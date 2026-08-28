@@ -1,0 +1,15 @@
+export const COLORS = {
+  canvas: "#080b10",
+  panel: "#0f141c",
+  panelRaised: "#171e29",
+  border: "#263143",
+  muted: "#8290a3",
+  text: "#f3f6fa",
+  focus: "#ff7a90",
+  break: "#64d8ff",
+  database: "#a78bfa",
+  git: "#f7c873",
+  success: "#5ee6a8",
+  warning: "#f7c873",
+  danger: "#ff6b6b",
+} as const

@@ -1,0 +1,24 @@
+{
+  "name": "tuiminal",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.tsx",
+    "start": "bun src/index.tsx",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "@tuiparts/core": "^0.0.6",
+    "@tuiparts/react": "^0.0.6",
+    "react": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "@types/react": "^19.2.18",
+    "typescript": "^7.0.2"
+  }
+}
