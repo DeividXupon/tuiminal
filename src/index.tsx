@@ -18,7 +18,10 @@ import {
 } from "react"
 import { DatabaseViewer } from "./components/DatabaseViewer"
 import { GitViewer } from "./components/GitViewer"
+import { HttpClient } from "./components/HttpClient"
+import { Runner } from "./components/Runner"
 import { closeDatabaseConnection } from "./database"
+import { stopAllRunnerProcesses } from "./runner"
 
 type TimerMode = "focus" | "break"
 
@@ -38,6 +41,8 @@ const COLORS = {
   break: "#64d8ff",
   database: "#a78bfa",
   git: "#f7c873",
+  runner: "#64d8ff",
+  http: "#fb923c",
   success: "#5ee6a8",
 }
 
@@ -65,17 +70,22 @@ function formatTime(totalSeconds: number) {
 }
 
 function BigTimer({ value, accent }: { value: string; accent: string }) {
-  const lines = [0, 1, 2].map((row) =>
-    value
+  const lines = [
+    { key: "top", row: 0 },
+    { key: "middle", row: 1 },
+    { key: "bottom", row: 2 },
+  ].map(({ key, row }) => ({
+    key,
+    content: value
       .split("")
       .map((character) => BIG_DIGITS[character]?.[row] ?? "   ")
       .join(" "),
-  )
+  }))
 
   return (
     <box style={{ alignItems: "center" }}>
-      {lines.map((line, index) => (
-        <text key={index} content={line} style={{ fg: accent }} />
+      {lines.map((line) => (
+        <text key={line.key} content={line.content} style={{ fg: accent }} />
       ))}
     </box>
   )
@@ -392,7 +402,16 @@ function Pomodoro({ active }: { active: boolean }) {
   )
 }
 
-type AppTab = "pomodoro" | "database" | "git"
+type AppTab = "pomodoro" | "database" | "git" | "runner" | "http"
+
+const requestedInitialTab = process.env.TUIMINAL_INITIAL_TAB
+const INITIAL_TAB: AppTab =
+  requestedInitialTab === "database" ||
+  requestedInitialTab === "git" ||
+  requestedInitialTab === "runner" ||
+  requestedInitialTab === "http"
+    ? requestedInitialTab
+    : "pomodoro"
 
 function NavigationTab({
   value,
@@ -420,9 +439,12 @@ function NavigationTab({
 
 function App() {
   const renderer = useRenderer()
-  const [activeTab, setActiveTab] = useState<AppTab>("pomodoro")
+  const terminal = useTerminalDimensions()
+  const [activeTab, setActiveTab] = useState<AppTab>(INITIAL_TAB)
+  const compactNavigation = terminal.width < 96
 
   const quit = useCallback(async () => {
+    stopAllRunnerProcesses()
     await closeDatabaseConnection()
     renderer.destroy()
   }, [renderer])
@@ -433,18 +455,35 @@ function App() {
       return
     }
 
-    const editingSearch = renderer.currentFocusedRenderable?.id === "table-search"
-    if (editingSearch) return
+    const focusedId = renderer.currentFocusedRenderable?.id
+    const editingText = focusedId === "table-search" ||
+      focusedId === "runner-command-input" ||
+      focusedId === "runner-project-search" ||
+      focusedId === "http-url-input" ||
+      focusedId === "http-request-editor"
+    const runnerPickerOpen = focusedId === "runner-project-list" ||
+      focusedId === "runner-directory-list"
+    if (editingText || runnerPickerOpen) return
 
     switch (key.name) {
       case "1":
+        if (key.shift) break
         setActiveTab("pomodoro")
         break
       case "2":
+        if (key.shift) break
         setActiveTab("database")
         break
       case "3":
+        if (key.shift) break
         setActiveTab("git")
+        break
+      case "4":
+        if (key.shift) break
+        setActiveTab("runner")
+        break
+      case "5":
+        setActiveTab("http")
         break
       case "q":
       case "escape":
@@ -462,6 +501,8 @@ function App() {
     >
       <box
         style={{
+          height: 2,
+          flexShrink: 0,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
@@ -472,12 +513,17 @@ function App() {
         }}
       >
         <text content="◆ TUIMINAL" style={{ fg: COLORS.text }} />
-        <Tabs.List flexDirection="row" gap={1}>
-          <NavigationTab value="pomodoro" label="Pomo" shortcut="[1]" />
-          <NavigationTab value="database" label="Banco" shortcut="[2]" />
-          <NavigationTab value="git" label="Git" shortcut="[3]" />
+        <Tabs.List flexDirection="row" gap={compactNavigation ? 0 : 1}>
+          <NavigationTab value="pomodoro" label={compactNavigation ? "P" : "Pomo"} shortcut="[1]" />
+          <NavigationTab value="database" label={compactNavigation ? "DB" : "Banco"} shortcut="[2]" />
+          <NavigationTab value="git" label={compactNavigation ? "G" : "Git"} shortcut="[3]" />
+          <NavigationTab value="runner" label={compactNavigation ? "Run" : "Runner"} shortcut="[4]" />
+          <NavigationTab value="http" label="HTTP" shortcut="[5]" />
         </Tabs.List>
-        <text content="[1–3] MUDAR  [Q] SAIR" style={{ fg: COLORS.muted }} />
+        <text
+          content={compactNavigation ? "[Q] SAIR" : "[1–5] MUDAR  [Q] SAIR"}
+          style={{ fg: COLORS.muted }}
+        />
       </box>
 
       <Tabs.Panel value="pomodoro" flexGrow={1} keepMounted>
@@ -488,6 +534,12 @@ function App() {
       </Tabs.Panel>
       <Tabs.Panel value="git" flexGrow={1} keepMounted>
         <GitViewer active={activeTab === "git"} />
+      </Tabs.Panel>
+      <Tabs.Panel value="runner" flexGrow={1} keepMounted>
+        <Runner active={activeTab === "runner"} />
+      </Tabs.Panel>
+      <Tabs.Panel value="http" flexGrow={1} keepMounted>
+        <HttpClient active={activeTab === "http"} />
       </Tabs.Panel>
     </Tabs.Root>
   )
