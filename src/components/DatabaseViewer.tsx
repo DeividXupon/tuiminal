@@ -134,6 +134,8 @@ export function DatabaseViewer({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!selectedTable) return
+    // Reading the counter here makes the R shortcut intentionally trigger a new request.
+    void refreshKey
     let cancelled = false
     setRowsLoading(true)
     setError(null)
@@ -308,7 +310,7 @@ export function DatabaseViewer({ active }: { active: boolean }) {
           options={tableOptions}
           selectedIndex={Math.max(
             0,
-            filteredTables.findIndex((table) => table === selectedTable),
+            filteredTables.indexOf(selectedTable ?? ""),
           )}
           onSelect={(_index, option) => {
             if (typeof option?.value === "string") openTable(option.value)
@@ -416,6 +418,9 @@ export function DatabaseViewer({ active }: { active: boolean }) {
             {rowLines.length ? (
               rowLines.map((line, index) => (
                 <text
+                  // Query results without a primary key have no stable unique identifier.
+                  // These text-only rows do not retain component state when reordered.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: See explanation above.
                   key={`${pageIndex}-${index}`}
                   content={line}
                   style={{
