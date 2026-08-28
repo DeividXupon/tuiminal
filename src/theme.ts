@@ -9,6 +9,7 @@ export const COLORS = {
   break: "#64d8ff",
   database: "#a78bfa",
   git: "#f7c873",
+  runner: "#64d8ff",
   success: "#5ee6a8",
   warning: "#f7c873",
   danger: "#ff6b6b",
