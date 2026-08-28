@@ -11,9 +11,15 @@ export type GitFile = {
 }
 
 export type GitCommit = {
+  fullHash: string
   hash: string
-  age: string
+  date: string
+  author: string
+  decorations: string
+  parents: string[]
   subject: string
+  additions: number
+  deletions: number
 }
 
 export type GitSnapshot = {
@@ -85,6 +91,11 @@ function parseStatus(output: string): GitFile[] {
         untracked,
       }
     })
+    .sort((left, right) => {
+      const leftGroup = left.unstaged ? 0 : 1
+      const rightGroup = right.unstaged ? 0 : 1
+      return leftGroup - rightGroup || left.path.localeCompare(right.path)
+    })
 }
 
 function parseCommits(output: string): GitCommit[] {
@@ -93,8 +104,36 @@ function parseCommits(output: string): GitCommit[] {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [hash = "", age = "", ...subject] = entry.split("\x1f")
-      return { hash, age, subject: subject.join("\x1f") }
+      const [metadata = "", ...statLines] = entry.split("\n")
+      const [
+        fullHash = "",
+        hash = "",
+        date = "",
+        author = "",
+        decorations = "",
+        parentList = "",
+        ...subject
+      ] = metadata.split("\x1f")
+      let additions = 0
+      let deletions = 0
+
+      for (const line of statLines) {
+        const [added, deleted] = line.split("\t")
+        if (/^\d+$/.test(added ?? "")) additions += Number(added)
+        if (/^\d+$/.test(deleted ?? "")) deletions += Number(deleted)
+      }
+
+      return {
+        fullHash,
+        hash,
+        date,
+        author,
+        decorations,
+        parents: parentList ? parentList.split(" ") : [],
+        subject: subject.join("\x1f"),
+        additions,
+        deletions,
+      }
     })
 }
 
@@ -142,8 +181,13 @@ export async function loadGitSnapshot(): Promise<GitSnapshot> {
       ]),
       runGit(root, [
         "log",
-        "-12",
-        "--pretty=format:%h%x1f%ar%x1f%s%x1e",
+        "--all",
+        "--topo-order",
+        "-32",
+        "--date=short",
+        "--decorate=short",
+        "--numstat",
+        "--pretty=format:%x1e%H%x1f%h%x1f%ad%x1f%an%x1f%D%x1f%P%x1f%s",
       ]),
     ])
 
@@ -243,6 +287,24 @@ export async function loadGitDiff(root: string, file: GitFile) {
   return sections.join("\n") || "Sem alterações textuais para exibir."
 }
 
+export async function loadCommitDiff(root: string, commitHash: string) {
+  const result = await runGit(root, [
+    "show",
+    "--format=",
+    "--no-ext-diff",
+    "--no-color",
+    "--unified=3",
+    commitHash,
+    "--",
+  ])
+
+  if (result.exitCode !== 0) {
+    throw commandError(result, "Não foi possível carregar o commit.")
+  }
+
+  return result.stdout.trimEnd() || "Este commit não possui diff textual."
+}
+
 export async function toggleGitFile(root: string, file: GitFile) {
   if (file.unstaged) {
     const addResult = await runGit(root, ["add", "--", file.path])
@@ -271,4 +333,20 @@ export async function toggleGitFile(root: string, file: GitFile) {
   }
 
   return "Alterações removidas do stage."
+}
+
+export async function toggleAllGitFiles(root: string, files: GitFile[]) {
+  if (files.some((file) => file.unstaged)) {
+    const addResult = await runGit(root, ["add", "--all"])
+    if (addResult.exitCode !== 0) {
+      throw commandError(addResult, "Não foi possível adicionar as alterações.")
+    }
+    return "Todas as alterações foram adicionadas ao stage."
+  }
+
+  const restoreResult = await runGit(root, ["restore", "--staged", "--", "."])
+  if (restoreResult.exitCode !== 0) {
+    throw commandError(restoreResult, "Não foi possível limpar o stage.")
+  }
+  return "Todos os arquivos foram removidos do stage."
 }

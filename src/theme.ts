@@ -12,4 +12,11 @@ export const COLORS = {
   success: "#5ee6a8",
   warning: "#f7c873",
   danger: "#ff6b6b",
+  diffAddedBg: "#132a21",
+  diffRemovedBg: "#321a21",
+  diffModifiedBg: "#17263a",
+  diffChangedBg: "#246b49",
+  diffRemovedChangedBg: "#7a2938",
+  diffHunkBg: "#192338",
+  diffGutterBg: "#111821",
 } as const
