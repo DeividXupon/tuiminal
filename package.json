@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "tuiminal": "./bin/tuiminal.ts"
+  },
   "scripts": {
     "check": "bun run typecheck && bun run lint",
     "dev": "bun --watch src/index.tsx",
