@@ -1,0 +1,7 @@
+{
+  "name": "tuiminal-runner-fixture",
+  "private": true,
+  "scripts": {
+    "test": "echo runner-fixture-ok"
+  }
+}
