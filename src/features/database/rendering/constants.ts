@@ -1,0 +1,27 @@
+import { SyntaxStyle } from "@opentui/core"
+import type { DatabaseTableQuery } from "../model/types"
+import { COLORS } from "../../../core/settings/theme"
+
+export const SIDEBAR_WIDTH = 32
+export const CELL_WIDTH = 18
+export const ROW_INSPECTOR_BREAKPOINT = 130
+export const COMPACT_ACTIONS_BREAKPOINT = 145
+export const QUERY_CELL_WIDTH = 22
+export const BATCH_SELECTOR_WIDTH = 3
+export const TABLE_HISTORY_LIMIT = 6
+export const SQL_TAB_LIMIT = 6
+export const EMPTY_TABLE_QUERY: DatabaseTableQuery = { search: "", sort: null }
+export const LOADING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+export const SQL_SYNTAX_STYLE = SyntaxStyle.fromStyles({
+  default: { fg: COLORS.text },
+  keyword: { fg: "#c792ea", bold: true },
+  string: { fg: "#c3e88d" },
+  comment: { fg: COLORS.muted, italic: true },
+  number: { fg: "#f78c6c" },
+  function: { fg: "#82aaff" },
+  type: { fg: "#ffcb6b" },
+  property: { fg: "#80cbc4" },
+  operator: { fg: "#89ddff" },
+  constant: { fg: "#f78c6c" },
+  punctuation: { fg: "#a6accd" },
+})
