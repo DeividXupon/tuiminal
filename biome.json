@@ -4,7 +4,10 @@
     "ignoreUnknown": true
   },
   "formatter": {
-    "enabled": false
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
   },
   "linter": {
     "enabled": true,
@@ -12,10 +15,17 @@
       "react": "recommended"
     },
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "warn",
+          "options": { "maxAllowedComplexity": 20 }
+        }
+      }
     }
   },
   "javascript": {
-    "jsxRuntime": "transparent"
+    "jsxRuntime": "transparent",
+    "formatter": { "semicolons": "asNeeded", "quoteStyle": "double" }
   }
 }

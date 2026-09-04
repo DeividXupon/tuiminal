@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "newFileMaxLines": 400,
+  "files": {
+    "src/app/App.tsx": {
+      "maxLines": 583,
+      "complexity": [
+        55,
+        52
+      ]
+    },
+    "src/app/tutorial/TutorialOverlay.tsx": {
+      "maxLines": 821,
+      "complexity": [
+        21
+      ]
+    },
+    "src/app/ui/ConfigurationModal.tsx": {
+      "maxLines": 688,
+      "complexity": [
+        41,
+        25
+      ]
+    },
+    "src/features/database/DatabaseWorkspace.tsx": {
+      "maxLines": 3025,
+      "complexity": [
+        255,
+        144
+      ]
+    },
+    "src/features/database/model/sql-autocomplete.ts": {
+      "maxLines": 321,
+      "complexity": [
+        35
+      ]
+    },
+    "src/features/database/model/sql-lexer.ts": {
+      "maxLines": 416,
+      "complexity": [
+        144
+      ]
+    },
+    "src/features/database/model/sql-statements.ts": {
+      "maxLines": 125,
+      "complexity": [
+        56
+      ]
+    },
+    "src/features/database/model/workspace.ts": {
+      "maxLines": 194,
+      "complexity": [
+        21
+      ]
+    },
+    "src/features/database/query/DatabaseQueryWorkspace.tsx": {
+      "maxLines": 2504,
+      "complexity": [
+        255,
+        147,
+        37,
+        30,
+        21
+      ]
+    },
+    "src/features/database/services/database.ts": {
+      "maxLines": 2638,
+      "complexity": [
+        64,
+        35,
+        29,
+        21
+      ]
+    },
+    "src/features/database/tutorial/DatabaseTutorialDemo.tsx": {
+      "maxLines": 473,
+      "complexity": [
+        34,
+        32
+      ]
+    },
+    "src/features/database/ui/DatabaseCellEditor.tsx": {
+      "maxLines": 267,
+      "complexity": [
+        23
+      ]
+    },
+    "src/features/database/ui/DatabaseChangesModal.tsx": {
+      "maxLines": 332,
+      "complexity": [
+        26
+      ]
+    },
+    "src/features/database/ui/DatabaseConnectionModal.tsx": {
+      "maxLines": 1012,
+      "complexity": [
+        85,
+        59,
+        28
+      ]
+    },
+    "src/features/database/ui/DatabaseQueryFavoritesModal.tsx": {
+      "maxLines": 419,
+      "complexity": [
+        26,
+        25
+      ]
+    },
+    "src/features/database/ui/DatabaseQueryHistoryModal.tsx": {
+      "maxLines": 504,
+      "complexity": [
+        63,
+        26
+      ]
+    },
+    "src/features/database/ui/DatabaseWriteModal.tsx": {
+      "maxLines": 391,
+      "complexity": [
+        46,
+        25
+      ]
+    },
+    "src/features/database/ui/RowInspector.tsx": {
+      "maxLines": 164,
+      "complexity": [
+        36
+      ]
+    },
+    "src/features/git/GitWorkspace.tsx": {
+      "maxLines": 1144,
+      "complexity": [
+        175,
+        56,
+        51,
+        49,
+        28,
+        28,
+        25
+      ]
+    },
+    "src/features/git/rendering/commit-graph.ts": {
+      "maxLines": 318,
+      "complexity": [
+        27,
+        26
+      ]
+    },
+    "src/features/git/rendering/diff.tsx": {
+      "maxLines": 419,
+      "complexity": [
+        40,
+        28,
+        21
+      ]
+    },
+    "src/features/http/HttpWorkspace.tsx": {
+      "maxLines": 735,
+      "complexity": [
+        104,
+        44
+      ]
+    },
+    "src/features/runner/RunnerWorkspace.tsx": {
+      "maxLines": 2708,
+      "complexity": [
+        255,
+        135,
+        46,
+        27,
+        25
+      ]
+    },
+    "src/features/runner/discovery/projects.ts": {
+      "maxLines": 119,
+      "complexity": [
+        27
+      ]
+    },
+    "src/features/runner/storage/runner-config.ts": {
+      "maxLines": 584,
+      "complexity": []
+    },
+    "src/features/terminal/TerminalWorkspace.tsx": {
+      "maxLines": 941,
+      "complexity": [
+        29,
+        22
+      ]
+    },
+    "src/shared/i18n/index.ts": {
+      "maxLines": 6130,
+      "complexity": [
+        21
+      ]
+    },
+    "src/shared/ui/InlineButton.tsx": {
+      "maxLines": 60,
+      "complexity": [
+        24
+      ]
+    }
+  }
+}
