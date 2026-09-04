@@ -1,0 +1,307 @@
+# Git / PR — referência do gh-dash e interface proposta
+
+Status: especificação de design para implementação futura, consultada em 2026-09-04.
+Este documento acompanha o [plano de implementação](../../GIT_PR_PLAN.md).
+Não representa uma tela já implementada no Tuiminal.
+
+## 1. Referência visual e grau de fidelidade
+
+A referência é a **interface de PRs do gh-dash**, não o layout do seu site.
+Queremos reconhecer o mesmo produto de interação: seções horizontais, busca por
+query, lista densa, seleção destacada, prévia contextual e rodapé curto.
+Não vamos embutir outro aplicativo em PTY nem reproduzir a marca do gh-dash.
+
+As duas imagens abaixo foram abertas e inspecionadas no site oficial. São
+referências remotas, não capturas do Tuiminal nem mockups produzidos nesta tarefa.
+O site anunciava v4.25.2; a captura Tokyo Night mostra v4.16.2. Portanto, imagens
+orientam composição; atalhos e capacidades são conferidos na documentação atual.
+
+### 1.1. Lista e prévia oficiais
+
+![gh-dash: seções horizontais, lista à esquerda e prévia à direita](https://www.gh-dash.dev/_astro/tokyo.C3tzrPg-_Z1SRz4H.webp)
+
+Observações da imagem, com exemplos de dados omitidos intencionalmente:
+
+- Faixa superior com nome e contagem de cada seção; seção ativa realçada.
+- Busca imediatamente acima da tabela, mostrando os filtros em uso.
+- Linhas com identidade do PR, título e sinais compactos de revisão/CI/alterações.
+- Seleção realçada por toda a largura, sem transformar cada PR em um card.
+- Divisão vertical simples; a prévia tem identidade, título, estado e branches.
+- Abas `Overview`, `Checks` e `Activity` organizam os detalhes.
+- Descrição resumida com expansão; informações adicionais seguem no mesmo painel.
+- Rodapé informa contexto, atualização, posição da seleção e ajuda.
+
+Fonte: [galeria oficial](https://www.gh-dash.dev/).
+
+### 1.2. Ajuda oficial
+
+![gh-dash: ajuda organizada em colunas de atalhos](https://www.gh-dash.dev/_astro/help.BFU_n1Fw_1cNf5p.webp)
+
+A captura mostra uma ajuda densa em colunas e também comandos personalizados.
+Não copiar suas associações como defaults: ela inclui, por exemplo, um comando
+de merge com bypass administrativo. O Tuiminal **não terá bypass automático**.
+
+## 2. Anatomia documentada do gh-dash
+
+| Região | Comportamento documentado | Fonte |
+| --- | --- | --- |
+| Seções | Cada seção tem título e filtros; pode substituir limite e layout. | [PR Sections](https://www.gh-dash.dev/configuration/pr-section/) |
+| Busca | Edita a query da seção; Enter aplica; alteração temporária não muda o arquivo de configuração. | [Global](https://www.gh-dash.dev/getting-started/keybindings/global/) |
+| Tabela | Colunas configuráveis por largura, crescimento, alinhamento e visibilidade; título aproveita a largura restante. | [Layout](https://www.gh-dash.dev/configuration/layout/pr/) e [opções](https://www.gh-dash.dev/configuration/layout/options/) |
+| Prévia | Pode abrir à direita, embaixo ou automaticamente; pode ser ocultada. | [Defaults](https://www.gh-dash.dev/configuration/defaults/) |
+| Navegação | J/K ou setas percorrem PRs; H/L ou setas laterais mudam seções; Home/End alcançam extremos. | [Navigation](https://www.gh-dash.dev/getting-started/keybindings/navigation/) |
+| Prévia por teclado | P alterna posição, p alterna visibilidade, Ctrl+D/U paginam, colchetes mudam abas internas. | [Preview Pane](https://www.gh-dash.dev/getting-started/keybindings/preview/) |
+| Ações | Atribuição, comentário e aprovação têm edição contextual; outras operações agem sobre o PR selecionado. | [Selected PR](https://www.gh-dash.dev/getting-started/keybindings/selected-pr/) |
+| Ajuda extensível | Há comandos internos para navegação, prévia, cópia, ações e acompanhamento de checks. | [Keybindings](https://www.gh-dash.dev/configuration/keybindings/) |
+
+Os defaults documentados incluem página de 20 PRs, prévia à direita com 45% da
+largura e posicionamento automático. A página de defaults diverge sobre a altura
+inferior: exemplo/tabela indicam 0,60, mas a prosa indica 40%. Não tratar essa
+inconsistência como medida confirmada; os critérios do Tuiminal estão abaixo.
+
+## 3. Adaptação ao Tuiminal
+
+| Preservar do gh-dash | Adaptar conscientemente |
+| --- | --- |
+| Seções em uma faixa horizontal | Colocá-las dentro de Git → `[2] PR`; não criar sidebar permanente de repositórios. |
+| Tabela principal com seleção por linha | Disponibilizar densidade de uma ou duas linhas e colunas responsivas. |
+| Prévia à direita/embaixo | Acrescentar modo de painel único quando duas áreas não tiverem espaço útil. |
+| Overview, Checks e Activity | Usar Visão geral, Checks e Atividade; acrescentar Commits e Arquivos para o escopo solicitado. |
+| Busca por filtros GitHub | Acrescentar edição e salvamento de seções pela interface. |
+| Atalhos de ações familiares | Manter H/L para foco entre painéis, conforme convenção do Tuiminal; seções usam `<`/`>`. |
+| Sinais compactos de revisão/CI | Sempre fornecer texto/legenda e estado desconhecido, além de cor. |
+| Ajuda contextual | Painel organizado por navegação, leitura e escrita, com clique nas ações. |
+
+Identidade Tuiminal: `ShortcutText`/`InlineButton` para teclas em `#4B75FF`, logo
+existente e quatro paletas. Títulos, Markdown, diffs e nomes de branches são dados:
+colchetes nesses conteúdos não recebem pintura de atalho. Suporte aos seis idiomas.
+
+## 4. Wireframes propostos
+
+Esquemas conceituais, com dados fictícios. Não são reproduções pixel a pixel das
+imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo.
+
+### 4.1. Terminal largo — estrutura principal
+
+```text
+◆ TUIMINAL    [@] Banco  [#] Git  [$] Runner  [%] HTTP  [^] Terminal   [,] Config
+GIT  [1] Base  [2] PR                              github.com · @usuario
+ [<]  Meus PRs 12  │  Revisar 4  │  Atribuídos 3  │  CI falhando 2  [>] [+]
+[/] is:open review-requested:@me             Escopo: projeto · 3 repositórios
+───────────────────────────────────────────┬──────────────────────────────────
+   Repo       PR / Título          Rev CI ± │ equipe/api #142
+▶  api        #142 Corrigir cache   ?   ×   │ Corrigir cache
+   web        #87 Ajustar navegação ✓   ✓   │ ABERTO · main ← fix/cache
+   infra      #31 Atualizar imagem  ?   ◷   │ @ana · 2h · +32 / -11
+                                           │ Geral Checks Atividade Commits …
+                                           │──────────────────────────────────
+                                           │ Descrição em Markdown…
+                                           │ [e] Expandir descrição
+                                           │
+                                           │ Revisores: @rui pendente
+                                           │ Code owners: @equipe/api pendente
+                                           │ Checks: 1 falhou · 2 passaram
+───────────────────────────────────────────┴──────────────────────────────────
+[j/k] Navegar [Enter] Prévia [o] Browser [d] Diff [?] Ações     1/4 · há 30s
+```
+
+A área sem linhas corresponde a uma lista curta, não a um rodapé ou bloco com
+altura reservada. Com mais PRs, as linhas ocupam toda a altura útil até o rodapé.
+Busca, título e tabs não devem reservar várias linhas vazias.
+
+### 4.2. Terminal médio — prévia embaixo
+
+```text
+GIT [1] Base [2] PR                         github.com · @usuario
+[<] Meus PRs 12 │ Revisar 4 │ Atribuídos 3 [>] [+]
+[/] is:open review-requested:@me
+   Repo      PR / Título                         Rev CI
+▶  api       #142 Corrigir cache                  ?   ×
+   web       #87 Ajustar navegação                ✓   ✓
+───────────────────────────────────────────────────────────────
+equipe/api #142 · ABERTO · main ← fix/cache
+Geral │ Checks │ Atividade │ Commits │ Arquivos
+Descrição…                     Revisores e code owners…
+───────────────────────────────────────────────────────────────
+[Enter] Prévia [p] Ocultar [Shift+P] Posição [?] Ações
+```
+
+### 4.3. Terminal estreito/baixo — um painel por vez
+
+```text
+GIT [1] Base [2] PR
+[<] Revisar · 4 [>] [+]
+[/] review-requested:@me
+▶ #142 Corrigir cache
+  equipe/api · @ana · CI falhou
+  #87 Ajustar navegação
+  equipe/web · @rui · aprovado
+[Enter] Abrir [?] Ações
+```
+
+Abrir a prévia substitui apenas o conteúdo da lista; `[Esc]`/`[h/←]` retorna à
+mesma linha e offset. A faixa Base/PR permanece acessível. Em larguras extremas,
+ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro.
+
+### 4.4. Prévia — conteúdo das abas
+
+| Aba | Conteúdo e interação |
+| --- | --- |
+| Visão geral | Título completo, URL, descrição recolhida/expandida, autor, responsáveis, branches, labels, resumo de alterações, revisões e code owners solicitados. |
+| Checks | Nome, provedor, execução/tentativa, estado, duração e URL; acompanhar, parar acompanhamento e revisar autorizações elegíveis. |
+| Atividade | Comentários, revisões, solicitações e eventos ordenados; paginação explícita e formulário de comentário. |
+| Commits | SHA curto, mensagem, autor e data; selecionar commit, copiar SHA completo e consultar seu diff. |
+| Arquivos | Caminho, adições/remoções e tipo de mudança; selecionar arquivo e entrar no diff. |
+
+Somente a identidade do PR fica fixa; o conteúdo rola no espaço restante. Abas
+que não couberem usam overflow horizontal com controles, nunca letras cortadas.
+`[`/`]` circulam pelas abas. Não usar números: `[1]`/`[2]` pertencem a Base/PR.
+
+### 4.5. Diff
+
+Modo focado dentro de PR: pequena lista de arquivos e documento de diff. Oferecer
+unificado, lado a lado quando couber, e intraline reaproveitando componentes
+internos do Git após separar suas dependências locais.
+
+- Cabeçalho com repositório, número e SHAs base/head efetivamente exibidos.
+- Navegação de arquivo e hunk; números de linha e contexto.
+- Arquivo renomeado, binário, removido, gerado ou truncado tem representação própria.
+- `[Esc]` volta à prévia e depois à lista, sem saltar para Base nem sair do app.
+- Não misturar ações de stage da Base com o diff remoto de PR.
+- Diff incompleto oferece abrir o arquivo/PR no navegador; nunca fingir completude.
+
+### 4.6. Formulários e confirmações
+
+```text
+┌ Aprovar PR ───────────────────────────────────────┐
+│ github.com · equipe/api #142 · usuário: @revisor  │
+│ Corrigir cache · commit 9ab13cd                   │
+│ Comentário                                       │
+│ Revisado e aprovado.                             │
+│                                                  │
+│ [Ctrl+S] Aprovar  [Esc] Desfocar/Voltar             │
+└──────────────────────────────────────────────────┘
+```
+
+- Mesmo padrão para comentário, responsáveis, merge, fechar/reabrir e pronto.
+- Campo de comentário de aprovação recebe texto configurável, mas nunca envia só
+  por abrir o modal ou carregar um template.
+- Merge mostra método, head SHA, bloqueios, CI, fila e efeito remoto; não oferece
+  bypass administrativo nem exclusão automática da branch.
+- Atualizar branch explica o merge da base no head e a possibilidade de conflito.
+- Aprovar workflow mostra a origem do código, ator e execução que será liberada.
+- Esc primeiro desfoca o input; outro Esc fecha a camada. Draft não é perdido
+  silenciosamente: preservá-lo em memória ou perguntar antes de descartar.
+- A confirmação mantém sua identidade de PR mesmo se a lista atualizar ao fundo.
+
+### 4.7. Editor de seções
+
+`[+]` cria seção; `[Ctrl+E]` abre o gerenciador das existentes. Formulário com
+nome, filtros, escopo/repositórios, ordenação, limite e colunas. Disponibilizar
+testar consulta, salvar, renomear, duplicar, reordenar e excluir configuração.
+Excluir uma seção nunca fecha PRs nem remove repositórios locais/remotos.
+Somente salvar promove a query temporária da busca a uma configuração persistente.
+
+## 5. Contrato responsivo
+
+Medidas em células de terminal, não pixels. Estes valores são **pontos de partida
+do Tuiminal**, não medições da imagem nem promessas de desempenho já verificadas.
+
+| Condição útil | Composição |
+| --- | --- |
+| Cabe lista ≥80 colunas, separador e prévia ≥48 | Prévia à direita, inicialmente cerca de 45%, limitada pelos mínimos. |
+| Split lateral não cabe, mas altura permite lista ≥6 linhas e prévia ≥8 | Prévia inferior, inicialmente metade da altura disponível. |
+| Nenhum split satisfaz os mínimos | Painel único; lista ou prévia, com retorno contextual. |
+| Prévia fechada | Tabela ocupa toda a largura e altura úteis. |
+| Menos de 40×10 | Estado mínimo legível; sem ações perigosas parcialmente visíveis. |
+
+O cálculo desconta o chrome global real, bordas do modo framed, query e rodapé;
+não usar somente `terminal.width < N`. Recalcular também depois de mudar idioma.
+Se o usuário escolher direita/baixo, respeitar a preferência quando couber; caso
+contrário mostrar o modo viável e restaurar a preferência ao ampliar.
+
+Prioridade de colunas: identidade/título → estado e CI/revisão → repositório →
+autor → alterações → atualização/comentários → responsáveis/base/labels. Em lista
+multirrepositório o repositório nunca desaparece: passa à segunda linha. Todos os
+campos continuam disponíveis na prévia, mesmo quando ocultos na tabela.
+
+## 6. Teclado, foco e mouse
+
+Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem como
+`Shift+letra`, evitando a ambiguidade entre comentar e fazer checkout.
+
+| Contexto | Tecla | Ação |
+| --- | --- | --- |
+| Git sem editor/modal | `[1]` / `[2]` | Base / PR. Preservar estado ao alternar. |
+| PR sem editor/modal | `[<]` / `[>]` | Seção anterior / seguinte. |
+| Lista | `[j/↓]` / `[k/↑]` | PR seguinte / anterior. |
+| Lista | `[g/Home]` / `[Shift+G/End]` | Primeiro / último PR carregado; indicar paginação. |
+| Lista | `[l/→]` / `[Enter]` | Abrir e focar prévia. |
+| Prévia | `[h/←]` | Voltar à lista. No diff, sair primeiro do diff focado. |
+| Prévia | `[j/↓]` / `[k/↑]` | Rolar conteúdo ou navegar commits/arquivos/checks. |
+| Painéis | `[Tab]` / `[Shift+Tab]` | Percorrer regiões focáveis; inputs mantêm navegação própria. |
+| Prévia fora de editor | `[Ctrl+D]` / `[Ctrl+U]` | Paginar conteúdo. Não enviar formulários. |
+| PR fora de editor | `[p]` / `[Shift+P]` | Alternar prévia / posição da prévia. |
+| Prévia | `[[]` / `[]]` | Aba interna anterior / seguinte (teclas `[` / `]`). |
+| Visão geral | `[e]` | Expandir/recolher descrição completa. |
+| PR | `[/]` | Editar busca; `[Enter]` aplica, `[Esc]` desfoca. |
+| PR | `[r]` / `[Shift+R]` | Atualizar seção / todas as seções do perfil. |
+| PR | `[o]` | Abrir PR no navegador. |
+| Lista/visão geral | `[y]` / `[Shift+Y]` | Copiar número / URL. |
+| Commits | `[y]` | Copiar SHA completo do commit selecionado; rodapé muda o rótulo. |
+| PR/arquivo/commit | `[d]` | Abrir o diff correspondente ao contexto. |
+| PR | `[Shift+C]` | Preparar checkout local. |
+| PR | `[a]` / `[Shift+A]` | Adicionar / remover responsáveis. |
+| PR | `[c]` / `[v]` | Comentar / aprovar com comentário editável. |
+| PR | `[w]` | Alternar acompanhamento de CI. |
+| Checks | `[Ctrl+A]` | Revisar workflows elegíveis para autorização. |
+| PR | `[u]` / `[Shift+W]` | Atualizar com base / tornar pronto para revisão. |
+| PR | `[m]` / `[x]` / `[Shift+X]` | Preparar merge / fechar / reabrir. |
+| PR | `[+]` / `[Ctrl+E]` | Criar seção / gerenciar seções. |
+| PR | `[?]` | Ajuda e lista completa de ações com disponibilidade/motivo. |
+| Formulário | `[Ctrl+S]` | Confirmar somente a operação mostrada. |
+| Camada local | `[Esc]` | Desfocar, fechar camada e devolver foco; nunca atravessar camadas. |
+
+Diferença deliberada: gh-dash usa H/L para seções; aqui usamos H/L para foco e
+`<`/`>` para seções, coerente com o Tuiminal. Não copiar o `[s]` que alterna Issues:
+Issues não está neste escopo. Ações só operam no PR ativo, não em seleção em lote.
+
+Mouse: clicar seção/aba/linha/ação; roda no painel apontado; clicar comentário ou
+responsável não dispara mutações. Expor todas as operações pelo menu `[?]`/Ações.
+Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]`,
+`[q]`, `[#]`, letras, pontuação e Ctrl+A permanecem edição, não atalhos globais.
+
+## 7. Estados que precisam de tela própria
+
+| Estado | Representação e saída |
+| --- | --- |
+| `gh` ausente/incompatível | Instrução de instalação/atualização e nova verificação; Base continua utilizável. |
+| Sem login/SSO pendente | Host identificado, instrução oficial de autenticação, botão verificar; sem pedir token em texto. |
+| Sem repo local | PR pode funcionar com repositórios configurados; Base mantém aviso local. |
+| Sem resultados | Query/escopo visíveis, editar filtros e atualizar; não confundir com erro. |
+| Carregando | Preservar linhas anteriores, marcar atualização; skeleton só na primeira carga. |
+| Erro parcial | Identificar seção/repo/página que falhou; resultado incompleto nunca aparece como completo. |
+| Offline/rate limit | Dados em memória com idade, motivo e instante possível da próxima tentativa. |
+| Permissão insuficiente | Leitura disponível quando possível; ação desabilitada com explicação. |
+| PR removido/inacessível | Não retargetear para a linha seguinte; fechar o detalhe de forma explícita. |
+| Head atualizado durante revisão | Marcar conteúdo antigo; recarregar e reconfirmar ações vinculadas ao commit. |
+| Sem checks | `Sem checks`, não sucesso verde. Falha de consulta é `Desconhecido`. |
+| Ação em curso | Bloquear repetição, mostrar alvo e andamento; navegar não inicia nova operação. |
+| Resultado remoto incerto | Pedir verificação antes de repetir; não assumir sucesso nem reenviar comentário. |
+| Notificação indisponível | Toast dentro do app e aviso da limitação do terminal/SO. |
+
+## 8. Critérios visuais de aceite
+
+- [ ] Reconhecer a composição do gh-dash sem criar uma sidebar extra permanente.
+- [ ] Lista e prévia usam toda a área útil; nada sobrepõe rodapé, última linha ou input.
+- [ ] Testar 40×12, 60×18, 80×24, 120×30, 160×45 e 220×60, nos dois layouts.
+- [ ] Repetir extremos com PT-BR, inglês, espanhol, japonês, chinês e coreano.
+- [ ] Rodapé contextual cabe sem imprimir todas as ações ao mesmo tempo.
+- [ ] Diferenciar foco, seleção, draft, falha, pendência e indisponibilidade sem depender só de cor.
+- [ ] Navegação rápida não troca a identidade da prévia por uma resposta atrasada.
+- [ ] Redimensionar preserva PR, aba interna, posição de leitura e texto em edição.
+- [ ] Confirmar percursos de teclado e mouse em TUI real e renderer de testes.
+- [ ] Comparar as capturas da implementação com as referências, registrando diferenças intencionais.
+
+Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
+atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.
