@@ -1,8 +1,10 @@
 # Git / PR — referência do gh-dash e interface proposta
 
-Status: especificação de design para implementação futura, consultada em 2026-09-04.
+Status: **implementada e validada**, referência consultada em 2026-09-04.
 Este documento acompanha o [plano de implementação](../../GIT_PR_PLAN.md).
-Não representa uma tela já implementada no Tuiminal.
+O shell Base/PR, dashboard responsivo, cinco abas, diff remoto, ações, CI,
+configuração e tutorial estão implementados. As diferenças deliberadas em relação
+ao gh-dash continuam documentadas aqui para evitar uma cópia acrítica de atalhos.
 
 ## 1. Referência visual e grau de fidelidade
 
@@ -87,7 +89,7 @@ imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo
 ◆ TUIMINAL    [@] Banco  [#] Git  [$] Runner  [%] HTTP  [^] Terminal   [,] Config
 GIT  [1] Base  [2] PR                              github.com · @usuario
  [<]  Meus PRs 12  │  Revisar 4  │  Atribuídos 3  │  CI falhando 2  [>] [+]
-[/] is:open review-requested:@me             Escopo: projeto · 3 repositórios
+[/] is:open review-requested:@me             Escopo: todos os projetos da conta
 ───────────────────────────────────────────┬──────────────────────────────────
    Repo       PR / Título          Rev CI ± │ equipe/api #142
 ▶  api        #142 Corrigir cache   ?   ×   │ Corrigir cache
@@ -245,7 +247,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Prévia | `[[]` / `[]]` | Aba interna anterior / seguinte (teclas `[` / `]`). |
 | Visão geral | `[e]` | Expandir/recolher descrição completa. |
 | PR | `[/]` | Editar busca; `[Enter]` aplica, `[Esc]` desfoca. |
-| PR | `[r]` / `[Shift+R]` | Atualizar seção / todas as seções do perfil. |
+| PR | `[r]` | Atualizar a seção ativa, preservando seleção por identidade. |
 | PR | `[o]` | Abrir PR no navegador. |
 | Lista/visão geral | `[y]` / `[Shift+Y]` | Copiar número / URL. |
 | Commits | `[y]` | Copiar SHA completo do commit selecionado; rodapé muda o rótulo. |
@@ -277,7 +279,7 @@ Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]
 | --- | --- |
 | `gh` ausente/incompatível | Instrução de instalação/atualização e nova verificação; Base continua utilizável. |
 | Sem login/SSO pendente | Host identificado, instrução oficial de autenticação, botão verificar; sem pedir token em texto. |
-| Sem repo local | PR pode funcionar com repositórios configurados; Base mantém aviso local. |
+| Sem repo local | PR usa a conta autenticada sem configuração inicial; Base mantém aviso local. |
 | Sem resultados | Query/escopo visíveis, editar filtros e atualizar; não confundir com erro. |
 | Carregando | Preservar linhas anteriores, marcar atualização; skeleton só na primeira carga. |
 | Erro parcial | Identificar seção/repo/página que falhou; resultado incompleto nunca aparece como completo. |
@@ -292,16 +294,27 @@ Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]
 
 ## 8. Critérios visuais de aceite
 
-- [ ] Reconhecer a composição do gh-dash sem criar uma sidebar extra permanente.
-- [ ] Lista e prévia usam toda a área útil; nada sobrepõe rodapé, última linha ou input.
-- [ ] Testar 40×12, 60×18, 80×24, 120×30, 160×45 e 220×60, nos dois layouts.
-- [ ] Repetir extremos com PT-BR, inglês, espanhol, japonês, chinês e coreano.
-- [ ] Rodapé contextual cabe sem imprimir todas as ações ao mesmo tempo.
-- [ ] Diferenciar foco, seleção, draft, falha, pendência e indisponibilidade sem depender só de cor.
-- [ ] Navegação rápida não troca a identidade da prévia por uma resposta atrasada.
-- [ ] Redimensionar preserva PR, aba interna, posição de leitura e texto em edição.
-- [ ] Confirmar percursos de teclado e mouse em TUI real e renderer de testes.
-- [ ] Comparar as capturas da implementação com as referências, registrando diferenças intencionais.
+- [x] Reconhecer a composição do gh-dash sem criar uma sidebar extra permanente.
+- [x] Lista e prévia usam toda a área útil; nada sobrepõe rodapé, última linha ou input.
+- [x] Testar 40×12, 60×18, 80×24, 120×30, 160×45 e 220×60, nos dois layouts.
+- [x] Repetir extremos com PT-BR, inglês, espanhol, japonês, chinês e coreano.
+- [x] Rodapé contextual cabe sem imprimir todas as ações ao mesmo tempo.
+- [x] Diferenciar foco, seleção, draft, falha, pendência e indisponibilidade sem depender só de cor.
+- [x] Navegação rápida não troca a identidade da prévia por uma resposta atrasada.
+- [x] Redimensionar preserva PR, aba interna, posição de leitura e texto em edição.
+- [x] Confirmar percursos de teclado e mouse no renderer nativo de testes.
+- [x] Comparar os frames de caracteres com a referência e registrar diferenças intencionais.
+
+Evidência: `tests/tui/git-pr.test.tsx` cobre o caminho exato de mouse (abas Git,
+seção, linha, aba da prévia e ações), layouts lateral/empilhado/painel único e uma
+matriz de 44 combinações entre tamanhos, seis idiomas, quatro paletas e dois modos
+de chrome. Os frames são inspecionados como texto renderizado, por isso a validação
+é determinística e não depende de pixels ou de uma fonte específica.
+
+Diferenças intencionais confirmadas: Base/PR pertence ao Git do Tuiminal; H/L move
+o foco e `<`/`>` troca seções; há Commits e Arquivos além das três abas principais;
+o Tuiminal fornece gerenciador visual de seções, modo de painel único e não expõe
+bypass administrativo, exclusão automática de branch ou comandos arbitrários.
 
 Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
 atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.

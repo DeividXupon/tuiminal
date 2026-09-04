@@ -7,6 +7,7 @@ Funcionalidades atuais:
 - Navegação por tabs
 - Explorador de bancos MySQL, PostgreSQL e SQLite, além de servidores MCP compatíveis
 - Workspace Git no estilo lazygit para o repositório de onde o app foi iniciado
+- Git `[1] Base` / `[2] PR`, com dashboard multirrepositório, prévia, diff, CI e ações seguras
 - Runner de scripts com logs ao vivo, processos simultâneos e histórico da sessão
 - Cliente HTTP com métodos, headers, body, resposta formatada e histórico
 - Free Terminal com sessões PTY persistentes, splits e comandos livres
@@ -292,7 +293,69 @@ usam o idioma configurado para formatar data e hora.
 ## Git
 
 A aba Git detecta automaticamente o repositório e o branch a partir do
-diretório onde o Tuiminal foi iniciado.
+diretório onde o Tuiminal foi iniciado. `[1] Base` abre o workspace local atual;
+`[2] PR` abre o dashboard de Pull Requests. Base continua funcionando offline e
+não inicia o GitHub CLI enquanto PR não for visitado.
+
+PR requer GitHub CLI 2.40.0 ou mais recente e uma sessão autenticada. O Tuiminal
+reutiliza a identidade do `gh`, não lê nem salva o token. Prepare uma vez com:
+
+```bash
+gh auth login --hostname github.com
+tuiminal git /caminho/do/projeto
+```
+
+No primeiro acesso a `[2] PR`, o dashboard já consulta a conta autenticada: inclui
+os repositórios de `@você`, das organizações às quais você pertence, colaborações
+diretas externas e pesquisas pessoais como `author:@me` ou `review-requested:@me`
+em qualquer repositório. Uma query ampla, como um texto livre, é limitada
+automaticamente a esse escopo; ela não pesquisa o GitHub inteiro.
+
+O perfil é salvo pela raiz canônica do projeto em
+`~/.config/tuiminal/git-pr.yaml`: abrir outro projeto cria seções, filtros e
+posição de prévia independentes. `[+]` cria uma seção e `[Ctrl+E]` gerencia as
+seções. A lista de repositórios em `[Ctrl+E]` é opcional: vazia significa todos os
+projetos da conta; ao adicionar `owner/repo`, todas as buscas daquele perfil ficam
+restritas aos repositórios listados. Cada seção pode definir query, colunas, ordem
+e limite.
+
+- `[1]` / `[2]`: alternar entre Base e PR
+- `[J/K]` ou `[↑/↓]`: navegar pelos PRs
+- `[G/Home]` / `[Shift+G/End]`: ir ao primeiro / último PR carregado
+- `[H/L]` ou `[←/→]`: mover o foco entre lista e prévia
+- `[<]` / `[>]`: mudar a seção de PRs
+- `[` / `]`: mudar a aba interna da prévia; no diff, mudar de hunk
+- `[P]`: mostrar ou ocultar a prévia
+- `[Shift+P]`: alternar a posição automática, direita ou abaixo, salva por projeto
+- `[/]`: editar a query; `[Enter]` aplica temporariamente e `[Ctrl+S]` salva
+- `[R]`: atualizar; `[N]`: carregar a próxima página disponível
+- `[O]`: abrir no navegador; `[Y]` copia o número e `[Shift+Y]` copia a URL
+- `[D]`: abrir diff de PR, arquivo ou commit; `[?]` mostra ações e indisponibilidades
+- `[C]` / `[V]`: comentar / aprovar com comentário opcional
+- `[A]` / `[Shift+A]`: adicionar / remover responsável
+- `[W]`: iniciar ou parar o acompanhamento de CI
+- `[Shift+C]`: preparar checkout no clone escolhido
+- `[U]` / `[Shift+W]`: atualizar com a base / marcar draft como pronto
+- `[M]` / `[X]` / `[Shift+X]`: preparar merge / fechar / reabrir
+- `[Ctrl+A]` em Checks: revisar e autorizar uma execução elegível de fork
+
+A prévia tem Visão geral, Checks, Atividade, Commits e Arquivos. Descrições em
+Markdown são apresentadas como texto terminal seguro; imagens não são baixadas e
+HTML não é executado. Commits permitem copiar o SHA completo, conexões paginadas
+indicam quando há mais dados e o diff remoto é preso aos SHAs exibidos.
+
+Toda escrita abre uma preparação com host, repositório, PR e commit. Nada é enviado
+até `[Ctrl+S]`; a identidade e o head são revalidados e um timeout após o envio é
+tratado como resultado incerto, sem repetição automática. Checkout bloqueia clone
+errado, worktree suja e operações Git em andamento. Merge nunca acrescenta bypass
+administrativo nem apaga branch. O acompanhamento de CI só começa por `[W]`, tem
+limite de dez PRs e termina ao fechar o Tuiminal.
+
+No diff remoto, `[H/L]` muda entre arquivos e documento, `[J/K]` navega, `[`/`]`
+salta entre hunks, `[V]` alterna unificado/duas colunas/intralinha, `[Y]` copia o
+caminho e `[Esc]` volta à prévia. Diffs acima de 2 MiB e descrições acima de
+256 KiB são limitados com sinalização. Os números medidos localmente ficam em
+[docs/benchmarks/git-pr.md](./docs/benchmarks/git-pr.md).
 
 - `↑` / `↓`: navegar pelos arquivos alterados
 - `Enter` sobre uma pasta: recolher ou expandir a pasta

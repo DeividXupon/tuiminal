@@ -1,4 +1,5 @@
 import stringWidth from "string-width"
+import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
@@ -4998,6 +4999,8 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_RESPONSE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,
   ...HTTP_WORKSPACE_SETTINGS_MESSAGES,
+  // Git / Pull Requests.
+  ...GIT_PR_MESSAGES,
   // Terminal livre.
   [
     "❯ FREE TERMINAL",

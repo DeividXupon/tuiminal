@@ -96,6 +96,13 @@ describe("internationalization", () => {
     expect(translateUi("<mascarado>", "en")).toBe("<masked>")
     expect(translateUi("<mascarada [V]>", "es")).toBe("<oculta [V]>")
     expect(translateUi("<confirmar [V]>", "ko")).toBe("<확인 [V]>")
+    expect(translateUi("TODOS OS PROJETOS DA CONTA", "en")).toBe("ALL ACCOUNT PROJECTS")
+    expect(translateUi("DESCOBRINDO PROJETOS DA CONTA…", "es")).toBe(
+      "DESCUBRIENDO PROYECTOS DE LA CUENTA…",
+    )
+    expect(translateUi("Sem filtros: buscando em todos os projetos da conta.", "zh-CN")).toBe(
+      "无筛选器：搜索账户中的所有项目。",
+    )
     expect(translateUi("… +3 parâmetro(s)", "ja")).toBe("… ほか3件")
     expect(
       translateUi("Reexecução desativada: alterações da grade exigem nova revisão.", "es"),
@@ -181,6 +188,23 @@ describe("internationalization", () => {
         "zh-CN",
       ),
     ).toBe("请求头 Authorization 包含凭据，无法保存到工作区。")
+  })
+
+  test("translates GitHub PR actions, safety reasons and diff navigation", () => {
+    expect(translateUi("Aprovar com comentário", "en")).toBe("Approve with comment")
+    expect(translateUi("cannot-approve-own-pr", "es")).toContain("propio PR")
+    expect(translateUi("[W] Acompanhar CI", "ja")).toContain("CI を監視")
+    expect(
+      translateUi("Resultado remoto incerto. Verifique o PR antes de tentar novamente.", "zh-CN"),
+    ).toContain("远程结果")
+    expect(translateUi("[Ctrl+S] Confirmar", "ko")).toBe("[Ctrl+S] 확인")
+    expect(
+      translateUi("  ESTADO · REPOSITÓRIO / PR / TÍTULO · REVISÃO · CI · ALTERAÇÕES", "en"),
+    ).toBe("  STATE · REPOSITORY / PR / TITLE · REVIEW · CI · CHANGES")
+    expect(translateUi("Posição da prévia salva para este projeto.", "en")).toContain(
+      "saved for this project",
+    )
+    expect(translateUi("right", "ja")).toBe("右")
   })
 
   test("measures, truncates, and pads wide characters", () => {

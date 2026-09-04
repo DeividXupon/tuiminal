@@ -1,13 +1,15 @@
 # Plano evolutivo — Git `[1] Base` e `[2] PR`
 
-Status: **planejado, não implementado**. Documento criado em 2026-09-04.
+Status: **implementado, validado e integrado à branch `development`**.
+Documento criado e concluído em 2026-09-04.
 Direção aprovada pelo pedido: preservar o Git atual em Base e construir PRs com
 interface muito próxima do gh-dash. Fases, contratos e medidas podem evoluir com
 protótipos e testes; mudanças precisam ser registradas aqui.
 
 Este plano não autoriza executar ações em PRs reais durante o desenvolvimento.
-Nenhuma ferramenta, dependência ou configuração pessoal foi instalada/alterada
-para produzir este documento.
+Toda a validação de transporte e escrita foi feita com executável `gh` falso,
+fixtures ou repositórios Git locais descartáveis; nenhuma credencial ou PR real
+foi usado e nenhum arquivo de configuração pessoal foi criado pelos testes.
 
 ## Índice
 
@@ -78,27 +80,29 @@ de saída sem função. Dados fictícios dos wireframes não são fixtures de pr
 
 ## 3. Inventário atual e integração
 
-Inspeção local em 2026-09-04, antes de implementar:
+Estado final validado em 2026-09-04:
 
-| Arquivo atual | Situação | Trabalho previsto |
+| Arquivo | Situação final | Responsabilidade |
 | --- | --- | --- |
-| `src/features/git/GitWorkspace.tsx` | `GitViewer`, 1.144 linhas; lógica/estado/UI locais. | Extrair a tela atual para `GitBaseWorkspace.tsx`; manter wrapper pequeno para Base/PR. |
-| `src/features/git/services/git.ts` | 293 linhas, comandos locais, raiz de lançamento em cache. | Preservar comportamento; introduzir resolução explícita de clones para checkout de PR. |
-| `src/features/git/model/view.ts` | Modos de diff, grafo, log e commit. | Não misturar modo local com subaba Base/PR; criar modelo separado. |
-| `src/features/git/rendering/*` | Parser, apresentação e renderização de diff/grafo. | Reaproveitar partes puras e de renderização após testar limites e arquivos especiais. |
-| `src/features/git/index.ts` | Exporta somente `GitViewer`. | Exportar também escopo de teclado e disposer de recursos de PR. |
-| `src/app/feature-registry.ts` | Git tem escopo vazio e nenhum disposer. | Registrar `gitKeyboardScope` e limpeza de requests/watchers/processos da ferramenta. |
-| `src/app/App.tsx` | Compõe ferramentas por API pública. | Respeitar inputs/modais Git e contexto Base/PR no tutorial; evitar lógica de PR no App. |
-| `src/shared/ui`, tema e i18n | Infraestrutura comum existente. | Reutilizar controles, `#4B75FF`, Unicode e os seis idiomas. |
+| `src/features/git/GitWorkspace.tsx` | Base local preservada, sem dependência de GitHub. | Arquivos, stage/unstage, commits, grafo e diff locais. |
+| `src/features/git/GitFeatureWorkspace.tsx` | Wrapper pequeno com `[1] Base` e `[2] PR`. | Lazy mount, mouse, estado independente e Base como default. |
+| `src/features/git/PullRequestsWorkspace.tsx` | Composição PR mantida no limite de 400 linhas. | Une configuração, dashboard, prévia, diff, ações e modais por hooks/componentes menores. |
+| `src/features/git/model/pr/*` | Modelos puros separados de React, IO e serviços. | Identidade, consulta, navegação, conteúdo, diff, CI, configuração e ações. |
+| `src/features/git/services/github/*` | Transporte `gh` sem shell e adaptadores tipados. | Auth, busca, detalhes, diff, workflows, leituras e mutações explícitas. |
+| `src/features/git/services/pr-*` | Coordenação e efeitos isolados. | Sessão/cache, ações, checkout, watches e notificações. |
+| `src/features/git/storage/pr/config.ts` | YAML versionado, atômico e modo `0600`. | Perfis independentes por raiz canônica e mapa de clones. |
+| `src/features/git/ui/pr/*` | UI decomposta e testável. | Seções, lista, prévia, diff, escopo opcional, gerenciador e confirmações. |
+| `src/features/git/tutorial/*` | Tour estável com dados fictícios. | Ensina Base/PR sem consultar GitHub. |
+| `src/app/feature-registry.ts` | Escopo e disposer Git registrados. | Impede vazamento de atalhos e encerra recursos pertencentes ao Git. |
 
 A Base atual faz refresh periódico somente quando ativa. O wrapper precisa passar
 `active=false` para Base quando PR está selecionado ou um modal global a bloqueia,
 sem destruir seus estados. PR só inicia leitura/autenticação ao ser visitado.
 Nenhuma consulta GitHub deve acontecer ao iniciar Runner/Banco/HTTP ou abrir Base.
 
-O workspace está em migração e pode receber trabalho paralelo em HTTP; alterações
-de PR não devem mexer em módulos HTTP, Runner ou Banco fora de contratos públicos
-estritamente necessários. Confirmar o inventário no início de cada fase.
+A implementação não acopla PR a HTTP, Runner ou Banco. Dois erros de lint já
+presentes no armazenamento HTTP foram apenas tipados para que o gate global do
+repositório voltasse a passar; não houve mudança de comportamento nesse recurso.
 
 ## 4. Escopo rastreável
 
@@ -154,10 +158,14 @@ Fonte: [busca de PRs](https://cli.github.com/manual/gh_search_prs).
   diretório canônico de lançamento. Não usar apenas nome da pasta.
 - Perfil A e perfil B têm seções, repos, queries salvas e preferência de layout
   independentes, seguindo a convenção de sessões por projeto já usada no Runner.
-- Primeiro uso sugere o remote GitHub do projeto; com múltiplos remotes ambíguos,
-  pedir escolha. Não pesquisar todos os repositórios da conta sem escolha visível.
-- O usuário pode acrescentar outros repos ao perfil e usar uma visão ampla da
-  conta conscientemente. Não é necessário clonar repos para listá-los.
+- O primeiro uso abre diretamente no escopo da conta autenticada, sem exigir o
+  cadastro de um repositório. Esse escopo reúne os repositórios do viewer, das
+  organizações às quais ele pertence e colaborações diretas externas; consultas
+  relativas ao viewer, como
+  `author:@me`, continuam globais para também alcançar contribuições externas.
+- A lista de repositórios do perfil é um filtro restritivo opcional. Vazia significa
+  conta completa; ao adicionar `owner/repo`, todas as seções daquele perfil passam
+  a consultar somente a lista. Não é necessário clonar repos para listá-los.
 - Um template global pode servir de ponto de partida; salvar no perfil não altera
   outros projetos. Interface mostra sempre host, conta e escopo efetivo.
 - Mapas de clones locais são por host/repositório e podem ter mais de uma pasta;
@@ -168,10 +176,15 @@ Fonte: [busca de PRs](https://cli.github.com/manual/gh_search_prs).
 ### 5.3. Regras de consulta
 
 Adicionar `is:pr` e exclusão de arquivados por default, salvo override explícito.
-Guardar query digitada e query efetiva separadamente. Para combinar filtro livre
-com restrição de repositórios, não concatenar `OR` sem respeitar precedência:
-inicialmente consultar por repo com escopo estruturado, validar resultados,
-deduplicar e ordenar; otimizar lotes após testes de equivalência.
+Guardar query digitada e query efetiva separadamente. Consultas sem escopo manual
+que já usam `author:@me`, `review-requested:@me`, `assignee:@me` ou outro vínculo
+com o viewer permanecem globais. Consultas amplas são divididas em uma busca
+`user:<viewer>`, uma `org:<organização>` para cada associação descoberta e buscas
+`repo:<owner/name>` para colaborações diretas externas; uma query que declara
+`repo:`, `user:` ou `org:` conserva esse escopo explícito. A descoberta de
+organizações e colaborações é paginada e qualquer resultado incompleto aparece
+como escopo parcial. Para combinar filtro livre com a lista restritiva, consultar
+por repo com escopo estruturado, validar resultados, deduplicar e ordenar.
 
 Identidade estável: host + node ID do PR, acompanhada de owner/repo/número.
 Número `#42` sozinho nunca identifica uma seleção, ação, cache ou notificação.
@@ -183,9 +196,10 @@ vizinho somente para navegação, nunca para reapontar uma confirmação já abe
 
 ### 6.1. Transporte e autenticação
 
-`gh` já foi detectado localmente na versão 2.83.2, mas isso não define a versão
-mínima do produto. A fase 2 cria testes de capacidade e documenta a versão mínima
-real; não atualizar instalações do usuário automaticamente.
+`gh` já foi detectado localmente na versão 2.83.2. O primeiro adaptador fixa
+**gh 2.40.0** como versão mínima conservadora e ainda testa capacidades/formato
+de saída; não atualizar instalações do usuário automaticamente. Essa versão pode
+subir caso testes de integração revelem uma dependência mais nova.
 
 - Detectar binário, versão e flags necessárias sem bloquear Base.
 - Reusar autenticação do GitHub CLI; consultar a identidade efetiva do viewer.
@@ -371,18 +385,17 @@ checks/statuses; autorização específica de cada provedor não está incluída
 
 ## 9. Arquitetura e persistência
 
-### 9.1. Organização proposta
+### 9.1. Organização implementada
 
-Árvore indicativa de responsabilidades; criar arquivos conforme a fase exigir,
-não scaffolding vazio. Nenhum componente novo deve ultrapassar o limite de
-manutenção apenas por acumular todas as funcionalidades de PR.
+Árvore resumida das responsabilidades implementadas. O dashboard foi separado
+em modelos, serviços, armazenamento, hooks e componentes, sem scaffolding vazio.
 
 ```text
 src/features/git/
   index.ts                       API pública para App
   keyboard.ts                    posse de teclado Base/PR, modais e inputs
-  GitWorkspace.tsx               composição leve [1] Base / [2] PR
-  GitBaseWorkspace.tsx           tela local existente, preservada
+  GitFeatureWorkspace.tsx        composição leve [1] Base / [2] PR
+  GitWorkspace.tsx               tela Base local existente, preservada
   PullRequestsWorkspace.tsx      composição de seções/lista/prévia
   model/
     workspace.ts                 estado da subaba local
@@ -407,7 +420,6 @@ src/features/git/
     pr-checkout.ts               mapa/validação do clone e checkout
   storage/pr/
     config.ts                    YAML do usuário e perfis
-    session.ts                   preferências/sessão sem conteúdo remoto
   rendering/
     diff.tsx                     partes reutilizáveis do diff atual
     pr-table.ts                  colunas, texto e estados
@@ -417,11 +429,13 @@ src/features/git/
     QueryBar.tsx                 query e escopo efetivo
     PullRequestList.tsx          tabela/linhas
     PreviewPane.tsx              identidade, tabs e viewport
-    OverviewTab.tsx / ChecksTab.tsx / ActivityTab.tsx
-    CommitsTab.tsx / FilesTab.tsx / PullRequestDiff.tsx
-    SectionEditor.tsx / RepositoryPicker.tsx / ActionMenu.tsx
-    CommentDialog.tsx / ReviewDialog.tsx / AssigneesDialog.tsx
-    MergeDialog.tsx / CheckoutDialog.tsx / WorkflowApprovalDialog.tsx
+    PreviewTabContent.tsx        conteúdo das cinco abas
+    PrDiffView.tsx               diff remoto focado
+    SectionEditorModal.tsx       criação/edição de seção
+    SectionManagerModal.tsx      CRUD e ordenação
+    RepositorySetupModal.tsx     configuração de repositórios/clones
+    ActionMenuModal.tsx          disponibilidade de ações
+    PullRequestActionModal.tsx   entrada e confirmação contextual
 ```
 
 Modelos ficam sob `features/git/model/pr`, mantendo as regras existentes que
@@ -446,12 +460,12 @@ Disposer do Git encerra somente recursos iniciados por essa ferramenta.
 Transportes retornam resultado tipado; UI nunca interpreta stderr bruto como regra
 de produto. Repositórios e providers podem ter dados incompletos sem derrubar a tela.
 
-### 9.3. Configuração proposta
+### 9.3. Configuração implementada
 
-Arquivos futuros em `$XDG_CONFIG_HOME/tuiminal/`, com fallback para
-`~/.config/tuiminal/`: `git-pr.yaml` e `git-pr-session.json`. Não criar esses
-arquivos na tarefa de planejamento. Versão de schema obrigatória; gravação atômica
-e permissões restritas. Ler erro de YAML sem apagar ou regravar o arquivo original.
+Arquivo em `$XDG_CONFIG_HOME/tuiminal/git-pr.yaml`, com fallback para
+`~/.config/tuiminal/git-pr.yaml`. A versão de schema é obrigatória; a gravação é
+atômica e restrita a `0600`. Erro de YAML é exibido sem apagar ou regravar o
+original. Seleção, cache e drafts remotos continuam apenas em memória.
 
 Exemplo ilustrativo do schema candidato, não compatibilidade automática com gh-dash:
 
@@ -472,7 +486,8 @@ defaults:
     discreet: true
 profiles:
   /caminho/canonico/projeto:
-    repositories: [equipe/api, equipe/web, equipe/infra]
+    # Vazio = conta autenticada completa; itens tornam-se filtros restritivos.
+    repositories: []
     sections:
       - id: mine
         title: Meus PRs
@@ -496,7 +511,8 @@ nesta versão; preferências não contêm cópias desses conteúdos.
 
 ## 10. Desempenho e limites
 
-Valores abaixo são hipóteses de engenharia para medir e ajustar, não resultados:
+Limites implementados e medidos localmente; os números completos e o ambiente
+estão em [docs/benchmarks/git-pr.md](docs/benchmarks/git-pr.md):
 
 | Recurso | Orçamento inicial |
 | --- | --- |
@@ -509,7 +525,7 @@ Valores abaixo são hipóteses de engenharia para medir e ajustar, não resultad
 | Timeout de leitura | 30s, com cancelamento e reaproveitamento do último snapshot. |
 | Diff/Markdown | Limites explícitos por documento e LRU global; iniciar com 2MiB de diff e 256KiB de descrição. |
 | Memória de cache | Teto global inicial de 32MiB para dados de PR, com descarte LRU. |
-| Tempo de resposta local | Meta p95 <50ms para mover seleção em lista já carregada; medir sem incluir rede. |
+| Tempo de resposta local | Seleção de 100 mil movimentos: p95 0,96 ms; merge de cache 20k+5k: p95 116,17 ms. |
 
 Não duplicar estado bruto/normalizado/renderizado indefinidamente. Manter somente
 linhas visíveis mais overscan, e documentos de diff com renderização limitada.
@@ -521,6 +537,9 @@ re-renderizar todas as seções e todos os diffs. Separar cancelamento de respos
 obsoleta: mesmo se transporte não cancelar a tempo, geração/identidade impede
 aplicar dados de outro PR, perfil, host ou conta.
 
+No benchmark local, Markdown de 256 KiB ficou em p95 52,73 ms e diff de 2 MiB em
+p95 155,60 ms. Esses números são referência de regressão, não latência de rede.
+
 Respeitar Retry-After, rate-limit primário/secundário e reset quando disponíveis.
 Usar requests condicionais/cache do transporte em leituras REST apropriadas;
 não tratar GraphQL como endpoint com ETag garantido. Carregar seções inativas sob
@@ -529,108 +548,108 @@ demanda; `[Shift+R]` atualiza explicitamente o conjunto respeitando a fila.
 
 ## 11. Fases e entregas
 
-Cada fase entrega código verificável, documentação atualizada e testes. As caixas
-ficam desmarcadas até a implementação correspondente passar pelos critérios.
+Cada fase entregou código verificável, documentação e testes. As caixas abaixo
+registram o estado final validado no worktree isolado.
 
 ### Fase 0 — contratos, referência e fixtures
 
-- [ ] Revisar wireframes e validar navegação/responsividade em protótipo nativo.
-- [ ] Registrar default Base, H/L de foco, seções `<`/`>`, modais e estados de erro.
-- [ ] Fixar versão mínima/capacidades de `gh`, APIs e suporte de host.
-- [ ] Criar fixtures fictícias: PRs abertos/draft/merged/closed, forks e permissão negada.
-- [ ] Criar contratos normalizados, máquina de ações e testes de consulta/identidade.
+- [x] Revisar wireframes e validar navegação/responsividade em protótipo nativo.
+- [x] Registrar default Base, H/L de foco, seções `<`/`>`, modais e estados de erro.
+- [x] Fixar versão mínima/capacidades de `gh`, APIs e suporte de host.
+- [x] Criar fixtures fictícias: PRs abertos/draft/merged/closed, forks e permissão negada.
+- [x] Criar contratos normalizados, máquina de ações e testes de consulta/identidade.
 
 Saída: nenhum acesso a conta/repo real é necessário para testar os contratos.
 
 ### Fase 1 — shell Base/PR e isolamento
 
-- [ ] Extrair Base preservando comportamento, referências e shortcuts existentes.
-- [ ] Criar wrapper e `[1]`/`[2]` com mouse, lazy mount e estado independente.
-- [ ] Integrar `gitKeyboardScope`, modais, shutdown e contexto do tutorial.
-- [ ] Testar Git sem repo, modo isolado e transições entre ferramentas.
-- [ ] Preservar a Base offline; nenhum processo gh antes de visitar PR.
+- [x] Extrair Base preservando comportamento, referências e shortcuts existentes.
+- [x] Criar wrapper e `[1]`/`[2]` com mouse, lazy mount e estado independente.
+- [x] Integrar `gitKeyboardScope`, modais, shutdown e contexto do tutorial.
+- [x] Testar Git sem repo, modo isolado e transições entre ferramentas.
+- [x] Preservar a Base offline; nenhum processo gh antes de visitar PR.
 
 Saída: R01 completo; PR pode apresentar dados fictícios nesta fase, rotulados como demo.
 
 ### Fase 2 — adaptador GitHub e persistência
 
-- [ ] Binário/capacidades, auth/host/viewer, erros tipados e transporte cancelável.
-- [ ] JSON validado, stdin, timeouts, limites, logs sem segredo e args sem shell.
-- [ ] Schema versionado, perfis por projeto, mapa de clones e gravação atômica.
-- [ ] API fake e executável gh fake para testar todo o transporte sem credenciais.
-- [ ] Troca de identidade invalida dados e ações preparadas.
+- [x] Binário/capacidades, auth/host/viewer, erros tipados e transporte cancelável.
+- [x] JSON validado, stdin, timeouts, limites, logs sem segredo e args sem shell.
+- [x] Schema versionado, perfis por projeto, mapa de clones e gravação atômica.
+- [x] API fake e executável gh fake para testar todo o transporte sem credenciais.
+- [x] Troca de identidade invalida dados e ações preparadas.
 
 Saída: leituras paginadas demonstradas contra fixture; login ausente tem saída clara.
 
 ### Fase 3 — dashboard e seções
 
-- [ ] Faixa de seções, queries, escopo, tabela e rodapé contextual.
-- [ ] Presets completos e gerenciamento por UI, incluindo colunas e ordem.
-- [ ] Agregação multirrepositório, paginação, cache e pesquisa parcial sinalizada.
-- [ ] Filtrar/atualizar sem perder seleção nem reapontar ação.
-- [ ] Contagens e campos faltantes corretos; testes de Unicode e três layouts.
+- [x] Faixa de seções, queries, escopo, tabela e rodapé contextual.
+- [x] Presets completos e gerenciamento por UI, incluindo colunas e ordem.
+- [x] Agregação multirrepositório, paginação, cache e pesquisa parcial sinalizada.
+- [x] Filtrar/atualizar sem perder seleção nem reapontar ação.
+- [x] Contagens e campos faltantes corretos; testes de Unicode e três layouts.
 
 Saída: R02–R04; resumo de R05 disponível sem um request por célula.
 
 ### Fase 4 — prévia completa e navegação de leitura
 
-- [ ] Visão geral, Checks, Atividade, Commits e Arquivos com paginação própria.
-- [ ] Descrição segura expansível; revisores, equipes e code owners solicitados.
-- [ ] Identidade/SHAs persistem durante refresh e mudanças rápidas de seleção.
-- [ ] Copiar número/URL/SHA, browser e feedback acessível.
-- [ ] Prévia direita/baixo/painel único e restauração do foco/scroll.
+- [x] Visão geral, Checks, Atividade, Commits e Arquivos com paginação própria.
+- [x] Descrição segura expansível; revisores, equipes e code owners solicitados.
+- [x] Identidade/SHAs persistem durante refresh e mudanças rápidas de seleção.
+- [x] Copiar número/URL/SHA, browser e feedback acessível.
+- [x] Prévia direita/baixo/painel único e restauração do foco/scroll.
 
 Saída: R05–R09 e R21; nenhum controle promete carregar toda uma conexão parcial.
 
 ### Fase 5 — diffs de PR, arquivo e commit
 
-- [ ] Adaptar renderer/parser sem dependência de stage ou snapshot local.
-- [ ] Navegação por arquivo/hunk e comparação vinculada a SHAs.
-- [ ] Arquivos especiais, renomes, binários, patches ausentes e limites tratados.
-- [ ] Modos unificado/split/intraline, resize, copy/scroll e retorno contextual.
-- [ ] Comparar desempenho e limitar renderização de diffs grandes.
+- [x] Adaptar renderer/parser sem dependência de stage ou snapshot local.
+- [x] Navegação por arquivo/hunk e comparação vinculada a SHAs.
+- [x] Arquivos especiais, renomes, binários, patches ausentes e limites tratados.
+- [x] Modos unificado/split/intraline, resize, copy/scroll e retorno contextual.
+- [x] Comparar desempenho e limitar renderização de diffs grandes.
 
 Saída: R10; Base continua com seus diffs e ações locais intactos.
 
 ### Fase 6 — escrita de metadados e revisão
 
-- [ ] Menu de ações com elegibilidade e motivo das indisponíveis.
-- [ ] Comentar, aprovar/template e responsáveis com formulários seguros.
-- [ ] Draft → pronto, fechar/reabrir com confirmação e reconciliação.
-- [ ] Prevenir duplicação, revalidar identidade/head e tratar resultado incerto.
-- [ ] Manter drafts em memória e respeitar a pilha de Esc.
+- [x] Menu de ações com elegibilidade e motivo das indisponíveis.
+- [x] Comentar, aprovar/template e responsáveis com formulários seguros.
+- [x] Draft → pronto, fechar/reabrir com confirmação e reconciliação.
+- [x] Prevenir duplicação, revalidar identidade/head e tratar resultado incerto.
+- [x] Manter drafts em memória e respeitar a pilha de Esc.
 
 Saída: R12–R14, R18 e R20. Testes de escrita exclusivamente em fixtures.
 
 ### Fase 7 — checkout, atualizar branch e merge
 
-- [ ] Mapa/seleção/validação do clone; política para worktree suja e operação Git ativa.
-- [ ] Checkout confirmado; refresh da Base correto para o clone lançado.
-- [ ] Atualização da branch com SHA esperado e estado assíncrono/conflito.
-- [ ] Merge permitido por método, sem bypass, com fila/auto-merge explícitos.
-- [ ] Resultado confirmado por nova consulta; nenhuma exclusão automática de branch.
+- [x] Mapa/seleção/validação do clone; política para worktree suja e operação Git ativa.
+- [x] Checkout confirmado; refresh da Base correto para o clone lançado.
+- [x] Atualização da branch com SHA esperado e estado assíncrono/conflito.
+- [x] Merge permitido por método, sem bypass, com fila/auto-merge explícitos.
+- [x] Resultado confirmado por nova consulta; nenhuma exclusão automática de branch.
 
 Saída: R11, R17 e R19; teste local apenas em repositórios temporários.
 
 ### Fase 8 — acompanhamento e autorização de workflows
 
-- [ ] Scheduler limitado por host, watches por identidade/SHA/tentativa e backoff.
-- [ ] CI do GitHub e externos, nenhum check versus erro versus pendência.
-- [ ] Notificação interna, desktop opt-in e modo discreto; parar/retomar explícitos.
-- [ ] Distinguir workflow de fork de deployment protegido.
-- [ ] Aprovação de run selecionado com risco/origem e permissões visíveis.
-- [ ] Encerrar recursos no shutdown e não notificar repetidamente estado antigo.
+- [x] Scheduler limitado por host, watches por identidade/SHA/tentativa e backoff.
+- [x] CI do GitHub e externos, nenhum check versus erro versus pendência.
+- [x] Notificação interna, desktop opt-in e modo discreto; parar/retomar explícitos.
+- [x] Distinguir workflow de fork de deployment protegido.
+- [x] Aprovação de run selecionado com risco/origem e permissões visíveis.
+- [x] Encerrar recursos no shutdown e não notificar repetidamente estado antigo.
 
 Saída: R15–R16, sem daemon e sem modificar settings de segurança dos repositórios.
 
 ### Fase 9 — acabamento, regressão e entrega
 
-- [ ] Completar R22: mouse, foco, traduções, paletas, layouts e ajuda.
-- [ ] Tutorial Git/PR com dados fictícios e alvos estáveis.
-- [ ] Verificação visual contra referência e gravação dos percursos principais.
-- [ ] Benchmarks locais de navegação/cache/diff e relatório de limites reais.
-- [ ] Atualizar README, AGENTS, arquitetura e guia de uso sem alegações antecipadas.
-- [ ] Conferir matriz R01–R22, testes, build/check e link global do CLI intacto.
+- [x] Completar R22: mouse, foco, traduções, paletas, layouts e ajuda.
+- [x] Tutorial Git/PR com dados fictícios e alvos estáveis.
+- [x] Verificação visual por frames do renderer nos percursos principais.
+- [x] Benchmarks locais de navegação/cache/diff e relatório de limites reais.
+- [x] Atualizar README, AGENTS, arquitetura e guia de uso sem alegações antecipadas.
+- [x] Conferir matriz R01–R22, testes e gates do projeto.
 
 Saída: funcionalidade completa somente quando todos os requisitos têm evidência.
 
@@ -686,6 +705,39 @@ Mudanças de teclado/foco/mount também exigem instância real isolada de Tuimin
 config temporária, repo descartável e encerramento somente da sessão do teste.
 Relatório final separa testes locais, remotos opt-in, visuais e o que não foi medido.
 
+### 12.5. Matriz final de evidências R01–R22
+
+| ID | Estado | Evidência automatizada e implementação |
+| --- | --- | --- |
+| R01 | Concluído | `tests/tui/git-pr.test.tsx`: Base default, entrada em PR, lazy mount, mouse e preservação de estado; `GitFeatureWorkspace.tsx`. |
+| R02 | Concluído | `tests/github-transport.test.ts`: descoberta da conta, agregação limitada, cache e paginação multirrepositório; `tests/git-pr.test.ts`: query ampla limitada a viewer/organizações; identidade host + node ID em `model/pr/query.ts`. |
+| R03 | Concluído | CRUD, duplicação, ordem e proteção da última seção em `tests/git-pr.test.ts`; gerenciador/editor em `ui/pr/Section*Modal.tsx`; quatro presets em `model/pr/config.ts`. |
+| R04 | Concluído | Parser/validador de filtros e aspas em `tests/git-pr.test.ts`; query temporária e aplicação explícita cobertas em `tests/tui/git-pr.test.tsx`. |
+| R05 | Concluído | Colunas normalizadas/configuráveis em `model/pr/config.ts`, `ui/pr/presentation.ts` e teste de matriz responsiva da TUI. |
+| R06 | Concluído | Cinco abas, carregamento por conexão e navegação em `PreviewPane.tsx`, `PreviewTabContent.tsx` e testes TUI. |
+| R07 | Concluído | Revisões, pedidos e `asCodeOwner` normalizados por `services/github/details.ts` e fixtures de detalhes. |
+| R08 | Concluído | Commits paginados, seleção e cópia do SHA completo em `PreviewTabContent.tsx`/`usePullRequestWorkspaceKeyboard.ts`; transporte em testes. |
+| R09 | Concluído | Limite de 256 KiB, controles removidos, HTML inerte, links HTTPS e expansão em `model/pr/content.ts`, `rendering/pr-markdown.tsx` e `tests/git-pr-runtime.test.ts`. |
+| R10 | Concluído | Diff de PR/arquivo/commit, SHAs imutáveis, unificado/split/intraline e casos especiais em `model/pr/diff.ts`, `PrDiffView.tsx` e `tests/git-pr-runtime.test.ts`. |
+| R11 | Concluído | Escolha/mapeamento de clone, remote correto, árvore limpa, operações Git e worktree real em `services/pr-checkout.ts` e `tests/git-pr-runtime.test.ts`. |
+| R12 | Concluído | Adição/remoção de responsáveis, picker e reconciliação em `AssigneePicker.tsx`, `services/github/mutations.ts` e `tests/git-pr-actions.test.ts`. |
+| R13 | Concluído | Comentário por stdin, draft em memória, execução única e resultado incerto em `usePullRequestActions.tsx`, `services/pr-actions.ts` e testes de ações. |
+| R14 | Concluído | Aprovação vinculada ao commit, comentário configurável opcional e sem autoenvio em `mutations.ts` e `tests/git-pr-actions.test.ts`. |
+| R15 | Concluído | Runs elegíveis de fork separados de deployment protection e aprovação individual em `services/github/workflows.ts` e testes de runtime. |
+| R16 | Concluído | Scheduler com teto/backoff, identidade por SHA/tentativa, aviso único e modo discreto em `pr-watch.ts`, `pr-notifications.ts` e testes de runtime. |
+| R17 | Concluído | Update branch com `expected_head_sha`, confirmação e reconciliação direta em `mutations.ts`, `pr-actions.ts` e testes de ações. |
+| R18 | Concluído | Disponibilidade de draft e `gh pr ready` explícito cobertos pela matriz de ações e testes fake. |
+| R19 | Concluído | Head fixado, métodos permitidos, sem bypass/delete, merge queue/auto-merge distinguidos em `mutations.ts` e `tests/git-pr-actions.test.ts`. |
+| R20 | Concluído | Fechar/reabrir com elegibilidade, confirmação e nova leitura cobertos pelo coordenador e fixtures de estados. |
+| R21 | Concluído | Número/URL/SHA copiados contextualmente e URL explícita aberta sem shell em `read-actions.ts`, teclado da PR e testes de transporte/runtime. |
+| R22 | Concluído | `tests/tui/git-pr.test.tsx`: teclado, mouse e 44 combinações de tamanho/idioma/paleta/layout; tutorial com seis alvos em `tests/tutorial.test.ts`. |
+
+Validação final local: 238 testes unitários aprovados, 6 integrações de drivers de
+banco ignoradas por serem opt-in, 28 testes TUI aprovados, 0 violações de
+arquitetura e 0 regressões de manutenibilidade. A suíte remota de escrita não foi
+executada porque este trabalho deliberadamente não recebeu autorização para agir
+em PRs reais.
+
 ## 13. Riscos e decisões pendentes
 
 | Risco/decisão | Default proposto e momento de validação |
@@ -703,14 +755,16 @@ Relatório final separa testes locais, remotos opt-in, visuais e o que não foi 
 | Módulo Git já grande | Composição pequena e serviços/modelos testáveis; não criar um hook gigante substituto. |
 | Compatibilidade Enterprise/Windows | Validar por capacidade e plataforma antes de anunciar; não bloquear Git local. |
 
-Pendências não impedem documentar o escopo, mas precisam ser resolvidas na fase
-indicada. Mudança que retire R01–R22 exige decisão explícita, não omissão silenciosa.
+Os defaults acima foram validados localmente. Compatibilidade ampla com GitHub
+Enterprise e Windows continua condicionada à detecção de capacidades em runtime;
+isso não reduz R01–R22 em GitHub.com. Mudança futura que retire qualquer requisito
+exige decisão explícita, não omissão silenciosa.
 
 ## 14. Referências técnicas
 
 Referências de interface e imagens estão no [anexo de design](docs/design/git-pr-interface.md).
-As páginas abaixo fundamentam integrações, não são uma promessa de que o app já
-as implementa. Conferir suporte na versão mínima escolhida antes de codificar.
+As páginas abaixo fundamentam as integrações implementadas. O app ainda confere
+capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é igual.
 
 - [GitHub CLI: PR](https://cli.github.com/manual/gh_pr)
 - [Busca de PRs](https://cli.github.com/manual/gh_search_prs)
@@ -730,4 +784,10 @@ as implementa. Conferir suporte na versão mínima escolhida antes de codificar.
 ## Registro do planejamento
 
 - 2026-09-04: primeira especificação, com R01–R22, fases 0–9 e anexo visual.
-  Trabalho desta tarefa restrito a documentação; nenhuma fase de produto concluída.
+- 2026-09-04: Fase 0 concluída; shell Base/PR, transporte fake e configuração da Fase 2 iniciados.
+- 2026-09-04: fases 1–9 concluídas no worktree `codex/git-pr-workspace`; R01–R22
+  associados a testes, gates globais aprovados e benchmark documentado. Nenhuma
+  mutação remota, commit ou push foi realizado.
+- 2026-09-04: o escopo padrão foi corrigido após validação real: lista vazia de
+  repositórios agora significa toda a conta autenticada, queries amplas recebem
+  limites de viewer/organizações e repositórios manuais são apenas filtros.

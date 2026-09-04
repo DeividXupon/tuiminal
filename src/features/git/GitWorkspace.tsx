@@ -42,7 +42,13 @@ import {
 } from "./rendering/diff"
 import { commitTitle, gitSnapshotSignature } from "./rendering/presentation"
 
-export function GitViewer({ active }: { active: boolean }) {
+export function GitBaseWorkspace({
+  active,
+  refreshRequest = 0,
+}: {
+  active: boolean
+  refreshRequest?: number
+}) {
   const terminal = useTerminalDimensions()
   const narrowGit = terminal.width < 78
   const fileListRef = useRef<SelectRenderable | null>(null)
@@ -73,7 +79,6 @@ export function GitViewer({ active }: { active: boolean }) {
   const [narrowPane, setNarrowPane] = useState<NarrowGitPane>("files")
   selectedPathRef.current = selectedPath
   viewRef.current = view
-
   const selectedFile = useMemo(
     () => snapshot?.files.find((file) => file.path === selectedPath) ?? null,
     [selectedPath, snapshot],
@@ -105,7 +110,6 @@ export function GitViewer({ active }: { active: boolean }) {
   const selectedCommit = snapshot?.commits[selectedCommitIndex] ?? null
   const stagedCount = snapshot?.files.filter((file) => file.staged).length ?? 0
   const unstagedCount = snapshot?.files.filter((file) => file.unstaged).length ?? 0
-
   const selectCommitByHash = useCallback(
     (hash: string, nextView: ViewMode = "graph") => {
       const index = snapshot?.commits.findIndex((commit) => commit.fullHash === hash) ?? -1
@@ -117,12 +121,10 @@ export function GitViewer({ active }: { active: boolean }) {
     },
     [narrowGit, snapshot?.commits],
   )
-
   const fileOptions = useMemo(
     () => createFileTreeOptions(snapshot?.files ?? [], collapsedFolders),
     [collapsedFolders, snapshot?.files],
   )
-
   const selectedTreeIndex = Math.max(
     0,
     fileOptions.findIndex(
@@ -135,7 +137,6 @@ export function GitViewer({ active }: { active: boolean }) {
     () => new Map((snapshot?.commits ?? []).map((commit) => [commit.fullHash, commit])),
     [snapshot?.commits],
   )
-
   const estimatedMainHeight = Math.max(4, terminal.height - (narrowGit ? 10 : 8))
   const visibleHeight = Math.max(3, estimatedMainHeight - 5)
   const previewWidth = narrowGit
@@ -148,7 +149,6 @@ export function GitViewer({ active }: { active: boolean }) {
     : 0
   const compactGraphRowLimit = Math.max(1, compactGraphHeight - 3)
   const fileTreeHeight = Math.max(2, estimatedMainHeight - compactGraphHeight - 3)
-
   const refresh = useCallback(async (showLoading = true) => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current
     const operation = (async () => {
@@ -196,18 +196,18 @@ export function GitViewer({ active }: { active: boolean }) {
       if (refreshInFlightRef.current === operation) refreshInFlightRef.current = null
     }
   }, [])
-
   useEffect(() => {
     if (!active || snapshot) return
     void refresh()
   }, [active, refresh, snapshot])
-
+  useEffect(() => {
+    if (active && refreshRequest > 0) void refresh(false)
+  }, [active, refresh, refreshRequest])
   useEffect(() => {
     if (!active || !snapshot) return
     const interval = setInterval(() => void refresh(false), 8000)
     return () => clearInterval(interval)
   }, [active, refresh, snapshot])
-
   useEffect(() => {
     if (active && snapshot?.isRepository) fileListRef.current?.focus()
   }, [active, snapshot?.isRepository])

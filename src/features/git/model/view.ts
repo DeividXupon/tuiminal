@@ -46,3 +46,17 @@ export type FileTreeOption = {
   description: string
   value: string
 }
+
+export function resolveDiffDocumentPath(header: string, selectedPath?: string) {
+  if (selectedPath) return selectedPath
+  const plainMarker = header.lastIndexOf(" b/")
+  if (plainMarker >= 0) return header.slice(plainMarker + 3)
+  const quoted = [...header.matchAll(/"((?:\\.|[^"\\])*)"/g)].at(-1)?.[0]
+  if (!quoted) return "arquivo"
+  try {
+    const decoded = JSON.parse(quoted) as string
+    return decoded.startsWith("b/") ? decoded.slice(2) : decoded
+  } catch {
+    return "arquivo"
+  }
+}

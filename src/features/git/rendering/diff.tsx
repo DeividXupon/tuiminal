@@ -1,14 +1,14 @@
 import { pathToFiletype, type RGBA, type TextChunk } from "@opentui/core"
 import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { COLORS } from "../../../core/settings/theme"
-
 import { DIFF_SYNTAX_STYLE, DIFF_CHANGED_HIGHLIGHT, DIFF_REMOVED_HIGHLIGHT } from "./constants"
-import type {
-  DiffLayout,
-  ParsedDiffLine,
-  DiffDocument,
-  CharacterRange,
-  InlineDiffRow,
+import {
+  resolveDiffDocumentPath,
+  type CharacterRange,
+  type DiffDocument,
+  type DiffLayout,
+  type InlineDiffRow,
+  type ParsedDiffLine,
 } from "../model/view"
 
 export function fitLine(line: string, width: number) {
@@ -354,7 +354,7 @@ export function parseDiffDocuments(input: string, selectedPath?: string): DiffDo
   const flush = () => {
     if (!lines.length) return
     const source = lines.join("\n")
-    const path = selectedPath ?? lines[0]?.match(/ b\/(.+)$/)?.[1] ?? "arquivo"
+    const path = resolveDiffDocumentPath(lines[0] ?? "", selectedPath)
     const unifiedLineCount = lines.filter(
       (line) => /^[- +]/.test(line) && !line.startsWith("--- ") && !line.startsWith("+++ "),
     ).length

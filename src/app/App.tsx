@@ -333,7 +333,9 @@ export function App() {
               onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
             />
           )}
-          {ONLY_TAB === "git" && <GitViewer active={!interactionBlocked} />}
+          {ONLY_TAB === "git" && (
+            <GitViewer active={!interactionBlocked} tutorialMode={tutorialOpen} />
+          )}
           {ONLY_TAB === "runner" && <Runner active={!interactionBlocked} />}
           {ONLY_TAB === "http" && (
             <HttpClient active={!interactionBlocked} onUnsavedChangesChange={exit.track} />
@@ -481,7 +483,10 @@ export function App() {
             {...(activeTab === "git" ? { id: "tutorial-current-tool" } : {})}
             style={{ flexGrow: 1 }}
           >
-            <GitViewer active={activeTab === "git" && !interactionBlocked} />
+            <GitViewer
+              active={activeTab === "git" && !interactionBlocked}
+              tutorialMode={tutorialOpen}
+            />
           </box>
         ) : null}
       </Tabs.Panel>

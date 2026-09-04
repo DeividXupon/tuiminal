@@ -36,6 +36,12 @@ async function runGit(cwd: string, args: string[]): Promise<GitCommandResult> {
   })
 }
 
+export async function resolveGitProjectScope(directory = GIT_LAUNCH_DIRECTORY) {
+  const requested = resolve(directory)
+  const rootResult = await runGit(requested, ["rev-parse", "--show-toplevel"])
+  return rootResult.exitCode === 0 ? resolve(rootResult.stdout.trim()) : requested
+}
+
 function parseStatus(output: string): GitFile[] {
   return output
     .split("\0")
