@@ -6,6 +6,12 @@ export type KeyboardScope = {
   deferEscape?: boolean
 }
 
+export function focusedRenderableId(
+  renderable: { id?: string; focused?: boolean } | null | undefined,
+) {
+  return renderable?.focused ? renderable.id : undefined
+}
+
 export function ownsInterrupt(scope: KeyboardScope, focusedId: string | undefined) {
   return Boolean(
     scope.localCtrlC ||

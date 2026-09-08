@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { ownsInterrupt, ownsKeyboardFocus } from "../src/core/keyboard/scope"
+import { focusedRenderableId, ownsInterrupt, ownsKeyboardFocus } from "../src/core/keyboard/scope"
+import { gitKeyboardScope } from "../src/features/git/keyboard"
+import { httpKeyboardScope } from "../src/features/http/keyboard"
 import { shutdownResources } from "../src/core/lifecycle/shutdown"
 import { definedProperties } from "../src/shared/data/defined-properties"
 import { runnerKeyboardScope } from "../src/features/runner/keyboard"
@@ -24,6 +26,16 @@ describe("application boundaries", () => {
     expect(ownsInterrupt(terminalKeyboardScope, "free-terminal-1")).toBe(true)
     expect(ownsInterrupt(terminalKeyboardScope, "terminal-command-input")).toBe(false)
     expect(ownsInterrupt(runnerKeyboardScope, "runner-command-input")).toBe(false)
+    expect(ownsKeyboardFocus(gitKeyboardScope, "git-pr-action-modal")).toBe(true)
+    expect(ownsKeyboardFocus(gitKeyboardScope, "git-pr-open-browser")).toBe(false)
+    expect(ownsKeyboardFocus(httpKeyboardScope, "http-url-input")).toBe(true)
+    expect(ownsKeyboardFocus(httpKeyboardScope, "http-response-scroll-scratch")).toBe(false)
+  })
+
+  test("stale or blurred renderables do not retain global shortcut ownership", () => {
+    expect(focusedRenderableId({ id: "http-url-input", focused: true })).toBe("http-url-input")
+    expect(focusedRenderableId({ id: "http-url-input", focused: false })).toBeUndefined()
+    expect(focusedRenderableId({ id: "db-connection-name" })).toBeUndefined()
   })
 
   test("one failing resource never prevents another from shutting down", async () => {

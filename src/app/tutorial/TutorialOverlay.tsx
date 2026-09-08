@@ -7,6 +7,7 @@ import { displayWidth, translateUi } from "../../shared/i18n/index"
 import { COLORS } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { GIT_TUTORIAL_STEPS } from "../../features/git"
+import { HTTP_TUTORIAL_STEPS } from "../../features/http"
 
 export type TutorialStep = {
   targetId: string
@@ -17,18 +18,8 @@ export type TutorialStep = {
   kind: "block" | "control" | "action"
   accent?: string
 }
-type TargetRect = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-type CardGeometry = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+type TargetRect = { x: number; y: number; width: number; height: number }
+type CardGeometry = { x: number; y: number; width: number; height: number }
 
 type CardLayout = CardGeometry & {
   descriptionHeight: number
@@ -369,6 +360,7 @@ export function estimateTutorialTextHeight(
 export function getTutorialSteps(screen: string): TutorialStep[] {
   if (screen === "database") return DATABASE_TUTORIAL_STEPS
   if (screen === "git") return [...GIT_TUTORIAL_STEPS]
+  if (screen === "http") return [...HTTP_TUTORIAL_STEPS]
   return GENERIC_TUTORIAL_STEPS
 }
 

@@ -1,12 +1,7 @@
 import { ShortcutText } from "../shared/ui/ShortcutText"
 import { BRAND_COLOR } from "../shared/ui/brand"
-import {
-  type ToolId as AppTab,
-  TOOL_SHORTCUTS as TAB_SHORTCUTS,
-  TOOL_LABELS as TAB_LABELS,
-  resolveToolLaunch,
-} from "./tool-catalog"
-import { ownsKeyboardFocus, ownsInterrupt } from "../core/keyboard/scope"
+import { type ToolId as AppTab, TOOL_LABELS as TAB_LABELS, resolveToolLaunch } from "./tool-catalog"
+import { focusedRenderableId, ownsKeyboardFocus, ownsInterrupt } from "../core/keyboard/scope"
 import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Tabs } from "@tuiparts/react/tabs"
@@ -21,8 +16,9 @@ import { DatabaseQueryHistoryModal } from "../features/database"
 import { type DatabaseQueryRerunRequest, DatabaseViewer } from "../features/database"
 import { FreeTerminal } from "../features/terminal"
 import { GitViewer } from "../features/git"
-import { HttpClient } from "../features/http"
+import { HttpClient, type HttpClientUrlRequest } from "../features/http"
 import { InlineButton } from "../shared/ui/InlineButton"
+import { MountWhen } from "../shared/ui/MountWhen"
 import { Runner } from "../features/runner"
 import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
@@ -42,8 +38,10 @@ import {
 import { NavigationTab } from "./ui/NavigationTab"
 import { UnsavedChangesExitModal } from "./ui/UnsavedChangesExitModal"
 import { useApplicationExit } from "./hooks/use-application-exit"
+import { useNotificationFromValue, withNotifications } from "../shared/notifications/index"
+import { globalApplicationShortcut } from "./global-shortcuts"
 
-export function App() {
+function AppContent() {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const [{ onlyTab: ONLY_TAB, initialTab: INITIAL_TAB }] = useState(() =>
@@ -59,13 +57,11 @@ export function App() {
   const [queryHistoryEntries, setQueryHistoryEntries] = useState<DatabaseQueryHistoryEntry[]>([])
   const [databaseQueryRerunRequest, setDatabaseQueryRerunRequest] =
     useState<DatabaseQueryRerunRequest | null>(null)
-  const [runnerHttpRequest, setRunnerHttpRequest] = useState<{
-    id: number
-    url: string
-  } | null>(null)
+  const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [configurationSection, setConfigurationSection] = useState<ConfigurationSection>("palette")
   const [settingsNotice, setSettingsNotice] = useState("")
+  useNotificationFromValue(settingsNotice, { source: "Configurações" })
   const settingsRef = useRef(settings)
   const openRunnerPortInHttp = useCallback((url: string) => {
     setRunnerHttpRequest({ id: Date.now(), url })
@@ -200,6 +196,17 @@ export function App() {
 
   useKeyboard((key) => {
     exit.guardKey(key)
+    const focusedId = focusedRenderableId(renderer.currentFocusedRenderable)
+    const keyboardScope = TOOL_KEYBOARD_SCOPES[ONLY_TAB ?? activeTab]
+    const globalLayerAvailable = !interactionBlocked && !ownsKeyboardFocus(keyboardScope, focusedId)
+    const globalShortcut = globalApplicationShortcut(key, globalLayerAvailable, Boolean(ONLY_TAB))
+    if (globalShortcut) {
+      key.preventDefault()
+      if (globalShortcut === "settings") openSettings()
+      else setActiveTab(globalShortcut)
+      return
+    }
+
     if (key.defaultPrevented) return
 
     if (queryHistoryOpen || sensitiveTermsOpen) return
@@ -232,36 +239,12 @@ export function App() {
       return
     }
 
-    const focusedId = renderer.currentFocusedRenderable?.id
-    const keyboardScope = TOOL_KEYBOARD_SCOPES[ONLY_TAB ?? activeTab]
-
     if (key.ctrl && key.name === "c" && !ownsInterrupt(keyboardScope, focusedId)) {
       void exit.quit()
       return
     }
 
     if (ownsKeyboardFocus(keyboardScope, focusedId)) return
-
-    if (!key.shift && (key.name === "," || key.sequence === "," || key.raw === ",")) {
-      key.preventDefault()
-      openSettings()
-      return
-    }
-
-    if (!ONLY_TAB) {
-      const shortcut = TAB_SHORTCUTS.find(
-        (candidate) =>
-          key.name === candidate.symbol ||
-          key.sequence === candidate.symbol ||
-          key.raw === candidate.symbol ||
-          (key.shift && key.name === candidate.key),
-      )
-      if (shortcut) {
-        key.preventDefault()
-        setActiveTab(shortcut.tab)
-        return
-      }
-    }
 
     if (key.name === "escape" && keyboardScope.deferEscape) {
       setTimeout(() => {
@@ -276,13 +259,15 @@ export function App() {
   })
 
   const exitModal = (
-    <UnsavedChangesExitModal
-      open={exit.open}
-      terminalWidth={terminal.width}
-      terminalHeight={terminal.height}
-      onConfirm={() => void exit.quit(true)}
-      onClose={exit.close}
-    />
+    <MountWhen when={exit.open}>
+      <UnsavedChangesExitModal
+        open
+        terminalWidth={terminal.width}
+        terminalHeight={terminal.height}
+        onConfirm={() => void exit.quit(true)}
+        onClose={exit.close}
+      />
+    </MountWhen>
   )
 
   if (ONLY_TAB) {
@@ -317,6 +302,7 @@ export function App() {
               }}
             />
             <InlineButton
+              id="app-exit-button"
               label={compactNavigation ? "[Q]" : "[Q] Sair"}
               accent={COLORS.focus}
               onPress={() => void exit.quit()}
@@ -338,49 +324,57 @@ export function App() {
           )}
           {ONLY_TAB === "runner" && <Runner active={!interactionBlocked} />}
           {ONLY_TAB === "http" && (
-            <HttpClient active={!interactionBlocked} onUnsavedChangesChange={exit.track} />
+            <HttpClient
+              active={!interactionBlocked}
+              tutorialMode={tutorialOpen}
+              onUnsavedChangesChange={exit.track}
+            />
           )}
           {ONLY_TAB === "terminal" && <FreeTerminal active={!interactionBlocked} />}
         </box>
-        <ConfigurationModal
-          open={settingsOpen}
-          settings={settings}
-          section={configurationSection}
-          notice={settingsNotice}
-          onClose={() => setSettingsOpen(false)}
-          onSectionChange={selectConfigurationSection}
-          onPaletteChange={(palette) => applySettings({ palette })}
-          onLayoutChange={(layout) => applySettings({ layout })}
-          onLanguageChange={(language) => applySettings({ language })}
-          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-          onReset={restoreDefaultSettings}
-          onOpenQueryHistory={openQueryHistory}
-          onStartTutorial={startTutorial}
-          queryHistoryCount={queryHistoryEntries.length}
-          tutorialLabel={TAB_LABELS[ONLY_TAB]}
-          showDatabaseSettings={showDatabaseSettings}
-        />
-        <SensitiveTermsModal
-          open={sensitiveTermsOpen}
-          terms={settings.sensitiveTerms}
-          onClose={() => setSensitiveTermsOpen(false)}
-          onSave={(terms) => {
-            applySettings({ sensitiveTerms: terms })
-            setSensitiveTermsOpen(false)
-          }}
-        />
-        <DatabaseQueryHistoryModal
-          open={queryHistoryOpen}
-          entries={queryHistoryEntries}
-          canRerun={queryHistoryCanRerun}
-          onClose={() => setQueryHistoryOpen(false)}
-          onRerun={rerunHistoryQuery}
-        />
-        <TutorialOverlay
-          open={tutorialOpen}
-          steps={tutorialSteps}
-          onClose={() => setTutorialOpen(false)}
-        />
+        <MountWhen when={settingsOpen}>
+          <ConfigurationModal
+            open
+            settings={settings}
+            section={configurationSection}
+            notice={settingsNotice}
+            onClose={() => setSettingsOpen(false)}
+            onSectionChange={selectConfigurationSection}
+            onPaletteChange={(palette) => applySettings({ palette })}
+            onLayoutChange={(layout) => applySettings({ layout })}
+            onLanguageChange={(language) => applySettings({ language })}
+            onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
+            onReset={restoreDefaultSettings}
+            onOpenQueryHistory={openQueryHistory}
+            onStartTutorial={startTutorial}
+            queryHistoryCount={queryHistoryEntries.length}
+            tutorialLabel={TAB_LABELS[ONLY_TAB]}
+            showDatabaseSettings={showDatabaseSettings}
+          />
+        </MountWhen>
+        <MountWhen when={sensitiveTermsOpen}>
+          <SensitiveTermsModal
+            open
+            terms={settings.sensitiveTerms}
+            onClose={() => setSensitiveTermsOpen(false)}
+            onSave={(terms) => {
+              applySettings({ sensitiveTerms: terms })
+              setSensitiveTermsOpen(false)
+            }}
+          />
+        </MountWhen>
+        <MountWhen when={queryHistoryOpen}>
+          <DatabaseQueryHistoryModal
+            open
+            entries={queryHistoryEntries}
+            canRerun={queryHistoryCanRerun}
+            onClose={() => setQueryHistoryOpen(false)}
+            onRerun={rerunHistoryQuery}
+          />
+        </MountWhen>
+        <MountWhen when={tutorialOpen}>
+          <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
+        </MountWhen>
         {exitModal}
       </box>
     )
@@ -395,7 +389,6 @@ export function App() {
     >
       <box
         id="tutorial-app-header"
-        key={LAYOUT.compact ? "app-header-compact" : "app-header-framed"}
         style={{
           height: LAYOUT.compact ? 1 : 2,
           flexShrink: 0,
@@ -511,6 +504,7 @@ export function App() {
           >
             <HttpClient
               active={activeTab === "http" && !interactionBlocked}
+              tutorialMode={tutorialOpen}
               initialUrlRequest={runnerHttpRequest}
               onUnsavedChangesChange={exit.track}
             />
@@ -527,46 +521,52 @@ export function App() {
           </box>
         ) : null}
       </Tabs.Panel>
-      <ConfigurationModal
-        open={settingsOpen}
-        settings={settings}
-        section={configurationSection}
-        notice={settingsNotice}
-        onClose={() => setSettingsOpen(false)}
-        onSectionChange={selectConfigurationSection}
-        onPaletteChange={(palette) => applySettings({ palette })}
-        onLayoutChange={(layout) => applySettings({ layout })}
-        onLanguageChange={(language) => applySettings({ language })}
-        onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-        onReset={restoreDefaultSettings}
-        onOpenQueryHistory={openQueryHistory}
-        onStartTutorial={startTutorial}
-        queryHistoryCount={queryHistoryEntries.length}
-        tutorialLabel={TAB_LABELS[activeTab]}
-        showDatabaseSettings={showDatabaseSettings}
-      />
-      <SensitiveTermsModal
-        open={sensitiveTermsOpen}
-        terms={settings.sensitiveTerms}
-        onClose={() => setSensitiveTermsOpen(false)}
-        onSave={(terms) => {
-          applySettings({ sensitiveTerms: terms })
-          setSensitiveTermsOpen(false)
-        }}
-      />
-      <DatabaseQueryHistoryModal
-        open={queryHistoryOpen}
-        entries={queryHistoryEntries}
-        canRerun={queryHistoryCanRerun}
-        onClose={() => setQueryHistoryOpen(false)}
-        onRerun={rerunHistoryQuery}
-      />
-      <TutorialOverlay
-        open={tutorialOpen}
-        steps={tutorialSteps}
-        onClose={() => setTutorialOpen(false)}
-      />
+      <MountWhen when={settingsOpen}>
+        <ConfigurationModal
+          open
+          settings={settings}
+          section={configurationSection}
+          notice={settingsNotice}
+          onClose={() => setSettingsOpen(false)}
+          onSectionChange={selectConfigurationSection}
+          onPaletteChange={(palette) => applySettings({ palette })}
+          onLayoutChange={(layout) => applySettings({ layout })}
+          onLanguageChange={(language) => applySettings({ language })}
+          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
+          onReset={restoreDefaultSettings}
+          onOpenQueryHistory={openQueryHistory}
+          onStartTutorial={startTutorial}
+          queryHistoryCount={queryHistoryEntries.length}
+          tutorialLabel={TAB_LABELS[activeTab]}
+          showDatabaseSettings={showDatabaseSettings}
+        />
+      </MountWhen>
+      <MountWhen when={sensitiveTermsOpen}>
+        <SensitiveTermsModal
+          open
+          terms={settings.sensitiveTerms}
+          onClose={() => setSensitiveTermsOpen(false)}
+          onSave={(terms) => {
+            applySettings({ sensitiveTerms: terms })
+            setSensitiveTermsOpen(false)
+          }}
+        />
+      </MountWhen>
+      <MountWhen when={queryHistoryOpen}>
+        <DatabaseQueryHistoryModal
+          open
+          entries={queryHistoryEntries}
+          canRerun={queryHistoryCanRerun}
+          onClose={() => setQueryHistoryOpen(false)}
+          onRerun={rerunHistoryQuery}
+        />
+      </MountWhen>
+      <MountWhen when={tutorialOpen}>
+        <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
+      </MountWhen>
       {exitModal}
     </Tabs.Root>
   )
 }
+
+export const App = withNotifications(AppContent)
