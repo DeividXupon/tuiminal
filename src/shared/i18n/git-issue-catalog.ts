@@ -2,12 +2,12 @@ import { GIT_ISSUE_CONFIG_MESSAGES } from "./git-issue-config-catalog"
 
 export const GIT_ISSUE_MESSAGES = [
   [
-    "[1] GIT · BASE LOCAL",
-    "[1] GIT · LOCAL BASE",
-    "[1] GIT · BASE LOCAL",
-    "[1] GIT・ローカル",
-    "[1] GIT · 本地",
-    "[1] GIT · 로컬",
+    "[1] GIT · DIFFS",
+    "[1] GIT · DIFFS",
+    "[1] GIT · DIFFS",
+    "[1] GIT・DIFF",
+    "[1] GIT · 差异",
+    "[1] GIT · DIFFS",
   ],
   ["[2] PR", "[2] PR", "[2] PR", "[2] PR", "[2] PR", "[2] PR"],
   ["[3] ISSUES", "[3] ISSUES", "[3] ISSUES", "[3] ISSUES", "[3] ISSUES", "[3] ISSUES"],

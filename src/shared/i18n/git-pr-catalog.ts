@@ -6,14 +6,15 @@ import { GIT_PR_WORKFLOW_MESSAGES } from "./git-pr-workflow-catalog"
 import { GIT_TUTORIAL_MESSAGES } from "./git-tutorial-catalog"
 
 export const GIT_PR_MESSAGES = [
-  ["Base", "Base", "Base", "ベース", "基础", "기본"],
+  ["Diffs", "Diffs", "Diffs", "Diff", "差异", "Diffs"],
+  ["GIT · DIFFS", "GIT · DIFFS", "GIT · DIFFS", "GIT・DIFF", "GIT · 差异", "GIT · DIFFS"],
   [
-    "GIT · BASE LOCAL",
-    "GIT · LOCAL BASE",
-    "GIT · BASE LOCAL",
-    "GIT・ローカル",
-    "GIT · 本地",
-    "GIT · 로컬",
+    "[1] GIT · DIFFS",
+    "[1] GIT · DIFFS",
+    "[1] GIT · DIFFS",
+    "[1] GIT・DIFF",
+    "[1] GIT · 差异",
+    "[1] GIT · DIFFS",
   ],
   [
     "PULL REQUESTS · DEMO",

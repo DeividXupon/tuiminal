@@ -15,7 +15,7 @@ import {
 import { DatabaseQueryHistoryModal } from "../features/database"
 import { type DatabaseQueryRerunRequest, DatabaseViewer } from "../features/database"
 import { FreeTerminal } from "../features/terminal"
-import { GitViewer } from "../features/git"
+import { GitViewer, type GitConfigurationTab } from "../features/git"
 import { HttpClient, type HttpClientUrlRequest } from "../features/http"
 import { InlineButton } from "../shared/ui/InlineButton"
 import { MountWhen } from "../shared/ui/MountWhen"
@@ -36,10 +36,15 @@ import {
   updateUiSettings,
 } from "../core/settings/theme"
 import { NavigationTab } from "./ui/NavigationTab"
-import { UnsavedChangesExitModal } from "./ui/UnsavedChangesExitModal"
+import { applicationExitLayer } from "./ui/application-exit-layer"
 import { useApplicationExit } from "./hooks/use-application-exit"
+import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
 import { useNotificationFromValue, withNotifications } from "../shared/notifications/index"
 import { globalApplicationShortcut } from "./global-shortcuts"
+import {
+  activateConfigurationSection,
+  configurationContextForTool,
+} from "./model/configuration-context"
 
 function AppContent() {
   const renderer = useRenderer()
@@ -70,17 +75,17 @@ function AppContent() {
   const configurationSectionRef = useRef(configurationSection)
   const queryRerunCounterRef = useRef(0)
   const exit = useApplicationExit(renderer, visitedTabsRef)
+  const gitConfiguration = useGitConfigurationLayer()
   const compactNavigation = terminal.width < 150
   const minimalNavigation = terminal.width < 82
   const tutorialScreen = ONLY_TAB ?? activeTab
-  const showDatabaseSettings = tutorialScreen === "database"
+  const configurationContext = configurationContextForTool(tutorialScreen)
   const configurationSections = useMemo(
-    () => configurationSectionsForContext(showDatabaseSettings),
-    [showDatabaseSettings],
+    () => configurationSectionsForContext(configurationContext),
+    [configurationContext],
   )
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
-  const interactionBlocked = settingsOpen || tutorialOpen || exit.open
-
+  const interactionBlocked = settingsOpen || gitConfiguration.open || tutorialOpen || exit.open
   const applySettings = useCallback(
     (patch: Partial<Pick<UiSettings, "palette" | "layout" | "language" | "sensitiveTerms">>) => {
       const result = updateUiSettings(patch)
@@ -90,32 +95,37 @@ function AppContent() {
     },
     [],
   )
-
   const selectConfigurationSection = useCallback((section: ConfigurationSection) => {
     configurationSectionRef.current = section
     setConfigurationSection(section)
   }, [])
-
   const restoreDefaultSettings = useCallback(() => {
     const result = resetUiSettings()
     settingsRef.current = result.settings
     setSettings(result.settings)
     setSettingsNotice(result.error ?? "Configuração padrão restaurada")
   }, [])
-
   const openSettings = useCallback(() => {
     setSettingsNotice("")
     selectConfigurationSection(configurationSections[0] ?? "palette")
-    setQueryHistoryEntries(showDatabaseSettings ? listDatabaseQueryHistory() : [])
+    setQueryHistoryEntries(configurationContext === "database" ? listDatabaseQueryHistory() : [])
     setSensitiveTermsOpen(false)
     setSettingsOpen(true)
-  }, [configurationSections, selectConfigurationSection, showDatabaseSettings])
-
+  }, [configurationContext, configurationSections, selectConfigurationSection])
   const openQueryHistory = useCallback(() => {
-    if (!showDatabaseSettings) return
+    if (configurationContext !== "database") return
     setQueryHistoryEntries(listDatabaseQueryHistory())
     setQueryHistoryOpen(true)
-  }, [showDatabaseSettings])
+  }, [configurationContext])
+
+  const openGitConfiguration = useCallback(
+    (tab: GitConfigurationTab = "diffs") => {
+      setSettingsOpen(false)
+      setSettingsNotice("")
+      gitConfiguration.openModal(tab)
+    },
+    [gitConfiguration.openModal],
+  )
 
   const queryHistoryCanRerun = useCallback(
     (entry: DatabaseQueryHistoryEntry) => {
@@ -151,7 +161,7 @@ function AppContent() {
     (direction: -1 | 1) => {
       const currentSection = normalizeConfigurationSectionForContext(
         configurationSectionRef.current,
-        showDatabaseSettings,
+        configurationContext,
       )
       const index = configurationSections.indexOf(currentSection)
       const nextIndex =
@@ -159,17 +169,13 @@ function AppContent() {
       const next = configurationSections[nextIndex]
       if (next) selectConfigurationSection(next)
     },
-    [configurationSections, selectConfigurationSection, showDatabaseSettings],
+    [configurationContext, configurationSections, selectConfigurationSection],
   )
 
   const cycleConfiguration = useCallback(
     (direction: -1 | 1) => {
       const currentSettings = settingsRef.current
-      if (
-        configurationSectionRef.current === "tutorial" ||
-        configurationSectionRef.current === "history" ||
-        configurationSectionRef.current === "sensitive"
-      )
+      if (["tutorial", "history", "sensitive", "git"].includes(configurationSectionRef.current))
         return
       if (configurationSectionRef.current === "language") {
         const index = LANGUAGE_OPTIONS.findIndex(
@@ -194,6 +200,16 @@ function AppContent() {
     [applySettings],
   )
 
+  const activateConfiguration = useCallback(() => {
+    activateConfigurationSection(configurationSectionRef.current, {
+      startTutorial,
+      openHistory: openQueryHistory,
+      openSensitive: () => setSensitiveTermsOpen(true),
+      openGit: openGitConfiguration,
+      close: () => setSettingsOpen(false),
+    })
+  }, [openGitConfiguration, openQueryHistory, startTutorial])
+
   useKeyboard((key) => {
     exit.guardKey(key)
     const focusedId = focusedRenderableId(renderer.currentFocusedRenderable)
@@ -209,7 +225,7 @@ function AppContent() {
 
     if (key.defaultPrevented) return
 
-    if (queryHistoryOpen || sensitiveTermsOpen) return
+    if (queryHistoryOpen || sensitiveTermsOpen || gitConfiguration.open) return
 
     if (tutorialOpen) {
       key.preventDefault()
@@ -221,10 +237,7 @@ function AppContent() {
       if (key.name === "escape" || key.name === "q") {
         setSettingsOpen(false)
       } else if (key.name === "enter" || key.name === "return") {
-        if (configurationSectionRef.current === "tutorial") startTutorial()
-        else if (configurationSectionRef.current === "history") openQueryHistory()
-        else if (configurationSectionRef.current === "sensitive") setSensitiveTermsOpen(true)
-        else setSettingsOpen(false)
+        activateConfiguration()
       } else if (key.name === "up") {
         cycleConfigurationSection(-1)
       } else if (key.name === "down" || key.name === "tab") {
@@ -258,18 +271,7 @@ function AppContent() {
     }
   })
 
-  const exitModal = (
-    <MountWhen when={exit.open}>
-      <UnsavedChangesExitModal
-        open
-        terminalWidth={terminal.width}
-        terminalHeight={terminal.height}
-        onConfirm={() => void exit.quit(true)}
-        onClose={exit.close}
-      />
-    </MountWhen>
-  )
-
+  const exitModal = applicationExitLayer(exit, terminal)
   if (ONLY_TAB) {
     return (
       <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
@@ -297,9 +299,7 @@ function AppContent() {
               id="tutorial-settings-button"
               label={compactNavigation ? "[,]" : "[,] Config"}
               accent={COLORS.focus}
-              onPress={() => {
-                openSettings()
-              }}
+              onPress={openSettings}
             />
             <InlineButton
               id="app-exit-button"
@@ -320,7 +320,13 @@ function AppContent() {
             />
           )}
           {ONLY_TAB === "git" && (
-            <GitViewer active={!interactionBlocked} tutorialMode={tutorialOpen} />
+            <GitViewer
+              active={!interactionBlocked}
+              tutorialMode={tutorialOpen}
+              configurationRevision={gitConfiguration.revision}
+              localConfigurationRevision={gitConfiguration.localRevision}
+              onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
+            />
           )}
           {ONLY_TAB === "runner" && <Runner active={!interactionBlocked} />}
           {ONLY_TAB === "http" && (
@@ -349,7 +355,8 @@ function AppContent() {
             onStartTutorial={startTutorial}
             queryHistoryCount={queryHistoryEntries.length}
             tutorialLabel={TAB_LABELS[ONLY_TAB]}
-            showDatabaseSettings={showDatabaseSettings}
+            context={configurationContext}
+            onOpenGitConfiguration={openGitConfiguration}
           />
         </MountWhen>
         <MountWhen when={sensitiveTermsOpen}>
@@ -375,6 +382,7 @@ function AppContent() {
         <MountWhen when={tutorialOpen}>
           <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
         </MountWhen>
+        {gitConfiguration.modal}
         {exitModal}
       </box>
     )
@@ -443,9 +451,7 @@ function AppContent() {
             id="tutorial-settings-button"
             label={compactNavigation ? "[,]" : "[,] Config"}
             accent={COLORS.focus}
-            onPress={() => {
-              openSettings()
-            }}
+            onPress={openSettings}
           />
           <InlineButton
             label={compactNavigation ? "[Q]" : "[Q] Sair"}
@@ -479,6 +485,9 @@ function AppContent() {
             <GitViewer
               active={activeTab === "git" && !interactionBlocked}
               tutorialMode={tutorialOpen}
+              configurationRevision={gitConfiguration.revision}
+              localConfigurationRevision={gitConfiguration.localRevision}
+              onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
             />
           </box>
         ) : null}
@@ -538,7 +547,8 @@ function AppContent() {
           onStartTutorial={startTutorial}
           queryHistoryCount={queryHistoryEntries.length}
           tutorialLabel={TAB_LABELS[activeTab]}
-          showDatabaseSettings={showDatabaseSettings}
+          context={configurationContext}
+          onOpenGitConfiguration={openGitConfiguration}
         />
       </MountWhen>
       <MountWhen when={sensitiveTermsOpen}>
@@ -564,6 +574,7 @@ function AppContent() {
       <MountWhen when={tutorialOpen}>
         <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
       </MountWhen>
+      {gitConfiguration.modal}
       {exitModal}
     </Tabs.Root>
   )

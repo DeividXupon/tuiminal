@@ -1,19 +1,22 @@
 import stringWidth from "string-width"
-import { GIT_PR_MESSAGES } from "./git-pr-catalog"
+import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
+import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
+import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
+import { GIT_PR_MESSAGES } from "./git-pr-catalog"
+import { HTTP_MESSAGES } from "./http-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
-import { HTTP_MESSAGES } from "./http-catalog"
 import { HTTP_IMPORT_MESSAGES, HTTP_IMPORT_PATTERNS } from "./http-import-catalog"
 import { HTTP_OVERLAY_MESSAGES } from "./http-overlays"
 import { HTTP_PATTERNS } from "./http-patterns"
-import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
+import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
-import { HTTP_TRANSPORT_MESSAGES } from "./http-transport-catalog"
-import { HTTP_TUTORIAL_MESSAGES } from "./http-tutorial-catalog"
 import { HTTP_RESPONSE_MESSAGES, HTTP_RESPONSE_PATTERNS } from "./http-response-catalog"
 import { HTTP_RUNNER_MESSAGES, HTTP_RUNNER_PATTERNS } from "./http-runner-catalog"
+import { HTTP_TRANSPORT_MESSAGES } from "./http-transport-catalog"
+import { HTTP_TUTORIAL_MESSAGES } from "./http-tutorial-catalog"
 import {
   HTTP_WORKSPACE_SETTINGS_MESSAGES,
   HTTP_WORKSPACE_SETTINGS_PATTERNS,
@@ -4397,11 +4400,27 @@ const MESSAGES: readonly Message[] = [
   ],
   ["[↵] Abrir", "[↵] Open", "[↵] Abrir", "[↵] 開く", "[↵] 打开", "[↵] 열기"],
   ["[G] Árvore", "[G] Graph", "[G] Árbol", "[G] グラフ", "[G] 图", "[G] 그래프"],
-  ["[L] Lista", "[L] List", "[L] Lista", "[L] リスト", "[L] 列表", "[L] 목록"],
+  ["[O] Lista", "[O] List", "[O] Lista", "[O] リスト", "[O] 列表", "[O] 목록"],
   ["[A] Todos", "[A] All", "[A] Todos", "[A] すべて", "[A] 全部", "[A] 모두"],
   ["[D] Diff", "[D] Diff", "[D] Diff", "[D] Diff", "[D] 差异", "[D] Diff"],
-  ["[L] Log", "[L] Log", "[L] Log", "[L] ログ", "[L] 日志", "[L] 로그"],
+  ["[O] Log", "[O] Log", "[O] Log", "[O] ログ", "[O] 日志", "[O] 로그"],
   ["[␠] Stage", "[␠] Stage", "[␠] Stage", "[␠] ステージ", "[␠] 暂存", "[␠] 스테이지"],
+  [
+    "[Tab/H/L] Painel  [V] Visual  [O] Log  [G] Árvore",
+    "[Tab/H/L] Pane  [V] View  [O] Log  [G] Graph",
+    "[Tab/H/L] Panel  [V] Vista  [O] Log  [G] Árbol",
+    "[Tab/H/L] ペイン  [V] 表示  [O] ログ  [G] グラフ",
+    "[Tab/H/L] 面板  [V] 视图  [O] 日志  [G] 图",
+    "[Tab/H/L] 패널  [V] 보기  [O] 로그  [G] 그래프",
+  ],
+  [
+    "[Tab/H/L/←/→] Árvore/diff  [V] Visualização  [O] Log  [G] Árvore Git  [R] Atualizar",
+    "[Tab/H/L/←/→] Tree/diff  [V] View  [O] Log  [G] Git graph  [R] Refresh",
+    "[Tab/H/L/←/→] Árbol/diff  [V] Vista  [O] Log  [G] Árbol Git  [R] Actualizar",
+    "[Tab/H/L/←/→] ツリー/Diff  [V] 表示  [O] ログ  [G] Git グラフ  [R] 更新",
+    "[Tab/H/L/←/→] 树/差异  [V] 视图  [O] 日志  [G] Git 图  [R] 刷新",
+    "[Tab/H/L/←/→] 트리/Diff  [V] 보기  [O] 로그  [G] Git 그래프  [R] 새로고침",
+  ],
   [
     "MONTANDO PREVIEW",
     "BUILDING PREVIEW",
@@ -5008,6 +5027,9 @@ const MESSAGES: readonly Message[] = [
   // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
   ...GIT_ISSUE_MESSAGES,
+  ...GIT_INBOX_MESSAGES,
+  ...GIT_CONFIGURATION_MESSAGES,
+  ...GIT_COMPARE_MESSAGES,
   // Notificações globais.
   ...NOTIFICATION_MESSAGES,
   // Terminal livre.

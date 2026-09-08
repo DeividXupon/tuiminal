@@ -18,9 +18,11 @@ export function GitTutorialDemo() {
         id="tutorial-git-mode-tabs"
         style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: COLORS.panel }}
       >
-        <InlineButton label="[1] GIT · BASE LOCAL" accent={COLORS.git} onPress={noop} />
+        <InlineButton label="[1]" accent={COLORS.git} onPress={noop} />
+        <InlineButton label={translateUi("[C] GIT · DIFFS")} accent={COLORS.git} onPress={noop} />
         <InlineButton label="[2] PR" accent={COLORS.git} active onPress={noop} />
         <InlineButton label={translateUi("[3] ISSUES")} accent={COLORS.git} onPress={noop} />
+        <InlineButton label={translateUi("[4] INBOX")} accent={COLORS.git} onPress={noop} />
       </box>
       <box
         id="tutorial-git-sections"
@@ -30,11 +32,33 @@ export function GitTutorialDemo() {
           <InlineButton label="[1] Meus PRs 3" accent={COLORS.git} active onPress={noop} />
           <InlineButton label="[2] Revisar 1" accent={COLORS.git} onPress={noop} />
           <InlineButton label="[3] CI falhando 1" accent={COLORS.git} onPress={noop} />
-          <InlineButton label="[+]" accent={COLORS.git} onPress={noop} />
         </box>
         <ShortcutText
           content="[/] is:open author:@me  ·  3 REPOSITÓRIOS · 3/3 PRs · DEMO"
           style={{ fg: COLORS.muted }}
+        />
+      </box>
+      <box
+        id="tutorial-git-inbox"
+        style={{ ...panelBorder(), height: 3, flexShrink: 0, backgroundColor: COLORS.panel }}
+      >
+        <box style={{ height: 1, flexDirection: "row" }}>
+          <InlineButton
+            label={translateUi("Caixa de entrada")}
+            accent={COLORS.git}
+            active
+            onPress={noop}
+          />
+          <InlineButton
+            label={translateUi("Revisão solicitada")}
+            accent={COLORS.git}
+            onPress={noop}
+          />
+          <InlineButton label={translateUi("Menções")} accent={COLORS.git} onPress={noop} />
+        </box>
+        <text
+          content={translateUi("▶ ● equipe/api · Revisão solicitada · há 2 min")}
+          style={{ fg: COLORS.text }}
         />
       </box>
       <box

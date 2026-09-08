@@ -19,41 +19,15 @@ import {
   type UiSettings,
 } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import type { ConfigurationContext, ConfigurationSection } from "../model/configuration-context"
+import { GitConfigurationGroup } from "./GitConfigurationGroup"
 
-export type ConfigurationSection =
-  | "palette"
-  | "layout"
-  | "language"
-  | "sensitive"
-  | "history"
-  | "tutorial"
-
-const GLOBAL_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
-  "palette",
-  "layout",
-  "language",
-  "tutorial",
-]
-
-const DATABASE_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
-  "sensitive",
-  "history",
-  ...GLOBAL_CONFIGURATION_SECTIONS,
-]
-
-export function configurationSectionsForContext(showDatabaseSettings: boolean) {
-  return showDatabaseSettings
-    ? [...DATABASE_CONFIGURATION_SECTIONS]
-    : [...GLOBAL_CONFIGURATION_SECTIONS]
-}
-
-export function normalizeConfigurationSectionForContext(
-  section: ConfigurationSection,
-  showDatabaseSettings: boolean,
-) {
-  const sections = configurationSectionsForContext(showDatabaseSettings)
-  return sections.includes(section) ? section : (sections[0] ?? "palette")
-}
+export {
+  configurationSectionsForContext,
+  normalizeConfigurationSectionForContext,
+  type ConfigurationContext,
+  type ConfigurationSection,
+} from "../model/configuration-context"
 
 type ConfigurationModalProps = {
   open: boolean
@@ -71,7 +45,8 @@ type ConfigurationModalProps = {
   onStartTutorial: () => void
   queryHistoryCount: number
   tutorialLabel: string
-  showDatabaseSettings: boolean
+  context: ConfigurationContext
+  onOpenGitConfiguration: () => void
 }
 
 function ConfigurationDivider({ label }: { label: string }) {
@@ -239,7 +214,8 @@ export function ConfigurationModal({
   onStartTutorial,
   queryHistoryCount,
   tutorialLabel,
-  showDatabaseSettings,
+  context,
+  onOpenGitConfiguration,
 }: ConfigurationModalProps) {
   const terminal = useTerminalDimensions()
   const contentRef = useRef<ScrollBoxRenderable | null>(null)
@@ -322,7 +298,15 @@ export function ConfigurationModal({
               trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
             }}
           >
-            {showDatabaseSettings ? (
+            <GitConfigurationGroup
+              visible={context === "git"}
+              selected={section === "git"}
+              compact={compact}
+              onSelect={() => onSectionChange("git")}
+              onOpen={onOpenGitConfiguration}
+            />
+
+            {context === "database" ? (
               <>
                 <ConfigurationDivider label="CONFIGURAÇÕES DO BANCO" />
 

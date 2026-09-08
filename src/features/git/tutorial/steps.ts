@@ -2,11 +2,20 @@ export const GIT_TUTORIAL_STEPS = [
   {
     targetId: "tutorial-git-mode-tabs",
     group: "GIT · NAVEGAÇÃO",
-    title: "Base local, Pull Requests e Issues",
+    title: "Diffs locais, Pull Requests, Issues e Inbox",
     description:
-      "A Base preserva o Git local e funciona offline. PR e Issues montam a integração GitHub somente quando você abre [2] ou [3].",
-    hint: "[1] Base · [2] PR · [3] Issues · cada workspace preserva o próprio estado",
+      "Diffs usa um projeto e branch locais e funciona offline. PR, Issues e Inbox montam a integração GitHub somente quando você abre [2], [3] ou [4].",
+    hint: "[1] Diffs · [C] compara branches · [2] PR · [3] Issues · [4] Inbox · [Ctrl+P] troca projeto/branch local",
     kind: "control",
+  },
+  {
+    targetId: "tutorial-git-inbox",
+    group: "INBOX · NOTIFICAÇÕES",
+    title: "Sua caixa de entrada do GitHub",
+    description:
+      "Revisões solicitadas, atribuições e menções chegam numa fila paginada que atualiza em segundo plano.",
+    hint: "[J/K] navega · [M] marca lida · [B] salva · [D] conclui · ações remotas não rodam no tour",
+    kind: "action",
   },
   {
     targetId: "tutorial-git-issues",
@@ -23,7 +32,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Seções e filtros",
     description:
       "Agrupe PRs de vários repositórios por autor, revisão, responsável, CI, branch ou label e salve a ordem por projeto.",
-    hint: "[</>] muda seção · [/] filtra · [S] configura · [+] adiciona repositório",
+    hint: "[</>] muda seção · [/] filtra · seletores e repositórios ficam em [,] Config",
     kind: "control",
   },
   {
