@@ -11,6 +11,7 @@ import { saveDatabaseBatchExport } from "../storage/batch-export"
 import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { COLORS } from "../../../core/settings/theme"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { useNotificationFromValue } from "../../../shared/notifications/index"
 
 const FORMAT_LABEL: Record<DatabaseBatchExportFormat, string> = {
   csv: "CSV",
@@ -37,6 +38,7 @@ export function DatabaseBatchExportModal({
   const formatRef = useRef<DatabaseBatchExportFormat>("csv")
   const [format, setFormat] = useState<DatabaseBatchExportFormat>("csv")
   const [notice, setNotice] = useState("")
+  useNotificationFromValue(notice, { source: "Banco · Exportação" })
   const content = useMemo(
     () => serializeDatabaseBatchRows(rows, columns, format),
     [columns, format, rows],

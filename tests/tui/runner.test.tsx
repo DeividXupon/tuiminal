@@ -6,8 +6,10 @@ import { act } from "react"
 import { Runner } from "../../src/features/runner/RunnerWorkspace"
 import { RunnerSaveCommandModal } from "../../src/features/runner/ui/RunnerSaveCommandModal"
 import { App } from "../../src/app/App"
+import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
 
 let tui: TestRendererSetup | undefined
+const initialSettings = getUiSettings()
 
 async function settle(until: () => boolean) {
   if (!tui) throw new Error("TUI not mounted")
@@ -33,6 +35,7 @@ async function key(name: string, ctrl = false) {
 afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
+  updateUiSettings(initialSettings)
 })
 
 describe("Runner TUI behavior", () => {
@@ -129,5 +132,26 @@ describe("Runner TUI behavior", () => {
     await key("+")
     await settle(() => tui?.captureCharFrame().includes("PROCURAR NOS ARQUIVOS") ?? false)
     expect(tui.captureCharFrame()).toContain("PROJETOS")
+  })
+
+  test("keeps the command header and details inside a 120-column framed panel", async () => {
+    updateUiSettings({ layout: "framed", language: "pt-BR" })
+    tui = await testRender(<Runner active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+    const panel = tui.renderer.root.findDescendantById("runner-command-panel")
+    if (!panel) throw new Error("Painel de comandos ausente")
+
+    for (const id of ["runner-command-mode", "runner-active-mode", "runner-scan"]) {
+      const target = tui.renderer.root.findDescendantById(id)
+      expect(target, `${id} ausente`).toBeDefined()
+      expect((target?.screenX ?? 0) + (target?.width ?? 0)).toBeLessThanOrEqual(
+        panel.screenX + panel.width,
+      )
+    }
+
+    const detail = tui.renderer.root.findDescendantById("runner-command-detail")
+    const meta = tui.renderer.root.findDescendantById("runner-command-detail-meta")
+    if (detail && meta) expect(meta.screenY).toBe(detail.screenY + 1)
+    expect(tui.captureCharFrame()).not.toMatch(/Scan│/)
   })
 })

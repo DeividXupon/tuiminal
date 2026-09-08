@@ -8,6 +8,7 @@ import type { DatabaseColumn } from "../model/types"
 import { translateUi } from "../../../shared/i18n/index"
 import { COLORS } from "../../../core/settings/theme"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { useNotificationFromValue } from "../../../shared/notifications/index"
 
 export type DatabaseWriteMode = "insert" | "update"
 
@@ -51,6 +52,7 @@ export function DatabaseWriteModal({
   const [nullFields, setNullFields] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
+  useNotificationFromValue(notice, { source: "Banco · Escrita" })
 
   useEffect(() => {
     if (!open) return

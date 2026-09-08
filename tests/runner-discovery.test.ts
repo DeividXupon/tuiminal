@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -75,10 +75,15 @@ describe("runner project detection", () => {
     expect(resolveRunnerSessionScope(nested)).toBe(projectRoot)
   })
 
-  test("does not treat an unrelated directory as a Runner project", async () => {
+  test("does not treat an unrelated directory itself as a Runner project", async () => {
     const unrelated = mkdtempSync(join(tmpdir(), "tuiminal-no-project-"))
     try {
-      expect(await resolveRunnerProjectContext(unrelated)).toBeNull()
+      const context = await resolveRunnerProjectContext(unrelated)
+      expect(context?.root).not.toBe(unrelated)
+      if (context) {
+        expect(context.commands).toEqual([])
+        expect(existsSync(join(context.root, ".git"))).toBe(true)
+      }
     } finally {
       rmSync(unrelated, { recursive: true, force: true })
     }

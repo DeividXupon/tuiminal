@@ -1,7 +1,8 @@
 import type { DatabaseConnectionProfile, DatabaseTable } from "../model/types"
 import { padDisplayEnd, truncateDisplay } from "../../../shared/i18n/index"
 
-import { CELL_WIDTH } from "./constants"
+import { CELL_WIDTH, TABLE_HISTORY_LIMIT } from "./constants"
+import { tableKey } from "../model/workspace"
 
 export function fitCell(value: unknown, width = CELL_WIDTH) {
   let text: string
@@ -22,6 +23,31 @@ export function fitCell(value: unknown, width = CELL_WIDTH) {
 
 export function shorten(value: string, length: number) {
   return truncateDisplay(value, length)
+}
+
+export function tableHistoryPresentation(
+  history: DatabaseTable[],
+  selected: DatabaseTable | null,
+  areaWidth: number,
+) {
+  const itemWidth = areaWidth < 72 ? 14 : 18
+  const visibleCount = Math.max(
+    1,
+    Math.min(TABLE_HISTORY_LIMIT, Math.floor(Math.max(1, areaWidth - 8) / itemWidth)),
+  )
+  const currentIndex = selected
+    ? history.findIndex((table) => tableKey(table) === tableKey(selected))
+    : -1
+  const visibleStart = Math.min(
+    Math.max(0, currentIndex - visibleCount + 1),
+    Math.max(0, history.length - visibleCount),
+  )
+  return {
+    itemWidth,
+    currentIndex,
+    visibleStart,
+    visible: history.slice(visibleStart, visibleStart + visibleCount),
+  }
 }
 
 export function detailValue(value: unknown) {

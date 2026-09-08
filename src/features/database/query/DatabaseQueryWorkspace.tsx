@@ -62,6 +62,8 @@ import {
   type DatabaseQueryFavoritesMode,
 } from "../ui/DatabaseQueryFavoritesModal"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { useDatabaseQueryNotifications } from "../hooks/use-database-notifications"
+import { useIdentifiedQueryRows } from "../hooks/use-identified-query-rows"
 
 import {
   COMPACT_ACTIONS_BREAKPOINT,
@@ -149,8 +151,6 @@ export function DatabaseQueryWorkspace({
   const editorRef = useRef<TextareaRenderable | null>(null)
   const resultScrollRef = useRef<ScrollBoxRenderable | null>(null)
   const resultInspectorRef = useRef<ScrollBoxRenderable | null>(null)
-  const queryRowIdsRef = useRef(new WeakMap<object, string>())
-  const queryRowCounterRef = useRef(0)
   const queryChangeCounterRef = useRef(0)
   const selectedResultRowIndexRef = useRef(0)
   const selectedResultColumnIndexRef = useRef(0)
@@ -203,21 +203,12 @@ export function DatabaseQueryWorkspace({
   )
   const [editorRatio, setEditorRatio] = useState(40)
   const [workspaceMode, setWorkspaceMode] = useState<SqlWorkspaceMode>("split")
+  useDatabaseQueryNotifications(queryError, resultNotice)
   const [executedStatementPosition, setExecutedStatementPosition] = useState<{
     index: number
     total: number
   } | null>(null)
-  const identifiedRows = useMemo(() => {
-    return (result?.rows ?? []).map((row) => {
-      let id = queryRowIdsRef.current.get(row)
-      if (!id) {
-        queryRowCounterRef.current += 1
-        id = `query-row-${queryRowCounterRef.current}`
-        queryRowIdsRef.current.set(row, id)
-      }
-      return { id, row }
-    })
-  }, [result])
+  const identifiedRows = useIdentifiedQueryRows(result?.rows ?? [])
   const splitEditorHeight = sqlSplitEditorHeight(terminal.height, editorRatio)
   const editorHeight =
     workspaceMode === "editor" ? Math.max(8, terminal.height - 13) : splitEditorHeight

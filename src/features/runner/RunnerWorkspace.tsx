@@ -36,7 +36,6 @@ import {
   loadRunnerSession,
   normalizeRunnerManualCommand,
   type RunnerEnvironmentProfile,
-  type RunnerPersistedExecution,
   type RunnerSessionState,
   removeSavedRunnerCommand,
   runnerPortUrl,
@@ -62,10 +61,18 @@ import {
 } from "./model/navigation"
 import { COLORS, LAYOUT, panelBorder } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import { MountWhen } from "../../shared/ui/MountWhen"
 import { type RunnerCommandSaveInput, RunnerSaveCommandModal } from "./ui/RunnerSaveCommandModal"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
-
-import type { ExecutionStatus, ExecutionLog, RunnerExecution } from "./model/execution"
+import type { ExecutionLog, RunnerExecution } from "./model/execution"
+import {
+  notifyRunnerExit,
+  notifyRunnerHealth,
+  notifyRunnerStarted,
+  runnerExitPresentation,
+  useRunnerNotifications,
+} from "./hooks/use-runner-notifications"
+import { restoredRunnerExecution } from "./state/restored-execution"
 
 const CATEGORY_ICONS: Record<RunnerCommand["category"], string> = {
   package: "◇",
@@ -109,21 +116,6 @@ import { MultiProcessPanel } from "./ui/MultiProcessPanel"
 type RunnerProps = {
   active: boolean
   onOpenHttp?: (url: string) => void
-}
-
-function restoredExecution(execution: RunnerPersistedExecution): RunnerExecution {
-  const command = createShellRunnerCommand(execution.displayCommand, {
-    label: execution.label,
-  })
-  return {
-    ...execution,
-    commandId: execution.commandId,
-    commandKey: commandKey(execution.projectRoot, execution.commandId),
-    logs: execution.logs.map((log, index) => ({ ...log, id: index })),
-    command,
-    restartAttempt: 0,
-    health: "none",
-  }
 }
 
 export function Runner({ active, onOpenHttp }: RunnerProps) {
@@ -173,7 +165,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
   const [commands, setCommands] = useState<RunnerCommand[]>([])
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null)
   const [executions, setExecutions] = useState<RunnerExecution[]>(() =>
-    loadRunnerHistory().map(restoredExecution),
+    loadRunnerHistory().map(restoredRunnerExecution),
   )
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -211,6 +203,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
   const [directoryEntries, setDirectoryEntries] = useState<RunnerDirectoryEntry[]>([])
   const [directoryLoading, setDirectoryLoading] = useState(false)
   const [now, setNow] = useState(Date.now())
+  const notify = useRunnerNotifications(runnerNotice, discoveryError, projectPickerError)
 
   const refreshCommands = useCallback(async () => {
     const sequence = discoverySequence.current + 1
@@ -460,6 +453,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
             ),
           )
           appendLog(executionId, detail, "system")
+          notifyRunnerHealth(notify, command.label, healthy, detail)
         }
         const selectedProfileId = profileSelections[executionProjectRoot]
         const profile = environmentProfiles.find((candidate) => candidate.id === selectedProfileId)
@@ -499,11 +493,8 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               if (healthTimer) clearTimeout(healthTimer)
               healthTimersRef.current.delete(executionId)
               if (!mountedRef.current) return
-              const status: ExecutionStatus = stopped
-                ? "stopped"
-                : code === 0
-                  ? "success"
-                  : "failed"
+              const presentation = runnerExitPresentation({ code, signal, stopped })
+              const { status, detail } = presentation
               const endedAt = Date.now()
               setExecutions((current) =>
                 current.map((item) =>
@@ -518,12 +509,8 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     : item,
                 ),
               )
-              const detail = stopped
-                ? "processo interrompido"
-                : code === 0
-                  ? "processo concluído"
-                  : `processo finalizado${code === null ? "" : ` com código ${code}`}${signal ? ` (${signal})` : ""}`
               appendLog(executionId, detail, "system")
+              notifyRunnerExit(notify, command.label, presentation)
               const persistedLogs = command.persistLogs
                 ? (executionLogsRef.current.get(executionId) ?? [])
                     .slice(-RUNNER_LOG_BUFFER_LIMIT)
@@ -573,6 +560,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
         setExecutions((current) =>
           current.map((item) => (item.id === executionId ? { ...item, pid: handle.pid } : item)),
         )
+        notifyRunnerStarted(notify, command.label, executionProjectRoot)
         if (command.healthCheck?.type === "log") {
           const timer = setTimeout(() => {
             markHealth(false, "health check por log expirou")
@@ -625,9 +613,10 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                 }))
             : [],
         })
+        notify({ source: "Runner", kind: "error", message })
       }
     },
-    [appendLog, environmentProfiles, narrowRunner, profileSelections, projectRoot],
+    [appendLog, environmentProfiles, narrowRunner, notify, profileSelections, projectRoot],
   )
 
   const runManualCommand = useCallback(
@@ -1457,6 +1446,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
   const commandPanelWidth = narrowRunner
     ? Math.max(1, terminal.width - 2)
     : Math.min(42, Math.max(30, Math.floor(terminal.width * 0.31)))
+  const compactCommandHeader = commandPanelWidth < 42
   const actionMenuHeight =
     moreActionsOpen && pickerMode === "closed" && projectAvailable !== false ? 4 : 0
   const appHeaderHeight = LAYOUT.compact ? 1 : 2
@@ -1861,7 +1851,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                 ref={commandPanelRef}
                 id="runner-command-panel"
                 focusable
-                key={LAYOUT.compact ? "commands-compact" : "commands-framed"}
                 style={{
                   height: "100%",
                   flexShrink: 0,
@@ -1873,8 +1862,9 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               >
                 <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
                   <InlineButton
+                    id="runner-command-mode"
                     label={
-                      commandPanelWidth < 36
+                      compactCommandHeader
                         ? `${listMode === "active" ? "[P] " : ""}CMD ${commands.length}`
                         : `${listMode === "active" ? "[P] " : ""}COMANDOS ${commands.length}`
                     }
@@ -1886,8 +1876,9 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     }}
                   />
                   <InlineButton
+                    id="runner-active-mode"
                     label={
-                      commandPanelWidth < 36
+                      compactCommandHeader
                         ? `${listMode === "commands" ? "[P] " : ""}ATIV ${activeExecutions.length}`
                         : `${listMode === "commands" ? "[P] " : ""}ATIVOS ${activeExecutions.length}`
                     }
@@ -1902,7 +1893,8 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                   />
                   {listMode === "commands" ? (
                     <InlineButton
-                      label={commandPanelWidth < 36 ? "[D]" : "[D] Scan"}
+                      id="runner-scan"
+                      label={compactCommandHeader ? "[D]" : "[D] Scan"}
                       accent={COLORS.runner}
                       disabled={loading}
                       onPress={() => void refreshCommands()}
@@ -2077,10 +2069,10 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                       flexShrink: 0,
                       border: ["top"],
                       borderColor: COLORS.border,
-                      paddingTop: 1,
                     }}
                   >
                     <text
+                      id="runner-command-detail"
                       content={fitLine(
                         `❯ ${selectedCommand.displayCommand}`,
                         commandPanelWidth - 4,
@@ -2088,6 +2080,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                       style={{ fg: COLORS.text }}
                     />
                     <ShortcutText
+                      id="runner-command-detail-meta"
                       highlight={Boolean(selectedCommandExecution)}
                       content={fitLine(
                         selectedCommandExecution
@@ -2693,16 +2686,18 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           </>
         )}
       </box>
-      <RunnerSaveCommandModal
-        open={saveCommandModalOpen}
-        command={manualCommand}
-        availableWidth={terminal.width}
-        onClose={() => {
-          setSaveCommandModalOpen(false)
-          setTimeout(() => manualInputRef.current?.focus(), 0)
-        }}
-        onSave={confirmSaveManualCommand}
-      />
+      <MountWhen when={saveCommandModalOpen}>
+        <RunnerSaveCommandModal
+          open
+          command={manualCommand}
+          availableWidth={terminal.width}
+          onClose={() => {
+            setSaveCommandModalOpen(false)
+            setTimeout(() => manualInputRef.current?.focus(), 0)
+          }}
+          onSave={confirmSaveManualCommand}
+        />
+      </MountWhen>
     </box>
   )
 }

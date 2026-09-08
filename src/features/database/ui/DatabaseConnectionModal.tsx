@@ -1,14 +1,7 @@
 import { ShortcutText } from "../../../shared/ui/ShortcutText"
-import {
-  InputRenderable,
-  parseColor,
-  type InputRenderableOptions,
-  type OptimizedBuffer,
-  type RenderContext,
-  type ScrollBoxRenderable,
-} from "@opentui/core"
+import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { extend, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
@@ -29,40 +22,9 @@ import {
 import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { COLORS } from "../../../core/settings/theme"
 import { InlineButton } from "../../../shared/ui/InlineButton"
-
-type PasswordInputOptions = InputRenderableOptions & {
-  onInput?: (value: string) => void
-  onChange?: (value: string) => void
-  onSubmit?: (value: string) => void
-}
-
-class PasswordInputRenderable extends InputRenderable {
-  constructor(ctx: RenderContext, options: PasswordInputOptions) {
-    const { onInput: _onInput, onChange: _onChange, onSubmit: _onSubmit, ...inputOptions } = options
-    super(ctx, inputOptions)
-  }
-
-  protected override renderSelf(buffer: OptimizedBuffer) {
-    super.renderSelf(buffer)
-    const maskLength = Math.min([...this.plainText].length, this.width)
-    if (maskLength === 0) return
-    buffer.drawText(
-      "*".repeat(maskLength),
-      this.screenX,
-      this.screenY,
-      parseColor(COLORS.text),
-      parseColor(COLORS.panelRaised),
-    )
-  }
-}
-
-extend({ "password-input": PasswordInputRenderable })
-
-declare module "@opentui/react" {
-  interface OpenTUIComponents {
-    "password-input": typeof PasswordInputRenderable
-  }
-}
+import { useNotificationFromValue } from "../../../shared/notifications/index"
+import type { PasswordInputRenderable } from "./PasswordInput"
+import "./PasswordInput"
 
 type DatabaseConnectionModalProps = {
   open: boolean
@@ -262,6 +224,7 @@ export function DatabaseConnectionModal({
   const [notice, setNotice] = useState("")
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null)
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null)
+  useNotificationFromValue(notice, { source: "Banco · Conexão" })
   const nameRef = useRef<InputRenderable | null>(null)
   const hostRef = useRef<InputRenderable | null>(null)
   const portRef = useRef<InputRenderable | null>(null)
@@ -455,8 +418,12 @@ export function DatabaseConnectionModal({
   useEffect(() => {
     if (!open) return
     return () => {
-      if (renderer.currentFocusedRenderable?.id?.startsWith("db-connection-")) {
-        renderer.currentFocusedRenderable.blur()
+      const focused = renderer.currentFocusedRenderable
+      if (
+        focused &&
+        (focused.id === "database-connection-list" || focused.id?.startsWith("db-connection-"))
+      ) {
+        focused.blur()
       }
     }
   }, [open, renderer])

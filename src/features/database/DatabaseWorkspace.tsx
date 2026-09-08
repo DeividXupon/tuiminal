@@ -56,8 +56,9 @@ import { DatabaseChangesModal, type DatabaseChangeReviewItem } from "./ui/Databa
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import { MountWhen } from "../../shared/ui/MountWhen"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
-
+import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
 import {
   CELL_WIDTH,
   ROW_INSPECTOR_BREAKPOINT,
@@ -84,7 +85,7 @@ import {
   stageBatchUpdates,
   stageBatchDeletes,
 } from "./model/workspace"
-import { fitCell, shorten } from "./rendering/workspace-shared"
+import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
 import { DatabaseQueryWorkspace } from "./query/DatabaseQueryWorkspace"
 import { RowInspector } from "./ui/RowInspector"
 import { DatabaseTutorialDemo } from "./tutorial/DatabaseTutorialDemo"
@@ -166,6 +167,7 @@ export function DatabaseViewer({
   const [tableHistoryByConnection, setTableHistoryByConnection] = useState<
     Record<string, DatabaseTable[]>
   >({})
+  useDatabaseWorkspaceNotifications(connectionNotice, error, changesModalNotice, writeNotice)
 
   const activatePane = useCallback((pane: DatabasePane) => {
     activePaneRef.current = pane
@@ -190,22 +192,12 @@ export function DatabaseViewer({
   const sidebarWidth = databaseSidebarWidth(terminal.width)
   // Account for the outer gap, panel border and horizontal padding.
   const tableAreaWidth = Math.max(16, terminal.width - sidebarWidth - 7)
-  const historyItemWidth = tableAreaWidth < 72 ? 14 : 18
-  const visibleHistoryCount = Math.max(
-    1,
-    Math.min(TABLE_HISTORY_LIMIT, Math.floor(Math.max(1, tableAreaWidth - 8) / historyItemWidth)),
-  )
-  const currentTableHistoryIndex = selectedTable
-    ? tableHistory.findIndex((table) => tableKey(table) === tableKey(selectedTable))
-    : -1
-  const visibleTableHistoryStart = Math.min(
-    Math.max(0, currentTableHistoryIndex - visibleHistoryCount + 1),
-    Math.max(0, tableHistory.length - visibleHistoryCount),
-  )
-  const visibleTableHistory = tableHistory.slice(
-    visibleTableHistoryStart,
-    visibleTableHistoryStart + visibleHistoryCount,
-  )
+  const {
+    itemWidth: historyItemWidth,
+    currentIndex: currentTableHistoryIndex,
+    visibleStart: visibleTableHistoryStart,
+    visible: visibleTableHistory,
+  } = tableHistoryPresentation(tableHistory, selectedTable, tableAreaWidth)
   const sideInspectorVisible =
     terminal.width >= ROW_INSPECTOR_BREAKPOINT &&
     view === "data" &&
@@ -2910,31 +2902,35 @@ export function DatabaseViewer({
         </>
       )}
 
-      <DatabaseCellEditor
-        open={cellEditorOpen}
-        tableName={selectedTable ? `${selectedTable.schema}.${selectedTable.name}` : ""}
-        column={selectedColumn}
-        value={selectedColumn && selectedRow ? selectedRow[selectedColumn.field] : null}
-        isNewRow={selectedGridRow?.change?.mutation.kind === "insert"}
-        batchRowCount={currentBatchRows.length}
-        onClose={() => setCellEditorOpen(false)}
-        onApply={currentBatchRows.length ? stageCurrentBatchValue : stageCellValue}
-      />
+      <MountWhen when={cellEditorOpen}>
+        <DatabaseCellEditor
+          open
+          tableName={selectedTable ? `${selectedTable.schema}.${selectedTable.name}` : ""}
+          column={selectedColumn}
+          value={selectedColumn && selectedRow ? selectedRow[selectedColumn.field] : null}
+          isNewRow={selectedGridRow?.change?.mutation.kind === "insert"}
+          batchRowCount={currentBatchRows.length}
+          onClose={() => setCellEditorOpen(false)}
+          onApply={currentBatchRows.length ? stageCurrentBatchValue : stageCellValue}
+        />
+      </MountWhen>
 
-      <DatabaseBatchExportModal
-        open={batchExportOpen}
-        tableName={selectedTable ? `${selectedTable.schema}.${selectedTable.name}` : "dados"}
-        columns={pageData?.columns.map((column) => column.field) ?? []}
-        rows={currentBatchRows}
-        onClose={() => {
-          setBatchExportOpen(false)
-          focusPane("grid")
-        }}
-      />
+      <MountWhen when={batchExportOpen}>
+        <DatabaseBatchExportModal
+          open
+          tableName={selectedTable ? `${selectedTable.schema}.${selectedTable.name}` : "dados"}
+          columns={pageData?.columns.map((column) => column.field) ?? []}
+          rows={currentBatchRows}
+          onClose={() => {
+            setBatchExportOpen(false)
+            focusPane("grid")
+          }}
+        />
+      </MountWhen>
 
-      {activeConnectionId && selectedTable && pageData ? (
+      {tableSearchOpen && activeConnectionId && selectedTable && pageData ? (
         <DatabaseTableSearchModal
-          open={tableSearchOpen}
+          open
           table={selectedTable}
           initialValue={activeTableQuery.search}
           onClose={() => {
@@ -2947,79 +2943,83 @@ export function DatabaseViewer({
         />
       ) : null}
 
-      <DatabaseChangesModal
-        open={changesModalOpen}
-        items={reviewItems}
-        busy={writeBusy}
-        notice={changesModalNotice}
-        onClose={() => setChangesModalOpen(false)}
-        onToggle={(changeId) => {
-          setStagedChanges((current) =>
-            current.map((change) =>
-              change.id === changeId ? { ...change, approved: !change.approved } : change,
-            ),
-          )
-          setChangesModalNotice("")
-        }}
-        onToggleAll={() => {
-          setStagedChanges((current) => {
-            const connectionChanges = current.filter(
-              (change) => change.connectionId === activeConnectionId,
+      <MountWhen when={changesModalOpen}>
+        <DatabaseChangesModal
+          open
+          items={reviewItems}
+          busy={writeBusy}
+          notice={changesModalNotice}
+          onClose={() => setChangesModalOpen(false)}
+          onToggle={(changeId) => {
+            setStagedChanges((current) =>
+              current.map((change) =>
+                change.id === changeId ? { ...change, approved: !change.approved } : change,
+              ),
             )
-            const approve = !connectionChanges.every((change) => change.approved)
-            return current.map((change) =>
-              change.connectionId === activeConnectionId
-                ? { ...change, approved: approve }
-                : change,
-            )
-          })
-          setChangesModalNotice("")
-        }}
-        onExecute={() => void executeApprovedChanges()}
-      />
+            setChangesModalNotice("")
+          }}
+          onToggleAll={() => {
+            setStagedChanges((current) => {
+              const connectionChanges = current.filter(
+                (change) => change.connectionId === activeConnectionId,
+              )
+              const approve = !connectionChanges.every((change) => change.approved)
+              return current.map((change) =>
+                change.connectionId === activeConnectionId
+                  ? { ...change, approved: approve }
+                  : change,
+              )
+            })
+            setChangesModalNotice("")
+          }}
+          onExecute={() => void executeApprovedChanges()}
+        />
+      </MountWhen>
 
-      <DatabaseConnectionModal
-        open={connectionModalOpen}
-        connections={connections}
-        selectedConnectionId={activeConnectionId}
-        startInForm={connectionModalStartsInForm}
-        onClose={() => setConnectionModalOpen(false)}
-        onSelect={switchConnection}
-        onCreated={(profile, notice) => {
-          const nextConnections = listDatabaseConnections()
-          setConnections(nextConnections)
-          setActiveConnectionId(profile.id)
-          setCatalogRefreshKey((current) => current + 1)
-          setDefaultDatabaseConnection(profile.id)
-          setConnectionNotice(notice)
-          setConnectionModalOpen(false)
-          resetTable()
-        }}
-        onDeleted={(connectionId) => {
-          const nextConnections = listDatabaseConnections()
-          setConnections(nextConnections)
-          setStagedChanges((current) =>
-            current.filter((change) => change.connectionId !== connectionId),
-          )
-          setTableQueries((current) =>
-            Object.fromEntries(
-              Object.entries(current).filter(([key]) => !key.startsWith(`${connectionId}\u0000`)),
-            ),
-          )
-          setBatchRowsByTable((current) =>
-            Object.fromEntries(
-              Object.entries(current).filter(([key]) => !key.startsWith(`${connectionId}\u0000`)),
-            ),
-          )
-          if (connectionId === activeConnectionId) {
-            const nextConnectionId = nextConnections[0]?.id ?? null
-            setActiveConnectionId(nextConnectionId)
-            if (nextConnectionId) setDefaultDatabaseConnection(nextConnectionId)
+      <MountWhen when={connectionModalOpen}>
+        <DatabaseConnectionModal
+          open
+          connections={connections}
+          selectedConnectionId={activeConnectionId}
+          startInForm={connectionModalStartsInForm}
+          onClose={() => setConnectionModalOpen(false)}
+          onSelect={switchConnection}
+          onCreated={(profile, notice) => {
+            const nextConnections = listDatabaseConnections()
+            setConnections(nextConnections)
+            setActiveConnectionId(profile.id)
+            setCatalogRefreshKey((current) => current + 1)
+            setDefaultDatabaseConnection(profile.id)
+            setConnectionNotice(notice)
+            setConnectionModalOpen(false)
             resetTable()
-          }
-          setConnectionNotice("Conexão excluída")
-        }}
-      />
+          }}
+          onDeleted={(connectionId) => {
+            const nextConnections = listDatabaseConnections()
+            setConnections(nextConnections)
+            setStagedChanges((current) =>
+              current.filter((change) => change.connectionId !== connectionId),
+            )
+            setTableQueries((current) =>
+              Object.fromEntries(
+                Object.entries(current).filter(([key]) => !key.startsWith(`${connectionId}\u0000`)),
+              ),
+            )
+            setBatchRowsByTable((current) =>
+              Object.fromEntries(
+                Object.entries(current).filter(([key]) => !key.startsWith(`${connectionId}\u0000`)),
+              ),
+            )
+            if (connectionId === activeConnectionId) {
+              const nextConnectionId = nextConnections[0]?.id ?? null
+              setActiveConnectionId(nextConnectionId)
+              if (nextConnectionId) setDefaultDatabaseConnection(nextConnectionId)
+              resetTable()
+            }
+            setConnectionNotice("Conexão excluída")
+          }}
+        />
+      </MountWhen>
     </box>
   )
 }

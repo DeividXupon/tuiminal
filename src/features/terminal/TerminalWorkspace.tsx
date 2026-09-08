@@ -3,6 +3,7 @@ import { basename } from "node:path"
 import { EmbeddedTerminalRenderable, type InputRenderable } from "@opentui/core"
 import { extend, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { notifyTerminalExit, useTerminalNotifications } from "./hooks/use-terminal-notifications"
 import {
   FREE_TERMINAL_WORKING_DIRECTORY,
   createFreeTerminalCommand,
@@ -12,9 +13,15 @@ import {
   type FreeTerminalKind,
   type FreeTerminalProcessHandle,
 } from "./services/terminal"
-import { translateUi, truncateDisplay } from "../../shared/i18n/index"
+import { translateUi } from "../../shared/i18n/index"
 import { COLORS } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import {
+  compactTerminalText,
+  terminalFooterLayout,
+  terminalStatusColor,
+  terminalStatusMarker,
+} from "./rendering/presentation"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
 
@@ -74,36 +81,6 @@ type TerminalPaneProps = {
 const MAX_SESSIONS = 12
 const MAX_TERMINALS_PER_SECTION = 4
 const MAX_SCROLLBACK_LINES = 5_000
-
-function statusMarker(status: FreeTerminalSessionStatus) {
-  switch (status) {
-    case "starting":
-      return "◐"
-    case "running":
-      return "●"
-    case "exited":
-      return "■"
-    case "failed":
-      return "×"
-  }
-}
-
-function statusColor(session: FreeTerminalSession) {
-  switch (session.status) {
-    case "starting":
-      return COLORS.warning
-    case "running":
-      return session.accent
-    case "exited":
-      return COLORS.muted
-    case "failed":
-      return COLORS.danger
-  }
-}
-
-function compactText(value: string, width: number) {
-  return truncateDisplay(translateUi(value), width)
-}
 
 function comparePanePosition(first: FreeTerminalSession, second: FreeTerminalSession) {
   return first.row - second.row || first.column - second.column
@@ -189,8 +166,8 @@ function TerminalPane({
         }}
       >
         <text
-          content={`${statusMarker(session.status)} ${ordinal}:${session.shortLabel} ${compactText(session.title, 16)}${session.pid ? ` · ${session.pid}` : ""}`}
-          style={{ fg: active ? statusColor(session) : COLORS.muted }}
+          content={`${terminalStatusMarker(session.status)} ${ordinal}:${session.shortLabel} ${compactTerminalText(session.title, 16)}${session.pid ? ` · ${session.pid}` : ""}`}
+          style={{ fg: active ? terminalStatusColor(session) : COLORS.muted }}
         />
         <box style={{ flexDirection: "row" }}>
           <InlineButton label="↻" accent={session.accent} onPress={() => onRestart(session.id)} />
@@ -241,6 +218,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
     "Crie uma seção; os terminais continuam vivos ao trocar de tab.",
   )
   const [leaderActive, setLeaderActive] = useState(false)
+  const notify = useTerminalNotifications(notice)
 
   const sectionIds = useMemo(() => {
     const ids: string[] = []
@@ -318,6 +296,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
   )
   const pageCount = Math.max(1, sectionIds.length)
   const compact = dimensions.width < 106
+  const footerLayout = terminalFooterLayout(dimensions.width - 2)
 
   activeRef.current = active
   activeSessionRef.current = activeSessionId
@@ -399,6 +378,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
               pid: null,
               exitCode: result.code,
             })
+            notifyTerminalExit(notify, command.label, result)
           },
         })
         processHandles.current.set(id, handle)
@@ -410,10 +390,10 @@ export function FreeTerminal({ active }: { active: boolean }) {
           error instanceof Error ? error.message : "Não foi possível iniciar a sessão."
         embeddedTerminal.write(`\u001b[38;2;255;107;107m× ${message}\u001b[0m\r\n`)
         updateSession(id, { status: "failed", pid: null, exitCode: 1 })
-        setNotice(message)
+        setNotice(`Erro: ${message}`)
       }
     },
-    [dimensions.height, dimensions.width, focusTerminal, updateSession],
+    [dimensions.height, dimensions.width, focusTerminal, notify, updateSession],
   )
 
   const terminalReady = useCallback(
@@ -751,12 +731,12 @@ export function FreeTerminal({ active }: { active: boolean }) {
       }}
     >
       <box
+        id="terminal-footer"
         style={{
           height: 1,
           flexShrink: 0,
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
           paddingLeft: 1,
           paddingRight: 1,
           backgroundColor: COLORS.panel,
@@ -924,16 +904,20 @@ export function FreeTerminal({ active }: { active: boolean }) {
         }}
       >
         <text
-          content={compactText(notice, Math.max(14, dimensions.width - (compact ? 39 : 72)))}
-          style={{ fg: leaderActive ? COLORS.warning : COLORS.muted }}
+          id="terminal-footer-notice"
+          content={compactTerminalText(notice, footerLayout.noticeWidth)}
+          style={{
+            width: footerLayout.noticeWidth,
+            flexShrink: 0,
+            overflow: "hidden",
+            fg: leaderActive ? COLORS.warning : COLORS.muted,
+          }}
         />
+        <box style={{ width: 1, flexShrink: 0 }} />
         <ShortcutText
-          content={
-            compact
-              ? "[^B] · [C] seção · [V] │ · [S] ─ · [G] tabs"
-              : "[Ctrl+B] · [C] nova · [V] lado · [S] baixo · [1–4] foco · [/] seção · [G] tabs"
-          }
-          style={{ fg: COLORS.muted }}
+          id="terminal-footer-help"
+          content={footerLayout.help}
+          style={{ width: footerLayout.helpWidth, flexShrink: 0, fg: COLORS.muted }}
         />
       </box>
     </box>
