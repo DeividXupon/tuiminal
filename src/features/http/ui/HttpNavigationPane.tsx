@@ -1,7 +1,7 @@
 import type { InputRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
 import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "../../../core/settings/theme"
+import { COLORS, focusedPanelBorder } from "../../../core/settings/theme"
 import { displayWidth, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import type { HttpNavigationView, HttpProjectRequestItem, HttpWorkspaceState } from "../model/types"
@@ -67,7 +67,7 @@ export function HttpNavigationPane({
         position: "absolute",
         ...position,
         zIndex: overlay ? 50 : 1,
-        ...panelBorder(focused ? COLORS.http : COLORS.border),
+        ...focusedPanelBorder(focused, COLORS.http),
         backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,

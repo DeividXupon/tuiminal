@@ -2,7 +2,7 @@ import { ShortcutText } from "../../../shared/ui/ShortcutText"
 import { Button } from "@tuiparts/react/button"
 import type { RunnerExecution } from "../model/execution"
 import type { RunnerListeningPort } from "../model/types"
-import { COLORS, LAYOUT, panelBorder } from "../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../core/settings/theme"
 import { filterRunnerLogs, runnerLogPresentation } from "../rendering/log-document"
 import {
   fitLine,
@@ -121,7 +121,7 @@ export function MultiProcessPanel({
                     width: multiPaneWidth,
                     flexGrow: 1,
                     flexShrink: 1,
-                    ...panelBorder(selected ? COLORS.runner : COLORS.border),
+                    ...focusedPanelBorder(selected, COLORS.runner),
                     backgroundColor: index % 2 === 0 ? COLORS.panel : LAYOUT.alternatePanel,
                     paddingLeft: 1,
                     paddingRight: 1,

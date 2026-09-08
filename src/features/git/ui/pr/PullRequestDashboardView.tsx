@@ -1,4 +1,4 @@
-import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
@@ -92,8 +92,9 @@ function DashboardPanels({
     >
       {showList ? (
         <box
+          id="git-pr-list-panel"
           style={{
-            ...panelBorder(focus === "list" ? COLORS.git : undefined),
+            ...focusedPanelBorder(focus === "list", COLORS.git),
             backgroundColor: COLORS.panel,
             flexGrow: layout === "stacked" ? 2 : 0,
             width: layout === "side-by-side" ? listWidth : "100%",
@@ -114,8 +115,9 @@ function DashboardPanels({
       ) : null}
       {showPreview ? (
         <box
+          id="git-pr-preview-panel"
           style={{
-            ...panelBorder(focus === "preview" ? COLORS.git : undefined),
+            ...focusedPanelBorder(focus === "preview", COLORS.git),
             backgroundColor: COLORS.panel,
             flexGrow: 1,
             width: layout === "side-by-side" ? previewWidth : "100%",

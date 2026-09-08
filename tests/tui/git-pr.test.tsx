@@ -12,6 +12,7 @@ import { App } from "../../src/app/App"
 import {
   COLORS,
   getUiSettings,
+  PALETTES,
   type LayoutMode,
   type PaletteId,
   updateUiSettings,
@@ -63,6 +64,14 @@ async function waitForText(text: string) {
     if (tui?.captureCharFrame().includes(text)) return
   }
   throw new Error(`TUI did not show: ${text}`)
+}
+
+function renderableBorderSides(panel: BoxRenderable) {
+  return (
+    panel as unknown as {
+      borderSides: { top: boolean; right: boolean; bottom: boolean; left: boolean }
+    }
+  ).borderSides
 }
 
 afterEach(() => {
@@ -305,6 +314,7 @@ test("Diffs toggles into the local branch comparison selector", async () => {
 })
 
 test("branch comparison selects two refs and renders their diff without checkout", async () => {
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
   const repository = mkdtempSync(join(tmpdir(), "tuiminal-compare-tui-"))
   execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository])
   writeFileSync(join(repository, "README.md"), "base\n")
@@ -379,10 +389,20 @@ test("branch comparison selects two refs and renders their diff without checkout
     await act(async () => Bun.sleep(20))
     await tui.renderOnce()
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-file-list")
+    const filesPanel = tui.renderer.root.findDescendantById(
+      "git-compare-files-panel",
+    ) as BoxRenderable
+    const diffPanel = tui.renderer.root.findDescendantById("git-compare-diff") as BoxRenderable
+    expect(renderableBorderSides(filesPanel).left).toBe(true)
+    expect(renderableBorderSides(diffPanel).left).toBe(false)
+    expect(filesPanel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.git).toInts())
     await key("l")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-diff")
+    expect(renderableBorderSides(filesPanel).left).toBe(false)
+    expect(renderableBorderSides(diffPanel).left).toBe(true)
+    expect(diffPanel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.git).toInts())
     await key("h")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
@@ -462,6 +482,27 @@ test("medium PR view stacks the list and preview without hiding either", async (
   expect(frame).toContain("equipe/api #142")
   expect(frame).toContain("ABERTO · main")
   expect(frame).toContain("Corrigir invalidação")
+  const listPanel = tui.renderer.root.findDescendantById("git-pr-list-panel") as BoxRenderable
+  const previewPanel = tui.renderer.root.findDescendantById("git-pr-preview-panel") as BoxRenderable
+  expect(renderableBorderSides(listPanel)).toEqual({
+    top: false,
+    right: false,
+    bottom: false,
+    left: true,
+  })
+  expect(renderableBorderSides(previewPanel).left).toBe(false)
+  expect(listPanel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.git).toInts())
+
+  await key("l")
+  await tui.renderOnce()
+  expect(renderableBorderSides(listPanel).left).toBe(false)
+  expect(renderableBorderSides(previewPanel)).toEqual({
+    top: false,
+    right: false,
+    bottom: false,
+    left: true,
+  })
+  expect(previewPanel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.git).toInts())
 })
 
 test("mouse reaches Git tabs, sections, rows, preview tabs and actions", async () => {
@@ -493,7 +534,7 @@ test("PR dashboard survives the documented size, language, palette and layout ma
     [160, 45],
     [220, 60],
   ] as const
-  const palettes: PaletteId[] = ["prime", "midnight", "nord", "gruvbox"]
+  const palettes = Object.keys(PALETTES) as PaletteId[]
   const layouts: LayoutMode[] = ["framed", "compact"]
   const variants = [
     ...languages.flatMap((language, index) =>

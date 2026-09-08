@@ -60,7 +60,7 @@ import {
   runnerProjectCloseResult,
   runnerProjectPickerShortcut,
 } from "./model/navigation"
-import { COLORS, LAYOUT, panelBorder } from "../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { MountWhen } from "../../shared/ui/MountWhen"
 import { type RunnerCommandSaveInput, RunnerSaveCommandModal } from "./ui/RunnerSaveCommandModal"
@@ -1850,7 +1850,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                   position: "relative",
                   height: "100%",
                   flexShrink: 0,
-                  ...panelBorder(focusPane === "commands" ? COLORS.runner : COLORS.border),
+                  ...focusedPanelBorder(focusPane === "commands", COLORS.runner),
                   backgroundColor: COLORS.panel,
                   paddingLeft: 1,
                   paddingRight: 1,
@@ -2061,7 +2061,10 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     style={{
                       height: 3,
                       flexShrink: 0,
-                      border: ["top"],
+                      border:
+                        LAYOUT.compact && focusPane === "history"
+                          ? (["top", "left"] as const)
+                          : (["top"] as const),
                       borderColor: COLORS.border,
                     }}
                   >
@@ -2118,7 +2121,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                 key={LAYOUT.compact ? "runner-log-compact" : "runner-log-framed"}
                 style={{
                   flexGrow: 1,
-                  ...panelBorder(focusPane === "log" ? COLORS.runner : COLORS.border),
+                  ...focusedPanelBorder(focusPane === "log", COLORS.runner),
                   backgroundColor: LAYOUT.alternatePanel,
                   paddingLeft: 1,
                   paddingRight: 1,

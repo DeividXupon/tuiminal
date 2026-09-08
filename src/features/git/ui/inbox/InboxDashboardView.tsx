@@ -1,4 +1,4 @@
-import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
@@ -40,7 +40,7 @@ function InboxReadyView(props: ReadyViewProps) {
     <box style={{ flexGrow: 1, flexDirection: props.wide ? "row" : "column", gap: LAYOUT.gap }}>
       <box
         style={{
-          ...panelBorder(props.focus === "list" ? COLORS.git : undefined),
+          ...focusedPanelBorder(props.focus === "list", COLORS.git),
           width: props.wide ? props.listWidth : "100%",
           flexGrow: props.wide ? 0 : 1,
           backgroundColor: COLORS.panel,
@@ -65,7 +65,7 @@ function InboxReadyView(props: ReadyViewProps) {
       {props.wide || props.focus === "preview" ? (
         <box
           style={{
-            ...panelBorder(props.focus === "preview" ? COLORS.git : undefined),
+            ...focusedPanelBorder(props.focus === "preview", COLORS.git),
             flexGrow: 1,
             backgroundColor: COLORS.panel,
             paddingLeft: 1,

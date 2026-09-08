@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
@@ -117,7 +117,7 @@ function FilePanel({
   return (
     <box
       style={{
-        ...panelBorder(focused ? COLORS.git : undefined),
+        ...focusedPanelBorder(focused, COLORS.git),
         width,
         flexGrow: 0,
         backgroundColor: COLORS.panel,
@@ -196,7 +196,7 @@ function DiffDocumentPane({
   return (
     <box
       style={{
-        ...panelBorder(focused ? COLORS.git : undefined),
+        ...focusedPanelBorder(focused, COLORS.git),
         flexGrow: 1,
         backgroundColor: COLORS.panel,
       }}

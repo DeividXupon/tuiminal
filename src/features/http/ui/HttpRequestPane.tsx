@@ -5,7 +5,7 @@ import {
   type TextareaRenderable,
 } from "@opentui/core"
 import { useRef } from "react"
-import { COLORS, LAYOUT, panelBorder } from "../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import type {
@@ -168,7 +168,7 @@ export function HttpRequestPane({
         style={{
           position: "absolute",
           ...position,
-          ...panelBorder(focused ? COLORS.http : COLORS.border),
+          ...focusedPanelBorder(focused, COLORS.http),
           backgroundColor: COLORS.panel,
           paddingLeft: 1,
           paddingRight: 1,
@@ -194,7 +194,7 @@ export function HttpRequestPane({
       style={{
         position: "absolute",
         ...position,
-        ...panelBorder(focused ? COLORS.http : COLORS.border),
+        ...focusedPanelBorder(focused, COLORS.http),
         backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,

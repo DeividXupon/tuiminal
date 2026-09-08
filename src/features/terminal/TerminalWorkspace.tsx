@@ -14,7 +14,7 @@ import {
   type FreeTerminalProcessHandle,
 } from "./services/terminal"
 import { translateUi } from "../../shared/i18n/index"
-import { COLORS } from "../../core/settings/theme"
+import { COLORS, LAYOUT } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import {
   compactTerminalText,
@@ -128,6 +128,7 @@ function TerminalPane({
   const borders: Array<"top" | "left"> = []
   if (visible && layout.borderTop) borders.push("top")
   if (visible && layout.borderLeft) borders.push("left")
+  if (visible && active && LAYOUT.compact && !borders.includes("left")) borders.push("left")
 
   useEffect(() => {
     const terminal = terminalRef.current
@@ -149,7 +150,7 @@ function TerminalPane({
         minHeight: visible ? 4 : 1,
         border: borders,
         borderStyle: "single",
-        borderColor: COLORS.border,
+        borderColor: active && LAYOUT.compact ? COLORS.terminal : COLORS.border,
         backgroundColor: COLORS.panel,
         overflow: "hidden",
       }}

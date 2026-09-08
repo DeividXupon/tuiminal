@@ -94,6 +94,10 @@ function navigationAction(keyName: string, fileTreeFocused: boolean): Navigation
   return null
 }
 
+function paneForDiffFocus(focusDiff: boolean): "files" | "diff" {
+  return focusDiff ? "diff" : "files"
+}
+
 function ComparisonBody({
   comparison,
   loading,
@@ -103,6 +107,8 @@ function ComparisonBody({
   terminalWidth,
   fileListRef,
   scrollRef,
+  focusedPane,
+  onFocusPane,
 }: {
   comparison: GitBranchComparison | null
   loading: boolean
@@ -112,6 +118,8 @@ function ComparisonBody({
   terminalWidth: number
   fileListRef: React.RefObject<SelectRenderable | null>
   scrollRef: React.RefObject<ScrollBoxRenderable | null>
+  focusedPane: "files" | "diff"
+  onFocusPane: (pane: "files" | "diff") => void
 }) {
   if (loading)
     return <text content={translateUi("◷ COMPARANDO BRANCHES…")} style={{ fg: COLORS.git }} />
@@ -125,6 +133,8 @@ function ComparisonBody({
         terminalWidth={terminalWidth}
         fileListRef={fileListRef}
         scrollRef={scrollRef}
+        focusedPane={focusedPane}
+        onFocusPane={onFocusPane}
       />
     )
   }
@@ -165,6 +175,7 @@ export function GitComparisonResult({
   const fileListRef = useRef<SelectRenderable | null>(null)
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const [offset, setOffset] = useState(0)
+  const [focusedPane, setFocusedPane] = useState<"files" | "diff">("files")
   const selection = useDocumentSelection(comparison, active, fileListRef)
   const rowCount = selection.selectedDocument
     ? documentLineCount(selection.selectedDocument, layout) + 1
@@ -179,6 +190,9 @@ export function GitComparisonResult({
     setOffset(0)
   }, [baseName, comparedName, layout, selection.selectedDocument?.path])
   useEffect(() => scrollRef.current?.scrollTo({ x: 0, y: offset }), [offset])
+  useEffect(() => {
+    if (active && selection.documents.length) setFocusedPane("files")
+  }, [active, selection.documents])
 
   useKeyboard((key) => {
     if (!active || key.ctrl || key.meta || key.super) return
@@ -189,6 +203,7 @@ export function GitComparisonResult({
     if (action === "toggle-pane" || action === "focus-tree" || action === "focus-diff") {
       key.stopPropagation()
       const focusDiff = action === "focus-diff" || (action === "toggle-pane" && fileTreeFocused)
+      setFocusedPane(paneForDiffFocus(focusDiff))
       setTimeout(() => {
         if (focusDiff) scrollRef.current?.focus()
         else fileListRef.current?.focus()
@@ -242,6 +257,8 @@ export function GitComparisonResult({
         terminalWidth={terminalWidth}
         fileListRef={fileListRef}
         scrollRef={scrollRef}
+        focusedPane={focusedPane}
+        onFocusPane={setFocusedPane}
       />
       <PlasmaLoadingOverlay active={loading} label="◷ COMPARANDO BRANCHES…" accent={COLORS.git} />
     </box>

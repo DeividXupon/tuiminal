@@ -1,7 +1,7 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { COLORS, LAYOUT, panelBorder } from "../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../core/settings/theme"
 import { translateUi } from "../../shared/i18n"
 import { useNotificationFromValue } from "../../shared/notifications/index"
 import { InlineButton } from "../../shared/ui/InlineButton"
@@ -549,7 +549,7 @@ export function GitBaseWorkspace({
               style={{
                 width: narrowGit ? "100%" : FILES_PANEL_WIDTH,
                 flexGrow: narrowGit ? 1 : 0,
-                ...panelBorder(active && focusedPane === "files" ? COLORS.git : COLORS.border),
+                ...focusedPanelBorder(active && focusedPane === "files", COLORS.git),
                 backgroundColor: COLORS.panel,
                 paddingLeft: 1,
                 paddingRight: 1,
@@ -671,7 +671,7 @@ export function GitBaseWorkspace({
               onMouseDown={() => setFocusedPane("preview")}
               style={{
                 flexGrow: 1,
-                ...panelBorder(active && focusedPane === "preview" ? COLORS.git : COLORS.border),
+                ...focusedPanelBorder(active && focusedPane === "preview", COLORS.git),
                 backgroundColor: LAYOUT.alternatePanel,
                 paddingLeft: 1,
                 paddingRight: 1,

@@ -49,7 +49,13 @@ import {
   sensitiveTermsSignature,
   type SensitiveVisibility,
 } from "../../shared/security/sensitive-data"
-import { COLORS, databaseSelectionColors, LAYOUT, panelBorder } from "../../core/settings/theme"
+import {
+  COLORS,
+  databaseSelectionColors,
+  focusedPanelBorder,
+  LAYOUT,
+  panelBorder,
+} from "../../core/settings/theme"
 import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
 import { DatabaseBatchExportModal } from "./ui/DatabaseBatchExportModal"
 import { DatabaseChangesModal, type DatabaseChangeReviewItem } from "./ui/DatabaseChangesModal"
@@ -1830,7 +1836,7 @@ export function DatabaseViewer({
             key={LAYOUT.compact ? "database-sidebar-compact" : "database-sidebar-framed"}
             style={{
               width: sidebarWidth,
-              ...panelBorder(activePane === "catalog" ? COLORS.database : COLORS.border),
+              ...focusedPanelBorder(activePane === "catalog", COLORS.database),
               backgroundColor:
                 activePane === "catalog" && LAYOUT.compact ? COLORS.panelRaised : COLORS.panel,
               paddingLeft: 1,
@@ -1945,7 +1951,7 @@ export function DatabaseViewer({
             style={{
               position: "relative",
               flexGrow: 1,
-              ...panelBorder(activePane === "grid" ? COLORS.database : COLORS.border),
+              ...focusedPanelBorder(activePane === "grid", COLORS.database),
               backgroundColor:
                 activePane === "grid" && LAYOUT.compact
                   ? COLORS.panelRaised

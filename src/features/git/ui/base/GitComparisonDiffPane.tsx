@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
 import type React from "react"
-import { COLORS, panelBorder } from "../../../../core/settings/theme"
+import { COLORS, focusedPanelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../../../shared/ui/selectMouse"
@@ -60,16 +60,21 @@ function ComparisonFileTree({
   selection,
   width,
   height,
+  focused,
+  onFocus,
 }: {
   fileListRef: React.RefObject<SelectRenderable | null>
   selection: ComparisonDocumentSelection
   width: number | "100%"
   height: number | "100%"
+  focused: boolean
+  onFocus: () => void
 }) {
   return (
     <box
+      id="git-compare-files-panel"
       style={{
-        ...panelBorder(),
+        ...focusedPanelBorder(focused, COLORS.git),
         flexShrink: 0,
         width,
         height,
@@ -93,12 +98,13 @@ function ComparisonFileTree({
         onSelect={(_index, option) => {
           if (typeof option?.value === "string") selection.toggleFolder(option.value)
         }}
-        onMouseDown={(event) =>
+        onMouseDown={(event) => {
+          onFocus()
           handleSelectMouseDown(event, fileListRef.current, {
             optionCount: selection.fileOptions.length,
             activateOnClick: true,
           })
-        }
+        }}
         onMouseScroll={(event) => handleSelectMouseScroll(event, fileListRef.current)}
         showDescription={false}
         showScrollIndicator
@@ -167,6 +173,8 @@ export function GitComparisonContent({
   terminalWidth,
   fileListRef,
   scrollRef,
+  focusedPane,
+  onFocusPane,
 }: {
   selection: ComparisonDocumentSelection
   layout: DiffLayout
@@ -174,6 +182,8 @@ export function GitComparisonContent({
   terminalWidth: number
   fileListRef: React.RefObject<SelectRenderable | null>
   scrollRef: React.RefObject<ScrollBoxRenderable | null>
+  focusedPane: "files" | "diff"
+  onFocusPane: (pane: "files" | "diff") => void
 }) {
   if (!selection.selectedDocument) return null
   const treeWidth = Math.min(34, Math.max(24, Math.floor(terminalWidth * 0.28)))
@@ -185,7 +195,10 @@ export function GitComparisonContent({
         selection={selection}
         width={narrow ? "100%" : treeWidth}
         height={narrow ? treeHeight : "100%"}
+        focused={focusedPane === "files"}
+        onFocus={() => onFocusPane("files")}
       />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: the native diff pane needs mouse focus for keyboard scrolling. */}
       <scrollbox
         ref={scrollRef}
         id="git-compare-diff"
@@ -193,7 +206,17 @@ export function GitComparisonContent({
         scrollY
         scrollX
         viewportCulling={layout !== "inline"}
-        style={{ flexGrow: 1, minHeight: 3, width: "100%", height: "100%" }}
+        onMouseDown={() => {
+          onFocusPane("diff")
+          scrollRef.current?.focus()
+        }}
+        style={{
+          ...focusedPanelBorder(focusedPane === "diff", COLORS.git),
+          flexGrow: 1,
+          minHeight: 3,
+          width: "100%",
+          height: "100%",
+        }}
         verticalScrollbarOptions={{
           trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
         }}

@@ -1,4 +1,4 @@
-import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
@@ -53,7 +53,7 @@ function IssuePanels(props: IssuePanelsProps) {
       {showList ? (
         <box
           style={{
-            ...panelBorder(props.focus === "list" ? COLORS.git : undefined),
+            ...focusedPanelBorder(props.focus === "list", COLORS.git),
             backgroundColor: COLORS.panel,
             flexGrow: props.layout === "stacked" ? 2 : 0,
             width: props.layout === "side-by-side" ? props.listWidth : "100%",
@@ -77,7 +77,7 @@ function IssuePanels(props: IssuePanelsProps) {
       {showPreview ? (
         <box
           style={{
-            ...panelBorder(props.focus === "preview" ? COLORS.git : undefined),
+            ...focusedPanelBorder(props.focus === "preview", COLORS.git),
             backgroundColor: COLORS.panel,
             flexGrow: 1,
             width: props.layout === "side-by-side" ? props.previewWidth : "100%",

@@ -124,8 +124,9 @@ Toda a interface também pode ser operada com o mouse. Clique nas tabs, botões,
 campos, projetos, arquivos e commits; use a roda do mouse nas listas, diffs e
 respostas HTTP. Os atalhos de teclado continuam disponíveis em paralelo.
 
-Ao abrir a interface, os quatro blocos da marca caem e se encaixam em sequência;
-em seguida, o nome Tuiminal aparece com a tipografia ASCII geométrica. A abertura
+Ao abrir a interface, os quatro blocos da marca caem e se encaixam de baixo para
+cima; a barra superior fecha a montagem e então o nome Tuiminal aparece com a
+tipografia ASCII geométrica. A abertura
 se adapta a terminais menores e pode ser adiantada com `[Enter]`, `[Esc]` ou um
 clique. As ferramentas só são montadas depois dela, enquanto comandos HTTP sem
 interface continuam iniciando diretamente.
@@ -149,16 +150,18 @@ segundo plano continuam usando indicadores pequenos dentro da própria lista.
 ## Configurações
 
 O botão `Config` e o atalho `[,]` abrem o modal contextual de configurações.
-Paleta, layout, idioma e tutorial ficam sob **Configurações globais** em qualquer
+Modo de cor, paleta, layout, idioma e tutorial ficam sob **Configurações globais** em qualquer
 ferramenta. **Configurações do banco** aparece primeiro somente quando a aba Banco
 está ativa e contém Dados sensíveis e Histórico SQL; essas opções não aparecem nas
-demais ferramentas. O modal permite trocar entre as paletas Prime, Midnight, Nord
-e Gruvbox e alternar o layout entre:
+demais ferramentas. O modo de cor começa em **Dark** e pode ser alternado para
+**Light**, independentemente da paleta. Estão disponíveis Prime, Midnight, Nord,
+Gruvbox, Dracula, Catppuccin e Tokyo Night. Também é possível alternar o layout entre:
 
 - **Moldurado**: mantém o espaçamento e as bordas arredondadas entre os painéis.
-- **Compacto**: remove padding, gaps e bordas dos painéis principais; fundos
-  levemente alternados continuam separando cada área, e seleções usam um tom
-  escuro do acento para permanecerem legíveis também em terminais de 256 cores.
+- **Compacto**: remove padding, gaps e as molduras completas dos painéis principais;
+  o painel focado recebe uma linha colorida à esquerda, fundos levemente alternados
+  continuam separando cada área, e seleções usam um tom escuro do acento para
+  permanecerem legíveis também em terminais de 256 cores.
 
 As alterações são aplicadas imediatamente em todas as ferramentas e ficam
 salvas em `~/.config/tuiminal/settings.json`. No modal, use `[↑/↓]` para

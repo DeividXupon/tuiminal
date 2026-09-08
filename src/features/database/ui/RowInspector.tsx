@@ -3,7 +3,12 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
 import type { DatabaseColumn } from "../model/types"
 import { translateUi } from "../../../shared/i18n/index"
-import { COLORS, databaseSelectionColors } from "../../../core/settings/theme"
+import {
+  COLORS,
+  databaseSelectionColors,
+  focusedPanelBorder,
+  LAYOUT,
+} from "../../../core/settings/theme"
 import { shorten, detailValue } from "../rendering/workspace-shared"
 
 export function RowInspector({
@@ -40,10 +45,12 @@ export function RowInspector({
         height: "100%",
         flexShrink: 0,
         ...(typeof width === "number"
-          ? {
-              border: ["left"] as const,
-              borderColor: active ? COLORS.database : COLORS.border,
-            }
+          ? LAYOUT.compact
+            ? focusedPanelBorder(active, COLORS.database)
+            : {
+                border: ["left"] as const,
+                borderColor: active ? COLORS.database : COLORS.border,
+              }
           : {}),
         backgroundColor: active ? COLORS.panelAlt : COLORS.panel,
         paddingLeft: 1,
