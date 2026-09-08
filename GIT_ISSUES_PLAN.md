@@ -108,3 +108,6 @@ limites deve atualizar este documento, o design e os testes correspondentes.
 Em 2026-09-08, os gerenciadores locais divergentes e os atalhos `[Ctrl+E]`, `[S]`
 e `[+]` foram substituídos pelo modal contextual unificado de `[,]`. A aba
 Repositórios passou a carregar todos os projetos acessíveis e a oferecer `TODOS`.
+O carregamento inicial e o de detalhes usam o plasma ASCII compartilhado com
+texto de estado e dissolução curta; paginação e refresh preservam o indicador
+inline para não cobrir issues já utilizáveis.

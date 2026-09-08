@@ -4337,6 +4337,14 @@ const MESSAGES: readonly Message[] = [
   ],
   ["ARQUIVOS", "FILES", "ARCHIVOS", "ファイル", "文件", "파일"],
   [
+    "CARREGANDO REPOSITÓRIO…",
+    "LOADING REPOSITORY…",
+    "CARGANDO REPOSITORIO…",
+    "リポジトリを読み込み中…",
+    "正在加载仓库…",
+    "저장소 불러오는 중…",
+  ],
+  [
     "Nenhum repositório Git encontrado",
     "No Git repository found",
     "No se encontró ningún repositorio Git",
@@ -4420,6 +4428,22 @@ const MESSAGES: readonly Message[] = [
     "[Tab/H/L/←/→] ツリー/Diff  [V] 表示  [O] ログ  [G] Git グラフ  [R] 更新",
     "[Tab/H/L/←/→] 树/差异  [V] 视图  [O] 日志  [G] Git 图  [R] 刷新",
     "[Tab/H/L/←/→] 트리/Diff  [V] 보기  [O] 로그  [G] Git 그래프  [R] 새로고침",
+  ],
+  [
+    "[Tab/H/L] Painel  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff",
+    "[Tab/H/L] Pane  [J/K/↑/↓] Navigate  [↵] Open  [D] Diff",
+    "[Tab/H/L] Panel  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff",
+    "[Tab/H/L] ペイン  [J/K/↑/↓] 移動  [↵] 開く  [D] Diff",
+    "[Tab/H/L] 面板  [J/K/↑/↓] 导航  [↵] 打开  [D] 差异",
+    "[Tab/H/L] 패널  [J/K/↑/↓] 탐색  [↵] 열기  [D] Diff",
+  ],
+  [
+    "[Tab/H/L/←/→] Árvore/histórico  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar",
+    "[Tab/H/L/←/→] Tree/history  [J/K/↑/↓] Navigate  [↵] Open  [D] Diff  [R] Refresh",
+    "[Tab/H/L/←/→] Árbol/historial  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Actualizar",
+    "[Tab/H/L/←/→] ツリー/履歴  [J/K/↑/↓] 移動  [↵] 開く  [D] Diff  [R] 更新",
+    "[Tab/H/L/←/→] 树/历史  [J/K/↑/↓] 导航  [↵] 打开  [D] 差异  [R] 刷新",
+    "[Tab/H/L/←/→] 트리/기록  [J/K/↑/↓] 탐색  [↵] 열기  [D] Diff  [R] 새로고침",
   ],
   [
     "MONTANDO PREVIEW",

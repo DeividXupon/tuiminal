@@ -4,6 +4,7 @@ import type { RefObject } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { GitConfigurationTab } from "../../model/git-configuration"
 import type { GitConfigurationReadyState, GitConfigurationState } from "./useGitConfiguration"
@@ -253,6 +254,7 @@ export function GitConfigurationPanel({
           id="git-configuration-modal"
           focusable
           style={{
+            position: "relative",
             width,
             height,
             border: true,
@@ -330,6 +332,12 @@ export function GitConfigurationPanel({
           {notice ? (
             <text content={notice} style={{ height: 1, flexShrink: 0, fg: COLORS.warning }} />
           ) : null}
+          <PlasmaLoadingOverlay
+            active={state.status === "loading"}
+            label="CARREGANDO CONFIGURAÇÃO GIT…"
+            accent={COLORS.git}
+            background={COLORS.canvas}
+          />
         </box>
       </box>
     </>

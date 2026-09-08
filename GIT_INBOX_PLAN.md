@@ -54,6 +54,10 @@ novos, o `origin` do repositório de lançamento é o padrão; fora de Git, `TOD
 selecionado. Alterar o host também invalida o cache do Inbox para sua próxima
 ativação.
 
+O carregamento inicial do Inbox usa o plasma ASCII compartilhado com mensagem de
+estado e dissolução curta. A paginação e o refresh continuam inline para manter
+as notificações anteriores visíveis e utilizáveis.
+
 ## Evidência
 
 - `tests/git-inbox.test.ts`: filtros, merge, paginação, autocomplete, transporte,

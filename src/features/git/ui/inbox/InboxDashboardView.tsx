@@ -1,6 +1,7 @@
 import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { InboxNotification, InboxSection } from "../../model/inbox/types"
 import { InboxList } from "./InboxList"
@@ -130,6 +131,7 @@ export function InboxDashboardView({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         backgroundColor: COLORS.canvas,
         padding: LAYOUT.outerPadding,
@@ -176,6 +178,13 @@ export function InboxDashboardView({
       ) : (
         <InboxStatePanel state={state} onRetry={onRetry} />
       )}
+      <PlasmaLoadingOverlay
+        active={state.status === "loading" || state.status === "idle"}
+        label="CARREGANDO GITHUB…"
+        detail="Buscando suas notificações"
+        accent={COLORS.git}
+        background={COLORS.canvas}
+      />
       <ShortcutText
         content="[J/K] Navegar  [H/L] Foco  [</>] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}

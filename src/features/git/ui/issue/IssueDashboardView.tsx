@@ -1,6 +1,7 @@
 import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { IssuePreviewConfig } from "../../model/issue/config"
 import type { IssueFocus, IssueLayoutMode } from "../../model/issue/navigation"
@@ -43,6 +44,7 @@ function IssuePanels(props: IssuePanelsProps) {
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         flexDirection: props.layout === "stacked" ? "column" : "row",
         gap: LAYOUT.gap,
@@ -154,6 +156,7 @@ export function IssueDashboardView({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         backgroundColor: COLORS.canvas,
         padding: LAYOUT.outerPadding,
@@ -241,6 +244,13 @@ export function IssueDashboardView({
       ) : (
         <IssueDashboardStatePanel state={dashboard} onRetry={onRetry} />
       )}
+      <PlasmaLoadingOverlay
+        active={dashboard.status === "loading" || dashboard.status === "idle"}
+        label="CARREGANDO GITHUB…"
+        detail="Buscando issues da sua conta"
+        accent={COLORS.git}
+        background={COLORS.canvas}
+      />
       {dashboard.status === "ready" && dashboard.hasNextPage ? (
         <InlineButton
           id="git-issue-load-more"

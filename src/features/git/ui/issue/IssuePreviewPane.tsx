@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { formatUiDateTime, translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { pullRequestMarkdownLines } from "../../model/pr/content"
 import { ISSUE_PREVIEW_TABS } from "../../model/issue/navigation"
 import type { IssueDetails, IssuePreviewTab, IssueSummary } from "../../model/issue/types"
@@ -175,7 +176,14 @@ export function IssuePreviewPane({
   const identity = `${item.identity.owner}/${item.identity.repository} #${item.identity.number}`
   const canLoadMore = details.status === "ready" && details.details.commentPage.hasNextPage
   return (
-    <box style={{ flexGrow: 1, width: "100%", backgroundColor: COLORS.panel }}>
+    <box
+      style={{
+        position: "relative",
+        flexGrow: 1,
+        width: "100%",
+        backgroundColor: COLORS.panel,
+      }}
+    >
       <text
         content={truncateDisplay(identity, Math.max(10, width - 2))}
         style={{ height: 1, flexShrink: 0, fg: focused ? COLORS.git : COLORS.text }}
@@ -248,6 +256,11 @@ export function IssuePreviewPane({
           />
         ) : null}
       </scrollbox>
+      <PlasmaLoadingOverlay
+        active={details.status === "loading"}
+        label="CARREGANDO DETALHES…"
+        accent={COLORS.git}
+      />
     </box>
   )
 }

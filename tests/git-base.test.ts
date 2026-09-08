@@ -5,7 +5,7 @@ import {
   compactGitActionFooter,
   gitActionLabel,
   gitPaneFocusTarget,
-} from "../src/features/git/GitWorkspace"
+} from "../src/features/git/model/base-navigation"
 import { createFileTreeOptions } from "../src/features/git/rendering/file-tree"
 import { trimGitPatchTerminator } from "../src/features/git/services/git"
 import { gitFileTreeWindowStart, gitStatusColor } from "../src/features/git/ui/base/GitFileTree"

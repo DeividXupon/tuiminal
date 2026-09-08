@@ -1,6 +1,7 @@
 import { Button } from "@tuiparts/react/button"
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { GitComparisonContext, GitComparisonRef } from "../../model/branch-comparison"
 import { fitLine } from "../../rendering/diff"
@@ -302,6 +303,7 @@ export function GitComparisonSelector({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: complete ? 0 : 1,
         flexShrink: 0,
         alignItems: "center",
@@ -321,6 +323,12 @@ export function GitComparisonSelector({
         onPick={onPick}
       />
       <SelectorStatus complete={complete} loading={loading} context={context} />
+      <PlasmaLoadingOverlay
+        active={loading}
+        label="◷ CARREGANDO BRANCHES…"
+        accent={COLORS.git}
+        background={COLORS.canvas}
+      />
     </box>
   )
 }

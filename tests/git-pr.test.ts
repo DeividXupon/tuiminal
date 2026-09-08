@@ -32,6 +32,10 @@ import {
   DEFAULT_GIT_WORKSPACE_TAB,
   gitWorkspaceTabForKey,
 } from "../src/features/git/model/workspace"
+import {
+  gitHistoryNavigationDelta,
+  isGitHistoryFocused,
+} from "../src/features/git/model/base-navigation"
 import { pullRequestDashboardPresentation } from "../src/features/git/ui/pr/presentation"
 
 const identity = DEMO_PULL_REQUESTS[0]?.identity ?? {
@@ -78,6 +82,19 @@ describe("Git Diffs/PR workspace", () => {
     expect(gitWorkspaceTabForKey("1")).toBe("base")
     expect(gitWorkspaceTabForKey("2")).toBe("pr")
     expect(gitWorkspaceTabForKey("#")).toBeNull()
+  })
+
+  test("uses arrows and J/K only inside the focused local history", () => {
+    expect(isGitHistoryFocused("git-base-history")).toBe(true)
+    expect(isGitHistoryFocused("git-base-log-row-2")).toBe(true)
+    expect(isGitHistoryFocused("git-base-graph-row-commit-2")).toBe(true)
+    expect(isGitHistoryFocused("git-file-list-row-2")).toBe(false)
+    expect(gitHistoryNavigationDelta("j")).toBe(1)
+    expect(gitHistoryNavigationDelta("down")).toBe(1)
+    expect(gitHistoryNavigationDelta("k")).toBe(-1)
+    expect(gitHistoryNavigationDelta("up")).toBe(-1)
+    expect(gitHistoryNavigationDelta("n")).toBe(0)
+    expect(gitHistoryNavigationDelta("p")).toBe(0)
   })
 
   test("resolves the three responsive PR compositions", () => {

@@ -823,3 +823,12 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
   A barra fixa de atalhos permanece acima do conteúdo rolável, `[V]` identifica a
   visualização ativa e a árvore local removeu marcadores redundantes, colorindo os
   dois caracteres de status Git e as pastas de forma distinta.
+- 2026-09-08: o foco de Diffs passou a colorir somente a borda do painel ativo.
+  Árvore de arquivos, Log e Árvore Git navegam com `[J/K]` e `[↑/↓]` dentro do
+  painel focado; `[N/P]` foi removido do histórico local. A troca de arquivo mantém
+  o diff anterior montado durante a leitura seguinte e não anima o cabeçalho do
+  repositório, evitando flicker e saltos de layout.
+- 2026-09-08: carregamentos de painel completo em Diffs, comparação, PR, Issues,
+  Inbox, detalhes e diff remoto passaram a usar a superfície plasma ASCII
+  compartilhada, com texto de estado sobreposto e dissolução rápida; paginação e
+  refresh de conteúdo já utilizável permanecem indicadores inline.

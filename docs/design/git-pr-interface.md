@@ -342,11 +342,22 @@ Em Diffs, os mesmos atalhos movem o foco entre a árvore local e o diff, enquant
 marcadores geométricos aos arquivos: usa apenas os dois caracteres nativos do Git,
 com cores semânticas por coluna, e diferencia pastas por cor.
 
+Em layout com moldura, somente o painel realmente focado recebe a borda de acento.
+A árvore de arquivos, o Log e a Árvore Git aceitam `[J/K]` e `[↑/↓]` quando seu
+painel possui o foco; o histórico local não usa `[N/P]`. Durante a troca de arquivo,
+o diff já visível permanece montado até o próximo estar pronto e o cabeçalho
+`projeto / branch` não recebe os frames dessa carga, evitando flicker e reflow.
+
 Desde 2026-09-08, a última linha solicita a próxima página com loader no
 scrollbox, `[R]` e o intervalo configurado renovam todas as seções e a mesma
 profundidade já carregada, e o editor de query oferece autocomplete por
 `[Ctrl+N/P]` e `[Ctrl+Y]`. O Inbox irmão é
 especificado em `git-inbox-interface.md`.
+
+Carregamentos que substituem um painel inteiro usam a superfície plasma ASCII
+compartilhada com a mensagem de estado em primeiro plano e saída por dissolução
+curta. Esse tratamento não se aplica ao loader incremental da lista nem ao
+refresh automático, pois o conteúdo anterior continua utilizável nesses casos.
 
 Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
 atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.

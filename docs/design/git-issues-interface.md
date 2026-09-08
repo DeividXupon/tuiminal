@@ -60,3 +60,6 @@ responsáveis e labels.
 - A última linha inicia a próxima página com loader; o refresh automático cobre
   todas as seções e a profundidade já carregada sem limpar a lista, e a query tem
   autocomplete do GitHub.
+- O carregamento inicial e o de detalhes ocupam o painel com plasma ASCII e texto
+  legível, dissolvendo rapidamente quando os dados chegam. Paginação e refresh
+  permanecem inline.

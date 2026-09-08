@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import {
   adjacentPullRequestHunkOffset,
@@ -360,17 +361,24 @@ export function PrDiffView({
         />
         <text content={` ${translateUi(mode.toUpperCase())}`} style={{ fg: COLORS.text }} />
       </box>
-      <DiffBody
-        state={state}
-        documents={documents}
-        selectedIndex={selectedIndex}
-        focus={focus}
-        narrow={terminal.width < 82}
-        width={terminal.width}
-        mode={mode}
-        scrollRef={scrollRef}
-        onSelect={selectFile}
-      />
+      <box style={{ position: "relative", flexGrow: 1 }}>
+        <DiffBody
+          state={state}
+          documents={documents}
+          selectedIndex={selectedIndex}
+          focus={focus}
+          narrow={terminal.width < 82}
+          width={terminal.width}
+          mode={mode}
+          scrollRef={scrollRef}
+          onSelect={selectFile}
+        />
+        <PlasmaLoadingOverlay
+          active={state.status === "loading"}
+          label="CARREGANDO DIFF…"
+          accent={COLORS.git}
+        />
+      </box>
       {state.status === "ready" && state.snapshot.truncated ? (
         <text
           content={`${translateUi("Diff limitado a 2 MiB.")} ${state.snapshot.byteLength} bytes`}

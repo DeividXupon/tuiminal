@@ -52,3 +52,6 @@ defaults do perfil de PR, evitando uma segunda configuração concorrente para o
 mesmo host. O conteúdo remoto fica em memória; apenas IDs salvos vão para disco.
 O host acompanha a opção GitHub aberta por `[,]` nas configurações da tela Git;
 uma alteração invalida o cache quando o Inbox voltar a ficar ativo.
+O carregamento inicial ocupa o painel com plasma ASCII e mensagem em primeiro
+plano, dissolvendo rapidamente ao revelar a lista; paginação e refresh não cobrem
+conteúdo já carregado.

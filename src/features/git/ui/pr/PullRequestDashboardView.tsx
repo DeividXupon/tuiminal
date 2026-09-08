@@ -1,6 +1,7 @@
 import { COLORS, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { PullRequestPreviewConfig } from "../../model/pr/config"
 import type { PullRequestFocus, PullRequestLayoutMode } from "../../model/pr/navigation"
@@ -83,6 +84,7 @@ function DashboardPanels({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         flexDirection: layout === "stacked" ? "column" : "row",
         gap: LAYOUT.gap,
@@ -210,6 +212,7 @@ export function PullRequestDashboardView({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         backgroundColor: COLORS.canvas,
         padding: LAYOUT.outerPadding,
@@ -306,6 +309,12 @@ export function PullRequestDashboardView({
       ) : (
         <DashboardStatePanel state={dashboard} onRetry={onRetry} />
       )}
+      <PlasmaLoadingOverlay
+        active={dashboard.status === "loading" || dashboard.status === "idle"}
+        label="CARREGANDO GITHUB…"
+        accent={COLORS.git}
+        background={COLORS.canvas}
+      />
       {dashboard.status === "ready" && dashboard.hasNextPage ? (
         <InlineButton
           id="git-pr-load-more"

@@ -95,7 +95,7 @@ test("Diffs opens the local target configuration directly with Ctrl+P", async ()
   await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
 
   await key("p", { ctrl: true })
-  await settle(() => Boolean(tui?.renderer.root.findDescendantById("git-configuration-modal")))
+  await settle(() => tui?.captureCharFrame().includes("PROJETO LOCAL") ?? false)
   expect(tui.captureCharFrame()).toContain("PROJETO LOCAL")
   expect(tui.captureCharFrame()).toContain("BRANCH LOCAL")
 })
@@ -107,7 +107,7 @@ test("Git comparison Escape returns to Diffs without exiting the application", a
   await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
 
   await key("c")
-  await settle(() => tui?.captureCharFrame().includes("GIT · COMPARAR") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("BRANCH BASE") ?? false)
   expect(tui.captureCharFrame()).toContain("BRANCH BASE")
   expect(tui.captureCharFrame()).toContain("BRANCH COMPARADA")
 
@@ -132,7 +132,7 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
     await Bun.sleep(5)
     await tui?.renderOnce()
   })
-  await settle(() => Boolean(tui?.renderer.root.findDescendantById("git-configuration-modal")))
+  await settle(() => tui?.captureCharFrame().includes("Seletores de PR") ?? false)
   expect(tui.captureCharFrame()).toContain("Seletores de PR")
   expect(tui.captureCharFrame()).toContain("Seletores de Issues")
   expect(tui.captureCharFrame()).toContain("Repositórios")

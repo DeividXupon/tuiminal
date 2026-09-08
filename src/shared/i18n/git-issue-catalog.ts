@@ -2,6 +2,14 @@ import { GIT_ISSUE_CONFIG_MESSAGES } from "./git-issue-config-catalog"
 
 export const GIT_ISSUE_MESSAGES = [
   [
+    "Buscando issues da sua conta",
+    "Fetching issues from your account",
+    "Buscando issues de tu cuenta",
+    "アカウントの Issue を取得中",
+    "正在获取您账户中的议题",
+    "계정의 Issue를 불러오는 중",
+  ],
+  [
     "[1] GIT · DIFFS",
     "[1] GIT · DIFFS",
     "[1] GIT · DIFFS",

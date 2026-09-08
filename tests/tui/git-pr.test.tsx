@@ -4,11 +4,13 @@ import { execFileSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { RGBA, type BoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { App } from "../../src/app/App"
 import {
+  COLORS,
   getUiSettings,
   type LayoutMode,
   type PaletteId,
@@ -52,6 +54,15 @@ async function click(id: string) {
     )
   })
   await tui.renderOnce()
+}
+
+async function waitForText(text: string) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await act(async () => Bun.sleep(10))
+    await tui?.renderOnce()
+    if (tui?.captureCharFrame().includes(text)) return
+  }
+  throw new Error(`TUI did not show: ${text}`)
 }
 
 afterEach(() => {
@@ -126,7 +137,7 @@ test("Diffs opens its local project and branch settings directly", async () => {
     width: 140,
     height: 32,
   })
-  await tui.renderOnce()
+  await waitForText("[Ctrl+P] Alterar projeto/branch")
 
   expect(tui.captureCharFrame()).toContain("[Ctrl+P] Alterar projeto/branch")
   await key("p", { ctrl: true })
@@ -152,10 +163,25 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     "-m",
     "base",
   ])
+  writeFileSync(join(repository, "HISTORY.md"), "second commit\n")
+  execFileSync("git", ["-C", repository, "add", "HISTORY.md"])
+  execFileSync("git", [
+    "-C",
+    repository,
+    "-c",
+    "user.name=Tuiminal Test",
+    "-c",
+    "user.email=tuiminal@example.test",
+    "commit",
+    "--quiet",
+    "-m",
+    "second",
+  ])
   writeFileSync(join(repository, "README.md"), "base\nchanged\n")
+  writeFileSync(join(repository, "notes.txt"), "untracked\n")
 
   try {
-    updateUiSettings({ layout: "compact", language: "pt-BR" })
+    updateUiSettings({ layout: "framed", language: "pt-BR" })
     tui = await testRender(<GitBaseWorkspace active targetDirectory={repository} />, {
       width: 120,
       height: 30,
@@ -177,11 +203,26 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff")
     expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
+    expect(
+      (
+        tui.renderer.root.findDescendantById("git-base-files-panel") as BoxRenderable
+      ).borderColor.toInts(),
+    ).toEqual(RGBA.fromHex(COLORS.git).toInts())
 
     await key("l")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-diff")
+    expect(
+      (
+        tui.renderer.root.findDescendantById("git-base-preview-panel") as BoxRenderable
+      ).borderColor.toInts(),
+    ).toEqual(RGBA.fromHex(COLORS.git).toInts())
+    expect(
+      (
+        tui.renderer.root.findDescendantById("git-base-files-panel") as BoxRenderable
+      ).borderColor.toInts(),
+    ).toEqual(RGBA.fromHex(COLORS.border).toInts())
     await key("h")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
@@ -195,9 +236,30 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     await tui.renderOnce()
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
 
+    const stableDiff = tui.renderer.root.findDescendantById("git-base-diff")
+    act(() => tui?.mockInput.pressArrow("down"))
+    await tui.renderOnce()
+    expect(tui.renderer.root.findDescendantById("git-base-diff")).toBe(stableDiff)
+
     await key("o")
     expect(tui.captureCharFrame()).toContain("HISTÓRICO DO BRANCH")
     expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
+    expect(tui.captureCharFrame()).toContain("[J/K/↑/↓] Navegar")
+    await key("l")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-history")
+    await key("j")
+    expect(tui.captureCharFrame()).toContain("2/2  [J/K/↑/↓]")
+    act(() => tui?.mockInput.pressArrow("up"))
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).toContain("1/2  [J/K/↑/↓]")
+    await key("n")
+    expect(tui.captureCharFrame()).toContain("1/2  [J/K/↑/↓]")
+    await key("g")
+    expect(tui.captureCharFrame()).toContain("ÁRVORE DE COMMITS")
+    await key("j")
+    expect(tui.captureCharFrame()).toContain("2/2  [J/K/↑/↓]")
   } finally {
     act(() => tui?.renderer.destroy())
     tui = undefined
@@ -542,6 +604,7 @@ test("action menu and remote diff are navigable without leaving PR", async () =>
 
   await key("d")
   expect(tui.captureCharFrame()).toContain("DIFF · equipe/api #142")
+  await waitForText("src/cache.ts")
   expect(tui.captureCharFrame()).toContain("src/cache.ts")
   await key("v")
   expect(tui.captureCharFrame()).toContain("SPLIT")

@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
@@ -5,7 +6,7 @@ import type { GitSnapshot } from "../../model/types"
 import { LOADING_FRAMES } from "../../rendering/constants"
 import { fitLine } from "../../rendering/diff"
 
-export function GitDiffsHeader({
+export const GitDiffsHeader = memo(function GitDiffsHeader({
   snapshot,
   loading,
   motionFrame,
@@ -36,6 +37,7 @@ export function GitDiffsHeader({
       : "◇ FORA DE UM REPOSITÓRIO"
   return (
     <box
+      id="git-diffs-header"
       style={{
         ...panelBorder(),
         backgroundColor: COLORS.panel,
@@ -64,4 +66,4 @@ export function GitDiffsHeader({
       <text content={status} style={{ fg: loading ? COLORS.git : COLORS.muted }} />
     </box>
   )
-}
+})

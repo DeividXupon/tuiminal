@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { nextPullRequestDetailConnection } from "../../model/pr/detail-pagination"
 import { PULL_REQUEST_PREVIEW_TABS } from "../../model/pr/navigation"
 import type { PullRequestPreviewTab, PullRequestSummary } from "../../model/pr/types"
@@ -144,6 +145,7 @@ export function PreviewPane({
   return (
     <box
       style={{
+        position: "relative",
         flexGrow: 1,
         width: "100%",
         flexDirection: "column",
@@ -242,6 +244,11 @@ export function PreviewPane({
           />
         ) : null}
       </scrollbox>
+      <PlasmaLoadingOverlay
+        active={details.status === "loading"}
+        label="CARREGANDO DETALHES…"
+        accent={COLORS.git}
+      />
     </box>
   )
 }

@@ -3,6 +3,7 @@ import { useKeyboard, useRenderer } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
+import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import type { GitBranchComparison } from "../../model/branch-comparison"
 import type { DiffLayout } from "../../model/view"
 import { documentLineCount, fitLine, parseDiffDocuments } from "../../rendering/diff"
@@ -201,7 +202,15 @@ export function GitComparisonResult({
   })
 
   return (
-    <box style={{ ...panelBorder(), flexGrow: 1, backgroundColor: COLORS.panel, minHeight: 7 }}>
+    <box
+      style={{
+        ...panelBorder(),
+        position: "relative",
+        flexGrow: 1,
+        backgroundColor: COLORS.panel,
+        minHeight: 7,
+      }}
+    >
       <box
         style={{
           height: 1,
@@ -234,6 +243,7 @@ export function GitComparisonResult({
         fileListRef={fileListRef}
         scrollRef={scrollRef}
       />
+      <PlasmaLoadingOverlay active={loading} label="◷ COMPARANDO BRANCHES…" accent={COLORS.git} />
     </box>
   )
 }

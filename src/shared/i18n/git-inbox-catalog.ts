@@ -1,4 +1,12 @@
 export const GIT_INBOX_MESSAGES = [
+  [
+    "Buscando suas notificações",
+    "Fetching your notifications",
+    "Buscando tus notificaciones",
+    "通知を取得中",
+    "正在获取您的通知",
+    "알림을 불러오는 중",
+  ],
   ["[4] INBOX", "[4] INBOX", "[4] BANDEJA", "[4] 受信箱", "[4] 收件箱", "[4] 받은편지함"],
   [
     "INBOX DO GITHUB",
