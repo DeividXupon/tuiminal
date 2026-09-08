@@ -12,10 +12,14 @@ import type {
   HttpMultipartPart,
   HttpProjectRequestItem,
 } from "./model/types"
-import { httpBodyFor, type HttpDocumentRefs, newHttpExecutionId } from "./runtime"
-import { createHttpWorkspaceState, httpWorkspaceReducer } from "./model/workspace"
+import { httpBodyFor } from "./runtime"
+import {
+  createHttpWorkspaceState,
+  httpWorkspaceReducer,
+  type HttpWorkspaceAction,
+} from "./model/workspace"
+import { httpRequestFilePath, isOpaqueHttpRequest } from "./model/request-capabilities"
 import { HTTP_WORKING_DIRECTORY } from "./services/context"
-import { applyHttpWorkspaceConfig } from "./storage/config"
 import { useHttpProject } from "./hooks/use-http-project"
 import { HttpDocumentBar } from "./ui/HttpDocumentBar"
 import { HttpOmnibar } from "./ui/HttpOmnibar"
@@ -37,29 +41,61 @@ import { useHttpOverlayNavigation } from "./hooks/use-http-overlay-navigation"
 import { useHttpCollectionRunner } from "./hooks/use-http-collection-runner"
 import { useHttpRequestPersistence } from "./hooks/use-http-request-persistence"
 import { useHttpRequestEditing } from "./hooks/use-http-request-editing"
-import { runHttpCollectionCase } from "./services/collection-runner"
 import { useHttpPreview } from "./hooks/use-http-request-preview"
 import { useHttpUnsavedChanges } from "./hooks/use-http-unsaved-changes"
+import { useHttpDocumentRefs } from "./hooks/use-http-document-refs"
+import { useHttpTlsApprovals } from "./hooks/use-http-tls-approvals"
+import { useHttpSendDocument, type HttpPendingTlsApproval } from "./hooks/use-http-send-document"
+import { HttpTutorialDemo } from "./tutorial/HttpTutorialDemo"
+import { useNotificationFromValue } from "../../shared/notifications/index"
+import { useHttpExecutionNotifications } from "./hooks/use-http-execution-notifications"
+import { ensureHttpRendererListenerBudget } from "./model/renderer-listener-budget"
 
-export function HttpClient({
-  active,
-  initialUrlRequest,
-  onUnsavedChangesChange,
-}: {
+type HttpClientProps = {
   active: boolean
   initialUrlRequest?: HttpClientUrlRequest | null
   onUnsavedChangesChange?: (dirty: boolean) => void
-}) {
+  tutorialMode?: boolean
+}
+
+export function HttpClient({ tutorialMode = false, ...props }: HttpClientProps) {
+  if (tutorialMode) return <HttpTutorialDemo />
+  return <HttpInteractiveClient {...props} />
+}
+
+function HttpInteractiveClient({
+  active,
+  initialUrlRequest,
+  onUnsavedChangesChange,
+}: HttpClientProps) {
   const renderer = useRenderer()
+  ensureHttpRendererListenerBudget(renderer)
   const terminal = useTerminalDimensions()
-  const [state, dispatch] = useReducer(httpWorkspaceReducer, undefined, createHttpWorkspaceState)
+  const [state, reactDispatch] = useReducer(
+    httpWorkspaceReducer,
+    undefined,
+    createHttpWorkspaceState,
+  )
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const dispatch = useCallback((action: HttpWorkspaceAction) => {
+    stateRef.current = httpWorkspaceReducer(stateRef.current, action)
+    reactDispatch(action)
+  }, [])
   const urlRef = useRef<InputRenderable | null>(null)
   const collectionSearchRef = useRef<InputRenderable | null>(null)
-  const documentRefs = useRef(new Map<string, HttpDocumentRefs>())
+  const { documentRefs, refsFor, blurDocumentControls } = useHttpDocumentRefs(urlRef)
   const abortControllers = useRef(new Map<string, AbortController>())
   const documentCounter = useRef(1)
   const [notice, setNotice] = useState("")
-  const httpProject = useHttpProject()
+  const [pendingTlsApproval, setPendingTlsApproval] = useState<HttpPendingTlsApproval | null>(null)
+  const tlsApprovals = useHttpTlsApprovals()
+  const activeDocument =
+    state.documents.find((document) => document.request.id === state.activeDocumentId) ??
+    state.documents[0]
+  useNotificationFromValue(notice, { source: "HTTP" })
+  useHttpExecutionNotifications(state.documents)
+  const httpProject = useHttpProject(httpRequestFilePath(activeDocument?.request))
   const {
     project,
     projectRequests,
@@ -83,10 +119,8 @@ export function HttpClient({
     setNotice,
     workspaceConfig,
     variablesForRequest,
+    isInsecureTlsApproved: tlsApprovals.isApproved,
   })
-  const activeDocument =
-    state.documents.find((document) => document.request.id === state.activeDocumentId) ??
-    state.documents[0]
   useHttpUnsavedChanges(state.documents, onUnsavedChangesChange)
   const preparedPreview = useHttpPreview(activeDocument, workspaceConfig, variablesForRequest)
   const {
@@ -116,22 +150,7 @@ export function HttpClient({
     spacing: LAYOUT.headerSpacing,
     splitRatio: activeDocument?.splitRatio ?? 0.4,
   })
-  const refsFor = useCallback((documentId: string) => {
-    const existing = documentRefs.current.get(documentId)
-    if (existing) return existing
-    const refs = { headers: null, body: null, response: null, responseSearch: null }
-    documentRefs.current.set(documentId, refs)
-    return refs
-  }, [])
-  const blurDocumentControls = useCallback(() => {
-    urlRef.current?.blur()
-    for (const refs of documentRefs.current.values()) {
-      refs.headers?.blur()
-      refs.body?.blur()
-      refs.response?.blur()
-      refs.responseSearch?.blur()
-    }
-  }, [])
+  const panelSpacing = layout.mode === "minimum" ? 0 : LAYOUT.headerSpacing
   useHttpResponseFocus({
     active,
     document: activeDocument,
@@ -181,121 +200,40 @@ export function HttpClient({
     refreshProject,
     setNotice,
   })
-  const sendDocument = useCallback(
-    async (documentId: string) => {
-      const document = state.documents.find((candidate) => candidate.request.id === documentId)
-      if (!document || document.execution.status === "running") return
-
-      const executionId = newHttpExecutionId()
-      const requestRevision = document.revision
-      const controller = new AbortController()
-      abortControllers.current.set(executionId, controller)
-      dispatch({ type: "start-execution", documentId, executionId, requestRevision })
-      dispatch({ type: "select-pane", pane: "response" })
-      refsFor(documentId).response?.scrollTo(0)
-
-      try {
-        const activeItem = {
-          filePath: document.request.source.kind === "file" ? document.request.source.path : "",
-          request: document.request,
-        }
-        const items = [
-          ...projectRequests.filter((item) => item.request.id !== document.request.id),
-          activeItem,
-        ].map((item) => ({
-          ...item,
-          request: applyHttpWorkspaceConfig(item.request, workspaceConfig),
-        }))
-        const chain = await runHttpCollectionCase({
-          name: document.request.name,
-          items,
-          selector: document.request.id,
-          variables: new Map(),
-          variablesForRequest,
-          root: HTTP_WORKING_DIRECTORY,
-          signal: controller.signal,
-          cookieJar: responseTools.cookieJar,
-        })
-        if (controller.signal.aborted) {
-          dispatch({ type: "cancel-execution", documentId, executionId, requestRevision })
-          return
-        }
-        const result = chain.items.find((item) => item.requestId === document.request.id)
-        const failed = result?.error ?? chain.items.findLast((item) => item.error)?.error
-        if (!result?.response || failed) {
-          const message = failed?.message ?? "O request não foi executado após suas dependências."
-          dispatch({
-            type: "fail-execution",
-            documentId,
-            executionId,
-            requestRevision,
-            kind: failed?.kind ?? "parse",
-            message,
-            historyEntry: document.request.options.noLog
-              ? null
-              : historyTools.failure(document, executionId, message, activeEnvironmentName),
-          })
-          return
-        }
-        const response = {
-          ...result.response,
-          executionId,
-          requestId: documentId,
-          requestRevision,
-        }
-        if (chain.items.length > 1) setNotice(`CHAIN EXECUTADO · ${chain.items.length} REQUESTS`)
-        responseTools.responseCompleted()
-        dispatch({
-          type: "finish-execution",
-          documentId,
-          response,
-          historyEntry: document.request.options.noLog
-            ? null
-            : historyTools.success(document, response, activeEnvironmentName),
-        })
-      } catch (error) {
-        if (controller.signal.aborted) {
-          dispatch({ type: "cancel-execution", documentId, executionId, requestRevision })
-        } else {
-          const message = error instanceof Error ? error.message : String(error)
-          dispatch({
-            type: "fail-execution",
-            documentId,
-            executionId,
-            requestRevision,
-            kind: "parse",
-            message,
-            historyEntry: document.request.options.noLog
-              ? null
-              : historyTools.failure(document, executionId, message, activeEnvironmentName),
-          })
-        }
-      } finally {
-        abortControllers.current.delete(executionId)
-      }
-    },
-    [
-      activeEnvironmentName,
-      historyTools,
-      projectRequests,
-      refsFor,
-      responseTools,
-      state.documents,
-      variablesForRequest,
-      workspaceConfig,
-    ],
-  )
+  const sendDocument = useHttpSendDocument({
+    getDocuments: () => stateRef.current.documents,
+    projectRequests,
+    workspaceConfig,
+    activeEnvironmentName,
+    variablesForRequest,
+    historyTools,
+    cookieJar: responseTools.cookieJar,
+    responseCompleted: responseTools.responseCompleted,
+    isInsecureTlsApproved: tlsApprovals.isApproved,
+    refsFor,
+    blurDocumentControls,
+    abortControllers,
+    dispatch,
+    setNotice,
+    setPendingTlsApproval,
+  })
   const openEnvironmentManager = useCallback(() => {
     blurDocumentControls()
     dispatch({ type: "open-overlay", overlay: "environment-manager" })
-  }, [blurDocumentControls])
+  }, [blurDocumentControls, dispatch])
   const openProjectRequest = useCallback(
     (item: HttpProjectRequestItem) => {
       blurDocumentControls()
       dispatch({ type: "add-document", request: item.request })
-      setTimeout(() => urlRef.current?.focus(), 0)
+      setTimeout(() => {
+        if (isOpaqueHttpRequest(item.request)) {
+          refsFor(item.request.id).raw?.focus()
+        } else {
+          urlRef.current?.focus()
+        }
+      }, 0)
     },
-    [blurDocumentControls],
+    [blurDocumentControls, dispatch, refsFor],
   )
 
   const requestEditing = useHttpRequestEditing({
@@ -329,7 +267,22 @@ export function HttpClient({
     root: HTTP_WORKING_DIRECTORY,
     items: projectRequests,
     variablesForRequest,
+    environmentName: activeEnvironmentName,
+    isInsecureTlsApproved: tlsApprovals.isApproved,
+    approveInsecureTls: tlsApprovals.approve,
   })
+  const confirmInsecureTls = useCallback(() => {
+    if (!pendingTlsApproval) return
+    const pendingDocumentId = pendingTlsApproval.documentId
+    tlsApprovals.approve(pendingTlsApproval)
+    setPendingTlsApproval(null)
+    closeOverlay()
+    setTimeout(() => void sendDocument(pendingDocumentId), 0)
+  }, [closeOverlay, pendingTlsApproval, sendDocument, tlsApprovals.approve])
+  const cancelInsecureTls = useCallback(() => {
+    setPendingTlsApproval(null)
+    closeOverlay()
+  }, [closeOverlay])
 
   useKeyboard((key) => {
     if (!active || !activeDocument) return
@@ -432,6 +385,7 @@ export function HttpClient({
       case "close-overlay":
         if (state.overlay === "collection-runner") collectionRunner.cancel()
         if (state.overlay === "discard-document") cancelPendingClose()
+        if (state.overlay === "insecure-tls-confirmation") setPendingTlsApproval(null)
         requestPersistence.cancelExternalConflict()
         closeOverlay()
         return
@@ -456,6 +410,8 @@ export function HttpClient({
         else if (state.overlay === "discard-document") {
           confirmCloseDocument()
           closeOverlay()
+        } else if (state.overlay === "insecure-tls-confirmation" && pendingTlsApproval) {
+          confirmInsecureTls()
         } else void requestFiles.apply(state.overlay)
         return
       case "toggle-import-format":
@@ -469,6 +425,9 @@ export function HttpClient({
         return
       case "cycle-runner-concurrency":
         collectionRunner.cycleConcurrency()
+        return
+      case "approve-runner-insecure-tls":
+        collectionRunner.approvePendingTls()
         return
       case "duplicate-document":
         return void requestPersistence.duplicateDocument(documentId)
@@ -507,7 +466,6 @@ export function HttpClient({
   })
   if (!activeDocument) return null
   const running = activeDocument.execution.status === "running"
-  const urlWidth = Math.max(8, terminal.width - (layout.omnibarRows === 2 ? 13 : 35))
   const historyDiff = selectedHttpHistoryEntries(state.history, state.historySelection)
   return (
     <box
@@ -529,8 +487,8 @@ export function HttpClient({
       <HttpOmnibar
         request={activeDocument.request}
         twoRows={layout.omnibarRows === 2}
-        inputWidth={urlWidth}
         running={running}
+        readOnly={isOpaqueHttpRequest(activeDocument.request)}
         urlRef={urlRef}
         onUrlChange={(url) =>
           dispatch({
@@ -554,7 +512,7 @@ export function HttpClient({
         onPane={(pane) => dispatch({ type: "select-pane", pane })}
         onNavigation={toggleNavigation}
       />
-      <box style={{ height: LAYOUT.headerSpacing, flexShrink: 0 }} />
+      <box style={{ height: panelSpacing, flexShrink: 0 }} />
       <HttpWorkspaceBody
         state={state}
         layout={layout}
@@ -564,6 +522,9 @@ export function HttpClient({
         }}
         registerBodyEditor={(documentId, editor) => {
           refsFor(documentId).body = editor
+        }}
+        registerRawScroll={(documentId, scroll) => {
+          refsFor(documentId).raw = scroll
         }}
         registerScroll={(documentId, scroll) => {
           refsFor(documentId).response = scroll
@@ -675,10 +636,19 @@ export function HttpClient({
         }}
         onOpenHistory={historyTools.open}
         preparedPreview={preparedPreview}
+        onSplitRatioChange={(ratio) =>
+          dispatch({
+            type: "set-split-ratio",
+            documentId: activeDocument.request.id,
+            ratio,
+          })
+        }
       />
-      <box style={{ height: LAYOUT.headerSpacing, flexShrink: 0 }} />
+      <box style={{ height: panelSpacing, flexShrink: 0 }} />
       <HttpClientFooter
+        availableWidth={Math.max(1, terminal.width - LAYOUT.outerPadding * 2)}
         minimum={layout.mode === "minimum"}
+        narrow={layout.mode === "minimum" || layout.mode === "focus"}
         document={activeDocument}
         activePane={state.activePane}
         dispatch={dispatch}
@@ -726,6 +696,9 @@ export function HttpClient({
           cancelPendingClose()
           closeOverlay()
         }}
+        pendingTlsApproval={pendingTlsApproval}
+        onConfirmInsecureTls={confirmInsecureTls}
+        onCancelInsecureTls={cancelInsecureTls}
       />
     </box>
   )

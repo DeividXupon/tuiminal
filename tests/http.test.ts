@@ -8,6 +8,7 @@ import { createScratchRequest } from "../src/features/http/model/workspace"
 import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
 import {
   HttpRequestValidationError,
+  normalizeHttpProxyUrl,
   normalizeHttpUrl,
   prepareHttpRequest,
 } from "../src/features/http/services/request-builder"
@@ -23,6 +24,10 @@ import { downloadCompleteHttpResponse } from "../src/features/http/services/down
 import { createHttpVariableContext } from "../src/features/http/model/variables"
 import { createHttpPreparedRequestPreview } from "../src/features/http/services/request-preview"
 import { applyHttpWorkspaceConfig } from "../src/features/http/storage/config"
+import {
+  httpInsecureTlsApproval,
+  HttpInsecureTlsApprovalError,
+} from "../src/features/http/model/tls-policy"
 
 describe("HTTP request preparation", () => {
   test("normalizes hostnames and only accepts HTTP protocols", () => {
@@ -30,6 +35,31 @@ describe("HTTP request preparation", () => {
     expect(normalizeHttpUrl("https://example.com/path").toString()).toBe("https://example.com/path")
     expect(() => normalizeHttpUrl(" ")).toThrow("Informe uma URL")
     expect(() => normalizeHttpUrl("file:///tmp/data.json")).toThrow("HTTP ou HTTPS")
+  })
+
+  test("normalizes and resolves an explicit proxy without exposing private credentials", () => {
+    expect(normalizeHttpProxyUrl("proxy.test:8080")).toBe("http://proxy.test:8080/")
+    expect(() => normalizeHttpProxyUrl("ftp://proxy.test")).toThrow("HTTP ou HTTPS")
+    const request = createScratchRequest("proxy", "https://example.test")
+    request.options.proxy = "{{proxyUrl}}"
+    const variables = createHttpVariableContext([
+      {
+        origin: "private",
+        values: { proxyUrl: "http://proxy-user:proxy-secret@proxy.test:8080" },
+        secret: true,
+      },
+    ])
+    const prepared = prepareHttpRequest(request, "proxy-execution", 0, variables)
+    expect(prepared.proxyUrl).toBe("http://proxy-user:proxy-secret@proxy.test:8080/")
+    const preview = createHttpPreparedRequestPreview({
+      sourceRequest: request,
+      effectiveRequest: request,
+      revision: 0,
+      variables,
+    })
+    expect(preview.ok).toBe(true)
+    expect(JSON.stringify(preview)).not.toContain("proxy-secret")
+    if (preview.ok) expect(preview.proxy).toBe("http://redacted:redacted@proxy.test:8080/")
   })
 
   test("builds params, auth, headers, body, and execution ownership", () => {
@@ -301,6 +331,64 @@ describe("HTTP cookie jar", () => {
       { url: "https://other.test/end", cookie: null },
     ])
   })
+
+  test("does not read or update the jar when the request disables cookies", async () => {
+    const jar = new HttpCookieJar()
+    jar.store(
+      "https://api.example.test/start",
+      new Headers({ "set-cookie": "existing=one; Path=/" }),
+    )
+    let sentCookie: string | null = "not-called"
+    const fetcher = (async (_input: string | URL | Request, init?: RequestInit) => {
+      sentCookie = new Headers(init?.headers).get("cookie")
+      return new Response("ok", { headers: { "set-cookie": "ignored=two; Path=/" } })
+    }) as typeof fetch
+    const request = {
+      executionId: "no-cookies",
+      requestId: "no-cookies",
+      requestRevision: 0,
+      method: "GET",
+      url: "https://api.example.test/start",
+      headers: [] as Array<[string, string]>,
+      timeoutMs: 1_000,
+      followRedirects: true,
+      useCookieJar: false,
+    }
+
+    await fetchWithHttpRedirects(request, new AbortController().signal, fetcher, 10, jar)
+    expect(sentCookie).toBeNull()
+    expect(jar.header("https://api.example.test/start")).toBe("existing=one")
+    expect(jar.list()).toHaveLength(1)
+  })
+
+  test("applies the explicit proxy to every redirect hop", async () => {
+    const seen: Array<{ url: string; proxy: string | undefined }> = []
+    const fetcher = (async (input: string | URL | Request, init?: BunFetchRequestInit) => {
+      const url = String(input)
+      const proxy = init?.proxy
+      seen.push({ url, proxy: typeof proxy === "string" ? proxy : proxy?.toString() })
+      return url.endsWith("/start")
+        ? new Response(null, { status: 302, headers: { location: "/end" } })
+        : new Response("ok")
+    }) as typeof fetch
+    const request = {
+      executionId: "proxy",
+      requestId: "proxy",
+      requestRevision: 0,
+      method: "GET",
+      url: "https://api.example.test/start",
+      headers: [] as Array<[string, string]>,
+      timeoutMs: 1_000,
+      followRedirects: true,
+      proxyUrl: "http://proxy.test:8080/",
+    }
+
+    await fetchWithHttpRedirects(request, new AbortController().signal, fetcher)
+    expect(seen).toEqual([
+      { url: "https://api.example.test/start", proxy: "http://proxy.test:8080/" },
+      { url: "https://api.example.test/end", proxy: "http://proxy.test:8080/" },
+    ])
+  })
 })
 
 describe("HTTP transport", () => {
@@ -398,7 +486,10 @@ describe("HTTP transport", () => {
 
     prepared.timeoutMs = 5
     await expect(executePreparedHttpRequest(prepared)).rejects.toEqual(
-      expect.objectContaining({ kind: "timeout" }),
+      expect.objectContaining({
+        kind: "timeout",
+        message: "O tempo limite de 5 ms foi excedido.",
+      }),
     )
   })
 
@@ -445,6 +536,105 @@ describe("HTTP transport", () => {
       executePreparedHttpRequest(prepareHttpRequest(request, "broken", 0)),
     ).rejects.toEqual(expect.objectContaining({ kind: "network" }))
   })
+
+  test("routes through an explicit HTTP proxy", async () => {
+    let requestedUrl = ""
+    const proxy = createServer((request, response) => {
+      requestedUrl = request.url ?? ""
+      response.writeHead(200, { "content-type": "text/plain" })
+      response.end("proxied")
+    })
+    proxy.listen(0, "127.0.0.1")
+    await new Promise<void>((done) => proxy.once("listening", done))
+    try {
+      const request = createScratchRequest("proxy-real", "http://unresolved.invalid/probe")
+      request.options.proxy = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`
+      const result = await executePreparedHttpRequest(prepareHttpRequest(request, "proxy-real", 0))
+      expect(responseBodyText(result, false)).toBe("proxied")
+      expect(requestedUrl).toBe("http://unresolved.invalid/probe")
+    } finally {
+      await new Promise<void>((done, reject) =>
+        proxy.close((error) => (error ? reject(error) : done())),
+      )
+    }
+  })
+
+  test("never exposes explicit proxy credentials in transport errors", async () => {
+    const request = createScratchRequest("proxy-error", "http://example.test/probe")
+    request.options.proxy = "http://proxy-user:proxy-secret@127.0.0.1:1"
+    let caught: unknown
+    try {
+      await executePreparedHttpRequest(prepareHttpRequest(request, "proxy-error", 0))
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toMatchObject({ kind: "network" })
+    expect(String((caught as Error).message)).not.toContain("proxy-user")
+    expect(String((caught as Error).message)).not.toContain("proxy-secret")
+  })
+
+  test.skipIf(!Bun.which("openssl"))(
+    "keeps self-signed TLS strict until the target is explicitly approved",
+    async () => {
+      const root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-tls-"))
+      const keyPath = resolve(root, "key.pem")
+      const certPath = resolve(root, "cert.pem")
+      const generated = Bun.spawn(
+        [
+          "openssl",
+          "req",
+          "-x509",
+          "-newkey",
+          "rsa:2048",
+          "-nodes",
+          "-keyout",
+          keyPath,
+          "-out",
+          certPath,
+          "-subj",
+          "/CN=localhost",
+          "-days",
+          "1",
+          "-addext",
+          "subjectAltName=DNS:localhost,IP:127.0.0.1",
+        ],
+        { stdout: "ignore", stderr: "ignore" },
+      )
+      expect(await generated.exited).toBe(0)
+      const tlsServer = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        tls: { key: Bun.file(keyPath), cert: Bun.file(certPath) },
+        fetch: () => new Response("self-signed-ok"),
+      })
+      try {
+        const request = createScratchRequest(
+          "self-signed",
+          `https://127.0.0.1:${tlsServer.port}/probe`,
+        )
+        await expect(
+          executePreparedHttpRequest(prepareHttpRequest(request, "strict-tls", 0)),
+        ).rejects.toMatchObject({ kind: "tls" })
+
+        request.options.tlsVerification = "insecure"
+        const insecure = prepareHttpRequest(request, "insecure-tls", 0)
+        await expect(executePreparedHttpRequest(insecure)).rejects.toBeInstanceOf(
+          HttpInsecureTlsApprovalError,
+        )
+        const result = await executePreparedHttpRequest(
+          insecure,
+          undefined,
+          undefined,
+          undefined,
+          true,
+        )
+        expect(responseBodyText(result, false)).toBe("self-signed-ok")
+      } finally {
+        tlsServer.stop(true)
+        await rm(root, { recursive: true })
+      }
+    },
+  )
 
   test("streams a complete GET response to a protected project file", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-download-"))
@@ -509,6 +699,68 @@ describe("HTTP transport", () => {
 })
 
 describe("HTTP redirect policy", () => {
+  test("requires target-scoped approval before disabling TLS verification", async () => {
+    const request = createScratchRequest("tls", "https://one.test/start")
+    request.options.tlsVerification = "insecure"
+    const prepared = prepareHttpRequest(request, "tls", 0)
+    const calls: Array<{ url: string; rejectUnauthorized: boolean | undefined }> = []
+    const fetcher = (async (url: string | URL | Request, init?: BunFetchRequestInit) => {
+      calls.push({
+        url: String(url),
+        rejectUnauthorized: init?.tls?.rejectUnauthorized,
+      })
+      return new Response("ok")
+    }) as typeof fetch
+
+    await expect(
+      fetchWithHttpRedirects(prepared, new AbortController().signal, fetcher),
+    ).rejects.toBeInstanceOf(HttpInsecureTlsApprovalError)
+    expect(calls).toEqual([])
+
+    await fetchWithHttpRedirects(
+      prepared,
+      new AbortController().signal,
+      fetcher,
+      10,
+      undefined,
+      (url) => httpInsecureTlsApproval(url, "local").target === "https://one.test",
+    )
+    expect(calls).toEqual([{ url: "https://one.test/start", rejectUnauthorized: false }])
+  })
+
+  test("requires a new insecure TLS approval after a cross-origin redirect", async () => {
+    const request = createScratchRequest("tls-redirect", "https://one.test/start")
+    request.options.tlsVerification = "insecure"
+    const prepared = prepareHttpRequest(request, "tls-redirect", 0)
+    const calls: string[] = []
+    const fetcher = (async (url: string | URL | Request) => {
+      calls.push(String(url))
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://two.test/final" },
+      })
+    }) as typeof fetch
+
+    await expect(
+      fetchWithHttpRedirects(
+        prepared,
+        new AbortController().signal,
+        fetcher,
+        10,
+        undefined,
+        (url) => new URL(url).origin === "https://one.test",
+      ),
+    ).rejects.toMatchObject({ target: "https://two.test" })
+    expect(calls).toEqual(["https://one.test/start"])
+  })
+
+  test("scopes insecure TLS approvals by target and environment", () => {
+    const local = httpInsecureTlsApproval("https://api.test/one", "local")
+    expect(httpInsecureTlsApproval("https://api.test/two", "local").key).toBe(local.key)
+    expect(httpInsecureTlsApproval("https://other.test", "local").key).not.toBe(local.key)
+    expect(httpInsecureTlsApproval("https://api.test", "production").key).not.toBe(local.key)
+  })
+
   test("tracks hops and strips credentials when the origin changes", async () => {
     const request = createScratchRequest("redirect", "https://one.test/start")
     request.headers = [

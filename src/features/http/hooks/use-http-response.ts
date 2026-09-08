@@ -7,6 +7,7 @@ import { prepareHttpRequest } from "../services/request-builder"
 import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
 import { saveCapturedHttpResponse } from "../storage/responses"
 import { httpResponseOpenCommand, isSafeHttpResponseOpenType } from "../services/open-response"
+import { httpInsecureTlsApproval, type HttpInsecureTlsApproval } from "../model/tls-policy"
 
 type HttpClipboard = {
   copyToClipboardOSC52: (content: string) => boolean
@@ -29,6 +30,7 @@ export function useHttpResponse({
   setNotice,
   workspaceConfig,
   variablesForRequest,
+  isInsecureTlsApproved,
 }: {
   documents: HttpDocumentState[]
   environmentName: string | null
@@ -36,6 +38,7 @@ export function useHttpResponse({
   setNotice: (notice: string) => void
   workspaceConfig: HttpWorkspaceConfig
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext
+  isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
 }) {
   const cookieJars = useRef(new Map<string, HttpCookieJar>())
   const [, setCookieRevision] = useState(0)
@@ -116,6 +119,8 @@ export function useHttpResponse({
           request: prepared,
           signal: controller.signal,
           cookieJar,
+          authorizeInsecureTls: (url) =>
+            isInsecureTlsApproved(httpInsecureTlsApproval(url, environmentName)),
         })
         setNotice(`DOWNLOAD COMPLETO · ${result.bytes} BYTES · ${result.path}`)
       } catch (error) {
@@ -130,7 +135,16 @@ export function useHttpResponse({
         setDownload((current) => (current?.controller === controller ? null : current))
       }
     },
-    [cookieJar, documents, download, setNotice, variablesForRequest, workspaceConfig],
+    [
+      cookieJar,
+      documents,
+      download,
+      environmentName,
+      isInsecureTlsApproved,
+      setNotice,
+      variablesForRequest,
+      workspaceConfig,
+    ],
   )
 
   const cancelDownload = useCallback(() => download?.controller.abort(), [download])

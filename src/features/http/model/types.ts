@@ -23,6 +23,7 @@ export type HttpWorkspaceOverlay =
   | "external-conflict"
   | "environment-manager"
   | "workspace-settings"
+  | "insecure-tls-confirmation"
   | null
 export type HttpJumpTarget =
   | "url"
@@ -98,6 +99,7 @@ export type HttpRequestDefinition = {
         blockId: string
         sourceHash: string
         supported?: boolean
+        rawText?: string
       }
   name: string
   method: HttpMethod
@@ -118,6 +120,9 @@ export type HttpRequestDefinition = {
     followRedirects: boolean
     timeoutExplicit?: boolean
     followRedirectsExplicit?: boolean
+    cookieJar?: boolean
+    proxy?: string
+    tlsVerification?: "strict" | "insecure"
     noLog?: boolean
   }
   assertions?: HttpAssertionDefinition[]
@@ -160,6 +165,9 @@ export type HttpPreparedRequest = {
       }
   timeoutMs: number
   followRedirects: boolean
+  useCookieJar?: boolean
+  proxyUrl?: string
+  tlsVerification?: "strict" | "insecure"
 }
 
 export type HttpResponseSnapshot = {

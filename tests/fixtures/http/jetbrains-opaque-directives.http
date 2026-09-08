@@ -1,0 +1,14 @@
+### Connection timeout
+# @name connection-timeout
+// @connection-timeout 2 m
+GET https://example.test/slow-connect
+
+### Encoding control
+# @name no-auto-encoding
+# @no-auto-encoding
+GET https://example.test/search?name=@#$somebody
+
+### Invalid timeout
+# @name invalid-timeout
+# @timeout eventually
+GET https://example.test/timeout

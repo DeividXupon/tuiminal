@@ -1,0 +1,21 @@
+### Explicit HTTP version
+# @name explicit-http-version
+GET https://example.test HTTP/2
+
+### WebSocket
+# @name websocket
+WEBSOCKET wss://example.test/chat
+
+### GraphQL
+# @name graphql
+GRAPHQL https://example.test/graphql
+
+query Viewer {
+  viewer {
+    id
+  }
+}
+
+### gRPC
+# @name grpc
+GRPC example.test:443/example.Service/Method

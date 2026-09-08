@@ -6,6 +6,8 @@ import {
 } from "./response-reader"
 import { fetchWithHttpRedirects, HttpRedirectError } from "./redirects"
 import type { HttpCookieJar } from "./cookies"
+import { HttpInsecureTlsApprovalError, type HttpInsecureTlsAuthorizer } from "../model/tls-policy"
+import { redactHttpUrlSecrets, redactKnownHttpSecrets } from "../model/secrets"
 
 export type HttpExecutionErrorKind = Extract<
   HttpFailureKind,
@@ -55,11 +57,44 @@ function networkErrorKind(error: unknown): "dns" | "network" | "tls" {
   return "network"
 }
 
+function decodedProxyCredentials(proxyUrl: string) {
+  try {
+    const proxy = new URL(proxyUrl)
+    return [proxy.username, proxy.password]
+      .filter(Boolean)
+      .map((value) => decodeURIComponent(value))
+  } catch {
+    return []
+  }
+}
+
+function safeNetworkErrorDetail(error: unknown, request: HttpPreparedRequest) {
+  const detail = error instanceof Error ? error.message : String(error)
+  if (!request.proxyUrl) return detail
+  const credentials = decodedProxyCredentials(request.proxyUrl)
+  return redactKnownHttpSecrets(
+    detail.replaceAll(request.proxyUrl, redactHttpUrlSecrets(request.proxyUrl, credentials)),
+    credentials,
+  )
+}
+
+export function formatHttpTimeoutError(timeoutMs: number) {
+  if (timeoutMs < 1_000) {
+    return `O tempo limite de ${Math.max(1, Math.round(timeoutMs))} ms foi excedido.`
+  }
+  const seconds = timeoutMs / 1_000
+  const formatted = Number.isInteger(seconds)
+    ? String(seconds)
+    : seconds.toFixed(2).replace(/0+$/, "")
+  return `O tempo limite de ${formatted} segundos foi excedido.`
+}
+
 export async function executePreparedHttpRequest(
   request: HttpPreparedRequest,
   signal?: AbortSignal,
   captureLimit = DEFAULT_HTTP_CAPTURE_LIMIT,
   cookieJar?: HttpCookieJar,
+  authorizeInsecureTls: HttpInsecureTlsAuthorizer = false,
 ): Promise<HttpResponseSnapshot> {
   const timeoutSignal = AbortSignal.timeout(request.timeoutMs)
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
@@ -72,6 +107,7 @@ export async function executePreparedHttpRequest(
       fetch,
       10,
       cookieJar,
+      authorizeInsecureTls,
     )
     const headersAt = performance.now()
     const { body, truncated } = await readLimitedResponseBody(response, captureLimit)
@@ -105,15 +141,13 @@ export async function executePreparedHttpRequest(
   } catch (error) {
     if (signal?.aborted) throw new HttpExecutionError("cancelled", "Requisição cancelada.")
     if (timeoutSignal.aborted) {
-      throw new HttpExecutionError(
-        "timeout",
-        `O tempo limite de ${Math.round(request.timeoutMs / 1_000)} segundos foi excedido.`,
-      )
+      throw new HttpExecutionError("timeout", formatHttpTimeoutError(request.timeoutMs))
     }
     if (error instanceof HttpRedirectError) {
       throw new HttpExecutionError("redirect", error.message)
     }
-    const detail = error instanceof Error ? error.message : String(error)
+    if (error instanceof HttpInsecureTlsApprovalError) throw error
+    const detail = safeNetworkErrorDetail(error, request)
     throw new HttpExecutionError(
       networkErrorKind(error),
       `Não foi possível concluir a requisição: ${detail}`,

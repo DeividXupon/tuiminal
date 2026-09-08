@@ -16,39 +16,38 @@ import {
 import {
   createPrivateHttpEnvironment,
   environmentVariableContext,
-  loadHttpEnvironments,
+  httpEnvironmentScopeDirectory,
+  httpEnvironmentsForRequest,
+  loadHttpEnvironmentCatalog,
   type CreatePrivateHttpEnvironmentInput,
+  type HttpEnvironmentCatalog,
   type HttpEnvironment,
 } from "../storage/environments"
 
-export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
+export function useHttpProject(requestPath?: string | null, root = HTTP_WORKING_DIRECTORY) {
   const [project, setProject] = useState<HttpProjectCollection>({ root, files: [], errors: [] })
-  const [environments, setEnvironments] = useState<HttpEnvironment[]>([])
+  const [environmentCatalog, setEnvironmentCatalog] = useState<HttpEnvironmentCatalog>({
+    scopes: [],
+  })
   const [activeEnvironmentName, setActiveEnvironmentName] = useState<string | null>(null)
   const [workspaceConfig, setWorkspaceConfig] = useState(DEFAULT_HTTP_WORKSPACE_CONFIG)
   const [workspaceConfigSourceHash, setWorkspaceConfigSourceHash] = useState<string | null>(null)
   const [workspaceConfigError, setWorkspaceConfigError] = useState("")
 
   const refresh = useCallback(async () => {
-    const [nextProject, nextEnvironments, nextConfig] = await Promise.all([
+    const [nextProject, nextConfig] = await Promise.all([
       scanHttpProject(root),
-      loadHttpEnvironments(root),
       loadHttpWorkspaceConfigSnapshot(root),
     ])
+    const nextEnvironmentCatalog = await loadHttpEnvironmentCatalog(
+      root,
+      nextProject.files.map((file) => file.path),
+    )
     setProject(nextProject)
-    setEnvironments(nextEnvironments)
+    setEnvironmentCatalog(nextEnvironmentCatalog)
     setWorkspaceConfig(nextConfig.config)
     setWorkspaceConfigSourceHash(nextConfig.sourceHash)
     setWorkspaceConfigError(nextConfig.error)
-    setActiveEnvironmentName((current) => {
-      if (current && nextEnvironments.some((environment) => environment.name === current)) {
-        return current
-      }
-      const preferred = nextConfig.config.defaultEnvironment
-      return preferred && nextEnvironments.some((environment) => environment.name === preferred)
-        ? preferred
-        : null
-    })
   }, [root])
 
   useEffect(() => {
@@ -77,6 +76,21 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
       ),
     [project.files],
   )
+  const environments = useMemo<HttpEnvironment[]>(
+    () => httpEnvironmentsForRequest(environmentCatalog, requestPath),
+    [environmentCatalog, requestPath],
+  )
+  useEffect(() => {
+    setActiveEnvironmentName((current) => {
+      if (current && environments.some((environment) => environment.name === current)) {
+        return current
+      }
+      const preferred = workspaceConfig.defaultEnvironment
+      return preferred && environments.some((environment) => environment.name === preferred)
+        ? preferred
+        : null
+    })
+  }, [environments, workspaceConfig.defaultEnvironment])
   const activeEnvironment = environments.find(
     (environment) => environment.name === activeEnvironmentName,
   )
@@ -87,9 +101,15 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
         source.kind === "file"
           ? project.files.find((file) => file.path === source.path)?.variables
           : undefined
-      return environmentVariableContext(activeEnvironment, fileVariables)
+      const scopedEnvironment = activeEnvironmentName
+        ? httpEnvironmentsForRequest(
+            environmentCatalog,
+            source.kind === "file" ? source.path : null,
+          ).find((environment) => environment.name === activeEnvironmentName)
+        : undefined
+      return environmentVariableContext(scopedEnvironment, fileVariables)
     },
-    [activeEnvironment, project.files],
+    [activeEnvironmentName, environmentCatalog, project.files],
   )
 
   const selectEnvironment = useCallback((name: string | null) => {
@@ -98,12 +118,17 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
 
   const createPrivateEnvironment = useCallback(
     async (input: CreatePrivateHttpEnvironmentInput) => {
-      const result = await createPrivateHttpEnvironment(root, input)
+      const result = await createPrivateHttpEnvironment(
+        root,
+        input,
+        undefined,
+        httpEnvironmentScopeDirectory(requestPath),
+      )
       await refresh()
       setActiveEnvironmentName(result.environmentName)
       return result
     },
-    [refresh, root],
+    [refresh, requestPath, root],
   )
 
   const saveWorkspaceConfig = useCallback(
@@ -124,6 +149,12 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
     environments,
     activeEnvironment,
     activeEnvironmentName,
+    privateEnvironmentPath: [
+      httpEnvironmentScopeDirectory(requestPath),
+      "http-client.private.env.json",
+    ]
+      .filter(Boolean)
+      .join("/"),
     workspaceConfig,
     workspaceConfigSourceHash,
     workspaceConfigError,

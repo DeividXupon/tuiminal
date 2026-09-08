@@ -21,6 +21,7 @@ import {
   httpWorkspaceReducer,
   nextHttpMethod,
 } from "../src/features/http/model/workspace"
+import { httpResponseContent } from "../src/features/http/ui/http-response-content"
 
 function response(executionId: string, requestId: string, requestRevision: number) {
   return {
@@ -43,6 +44,24 @@ function response(executionId: string, requestId: string, requestRevision: numbe
 }
 
 describe("HTTP workspace state", () => {
+  test("limits the rendered preview of a large captured response", () => {
+    const request = createScratchRequest("large-display")
+    const state = createHttpWorkspaceState(request)
+    const body = new TextEncoder().encode("a".repeat(60_000))
+    state.documents[0]!.execution = {
+      status: "success",
+      response: {
+        ...response("large", request.id, 0),
+        body,
+        capturedBytes: body.length,
+        truncated: true,
+      },
+    }
+    const content = httpResponseContent(state.documents[0]!, [])
+    expect(content).toContain("EXIBIÇÃO LIMITADA")
+    expect(content.length).toBeLessThan(body.length)
+  })
+
   test("cycles standard methods predictably after a custom method", () => {
     expect(nextHttpMethod("PROPFIND", 1)).toBe("GET")
     expect(nextHttpMethod("PROPFIND", -1)).toBe("OPTIONS")
@@ -95,6 +114,40 @@ describe("HTTP workspace state", () => {
     state = httpWorkspaceReducer(state, { type: "close-document", documentId: "two" })
     expect(state.activeDocumentId).toBe("one")
     expect(state.documents).toHaveLength(1)
+  })
+
+  test("does not mark a request dirty when an input re-emits its current value", () => {
+    const state = createHttpWorkspaceState(createScratchRequest("unchanged"))
+    const next = httpWorkspaceReducer(state, {
+      type: "update-request",
+      documentId: "unchanged",
+      patch: { url: "", query: [] },
+    })
+
+    expect(next.documents[0]?.revision).toBe(0)
+    expect(hasUnsavedHttpDocuments(next.documents)).toBe(false)
+  })
+
+  test("does not mutate opaque file requests through workspace editing actions", () => {
+    const opaque = {
+      ...createScratchRequest("opaque", "https://example.test/original"),
+      source: {
+        kind: "file" as const,
+        path: "opaque.http",
+        blockId: "opaque.http#opaque",
+        sourceHash: "hash",
+        supported: false,
+        rawText: "GET https://example.test/original > scripts/handler.js\n",
+      },
+    }
+    const state = createHttpWorkspaceState(opaque)
+    const changed = httpWorkspaceReducer(state, {
+      type: "update-request",
+      documentId: "opaque",
+      patch: { url: "https://example.test/changed" },
+    })
+    expect(changed.documents[0]?.request.url).toBe("https://example.test/original")
+    expect(changed.documents[0]?.revision).toBe(0)
   })
 
   test("enforces the document limit and never closes the final scratch", () => {
@@ -542,6 +595,8 @@ describe("HTTP keyboard ownership", () => {
     for (const [name, kind] of [
       ["t", "cycle-request-timeout"],
       ["r", "toggle-request-redirects"],
+      ["c", "toggle-request-cookie-jar"],
+      ["v", "toggle-request-tls-verification"],
       ["l", "toggle-request-no-log"],
     ] as const) {
       expect(
@@ -599,6 +654,9 @@ describe("HTTP keyboard ownership", () => {
     expect(command({ name: "x" }, "", false, "collection-runner")).toEqual({
       kind: "apply-overlay",
     })
+    expect(command({ name: "i" }, "", false, "collection-runner")).toEqual({
+      kind: "approve-runner-insecure-tls",
+    })
     expect(
       command({ name: "t" }, "http-collection-runner-dataset", false, "collection-runner"),
     ).toEqual({ kind: "ignore" })
@@ -612,6 +670,18 @@ describe("HTTP keyboard ownership", () => {
       kind: "close-overlay",
     })
     expect(command({ name: "x" }, "", false, "discard-document")).toEqual({ kind: "ignore" })
+  })
+
+  test("isolates insecure TLS confirmation keys", () => {
+    expect(command({ name: "i" }, "", false, "insecure-tls-confirmation")).toEqual({
+      kind: "apply-overlay",
+    })
+    expect(command({ name: "escape" }, "", false, "insecure-tls-confirmation")).toEqual({
+      kind: "close-overlay",
+    })
+    expect(command({ name: "s" }, "", false, "insecure-tls-confirmation")).toEqual({
+      kind: "ignore",
+    })
   })
 })
 

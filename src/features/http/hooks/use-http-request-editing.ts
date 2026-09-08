@@ -98,15 +98,30 @@ export function useHttpRequestEditing({
     patchActiveOptions({ noLog: !activeDocument.request.options.noLog })
   }, [activeDocument, patchActiveOptions])
 
+  const toggleCookieJar = useCallback(() => {
+    if (!activeDocument) return
+    patchActiveOptions({ cookieJar: activeDocument.request.options.cookieJar === false })
+  }, [activeDocument, patchActiveOptions])
+
+  const toggleTlsVerification = useCallback(() => {
+    if (!activeDocument) return
+    patchActiveOptions({
+      tlsVerification:
+        activeDocument.request.options.tlsVerification === "insecure" ? "strict" : "insecure",
+    })
+  }, [activeDocument, patchActiveOptions])
+
   const applyOptionCommand = useCallback(
     (command: string) => {
       if (command === "cycle-request-timeout") cycleTimeout()
       else if (command === "toggle-request-redirects") toggleRedirects()
+      else if (command === "toggle-request-cookie-jar") toggleCookieJar()
+      else if (command === "toggle-request-tls-verification") toggleTlsVerification()
       else if (command === "toggle-request-no-log") toggleNoLog()
       else return false
       return true
     },
-    [cycleTimeout, toggleNoLog, toggleRedirects],
+    [cycleTimeout, toggleCookieJar, toggleNoLog, toggleRedirects, toggleTlsVerification],
   )
 
   const selectRequestView = useCallback(
@@ -169,6 +184,8 @@ export function useHttpRequestEditing({
     changeOptions,
     cycleTimeout,
     toggleRedirects,
+    toggleCookieJar,
+    toggleTlsVerification,
     toggleNoLog,
     applyOptionCommand,
     selectRequestView,

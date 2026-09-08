@@ -71,6 +71,14 @@ export function useHttpRequestFiles({
         setNotice("SALVE O REQUEST ANTES DE MOVER OU EXCLUIR")
         return
       }
+      if (
+        overlay === "request-move" &&
+        document.request.source.kind === "file" &&
+        document.request.source.supported === false
+      ) {
+        setNotice("O bloco HTTP não pode ser editado com segurança.")
+        return
+      }
       setMoveTarget(document.request.source.path)
       dispatch({ type: "open-overlay", overlay })
     },

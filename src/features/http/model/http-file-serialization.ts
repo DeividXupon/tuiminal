@@ -44,6 +44,9 @@ function optionDirectives(request: HttpRequestDefinition) {
     lines.push(request.options.followRedirects ? "# @follow-redirects" : "# @no-redirect")
   }
   if (request.options.noLog) lines.push("# @no-log")
+  if (request.options.cookieJar === false) lines.push("# @no-cookie-jar")
+  if (request.options.proxy?.trim()) lines.push(`# @proxy ${request.options.proxy.trim()}`)
+  if (request.options.tlsVerification === "insecure") lines.push("# @insecure-tls")
   return lines
 }
 

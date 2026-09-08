@@ -1,7 +1,7 @@
 import type { InputRenderable } from "@opentui/core"
 import { useMemo, useRef, useState } from "react"
 import { COLORS } from "../../../core/settings/theme"
-import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import { buildHttpCollectionTree } from "../model/collection-tree"
 import type { HttpProjectRequestItem, HttpWorkspaceState } from "../model/types"
@@ -41,19 +41,21 @@ export function HttpCollectionTree({
       else next.add(id)
       return next
     })
+  const compactActions = contentWidth < 26
+  const compactSearch = contentWidth < 30
 
   return (
     <>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton
           id="http-collection-import-button"
-          label="[I] Importar"
+          label={compactActions ? "[I]" : "[I] Importar"}
           accent={COLORS.http}
           onPress={onImport}
         />
         <InlineButton
           id="http-collection-runner-button"
-          label="[R] Rodar"
+          label={compactActions ? "[R]" : "[R] Rodar"}
           accent={COLORS.http}
           onPress={onRun}
         />
@@ -61,7 +63,7 @@ export function HttpCollectionTree({
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton
           id="http-collection-search-button"
-          label="[F] Buscar"
+          label={compactSearch ? "[F]" : "[F] Buscar"}
           accent={COLORS.http}
           active={Boolean(query)}
           onPress={() => {
@@ -76,7 +78,7 @@ export function HttpCollectionTree({
           }}
           id="http-collection-search"
           value={query}
-          placeholder={translateUi("Buscar coleção")}
+          placeholder={compactSearch ? "…" : translateUi("Buscar coleção")}
           onInput={setQuery}
           onMouseDown={() => {
             onFocus()
@@ -100,14 +102,19 @@ export function HttpCollectionTree({
       {rows.length ? (
         rows.map((row) => {
           const indent = "  ".repeat(row.depth)
+          const indentWidth = displayWidth(indent)
           if (row.kind === "request") {
+            const nameWidth = Math.max(
+              1,
+              contentWidth - 2 - indentWidth - displayWidth(row.item.request.method) - 1,
+            )
             return (
               <InlineButton
                 key={row.id}
                 id={`http-navigation-project-${row.item.request.id}`}
                 label={`${indent}${row.item.request.method} ${truncateDisplay(
                   row.item.request.name,
-                  Math.max(4, contentWidth - indent.length - row.item.request.method.length - 2),
+                  nameWidth,
                 )}`}
                 accent={COLORS.http}
                 active={row.item.request.id === state.activeDocumentId}
@@ -118,14 +125,16 @@ export function HttpCollectionTree({
               />
             )
           }
+          const count = ` (${row.requestCount})`
+          const nameWidth = Math.max(1, contentWidth - 2 - indentWidth - 2 - displayWidth(count))
           return (
             <InlineButton
               key={row.id}
               id={`http-collection-${row.kind}-${row.path}`}
               label={`${indent}${row.expanded ? "▾" : "▸"} ${truncateDisplay(
                 row.name,
-                Math.max(4, contentWidth - indent.length - 6),
-              )} (${row.requestCount})`}
+                nameWidth,
+              )}${count}`}
               accent={COLORS.http}
               onPress={() => toggle(row.id)}
             />
@@ -133,17 +142,23 @@ export function HttpCollectionTree({
         })
       ) : (
         <text
-          content={translateUi(
-            query
-              ? "Nenhum request corresponde à busca."
-              : "Nenhum arquivo .http ou .rest no projeto.",
+          content={truncateDisplay(
+            translateUi(
+              query
+                ? "Nenhum request corresponde à busca."
+                : "Nenhum arquivo .http ou .rest no projeto.",
+            ),
+            contentWidth,
           )}
           style={{ fg: COLORS.muted }}
         />
       )}
       {projectErrors ? (
         <text
-          content={translateUi(`${projectErrors} arquivo(s) não puderam ser lidos.`)}
+          content={truncateDisplay(
+            translateUi(`${projectErrors} arquivo(s) não puderam ser lidos.`),
+            contentWidth,
+          )}
           style={{ fg: COLORS.warning }}
         />
       ) : null}

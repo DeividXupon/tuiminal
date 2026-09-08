@@ -10,6 +10,7 @@ type OverlayCommand =
         | "back-import-preview"
         | "cycle-runner-target"
         | "cycle-runner-concurrency"
+        | "approve-runner-insecure-tls"
     }
   | {
       kind: "resolve-external-conflict"
@@ -42,6 +43,7 @@ function collectionRunnerCommand(key: OverlayKey, focusedId: string): OverlayCom
   if (key.name === "t") return { kind: "cycle-runner-target" }
   if (key.name === "c") return { kind: "cycle-runner-concurrency" }
   if (key.name === "x") return { kind: "apply-overlay" }
+  if (key.name === "i") return { kind: "approve-runner-insecure-tls" }
   return closesOverlay(key) ? { kind: "close-overlay" } : { kind: "ignore" }
 }
 
@@ -67,6 +69,10 @@ export function resolveSpecialHttpOverlayCommand(
   key: OverlayKey,
   focusedId: string,
 ): OverlayCommand | null {
+  if (overlay === "insecure-tls-confirmation") {
+    if (key.name === "i") return { kind: "apply-overlay" }
+    return closesOverlay(key) ? { kind: "close-overlay" } : { kind: "ignore" }
+  }
   if (overlay === "collection-import") return collectionImportCommand(key, focusedId)
   if (overlay === "collection-runner") return collectionRunnerCommand(key, focusedId)
   if (overlay === "external-conflict") return externalConflictCommand(key)

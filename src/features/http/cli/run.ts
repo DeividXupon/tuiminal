@@ -17,6 +17,7 @@ type RunOptions = {
   report: HttpReportKind
   dataset?: string
   concurrency: number
+  allowInsecureTls: boolean
 }
 
 function optionValue(args: string[], index: number, name: string) {
@@ -26,21 +27,24 @@ function optionValue(args: string[], index: number, name: string) {
 }
 
 function parseRunOptions(args: string[]): RunOptions {
-  const file = args[0]
+  const allowInsecureTls = args.includes("--allow-insecure-tls")
+  const filteredArgs = args.filter((argument) => argument !== "--allow-insecure-tls")
+  const file = filteredArgs[0]
   if (!file || file.startsWith("-")) throw new Error("Informe um arquivo .http para executar.")
-  const options: RunOptions = { file, report: "text", concurrency: 1 }
-  for (let index = 1; index < args.length; index += 1) {
-    const argument = args[index]
-    if (argument === "--env") options.environment = optionValue(args, index++, argument)
+  const options: RunOptions = { file, report: "text", concurrency: 1, allowInsecureTls }
+  for (let index = 1; index < filteredArgs.length; index += 1) {
+    const argument = filteredArgs[index]
+    if (argument === "--env") options.environment = optionValue(filteredArgs, index++, argument)
     else if (argument === "--report") {
-      const report = optionValue(args, index++, argument)
+      const report = optionValue(filteredArgs, index++, argument)
       if (!(["text", "json", "junit"] as string[]).includes(report)) {
         throw new Error(`Formato de relatório inválido: ${report}.`)
       }
       options.report = report as HttpReportKind
-    } else if (argument === "--data") options.dataset = optionValue(args, index++, argument)
-    else if (argument === "--concurrency") {
-      const concurrency = Number(optionValue(args, index++, argument))
+    } else if (argument === "--data") {
+      options.dataset = optionValue(filteredArgs, index++, argument)
+    } else if (argument === "--concurrency") {
+      const concurrency = Number(optionValue(filteredArgs, index++, argument))
       if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 8) {
         throw new Error("A concorrência precisa estar entre 1 e 8.")
       }
@@ -68,7 +72,7 @@ export async function runHttpHeadless(args: string[], root = process.cwd()) {
     const path = relative(projectRoot, target.path)
     const parsed = parseHttpFile(source, path)
     const items = projectItems(source, path)
-    const environments = await loadHttpEnvironments(projectRoot)
+    const environments = await loadHttpEnvironments(projectRoot, undefined, path)
     const environment = options.environment
       ? environments.find((candidate) => candidate.name === options.environment)
       : undefined
@@ -90,6 +94,8 @@ export async function runHttpHeadless(args: string[], root = process.cwd()) {
         ...(target.selector ? { selector: target.selector } : {}),
         variables,
         root: projectRoot,
+        environmentName: options.environment ?? null,
+        isInsecureTlsApproved: () => options.allowInsecureTls,
       })
     })
     process.stdout.write(formatHttpRunReport(cases, options.report))

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { COLORS, panelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { findHttpTextMatches } from "../model/response"
-import type { HttpDocumentState, HttpResponseView } from "../model/types"
+import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
 import { responseFiletype } from "./format"
 import { httpResponseContent } from "./http-response-content"
@@ -20,6 +20,40 @@ const RESPONSE_SYNTAX = SyntaxStyle.fromStyles({
   punctuation: { fg: "#a6accd" },
   keyword: { fg: "#c792ea", bold: true },
 })
+const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
+
+function HttpResponseDocument({
+  content,
+  response,
+  wrap,
+}: {
+  content: string
+  response: HttpResponseSnapshot
+  wrap: boolean
+}) {
+  const filetype = responseFiletype(response)
+  const height = Math.max(1, content.split("\n").length)
+  const displayedContent = content || translateUi("(resposta vazia)")
+  if (filetype === "text" || response.capturedBytes > MAX_HIGHLIGHTED_RESPONSE_BYTES) {
+    return (
+      <text
+        content={displayedContent}
+        wrapMode={wrap ? "word" : "none"}
+        style={{ width: "100%", height, bg: COLORS.canvas, fg: COLORS.text }}
+      />
+    )
+  }
+  return (
+    <code
+      content={displayedContent}
+      filetype={filetype}
+      syntaxStyle={RESPONSE_SYNTAX}
+      bg={COLORS.canvas}
+      wrapMode={wrap ? "word" : "none"}
+      style={{ width: "100%", height }}
+    />
+  )
+}
 
 export function HttpResponsePane({
   document,
@@ -89,6 +123,7 @@ export function HttpResponsePane({
 
   return (
     <box
+      id={`http-response-pane-${document.request.id}`}
       visible={visible}
       style={{
         position: "absolute",
@@ -97,6 +132,7 @@ export function HttpResponsePane({
         backgroundColor: COLORS.panelAlt,
         paddingLeft: 1,
         paddingRight: 1,
+        overflow: "hidden",
       }}
     >
       <HttpResponseHeader document={document} response={response} />
@@ -134,14 +170,7 @@ export function HttpResponsePane({
           viewportCulling
           style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
         >
-          <code
-            content={content || translateUi("(resposta vazia)")}
-            filetype={responseFiletype(response)}
-            syntaxStyle={RESPONSE_SYNTAX}
-            bg={COLORS.canvas}
-            wrapMode={presentation.wrap ? "word" : "none"}
-            style={{ width: "100%", height: Math.max(1, content.split("\n").length) }}
-          />
+          <HttpResponseDocument content={content} response={response} wrap={presentation.wrap} />
           {stale ? (
             <text
               content={translateUi("RESPOSTA DE UMA REVISÃO ANTERIOR")}

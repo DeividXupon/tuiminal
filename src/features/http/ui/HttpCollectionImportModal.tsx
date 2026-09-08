@@ -72,10 +72,10 @@ function ImportPreview({
     Math.min(3, ignored.length)
   return (
     <>
-      <text content={translateUi(summary)} style={{ fg: COLORS.http }} />
+      <text content={translateUi(summary)} style={{ height: 1, flexShrink: 0, fg: COLORS.http }} />
       <text
         content={`${translateUi("DESTINO")}  ${truncateDisplay(preview.plannedPath, contentWidth - 9)}`}
-        style={{ fg: COLORS.muted }}
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
       <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
         {details.map((detail) => (
@@ -167,6 +167,7 @@ export function HttpCollectionImportModal({
       ) : (
         <box style={{ flexGrow: 1, gap: 1 }}>
           <InlineButton
+            id="http-collection-import-format"
             label={`[F] Formato: ${format === "postman" ? "POSTMAN" : "OPENAPI"}`}
             accent={COLORS.http}
             active
@@ -198,8 +199,16 @@ export function HttpCollectionImportModal({
       )}
       {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        {preview ? <InlineButton label="[B] Voltar" accent={COLORS.http} onPress={onBack} /> : null}
+        {preview ? (
+          <InlineButton
+            id="http-collection-import-back"
+            label="[B] Voltar"
+            accent={COLORS.http}
+            onPress={onBack}
+          />
+        ) : null}
         <InlineButton
+          id="http-collection-import-apply"
           label={
             busy
               ? "PROCESSANDO…"

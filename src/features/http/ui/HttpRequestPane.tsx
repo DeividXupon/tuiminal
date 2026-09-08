@@ -1,4 +1,9 @@
-import { RGBA, type InputRenderable, type TextareaRenderable } from "@opentui/core"
+import {
+  RGBA,
+  type InputRenderable,
+  type ScrollBoxRenderable,
+  type TextareaRenderable,
+} from "@opentui/core"
 import { useRef } from "react"
 import { COLORS, LAYOUT, panelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
@@ -19,9 +24,13 @@ import type { HttpPreparedRequestPreview } from "../services/request-preview"
 import { HttpAuthEditor } from "./HttpAuthEditor"
 import { HttpKeyValueEditor } from "./HttpKeyValueEditor"
 import { HttpMultipartEditor } from "./HttpMultipartEditor"
+import { HttpOpaqueRequestContent } from "./HttpOpaqueRequestContent"
 import { HttpRequestMoreEditor } from "./HttpRequestMoreEditor"
 
-function requestViewLabel(view: HttpRequestView) {
+function requestViewLabel(view: HttpRequestView, narrow = false) {
+  if (narrow) {
+    return { params: "[P]", headers: "[H]", body: "[B]", auth: "[A]", more: "[O]" }[view]
+  }
   switch (view) {
     case "params":
       return "[P] Parâmetros"
@@ -58,6 +67,25 @@ function BodyKindButtons({
   )
 }
 
+function RequestPaneTitle({ dirty }: { dirty: boolean }) {
+  return (
+    <box
+      style={{
+        height: 1,
+        flexShrink: 0,
+        flexDirection: "row",
+        justifyContent: "space-between",
+      }}
+    >
+      <text content={translateUi("REQUISIÇÃO")} style={{ fg: COLORS.http }} />
+      <text
+        content={dirty ? translateUi("● MODIFICADO") : translateUi("SALVO")}
+        style={{ fg: dirty ? COLORS.warning : COLORS.muted }}
+      />
+    </box>
+  )
+}
+
 export function HttpRequestPane({
   document,
   visible,
@@ -65,6 +93,7 @@ export function HttpRequestPane({
   position,
   registerHeaderInput,
   registerBodyEditor,
+  registerRawScroll,
   onSelectView,
   onQueryChange,
   onPathChange,
@@ -96,6 +125,7 @@ export function HttpRequestPane({
   position: { left: number; top: number; width: number; height: number }
   registerHeaderInput: (input: InputRenderable | null) => void
   registerBodyEditor: (editor: TextareaRenderable | null) => void
+  registerRawScroll: (scroll: ScrollBoxRenderable | null) => void
   onSelectView: (view: HttpRequestView) => void
   onSelectMoreView: (view: HttpRequestMoreView) => void
   onQueryChange: (entries: HttpKeyValue[]) => void
@@ -125,12 +155,41 @@ export function HttpRequestPane({
   const fileInputRef = useRef<InputRenderable | null>(null)
   const request = document.request
   const dirty = document.revision !== document.savedRevision
+  const dense = position.height < 10
   const bodyDisabled = request.body.kind === "none"
   const textBody =
     request.body.kind === "json" || request.body.kind === "text" || request.body.kind === "xml"
 
+  if (request.source.kind === "file" && request.source.supported === false) {
+    return (
+      <box
+        id={`http-request-pane-${request.id}`}
+        visible={visible}
+        style={{
+          position: "absolute",
+          ...position,
+          ...panelBorder(focused ? COLORS.http : COLORS.border),
+          backgroundColor: COLORS.panel,
+          paddingLeft: 1,
+          paddingRight: 1,
+          overflow: "hidden",
+        }}
+      >
+        {dense ? null : <RequestPaneTitle dirty={false} />}
+        <HttpOpaqueRequestContent
+          requestId={request.id}
+          rawText={request.source.rawText ?? ""}
+          registerScroll={registerRawScroll}
+          onFocus={onFocus}
+          active={visible && focused}
+        />
+      </box>
+    )
+  }
+
   return (
     <box
+      id={`http-request-pane-${request.id}`}
       visible={visible}
       style={{
         position: "absolute",
@@ -139,22 +198,10 @@ export function HttpRequestPane({
         backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,
+        overflow: "hidden",
       }}
     >
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <text content={translateUi("REQUISIÇÃO")} style={{ fg: COLORS.http }} />
-        <text
-          content={dirty ? translateUi("● MODIFICADO") : translateUi("SALVO")}
-          style={{ fg: dirty ? COLORS.warning : COLORS.muted }}
-        />
-      </box>
+      {dense ? null : <RequestPaneTitle dirty={dirty} />}
       <box
         style={{
           height: 1,
@@ -167,7 +214,7 @@ export function HttpRequestPane({
         {(["params", "headers", "body", "auth", "more"] as const).map((view) => (
           <InlineButton
             key={view}
-            label={requestViewLabel(view)}
+            label={requestViewLabel(view, position.width < 80)}
             accent={COLORS.http}
             active={document.requestView === view}
             onPress={() => {
@@ -187,12 +234,14 @@ export function HttpRequestPane({
             title="QUERY PARAMS"
             entries={request.query}
             onChange={onQueryChange}
+            dense={dense}
           />
           <HttpKeyValueEditor
             idPrefix={`${request.id}-path`}
             title="PATH PARAMS"
             entries={request.path}
             onChange={onPathChange}
+            dense={dense}
           />
         </box>
         <box
@@ -207,6 +256,7 @@ export function HttpRequestPane({
             registerFirstInput={registerHeaderInput}
             detectSensitiveNames
             nameSuggestions={COMMON_HTTP_HEADER_NAMES}
+            dense={dense}
           />
         </box>
         <box
@@ -246,6 +296,7 @@ export function HttpRequestPane({
               title="FORM URL ENCODED"
               entries={request.body.form}
               onChange={onBodyFormChange}
+              dense={dense}
             />
           </box>
           <box visible={request.body.kind === "multipart"} style={{ flexGrow: 1 }}>
@@ -301,10 +352,18 @@ export function HttpRequestPane({
         </box>
         <box
           visible={document.requestView === "more"}
-          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, padding: 1 }}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            padding: dense ? 0 : 1,
+          }}
         >
           <HttpRequestMoreEditor
             document={document}
+            dense={dense}
             onSelectView={onSelectMoreView}
             onNameChange={onNameChange}
             onMethodChange={onMethodChange}
@@ -321,7 +380,7 @@ export function HttpRequestPane({
           />
         </box>
       </box>
-      {LAYOUT.compact ? null : (
+      {LAYOUT.compact || dense ? null : (
         <text
           content={translateUi("[Ctrl+Enter] Enviar · [Esc] Sair do editor")}
           style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}

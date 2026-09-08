@@ -29,6 +29,8 @@ import { HttpHistoryDiffModal } from "./HttpHistoryDiffModal"
 import { HttpRequestFileModal } from "./HttpRequestFileModal"
 import { HttpWorkspaceOverlay } from "./HttpWorkspaceOverlay"
 import { HttpWorkspaceSettingsModal } from "./HttpWorkspaceSettingsModal"
+import { HttpInsecureTlsModal } from "./HttpInsecureTlsModal"
+import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 export function HttpWorkspaceOverlays({
   overlay,
@@ -55,6 +57,9 @@ export function HttpWorkspaceOverlays({
   pendingCloseName,
   onConfirmCloseDocument,
   onCancelCloseDocument,
+  pendingTlsApproval,
+  onConfirmInsecureTls,
+  onCancelInsecureTls,
 }: {
   overlay: HttpWorkspaceOverlayKind
   document: HttpDocumentState
@@ -93,14 +98,17 @@ export function HttpWorkspaceOverlays({
     status: "idle" | "running" | "complete" | "cancelled"
     cases: import("../services/collection-runner").HttpRunCase[]
     error: string
+    pendingTlsApproval: HttpInsecureTlsApproval | null
     cycleTarget: () => void
     cycleConcurrency: () => void
+    approvePendingTls: () => void
     cancel: () => void
     run: () => Promise<void>
   }
   environment: {
     environments: HttpEnvironment[]
     activeEnvironmentName: string | null
+    privateEnvironmentPath: string
     selectEnvironment: (name: string | null) => void
     createPrivateEnvironment: (
       input: CreatePrivateHttpEnvironmentInput,
@@ -123,6 +131,9 @@ export function HttpWorkspaceOverlays({
   pendingCloseName: string
   onConfirmCloseDocument: () => void
   onCancelCloseDocument: () => void
+  pendingTlsApproval: HttpInsecureTlsApproval | null
+  onConfirmInsecureTls: () => void
+  onCancelInsecureTls: () => void
 }) {
   return (
     <>
@@ -192,6 +203,7 @@ export function HttpWorkspaceOverlays({
           onDatasetPathChange={collectionRunner.setDatasetPath}
           onCycleTarget={collectionRunner.cycleTarget}
           onCycleConcurrency={collectionRunner.cycleConcurrency}
+          onApproveInsecureTls={collectionRunner.approvePendingTls}
           onRun={() => void collectionRunner.run()}
           onClose={() => {
             collectionRunner.cancel()
@@ -216,6 +228,7 @@ export function HttpWorkspaceOverlays({
         <HttpEnvironmentManagerModal
           environments={environment.environments}
           activeName={environment.activeEnvironmentName}
+          privateEnvironmentPath={environment.privateEnvironmentPath}
           terminalWidth={terminalWidth}
           terminalHeight={terminalHeight}
           onSelect={environment.selectEnvironment}
@@ -243,6 +256,15 @@ export function HttpWorkspaceOverlays({
           terminalHeight={terminalHeight}
           onConfirm={onConfirmCloseDocument}
           onClose={onCancelCloseDocument}
+        />
+      ) : null}
+      {overlay === "insecure-tls-confirmation" && pendingTlsApproval ? (
+        <HttpInsecureTlsModal
+          approval={pendingTlsApproval}
+          terminalWidth={terminalWidth}
+          terminalHeight={terminalHeight}
+          onConfirm={onConfirmInsecureTls}
+          onClose={onCancelInsecureTls}
         />
       ) : null}
     </>

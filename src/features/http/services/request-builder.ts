@@ -44,6 +44,24 @@ export function normalizeHttpUrl(source: string) {
   return url
 }
 
+export function normalizeHttpProxyUrl(source: string) {
+  const value = source.trim()
+  if (!value) return undefined
+  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`
+  let url: URL
+  try {
+    url = new URL(withProtocol)
+  } catch {
+    throw new HttpRequestValidationError(
+      "Proxy inválido. Use uma URL HTTP/HTTPS ou uma variável privada.",
+    )
+  }
+  if (!["http:", "https:"].includes(url.protocol) || !url.hostname) {
+    throw new HttpRequestValidationError("O proxy deve usar HTTP ou HTTPS.")
+  }
+  return url.toString()
+}
+
 function enabledValues(entries: HttpKeyValue[]) {
   return entries.filter((entry) => entry.enabled && entry.name.trim())
 }
@@ -282,6 +300,9 @@ export function prepareHttpRequest(
   })
   applyAuth(url, headers, request.auth, variables)
   const preparedBody = prepareBody(request, headers, variables, projectRoot)
+  const proxyUrl = normalizeHttpProxyUrl(
+    resolveHttpTemplate(request.options.proxy ?? "", variables),
+  )
 
   return {
     executionId,
@@ -293,5 +314,8 @@ export function prepareHttpRequest(
     ...preparedBody,
     timeoutMs: request.options.timeoutMs,
     followRedirects: request.options.followRedirects,
+    useCookieJar: request.options.cookieJar !== false,
+    ...(proxyUrl ? { proxyUrl } : {}),
+    tlsVerification: request.options.tlsVerification ?? "strict",
   }
 }

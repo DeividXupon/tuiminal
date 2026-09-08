@@ -1,0 +1,29 @@
+@baseUrl = https://example.test
+@api-version = v1
+
+### List users
+# @name = list-users
+// @timeout 2 s
+// @no-log
+GET {{baseUrl}}
+  /{{api-version}}/users
+  ?page=1
+  &tag=terminal
+Accept: application/json
+
+### Health check
+# @name = health-check
+// @no-redirect
+{{baseUrl}}/health
+
+### WebDAV metadata
+# @name webdav-metadata
+PROPFIND {{baseUrl}}/dav
+Depth: 1
+
+### Stateless request
+# @name stateless
+// @no-cookie-jar
+// @proxy {{proxyUrl}}
+// @insecure-tls
+GET {{baseUrl}}/stateless

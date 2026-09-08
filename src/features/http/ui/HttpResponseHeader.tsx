@@ -28,8 +28,8 @@ export function HttpResponseHeader({
             style={{ fg: statusColor(response.status) }}
           />
           <text
-            content={` · ${formatHttpDuration(response.timings.totalMs)} · ${formatHttpBytes(response.capturedBytes)}`}
-            style={{ fg: COLORS.muted }}
+            content={` · ${formatHttpDuration(response.timings.totalMs)} · ${formatHttpBytes(response.capturedBytes)}${response.truncated ? ` · ${translateUi("TRUNCADO")}` : ""}`}
+            style={{ fg: response.truncated ? COLORS.warning : COLORS.muted }}
           />
         </box>
       ) : (

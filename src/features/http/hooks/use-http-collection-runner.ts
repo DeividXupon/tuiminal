@@ -11,17 +11,29 @@ import {
   runHttpDataset,
   type HttpRunCase,
 } from "../services/collection-runner"
+import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 type RunnerStatus = "idle" | "running" | "complete" | "cancelled"
+
+function completedRunnerStatus(aborted: boolean, approval: HttpInsecureTlsApproval | null) {
+  if (aborted) return "cancelled"
+  return approval ? "idle" : "complete"
+}
 
 export function useHttpCollectionRunner({
   root,
   items,
   variablesForRequest,
+  environmentName,
+  isInsecureTlsApproved,
+  approveInsecureTls,
 }: {
   root: string
   items: HttpProjectRequestItem[]
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext
+  environmentName: string | null
+  isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
+  approveInsecureTls: (approval: HttpInsecureTlsApproval) => void
 }) {
   const [targetId, setTargetId] = useState<string | null>(null)
   const [datasetPath, setDatasetPath] = useState("")
@@ -29,6 +41,7 @@ export function useHttpCollectionRunner({
   const [status, setStatus] = useState<RunnerStatus>("idle")
   const [cases, setCases] = useState<HttpRunCase[]>([])
   const [error, setError] = useState("")
+  const [pendingTlsApproval, setPendingTlsApproval] = useState<HttpInsecureTlsApproval | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
 
   const open = useCallback(() => {
@@ -38,6 +51,7 @@ export function useHttpCollectionRunner({
     setStatus("idle")
     setCases([])
     setError("")
+    setPendingTlsApproval(null)
   }, [items])
   const cycleTarget = useCallback(() => {
     setTargetId((current) => {
@@ -47,6 +61,7 @@ export function useHttpCollectionRunner({
     })
     setCases([])
     setStatus("idle")
+    setPendingTlsApproval(null)
   }, [items])
   const cycleConcurrency = useCallback(() => {
     setConcurrency((current) => (current >= 8 ? 1 : current + 1))
@@ -88,19 +103,44 @@ export function useHttpCollectionRunner({
             variablesForRequest,
             root,
             signal: controller.signal,
+            environmentName,
+            isInsecureTlsApproved,
           })
         },
         controller.signal,
       )
       setCases(results)
-      setStatus(controller.signal.aborted ? "cancelled" : "complete")
+      const approval = results
+        .flatMap((result) => result.items)
+        .map((item) => item.error?.approval)
+        .find((candidate): candidate is HttpInsecureTlsApproval => Boolean(candidate))
+      setPendingTlsApproval(approval ?? null)
+      setStatus(completedRunnerStatus(controller.signal.aborted, approval ?? null))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
       setStatus(controller.signal.aborted ? "cancelled" : "idle")
     } finally {
       if (controllerRef.current === controller) controllerRef.current = null
     }
-  }, [cancel, concurrency, datasetPath, items, root, status, targetId, variablesForRequest])
+  }, [
+    cancel,
+    concurrency,
+    datasetPath,
+    environmentName,
+    isInsecureTlsApproved,
+    items,
+    root,
+    status,
+    targetId,
+    variablesForRequest,
+  ])
+
+  const approvePendingTls = useCallback(() => {
+    if (!pendingTlsApproval) return
+    approveInsecureTls(pendingTlsApproval)
+    setPendingTlsApproval(null)
+    setError("")
+  }, [approveInsecureTls, pendingTlsApproval])
 
   return {
     targetId,
@@ -111,6 +151,8 @@ export function useHttpCollectionRunner({
     status,
     cases,
     error,
+    pendingTlsApproval,
+    approvePendingTls,
     open,
     cycleTarget,
     cycleConcurrency,

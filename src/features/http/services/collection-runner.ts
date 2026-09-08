@@ -16,6 +16,11 @@ import { executePreparedHttpRequest, HttpExecutionError } from "./fetch-transpor
 import { HttpRequestValidationError, prepareHttpRequest } from "./request-builder"
 import { responseBodyText } from "./response-reader"
 import { HttpCookieJar } from "./cookies"
+import {
+  httpInsecureTlsApproval,
+  HttpInsecureTlsApprovalError,
+  type HttpInsecureTlsApproval,
+} from "../model/tls-policy"
 
 export type HttpRunItem = {
   requestId: string
@@ -23,7 +28,7 @@ export type HttpRunItem = {
   method: string
   url: string
   response?: HttpResponseSnapshot
-  error?: { kind: HttpFailureKind; message: string }
+  error?: { kind: HttpFailureKind; message: string; approval?: HttpInsecureTlsApproval }
 }
 
 export type HttpRunCase = { name: string; items: HttpRunItem[] }
@@ -126,6 +131,29 @@ function extractVariables(
   }
 }
 
+function collectionRunError(
+  error: unknown,
+  context: HttpVariableContext,
+  environmentName: string | null,
+): NonNullable<HttpRunItem["error"]> {
+  const kind =
+    error instanceof HttpInsecureTlsApprovalError
+      ? "tls"
+      : error instanceof HttpExecutionError || error instanceof HttpRequestValidationError
+        ? error.kind
+        : "parse"
+  return {
+    kind,
+    message: redactHttpRunDiagnostic(
+      error instanceof Error ? error.message : String(error),
+      context,
+    ),
+    ...(error instanceof HttpInsecureTlsApprovalError
+      ? { approval: httpInsecureTlsApproval(error.url, environmentName) }
+      : {}),
+  }
+}
+
 export async function runHttpCollectionCase({
   name,
   items,
@@ -135,6 +163,8 @@ export async function runHttpCollectionCase({
   signal,
   variablesForRequest,
   cookieJar,
+  environmentName = null,
+  isInsecureTlsApproved,
 }: {
   name: string
   items: HttpProjectRequestItem[]
@@ -144,6 +174,8 @@ export async function runHttpCollectionCase({
   signal?: AbortSignal
   variablesForRequest?: (request: HttpRequestDefinition) => HttpVariableContext
   cookieJar?: HttpCookieJar
+  environmentName?: string | null
+  isInsecureTlsApproved?: (approval: HttpInsecureTlsApproval) => boolean
 }): Promise<HttpRunCase> {
   const selected = selectedRequests(items, selector)
   const results: HttpRunItem[] = []
@@ -162,6 +194,7 @@ export async function runHttpCollectionCase({
         signal,
         undefined,
         activeCookieJar,
+        (url) => isInsecureTlsApproved?.(httpInsecureTlsApproval(url, environmentName)) ?? false,
       )
       const response = {
         ...received,
@@ -181,18 +214,7 @@ export async function runHttpCollectionCase({
         requestName: request.name,
         method: request.method,
         url: redactHttpHistoryUrl(request.url),
-        error: {
-          kind:
-            error instanceof HttpExecutionError
-              ? error.kind
-              : error instanceof HttpRequestValidationError
-                ? error.kind
-                : "parse",
-          message: redactHttpRunDiagnostic(
-            error instanceof Error ? error.message : String(error),
-            context,
-          ),
-        },
+        error: collectionRunError(error, context, environmentName),
       })
       break
     }

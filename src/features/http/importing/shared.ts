@@ -24,7 +24,12 @@ export function importedHttpRequest(
     headers: [],
     auth: { kind: "none" },
     body: { kind: "none", text: "", form: [] },
-    options: { timeoutMs: 30_000, followRedirects: true },
+    options: {
+      timeoutMs: 30_000,
+      followRedirects: true,
+      cookieJar: true,
+      tlsVerification: "strict",
+    },
   }
 }
 

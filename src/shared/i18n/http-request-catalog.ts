@@ -352,4 +352,20 @@ export const HTTP_REQUEST_MESSAGES = [
     "[L] 历史：不记录",
     "[L] 기록: 저장 안 함",
   ],
+  [
+    "[C] Cookie jar: usar",
+    "[C] Cookie jar: use",
+    "[C] Cookie jar: usar",
+    "[C] Cookie jar: 使用",
+    "[C] Cookie jar：使用",
+    "[C] Cookie jar: 사용",
+  ],
+  [
+    "[C] Cookie jar: ignorar",
+    "[C] Cookie jar: ignore",
+    "[C] Cookie jar: ignorar",
+    "[C] Cookie jar: 無効",
+    "[C] Cookie jar：忽略",
+    "[C] Cookie jar: 무시",
+  ],
 ] as const

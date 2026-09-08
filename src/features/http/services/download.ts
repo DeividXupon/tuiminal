@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 import type { HttpPreparedRequest } from "../model/types"
 import type { HttpCookieJar } from "./cookies"
 import { fetchWithHttpRedirects } from "./redirects"
+import type { HttpInsecureTlsAuthorizer } from "../model/tls-policy"
 
 function safeStem(value: string) {
   return (
@@ -42,6 +43,7 @@ export async function downloadCompleteHttpResponse({
   request,
   signal,
   cookieJar,
+  authorizeInsecureTls = false,
   now = new Date(),
 }: {
   root: string
@@ -49,6 +51,7 @@ export async function downloadCompleteHttpResponse({
   request: HttpPreparedRequest
   signal: AbortSignal
   cookieJar?: HttpCookieJar
+  authorizeInsecureTls?: HttpInsecureTlsAuthorizer
   now?: Date
 }) {
   if (request.method.toUpperCase() !== "GET") {
@@ -56,7 +59,14 @@ export async function downloadCompleteHttpResponse({
   }
   const timeoutSignal = AbortSignal.timeout(request.timeoutMs)
   const combinedSignal = AbortSignal.any([signal, timeoutSignal])
-  const { response } = await fetchWithHttpRedirects(request, combinedSignal, fetch, 10, cookieJar)
+  const { response } = await fetchWithHttpRedirects(
+    request,
+    combinedSignal,
+    fetch,
+    10,
+    cookieJar,
+    authorizeInsecureTls,
+  )
   const directory = resolve(root, "tuiminal-exports", "http")
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)

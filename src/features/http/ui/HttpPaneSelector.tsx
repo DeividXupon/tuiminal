@@ -24,12 +24,14 @@ export function HttpPaneSelector({
       {mode === "minimum" ? (
         <>
           <InlineButton
+            id="http-pane-request"
             label="[1] Requisição"
             accent={COLORS.http}
             active={activePane === "request"}
             onPress={() => onPane("request")}
           />
           <InlineButton
+            id="http-pane-response"
             label="[2] Resposta"
             accent={COLORS.http}
             active={activePane === "response"}
@@ -38,12 +40,14 @@ export function HttpPaneSelector({
         </>
       ) : null}
       <InlineButton
+        id="http-pane-collection"
         label="[C] Coleção"
         accent={COLORS.http}
         active={navigationOpen && navigationView === "collection"}
         onPress={() => onNavigation("collection")}
       />
       <InlineButton
+        id="http-pane-history"
         label="[Y] Histórico"
         accent={COLORS.http}
         active={navigationOpen && navigationView === "history"}

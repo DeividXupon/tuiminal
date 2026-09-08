@@ -4,6 +4,7 @@ import { COLORS, panelBorder } from "../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import type { HttpRunCase } from "../services/collection-runner"
+import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 function runItemPassed(item: HttpRunCase["items"][number]) {
   return (
@@ -59,12 +60,14 @@ export function HttpCollectionRunnerModal({
   status,
   cases,
   error,
+  pendingTlsApproval,
   terminalWidth,
   terminalHeight,
   onDatasetPathChange,
   onCycleTarget,
   onCycleConcurrency,
   onRun,
+  onApproveInsecureTls,
   onClose,
 }: {
   targetName: string | null
@@ -73,12 +76,14 @@ export function HttpCollectionRunnerModal({
   status: "idle" | "running" | "complete" | "cancelled"
   cases: HttpRunCase[]
   error: string
+  pendingTlsApproval: HttpInsecureTlsApproval | null
   terminalWidth: number
   terminalHeight: number
   onDatasetPathChange: (path: string) => void
   onCycleTarget: () => void
   onCycleConcurrency: () => void
   onRun: () => void
+  onApproveInsecureTls: () => void
   onClose: () => void
 }) {
   const datasetRef = useRef<InputRenderable | null>(null)
@@ -150,6 +155,23 @@ export function HttpCollectionRunnerModal({
         style={{ fg: status === "running" ? COLORS.warning : COLORS.muted }}
       />
       {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
+      {pendingTlsApproval ? (
+        <box style={{ height: 2, flexShrink: 0 }}>
+          <text
+            content={truncateDisplay(
+              `${translateUi("TLS INSEGURO")} · ${pendingTlsApproval.target}`,
+              contentWidth,
+            )}
+            style={{ fg: COLORS.danger }}
+          />
+          <InlineButton
+            id="http-collection-runner-approve-tls"
+            label="[I] Autorizar nesta sessão"
+            accent={COLORS.danger}
+            onPress={onApproveInsecureTls}
+          />
+        </box>
+      ) : null}
       <RunnerResults cases={cases} width={contentWidth} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
         <InlineButton

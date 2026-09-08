@@ -1,0 +1,92 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Tuiminal OpenAPI 3.0 matrix", "version": "1.0.0" },
+  "servers": [
+    {
+      "url": "https://{region}.api.example.test/v1",
+      "variables": { "region": { "default": "eu" } }
+    }
+  ],
+  "security": [{ "ApiKeyAlias": [] }],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAlias": { "$ref": "#/components/securitySchemes/ApiKey" },
+      "ApiKey": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+    },
+    "parameters": {
+      "UserId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "default": 7 }
+      },
+      "Tenant": { "name": "X-Tenant", "in": "header", "required": true, "example": "acme" },
+      "SessionCookie": { "name": "session", "in": "cookie", "schema": { "type": "string" } }
+    },
+    "schemas": {
+      "DisplayName": { "type": "string", "example": "Ada" },
+      "BaseUser": {
+        "type": "object",
+        "properties": {
+          "name": { "$ref": "#/components/schemas/DisplayName" },
+          "active": { "type": "boolean", "default": true }
+        }
+      },
+      "UserInput": {
+        "allOf": [
+          { "$ref": "#/components/schemas/BaseUser" },
+          {
+            "type": "object",
+            "properties": {
+              "roles": { "type": "array", "items": { "type": "string", "enum": ["admin"] } }
+            }
+          }
+        ]
+      }
+    },
+    "requestBodies": {
+      "CreateUser": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/UserInput" } }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/users/{id}": {
+      "servers": [{ "url": "/tenant-api" }],
+      "parameters": [
+        { "$ref": "#/components/parameters/UserId" },
+        { "$ref": "#/components/parameters/Tenant" },
+        { "$ref": "#/components/parameters/SessionCookie" }
+      ],
+      "get": {
+        "operationId": "getUser",
+        "summary": "Get user",
+        "security": [],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "example": 42 },
+          {
+            "name": "expand",
+            "in": "query",
+            "schema": { "type": "array", "default": ["profile", "teams"] }
+          },
+          { "name": "Authorization", "in": "header", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/users": {
+      "post": {
+        "operationId": "createUser",
+        "summary": "Create user",
+        "servers": [{ "url": "https://write.example.test/v2" }],
+        "requestBody": { "$ref": "#/components/requestBodies/CreateUser" },
+        "responses": { "201": { "description": "Created" } },
+        "callbacks": { "created": {} }
+      }
+    },
+    "/external": { "$ref": "./external-paths.yaml#/External" }
+  }
+}

@@ -1,5 +1,13 @@
 export const HTTP_PATTERNS = [
   [
+    /^TLS inseguro para (.+) exige confirmação nesta sessão\.$/,
+    "Insecure TLS for $1 requires confirmation in this session.",
+    "TLS inseguro para $1 requiere confirmación en esta sesión.",
+    "$1への安全でないTLS接続には、このセッションでの確認が必要です。",
+    "$1 的不安全 TLS 需要在本次会话中确认。",
+    "$1에 대한 안전하지 않은 TLS는 이 세션에서 확인해야 합니다.",
+  ],
+  [
     /^\[T\] Timeout: (.+)$/,
     "[T] Timeout: $1",
     "[T] Tiempo límite: $1",
@@ -32,12 +40,20 @@ export const HTTP_PATTERNS = [
     "$1 헤더에 줄바꿈이 있습니다.",
   ],
   [
-    /^O tempo limite de (\d+) segundos foi excedido\.$/,
+    /^O tempo limite de ([\d.]+) segundos foi excedido\.$/,
     "The $1-second timeout was exceeded.",
     "Se superó el tiempo límite de $1 segundos.",
     "$1秒のタイムアウトを超えました。",
     "已超过 $1 秒超时限制。",
     "$1초 제한 시간을 초과했습니다.",
+  ],
+  [
+    /^O tempo limite de (\d+) ms foi excedido\.$/,
+    "The $1 ms timeout was exceeded.",
+    "Se superó el tiempo límite de $1 ms.",
+    "$1ミリ秒のタイムアウトを超えました。",
+    "已超过 $1 毫秒超时限制。",
+    "$1ms 제한 시간을 초과했습니다.",
   ],
   [
     /^Não foi possível concluir a requisição: (.+)$/,

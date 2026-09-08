@@ -72,6 +72,13 @@ export function exportPreparedRequestAsCurl(
     parts.push("--header", shellQuote(`${name}: ${value}`))
   }
   appendPreparedBody(parts, request, revealSecrets, secretValues)
+  if (request.proxyUrl) {
+    const proxy = revealSecrets
+      ? request.proxyUrl
+      : redactHttpUrlSecrets(request.proxyUrl, secretValues)
+    parts.push("--proxy", shellQuote(proxy))
+  }
+  if (request.tlsVerification === "insecure") parts.push("--insecure")
   if (request.followRedirects) parts.push("--location")
   return parts.join(" ")
 }

@@ -77,6 +77,15 @@ export function HttpPreparedRequestPreview({ preview }: { preview: PreparedPrevi
         value={translateUi(preview.followRedirects ? "seguir" : "manual")}
       />
       <PreviewLine
+        label="COOKIE JAR"
+        value={translateUi(preview.useCookieJar ? "usar" : "ignorar")}
+      />
+      <PreviewLine label="PROXY" value={preview.proxy ?? translateUi("direto")} />
+      <PreviewLine
+        label="VERIFICAÇÃO TLS"
+        value={translateUi(preview.tlsVerification === "insecure" ? "TLS INSEGURO" : "verificar")}
+      />
+      <PreviewLine
         label="HISTÓRICO"
         value={translateUi(preview.noLog ? "não registrar" : "registrar")}
       />

@@ -98,7 +98,7 @@ export function HttpEnvironmentList({
             ? environments.find((candidate) => candidate.name === name)
             : undefined
           const details = environment
-            ? `${environment.production ? " · PROD" : ""} · ${translateUi(`${environment.privateNames.size} privado(s)`)}`
+            ? `${environment.production ? " · PROD" : ""} · ${translateUi(`${environment.privateNames.size} privado(s)`)} · ${environment.directory || "/"}`
             : ""
           return (
             <InlineButton
@@ -141,6 +141,7 @@ export function HttpPrivateEnvironmentForm({
   storeInKeychain,
   busy,
   error,
+  privateEnvironmentPath,
   onEnvironmentNameChange,
   onVariableNameChange,
   onSecretChange,
@@ -156,6 +157,7 @@ export function HttpPrivateEnvironmentForm({
   storeInKeychain: boolean
   busy: boolean
   error: string
+  privateEnvironmentPath: string
   onEnvironmentNameChange: (value: string) => void
   onVariableNameChange: (value: string) => void
   onSecretChange: (value: string) => void
@@ -177,6 +179,10 @@ export function HttpPrivateEnvironmentForm({
     <>
       <text
         content={translateUi("Crie uma variável secreta sem gravá-la no request.")}
+        style={{ fg: COLORS.muted }}
+      />
+      <text
+        content={`${translateUi("ARQUIVO")}  ${privateEnvironmentPath}`}
         style={{ fg: COLORS.muted }}
       />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>

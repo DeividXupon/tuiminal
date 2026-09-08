@@ -4,7 +4,9 @@ import { resizeHttpSplitRatio } from "../model/layout"
 import { HttpWorkspaceFooter } from "./HttpWorkspaceFooter"
 
 export function HttpClientFooter({
+  availableWidth,
   minimum,
+  narrow,
   document,
   activePane,
   notice,
@@ -13,7 +15,9 @@ export function HttpClientFooter({
   onHelp,
   onSave,
 }: {
+  availableWidth: number
   minimum: boolean
+  narrow: boolean
   document: HttpDocumentState
   activePane: HttpPane
   notice: string
@@ -24,7 +28,12 @@ export function HttpClientFooter({
 }) {
   return (
     <HttpWorkspaceFooter
+      availableWidth={availableWidth}
       minimum={minimum}
+      narrow={narrow}
+      readOnly={
+        document.request.source.kind === "file" && document.request.source.supported === false
+      }
       maximized={document.maximizedPane !== null}
       onResize={(direction) =>
         dispatch({

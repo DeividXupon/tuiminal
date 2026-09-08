@@ -1,5 +1,10 @@
 import type { HttpPreparedRequest, HttpRedirectHop } from "../model/types"
 import type { HttpCookieJar } from "./cookies"
+import {
+  allowsInsecureTls,
+  HttpInsecureTlsApprovalError,
+  type HttpInsecureTlsAuthorizer,
+} from "../model/tls-policy"
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const CROSS_ORIGIN_HEADERS = new Set([
@@ -36,13 +41,49 @@ function redirectHeaders(
   })
 }
 
+function validateRedirectHop(
+  request: HttpPreparedRequest,
+  url: string,
+  visited: Set<string>,
+  authorizeInsecureTls: HttpInsecureTlsAuthorizer,
+) {
+  if (visited.has(url)) throw new HttpRedirectError("A requisição entrou em um loop de redirects.")
+  visited.add(url)
+  const insecureTls = request.tlsVerification === "insecure" && new URL(url).protocol === "https:"
+  if (insecureTls && !allowsInsecureTls(authorizeInsecureTls, url)) {
+    throw new HttpInsecureTlsApprovalError(url)
+  }
+  return insecureTls
+}
+
+function redirectFetchInit(
+  request: HttpPreparedRequest,
+  method: string,
+  headers: Array<[string, string]>,
+  body: BodyInit | undefined,
+  signal: AbortSignal,
+  insecureTls: boolean,
+): BunFetchRequestInit {
+  return {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body }),
+    redirect: "manual",
+    signal,
+    ...(request.proxyUrl ? { proxy: request.proxyUrl } : {}),
+    ...(insecureTls ? { tls: { rejectUnauthorized: false } } : {}),
+  }
+}
+
 export async function fetchWithHttpRedirects(
   request: HttpPreparedRequest,
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
   maximumRedirects = 10,
   cookieJar?: HttpCookieJar,
+  authorizeInsecureTls: HttpInsecureTlsAuthorizer = false,
 ) {
+  const activeCookieJar = request.useCookieJar === false ? undefined : cookieJar
   let url = request.url
   let method = request.method
   let headers = request.headers
@@ -51,22 +92,17 @@ export async function fetchWithHttpRedirects(
   const redirects: HttpRedirectHop[] = []
 
   while (true) {
-    if (visited.has(url))
-      throw new HttpRedirectError("A requisição entrou em um loop de redirects.")
-    visited.add(url)
-    const cookie = cookieJar?.header(url)
+    const insecureTls = validateRedirectHop(request, url, visited, authorizeInsecureTls)
+    const cookie = activeCookieJar?.header(url)
     const requestHeaders =
       cookie && !headers.some(([name]) => name.toLowerCase() === "cookie")
         ? [...headers, ["Cookie", cookie] as [string, string]]
         : headers
-    const response = await fetcher(url, {
-      method,
-      headers: requestHeaders,
-      ...(body === undefined ? {} : { body }),
-      redirect: "manual",
-      signal,
-    })
-    cookieJar?.store(url, response.headers)
+    const response = await fetcher(
+      url,
+      redirectFetchInit(request, method, requestHeaders, body, signal, insecureTls),
+    )
+    activeCookieJar?.store(url, response.headers)
     const location = response.headers.get("location")
     if (!request.followRedirects || !location || !REDIRECT_STATUSES.has(response.status)) {
       return { response, redirects }

@@ -41,9 +41,12 @@ export type HttpKeyboardCommand =
         | "back-import-preview"
         | "cycle-runner-target"
         | "cycle-runner-concurrency"
+        | "approve-runner-insecure-tls"
         | "add-automation-row"
         | "cycle-request-timeout"
         | "toggle-request-redirects"
+        | "toggle-request-cookie-jar"
+        | "toggle-request-tls-verification"
         | "toggle-request-no-log"
     }
   | {
@@ -192,7 +195,8 @@ function focusedCommand(focusedId: string, key: HttpKey): HttpKeyboardCommand | 
     focusedId.startsWith("http-auth-") ||
     focusedId.startsWith("http-automation-") ||
     focusedId.startsWith("http-custom-method-") ||
-    focusedId.startsWith("http-request-name-")
+    focusedId.startsWith("http-request-name-") ||
+    focusedId.startsWith("http-request-proxy-")
   ) {
     return singleLineInputCommand(key, "blur-control")
   }
@@ -248,6 +252,12 @@ function contextualRequestCommand(
     return { kind: "toggle-request-redirects" }
   }
   if (requestMoreView === "options" && key.name === "l") return { kind: "toggle-request-no-log" }
+  if (requestMoreView === "options" && key.name === "c") {
+    return { kind: "toggle-request-cookie-jar" }
+  }
+  if (requestMoreView === "options" && key.name === "v") {
+    return { kind: "toggle-request-tls-verification" }
+  }
   if (key.name === "i") return { kind: "open-overlay", overlay: "curl-import" }
   if (key.name === "x" && !running) return { kind: "open-overlay", overlay: "curl-export" }
   return key.name === "d" && requestMoreView === "options" ? { kind: "duplicate-document" } : null

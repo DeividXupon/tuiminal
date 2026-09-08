@@ -12,6 +12,8 @@ import {
 import type { HttpRequestDefinition } from "../model/types"
 import { validateHttpRequestAutomation } from "../model/automation"
 import { isValidHttpMethod } from "../model/request-validation"
+import { isOpaqueHttpRequest } from "../model/request-capabilities"
+import { httpProxyHasCredentials } from "../model/secrets"
 
 const IGNORED_DIRECTORIES = new Set([
   ".git",
@@ -232,6 +234,9 @@ function assertNoLiteralProjectSecrets(request: HttpRequestDefinition) {
   if (request.auth.kind === "bearer") secretValues.push(request.auth.token)
   if (request.auth.kind === "basic") secretValues.push(request.auth.password)
   if (request.auth.kind === "api-key") secretValues.push(request.auth.value)
+  if (request.options.proxy && httpProxyHasCredentials(request.options.proxy)) {
+    secretValues.push(request.options.proxy)
+  }
   if (secretValues.some((value) => !secretUsesOnlyReferences(value))) {
     throw new HttpCollectionConflictError(
       "Segredos literais não são salvos em .http; use uma variável do ambiente privado.",
@@ -294,6 +299,9 @@ export async function saveHttpRequest(root: string, request: HttpRequestDefiniti
 }
 
 export async function duplicateHttpRequest(root: string, request: HttpRequestDefinition) {
+  if (isOpaqueHttpRequest(request)) {
+    throw new HttpCollectionConflictError("O bloco HTTP não pode ser editado com segurança.")
+  }
   return saveHttpRequest(root, {
     ...request,
     id: `${request.id}-copy-${Date.now()}`,
@@ -353,6 +361,9 @@ export async function moveHttpRequest(
   request: HttpRequestDefinition,
   targetPath: string,
 ) {
+  if (isOpaqueHttpRequest(request)) {
+    throw new HttpCollectionConflictError("O bloco HTTP não pode ser editado com segurança.")
+  }
   const current = await currentRequestBlock(root, request)
   if (!/\.(?:http|rest)$/i.test(targetPath)) {
     throw new HttpCollectionConflictError("O destino precisa terminar em .http ou .rest.")

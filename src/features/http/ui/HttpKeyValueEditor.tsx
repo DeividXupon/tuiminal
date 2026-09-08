@@ -24,6 +24,7 @@ export function HttpKeyValueEditor({
   registerFirstInput,
   detectSensitiveNames = false,
   nameSuggestions = [],
+  dense = false,
 }: {
   idPrefix: string
   title: string
@@ -32,6 +33,7 @@ export function HttpKeyValueEditor({
   registerFirstInput?: (input: InputRenderable | null) => void
   detectSensitiveNames?: boolean
   nameSuggestions?: readonly string[]
+  dense?: boolean
 }) {
   const inputs = useRef(new Map<string, InputRenderable>())
   const patchEntry = (id: string, patch: Partial<HttpKeyValue>) =>
@@ -50,7 +52,7 @@ export function HttpKeyValueEditor({
     )
 
   return (
-    <box style={{ flexGrow: 1, minHeight: 3 }}>
+    <box style={{ flexGrow: 1, minHeight: dense ? 2 : 3 }}>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", alignItems: "center" }}>
         <text content={translateUi(title)} style={{ flexGrow: 1, fg: COLORS.muted }} />
         <InlineButton
@@ -59,11 +61,13 @@ export function HttpKeyValueEditor({
           onPress={() => onChange([...entries, newEntry(idPrefix)])}
         />
       </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content="   " />
-        <text content={translateUi("NOME")} style={{ width: "40%", fg: COLORS.muted }} />
-        <text content={translateUi("VALOR")} style={{ flexGrow: 1, fg: COLORS.muted }} />
-      </box>
+      {dense ? null : (
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          <text content="   " />
+          <text content={translateUi("NOME")} style={{ width: "40%", fg: COLORS.muted }} />
+          <text content={translateUi("VALOR")} style={{ flexGrow: 1, fg: COLORS.muted }} />
+        </box>
+      )}
       <scrollbox scrollY viewportCulling style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
         {entries.length ? (
           entries.map((entry, index) => (

@@ -1,0 +1,66 @@
+openapi: 3.1.1
+info:
+  title: Tuiminal OpenAPI 3.1 matrix
+  version: 1.0.0
+components:
+  schemas:
+    Form:
+      type: object
+      properties:
+        mode:
+          type: string
+          const: compact
+        attempts:
+          type: integer
+          examples: [3]
+    Upload:
+      type: object
+      properties:
+        caption:
+          type: string
+          default: fixture
+        asset:
+          type: string
+          format: binary
+  pathItems:
+    Health:
+      servers:
+        - url: https://health.example.test
+      get:
+        operationId: health
+        responses:
+          "204":
+            description: Empty
+paths:
+  /health:
+    $ref: "#/components/pathItems/Health"
+  /forms:
+    post:
+      operationId: submitForm
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/Form"
+      responses:
+        "202":
+          description: Accepted
+  /uploads:
+    post:
+      operationId: uploadAsset
+      parameters:
+        - $ref: "https://example.test/common.yaml#/parameters/trace"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/Upload"
+      responses:
+        "200":
+          description: Uploaded
+webhooks:
+  event:
+    post:
+      responses:
+        "200":
+          description: Received

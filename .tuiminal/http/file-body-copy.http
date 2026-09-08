@@ -1,0 +1,11 @@
+### File body copy
+# @name file-body-copy
+# @no-redirect
+# @no-cookie-jar
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "name": "tuiminal",
+  "test": true
+}

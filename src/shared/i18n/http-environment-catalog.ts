@@ -182,6 +182,22 @@ export const HTTP_ENVIRONMENT_MESSAGES = [
     "系统凭据管理器不可用。",
     "시스템 자격 증명 관리자를 사용할 수 없습니다.",
   ],
+  [
+    "O ambiente precisa permanecer dentro do projeto.",
+    "The environment must remain inside the project.",
+    "El ambiente debe permanecer dentro del proyecto.",
+    "環境はプロジェクト内に置く必要があります。",
+    "环境必须位于项目内。",
+    "환경은 프로젝트 내부에 있어야 합니다.",
+  ],
+  [
+    "O diretório do ambiente não existe.",
+    "The environment directory does not exist.",
+    "El directorio del ambiente no existe.",
+    "環境ディレクトリが存在しません。",
+    "环境目录不存在。",
+    "환경 디렉터리가 없습니다.",
+  ],
 ] as const
 
 export const HTTP_ENVIRONMENT_PATTERNS = [

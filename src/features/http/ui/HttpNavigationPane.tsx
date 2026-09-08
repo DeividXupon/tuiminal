@@ -2,7 +2,7 @@ import type { InputRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
 import { useEffect, useRef } from "react"
 import { COLORS, panelBorder } from "../../../core/settings/theme"
-import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import type { HttpNavigationView, HttpProjectRequestItem, HttpWorkspaceState } from "../model/types"
 import type { HttpHistoryEntry } from "../model/types"
@@ -49,6 +49,7 @@ export function HttpNavigationPane({
   onOpenHistory: (entry: HttpHistoryEntry) => void
 }) {
   const contentWidth = Math.max(8, position.width - 4)
+  const compactTabs = contentWidth < 28
   const collectionRef = useRef<ButtonRenderable | null>(null)
   const historyRef = useRef<ButtonRenderable | null>(null)
   useEffect(() => {
@@ -60,6 +61,7 @@ export function HttpNavigationPane({
   }, [focused, state.navigationView, state.overlay, visible])
   return (
     <box
+      id="http-navigation-pane"
       visible={visible}
       style={{
         position: "absolute",
@@ -69,6 +71,7 @@ export function HttpNavigationPane({
         backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,
+        overflow: "hidden",
       }}
     >
       <box
@@ -82,7 +85,7 @@ export function HttpNavigationPane({
         <InlineButton
           id="http-navigation-collection"
           buttonRef={collectionRef}
-          label="[C] Coleção"
+          label={compactTabs ? "[C]" : "[C] Coleção"}
           accent={COLORS.http}
           active={state.navigationView === "collection"}
           onPress={() => {
@@ -93,7 +96,7 @@ export function HttpNavigationPane({
         <InlineButton
           id="http-navigation-history"
           buttonRef={historyRef}
-          label="[Y] Histórico"
+          label={compactTabs ? "[Y]" : "[Y] Histórico"}
           accent={COLORS.http}
           active={state.navigationView === "history"}
           onPress={() => {
@@ -124,7 +127,10 @@ export function HttpNavigationPane({
                 <InlineButton
                   key={document.request.id}
                   id={`http-navigation-document-${document.request.id}`}
-                  label={`${document.request.method} ${truncateDisplay(document.request.name, contentWidth - 8)}`}
+                  label={`${document.request.method} ${truncateDisplay(
+                    document.request.name,
+                    Math.max(1, contentWidth - displayWidth(document.request.method) - 3),
+                  )}`}
                   accent={COLORS.http}
                   active={document.request.id === state.activeDocumentId}
                   onPress={() => {
@@ -144,7 +150,7 @@ export function HttpNavigationPane({
           />
         ) : (
           <text
-            content={translateUi("Nenhuma execução nesta sessão.")}
+            content={truncateDisplay(translateUi("Nenhuma execução nesta sessão."), contentWidth)}
             style={{ fg: COLORS.muted }}
           />
         )}

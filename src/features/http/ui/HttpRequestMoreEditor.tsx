@@ -16,47 +16,43 @@ import { HttpRequestChainingEditor } from "./HttpRequestChainingEditor"
 
 function MoreViewTabs({
   view,
+  dense,
   onChange,
 }: {
   view: HttpRequestMoreView
+  dense: boolean
   onChange: (view: HttpRequestMoreView) => void
 }) {
+  const buttons = (
+    [
+      ["options", "[1] Opções"],
+      ["assertions", "[2] Assertions"],
+      ["chaining", "[3] Chaining"],
+      ["preview", "[4] Preview"],
+    ] as const
+  ).map(([candidate, label]) => (
+    <InlineButton
+      key={candidate}
+      label={label}
+      accent={COLORS.http}
+      active={view === candidate}
+      onPress={() => onChange(candidate)}
+    />
+  ))
+  if (dense) {
+    return <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons}</box>
+  }
   return (
     <box style={{ height: 2, flexShrink: 0 }}>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          label="[1] Opções"
-          accent={COLORS.http}
-          active={view === "options"}
-          onPress={() => onChange("options")}
-        />
-        <InlineButton
-          label="[2] Assertions"
-          accent={COLORS.http}
-          active={view === "assertions"}
-          onPress={() => onChange("assertions")}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          label="[3] Chaining"
-          accent={COLORS.http}
-          active={view === "chaining"}
-          onPress={() => onChange("chaining")}
-        />
-        <InlineButton
-          label="[4] Preview"
-          accent={COLORS.http}
-          active={view === "preview"}
-          onPress={() => onChange("preview")}
-        />
-      </box>
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons.slice(0, 2)}</box>
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons.slice(2)}</box>
     </box>
   )
 }
 
 function RequestOptions({
   request,
+  dense,
   onNameChange,
   onMethodChange,
   onOptionsChange,
@@ -68,6 +64,7 @@ function RequestOptions({
   onFocus,
 }: {
   request: HttpRequestDefinition
+  dense: boolean
   onNameChange: (name: string) => void
   onMethodChange: (method: string) => void
   onOptionsChange: (options: HttpRequestDefinition["options"]) => void
@@ -80,9 +77,94 @@ function RequestOptions({
 }) {
   const nameInputRef = useRef<InputRenderable | null>(null)
   const methodInputRef = useRef<InputRenderable | null>(null)
+  const proxyInputRef = useRef<InputRenderable | null>(null)
   return (
-    <box style={{ flexGrow: 1, paddingTop: 1 }}>
+    <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: dense ? 0 : 1 }}>
       <text content={translateUi("OPÇÕES DA REQUISIÇÃO")} style={{ fg: COLORS.text }} />
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        <InlineButton
+          label={
+            request.options.timeoutExplicit
+              ? `[T] Timeout: ${request.options.timeoutMs / 1_000}s`
+              : "[T] Timeout: herdar"
+          }
+          accent={COLORS.http}
+          active={request.options.timeoutExplicit === true}
+          onPress={() => onOptionsChange(cycleHttpRequestTimeout(request.options))}
+        />
+        <InlineButton
+          label={
+            request.options.followRedirectsExplicit
+              ? request.options.followRedirects
+                ? "[R] Redirects: seguir"
+                : "[R] Redirects: manual"
+              : "[R] Redirects: herdar"
+          }
+          accent={COLORS.http}
+          active={request.options.followRedirectsExplicit === true}
+          onPress={() => onOptionsChange(cycleHttpRequestRedirects(request.options))}
+        />
+        <InlineButton
+          id="http-request-cookie-jar"
+          label={
+            request.options.cookieJar === false ? "[C] Cookie jar: ignorar" : "[C] Cookie jar: usar"
+          }
+          accent={request.options.cookieJar === false ? COLORS.warning : COLORS.http}
+          active={request.options.cookieJar === false}
+          onPress={() =>
+            onOptionsChange({ ...request.options, cookieJar: request.options.cookieJar === false })
+          }
+        />
+      </box>
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        <text
+          content={translateUi("PROXY")}
+          style={{ width: 12, flexShrink: 0, fg: COLORS.muted }}
+        />
+        <input
+          ref={proxyInputRef}
+          id={`http-request-proxy-${request.id}`}
+          value={request.options.proxy ?? ""}
+          placeholder={translateUi("http://proxy:8080 ou {{proxyUrl}}")}
+          onInput={(proxy) => onOptionsChange({ ...request.options, proxy })}
+          onMouseDown={() => {
+            onFocus()
+            proxyInputRef.current?.focus()
+          }}
+          style={{
+            flexGrow: 1,
+            backgroundColor: COLORS.canvas,
+            focusedBackgroundColor: COLORS.panelRaised,
+          }}
+        />
+      </box>
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        <InlineButton
+          label={
+            request.options.noLog ? "[L] Histórico: não registrar" : "[L] Histórico: registrar"
+          }
+          accent={request.options.noLog ? COLORS.warning : COLORS.http}
+          active={request.options.noLog === true}
+          onPress={() => onOptionsChange({ ...request.options, noLog: !request.options.noLog })}
+        />
+        <InlineButton
+          id="http-request-tls-verification"
+          label={
+            request.options.tlsVerification === "insecure"
+              ? "[V] TLS INSEGURO"
+              : "[V] TLS: verificar"
+          }
+          accent={request.options.tlsVerification === "insecure" ? COLORS.danger : COLORS.http}
+          active={request.options.tlsVerification === "insecure"}
+          onPress={() =>
+            onOptionsChange({
+              ...request.options,
+              tlsVerification:
+                request.options.tlsVerification === "insecure" ? "strict" : "insecure",
+            })
+          }
+        />
+      </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <text content={translateUi("NOME")} style={{ width: 12, fg: COLORS.muted }} />
         <input
@@ -132,38 +214,6 @@ function RequestOptions({
         />
       ) : null}
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          label={
-            request.options.timeoutExplicit
-              ? `[T] Timeout: ${request.options.timeoutMs / 1_000}s`
-              : "[T] Timeout: herdar"
-          }
-          accent={COLORS.http}
-          active={request.options.timeoutExplicit === true}
-          onPress={() => onOptionsChange(cycleHttpRequestTimeout(request.options))}
-        />
-        <InlineButton
-          label={
-            request.options.followRedirectsExplicit
-              ? request.options.followRedirects
-                ? "[R] Redirects: seguir"
-                : "[R] Redirects: manual"
-              : "[R] Redirects: herdar"
-          }
-          accent={COLORS.http}
-          active={request.options.followRedirectsExplicit === true}
-          onPress={() => onOptionsChange(cycleHttpRequestRedirects(request.options))}
-        />
-        <InlineButton
-          label={
-            request.options.noLog ? "[L] Histórico: não registrar" : "[L] Histórico: registrar"
-          }
-          accent={request.options.noLog ? COLORS.warning : COLORS.http}
-          active={request.options.noLog === true}
-          onPress={() => onOptionsChange({ ...request.options, noLog: !request.options.noLog })}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton label="[I] Importar cURL" accent={COLORS.http} onPress={onImportCurl} />
         <InlineButton label="[X] Exportar cURL" accent={COLORS.http} onPress={onExportCurl} />
         <InlineButton label="[D] Duplicar" accent={COLORS.http} onPress={onDuplicate} />
@@ -174,7 +224,7 @@ function RequestOptions({
           </>
         ) : null}
       </box>
-    </box>
+    </scrollbox>
   )
 }
 
@@ -267,6 +317,7 @@ function AssertionsEditor({
 
 export function HttpRequestMoreEditor({
   document,
+  dense,
   onSelectView,
   onNameChange,
   onMethodChange,
@@ -282,6 +333,7 @@ export function HttpRequestMoreEditor({
   preview,
 }: {
   document: { request: HttpRequestDefinition; requestMoreView: HttpRequestMoreView }
+  dense: boolean
   onSelectView: (view: HttpRequestMoreView) => void
   onNameChange: (name: string) => void
   onMethodChange: (method: string) => void
@@ -299,10 +351,11 @@ export function HttpRequestMoreEditor({
   const request = document.request
   return (
     <box style={{ flexGrow: 1 }}>
-      <MoreViewTabs view={document.requestMoreView} onChange={onSelectView} />
+      <MoreViewTabs view={document.requestMoreView} dense={dense} onChange={onSelectView} />
       {document.requestMoreView === "options" ? (
         <RequestOptions
           request={request}
+          dense={dense}
           onNameChange={onNameChange}
           onMethodChange={onMethodChange}
           onOptionsChange={onOptionsChange}

@@ -1,0 +1,17 @@
+### Inline response handler
+# @name inline-response-handler
+GET https://example.test/users > {% client.log(response.status); %}
+
+### Inline pre-request script
+# @name inline-pre-request
+< {% request.variables.set("petName", "Bella"); %} POST https://example.test/pets/{{petName}}
+
+### External handlers
+# @name external-handlers
+< scripts/pre-request.js
+PUT https://example.test/users/1
+> scripts/response-handler.js
+
+### Redirect response to file
+# @name redirect-response
+POST https://example.test/export >> responses/result.json

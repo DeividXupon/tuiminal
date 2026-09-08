@@ -38,6 +38,9 @@ export type HttpPreparedRequestPreview =
       body: { kind: string; content: string; truncated: boolean }
       timeoutMs: number
       followRedirects: boolean
+      useCookieJar: boolean
+      proxy: string | null
+      tlsVerification: "strict" | "insecure"
       noLog: boolean
     }
   | { ok: false; error: string }
@@ -146,6 +149,7 @@ function requestTemplateSources(request: HttpRequestDefinition) {
     ...request.headers.flatMap((entry) => [entry.name, entry.value]),
     ...request.body.form.flatMap((entry) => [entry.name, entry.value]),
     ...(request.body.multipart ?? []).flatMap((entry) => [entry.name, entry.value]),
+    request.options.proxy ?? "",
     ...auth,
   ]
 }
@@ -259,6 +263,11 @@ export function createHttpPreparedRequestPreview({
       body: previewBody(effectiveRequest, prepared, secretValues),
       timeoutMs: prepared.timeoutMs,
       followRedirects: prepared.followRedirects,
+      useCookieJar: prepared.useCookieJar !== false,
+      proxy: prepared.proxyUrl
+        ? sanitizeTerminalText(redactHttpUrlSecrets(prepared.proxyUrl, secretValues))
+        : null,
+      tlsVerification: prepared.tlsVerification ?? "strict",
       noLog: sourceRequest.options.noLog === true,
     }
   } catch (error) {

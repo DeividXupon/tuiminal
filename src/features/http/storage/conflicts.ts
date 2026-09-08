@@ -2,7 +2,11 @@ import { readFile, realpath } from "node:fs/promises"
 import { resolve, sep } from "node:path"
 import { diffHttpText, sanitizeTerminalText, type HttpDiffLine } from "../model/response"
 import { httpHeaderSensitivity } from "../model/key-value"
-import { httpRequestSecretValues, redactKnownHttpSecrets } from "../model/secrets"
+import {
+  httpRequestSecretValues,
+  redactHttpUrlSecrets,
+  redactKnownHttpSecrets,
+} from "../model/secrets"
 import type {
   HttpKeyValue,
   HttpMultipartPart,
@@ -69,6 +73,12 @@ function redactedRequest(request: HttpRequestDefinition, secrets: readonly strin
     path: request.path.map((entry) => redactEntry(entry, secrets)),
     headers: request.headers.map((entry) => redactEntry(entry, secrets)),
     auth,
+    options: {
+      ...request.options,
+      ...(request.options.proxy
+        ? { proxy: redactHttpUrlSecrets(request.options.proxy, secrets) }
+        : {}),
+    },
     body: {
       ...request.body,
       text: redactKnownHttpSecrets(request.body.text, secrets),
@@ -121,6 +131,9 @@ export async function resolveHttpExternalConflict(
   resolution: HttpExternalConflictResolution,
 ) {
   if (resolution === "save-copy") {
+    if (request.source.kind === "file" && request.source.supported === false) {
+      throw new HttpCollectionConflictError("O bloco HTTP não pode ser editado com segurança.")
+    }
     return saveHttpRequest(root, {
       ...request,
       id: `${request.id}-local-${Date.now()}`,

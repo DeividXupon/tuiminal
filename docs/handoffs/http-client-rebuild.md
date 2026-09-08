@@ -12,9 +12,10 @@ em `src/http.ts` e `src/components/HttpClient.tsx` foi removida; ela não deve s
 reintroduzida nem usada como modelo interno. Somente contratos externos do CLI e a
 infraestrutura compartilhada do Tuiminal podem ser reutilizados.
 
-O resultado atual já é um workspace funcional, mas o programa de evolução ainda
-não está concluído. A regra para as próximas mudanças é preservar o que funciona,
-fechar as lacunas documentadas abaixo e manter o gate `bun run check` verde.
+O resultado atual é um workspace funcional e as fases 0–4 do programa foram
+concluídas. A regra para as próximas mudanças é preservar o que funciona, tratar a
+Fase 5 somente quando houver demanda/evidência e manter o gate `bun run check`
+verde.
 
 ## Onde cada responsabilidade está
 
@@ -42,17 +43,25 @@ fechar as lacunas documentadas abaixo e manter o gate `bun run check` verde.
 - Ownership de execução por documento, cancelamento, timeout e limite de captura.
 - Regressões para transporte, ciclo de vida e consumo correto de `[Esc]`.
 
-### Fase 1 — avançada
+### Fase 1 — concluída no escopo atual
 
 - Quatro modos responsivos, builder e response simultâneos, seis tabs, split,
   maximização, jump mode e método customizado.
 - Params, Headers, Body, Auth e Mais conectados ao draft.
 - Preview da requisição preparada mostra origem dos valores e mascara segredos.
 - Saída do aplicativo confirma drafts HTTP ainda não salvos.
-- Pendente: validar em terminal real toda a matriz entre `60x16` e `160x40`, nos
-  layouts framed/compact e nas seis línguas.
+- A matriz automatizada cobre `60x16`, `72x18`, `80x24`, `96x24`, `120x30` e
+  `160x40`, framed/compact e as seis línguas, com URL/CJK longos, seis documentos,
+  bounds dos controles e resize sem perder a identidade do input. Ela encontrou e
+  fixou overflow no omnibar/rodapé/panes, tabs estreitas e falta de espaço nos
+  editores mínimos.
+- Sessões PTY reais confirmaram framed e compact nas seis dimensões, o resize
+  `160x40 → 60x16 → 160x40` sem perder o conteúdo editado, drag real do divisor,
+  sequência de `[Esc]` e alinhamento CJK em japonês. A auditoria rodou dentro de
+  WezTerm/WSL2 e em um socket tmux isolado; GNU Screen, VS Code Terminal, Windows
+  Terminal e macOS não estavam disponíveis nesta máquina.
 
-### Fase 2 — avançada
+### Fase 2 — concluída no escopo atual
 
 - Scanner e watcher do projeto, parser/serializer `.http`, request body por
   arquivo, multipart, ambientes público/privado e import/export cURL.
@@ -72,35 +81,68 @@ fechar as lacunas documentadas abaixo e manter o gate `bun run check` verde.
 - Blocos com scripts, handlers/redirecionamento de resposta ou diretivas ainda não
   suportadas são opacos: ficam somente leitura e não podem ser executados nem
   reserializados como se fossem compreendidos.
+- A matriz versionada em `tests/fixtures/http/` cobre sintaxe editável, bodies,
+  diretivas opacas, scripts, redirects de saída, versões HTTP e protocolos da Fase
+  5. Blocos opacos agora abrem com o raw original completo em um pane rolável; o
+  builder e o omnibar editáveis não permanecem ativos.
+- A resolução de ambientes agora é feita por nome para cada request: procura do
+  diretório do `.http` até a raiz, o primeiro escopo vence por inteiro, o privado
+  sobrescreve o público apenas no mesmo diretório e irmãos ficam isolados. Scratch
+  usa somente a raiz e novos segredos são criados ao lado do arquivo ativo.
 
-Pendências desta fase, em ordem:
+As pendências registradas para esta fase foram fechadas. Diretivas ainda sem
+semântica segura, como `@connection-timeout` e `@no-auto-encoding`, permanecem
+explicitamente opacas na matriz até uma implementação completa de parse, execução
+e serialização. `@no-cookie-jar` saiu dessa lista porque já possui parse, execução,
+preview e serialização completos.
 
-1. Criar uma matriz ampla e versionada de fixtures `.http` baseada na sintaxe
-   documentada pelo JetBrains HTTP Client.
-2. Exibir o texto raw completo do bloco opaco. Hoje a UI avisa em Opções que o
-   request é somente leitura, mas ainda não oferece o pane raw planejado.
-3. Decidir e implementar o escopo de ambientes por diretório. O carregador atual
-   considera os arquivos público/privado na raiz do projeto; a referência
-   JetBrains permite resolução pelo arquivo mais próximo e diretórios pais.
-4. Manter explicitamente bloqueadas, até implementação real, diretivas como
-   `@connection-timeout`, `@no-cookie-jar` e `@no-auto-encoding`.
-
-### Fase 3 — avançada
+### Fase 3 — concluída no escopo atual
 
 - Busca e folding, JSONPath, copiar/salvar, resposta binária, redirect, cookies,
   timing, histórico opt-in, comparação e download completo.
-- Pendente: expor as opções avançadas previstas no plano, em especial cookie jar,
-  proxy e TLS, e fazer auditoria manual de carga com respostas grandes/contínuas.
+- `[C]` em Opções inclui ou ignora o cookie jar por request. O estado aparece no
+  preview, faz round-trip por `# @no-cookie-jar` e, quando desativado, não lê cookies
+  nem incorpora `Set-Cookie` da resposta.
+- Proxy HTTP/HTTPS explícito aceita variável privada, aparece redigido no preview,
+  é aplicado em todos os redirects e faz round-trip por `# @proxy` e cURL
+  `--proxy`. Credenciais literais não podem ser persistidas e erros de transporte
+  também são redigidos.
+- `[V]` alterna verificação TLS. `# @insecure-tls` e cURL `--insecure` fazem
+  round-trip; antes do transporte a TUI exige `[I]` por target, ambiente e sessão,
+  inclusive para cada novo target HTTPS após redirect. A CLI exige
+  `--allow-insecure-tls`.
+- A auditoria local de carga encerrou um stream contínuo ao atingir exatamente
+  1.500.000 bytes. O teste TUI mantém o pane interativo após o truncamento; para
+  evitar syntax highlighting e layout de megabytes, o preview usa um único texto
+  nativo limitado a 50 mil caracteres, enquanto `Salvar` preserva toda a captura.
 
-### Fase 4 — avançada
+As pendências registradas para esta fase foram fechadas.
+
+### Fase 4 — concluída no escopo atual
 
 - Importadores Postman/OpenAPI com preview, assertions, chaining e extrações
   secretas voláteis.
 - Collection runner com dataset/concorrência e CLI com relatórios text, JSON e
   JUnit. Execução individual e em coleção usam o mesmo motor; dependências são
   resolvidas topologicamente.
-- Pendente: fixtures amplas de compatibilidade de importação e validação final dos
-  fluxos TUI e CLI.
+- A matriz versionada em `tests/fixtures/http/import/` cobre Postman v2.1,
+  OpenAPI 3.0 JSON e 3.1 YAML: herança, secrets, URL estruturada, headers, bodies,
+  `$ref` local, `allOf`, servers por escopo, override de parâmetros, callbacks,
+  webhooks e referências externas explicitamente não seguidas.
+- TUI e CLI percorrem preview, relatório e escrita protegida com placeholders
+  privados únicos; os testes confirmam que nenhum segredo literal chega ao `.http`
+  importado ou à prévia.
+
+As pendências registradas para esta fase foram fechadas.
+
+### Tutorial e split por mouse
+
+- O tour HTTP usa dados simulados e seis targets estáveis: documentos, omnibar,
+  coleção, request, automação/segurança e response. Ele não lê o projeto nem faz
+  rede, e todo texto do card possui tradução nas seis línguas.
+- O split request/response pode ser ajustado pelos botões `[Ctrl+↑/↓]` ou por um
+  handle arrastável real. Ambos alteram a mesma proporção por documento, limitada
+  a 25%–70%; há regressão TUI usando eventos de mouse por coordenada.
 
 ### Fase 5 — deliberadamente não iniciada
 
@@ -131,14 +173,11 @@ quando houver a evidência e os critérios de segurança definidos no plano.
 
 ## Próxima sequência recomendada
 
-1. Começar pelas fixtures `.http` e pela visualização raw de blocos opacos. Isso
-   reduz o maior risco atual: perda ou execução incorreta de arquivos do usuário.
-2. Implementar/testar resolução de ambientes por diretório somente depois de
-   registrar no plano a regra exata de precedência e escopo.
-3. Executar a matriz visual real da Fase 1 e registrar cada breakpoint problemático
-   como regressão automatizada quando possível.
-4. Fechar opções da Fase 3 e fixtures/validação da Fase 4.
-5. Só então concluir tutorial, documentação final de atalhos e gate de release.
+1. Preservar o gate e as matrizes versionadas ao evoluir as fases concluídas.
+2. Repetir oportunisticamente a auditoria de compatibilidade em GNU Screen, VS Code
+   Terminal, Windows Terminal e macOS quando esses ambientes estiverem disponíveis.
+3. Só iniciar recursos da Fase 5 após registrar demanda, limites e modelo de
+   segurança no plano.
 
 ## Como validar e retomar
 
@@ -156,12 +195,14 @@ opt-in e não faz parte do gate offline:
 
 Estado verificado na entrega deste handoff:
 
-- `bun run check`: aprovado;
-- arquitetura: 208 módulos, 944 dependências e 0 violações;
-- manutenção: 0 regressões e 58 funções preexistentes acima da complexidade 20;
-- testes unitários: 249 aprovados, 6 integrações pesadas ignoradas por opt-in e 0
+- gate completo: aprovado com Bun 1.3.14 e também com o Bun 1.4.2 disponível no
+  ambiente;
+- arquitetura: 292 módulos, 1317 dependências e 0 violações;
+- manutenção: 0 regressões e 57 funções preexistentes acima da complexidade 20;
+- testes unitários: 337 aprovados, 6 integrações pesadas ignoradas por opt-in e 0
   falhas;
-- testes TUI: 23 aprovados e 0 falhas.
+- testes TUI: 44 aprovados e 0 falhas;
+- `git diff --check`, typecheck, format check e lint: aprovados.
 
 ```bash
 bun run test:database:drivers
@@ -188,7 +229,8 @@ rg -n "Ainda falt|Restam|pendente|não iniciada" HTTP_CLIENT_PLAN.md docs/handof
 
 ## Critério para declarar o plano concluído
 
-Não marque o programa como pronto enquanto restarem: matriz visual em terminal
-real, raw seguro para sintaxe opaca, opções avançadas, fixtures amplas de
-compatibilidade, tutorial/documentação final e gate completo de release. Atualize
-este handoff e `HTTP_CLIENT_PLAN.md` sempre que uma dessas fronteiras mudar.
+O plano das fases 0–4 foi concluído com fixtures amplas de importação, tutorial,
+documentação, auditoria PTY disponível e gate final no Bun 1.3.14. Compatibilidade
+em sistemas/emuladores ausentes continua sendo uma verificação futura, sem alegar
+cobertura que esta máquina não forneceu. Atualize este handoff e
+`HTTP_CLIENT_PLAN.md` sempre que uma dessas fronteiras mudar.

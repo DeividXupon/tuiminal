@@ -179,6 +179,14 @@ function applyCurlOption(
       request.options.followRedirects = true
       request.options.followRedirectsExplicit = true
       return index
+    case "-x":
+    case "--proxy":
+      request.options.proxy = takeValue(tokens, index, token)
+      return index + 1
+    case "-k":
+    case "--insecure":
+      request.options.tlsVerification = "insecure"
+      return index
     case "--max-time": {
       const seconds = Number(takeValue(tokens, index, token))
       if (Number.isFinite(seconds) && seconds > 0) {

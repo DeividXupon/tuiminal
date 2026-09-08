@@ -29,6 +29,15 @@ export function httpRequestSecretValues(
   if (request.auth.kind === "bearer") values.push(resolved(request.auth.token, variables))
   if (request.auth.kind === "basic") values.push(resolved(request.auth.password, variables))
   if (request.auth.kind === "api-key") values.push(resolved(request.auth.value, variables))
+  if (request.options.proxy) {
+    try {
+      const proxy = new URL(resolved(request.options.proxy, variables))
+      if (proxy.username) values.push(decodeURIComponent(proxy.username))
+      if (proxy.password) values.push(decodeURIComponent(proxy.password))
+    } catch {
+      // Invalid proxy values are reported by request preparation without exposing them.
+    }
+  }
   return [...new Set(values.filter(Boolean))].sort((left, right) => right.length - left.length)
 }
 
@@ -36,6 +45,15 @@ export function redactKnownHttpSecrets(value: string, secretValues: readonly str
   let result = value
   for (const secret of secretValues) result = result.replaceAll(secret, "<redacted>")
   return result
+}
+
+export function httpProxyHasCredentials(value: string) {
+  try {
+    const proxy = new URL(/^[a-z][\w+.-]*:\/\//i.test(value) ? value : `http://${value}`)
+    return Boolean(proxy.username || proxy.password)
+  } catch {
+    return false
+  }
 }
 
 function decodedUrlComponent(value: string) {

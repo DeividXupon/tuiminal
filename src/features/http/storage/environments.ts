@@ -1,18 +1,24 @@
-import { chmod, lstat, open, readFile, rename, unlink } from "node:fs/promises"
-import { resolve } from "node:path"
-import { createHttpVariableContext } from "../model/variables"
+import { chmod, lstat, open, readFile, realpath, rename, unlink } from "node:fs/promises"
+import { relative, resolve, sep } from "node:path"
+import {
+  environmentDirectoryLineage,
+  httpEnvironmentsForRequest,
+  type HttpEnvironment,
+  type HttpEnvironmentCatalog,
+} from "../model/environment-scope"
+
+export {
+  environmentVariableContext,
+  httpBuiltInVariables,
+  httpEnvironmentScopeDirectory,
+  httpEnvironmentsForRequest,
+} from "../model/environment-scope"
+export type { HttpEnvironment, HttpEnvironmentCatalog } from "../model/environment-scope"
 
 export const PRIVATE_HTTP_ENVIRONMENT_FILE = "http-client.private.env.json"
 export const HTTP_SECRET_SERVICE = "dev.tuiminal.http"
 const PRIVATE_ENVIRONMENT_LIMIT = 1_000_000
 const KEYCHAIN_REFERENCE = /^\{\{(\$tuiminal\.keychain\.[\w-]+)\}\}$/u
-
-export type HttpEnvironment = {
-  name: string
-  values: Record<string, string>
-  privateNames: Set<string>
-  production: boolean
-}
 
 type EnvironmentFile = Record<string, Record<string, unknown>>
 
@@ -73,8 +79,8 @@ async function readEnvironmentFile(path: string): Promise<EnvironmentFile> {
   }
 }
 
-async function readPrivateEnvironmentSource(root: string) {
-  const path = resolve(root, PRIVATE_HTTP_ENVIRONMENT_FILE)
+async function readPrivateEnvironmentSource(directory: string) {
+  const path = resolve(directory, PRIVATE_HTTP_ENVIRONMENT_FILE)
   await assertRegularOrMissing(path)
   try {
     const source = await readFile(path, "utf8")
@@ -133,7 +139,15 @@ function validatesVariableName(value: string) {
   return /^[A-Za-z_$][\w$.-]*$/u.test(value) && value.length <= 120
 }
 
-async function gitIgnoresPrivateEnvironment(root: string) {
+function portablePath(path: string) {
+  return path.split(sep).join("/")
+}
+
+function insideProject(root: string, candidate: string) {
+  return candidate === root || candidate.startsWith(`${root}${sep}`)
+}
+
+async function gitIgnoresPrivateEnvironment(root: string, privatePath: string) {
   try {
     const source = await readFile(resolve(root, ".gitignore"), "utf8")
     if (
@@ -142,7 +156,10 @@ async function gitIgnoresPrivateEnvironment(root: string) {
         .map((line) => line.trim())
         .some(
           (line) =>
-            line === PRIVATE_HTTP_ENVIRONMENT_FILE || line === `/${PRIVATE_HTTP_ENVIRONMENT_FILE}`,
+            line === PRIVATE_HTTP_ENVIRONMENT_FILE ||
+            line === `/${PRIVATE_HTTP_ENVIRONMENT_FILE}` ||
+            line === privatePath ||
+            line === `/${privatePath}`,
         )
     ) {
       return true
@@ -151,18 +168,19 @@ async function gitIgnoresPrivateEnvironment(root: string) {
     // Git can still report a rule inherited from another ignore file.
   }
   try {
-    const child = Bun.spawn(
-      ["git", "check-ignore", "--quiet", "--no-index", PRIVATE_HTTP_ENVIRONMENT_FILE],
-      { cwd: root, stdout: "ignore", stderr: "ignore" },
-    )
+    const child = Bun.spawn(["git", "check-ignore", "--quiet", "--no-index", privatePath], {
+      cwd: root,
+      stdout: "ignore",
+      stderr: "ignore",
+    })
     return (await child.exited) === 0
   } catch {
     return false
   }
 }
 
-async function addPrivateEnvironmentToGitignore(root: string) {
-  if (await gitIgnoresPrivateEnvironment(root)) return false
+async function addPrivateEnvironmentToGitignore(root: string, privatePath: string) {
+  if (await gitIgnoresPrivateEnvironment(root, privatePath)) return false
   const path = resolve(root, ".gitignore")
   await assertRegularOrMissing(path)
   const source = await readFile(path, "utf8").catch((error) => {
@@ -184,6 +202,7 @@ export async function createPrivateHttpEnvironment(
   root: string,
   input: CreatePrivateHttpEnvironmentInput,
   credentialStore = runtimeCredentialStore(),
+  scopeDirectory = "",
 ): Promise<CreatePrivateHttpEnvironmentResult> {
   const environmentName = input.environmentName.trim()
   const variableName = input.variableName.trim()
@@ -197,7 +216,21 @@ export async function createPrivateHttpEnvironment(
   if (input.storeInKeychain && !credentialStore) {
     throw new HttpEnvironmentConflictError("O gerenciador de credenciais não está disponível.")
   }
-  const current = await readPrivateEnvironmentSource(root)
+  const projectRoot = await realpath(root)
+  const requestedScope = resolve(projectRoot, scopeDirectory)
+  if (!insideProject(projectRoot, requestedScope)) {
+    throw new HttpEnvironmentConflictError("O ambiente precisa permanecer dentro do projeto.")
+  }
+  const scope = await realpath(requestedScope).catch(() => {
+    throw new HttpEnvironmentConflictError("O diretório do ambiente não existe.")
+  })
+  if (!insideProject(projectRoot, scope)) {
+    throw new HttpEnvironmentConflictError("O ambiente precisa permanecer dentro do projeto.")
+  }
+  const privatePath = portablePath(
+    relative(projectRoot, resolve(scope, PRIVATE_HTTP_ENVIRONMENT_FILE)),
+  )
+  const current = await readPrivateEnvironmentSource(scope)
   const values = current.file[environmentName]
   if (values && Object.hasOwn(values, variableName)) {
     throw new HttpEnvironmentConflictError(
@@ -211,7 +244,7 @@ export async function createPrivateHttpEnvironment(
     [environmentName]: { ...values, [variableName]: storedValue },
   }
   const gitignoreUpdated = input.addToGitignore
-    ? await addPrivateEnvironmentToGitignore(root)
+    ? await addPrivateEnvironmentToGitignore(projectRoot, privatePath)
     : false
   if (input.storeInKeychain) {
     await credentialStore?.set({
@@ -234,7 +267,7 @@ export async function createPrivateHttpEnvironment(
     environmentName,
     variableName,
     gitignoreUpdated,
-    gitignoreProtected: await gitIgnoresPrivateEnvironment(root),
+    gitignoreProtected: await gitIgnoresPrivateEnvironment(projectRoot, privatePath),
     keychainStored: input.storeInKeychain,
   }
 }
@@ -282,13 +315,19 @@ async function resolveKeychainValues(
   return resolved
 }
 
-export async function loadHttpEnvironments(
+async function environmentsInDirectory(
   root: string,
-  credentialStore = runtimeCredentialStore(),
-): Promise<HttpEnvironment[]> {
+  directory: string,
+  credentialStore: HttpCredentialStore | undefined,
+) {
+  const projectRoot = await realpath(root).catch(() => resolve(root))
+  const candidate = resolve(projectRoot, directory)
+  if (!insideProject(projectRoot, candidate)) return []
+  const absoluteDirectory = await realpath(candidate).catch(() => null)
+  if (!absoluteDirectory || !insideProject(projectRoot, absoluteDirectory)) return []
   const [publicFile, rawPrivateFile] = await Promise.all([
-    readEnvironmentFile(resolve(root, "http-client.env.json")),
-    readEnvironmentFile(resolve(root, "http-client.private.env.json")),
+    readEnvironmentFile(resolve(absoluteDirectory, "http-client.env.json")),
+    readEnvironmentFile(resolve(absoluteDirectory, "http-client.private.env.json")),
   ])
   const privateFile = await resolveKeychainValues(rawPrivateFile, credentialStore)
   const names = [...new Set([...Object.keys(publicFile), ...Object.keys(privateFile)])].sort()
@@ -300,34 +339,38 @@ export async function loadHttpEnvironments(
       values: { ...publicValues, ...privateValues },
       privateNames: new Set(Object.keys(privateValues)),
       production: /(^|[-_])(prod|production|produção)($|[-_])/i.test(name),
+      directory,
     }
   })
 }
 
-export function httpBuiltInVariables(now = new Date(), uuid = crypto.randomUUID()) {
-  return {
-    $timestamp: String(Math.floor(now.getTime() / 1_000)),
-    $isoTimestamp: now.toISOString(),
-    "$random.uuid": uuid,
+export async function loadHttpEnvironmentCatalog(
+  root: string,
+  requestPaths: readonly string[],
+  credentialStore = runtimeCredentialStore(),
+): Promise<HttpEnvironmentCatalog> {
+  const directories = new Set<string>([""])
+  for (const requestPath of requestPaths) {
+    for (const directory of environmentDirectoryLineage(requestPath)) directories.add(directory)
   }
+  const scopes = await Promise.all(
+    [...directories].map(async (directory) => ({
+      directory,
+      environments: await environmentsInDirectory(root, directory, credentialStore),
+    })),
+  )
+  return { scopes }
 }
 
-export function environmentVariableContext(
-  environment: HttpEnvironment | undefined,
-  fileValues: Readonly<Record<string, string>> = {},
-  requestValues: Readonly<Record<string, string>> = {},
-) {
-  const privateValues: Record<string, string> = {}
-  const publicValues: Record<string, string> = {}
-  for (const [name, value] of Object.entries(environment?.values ?? {})) {
-    if (environment?.privateNames.has(name)) privateValues[name] = value
-    else publicValues[name] = value
-  }
-  return createHttpVariableContext([
-    { origin: "request", values: requestValues },
-    { origin: "file", values: fileValues },
-    { origin: "private", values: privateValues, secret: true },
-    { origin: "public", values: publicValues },
-    { origin: "built-in", values: httpBuiltInVariables() },
-  ])
+export async function loadHttpEnvironments(
+  root: string,
+  credentialStore = runtimeCredentialStore(),
+  requestPath?: string | null,
+): Promise<HttpEnvironment[]> {
+  const catalog = await loadHttpEnvironmentCatalog(
+    root,
+    requestPath ? [requestPath] : [],
+    credentialStore,
+  )
+  return httpEnvironmentsForRequest(catalog, requestPath)
 }

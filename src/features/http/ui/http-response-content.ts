@@ -5,6 +5,13 @@ import type { HttpCookie } from "../services/cookies"
 import { responseBodyText } from "../services/response-reader"
 import { formatHttpBytes, formatHttpDuration } from "./format"
 
+const MAX_HTTP_DISPLAY_CHARACTERS = 50_000
+
+function limitedBodyContent(content: string) {
+  if (content.length <= MAX_HTTP_DISPLAY_CHARACTERS) return content
+  return `${content.slice(0, MAX_HTTP_DISPLAY_CHARACTERS)}\n\n${translateUi("EXIBIÇÃO LIMITADA · use Salvar para preservar todo o conteúdo capturado")}`
+}
+
 function jsonPathContent(source: string, path: string) {
   if (!path.trim()) return source
   try {
@@ -20,13 +27,18 @@ function bodyContent(document: HttpDocumentState) {
   if (document.execution.status !== "success") return ""
   const response = document.execution.response
   const presentation = document.responsePresentation
-  let content = responseBodyText(response, document.responseView === "pretty")
-  if (document.responseView === "pretty" && response.bodyKind === "json") {
+  const prettyJson = document.responseView === "pretty" && response.bodyKind === "json"
+  const explicitJsonInspection = presentation.jsonPath.trim() || presentation.foldDepth !== null
+  const limitDefaultView =
+    response.capturedBytes > MAX_HTTP_DISPLAY_CHARACTERS && !explicitJsonInspection
+  let content = responseBodyText(response, !limitDefaultView && document.responseView === "pretty")
+  if (prettyJson && !limitDefaultView) {
     if (presentation.jsonPath.trim()) {
       content = jsonPathContent(responseBodyText(response, false), presentation.jsonPath)
     }
     if (presentation.foldDepth !== null) content = foldHttpJson(content, presentation.foldDepth)
   }
+  content = limitedBodyContent(content)
   return presentation.lineNumbers ? withHttpLineNumbers(content) : content
 }
 

@@ -1,4 +1,12 @@
 export const HTTP_RESPONSE_MESSAGES = [
+  [
+    "EXIBIÇÃO LIMITADA · use Salvar para preservar todo o conteúdo capturado",
+    "LIMITED DISPLAY · use Save to preserve all captured content",
+    "VISUALIZACIÓN LIMITADA · usa Guardar para conservar todo el contenido capturado",
+    "表示を制限中・キャプチャした内容をすべて保持するには保存を使用してください",
+    "显示受限 · 使用保存以保留全部已捕获内容",
+    "표시 제한 · 캡처한 전체 내용을 보존하려면 저장을 사용하세요",
+  ],
   ["Até headers", "Until headers", "Hasta headers", "ヘッダーまで", "收到响应头", "헤더까지"],
   [
     "DNS/TCP/TLS indisponível neste transporte.",

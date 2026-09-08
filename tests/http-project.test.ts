@@ -8,6 +8,7 @@ import {
   parseHttpFile,
   replaceHttpRequestBlock,
   requestFromHttpFile,
+  serializeHttpRequestBlock,
 } from "../src/features/http/model/http-file"
 import {
   createHttpVariableContext,
@@ -40,14 +41,22 @@ import {
 import {
   createPrivateHttpEnvironment,
   environmentVariableContext,
+  httpEnvironmentScopeDirectory,
+  httpEnvironmentsForRequest,
   HTTP_SECRET_SERVICE,
   HttpEnvironmentConflictError,
   type HttpCredentialStore,
+  loadHttpEnvironmentCatalog,
   loadHttpEnvironments,
 } from "../src/features/http/storage/environments"
 import { saveCapturedHttpResponse } from "../src/features/http/storage/responses"
 
 const temporaryDirectories: string[] = []
+const httpFixtureRoot = resolve(import.meta.dir, "fixtures/http")
+
+function readHttpFixture(name: string) {
+  return readFile(resolve(httpFixtureRoot, name), "utf8")
+}
 
 async function temporaryProject() {
   const directory = await mkdtemp(resolve(tmpdir(), "tuiminal-http-"))
@@ -88,7 +97,7 @@ describe(".http project model", () => {
   })
 
   test("round-trips structured auth, execution options and no-log directives", () => {
-    const directiveSource = `### Private\n# @name private\n# @auth {"kind":"bearer","token":"{{token}}"}\n# @timeout 5000 ms\n# @no-redirect\n# @no-log\nGET https://example.test\n`
+    const directiveSource = `### Private\n# @name private\n# @auth {"kind":"bearer","token":"{{token}}"}\n# @timeout 5000 ms\n# @no-redirect\n# @no-log\n# @no-cookie-jar\n# @proxy {{proxyUrl}}\n# @insecure-tls\nGET https://example.test\n`
     const file = parseHttpFile(directiveSource, "private.http")
     const request = requestFromHttpFile(file, file.requests[0]!)
     expect(request.auth).toEqual({ kind: "bearer", token: "{{token}}" })
@@ -97,6 +106,9 @@ describe(".http project model", () => {
       followRedirects: false,
       timeoutExplicit: true,
       followRedirectsExplicit: true,
+      cookieJar: false,
+      proxy: "{{proxyUrl}}",
+      tlsVerification: "insecure",
       noLog: true,
     })
     expect(replaceHttpRequestBlock(file, file.requests[0]!, request)).toBe(directiveSource)
@@ -153,6 +165,89 @@ describe(".http project model", () => {
     })
   })
 
+  test("covers the editable JetBrains fixture matrix without touching sibling bytes", async () => {
+    const source = await readHttpFixture("jetbrains-compatible.http")
+    const file = parseHttpFile(source, "jetbrains-compatible.http")
+    expect(file.requests).toHaveLength(4)
+    expect(file.requests.every((block) => block.editable)).toBe(true)
+
+    const requests = file.requests.map((block) => requestFromHttpFile(file, block))
+    expect(requests.map(({ method, name }) => [method, name])).toEqual([
+      ["GET", "List users"],
+      ["GET", "Health check"],
+      ["PROPFIND", "WebDAV metadata"],
+      ["GET", "Stateless request"],
+    ])
+    expect(requests[0]?.url).toBe("{{baseUrl}}/{{api-version}}/users")
+    expect(requests[0]?.query.map(({ name, value }) => [name, value])).toEqual([
+      ["page", "1"],
+      ["tag", "terminal"],
+    ])
+    expect(requests[0]?.options).toMatchObject({ timeoutMs: 2_000, noLog: true })
+    expect(requests[3]?.options.cookieJar).toBe(false)
+    expect(requests[3]?.options.proxy).toBe("{{proxyUrl}}")
+    expect(requests[3]?.options.tlsVerification).toBe("insecure")
+
+    for (const [index, block] of file.requests.entries()) {
+      const request = requests[index]!
+      request.url = `${request.url}/edited`
+      const replacement = serializeHttpRequestBlock(request)
+      expect(replaceHttpRequestBlock(file, block, request)).toBe(
+        `${source.slice(0, block.start)}${replacement}${source.slice(block.end)}`,
+      )
+    }
+  })
+
+  test("covers JetBrains request body fixtures", async () => {
+    const source = await readHttpFixture("jetbrains-bodies.http")
+    const file = parseHttpFile(source, "jetbrains-bodies.http")
+    expect(file.requests).toHaveLength(4)
+    expect(file.requests.every((block) => block.editable)).toBe(true)
+    const requests = file.requests.map((block) => requestFromHttpFile(file, block))
+    expect(requests.map((request) => request.body.kind)).toEqual([
+      "json",
+      "form",
+      "file",
+      "multipart",
+    ])
+    expect(requests[1]?.body.form.map(({ name, value }) => [name, value])).toEqual([
+      ["field1", "value+value"],
+      ["field2", "value&value"],
+    ])
+    expect(requests[2]?.body.filePath).toBe("./payload.json")
+    expect(
+      requests[3]?.body.multipart?.map(({ name, value, kind }) => [name, value, kind]),
+    ).toEqual([
+      ["caption", "terminal workspace", "text"],
+      ["upload", "./payload.txt", "file"],
+    ])
+  })
+
+  test("keeps documented but unsupported JetBrains syntax opaque with exact raw text", async () => {
+    for (const fixture of [
+      "jetbrains-opaque-directives.http",
+      "jetbrains-opaque-scripts.http",
+      "jetbrains-opaque-protocols.rest",
+    ]) {
+      const source = await readHttpFixture(fixture)
+      const file = parseHttpFile(source, fixture)
+      expect(file.requests.length).toBeGreaterThanOrEqual(3)
+      for (const block of file.requests) {
+        expect(block.editable).toBe(false)
+        expect(block.rawText).toBe(source.slice(block.start, block.end))
+        const request = requestFromHttpFile(file, block)
+        expect(request.source).toMatchObject({
+          kind: "file",
+          supported: false,
+          rawText: block.rawText,
+        })
+        expect(() => prepareHttpRequest(request, "opaque-fixture", 0)).toThrow(
+          "ainda não executa com segurança",
+        )
+      }
+    }
+  })
+
   test("interprets bare timeouts as seconds and protects opaque JetBrains features", async () => {
     const timeout = parseHttpFile(
       `### Timeout\n# @timeout 0.5\nGET https://example.test\n`,
@@ -167,10 +262,17 @@ describe(".http project model", () => {
     const file = parseHttpFile(scripted, "scripted.http")
     expect(file.requests[0]?.editable).toBe(false)
     const request = requestFromHttpFile(file, file.requests[0]!)
+    expect(request.source).toMatchObject({ rawText: scripted })
     expect(() => prepareHttpRequest(request, "opaque", 0)).toThrow(
       "ainda não executa com segurança",
     )
     await expect(saveHttpRequest(root, request)).rejects.toThrow(
+      "bloco HTTP não pode ser editado com segurança",
+    )
+    await expect(duplicateHttpRequest(root, request)).rejects.toThrow(
+      "bloco HTTP não pode ser editado com segurança",
+    )
+    await expect(moveHttpRequest(root, request, "moved.http")).rejects.toThrow(
       "bloco HTTP não pode ser editado com segurança",
     )
     expect(await readFile(path, "utf8")).toBe(scripted)
@@ -350,8 +452,12 @@ describe(".http project model", () => {
     request.auth = { kind: "bearer", token: "literal-secret" }
     await expect(saveHttpRequest(root, request)).rejects.toThrow("variável do ambiente privado")
     request.auth = { kind: "bearer", token: "{{token}}" }
+    request.options.proxy = "http://user:literal-password@proxy.example.test:8080"
+    await expect(saveHttpRequest(root, request)).rejects.toThrow("variável do ambiente privado")
+    request.options.proxy = "{{proxyUrl}}"
     const saved = await saveHttpRequest(root, request)
     expect(saved.auth).toEqual({ kind: "bearer", token: "{{token}}" })
+    expect(saved.options.proxy).toBe("{{proxyUrl}}")
   })
 
   test("refuses to persist invalid assertions or extraction definitions", async () => {
@@ -423,6 +529,69 @@ describe("HTTP variables and environments", () => {
     expect(context.get("token")).toMatchObject({ secret: true, origin: "private" })
   })
 
+  test("resolves each request environment from its directory toward the project root", async () => {
+    const root = await temporaryProject()
+    await mkdir(resolve(root, "services/api"), { recursive: true })
+    await mkdir(resolve(root, "services/other"), { recursive: true })
+    await writeFile(
+      resolve(root, "http-client.env.json"),
+      JSON.stringify({
+        dev: { host: "root", parentOnly: "root-only" },
+        staging: { host: "staging" },
+      }),
+    )
+    await writeFile(
+      resolve(root, "http-client.private.env.json"),
+      JSON.stringify({ dev: { token: "root-secret" } }),
+    )
+    await writeFile(
+      resolve(root, "services/api/http-client.env.json"),
+      JSON.stringify({ dev: { host: "api" } }),
+    )
+    await writeFile(
+      resolve(root, "services/api/http-client.private.env.json"),
+      JSON.stringify({ dev: { token: "api-secret" } }),
+    )
+    await writeFile(
+      resolve(root, "services/other/http-client.env.json"),
+      JSON.stringify({ qa: { host: "other" } }),
+    )
+
+    const catalog = await loadHttpEnvironmentCatalog(root, [
+      "services/api/requests.http",
+      "services/other/requests.http",
+    ])
+    const apiEnvironments = httpEnvironmentsForRequest(catalog, "services/api/requests.http")
+    const apiDev = apiEnvironments.find((environment) => environment.name === "dev")
+    expect(apiEnvironments.map((environment) => environment.name)).toEqual(["dev", "staging"])
+    expect(apiDev).toMatchObject({
+      directory: "services/api",
+      values: { host: "api", token: "api-secret" },
+    })
+    expect(apiDev?.values).not.toHaveProperty("parentOnly")
+    expect(environmentVariableContext(apiDev).get("token")).toMatchObject({
+      secret: true,
+      origin: "private",
+    })
+
+    const otherEnvironments = httpEnvironmentsForRequest(catalog, "services/other/requests.http")
+    expect(otherEnvironments.map((environment) => environment.name)).toEqual([
+      "dev",
+      "qa",
+      "staging",
+    ])
+    expect(otherEnvironments.find((environment) => environment.name === "dev")).toMatchObject({
+      directory: "",
+      values: { host: "root", parentOnly: "root-only", token: "root-secret" },
+    })
+
+    const scratchEnvironments = httpEnvironmentsForRequest(catalog)
+    expect(scratchEnvironments.map((environment) => environment.name)).toEqual(["dev", "staging"])
+    expect(httpEnvironmentScopeDirectory("services/api/requests.http")).toBe("services/api")
+    expect(httpEnvironmentScopeDirectory("../outside.http")).toBe("")
+    expect(httpEnvironmentScopeDirectory("/outside.http")).toBe("")
+  })
+
   test("creates a protected private environment and explicitly updates .gitignore", async () => {
     const root = await temporaryProject()
     await writeFile(resolve(root, ".gitignore"), "dist", { mode: 0o640 })
@@ -479,6 +648,63 @@ describe("HTTP variables and environments", () => {
     ).rejects.toBeInstanceOf(HttpEnvironmentConflictError)
     expect(await readFile(outsideFile, "utf8")).toBe('{"untouched":true}\n')
     await expect(readFile(resolve(root, ".gitignore"), "utf8")).rejects.toThrow()
+  })
+
+  test("creates private values beside the active request and rejects escaped scopes", async () => {
+    const root = await temporaryProject()
+    const outside = await temporaryProject()
+    await mkdir(resolve(root, "services/api"), { recursive: true })
+    const result = await createPrivateHttpEnvironment(
+      root,
+      {
+        environmentName: "dev",
+        variableName: "token",
+        value: "nested-secret",
+        addToGitignore: true,
+        storeInKeychain: false,
+      },
+      undefined,
+      "services/api",
+    )
+    const nestedPath = resolve(root, "services/api/http-client.private.env.json")
+    expect(result).toMatchObject({ gitignoreUpdated: true, gitignoreProtected: true })
+    expect((await stat(nestedPath)).mode & 0o777).toBe(0o600)
+    expect(await readFile(nestedPath, "utf8")).toContain("nested-secret")
+    expect(await Bun.file(resolve(root, "http-client.private.env.json")).exists()).toBe(false)
+    expect(await readFile(resolve(root, ".gitignore"), "utf8")).toBe(
+      "http-client.private.env.json\n",
+    )
+
+    await expect(
+      createPrivateHttpEnvironment(
+        root,
+        {
+          environmentName: "dev",
+          variableName: "escaped",
+          value: "blocked",
+          addToGitignore: false,
+          storeInKeychain: false,
+        },
+        undefined,
+        "../outside",
+      ),
+    ).rejects.toThrow("permanecer dentro do projeto")
+
+    await symlink(outside, resolve(root, "escaped-directory"), "dir")
+    await expect(
+      createPrivateHttpEnvironment(
+        root,
+        {
+          environmentName: "dev",
+          variableName: "symlinked",
+          value: "blocked",
+          addToGitignore: false,
+          storeInKeychain: false,
+        },
+        undefined,
+        "escaped-directory",
+      ),
+    ).rejects.toThrow("permanecer dentro do projeto")
   })
 
   test("stores only an opaque keychain reference and resolves it at load time", async () => {
@@ -595,7 +821,7 @@ describe("cURL interoperability", () => {
       "X-Test: a b",
     ])
     const request = importCurl(
-      `curl 'https://example.test/users?tag=a&tag=b' -H 'Content-Type: application/json' -H 'X-Test: yes' -u 'ada:secret' --max-time 5 --data-raw '{"ok":true}'`,
+      `curl 'https://example.test/users?tag=a&tag=b' -H 'Content-Type: application/json' -H 'X-Test: yes' -u 'ada:secret' --proxy 'http://proxy.test:8080' --insecure --max-time 5 --data-raw '{"ok":true}'`,
       "curl-request",
     )
     expect(request).toMatchObject({
@@ -608,6 +834,8 @@ describe("cURL interoperability", () => {
       ["tag", "b"],
     ])
     expect(request.options.timeoutMs).toBe(5_000)
+    expect(request.options.proxy).toBe("http://proxy.test:8080")
+    expect(request.options.tlsVerification).toBe("insecure")
     expect(request.body.kind).toBe("json")
   })
 
@@ -617,10 +845,14 @@ describe("cURL interoperability", () => {
       "curl-export",
     )
     const prepared = prepareHttpRequest(request, "execution", 0)
+    prepared.proxyUrl = "http://proxy-user:proxy-secret@proxy.test:8080/"
+    prepared.tlsVerification = "insecure"
     const exported = exportPreparedRequestAsCurl(prepared)
     expect(exported).toContain("token=%3Credacted%3E")
     expect(exported).toContain("Authorization: <redacted>")
     expect(exported).toContain(`X-Name: O'\"'\"'Reilly`)
+    expect(exported).toContain("--proxy 'http://redacted:redacted@proxy.test:8080/'")
+    expect(exported).toContain("--insecure")
     expect(exportPreparedRequestAsCurl(prepared, { revealSecrets: true })).toContain("Bearer abc")
   })
 

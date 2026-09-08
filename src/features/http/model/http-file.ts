@@ -29,6 +29,7 @@ export type HttpFileRequestBlock = {
   body: string
   start: number
   end: number
+  rawText: string
   editable: boolean
   assertions: HttpAssertionDefinition[]
   chain: { dependsOn?: string; extract: HttpChainExtraction[] }
@@ -38,6 +39,9 @@ export type HttpFileRequestBlock = {
     followRedirects: boolean
     timeoutExplicit?: boolean
     followRedirectsExplicit?: boolean
+    cookieJar: boolean
+    proxy?: string
+    tlsVerification: "strict" | "insecure"
     noLog: boolean
   }
   query: HttpKeyValue[]
@@ -220,9 +224,11 @@ function parseSection(
   const lineSources = lines.map((line) => line.text)
   const timeout = parseHttpTimeout(lineSources)
   const redirectDirective = parseHttpRedirectDirective(lineSources)
+  const proxy = lineSources.map((line) => httpDirectiveValue(line, "proxy")).find(Boolean)
   const startsWithSeparator = /^\s*###/.test(lines[0]?.text ?? "")
   const start = startsWithSeparator ? (lines[0]?.start ?? requestLine.start) : requestLine.start
   const end = lines.at(-1)?.end ?? requestLine.end
+  const rawText = source.slice(lines[0]?.start ?? requestLine.start, end)
   const body =
     parsedHeaders.bodyStart >= 0 ? source.slice(parsedHeaders.bodyStart, end).trimEnd() : ""
   return {
@@ -234,7 +240,8 @@ function parseSection(
     body,
     start,
     end,
-    editable: parsedHeaders.editable && !usesOpaqueHttpSyntax(lineSources),
+    rawText,
+    editable: parsedHeaders.editable && !usesOpaqueHttpSyntax(lineSources, requestStart),
     assertions,
     chain: { ...(dependsOn ? { dependsOn } : {}), extract },
     ...(auth ? { auth } : {}),
@@ -243,6 +250,9 @@ function parseSection(
       followRedirects: redirectDirective !== "manual",
       ...(timeout !== null ? { timeoutExplicit: true } : {}),
       ...(redirectDirective ? { followRedirectsExplicit: true } : {}),
+      cookieJar: !hasHttpDirective(lineSources, "no-cookie-jar"),
+      ...(proxy ? { proxy } : {}),
+      tlsVerification: hasHttpDirective(lineSources, "insecure-tls") ? "insecure" : "strict",
       noLog: hasHttpDirective(lineSources, "no-log"),
     },
     query: parsedKeyValueDirectives(lines, "query", stableBlockId),
@@ -300,6 +310,7 @@ export function requestFromHttpFile(
       blockId: block.blockId,
       sourceHash: file.sourceHash,
       supported: block.editable,
+      ...(block.editable ? {} : { rawText: block.rawText }),
     },
     name: block.name,
     method: block.method,

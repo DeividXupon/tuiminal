@@ -1,4 +1,5 @@
-import type {
+import {
+  HTTP_METHODS,
   HttpDocumentState,
   HttpHistoryEntry,
   HttpPane,
@@ -11,7 +12,7 @@ import type {
   HttpWorkspaceOverlay,
   HttpWorkspaceState,
 } from "./types"
-import { HTTP_METHODS } from "./types"
+import { requestPatchIsUnchanged } from "./request-patch"
 import {
   budgetHttpHistory,
   createHttpErrorHistoryEntry,
@@ -20,13 +21,10 @@ import {
   isHttpHistoryAction,
   reduceHttpHistoryAction,
 } from "./history"
-
 export const HTTP_DOCUMENT_LIMIT = 6
-
 export function hasUnsavedHttpDocuments(documents: HttpDocumentState[]) {
   return documents.some((document) => document.revision !== document.savedRevision)
 }
-
 export function httpDocumentNeedsDiscardConfirmation(
   documents: HttpDocumentState[],
   documentId: string,
@@ -35,7 +33,6 @@ export function httpDocumentNeedsDiscardConfirmation(
   const document = documents.find((candidate) => candidate.request.id === documentId)
   return Boolean(document && document.revision !== document.savedRevision)
 }
-
 export function nextHttpMethod(method: string, direction: -1 | 1): (typeof HTTP_METHODS)[number] {
   const current = HTTP_METHODS.indexOf(method.toUpperCase() as (typeof HTTP_METHODS)[number])
   if (current < 0) return direction > 0 ? "GET" : "OPTIONS"
@@ -333,11 +330,17 @@ export function httpWorkspaceReducer(
         ),
       }
     case "update-request":
-      return updateDocument(state, action.documentId, (document) => ({
-        ...document,
-        request: { ...document.request, ...action.patch },
-        revision: document.revision + 1,
-      }))
+      return updateDocument(state, action.documentId, (document) =>
+        document.request.source.kind === "file" && document.request.source.supported === false
+          ? document
+          : requestPatchIsUnchanged(document.request, action.patch)
+            ? document
+            : {
+                ...document,
+                request: { ...document.request, ...action.patch },
+                revision: document.revision + 1,
+              },
+      )
     case "select-request-view":
       return updateDocument(state, action.documentId, (document) => ({
         ...document,

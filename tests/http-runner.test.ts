@@ -93,6 +93,7 @@ describe("HTTP headless collection runner", () => {
       production: false,
       values: { credential: "a secret/value" },
       privateNames: new Set(["credential"]),
+      directory: "",
     })
     const redacted = redactHttpRunUrl(
       "https://example.test/a%20secret%2Fvalue?code=a+secret%2Fvalue",
@@ -200,5 +201,46 @@ describe("HTTP headless collection runner", () => {
     expect(stderr).toBe("")
     expect(exitCode).toBe(0)
     expect(JSON.parse(stdout).cases[0].requests[0].status).toBe(200)
+  })
+
+  test("requires an explicit CLI opt-in for insecure TLS requests", async () => {
+    const file = resolve(root, "insecure.http")
+    await writeFile(
+      file,
+      "### Insecure\n# @name insecure\n# @insecure-tls\nGET https://127.0.0.1:1/probe\n",
+    )
+    const run = async (allow: boolean) => {
+      const process = Bun.spawn(
+        [
+          "bun",
+          resolve(import.meta.dir, "../bin/tuiminal.ts"),
+          "http",
+          "run",
+          "insecure.http#insecure",
+          "--report",
+          "json",
+          ...(allow ? ["--allow-insecure-tls"] : []),
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      )
+      const [exitCode, stdout, stderr] = await Promise.all([
+        process.exited,
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+      ])
+      return { exitCode, report: JSON.parse(stdout), stderr }
+    }
+
+    const blocked = await run(false)
+    expect(blocked.exitCode).toBe(3)
+    expect(blocked.stderr).toBe("")
+    expect(blocked.report.cases[0].requests[0].error).toMatchObject({ kind: "tls" })
+    expect(blocked.report.cases[0].requests[0].error.message).toContain("confirmação")
+
+    const allowed = await run(true)
+    expect(allowed.exitCode).toBe(3)
+    expect(allowed.stderr).toBe("")
+    expect(allowed.report.cases[0].requests[0].error).toMatchObject({ kind: "network" })
+    expect(allowed.report.cases[0].requests[0].error.message).not.toContain("confirmação")
   })
 })

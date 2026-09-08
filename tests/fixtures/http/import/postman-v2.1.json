@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "Tuiminal compatibility matrix",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "root-literal-token", "type": "string" }]
+  },
+  "variable": [{ "key": "baseUrl", "value": "https://api.example.test" }],
+  "event": [{ "listen": "prerequest", "script": { "exec": ["pm.variables.set('x', '1')"] } }],
+  "item": [
+    {
+      "name": "Users",
+      "auth": {
+        "type": "basic",
+        "basic": [
+          { "key": "username", "value": "fixture-user", "type": "string" },
+          { "key": "password", "value": "literal-password", "type": "string" }
+        ]
+      },
+      "event": [{ "listen": "prerequest", "script": { "exec": ["console.log('folder')"] } }],
+      "item": [
+        {
+          "name": "Get structured",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status')"] } }],
+          "request": {
+            "method": "GET",
+            "header": "Accept: application/json\nX-Trace: fixture",
+            "url": {
+              "raw": "https://api.example.test:8443/users/:id?expand=profile&disabled=yes#local",
+              "protocol": "https",
+              "host": ["api", "example", "test"],
+              "port": "8443",
+              "path": ["users", ":id"],
+              "query": [
+                { "key": "expand", "value": "profile" },
+                { "key": "disabled", "value": "yes", "disabled": true }
+              ],
+              "variable": [{ "key": "id", "value": "42" }]
+            }
+          },
+          "response": [{ "name": "Saved response", "code": 200, "body": "{}" }]
+        },
+        {
+          "name": "Create JSON",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "literal-api-key" },
+              { "key": "X-Disabled", "value": "no", "disabled": true }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Ada\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Submit form",
+          "request": {
+            "method": "POST",
+            "url": {
+              "protocol": "https",
+              "host": ["forms", "example", "test"],
+              "path": ["submit"]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "enabled", "value": "yes" },
+                { "key": "disabled", "value": "no", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upload multipart",
+          "request": {
+            "method": "POST",
+            "url": "https://uploads.example.test/files",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "caption", "value": "fixture", "type": "text" },
+                { "key": "asset", "src": "fixtures/asset.bin", "type": "file" },
+                { "key": "ignored", "value": "no", "type": "text", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GraphQL body",
+          "request": {
+            "method": "POST",
+            "url": "https://graphql.example.test/query",
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query User($id: ID!) { user(id: $id) { name } }",
+                "variables": "{\"id\":\"42\"}"
+              }
+            }
+          }
+        },
+        {
+          "name": "Disabled body",
+          "request": {
+            "method": "POST",
+            "url": "https://api.example.test/disabled",
+            "body": { "mode": "raw", "raw": "not sent", "disabled": true }
+          }
+        },
+        {
+          "name": "Unsupported auth",
+          "request": {
+            "method": "GET",
+            "url": "https://api.example.test/oauth",
+            "auth": { "type": "oauth2", "oauth2": [{ "key": "accessToken", "value": "secret" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Root auth",
+      "request": { "method": "HEAD", "url": "https://api.example.test/health" }
+    }
+  ]
+}

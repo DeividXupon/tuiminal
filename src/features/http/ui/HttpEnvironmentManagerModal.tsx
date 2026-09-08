@@ -14,6 +14,7 @@ import { HttpEnvironmentList, HttpPrivateEnvironmentForm } from "./HttpEnvironme
 type EnvironmentManagerProps = {
   environments: HttpEnvironment[]
   activeName: string | null
+  privateEnvironmentPath: string
   terminalWidth: number
   terminalHeight: number
   onSelect: (name: string | null) => void
@@ -64,6 +65,7 @@ function resolveEnvironmentCreateCommand(
 export function HttpEnvironmentManagerModal({
   environments,
   activeName,
+  privateEnvironmentPath,
   terminalWidth,
   terminalHeight,
   onSelect,
@@ -232,6 +234,7 @@ export function HttpEnvironmentManagerModal({
           storeInKeychain={storeInKeychain}
           busy={busy}
           error={error}
+          privateEnvironmentPath={privateEnvironmentPath}
           onEnvironmentNameChange={setEnvironmentName}
           onVariableNameChange={setVariableName}
           onSecretChange={setSecret}

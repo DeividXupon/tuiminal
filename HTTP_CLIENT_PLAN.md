@@ -4,7 +4,7 @@
 > alvo; o quadro de andamento distingue o que já possui evidência no worktree do
 > que ainda depende de implementação ou validação.
 >
-> Pesquisa e auditoria atualizadas em 4 de setembro de 2026.
+> Pesquisa e auditoria atualizadas em 5 de setembro de 2026.
 >
 > Decisão de implementação: o HTTP será reconstruído do zero. Código, modelos,
 > estado, componentes e testes específicos da implementação HTTP anterior não são
@@ -45,12 +45,16 @@ avançada e automação entram sobre essa fundação.
   anterior foi substituída por módulos novos de domínio, layout, transporte,
   storage e UI; ownership de execução, cancelamento, timeout, captura limitada e
   propagação de `[Esc]` já possuem regressões.
-- **Fase 1 — avançada:** os quatro modos responsivos, builder/response, seis tabs,
+- **Fase 1 — concluída no escopo atual:** os quatro modos responsivos, builder/response, seis tabs,
   split, maximização, jump mode, Params/Headers/Body/Auth/Mais e método customizado
   estão conectados. O preview mostra a requisição preparada com origens e segredos
-  mascarados, e sair do aplicativo com drafts HTTP exige confirmação. A matriz
-  visual completa em terminais reais continua pendente.
-- **Fase 2 — avançada:** scanner/watcher, parser e serializer `.http`, arquivos,
+  mascarados, e sair do aplicativo com drafts HTTP exige confirmação. Uma matriz
+  automatizada cobre `60×16`, `72×18`, `80×24`, `96×24`, `120×30` e `160×40` nos
+  layouts framed/compact e nas seis línguas, incluindo URL/CJK longos, seis tabs,
+  bounds dos controles e resize sem remount. Sessões PTY reais confirmaram framed e
+  compact nas seis dimensões, resize durante edição, sequência de `[Esc]`, drag real
+  do divisor e alinhamento CJK em japonês, dentro de WezTerm/WSL2 e tmux.
+- **Fase 2 — concluída no escopo atual:** scanner/watcher, parser e serializer `.http`, arquivos,
   ambientes público/privado carregados do projeto, cURL, multipart e body por
   arquivo existem. Conflitos externos agora abrem um diff redigido com escolhas
   explícitas para recarregar, aplicar a versão local ou salvá-la como cópia. O
@@ -59,22 +63,38 @@ avançada e automação entram sobre essa fundação.
   visual de defaults não secretos persiste `.tuiminal/http/config.json` e mantém a
   precedência request explícito > workspace. A primeira auditoria corrigiu unidades
   JetBrains de `@timeout`, diretivas `//`, `# @name =`, GET abreviado e URLs
-  multilinha; sintaxe opaca fica somente leitura e bloqueada para execução. Ainda
-  faltam a matriz ampla de fixtures e a visualização raw dos blocos opacos.
-- **Fase 3 — avançada:** busca, folding, JSONPath, copy/save, resposta binária,
+  multilinha. A matriz versionada cobre requests editáveis, bodies, diretivas,
+  scripts, redirects de saída, versão HTTP e protocolos não iniciados. Sintaxe
+  opaca abre com o bloco raw exato, sem builder/omnibar editável, e fica bloqueada
+  para execução, save, move e duplicação. Ambientes são resolvidos por nome, por
+  request, do diretório do `.http` até a raiz, sem misturar o escopo vencedor com
+  pais ou irmãos; novos valores privados são gravados ao lado do arquivo ativo.
+- **Fase 3 — concluída no escopo atual:** busca, folding, JSONPath, copy/save, resposta binária,
   redirect, cookies, timing, histórico opt-in, diff e download completo existem.
-  Ainda faltam controles de opções mais completos e a auditoria manual de carga.
-- **Fase 4 — avançada:** Postman/OpenAPI com preview, assertions, chaining,
+  `[C]` agora controla o cookie jar por request, desativa leitura e escrita quando
+  necessário, aparece no preview e faz round-trip por `@no-cookie-jar`. Proxy
+  HTTP/HTTPS explícito, `@proxy`, cURL `--proxy`, verificação TLS por request,
+  `@insecure-tls` e cURL `--insecure` também estão completos. TLS inseguro exige
+  aprovação por target/ambiente/sessão na TUI ou `--allow-insecure-tls` no modo
+  headless. A auditoria de carga confirmou cancelamento do stream no limite de
+  1,5 MB e motivou um preview nativo limitado a 50 mil caracteres.
+- **Fase 4 — concluída no escopo atual:** Postman/OpenAPI com preview, assertions, chaining,
   extrações secretas voláteis, runner TUI com dataset/concorrência e CLI
   text/JSON/JUnit estão implementados. O envio individual usa o mesmo motor e
-  resolve dependências topologicamente. Restam fixtures amplas de compatibilidade
-  e a validação TUI/CLI final.
+  resolve dependências topologicamente. Fixtures versionadas cobrem Postman v2.1,
+  OpenAPI 3.0 JSON e 3.1 YAML, incluindo herança, secrets, bodies, `$ref` local,
+  `allOf`, servers, overrides e perdas explícitas. CLI e TUI percorrem import,
+  preview e escrita protegida sem vazar literais.
 - **Fase 5 — não iniciada por decisão:** OAuth2, certificados, SSE, WebSocket,
   scripting, GraphQL e gRPC permanecem sujeitos à evidência prevista nesta fase.
 
-O programa ainda não atende à definição de concluído: tutorial, documentação final
-de todos os atalhos, opções avançadas, matriz visual `60×16`–`160×40` e o gate
-completo de release precisam ser encerrados antes de marcar o plano como pronto.
+O programa das fases 0–4 atende à definição de concluído. A auditoria manual
+disponível foi executada em WezTerm/WSL2 e tmux com Bun 1.3.14; GNU Screen, VS Code
+Terminal, Windows Terminal e macOS não estavam disponíveis e permanecem como
+validação de compatibilidade futura, não como lacuna funcional conhecida. O gate
+final aprovou 337 testes unitários e 44 testes TUI, sem falhas, violações
+arquiteturais ou regressões de manutenção. A Fase 5 continua deliberadamente fora
+do escopo até existir demanda e evidência de segurança.
 
 ## Objetivos e não objetivos
 
@@ -750,6 +770,19 @@ Authorization: Bearer {{apiToken}}
   maior valor podem ficar no keychain e aparecer no arquivo apenas como referência.
 - Precedência inicial: variável do request > variável do arquivo > ambiente privado
   > ambiente público > built-in dinâmica. Duplicatas mostram a origem vencedora.
+- Escopo por arquivo: para um request salvo, procurar o nome de ambiente selecionado
+  primeiro no diretório do `.http` e depois em cada diretório pai até a raiz do
+  projeto. O primeiro diretório que definir esse ambiente vence por inteiro; não
+  mesclar variáveis homônimas de um pai depois que um escopo mais próximo foi
+  encontrado. Dentro do mesmo diretório, o arquivo privado sobrescreve o público.
+- Requests scratch consultam somente a raiz. Ambientes existentes apenas em
+  diretórios irmãos não aparecem nem são usados, evitando importar acidentalmente
+  segredos de outro serviço. A seleção é o nome do ambiente; em collection runs,
+  cada request resolve esse mesmo nome contra a sua própria cadeia de diretórios.
+- `[N] Novo ambiente privado` grava no diretório do arquivo ativo, ou na raiz para
+  scratch, e mostra o caminho de destino antes da confirmação. Ao trocar para um
+  documento cuja cadeia não contenha o nome selecionado, voltar explicitamente a
+  `Sem ambiente`.
 - Para headers/options/auth: valor explícito do request > defaults da coleção mais
   próxima > defaults do workspace > valor automático do cliente. O preview mostra
   origem e conflito; auth herdada nunca fica implícita apenas em uma cor.
@@ -1135,7 +1168,8 @@ Servidor HTTP efêmero e isolado para:
 - cancelamento, timeout, chunked, gzip/brotli, body grande e conexão interrompida;
 - upload JSON, form, multipart e arquivo;
 - cookies com domain/path/secure/expiry;
-- proxy e TLS com certificado descartável, quando a fase chegar.
+- proxy HTTP local e TLS com certificado descartável; strict falha, insecure exige
+  aprovação anterior ao transporte e só então desativa a verificação.
 
 ### TUI real
 

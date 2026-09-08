@@ -4,6 +4,7 @@ import type { HttpWorkspaceState } from "./model/types"
 export type HttpDocumentRefs = {
   headers: InputRenderable | null
   body: TextareaRenderable | null
+  raw: ScrollBoxRenderable | null
   response: ScrollBoxRenderable | null
   responseSearch: InputRenderable | null
 }

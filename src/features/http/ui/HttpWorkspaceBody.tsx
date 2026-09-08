@@ -1,5 +1,11 @@
-import type { InputRenderable, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
-import { Fragment } from "react"
+import type {
+  InputRenderable,
+  MouseEvent as OpenTuiMouseEvent,
+  ScrollBoxRenderable,
+  TextareaRenderable,
+} from "@opentui/core"
+import { Fragment, useRef } from "react"
+import { COLORS } from "../../../core/settings/theme"
 import type { HttpLayout } from "../model/layout"
 import type {
   HttpAssertionDefinition,
@@ -27,6 +33,7 @@ type HttpWorkspaceBodyProps = {
   height: number
   registerHeaderInput: (documentId: string, input: InputRenderable | null) => void
   registerBodyEditor: (documentId: string, editor: TextareaRenderable | null) => void
+  registerRawScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
   registerScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
   registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
   registerCollectionSearch: (input: InputRenderable | null) => void
@@ -83,6 +90,42 @@ type HttpWorkspaceBodyProps = {
   onCompareHistory: () => void
   onOpenHistory: (entry: HttpWorkspaceState["history"][number]) => void
   preparedPreview: HttpPreparedRequestPreview | null
+  onSplitRatioChange: (ratio: number) => void
+}
+
+function splitRatioFromMouse(layout: HttpLayout, event: OpenTuiMouseEvent) {
+  const target = event.currentTarget
+  if (!target) return null
+  const stacked = layout.request.left === layout.response.left
+  const available = stacked
+    ? layout.request.height + layout.response.height
+    : layout.request.width + layout.response.width
+  const start = stacked ? target.screenY + layout.request.top : target.screenX + layout.request.left
+  const position = stacked ? event.y : event.x
+  return Math.min(0.7, Math.max(0.25, (position - start) / Math.max(1, available)))
+}
+
+function HttpSplitHandle({ layout, onStart }: { layout: HttpLayout; onStart: () => void }) {
+  const stacked = layout.request.left === layout.response.left
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes expose mouse events but no ARIA role; keyboard split controls remain available in the footer.
+    <box
+      id="http-split-handle"
+      style={{
+        position: "absolute",
+        left: stacked ? layout.request.left : layout.response.left - 1,
+        top: stacked ? layout.response.top - 1 : layout.request.top,
+        width: stacked ? layout.request.width : 1,
+        height: stacked ? 1 : layout.request.height,
+        zIndex: 4,
+        backgroundColor: COLORS.border,
+      }}
+      onMouseDown={(event) => {
+        onStart()
+        event.preventDefault()
+      }}
+    />
+  )
 }
 
 export function HttpWorkspaceBody({
@@ -91,6 +134,7 @@ export function HttpWorkspaceBody({
   height,
   registerHeaderInput,
   registerBodyEditor,
+  registerRawScroll,
   registerScroll,
   registerResponseSearch,
   registerCollectionSearch,
@@ -138,7 +182,9 @@ export function HttpWorkspaceBody({
   onCompareHistory,
   onOpenHistory,
   preparedPreview,
+  onSplitRatioChange,
 }: HttpWorkspaceBodyProps) {
+  const draggingSplit = useRef(false)
   const navigationVisible =
     layout.navigationFixed ||
     state.navigationOpen ||
@@ -146,7 +192,23 @@ export function HttpWorkspaceBody({
   const navigationOverlayOpen = !layout.navigationFixed && state.navigationOpen
 
   return (
-    <box style={{ height, flexShrink: 0, position: "relative" }}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI requires drag continuation on the containing box and does not expose ARIA roles.
+    <box
+      style={{ height, flexShrink: 0, position: "relative", overflow: "hidden" }}
+      onMouseDrag={(event) => {
+        if (!draggingSplit.current) return
+        event.preventDefault()
+        event.stopPropagation()
+        const ratio = splitRatioFromMouse(layout, event)
+        if (ratio !== null) onSplitRatioChange(ratio)
+      }}
+      onMouseUp={() => {
+        draggingSplit.current = false
+      }}
+      onMouseDragEnd={() => {
+        draggingSplit.current = false
+      }}
+    >
       {state.documents.map((document) => {
         const active = document.request.id === state.activeDocumentId
         const contentRight = layout.response.left + layout.response.width
@@ -177,6 +239,7 @@ export function HttpWorkspaceBody({
               position={maximizedPane === "request" ? maximizedPosition : layout.request}
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
+              registerRawScroll={(scroll) => registerRawScroll(document.request.id, scroll)}
               onSelectView={(view) => onSelectRequestView(document.request.id, view)}
               onSelectMoreView={(view) => onSelectRequestMoreView(document.request.id, view)}
               onQueryChange={(entries) => onQueryChange(document.request.id, entries)}
@@ -247,6 +310,17 @@ export function HttpWorkspaceBody({
         onCompareHistory={onCompareHistory}
         onOpenHistory={onOpenHistory}
       />
+      {layout.simultaneousPanes &&
+      !navigationOverlayOpen &&
+      !state.documents.find((document) => document.request.id === state.activeDocumentId)
+        ?.maximizedPane ? (
+        <HttpSplitHandle
+          layout={layout}
+          onStart={() => {
+            draggingSplit.current = true
+          }}
+        />
+      ) : null}
     </box>
   )
 }

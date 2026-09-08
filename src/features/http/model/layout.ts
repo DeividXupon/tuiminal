@@ -140,7 +140,8 @@ export function resolveHttpWorkspaceLayout({
   const availableHeight = Math.max(8, terminalHeight - appHeaderRows - outerPadding * 2)
   const initial = resolveHttpLayout({ width, height: availableHeight })
   const selectorRows = initial.mode === "panorama" || initial.mode === "workbench" ? 0 : 1
-  const chromeRows = 1 + initial.omnibarRows + selectorRows + 1 + spacing * 2
+  const layoutSpacing = initial.mode === "minimum" ? 0 : spacing
+  const chromeRows = 1 + initial.omnibarRows + selectorRows + 1 + layoutSpacing * 2
   const bodyHeight = Math.max(4, availableHeight - chromeRows)
   return {
     bodyHeight,
