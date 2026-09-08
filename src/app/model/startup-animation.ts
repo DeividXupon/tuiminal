@@ -1,16 +1,23 @@
 export const STARTUP_WORDMARK = "Tuiminal"
 
 export const STARTUP_ANIMATION_TIMING = {
-  blockDuration: 260,
-  blockStarts: [0, 260, 520, 780],
-  wordStart: 1080,
-  wordDuration: 240,
-  exitStart: 1500,
-  exitDuration: 220,
-  total: 1720,
+  blockDuration: 320,
+  blockStarts: [0, 300, 600, 900],
+  wordStart: 1280,
+  wordDuration: 280,
+  exitStart: 1800,
+  exitDuration: 260,
+  total: 2060,
 } as const
 
 export type StartupLogoBlockId = "top" | "left" | "rightTop" | "rightBottom"
+
+export const STARTUP_BLOCK_DROP_ORDER: readonly StartupLogoBlockId[] = [
+  "rightBottom",
+  "rightTop",
+  "left",
+  "top",
+]
 
 export type StartupLogoBlockFrame = {
   id: StartupLogoBlockId
@@ -127,8 +134,9 @@ export function createStartupAnimationFrame(
   const originLeft = Math.max(0, Math.floor((width - layout.logoWidth) / 2))
   const originTop = Math.max(0, Math.floor((height - layout.totalHeight) / 2))
 
-  const blocks = layout.blocks.map((block, index): StartupLogoBlockFrame => {
-    const start = STARTUP_ANIMATION_TIMING.blockStarts[index] ?? 0
+  const blocks = layout.blocks.map((block): StartupLogoBlockFrame => {
+    const dropIndex = STARTUP_BLOCK_DROP_ORDER.indexOf(block.id)
+    const start = STARTUP_ANIMATION_TIMING.blockStarts[dropIndex] ?? 0
     const progress = clamp((elapsed - start) / STARTUP_ANIMATION_TIMING.blockDuration)
     const targetTop = originTop + block.top
     const startTop = -block.height

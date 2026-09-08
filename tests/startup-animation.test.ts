@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   createStartupAnimationFrame,
   STARTUP_ANIMATION_TIMING,
+  STARTUP_BLOCK_DROP_ORDER,
   STARTUP_WORDMARK,
 } from "../src/app/model/startup-animation"
 
@@ -10,17 +11,17 @@ describe("startup animation", () => {
     for (let index = 0; index < STARTUP_ANIMATION_TIMING.blockStarts.length; index += 1) {
       const elapsed = (STARTUP_ANIMATION_TIMING.blockStarts[index] ?? 0) + 1
       const frame = createStartupAnimationFrame(elapsed, 100, 30)
-      expect(frame.blocks.filter((block) => block.visible)).toHaveLength(index + 1)
+      const visible = new Set(
+        frame.blocks.filter((block) => block.visible).map((block) => block.id),
+      )
+      expect(visible.size).toBe(index + 1)
+      for (const id of STARTUP_BLOCK_DROP_ORDER.slice(0, index + 1))
+        expect(visible.has(id)).toBe(true)
     }
 
     const settled = createStartupAnimationFrame(STARTUP_ANIMATION_TIMING.wordStart, 100, 30)
     expect(settled.blocks.every((block) => block.settled)).toBe(true)
-    expect(settled.blocks.map((block) => block.id)).toEqual([
-      "top",
-      "left",
-      "rightTop",
-      "rightBottom",
-    ])
+    expect(STARTUP_BLOCK_DROP_ORDER).toEqual(["rightBottom", "rightTop", "left", "top"])
   })
 
   test("reveals the wordmark only after the logo is assembled and then exits", () => {
@@ -30,7 +31,11 @@ describe("startup animation", () => {
       100,
       30,
     )
-    const exiting = createStartupAnimationFrame(STARTUP_ANIMATION_TIMING.exitStart + 110, 100, 30)
+    const exiting = createStartupAnimationFrame(
+      STARTUP_ANIMATION_TIMING.exitStart + STARTUP_ANIMATION_TIMING.exitDuration / 2,
+      100,
+      30,
+    )
     const complete = createStartupAnimationFrame(STARTUP_ANIMATION_TIMING.total, 100, 30)
 
     expect(beforeWord.word).toBe("")
