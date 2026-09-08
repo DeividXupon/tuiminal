@@ -61,6 +61,17 @@ function countsForDashboard(
 function dashboardMeta(dashboard: PullRequestDashboardState) {
   if (dashboard.status === "demo") return "MODO DEMO · integração GitHub ainda não conectada"
   if (dashboard.status === "ready") return `${dashboard.auth.host} · @${dashboard.auth.viewerLogin}`
+  if (dashboard.status === "requirements") {
+    return dashboard.capabilities.reason === "missing"
+      ? "GITHUB CLI NÃO ENCONTRADO"
+      : "GITHUB CLI DESATUALIZADO"
+  }
+  if (dashboard.status === "config-error") return "ERRO NA CONFIGURAÇÃO"
+  if (dashboard.status === "error") {
+    return dashboard.kind === "not-authenticated"
+      ? "AUTENTICAÇÃO GITHUB NECESSÁRIA"
+      : "ERRO NO GITHUB"
+  }
   return "CARREGANDO GITHUB…"
 }
 

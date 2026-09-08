@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { translateUi } from "../../../../shared/i18n"
+import { MountWhen } from "../../../../shared/ui/MountWhen"
 import {
   type PullRequestActionKind,
   preparePullRequestAction,
@@ -214,13 +215,15 @@ export function usePullRequestActions({
   const modalOpen = menuOpen || kind !== null
   const modals = item ? (
     <>
-      <ActionMenuModal
-        open={menuOpen}
-        item={item}
-        actions={actions}
-        onClose={() => setMenuOpen(false)}
-        onSelect={openAction}
-      />
+      <MountWhen when={menuOpen}>
+        <ActionMenuModal
+          open
+          item={item}
+          actions={actions}
+          onClose={() => setMenuOpen(false)}
+          onSelect={openAction}
+        />
+      </MountWhen>
       {kind ? (
         <PullRequestActionModal
           open

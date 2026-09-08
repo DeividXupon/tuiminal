@@ -87,7 +87,7 @@ imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo
 
 ```text
 ◆ TUIMINAL    [@] Banco  [#] Git  [$] Runner  [%] HTTP  [^] Terminal   [,] Config
-GIT  [1] Base  [2] PR                              github.com · @usuario
+GIT  [1] Base  [2] PR  [3] Issues                  github.com · @usuario
  [<]  Meus PRs 12  │  Revisar 4  │  Atribuídos 3  │  CI falhando 2  [>] [+]
 [/] is:open review-requested:@me             Escopo: todos os projetos da conta
 ───────────────────────────────────────────┬──────────────────────────────────
@@ -114,7 +114,7 @@ Busca, título e tabs não devem reservar várias linhas vazias.
 ### 4.2. Terminal médio — prévia embaixo
 
 ```text
-GIT [1] Base [2] PR                         github.com · @usuario
+GIT [1] Base [2] PR [3] Issues              github.com · @usuario
 [<] Meus PRs 12 │ Revisar 4 │ Atribuídos 3 [>] [+]
 [/] is:open review-requested:@me
    Repo      PR / Título                         Rev CI
@@ -131,7 +131,7 @@ Descrição…                     Revisores e code owners…
 ### 4.3. Terminal estreito/baixo — um painel por vez
 
 ```text
-GIT [1] Base [2] PR
+GIT [1] Base [2] PR [3] Issues
 [<] Revisar · 4 [>] [+]
 [/] review-requested:@me
 ▶ #142 Corrigir cache
@@ -142,7 +142,7 @@ GIT [1] Base [2] PR
 ```
 
 Abrir a prévia substitui apenas o conteúdo da lista; `[Esc]`/`[h/←]` retorna à
-mesma linha e offset. A faixa Base/PR permanece acessível. Em larguras extremas,
+mesma linha e offset. A faixa Base/PR/Issues permanece acessível. Em larguras extremas,
 ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro.
 
 ### 4.4. Prévia — conteúdo das abas
@@ -157,7 +157,8 @@ ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro
 
 Somente a identidade do PR fica fixa; o conteúdo rola no espaço restante. Abas
 que não couberem usam overflow horizontal com controles, nunca letras cortadas.
-`[`/`]` circulam pelas abas. Não usar números: `[1]`/`[2]` pertencem a Base/PR.
+`[`/`]` circulam pelas abas. Não usar números: `[1]`/`[2]`/`[3]` pertencem a
+Base/PR/Issues.
 
 ### 4.5. Diff
 
@@ -234,7 +235,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 
 | Contexto | Tecla | Ação |
 | --- | --- | --- |
-| Git sem editor/modal | `[1]` / `[2]` | Base / PR. Preservar estado ao alternar. |
+| Git sem editor/modal | `[1]` / `[2]` / `[3]` | Base / PR / Issues. Preservar estado ao alternar. |
 | PR sem editor/modal | `[<]` / `[>]` | Seção anterior / seguinte. |
 | Lista | `[j/↓]` / `[k/↑]` | PR seguinte / anterior. |
 | Lista | `[g/Home]` / `[Shift+G/End]` | Primeiro / último PR carregado; indicar paginação. |
@@ -265,12 +266,13 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Camada local | `[Esc]` | Desfocar, fechar camada e devolver foco; nunca atravessar camadas. |
 
 Diferença deliberada: gh-dash usa H/L para seções; aqui usamos H/L para foco e
-`<`/`>` para seções, coerente com o Tuiminal. Não copiar o `[s]` que alterna Issues:
-Issues não está neste escopo. Ações só operam no PR ativo, não em seleção em lote.
+`<`/`>` para seções, coerente com o Tuiminal. Esta especificação permanece
+limitada a PR; `[3] Issues` é descrito em `git-issues-interface.md`. Ações só
+operam no PR ativo, não em seleção em lote.
 
 Mouse: clicar seção/aba/linha/ação; roda no painel apontado; clicar comentário ou
 responsável não dispara mutações. Expor todas as operações pelo menu `[?]`/Ações.
-Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]`,
+Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]`, `[3]`,
 `[q]`, `[#]`, letras, pontuação e Ctrl+A permanecem edição, não atalhos globais.
 
 ## 7. Estados que precisam de tela própria
@@ -311,7 +313,7 @@ matriz de 44 combinações entre tamanhos, seis idiomas, quatro paletas e dois m
 de chrome. Os frames são inspecionados como texto renderizado, por isso a validação
 é determinística e não depende de pixels ou de uma fonte específica.
 
-Diferenças intencionais confirmadas: Base/PR pertence ao Git do Tuiminal; H/L move
+Diferenças intencionais confirmadas: Base/PR/Issues pertencem ao Git do Tuiminal; H/L move
 o foco e `<`/`>` troca seções; há Commits e Arquivos além das três abas principais;
 o Tuiminal fornece gerenciador visual de seções, modo de painel único e não expõe
 bypass administrativo, exclusão automática de branch ou comandos arbitrários.

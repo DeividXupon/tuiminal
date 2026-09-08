@@ -321,7 +321,7 @@ export function PullRequestDashboardView({
       >
         <ShortcutText
           content={translateUi(
-            "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[/]] Aba  [P] Prévia  [D] Diff  [?] Ações",
+            "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [D] Diff  [?] Ações",
           )}
           style={{ fg: COLORS.muted }}
         />

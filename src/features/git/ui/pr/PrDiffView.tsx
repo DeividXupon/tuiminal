@@ -379,7 +379,7 @@ export function PrDiffView({
       ) : null}
       <ShortcutText
         content={translateUi(
-          "[J/K] Navegar/rolar  [[/]] Hunk  [H/L] Foco  [V] Modo  [Y] Copiar caminho  [Esc] Voltar",
+          "[J/K] Navegar/rolar  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Copiar caminho  [Esc] Voltar",
         )}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />

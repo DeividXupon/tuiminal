@@ -1,0 +1,58 @@
+# Interface Git Issues
+
+Especificação do workspace `[3] Issues`, implementado a partir do gh-dash e
+ajustado às regras de foco, segurança e responsividade do Tuiminal.
+
+## Anatomia
+
+```text
+┌ [1] GIT · BASE LOCAL  [2] PR  [3] ISSUES ───────────────────────────────┐
+│ ISSUES                                      github.com · @viewer          │
+│ [<] Criadas 12  Atribuídas 4  Envolvido 21  Mencionaram 3 [>] [+] [^E] │
+│ [/] is:open author:@me       TODOS OS PROJETOS · 20/42 · ATUALIZADO     │
+├───────────────────────────────┬───────────────────────────────────────────┤
+│ ▶ ◆ owner/api #318 Título 6 ♥4│ owner/api #318 · Título                  │
+│     @autor · → @ana · bug      │ [VISÃO GERAL] [ATIVIDADE]               │
+│   ◆ owner/web #204 Outro 3 ♥8 │ [O] Abrir [Y] nº [Shift+Y] URL [?] Ações│
+│     @rui · → @viewer · a11y    │ descrição, metadados ou comentários     │
+└───────────────────────────────┴───────────────────────────────────────────┘
+ [J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações
+```
+
+As seções ficam horizontais; não existe sidebar permanente de repositórios. A
+query permanece visível. Duas linhas mantêm densidade sem esconder autoria,
+responsáveis e labels.
+
+## Composições responsivas
+
+- Larga (`≥118 × 22`): lista à esquerda e prévia à direita.
+- Média (`≥76 × 20`): lista acima e prévia abaixo.
+- Estreita: um painel; `[L/→/Enter]` abre a prévia e `[H/←/Esc]` volta.
+- Posição forçada só vale quando o conteúdo mínimo cabe; senão usa painel único.
+- `[P]` oculta a prévia e devolve foco à lista; `[Shift+P]` alterna a preferência
+  persistida por projeto.
+
+## Foco, camadas e estados
+
+- Lista: `[J/K]`, setas, `[G/Home]` e `[Shift+G/End]`.
+- Seções: `[<]`/`[>]`; `[/]` query; `[+]` cria; `[Ctrl+E]` gerencia.
+- Prévia: `[[]/[]]` alterna abas; `[J/K]` rola; `[Ctrl+D/U]` pagina; `[E]`
+  expande/recolhe a descrição.
+- `[?]` mostra disponibilidade e motivo de todas as ações.
+- Inputs detêm letras, números e atalhos globais. `[Esc]` primeiro desfoca, depois
+  fecha o modal e nunca atravessa duas camadas no mesmo evento.
+- Estado aberto/fechado tem símbolo e texto; cor é apenas reforço.
+- Markdown remoto é sanitizado e vira texto terminal; HTML não é executado e
+  imagens não são baixadas.
+- Carregando, vazio, autenticação ausente, `gh` incompatível, erro parcial,
+  permissão insuficiente e resultado incerto são estados distintos.
+- Seleção é preservada por host + node ID; uma issue removida da seção não é
+  silenciosamente substituída por outra identidade.
+
+## Diferenças deliberadas do gh-dash
+
+- `[H/L]` é foco; seções usam `[</>]`.
+- Labels usa `[Shift+L]`, sem conflitar com `[L]` para abrir a prévia.
+- Escritas exigem `[Ctrl+S]` e revalidação; não há comandos arbitrários ou lote.
+- Checkout não clona e opera somente em clone local elegível.
+- Base, PR e Issues são áreas lazy, separadas e com estado independente.

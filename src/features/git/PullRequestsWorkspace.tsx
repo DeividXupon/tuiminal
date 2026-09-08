@@ -22,6 +22,7 @@ import { usePullRequestDetails } from "./ui/pr/usePullRequestDetails"
 import { usePullRequestWatch } from "./ui/pr/usePullRequestWatch"
 import { usePullRequestWorkflows } from "./ui/pr/usePullRequestWorkflows"
 import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspaceKeyboard"
+import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
 import {
   dashboardAuth,
   dashboardProfileTarget,
@@ -130,6 +131,7 @@ export function PullRequestsWorkspace({
   const layout = previewVisible ? responsiveLayout : "single"
   const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen
   const previewItemIndex = previewItemIndices[previewTab]
+  usePullRequestNotifications(notice, dashboard, details, workflowError)
 
   const selectSection = useCallback(
     (index: number) => {

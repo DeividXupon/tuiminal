@@ -2,11 +2,20 @@ export const GIT_TUTORIAL_STEPS = [
   {
     targetId: "tutorial-git-mode-tabs",
     group: "GIT · NAVEGAÇÃO",
-    title: "Base local e Pull Requests",
+    title: "Base local, Pull Requests e Issues",
     description:
-      "A Base preserva o Git local e funciona offline. PR monta a integração GitHub somente quando você abre [2].",
-    hint: "[1] Base · [2] PR · os dois workspaces preservam o próprio estado",
+      "A Base preserva o Git local e funciona offline. PR e Issues montam a integração GitHub somente quando você abre [2] ou [3].",
+    hint: "[1] Base · [2] PR · [3] Issues · cada workspace preserva o próprio estado",
     kind: "control",
+  },
+  {
+    targetId: "tutorial-git-issues",
+    group: "ISSUES · FILA E AÇÕES",
+    title: "Issues no estilo gh-dash",
+    description:
+      "Seções e queries organizam issues de toda a conta em uma lista densa com descrição, atividade, responsáveis, labels e reações na prévia.",
+    hint: "[C] comenta · [A] atribui · [Shift+L] edita labels · [Shift+C] cria a branch · [X] fecha",
+    kind: "action",
   },
   {
     targetId: "tutorial-git-sections",
@@ -32,7 +41,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Cinco abas de contexto",
     description:
       "Visão geral, Checks, Atividade, Commits e Arquivos carregam detalhes paginados sem alterar o checkout local.",
-    hint: "[[/]] troca aba · [H/L] move foco · [P] muda a posição da prévia",
+    hint: "[[]/[]] troca aba · [H/L] move foco · [P] muda a posição da prévia",
     kind: "control",
   },
   {
@@ -50,7 +59,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Diff remoto e acompanhamento",
     description:
       "O diff usa os SHAs do PR, alterna modo unificado, lado a lado e intralinha, e distingue checks, workflows e deployments.",
-    hint: "[J/K] rola · [[/]] muda hunk · [V] muda modo · [Esc] volta",
+    hint: "[J/K] rola · [[]/[]] muda hunk · [V] muda modo · [Esc] volta",
     kind: "block",
   },
 ] as const

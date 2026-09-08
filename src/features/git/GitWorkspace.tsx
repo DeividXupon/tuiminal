@@ -8,12 +8,12 @@ import {
   loadGitSnapshot,
   toggleAllGitFiles,
   toggleGitFile,
-  type GitFile,
   type GitSnapshot,
 } from "./services/git"
 import { COLORS, LAYOUT, panelBorder } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
+import { useNotificationFromValue } from "../../shared/notifications/index"
 
 import { LOADING_FRAMES, FILES_PANEL_WIDTH, DIFF_SYNTAX_STYLE } from "./rendering/constants"
 import type { ViewMode, DiffLayout, NarrowGitPane } from "./model/view"
@@ -41,6 +41,15 @@ import {
   documentLineCount,
 } from "./rendering/diff"
 import { commitTitle, gitSnapshotSignature } from "./rendering/presentation"
+import { useGitDiffTarget } from "./hooks/use-git-diff-target"
+
+export function compactGitActionFooter(previewWidth: number) {
+  return previewWidth < 58
+}
+
+export function gitActionLabel(compact: boolean, label: string) {
+  return compact ? (label.match(/^\[[^\]]+\]/)?.[0] ?? label) : label
+}
 
 export function GitBaseWorkspace({
   active,
@@ -74,6 +83,8 @@ export function GitBaseWorkspace({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useNotificationFromValue(message, { source: "Git" })
+  useNotificationFromValue(error, { source: "Git", kind: "error" })
   const [motionFrame, setMotionFrame] = useState(0)
   const [refreshSequence, setRefreshSequence] = useState(0)
   const [narrowPane, setNarrowPane] = useState<NarrowGitPane>("files")
@@ -83,30 +94,7 @@ export function GitBaseWorkspace({
     () => snapshot?.files.find((file) => file.path === selectedPath) ?? null,
     [selectedPath, snapshot],
   )
-  const selectedFilePath = selectedFile?.path
-  const selectedFileIndexStatus = selectedFile?.indexStatus
-  const selectedFileWorktreeStatus = selectedFile?.worktreeStatus
-  const selectedFileStaged = selectedFile?.staged
-  const selectedFileUnstaged = selectedFile?.unstaged
-  const selectedFileUntracked = selectedFile?.untracked
-  const diffTarget = useMemo<GitFile | null>(() => {
-    if (!selectedFilePath) return null
-    return {
-      path: selectedFilePath,
-      indexStatus: selectedFileIndexStatus ?? " ",
-      worktreeStatus: selectedFileWorktreeStatus ?? " ",
-      staged: selectedFileStaged ?? false,
-      unstaged: selectedFileUnstaged ?? false,
-      untracked: selectedFileUntracked ?? false,
-    }
-  }, [
-    selectedFileIndexStatus,
-    selectedFilePath,
-    selectedFileStaged,
-    selectedFileUnstaged,
-    selectedFileUntracked,
-    selectedFileWorktreeStatus,
-  ])
+  const diffTarget = useGitDiffTarget(selectedFile)
   const selectedCommit = snapshot?.commits[selectedCommitIndex] ?? null
   const stagedCount = snapshot?.files.filter((file) => file.staged).length ?? 0
   const unstagedCount = snapshot?.files.filter((file) => file.unstaged).length ?? 0
@@ -142,6 +130,7 @@ export function GitBaseWorkspace({
   const previewWidth = narrowGit
     ? Math.max(16, terminal.width - 6)
     : Math.max(24, terminal.width - FILES_PANEL_WIDTH - 9)
+  const compactPreviewActions = compactGitActionFooter(previewWidth)
   const filesContentWidth = narrowGit ? Math.max(16, terminal.width - 8) : FILES_PANEL_WIDTH - 4
   const showMiniGraph = terminal.height >= 22
   const compactGraphHeight = showMiniGraph
@@ -1052,11 +1041,14 @@ export function GitBaseWorkspace({
                   }}
                 />
               ) : (
-                <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+                <box
+                  id="git-base-action-footer"
+                  style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}
+                >
                   {view === "graph" || view === "log" ? (
                     <>
                       <InlineButton
-                        label="[P] ‹"
+                        label={gitActionLabel(compactPreviewActions, "[P] ‹")}
                         accent={COLORS.git}
                         disabled={selectedCommitIndex === 0}
                         onPress={() =>
@@ -1064,7 +1056,7 @@ export function GitBaseWorkspace({
                         }
                       />
                       <InlineButton
-                        label="[N] ›"
+                        label={gitActionLabel(compactPreviewActions, "[N] ›")}
                         accent={COLORS.git}
                         disabled={selectedCommitIndex >= (snapshot?.commits.length ?? 1) - 1}
                         onPress={() =>
@@ -1074,18 +1066,21 @@ export function GitBaseWorkspace({
                         }
                       />
                       <InlineButton
-                        label="[↵] Abrir"
+                        label={gitActionLabel(compactPreviewActions, "[↵] Abrir")}
                         accent={COLORS.git}
                         disabled={!selectedCommit}
                         onPress={() => setView("commit")}
                       />
                       <InlineButton
-                        label="[D] Diff"
+                        label={gitActionLabel(compactPreviewActions, "[D] Diff")}
                         accent={COLORS.git}
                         onPress={() => setView("diff")}
                       />
                       <InlineButton
-                        label={view === "graph" ? "[L] Lista" : "[G] Árvore"}
+                        label={gitActionLabel(
+                          compactPreviewActions,
+                          view === "graph" ? "[L] Lista" : "[G] Árvore",
+                        )}
                         accent={COLORS.database}
                         onPress={() => setView(view === "graph" ? "log" : "graph")}
                       />
@@ -1095,13 +1090,13 @@ export function GitBaseWorkspace({
                       {view === "diff" ? (
                         <>
                           <InlineButton
-                            label="[␠] Stage"
+                            label={gitActionLabel(compactPreviewActions, "[␠] Stage")}
                             accent={COLORS.git}
                             disabled={!selectedFile || busy}
                             onPress={() => void runStageAction(false)}
                           />
                           <InlineButton
-                            label="[A] Todos"
+                            label={gitActionLabel(compactPreviewActions, "[A] Todos")}
                             accent={COLORS.git}
                             disabled={!snapshot?.files.length || busy}
                             onPress={() => void runStageAction(true)}
@@ -1109,18 +1104,18 @@ export function GitBaseWorkspace({
                         </>
                       ) : null}
                       <InlineButton
-                        label="[G] Árvore"
+                        label={gitActionLabel(compactPreviewActions, "[G] Árvore")}
                         accent={COLORS.database}
                         onPress={() => setView("graph")}
                       />
                       <InlineButton
-                        label="[L] Log"
+                        label={gitActionLabel(compactPreviewActions, "[L] Log")}
                         accent={COLORS.git}
                         onPress={() => setView("log")}
                       />
                       {view === "commit" ? (
                         <InlineButton
-                          label="[D] Diff"
+                          label={gitActionLabel(compactPreviewActions, "[D] Diff")}
                           accent={COLORS.git}
                           onPress={() => setView("diff")}
                         />
@@ -1128,7 +1123,8 @@ export function GitBaseWorkspace({
                     </>
                   )}
                   <InlineButton
-                    label="[R] Sync"
+                    id="git-base-refresh"
+                    label={gitActionLabel(compactPreviewActions, "[R] Sync")}
                     accent={COLORS.git}
                     disabled={loading}
                     onPress={() => void refresh()}

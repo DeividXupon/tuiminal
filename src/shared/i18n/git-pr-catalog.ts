@@ -71,12 +71,12 @@ export const GIT_PR_MESSAGES = [
     "상세 데이터는 GitHub 연동에서 불러옵니다.",
   ],
   [
-    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[/]] Aba",
-    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[/]] Tab",
-    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[/]] Pestaña",
-    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[/]] タブ",
-    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[/]] 标签",
-    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[/]] 탭",
+    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba",
+    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[]/[]] Tab",
+    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[]/[]] Pestaña",
+    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[]/[]] タブ",
+    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[]/[]] 标签",
+    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[]/[]] 탭",
   ],
   [
     "PULL REQUESTS",

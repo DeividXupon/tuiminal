@@ -111,6 +111,13 @@ function commandError(result: GitCommandResult, fallback: string) {
   return new Error(result.stderr.trim() || result.stdout.trim() || fallback)
 }
 
+/** Remove Git's record terminator without erasing a meaningful patch marker. */
+export function trimGitPatchTerminator(output: string) {
+  if (output.endsWith("\r\n")) return output.slice(0, -2)
+  if (output.endsWith("\n")) return output.slice(0, -1)
+  return output
+}
+
 export async function loadGitSnapshot(): Promise<GitSnapshot> {
   if (!cachedRepositoryRoot) {
     const rootResult = await runGit(GIT_LAUNCH_DIRECTORY, ["rev-parse", "--show-toplevel"])
@@ -205,7 +212,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
       file.path,
     ])
     if (stagedResult.stdout.trim()) {
-      sections.push("── STAGED ──", stagedResult.stdout.trimEnd())
+      sections.push("── STAGED ──", trimGitPatchTerminator(stagedResult.stdout))
     }
   }
 
@@ -220,7 +227,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
       resolve(root, file.path),
     ])
     if (untrackedResult.stdout.trim()) {
-      sections.push("── UNTRACKED ──", untrackedResult.stdout.trimEnd())
+      sections.push("── UNTRACKED ──", trimGitPatchTerminator(untrackedResult.stdout))
     }
   } else if (file.unstaged) {
     const unstagedResult = await runGit(root, [
@@ -235,7 +242,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
       throw commandError(unstagedResult, "Não foi possível carregar o diff.")
     }
     if (unstagedResult.stdout.trim()) {
-      sections.push("── WORKTREE ──", unstagedResult.stdout.trimEnd())
+      sections.push("── WORKTREE ──", trimGitPatchTerminator(unstagedResult.stdout))
     }
   }
 
@@ -257,7 +264,7 @@ export async function loadCommitDiff(root: string, commitHash: string) {
     throw commandError(result, "Não foi possível carregar o commit.")
   }
 
-  return result.stdout.trimEnd() || "Este commit não possui diff textual."
+  return trimGitPatchTerminator(result.stdout) || "Este commit não possui diff textual."
 }
 
 export async function toggleGitFile(root: string, file: GitFile) {

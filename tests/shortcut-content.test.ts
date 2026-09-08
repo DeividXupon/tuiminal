@@ -24,9 +24,15 @@ describe("shortcut accent", () => {
 
   test("handles Vim keys, arrows, symbols, ranges and literal brackets", () => {
     const keys = ["[H/←]", "[↑/↓/J/K]", "[+ ]", "[@ # $ % ^]", "[1–4]", "[dd]", "[[]", "[]]"]
-    const result = shortcutContent(keys.join(" "))
+    const value = `${keys.join(" ")} · [[]/[]] troca aba`
+    const result = shortcutContent(value)
     if (typeof result === "string") throw new Error("Expected styled shortcuts")
-    expect(result.chunks.filter((chunk) => chunk.fg).map((chunk) => chunk.text)).toEqual(keys)
+    expect(result.chunks.map((chunk) => chunk.text).join("")).toBe(value)
+    expect(result.chunks.filter((chunk) => chunk.fg).map((chunk) => chunk.text)).toEqual([
+      ...keys,
+      "[[]",
+      "[]]",
+    ])
   })
 
   test("does not allocate styled text for ordinary text or incomplete hints", () => {

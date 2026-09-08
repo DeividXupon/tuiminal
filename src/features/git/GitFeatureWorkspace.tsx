@@ -1,6 +1,7 @@
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { useState } from "react"
 import { COLORS, LAYOUT } from "../../core/settings/theme"
+import { translateUi } from "../../shared/i18n"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { GitBaseWorkspace } from "./GitWorkspace"
 import {
@@ -9,6 +10,7 @@ import {
   gitWorkspaceTabForKey,
 } from "./model/workspace"
 import { PullRequestsWorkspace } from "./PullRequestsWorkspace"
+import { IssuesWorkspace } from "./IssuesWorkspace"
 import { GitTutorialDemo } from "./tutorial/GitTutorialDemo"
 
 export function GitViewer({
@@ -26,17 +28,19 @@ function GitInteractiveWorkspace({ active }: { active: boolean }) {
   const renderer = useRenderer()
   const [activeTab, setActiveTab] = useState<GitWorkspaceTab>(DEFAULT_GIT_WORKSPACE_TAB)
   const [pullRequestsMounted, setPullRequestsMounted] = useState(false)
+  const [issuesMounted, setIssuesMounted] = useState(false)
   const [baseRefreshRequest, setBaseRefreshRequest] = useState(0)
 
   const selectTab = (tab: GitWorkspaceTab) => {
     if (tab === "pr") setPullRequestsMounted(true)
+    if (tab === "issues") setIssuesMounted(true)
     setActiveTab(tab)
   }
 
   useKeyboard((key) => {
     if (!active || key.ctrl || key.meta || key.super) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
-    if (/git-pr-.*(?:input|modal|menu)/.test(focusedId)) return
+    if (/git-(?:pr|issue)-.*(?:input|modal|menu)/.test(focusedId)) return
     const tab = gitWorkspaceTabForKey(key.name)
     if (!tab) return
     key.preventDefault()
@@ -57,17 +61,24 @@ function GitInteractiveWorkspace({ active }: { active: boolean }) {
       >
         <InlineButton
           id="git-tab-base"
-          label="[1] GIT · BASE LOCAL"
+          label={translateUi("[1] GIT · BASE LOCAL")}
           accent={COLORS.git}
           active={activeTab === "base"}
           onPress={() => selectTab("base")}
         />
         <InlineButton
           id="git-tab-pr"
-          label="[2] PR"
+          label={translateUi("[2] PR")}
           accent={COLORS.git}
           active={activeTab === "pr"}
           onPress={() => selectTab("pr")}
+        />
+        <InlineButton
+          id="git-tab-issues"
+          label={translateUi("[3] ISSUES")}
+          accent={COLORS.git}
+          active={activeTab === "issues"}
+          onPress={() => selectTab("issues")}
         />
       </box>
       <box
@@ -92,6 +103,20 @@ function GitInteractiveWorkspace({ active }: { active: boolean }) {
         >
           <PullRequestsWorkspace
             active={active && activeTab === "pr"}
+            onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
+          />
+        </box>
+      ) : null}
+      {issuesMounted ? (
+        <box
+          style={{
+            height: activeTab === "issues" ? "100%" : 0,
+            flexGrow: activeTab === "issues" ? 1 : 0,
+            overflow: "hidden",
+          }}
+        >
+          <IssuesWorkspace
+            active={active && activeTab === "issues"}
             onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
           />
         </box>

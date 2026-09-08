@@ -23,11 +23,11 @@ export const GIT_PR_LAYOUT_MESSAGES = [
     "브라우저에서 PR을 열었습니다.",
   ],
   [
-    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[/]] Aba  [P] Prévia  [D] Diff  [?] Ações",
-    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[/]] Tab  [P] Preview  [D] Diff  [?] Actions",
-    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[/]] Pestaña  [P] Vista previa  [D] Diff  [?] Acciones",
-    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[/]] タブ  [P] プレビュー  [D] Diff  [?] 操作",
-    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[/]] 标签  [P] 预览  [D] Diff  [?] 操作",
-    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[/]] 탭  [P] 미리보기  [D] Diff  [?] 작업",
+    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [D] Diff  [?] Ações",
+    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[]/[]] Tab  [P] Preview  [D] Diff  [?] Actions",
+    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[]/[]] Pestaña  [P] Vista previa  [D] Diff  [?] Acciones",
+    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[]/[]] タブ  [P] プレビュー  [D] Diff  [?] 操作",
+    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[]/[]] 标签  [P] 预览  [D] Diff  [?] 操作",
+    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[]/[]] 탭  [P] 미리보기  [D] Diff  [?] 작업",
   ],
 ] as const

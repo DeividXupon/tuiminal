@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { translateUi } from "../../../../shared/i18n"
+import { MountWhen } from "../../../../shared/ui/MountWhen"
 import type { PullRequestPreviewConfig, PullRequestProfile } from "../../model/pr/config"
 import { nextPullRequestPreviewPosition } from "../../model/pr/navigation"
 import {
@@ -172,53 +173,57 @@ export function usePullRequestConfiguration({
 
   const modals = target ? (
     <>
-      <RepositorySetupModal
-        open={repositoryOpen}
-        root={target.root}
-        host={target.profile.host}
-        onClose={() => setRepositoryOpen(false)}
-        onSaved={() => {
-          setRepositoryOpen(false)
-          refresh()
-        }}
-      />
-      <SectionManagerModal
-        open={managerOpen}
-        sections={target.profile.sections}
-        repositories={target.profile.repositories}
-        onClose={() => setManagerOpen(false)}
-        onCreate={openCreateSection}
-        onEdit={editSection}
-        onDuplicate={(section) => {
-          persist((profile) => ({
-            ...profile,
-            sections: duplicatePullRequestSection(profile.sections, section.id),
-          }))
-          setManagerOpen(false)
-        }}
-        onMove={(section, delta) => {
-          persist((profile) => ({
-            ...profile,
-            sections: movePullRequestSection(profile.sections, section.id, delta),
-          }))
-          setManagerOpen(false)
-        }}
-        onDelete={(section) => {
-          persist((profile) => ({
-            ...profile,
-            sections: removePullRequestSection(profile.sections, section.id),
-          }))
-          setManagerOpen(false)
-          selectFallback(
-            target.profile.sections.find((item) => item.id !== section.id)?.id ?? "mine",
-          )
-        }}
-        onAddRepository={() => {
-          setManagerOpen(false)
-          setRepositoryOpen(true)
-        }}
-        onRemoveRepository={removeRepository}
-      />
+      <MountWhen when={repositoryOpen}>
+        <RepositorySetupModal
+          open
+          root={target.root}
+          host={target.profile.host}
+          onClose={() => setRepositoryOpen(false)}
+          onSaved={() => {
+            setRepositoryOpen(false)
+            refresh()
+          }}
+        />
+      </MountWhen>
+      <MountWhen when={managerOpen}>
+        <SectionManagerModal
+          open
+          sections={target.profile.sections}
+          repositories={target.profile.repositories}
+          onClose={() => setManagerOpen(false)}
+          onCreate={openCreateSection}
+          onEdit={editSection}
+          onDuplicate={(section) => {
+            persist((profile) => ({
+              ...profile,
+              sections: duplicatePullRequestSection(profile.sections, section.id),
+            }))
+            setManagerOpen(false)
+          }}
+          onMove={(section, delta) => {
+            persist((profile) => ({
+              ...profile,
+              sections: movePullRequestSection(profile.sections, section.id, delta),
+            }))
+            setManagerOpen(false)
+          }}
+          onDelete={(section) => {
+            persist((profile) => ({
+              ...profile,
+              sections: removePullRequestSection(profile.sections, section.id),
+            }))
+            setManagerOpen(false)
+            selectFallback(
+              target.profile.sections.find((item) => item.id !== section.id)?.id ?? "mine",
+            )
+          }}
+          onAddRepository={() => {
+            setManagerOpen(false)
+            setRepositoryOpen(true)
+          }}
+          onRemoveRepository={removeRepository}
+        />
+      </MountWhen>
       {editor ? (
         <SectionEditorModal
           open

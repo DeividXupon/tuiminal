@@ -20,6 +20,7 @@ export function GitTutorialDemo() {
       >
         <InlineButton label="[1] GIT · BASE LOCAL" accent={COLORS.git} onPress={noop} />
         <InlineButton label="[2] PR" accent={COLORS.git} active onPress={noop} />
+        <InlineButton label={translateUi("[3] ISSUES")} accent={COLORS.git} onPress={noop} />
       </box>
       <box
         id="tutorial-git-sections"
@@ -35,6 +36,47 @@ export function GitTutorialDemo() {
           content="[/] is:open author:@me  ·  3 REPOSITÓRIOS · 3/3 PRs · DEMO"
           style={{ fg: COLORS.muted }}
         />
+      </box>
+      <box
+        id="tutorial-git-issues"
+        style={{ ...panelBorder(), height: 4, flexShrink: 0, backgroundColor: COLORS.panel }}
+      >
+        <box style={{ height: 1, flexDirection: "row" }}>
+          <InlineButton
+            label={translateUi("Criadas por mim")}
+            accent={COLORS.git}
+            active
+            onPress={noop}
+          />
+          <InlineButton
+            label={translateUi("Atribuídas a mim")}
+            accent={COLORS.git}
+            onPress={noop}
+          />
+          <InlineButton label="[/] is:open author:@me" accent={COLORS.git} onPress={noop} />
+        </box>
+        <text
+          content="▶ ◆ equipe/api #318 · Cache expira antes da atualização"
+          style={{ fg: COLORS.text }}
+        />
+        <box style={{ height: 1, flexDirection: "row" }}>
+          <InlineButton label={translateUi("[C] Comentar")} accent={COLORS.git} onPress={noop} />
+          <InlineButton
+            label={translateUi("[A] Adicionar responsáveis")}
+            accent={COLORS.git}
+            onPress={noop}
+          />
+          <InlineButton
+            label={translateUi("[Shift+L] Editar labels")}
+            accent={COLORS.git}
+            onPress={noop}
+          />
+          <InlineButton
+            label={translateUi("[Shift+C] Criar branch e checkout")}
+            accent={COLORS.git}
+            onPress={noop}
+          />
+        </box>
       </box>
       <box style={{ flexGrow: 1, flexDirection: "row", gap: LAYOUT.gap }}>
         <box
@@ -79,7 +121,7 @@ export function GitTutorialDemo() {
         </box>
       </box>
       <ShortcutText
-        content="[J/K] Navegar  [H/L] Foco  [</>] Seção  [[/]] Aba  [P] Layout  [D] Diff  [?] Ações"
+        content="[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Layout  [D] Diff  [?] Ações"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>

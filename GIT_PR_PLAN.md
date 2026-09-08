@@ -45,12 +45,16 @@ operações locais; GitHub CLI (`gh`) como transporte autenticado e comandos; AP
 GraphQL/REST quando os comandos de alto nível não entregarem os campos necessários.
 Não criar backend, serviço cloud, banco próprio nem requisito de instalar gh-dash.
 
-Fora desta entrega: GitLab/Bitbucket, Issues, inbox geral de notificações GitHub,
+Fora desta entrega de PR: GitLab/Bitbucket, inbox geral de notificações GitHub,
 criação de PRs, comentários inline novos por linha de diff, resolver threads,
 edição de labels/revisores, operações em lote, execução arbitrária de comandos
 configurados, bypass de proteção, clone automático e daemon após fechar o app.
 Esses itens não foram pedidos; não ampliá-los silenciosamente. Ler labels,
 revisores e threads existentes continua no escopo.
+
+Issues foi implementado depois como workspace irmão em `[3] Issues`. Contratos,
+ações e evidências ficam em `GIT_ISSUES_PLAN.md` e
+`docs/design/git-issues-interface.md`, sem transferir responsabilidades para PR.
 
 GitHub.com é o primeiro alvo. A identidade dos dados inclui host desde o início;
 GitHub Enterprise exige teste de versão/capacidades antes de ser anunciado como
@@ -85,14 +89,14 @@ Estado final validado em 2026-09-04:
 | Arquivo | Situação final | Responsabilidade |
 | --- | --- | --- |
 | `src/features/git/GitWorkspace.tsx` | Base local preservada, sem dependência de GitHub. | Arquivos, stage/unstage, commits, grafo e diff locais. |
-| `src/features/git/GitFeatureWorkspace.tsx` | Wrapper pequeno com `[1] Base` e `[2] PR`. | Lazy mount, mouse, estado independente e Base como default. |
+| `src/features/git/GitFeatureWorkspace.tsx` | Wrapper pequeno com `[1] Base`, `[2] PR` e o workspace irmão `[3] Issues`. | Lazy mount, mouse, estado independente e Base como default. |
 | `src/features/git/PullRequestsWorkspace.tsx` | Composição PR mantida no limite de 400 linhas. | Une configuração, dashboard, prévia, diff, ações e modais por hooks/componentes menores. |
 | `src/features/git/model/pr/*` | Modelos puros separados de React, IO e serviços. | Identidade, consulta, navegação, conteúdo, diff, CI, configuração e ações. |
 | `src/features/git/services/github/*` | Transporte `gh` sem shell e adaptadores tipados. | Auth, busca, detalhes, diff, workflows, leituras e mutações explícitas. |
 | `src/features/git/services/pr-*` | Coordenação e efeitos isolados. | Sessão/cache, ações, checkout, watches e notificações. |
 | `src/features/git/storage/pr/config.ts` | YAML versionado, atômico e modo `0600`. | Perfis independentes por raiz canônica e mapa de clones. |
 | `src/features/git/ui/pr/*` | UI decomposta e testável. | Seções, lista, prévia, diff, escopo opcional, gerenciador e confirmações. |
-| `src/features/git/tutorial/*` | Tour estável com dados fictícios. | Ensina Base/PR sem consultar GitHub. |
+| `src/features/git/tutorial/*` | Tour estável com dados fictícios. | Ensina Base/PR/Issues sem consultar GitHub. |
 | `src/app/feature-registry.ts` | Escopo e disposer Git registrados. | Impede vazamento de atalhos e encerra recursos pertencentes ao Git. |
 
 A Base atual faz refresh periódico somente quando ativa. O wrapper precisa passar
@@ -393,8 +397,8 @@ em modelos, serviços, armazenamento, hooks e componentes, sem scaffolding vazio
 ```text
 src/features/git/
   index.ts                       API pública para App
-  keyboard.ts                    posse de teclado Base/PR, modais e inputs
-  GitFeatureWorkspace.tsx        composição leve [1] Base / [2] PR
+  keyboard.ts                    posse de teclado Base/PR/Issues, modais e inputs
+  GitFeatureWorkspace.tsx        composição leve [1] Base / [2] PR / [3] Issues
   GitWorkspace.tsx               tela Base local existente, preservada
   PullRequestsWorkspace.tsx      composição de seções/lista/prévia
   model/

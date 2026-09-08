@@ -33,6 +33,7 @@ import {
   DEFAULT_GIT_WORKSPACE_TAB,
   gitWorkspaceTabForKey,
 } from "../src/features/git/model/workspace"
+import { pullRequestDashboardPresentation } from "../src/features/git/ui/pr/presentation"
 
 const identity = DEMO_PULL_REQUESTS[0]?.identity ?? {
   host: "github.com",
@@ -50,6 +51,29 @@ const auth: PullRequestAuthContext = {
 }
 
 describe("Git Base/PR workspace", () => {
+  test("keeps terminal GitHub failures consistent between header and state panel", () => {
+    expect(
+      pullRequestDashboardPresentation(
+        {
+          status: "requirements",
+          capabilities: {
+            available: false,
+            version: null,
+            supported: false,
+            reason: "missing",
+          },
+        },
+        0,
+      ).meta,
+    ).toBe("GITHUB CLI NÃO ENCONTRADO")
+    expect(
+      pullRequestDashboardPresentation(
+        { status: "error", kind: "not-authenticated", error: "fixture" },
+        0,
+      ).meta,
+    ).toBe("AUTENTICAÇÃO GITHUB NECESSÁRIA")
+  })
+
   test("opens on Base and maps only local number shortcuts", () => {
     expect(DEFAULT_GIT_WORKSPACE_TAB).toBe("base")
     expect(gitWorkspaceTabForKey("1")).toBe("base")
