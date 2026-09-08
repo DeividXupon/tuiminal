@@ -1,47 +1,49 @@
-import type { ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import type { ScrollBoxRenderable } from "@opentui/core"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import {
-  loadCommitDiff,
-  loadGitDiff,
-  loadGitSnapshot,
-  toggleAllGitFiles,
-  toggleGitFile,
-  type GitSnapshot,
-} from "./services/git"
 import { COLORS, LAYOUT, panelBorder } from "../../core/settings/theme"
-import { InlineButton } from "../../shared/ui/InlineButton"
-import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
+import { translateUi } from "../../shared/i18n"
 import { useNotificationFromValue } from "../../shared/notifications/index"
-
-import { LOADING_FRAMES, FILES_PANEL_WIDTH, DIFF_SYNTAX_STYLE } from "./rendering/constants"
-import type { ViewMode, DiffLayout, NarrowGitPane } from "./model/view"
-import {
-  FILE_OPTION_PREFIX,
-  FOLDER_OPTION_PREFIX,
-  displayPath,
-  fileOptionValue,
-  createFileTreeOptions,
-} from "./rendering/file-tree"
+import { InlineButton } from "../../shared/ui/InlineButton"
+import { ShortcutText } from "../../shared/ui/ShortcutText"
+import { useGitDiffTarget } from "./hooks/use-git-diff-target"
+import { useGitSnapshot } from "./hooks/use-git-snapshot"
+import { useLocalConfigurationShortcut } from "./hooks/use-local-configuration-shortcut"
+import type { DiffLayout, FileTreeOption, NarrowGitPane, ViewMode } from "./model/view"
 import {
   authorInitials,
-  formatGraph,
   buildCommitGraph,
   commitLaneColor,
-  styledGraph,
   formatDecorations,
+  formatGraph,
+  styledGraph,
 } from "./rendering/commit-graph"
+import { DIFF_SYNTAX_STYLE, FILES_PANEL_WIDTH, LOADING_FRAMES } from "./rendering/constants"
 import {
-  fitLine,
+  documentLineCount,
   fillLine,
-  parseUnifiedDiff,
+  fitLine,
   InlineDiffLine,
   parseDiffDocuments,
-  documentLineCount,
+  parseUnifiedDiff,
 } from "./rendering/diff"
-import { commitTitle, gitSnapshotSignature } from "./rendering/presentation"
-import { useGitDiffTarget } from "./hooks/use-git-diff-target"
+import {
+  createFileTreeOptions,
+  displayPath,
+  FOLDER_OPTION_PREFIX,
+  fileOptionValue,
+} from "./rendering/file-tree"
+import { commitTitle } from "./rendering/presentation"
+import {
+  GIT_LAUNCH_DIRECTORY,
+  loadCommitDiff,
+  loadGitDiff,
+  toggleAllGitFiles,
+  toggleGitFile,
+} from "./services/git"
+import { GitDiffsHeader } from "./ui/base/GitDiffsHeader"
+import { GitFileTree, gitFileTreeRowId, isGitFileTreeFocused } from "./ui/base/GitFileTree"
 
 export function compactGitActionFooter(previewWidth: number) {
   return previewWidth < 58
@@ -51,23 +53,47 @@ export function gitActionLabel(compact: boolean, label: string) {
   return compact ? (label.match(/^\[[^\]]+\]/)?.[0] ?? label) : label
 }
 
+export function gitPaneFocusTarget(
+  keyName: string,
+  fileTreeFocused: boolean,
+  previewFocused: boolean,
+): NarrowGitPane | null {
+  if (keyName === "tab") return fileTreeFocused ? "preview" : "files"
+  if (fileTreeFocused && (keyName === "l" || keyName === "right")) return "preview"
+  if (previewFocused && (keyName === "h" || keyName === "left")) return "files"
+  return null
+}
+
+function gitDiffLayoutLabel(current: DiffLayout, target: DiffLayout, label: string) {
+  return `${current === target ? "[V] " : ""}${label}`
+}
+
+function gitBaseShortcutHint(width: number) {
+  return width < 86
+    ? "[Tab/H/L] Painel  [V] Visual  [O] Log  [G] Árvore"
+    : "[Tab/H/L/←/→] Árvore/diff  [V] Visualização  [O] Log  [G] Árvore Git  [R] Atualizar"
+}
+
+function gitFileTreeIsActive(active: boolean, narrow: boolean, pane: NarrowGitPane) {
+  return active && (!narrow || pane === "files")
+}
+
 export function GitBaseWorkspace({
   active,
   refreshRequest = 0,
+  targetDirectory = GIT_LAUNCH_DIRECTORY,
+  onOpenLocalConfiguration,
 }: {
   active: boolean
   refreshRequest?: number
+  targetDirectory?: string
+  onOpenLocalConfiguration?: (() => void) | undefined
 }) {
   const terminal = useTerminalDimensions()
+  const renderer = useRenderer()
   const narrowGit = terminal.width < 78
-  const fileListRef = useRef<SelectRenderable | null>(null)
   const diffScrollRef = useRef<ScrollBoxRenderable | null>(null)
   const loadedDiffTargetRef = useRef<string | null>(null)
-  const refreshInFlightRef = useRef<Promise<void> | null>(null)
-  const snapshotSignatureRef = useRef<string | null>(null)
-  const selectedPathRef = useRef<string | null>(null)
-  const viewRef = useRef<ViewMode>("diff")
-  const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [selectedTreeValue, setSelectedTreeValue] = useState<string | null>(null)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set())
@@ -77,19 +103,28 @@ export function GitBaseWorkspace({
   const [view, setView] = useState<ViewMode>("diff")
   const [diffLayout, setDiffLayout] = useState<DiffLayout>("unified")
   const [diffOffset, setDiffOffset] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [diffLoading, setDiffLoading] = useState(false)
   const [commitLoading, setCommitLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   useNotificationFromValue(message, { source: "Git" })
-  useNotificationFromValue(error, { source: "Git", kind: "error" })
   const [motionFrame, setMotionFrame] = useState(0)
-  const [refreshSequence, setRefreshSequence] = useState(0)
   const [narrowPane, setNarrowPane] = useState<NarrowGitPane>("files")
-  selectedPathRef.current = selectedPath
-  viewRef.current = view
+  const { snapshot, loading, error, setError, refreshSequence, refresh } = useGitSnapshot({
+    active,
+    targetDirectory,
+    refreshRequest,
+    selectedPath,
+    view,
+    setters: { setSelectedPath, setSelectedCommitIndex, setDiff, setCommitDiff },
+  })
+  useNotificationFromValue(error, { source: "Git", kind: "error" })
+  useLocalConfigurationShortcut(active, onOpenLocalConfiguration)
+  useEffect(() => {
+    void targetDirectory
+    loadedDiffTargetRef.current = null
+    setSelectedTreeValue(null)
+  }, [targetDirectory])
   const selectedFile = useMemo(
     () => snapshot?.files.find((file) => file.path === selectedPath) ?? null,
     [selectedPath, snapshot],
@@ -121,6 +156,31 @@ export function GitBaseWorkspace({
         (!selectedTreeValue && option.value === fileOptionValue(selectedPath ?? "")),
     ),
   )
+  const selectFileTreeOption = useCallback((index: number, option: FileTreeOption) => {
+    void index
+    setSelectedTreeValue(option.value)
+    if (option.kind === "file") {
+      setSelectedPath(option.path)
+      setView("diff")
+    }
+  }, [])
+  const activateFileTreeOption = useCallback(
+    (index: number, option: FileTreeOption) => {
+      void index
+      if (option.kind === "file") {
+        if (narrowGit) setNarrowPane("preview")
+        return
+      }
+      if (view !== "diff") return
+      setCollapsedFolders((current) => {
+        const next = new Set(current)
+        if (next.has(option.path)) next.delete(option.path)
+        else next.add(option.path)
+        return next
+      })
+    },
+    [narrowGit, view],
+  )
   const commitByHash = useMemo(
     () => new Map((snapshot?.commits ?? []).map((commit) => [commit.fullHash, commit])),
     [snapshot?.commits],
@@ -138,68 +198,35 @@ export function GitBaseWorkspace({
     : 0
   const compactGraphRowLimit = Math.max(1, compactGraphHeight - 3)
   const fileTreeHeight = Math.max(2, estimatedMainHeight - compactGraphHeight - 3)
-  const refresh = useCallback(async (showLoading = true) => {
-    if (refreshInFlightRef.current) return refreshInFlightRef.current
-    const operation = (async () => {
-      if (showLoading) setLoading(true)
-      setError(null)
-      try {
-        const nextSnapshot = await loadGitSnapshot()
-        const nextSignature = gitSnapshotSignature(nextSnapshot)
-        const snapshotChanged = snapshotSignatureRef.current !== nextSignature
-
-        if (snapshotChanged) {
-          snapshotSignatureRef.current = nextSignature
-          setSnapshot(nextSnapshot)
-          setRefreshSequence((current) => current + 1)
-          setSelectedPath((current) => {
-            if (current && nextSnapshot.files.some((file) => file.path === current)) {
-              return current
-            }
-            return nextSnapshot.files[0]?.path ?? null
-          })
-          setSelectedCommitIndex((current) =>
-            Math.min(current, Math.max(0, nextSnapshot.commits.length - 1)),
-          )
-        } else if (nextSnapshot.root && viewRef.current === "diff") {
-          const selected = nextSnapshot.files.find((file) => file.path === selectedPathRef.current)
-          if (selected) {
-            const nextDiff = await loadGitDiff(nextSnapshot.root, selected)
-            setDiff((current) => (current === nextDiff ? current : nextDiff))
-          }
+  const showPreviewPane = useCallback(() => {
+    if (narrowGit) setNarrowPane("preview")
+  }, [narrowGit])
+  const focusGitPane = useCallback(
+    (pane: NarrowGitPane) => {
+      if (narrowGit) setNarrowPane(pane)
+      setTimeout(() => {
+        if (pane === "files") {
+          renderer.root
+            .findDescendantById(gitFileTreeRowId("git-file-list", selectedTreeIndex))
+            ?.focus()
+        } else {
+          diffScrollRef.current?.focus()
         }
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Não foi possível carregar o repositório.",
-        )
-      } finally {
-        if (showLoading) setLoading(false)
-      }
-    })()
-    refreshInFlightRef.current = operation
-    try {
-      await operation
-    } finally {
-      if (refreshInFlightRef.current === operation) refreshInFlightRef.current = null
-    }
-  }, [])
+      }, 0)
+    },
+    [narrowGit, renderer, selectedTreeIndex],
+  )
   useEffect(() => {
-    if (!active || snapshot) return
-    void refresh()
-  }, [active, refresh, snapshot])
-  useEffect(() => {
-    if (active && refreshRequest > 0) void refresh(false)
-  }, [active, refresh, refreshRequest])
-  useEffect(() => {
-    if (!active || !snapshot) return
-    const interval = setInterval(() => void refresh(false), 8000)
-    return () => clearInterval(interval)
-  }, [active, refresh, snapshot])
-  useEffect(() => {
-    if (active && snapshot?.isRepository) fileListRef.current?.focus()
-  }, [active, snapshot?.isRepository])
+    if (!active || !snapshot?.isRepository) return
+    const timeout = setTimeout(
+      () =>
+        renderer.root
+          .findDescendantById(gitFileTreeRowId("git-file-list", selectedTreeIndex))
+          ?.focus(),
+      0,
+    )
+    return () => clearTimeout(timeout)
+  }, [active, renderer, selectedTreeIndex, snapshot?.isRepository])
 
   useEffect(() => {
     if (!message) return
@@ -314,7 +341,7 @@ export function GitBaseWorkspace({
         setBusy(false)
       }
     },
-    [busy, refresh, selectedFile, selectedTreeValue, snapshot],
+    [busy, refresh, selectedFile, selectedTreeValue, setError, snapshot],
   )
 
   const activeDiff = view === "commit" ? commitDiff : diff
@@ -368,6 +395,17 @@ export function GitBaseWorkspace({
   useKeyboard((key) => {
     if (!active) return
 
+    const focusedId = renderer.currentFocusedRenderable?.id ?? ""
+    const fileTreeFocused = isGitFileTreeFocused(focusedId, "git-file-list")
+    const previewFocused = focusedId === "git-base-diff"
+    const paneTarget = gitPaneFocusTarget(key.name, fileTreeFocused, previewFocused)
+    if (paneTarget) {
+      key.preventDefault()
+      key.stopPropagation()
+      focusGitPane(paneTarget)
+      return
+    }
+
     switch (key.name) {
       case "r":
         void refresh()
@@ -383,17 +421,17 @@ export function GitBaseWorkspace({
         break
       case "d":
         setView("diff")
-        if (narrowGit) setNarrowPane("preview")
+        showPreviewPane()
         setDiffOffset(0)
         break
-      case "l":
+      case "o":
         setView("log")
-        if (narrowGit) setNarrowPane("preview")
+        showPreviewPane()
         setDiffOffset(0)
         break
       case "g":
         setView((current) => (current === "graph" ? "diff" : "graph"))
-        if (narrowGit) setNarrowPane("preview")
+        showPreviewPane()
         setDiffOffset(0)
         break
       case "v":
@@ -421,30 +459,15 @@ export function GitBaseWorkspace({
       case "linefeed":
         if ((view === "log" || view === "graph") && selectedCommit) {
           setView("commit")
-          if (narrowGit) setNarrowPane("preview")
-        }
-        break
-      case "tab":
-        if (narrowGit) {
-          key.preventDefault()
-          setNarrowPane((current) => {
-            const next = current === "files" ? "preview" : "files"
-            setTimeout(() => {
-              if (next === "files") fileListRef.current?.focus()
-              else diffScrollRef.current?.focus()
-            }, 0)
-            return next
-          })
+          showPreviewPane()
         }
         break
       case "[":
-      case "left":
         if (view !== "log" && view !== "graph") {
           setDiffOffset((current) => Math.max(0, current - 5))
         }
         break
       case "]":
-      case "right":
         if (view !== "log" && view !== "graph") {
           setDiffOffset((current) => Math.min(maxDiffOffset, current + 5))
         }
@@ -475,39 +498,17 @@ export function GitBaseWorkspace({
         gap: LAYOUT.gap,
       }}
     >
-      <box
+      <GitDiffsHeader
         key={LAYOUT.compact ? "git-header-compact" : "git-header-framed"}
-        style={{
-          ...panelBorder(),
-          backgroundColor: COLORS.panel,
-          paddingLeft: 1,
-          paddingRight: 1,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <text
-          content={fitLine(
-            snapshot?.isRepository
-              ? `◆ ${snapshot.repositoryName}  /  ${snapshot.branch}`
-              : "◆ GIT WORKSPACE",
-            narrowGit ? Math.max(12, terminal.width - 20) : Math.max(24, terminal.width - 38),
-          )}
-          style={{ fg: COLORS.git }}
-        />
-        <text
-          content={
-            loading
-              ? `${LOADING_FRAMES[motionFrame]} ATUALIZANDO`
-              : snapshot?.isRepository
-                ? narrowGit
-                  ? `●${stagedCount} ○${unstagedCount}`
-                  : `${snapshot.files.length} ALT  ●${stagedCount} ○${unstagedCount}  ↑${snapshot.ahead} ↓${snapshot.behind}`
-                : "◇ FORA DE UM REPOSITÓRIO"
-          }
-          style={{ fg: loading ? COLORS.git : COLORS.muted }}
-        />
-      </box>
+        snapshot={snapshot}
+        loading={loading}
+        motionFrame={motionFrame}
+        stagedCount={stagedCount}
+        unstagedCount={unstagedCount}
+        narrow={narrowGit}
+        terminalWidth={terminal.width}
+        onConfigure={onOpenLocalConfiguration}
+      />
 
       {!loading && snapshot && !snapshot.isRepository ? (
         <box
@@ -551,14 +552,23 @@ export function GitBaseWorkspace({
                 active={narrowPane === "files"}
                 onPress={() => {
                   setNarrowPane("files")
-                  setTimeout(() => fileListRef.current?.focus(), 0)
+                  setTimeout(
+                    () =>
+                      renderer.root
+                        .findDescendantById(gitFileTreeRowId("git-file-list", selectedTreeIndex))
+                        ?.focus(),
+                    0,
+                  )
                 }}
               />
               <InlineButton
                 label="[Tab] Preview"
                 accent={COLORS.git}
                 active={narrowPane === "preview"}
-                onPress={() => setNarrowPane("preview")}
+                onPress={() => {
+                  setNarrowPane("preview")
+                  setTimeout(() => diffScrollRef.current?.focus(), 0)
+                }}
               />
               <text content=" · um painel por vez" style={{ fg: COLORS.muted }} />
             </box>
@@ -580,64 +590,15 @@ export function GitBaseWorkspace({
                 style={{ height: 1, flexShrink: 0, fg: COLORS.git }}
               />
               {fileOptions.length ? (
-                <select
-                  ref={fileListRef}
+                <GitFileTree
+                  active={gitFileTreeIsActive(active, narrowGit, narrowPane)}
                   id="git-file-list"
                   options={fileOptions}
                   selectedIndex={selectedTreeIndex}
-                  onChange={(_index, option) => {
-                    if (typeof option?.value === "string") {
-                      setSelectedTreeValue(option.value)
-                      if (option.value.startsWith(FILE_OPTION_PREFIX)) {
-                        setSelectedPath(option.value.slice(FILE_OPTION_PREFIX.length))
-                        setView("diff")
-                      }
-                    }
-                  }}
-                  onSelect={(_index, option) => {
-                    if (
-                      narrowGit &&
-                      typeof option?.value === "string" &&
-                      option.value.startsWith(FILE_OPTION_PREFIX)
-                    ) {
-                      setNarrowPane("preview")
-                      return
-                    }
-                    if (
-                      view !== "diff" ||
-                      typeof option?.value !== "string" ||
-                      !option.value.startsWith(FOLDER_OPTION_PREFIX)
-                    ) {
-                      return
-                    }
-                    const folder = option.value.slice(FOLDER_OPTION_PREFIX.length)
-                    setCollapsedFolders((current) => {
-                      const next = new Set(current)
-                      if (next.has(folder)) next.delete(folder)
-                      else next.add(folder)
-                      return next
-                    })
-                  }}
-                  onMouseDown={(event) =>
-                    handleSelectMouseDown(event, fileListRef.current, {
-                      optionCount: fileOptions.length,
-                      activateOnClick: true,
-                    })
-                  }
-                  onMouseScroll={(event) => handleSelectMouseScroll(event, fileListRef.current)}
-                  showDescription={false}
-                  showScrollIndicator
-                  wrapSelection
-                  style={{
-                    width: filesContentWidth,
-                    height: fileTreeHeight,
-                    backgroundColor: COLORS.panel,
-                    focusedBackgroundColor: COLORS.panel,
-                    textColor: COLORS.muted,
-                    focusedTextColor: COLORS.text,
-                    selectedBackgroundColor: COLORS.panelRaised,
-                    selectedTextColor: COLORS.git,
-                  }}
+                  width={filesContentWidth}
+                  height={fileTreeHeight}
+                  onMove={selectFileTreeOption}
+                  onActivate={activateFileTreeOption}
                 />
               ) : (
                 <box style={{ height: fileTreeHeight, justifyContent: "center" }}>
@@ -792,7 +753,7 @@ export function GitBaseWorkspace({
                     <>
                       <text content="VIEW" style={{ fg: COLORS.border }} />
                       <InlineButton
-                        label="Unificado"
+                        label={gitDiffLayoutLabel(diffLayout, "unified", translateUi("Unificado"))}
                         accent={COLORS.database}
                         active={diffLayout === "unified"}
                         onPress={() => {
@@ -801,7 +762,7 @@ export function GitBaseWorkspace({
                         }}
                       />
                       <InlineButton
-                        label="2 colunas"
+                        label={gitDiffLayoutLabel(diffLayout, "split", translateUi("2 colunas"))}
                         accent={COLORS.database}
                         active={diffLayout === "split"}
                         onPress={() => {
@@ -810,7 +771,7 @@ export function GitBaseWorkspace({
                         }}
                       />
                       <InlineButton
-                        label="Intralinha"
+                        label={gitDiffLayoutLabel(diffLayout, "inline", translateUi("Intralinha"))}
                         accent={COLORS.database}
                         active={diffLayout === "inline"}
                         onPress={() => {
@@ -953,6 +914,8 @@ export function GitBaseWorkspace({
                 ) : (selectedFile || view === "commit") && diffDocuments.length ? (
                   <scrollbox
                     ref={diffScrollRef}
+                    id="git-base-diff"
+                    focusable
                     scrollY
                     scrollX
                     viewportCulling
@@ -1040,101 +1003,118 @@ export function GitBaseWorkspace({
                     fg: error ? COLORS.danger : busy ? COLORS.git : COLORS.success,
                   }}
                 />
-              ) : (
-                <box
-                  id="git-base-action-footer"
-                  style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}
-                >
-                  {view === "graph" || view === "log" ? (
-                    <>
-                      <InlineButton
-                        label={gitActionLabel(compactPreviewActions, "[P] ‹")}
-                        accent={COLORS.git}
-                        disabled={selectedCommitIndex === 0}
-                        onPress={() =>
-                          setSelectedCommitIndex((current) => Math.max(0, current - 1))
-                        }
-                      />
-                      <InlineButton
-                        label={gitActionLabel(compactPreviewActions, "[N] ›")}
-                        accent={COLORS.git}
-                        disabled={selectedCommitIndex >= (snapshot?.commits.length ?? 1) - 1}
-                        onPress={() =>
-                          setSelectedCommitIndex((current) =>
-                            Math.min((snapshot?.commits.length ?? 1) - 1, current + 1),
-                          )
-                        }
-                      />
-                      <InlineButton
-                        label={gitActionLabel(compactPreviewActions, "[↵] Abrir")}
-                        accent={COLORS.git}
-                        disabled={!selectedCommit}
-                        onPress={() => setView("commit")}
-                      />
+              ) : null}
+              <box
+                id="git-base-action-footer"
+                style={{
+                  height: 1,
+                  flexShrink: 0,
+                  flexDirection: "row",
+                  overflow: "hidden",
+                  backgroundColor: COLORS.panelRaised,
+                  zIndex: 20,
+                }}
+              >
+                {view === "graph" || view === "log" ? (
+                  <>
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[P] ‹")}
+                      accent={COLORS.git}
+                      disabled={selectedCommitIndex === 0}
+                      onPress={() => setSelectedCommitIndex((current) => Math.max(0, current - 1))}
+                    />
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[N] ›")}
+                      accent={COLORS.git}
+                      disabled={selectedCommitIndex >= (snapshot?.commits.length ?? 1) - 1}
+                      onPress={() =>
+                        setSelectedCommitIndex((current) =>
+                          Math.min((snapshot?.commits.length ?? 1) - 1, current + 1),
+                        )
+                      }
+                    />
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[↵] Abrir")}
+                      accent={COLORS.git}
+                      disabled={!selectedCommit}
+                      onPress={() => setView("commit")}
+                    />
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[D] Diff")}
+                      accent={COLORS.git}
+                      onPress={() => setView("diff")}
+                    />
+                    <InlineButton
+                      label={gitActionLabel(
+                        compactPreviewActions,
+                        view === "graph" ? "[O] Lista" : "[G] Árvore",
+                      )}
+                      accent={COLORS.database}
+                      onPress={() => setView(view === "graph" ? "log" : "graph")}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {view === "diff" ? (
+                      <>
+                        <InlineButton
+                          label={gitActionLabel(compactPreviewActions, "[␠] Stage")}
+                          accent={COLORS.git}
+                          disabled={!selectedFile || busy}
+                          onPress={() => void runStageAction(false)}
+                        />
+                        <InlineButton
+                          label={gitActionLabel(compactPreviewActions, "[A] Todos")}
+                          accent={COLORS.git}
+                          disabled={!snapshot?.files.length || busy}
+                          onPress={() => void runStageAction(true)}
+                        />
+                      </>
+                    ) : null}
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[G] Árvore")}
+                      accent={COLORS.database}
+                      onPress={() => setView("graph")}
+                    />
+                    <InlineButton
+                      label={gitActionLabel(compactPreviewActions, "[O] Log")}
+                      accent={COLORS.git}
+                      onPress={() => setView("log")}
+                    />
+                    {view === "commit" ? (
                       <InlineButton
                         label={gitActionLabel(compactPreviewActions, "[D] Diff")}
                         accent={COLORS.git}
                         onPress={() => setView("diff")}
                       />
-                      <InlineButton
-                        label={gitActionLabel(
-                          compactPreviewActions,
-                          view === "graph" ? "[L] Lista" : "[G] Árvore",
-                        )}
-                        accent={COLORS.database}
-                        onPress={() => setView(view === "graph" ? "log" : "graph")}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      {view === "diff" ? (
-                        <>
-                          <InlineButton
-                            label={gitActionLabel(compactPreviewActions, "[␠] Stage")}
-                            accent={COLORS.git}
-                            disabled={!selectedFile || busy}
-                            onPress={() => void runStageAction(false)}
-                          />
-                          <InlineButton
-                            label={gitActionLabel(compactPreviewActions, "[A] Todos")}
-                            accent={COLORS.git}
-                            disabled={!snapshot?.files.length || busy}
-                            onPress={() => void runStageAction(true)}
-                          />
-                        </>
-                      ) : null}
-                      <InlineButton
-                        label={gitActionLabel(compactPreviewActions, "[G] Árvore")}
-                        accent={COLORS.database}
-                        onPress={() => setView("graph")}
-                      />
-                      <InlineButton
-                        label={gitActionLabel(compactPreviewActions, "[L] Log")}
-                        accent={COLORS.git}
-                        onPress={() => setView("log")}
-                      />
-                      {view === "commit" ? (
-                        <InlineButton
-                          label={gitActionLabel(compactPreviewActions, "[D] Diff")}
-                          accent={COLORS.git}
-                          onPress={() => setView("diff")}
-                        />
-                      ) : null}
-                    </>
-                  )}
-                  <InlineButton
-                    id="git-base-refresh"
-                    label={gitActionLabel(compactPreviewActions, "[R] Sync")}
-                    accent={COLORS.git}
-                    disabled={loading}
-                    onPress={() => void refresh()}
-                  />
-                </box>
-              )}
+                    ) : null}
+                  </>
+                )}
+                <InlineButton
+                  id="git-base-refresh"
+                  label={gitActionLabel(compactPreviewActions, "[R] Sync")}
+                  accent={COLORS.git}
+                  disabled={loading}
+                  onPress={() => void refresh()}
+                />
+              </box>
             </box>
           ) : null}
         </box>
       )}
+      <ShortcutText
+        id="git-base-shortcut-footer"
+        content={translateUi(gitBaseShortcutHint(terminal.width))}
+        style={{
+          width: "100%",
+          height: 1,
+          flexShrink: 0,
+          overflow: "hidden",
+          fg: COLORS.muted,
+          bg: COLORS.panelRaised,
+          zIndex: 30,
+        }}
+      />
     </box>
   )
 }

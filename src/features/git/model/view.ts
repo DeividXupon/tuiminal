@@ -45,6 +45,11 @@ export type FileTreeOption = {
   name: string
   description: string
   value: string
+  kind: "folder" | "file"
+  path: string
+  depth: number
+  indexStatus?: string
+  worktreeStatus?: string
 }
 
 export function resolveDiffDocumentPath(header: string, selectedPath?: string) {

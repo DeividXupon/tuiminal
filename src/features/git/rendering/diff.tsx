@@ -1,15 +1,15 @@
 import { pathToFiletype, type RGBA, type TextChunk } from "@opentui/core"
-import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { COLORS } from "../../../core/settings/theme"
-import { DIFF_SYNTAX_STYLE, DIFF_CHANGED_HIGHLIGHT, DIFF_REMOVED_HIGHLIGHT } from "./constants"
+import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import {
-  resolveDiffDocumentPath,
   type CharacterRange,
   type DiffDocument,
   type DiffLayout,
   type InlineDiffRow,
   type ParsedDiffLine,
+  resolveDiffDocumentPath,
 } from "../model/view"
+import { DIFF_CHANGED_HIGHLIGHT, DIFF_REMOVED_HIGHLIGHT, DIFF_SYNTAX_STYLE } from "./constants"
 
 export function fitLine(line: string, width: number) {
   const clean = translateUi(line).replace(/\t/g, "  ").replace(/\r/g, "")
@@ -340,7 +340,7 @@ export function InlineDiffLine({ row, filetype }: { row: InlineDiffRow; filetype
                 ),
             }
           : {})}
-        style={{ flexGrow: 1, width: "100%", height: 1 }}
+        style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, height: 1 }}
       />
     </box>
   )
