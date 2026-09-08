@@ -6,9 +6,9 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 ## Anatomia
 
 ```text
-┌ [1] GIT · BASE LOCAL  [2] PR  [3] ISSUES ───────────────────────────────┐
+┌ [1] [C] GIT · DIFFS  [2] PR  [3] ISSUES  [4] INBOX ─────────────────────┐
 │ ISSUES                                      github.com · @viewer          │
-│ [<] Criadas 12  Atribuídas 4  Envolvido 21  Mencionaram 3 [>] [+] [^E] │
+│ [<] Criadas 12  Atribuídas 4  Envolvido 21  Mencionaram 3 [>]          │
 │ [/] is:open author:@me       TODOS OS PROJETOS · 20/42 · ATUALIZADO     │
 ├───────────────────────────────┬───────────────────────────────────────────┤
 │ ▶ ◆ owner/api #318 Título 6 ♥4│ owner/api #318 · Título                  │
@@ -35,7 +35,8 @@ responsáveis e labels.
 ## Foco, camadas e estados
 
 - Lista: `[J/K]`, setas, `[G/Home]` e `[Shift+G/End]`.
-- Seções: `[<]`/`[>]`; `[/]` query; `[+]` cria; `[Ctrl+E]` gerencia.
+- Seções: `[<]`/`[>]`; `[/]` edita a query ativa. Criação, edição, ordem e
+  repositórios ficam no modal Git aberto por `[,]` nas configurações do Git.
 - Prévia: `[[]/[]]` alterna abas; `[J/K]` rola; `[Ctrl+D/U]` pagina; `[E]`
   expande/recolhe a descrição.
 - `[?]` mostra disponibilidade e motivo de todas as ações.
@@ -55,4 +56,7 @@ responsáveis e labels.
 - Labels usa `[Shift+L]`, sem conflitar com `[L]` para abrir a prévia.
 - Escritas exigem `[Ctrl+S]` e revalidação; não há comandos arbitrários ou lote.
 - Checkout não clona e opera somente em clone local elegível.
-- Base, PR e Issues são áreas lazy, separadas e com estado independente.
+- Diffs, PR e Issues são áreas separadas e com estado independente.
+- A última linha inicia a próxima página com loader; o refresh automático cobre
+  todas as seções e a profundidade já carregada sem limpar a lista, e a query tem
+  autocomplete do GitHub.

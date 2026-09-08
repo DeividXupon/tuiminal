@@ -2,7 +2,7 @@
 
 Status: **implementada e validada**, referência consultada em 2026-09-04.
 Este documento acompanha o [plano de implementação](../../GIT_PR_PLAN.md).
-O shell Base/PR, dashboard responsivo, cinco abas, diff remoto, ações, CI,
+O shell Diffs/PR, dashboard responsivo, cinco abas, diff remoto, ações, CI,
 configuração e tutorial estão implementados. As diferenças deliberadas em relação
 ao gh-dash continuam documentadas aqui para evitar uma cópia acrítica de atalhos.
 
@@ -87,7 +87,7 @@ imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo
 
 ```text
 ◆ TUIMINAL    [@] Banco  [#] Git  [$] Runner  [%] HTTP  [^] Terminal   [,] Config
-GIT  [1] Base  [2] PR  [3] Issues                  github.com · @usuario
+GIT  [1] Diffs  [2] PR  [3] Issues                 github.com · @usuario
  [<]  Meus PRs 12  │  Revisar 4  │  Atribuídos 3  │  CI falhando 2  [>] [+]
 [/] is:open review-requested:@me             Escopo: todos os projetos da conta
 ───────────────────────────────────────────┬──────────────────────────────────
@@ -114,7 +114,7 @@ Busca, título e tabs não devem reservar várias linhas vazias.
 ### 4.2. Terminal médio — prévia embaixo
 
 ```text
-GIT [1] Base [2] PR [3] Issues              github.com · @usuario
+GIT [1] Diffs [2] PR [3] Issues             github.com · @usuario
 [<] Meus PRs 12 │ Revisar 4 │ Atribuídos 3 [>] [+]
 [/] is:open review-requested:@me
    Repo      PR / Título                         Rev CI
@@ -131,7 +131,7 @@ Descrição…                     Revisores e code owners…
 ### 4.3. Terminal estreito/baixo — um painel por vez
 
 ```text
-GIT [1] Base [2] PR [3] Issues
+GIT [1] Diffs [2] PR [3] Issues
 [<] Revisar · 4 [>] [+]
 [/] review-requested:@me
 ▶ #142 Corrigir cache
@@ -142,7 +142,7 @@ GIT [1] Base [2] PR [3] Issues
 ```
 
 Abrir a prévia substitui apenas o conteúdo da lista; `[Esc]`/`[h/←]` retorna à
-mesma linha e offset. A faixa Base/PR/Issues permanece acessível. Em larguras extremas,
+mesma linha e offset. A faixa Diffs/PR/Issues permanece acessível. Em larguras extremas,
 ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro.
 
 ### 4.4. Prévia — conteúdo das abas
@@ -158,7 +158,7 @@ ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro
 Somente a identidade do PR fica fixa; o conteúdo rola no espaço restante. Abas
 que não couberem usam overflow horizontal com controles, nunca letras cortadas.
 `[`/`]` circulam pelas abas. Não usar números: `[1]`/`[2]`/`[3]` pertencem a
-Base/PR/Issues.
+Diffs/PR/Issues.
 
 ### 4.5. Diff
 
@@ -169,8 +169,8 @@ internos do Git após separar suas dependências locais.
 - Cabeçalho com repositório, número e SHAs base/head efetivamente exibidos.
 - Navegação de arquivo e hunk; números de linha e contexto.
 - Arquivo renomeado, binário, removido, gerado ou truncado tem representação própria.
-- `[Esc]` volta à prévia e depois à lista, sem saltar para Base nem sair do app.
-- Não misturar ações de stage da Base com o diff remoto de PR.
+- `[Esc]` volta à prévia e depois à lista, sem saltar para Diffs nem sair do app.
+- Não misturar ações de stage de Diffs com o diff remoto de PR.
 - Diff incompleto oferece abrir o arquivo/PR no navegador; nunca fingir completude.
 
 ### 4.6. Formulários e confirmações
@@ -199,9 +199,10 @@ internos do Git após separar suas dependências locais.
 
 ### 4.7. Editor de seções
 
-`[+]` cria seção; `[Ctrl+E]` abre o gerenciador das existentes. Formulário com
-nome, filtros, escopo/repositórios, ordenação, limite e colunas. Disponibilizar
-testar consulta, salvar, renomear, duplicar, reordenar e excluir configuração.
+Na tela Git, `[,]` abre as configurações contextuais; a opção GitHub abre um
+gerenciador único com abas para seletores de PR, seletores de Issues e
+repositórios. O formulário oferece nome, filtros, ordenação, limite e colunas,
+além de salvar, renomear, duplicar, reordenar e excluir configuração.
 Excluir uma seção nunca fecha PRs nem remove repositórios locais/remotos.
 Somente salvar promove a query temporária da busca a uma configuração persistente.
 
@@ -235,7 +236,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 
 | Contexto | Tecla | Ação |
 | --- | --- | --- |
-| Git sem editor/modal | `[1]` / `[2]` / `[3]` | Base / PR / Issues. Preservar estado ao alternar. |
+| Git sem editor/modal | `[1]` / `[2]` / `[3]` | Diffs / PR / Issues. Preservar estado ao alternar. |
 | PR sem editor/modal | `[<]` / `[>]` | Seção anterior / seguinte. |
 | Lista | `[j/↓]` / `[k/↑]` | PR seguinte / anterior. |
 | Lista | `[g/Home]` / `[Shift+G/End]` | Primeiro / último PR carregado; indicar paginação. |
@@ -260,7 +261,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Checks | `[Ctrl+A]` | Revisar workflows elegíveis para autorização. |
 | PR | `[u]` / `[Shift+W]` | Atualizar com base / tornar pronto para revisão. |
 | PR | `[m]` / `[x]` / `[Shift+X]` | Preparar merge / fechar / reabrir. |
-| PR | `[+]` / `[Ctrl+E]` | Criar seção / gerenciar seções. |
+| Git | `[,]` → GitHub | Gerenciar seletores de PR/Issues e o escopo compartilhado de repositórios. |
 | PR | `[?]` | Ajuda e lista completa de ações com disponibilidade/motivo. |
 | Formulário | `[Ctrl+S]` | Confirmar somente a operação mostrada. |
 | Camada local | `[Esc]` | Desfocar, fechar camada e devolver foco; nunca atravessar camadas. |
@@ -279,9 +280,9 @@ Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]
 
 | Estado | Representação e saída |
 | --- | --- |
-| `gh` ausente/incompatível | Instrução de instalação/atualização e nova verificação; Base continua utilizável. |
+| `gh` ausente/incompatível | Instrução de instalação/atualização e nova verificação; Diffs continua utilizável. |
 | Sem login/SSO pendente | Host identificado, instrução oficial de autenticação, botão verificar; sem pedir token em texto. |
-| Sem repo local | PR usa a conta autenticada sem configuração inicial; Base mantém aviso local. |
+| Sem repo local | PR usa a conta autenticada sem configuração inicial; Diffs permite escolher um repositório local. |
 | Sem resultados | Query/escopo visíveis, editar filtros e atualizar; não confundir com erro. |
 | Carregando | Preservar linhas anteriores, marcar atualização; skeleton só na primeira carga. |
 | Erro parcial | Identificar seção/repo/página que falhou; resultado incompleto nunca aparece como completo. |
@@ -313,10 +314,39 @@ matriz de 44 combinações entre tamanhos, seis idiomas, quatro paletas e dois m
 de chrome. Os frames são inspecionados como texto renderizado, por isso a validação
 é determinística e não depende de pixels ou de uma fonte específica.
 
-Diferenças intencionais confirmadas: Base/PR/Issues pertencem ao Git do Tuiminal; H/L move
+Diferenças intencionais confirmadas: Diffs/PR/Issues/Inbox pertencem ao Git do Tuiminal; H/L move
 o foco e `<`/`>` troca seções; há Commits e Arquivos além das três abas principais;
 o Tuiminal fornece gerenciador visual de seções, modo de painel único e não expõe
 bypass administrativo, exclusão automática de branch ou comandos arbitrários.
+
+`[1] [C] Git · Diffs` usa exclusivamente um repositório disponível na máquina. O cabeçalho
+mostra `projeto / branch` e `[Ctrl+P] Alterar projeto/branch`; o mesmo controle é
+a primeira aba do modal Git aberto pelas configurações `[,]`. A troca do alvo
+local não muda o escopo remoto, que pode incluir repositórios sem clone local.
+
+`[C]` alterna essa mesma aba para `Git · Comparar`. Antes de haver resultado, três
+cartões ficam centralizados para selecionar projeto, branch base e branch comparada.
+Quando as escolhas estão completas, telas largas mostram
+`[projeto] [branch base] → [branch comparada]` na mesma linha e telas estreitas
+empilham os três. `[B]` e `[T]` abrem seletores com branches locais e refs remotas
+já conhecidas. O resultado usa `base...comparada`, preserva a branch atual e ignora
+alterações não commitadas. Uma árvore agrupada em pastas seleciona um único arquivo
+por vez para o diff; `[Tab]`, `[H/L]` e `[←/→]` alternam o foco entre árvore e diff.
+A barra de atalhos fica fora e acima do conteúdo rolável, e a visão intralinha
+permanece contida no painel.
+`[C]` ou `[Esc]` retorna aos Diffs. Todos os cartões, arquivos, pastas e seletores
+aceitam mouse.
+
+Em Diffs, os mesmos atalhos movem o foco entre a árvore local e o diff, enquanto
+`[O]` abre o Log e `[V]` identifica a visualização ativa. A árvore não acrescenta
+marcadores geométricos aos arquivos: usa apenas os dois caracteres nativos do Git,
+com cores semânticas por coluna, e diferencia pastas por cor.
+
+Desde 2026-09-08, a última linha solicita a próxima página com loader no
+scrollbox, `[R]` e o intervalo configurado renovam todas as seções e a mesma
+profundidade já carregada, e o editor de query oferece autocomplete por
+`[Ctrl+N/P]` e `[Ctrl+Y]`. O Inbox irmão é
+especificado em `git-inbox-interface.md`.
 
 Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
 atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.

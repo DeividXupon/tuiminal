@@ -3,13 +3,13 @@
 Status: **implementado em 2026-09-07**.
 
 Este documento registra o comportamento atual da área de Issues do Tuiminal. Ela
-fica dentro da ferramenta Git, preserva Base e Pull Requests, e adapta a
+fica dentro da ferramenta Git, preserva Diffs e Pull Requests, e adapta a
 organização e as ações do gh-dash às convenções do projeto. Testes usam somente
 fixtures e um `gh` falso; nenhuma issue, credencial ou configuração pessoal real.
 
 ## Objetivo e referência
 
-- `[1] Base` permanece local, offline e padrão; `[2] PR` permanece independente.
+- `[1] Diffs` permanece local, offline e padrão; `[2] PR` permanece independente.
 - `[3] Issues` monta processos e estado somente no primeiro acesso e preserva-os
   ao trocar de aba.
 - Issues independe de checkout, exceto para criar/abrir uma branch.
@@ -26,7 +26,8 @@ Referências públicas usadas:
 Foram incorporados: seções e queries, lista multirrepositório densa, prévia,
 abrir/copiar, comentar, atribuir/desatribuir, editar labels, criar/fazer checkout
 da branch e fechar/reabrir. Não há ações em lote, comandos configuráveis
-arbitrários, exclusão de issues ou inbox geral de notificações GitHub.
+arbitrários ou exclusão de issues. O inbox geral foi implementado depois em
+`[4] Inbox`, com contratos separados em `GIT_INBOX_PLAN.md`.
 
 ## Interface
 
@@ -40,20 +41,27 @@ O layout completo está em
 - Composição lado a lado, empilhada ou painel único conforme o terminal.
 - `[P]` mostra/oculta; `[Shift+P]` alterna posição automática, direita e abaixo.
 - Todos os controles de teclado relevantes possuem alvo de mouse.
+- Chegar à última issue dispara a próxima página e mostra o loader na lista.
+- O intervalo configurado renova todas as seções e a profundidade já carregada
+  sem apagar os dados visíveis; o editor de query oferece autocomplete contextual
+  do GitHub.
 
 ## Consultas e escopo
 
 Toda busca recebe `is:issue` e `archived:false`; `is:pr` é rejeitado. Repositórios
 salvos são filtros estruturados, separados da query.
 
-Uma lista vazia significa escopo completo da conta autenticada: projetos do
+Sem perfil explícito, o lançamento dentro de um repositório Git com `origin`
+reconhecido começa naquele `owner/repo`; fora de Git começa em `TODOS`. Uma lista
+salva vazia significa o escopo completo da conta autenticada: projetos do
 usuário, organizações, colaborações externas diretas e pesquisas relativas como
 `author:@me`, `assignee:@me`, `involves:@me` e `mentions:@me`. Queries amplas são
 divididas com `user:`, `org:` e `repo:` para nunca virarem buscas GitHub globais
 acidentais. Resultados são deduplicados por host e node ID.
 
-Cada seção persiste título, query, colunas, ordem e limite. O gerenciador cria,
-edita, duplica, move e exclui seções e gerencia filtros de repositório.
+Cada seção persiste título, query, colunas, ordem e limite. Na tela Git, `[,]`
+expõe a opção GitHub: seu gerenciador único cria, edita, duplica, move e exclui
+seletores de PR/Issues e salva o mesmo filtro de repositórios para os dois.
 
 ## Ações e segurança
 
@@ -96,3 +104,7 @@ manutenibilidade aprovados; **370 testes unitários e 65 testes TUI passaram**. 
 
 Qualquer alteração de consultas, ações, atalhos, confirmação, persistência ou
 limites deve atualizar este documento, o design e os testes correspondentes.
+
+Em 2026-09-08, os gerenciadores locais divergentes e os atalhos `[Ctrl+E]`, `[S]`
+e `[+]` foram substituídos pelo modal contextual unificado de `[,]`. A aba
+Repositórios passou a carregar todos os projetos acessíveis e a oferecer `TODOS`.

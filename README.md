@@ -6,9 +6,9 @@ Funcionalidades atuais:
 
 - Navegação por tabs
 - Explorador de bancos MySQL, PostgreSQL e SQLite, além de servidores MCP compatíveis
-- Workspace Git no estilo lazygit para o repositório de onde o app foi iniciado
-- Git `[1] Base` / `[2] PR` / `[3] Issues`, com dashboards multirrepositório,
-  prévias, diff/CI de PR e ações remotas seguras
+- Workspace Git no estilo lazygit para qualquer repositório local selecionado
+- Git `[1] Diffs` / `[2] PR` / `[3] Issues` / `[4] Inbox`, com dashboards
+  multirrepositório, notificações, prévias, diff/CI e ações remotas seguras
 - Runner de scripts com logs ao vivo, processos simultâneos e histórico da sessão
 - Cliente HTTP com métodos, headers, body, resposta formatada e histórico
 - Free Terminal com sessões PTY persistentes, splits e comandos livres
@@ -24,11 +24,13 @@ Ele é um roteiro evolutivo, não uma especificação definitiva: fases, comando
 decisões técnicas podem mudar depois de protótipos, testes e feedback. Nada nesse
 plano deve ser interpretado como funcionalidade já disponível.
 
-O [plano Git Base/PR](./GIT_PR_PLAN.md) e o
-[plano de Issues](./GIT_ISSUES_PLAN.md) registram os dashboards implementados a
+O [plano Git Diffs/PR](./GIT_PR_PLAN.md), o
+[plano de Issues](./GIT_ISSUES_PLAN.md) e o
+[plano do Inbox](./GIT_INBOX_PLAN.md) registram os dashboards implementados a
 partir do gh-dash. As especificações de interface de
 [PR](./docs/design/git-pr-interface.md) e
-[Issues](./docs/design/git-issues-interface.md) reúnem referências, wireframes,
+[Issues](./docs/design/git-issues-interface.md), além do design do
+[Inbox](./docs/design/git-inbox-interface.md), reúnem referências, wireframes,
 atalhos, diferenças deliberadas e critérios de layout.
 
 ## Executar
@@ -309,13 +311,32 @@ usam o idioma configurado para formatar data e hora.
 
 ## Git
 
-A aba Git detecta automaticamente o repositório e o branch a partir do
-diretório onde o Tuiminal foi iniciado. `[1] Base` abre o workspace local atual;
-`[2] PR` abre o dashboard de Pull Requests e `[3] Issues` abre a fila de Issues.
-Base continua funcionando offline; PR e Issues são montados separadamente e não
+A aba Git detecta inicialmente o repositório e o branch a partir do diretório
+onde o Tuiminal foi iniciado. `[1] [C] Git · Diffs` abre o workspace local atual;
+`[2] PR` abre o dashboard de Pull Requests, `[3] Issues` abre a fila de Issues e
+`[4] Inbox` abre as notificações da conta. Diffs continua funcionando offline; as
+três áreas remotas são montadas separadamente e não
 iniciam o GitHub CLI antes do primeiro acesso à respectiva aba.
 
-PR e Issues requerem GitHub CLI 2.40.0 ou mais recente e uma sessão autenticada. O Tuiminal
+No cabeçalho de Diffs, `[Ctrl+P] Alterar projeto/branch` abre diretamente a
+configuração local. O projeto pode ser trocado por outro repositório Git existente
+na máquina, e a branch por uma branch local desse repositório. Essa escolha é
+salva separadamente em `~/.config/tuiminal/git-diffs.json` e não altera o escopo
+remoto usado por PR, Issues ou Inbox.
+
+Na primeira aba, `[C]` alterna entre `Git · Diffs` e `Git · Comparar`. Comparar
+mantém o projeto local selecionado e mostra três cartões. Depois da seleção, telas
+largas colocam `projeto`, `branch base → branch comparada` na mesma linha; telas
+estreitas empilham os três. `[B]` escolhe a base e `[T]` a comparada entre branches
+locais e referências remotas já conhecidas pelo Git. O resultado possui uma árvore
+de arquivos agrupada em pastas e mostra o diff do arquivo selecionado. `[Tab]`,
+`[H/L]` e `[←/→]` alternam entre árvore e diff, `[J/K]` navega ou rola o painel
+focado e `[V]` alterna unificado, duas colunas e intralinha. A comparação usa `base...comparada`, como a
+comparação de um PR, não executa checkout e não inclui mudanças ainda não
+commitadas. A barra fixa mantém os atalhos visíveis; `[Esc]` ou `[C]` retorna aos
+Diffs.
+
+PR, Issues e Inbox requerem GitHub CLI 2.40.0 ou mais recente e uma sessão autenticada. O Tuiminal
 reutiliza a identidade do `gh`, não lê nem salva o token. Prepare uma vez com:
 
 ```bash
@@ -323,23 +344,38 @@ gh auth login --hostname github.com
 tuiminal git /caminho/do/projeto
 ```
 
-No primeiro acesso a `[2] PR` ou `[3] Issues`, o dashboard já consulta a conta autenticada: inclui
-os repositórios de `@você`, das organizações às quais você pertence, colaborações
-diretas externas e pesquisas pessoais como `author:@me`, `assignee:@me` ou
-`review-requested:@me`
-em qualquer repositório. Uma query ampla, como um texto livre, é limitada
-automaticamente a esse escopo; ela não pesquisa o GitHub inteiro.
+Sem configuração salva, abrir o Tuiminal dentro de um repositório Git com
+`origin` do GitHub faz PR e Issues começarem nesse repositório. Fora de um
+repositório, o padrão é `TODOS`: repositórios de `@você`, das organizações às
+quais você pertence e colaborações diretas externas. Nesse modo, pesquisas como
+`author:@me`, `assignee:@me` ou `review-requested:@me` alcançam toda a conta, e
+uma query ampla é limitada automaticamente a esse escopo em vez de pesquisar o
+GitHub inteiro.
 
 Os perfis são salvos pela raiz canônica do projeto em
 `~/.config/tuiminal/git-pr.yaml` e `~/.config/tuiminal/git-issues.yaml`: abrir
-outro projeto cria seções, filtros e posição de prévia independentes. `[+]` cria
-uma seção e `[Ctrl+E]` gerencia as
-seções. A lista de repositórios em `[Ctrl+E]` é opcional: vazia significa todos os
-projetos da conta; ao adicionar `owner/repo`, todas as buscas daquele perfil ficam
-restritas aos repositórios listados. Cada seção pode definir query, colunas, ordem
-e limite.
+outro projeto cria seções, filtros e posição de prévia independentes. Na tela Git,
+`[,]` abre as configurações e a opção `Git` leva a um único modal com Diffs,
+seletores de PR, seletores de Issues e repositórios. A aba de
+repositórios lista `TODOS` e todos os projetos acessíveis da conta; `TODOS`
+mantém o escopo completo, enquanto uma ou mais escolhas restringem todas as
+buscas de PR e Issues. Cada seção pode definir query, colunas, ordem e limite.
 
-- `[1]` / `[2]` / `[3]`: alternar entre Base, PR e Issues
+As listas remotas carregam a próxima página automaticamente quando a seleção
+chega ao último item e mostram um loader dentro da própria lista. O intervalo
+`refreshSeconds` atualiza em segundo plano todas as seções e reconstrói a mesma
+profundidade de páginas já aberta em PR, Issues e Inbox, sem apagar o conteúdo
+visível durante a chamada.
+Nos editores de query, o autocomplete oferece qualificadores do GitHub e os
+repositórios do perfil: `[Ctrl+N/P]` navega e `[Ctrl+Y]` aplica a sugestão.
+
+- `[1]` / `[2]` / `[3]` / `[4]`: alternar entre Diffs, PR, Issues e Inbox
+- `[C]`: em Diffs, alternar entre alterações locais e comparação de branches
+- `[Tab]`, `[H/L]` ou `[←/→]`: em Diffs, alternar o foco entre a árvore e o diff
+- `[V]` / `[O]`: em Diffs, mudar a visualização / abrir o Log
+- `[B]` / `[T]`: em Comparar, escolher branch base / branch comparada
+- `[Tab/H/L/←/→]` / `[J/K]` / `[V]`: em Comparar, trocar árvore/diff, navegar/rolar e mudar a visualização
+- `[Ctrl+P]`: em Diffs, alterar diretamente o projeto ou a branch local
 - `[J/K]` ou `[↑/↓]`: navegar pelos PRs
 - `[G/Home]` / `[Shift+G/End]`: ir ao primeiro / último PR carregado
 - `[H/L]` ou `[←/→]`: mover o foco entre lista e prévia
@@ -348,6 +384,7 @@ e limite.
 - `[P]`: mostrar ou ocultar a prévia
 - `[Shift+P]`: alternar a posição automática, direita ou abaixo, salva por projeto
 - `[/]`: editar a query; `[Enter]` aplica temporariamente e `[Ctrl+S]` salva
+- `[,]`: nas configurações da tela Git, editar Diffs, seletores e repositórios remotos
 - `[R]`: atualizar; `[N]`: carregar a próxima página disponível
 - `[O]`: abrir no navegador; `[Y]` copia o número e `[Shift+Y]` copia a URL
 - `[D]`: abrir diff de PR, arquivo ou commit; `[?]` mostra ações e indisponibilidades
@@ -369,6 +406,13 @@ paginação, prévia, navegador e cópia permanecem iguais. As ações específi
 - `[Shift+C]`: criar e fazer checkout da branch com `gh issue develop`
 - `[X]` / `[Shift+X]`: fechar / reabrir a issue
 - `[?]`: abrir a lista completa com disponibilidade e motivo
+
+Em `[4] Inbox`, as seções Caixa de entrada, Revisão solicitada, Atribuídas,
+Menções e Salvas filtram a fila sem fazer uma busca global. `[M]` marca como
+lida, `[B]` salva localmente, `[D]` conclui no GitHub e `[U]` deixa de acompanhar;
+as duas últimas ações exigem confirmação. `[O]` abre o PR, issue ou assunto no
+navegador. Apenas os IDs salvos são persistidos em
+`~/.config/tuiminal/git-inbox.json`, com modo `0600`.
 
 A prévia tem Visão geral, Checks, Atividade, Commits e Arquivos. Descrições em
 Markdown são apresentadas como texto terminal seguro; imagens não são baixadas e

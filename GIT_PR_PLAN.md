@@ -1,8 +1,8 @@
-# Plano evolutivo — Git `[1] Base` e `[2] PR`
+# Plano evolutivo — Git `[1] Diffs` e `[2] PR`
 
 Status: **implementado, validado e integrado à branch `development`**.
 Documento criado e concluído em 2026-09-04.
-Direção aprovada pelo pedido: preservar o Git atual em Base e construir PRs com
+Direção aprovada pelo pedido: preservar o Git local em Diffs e construir PRs com
 interface muito próxima do gh-dash. Fases, contratos e medidas podem evoluir com
 protótipos e testes; mudanças precisam ser registradas aqui.
 
@@ -32,20 +32,20 @@ foi usado e nenhum arquivo de configuração pessoal foi criado pelos testes.
 
 Criar um dashboard de Pull Requests **dentro da ferramenta Git**:
 
-- `[1] Base`: comportamento atual de arquivos, stage/unstage, commits, grafo e diffs.
+- `[1] [C] Diffs`: arquivos, stage/unstage, commits, grafo e diffs do projeto local escolhido; `[C]` alterna para comparação entre branches.
 - `[2] PR`: seções configuráveis, PRs de vários repositórios, detalhes, diff e ações.
 - `[#]` continua abrindo Git; `tuiminal git [diretório]` continua válido.
-- Ao abrir Git pela primeira vez, selecionar Base; ao alternar outras ferramentas
+- Ao abrir Git pela primeira vez, selecionar Diffs; ao alternar outras ferramentas
   durante a mesma sessão, conservar a última subaba e o estado de ambas.
 - PRs não dependem de haver um checkout local, exceto a ação de checkout.
-- Base funciona sem internet, GitHub CLI ou conta GitHub.
+- Diffs funciona sem internet, GitHub CLI ou conta GitHub.
 
 Stack proposto: Bun + TypeScript + React + OpenTUI existentes; Git local para
 operações locais; GitHub CLI (`gh`) como transporte autenticado e comandos; APIs
 GraphQL/REST quando os comandos de alto nível não entregarem os campos necessários.
 Não criar backend, serviço cloud, banco próprio nem requisito de instalar gh-dash.
 
-Fora desta entrega de PR: GitLab/Bitbucket, inbox geral de notificações GitHub,
+Fora desta entrega original de PR: GitLab/Bitbucket, inbox geral de notificações GitHub,
 criação de PRs, comentários inline novos por linha de diff, resolver threads,
 edição de labels/revisores, operações em lote, execução arbitrária de comandos
 configurados, bypass de proteção, clone automático e daemon após fechar o app.
@@ -55,6 +55,9 @@ revisores e threads existentes continua no escopo.
 Issues foi implementado depois como workspace irmão em `[3] Issues`. Contratos,
 ações e evidências ficam em `GIT_ISSUES_PLAN.md` e
 `docs/design/git-issues-interface.md`, sem transferir responsabilidades para PR.
+O Inbox foi implementado posteriormente como workspace irmão em `[4] Inbox`;
+seus contratos ficam em `GIT_INBOX_PLAN.md` e
+`docs/design/git-inbox-interface.md`.
 
 GitHub.com é o primeiro alvo. A identidade dos dados inclui host desde o início;
 GitHub Enterprise exige teste de versão/capacidades antes de ser anunciado como
@@ -69,7 +72,7 @@ intencionais, layouts largo/médio/estreito, abas da prévia, modais e todos os 
 
 Direção resumida:
 
-1. Faixa local Base/PR abaixo do cabeçalho global.
+1. Faixa local Diffs/PR abaixo do cabeçalho global.
 2. Seções de PR em faixa horizontal, com contagens e overflow acessível.
 3. Query da seção visível e editável acima da tabela.
 4. Tabela densa, não cards, com coluna de título expansível.
@@ -88,21 +91,22 @@ Estado final validado em 2026-09-04:
 
 | Arquivo | Situação final | Responsabilidade |
 | --- | --- | --- |
-| `src/features/git/GitWorkspace.tsx` | Base local preservada, sem dependência de GitHub. | Arquivos, stage/unstage, commits, grafo e diff locais. |
-| `src/features/git/GitFeatureWorkspace.tsx` | Wrapper pequeno com `[1] Base`, `[2] PR` e o workspace irmão `[3] Issues`. | Lazy mount, mouse, estado independente e Base como default. |
+| `src/features/git/GitWorkspace.tsx` | Diffs local preservado, sem dependência de GitHub. | Arquivos, stage/unstage, commits, grafo e diff locais do alvo selecionado. |
+| `src/features/git/GitCompareWorkspace.tsx` | Comparação local sem checkout. | Projeto selecionado, branches base/comparada e diff `base...comparada`. |
+| `src/features/git/GitFeatureWorkspace.tsx` | Wrapper pequeno com `[1] Diffs`, `[2] PR`, `[3] Issues` e `[4] Inbox`. | Lazy mount, mouse, estado independente e Diffs como default. |
 | `src/features/git/PullRequestsWorkspace.tsx` | Composição PR mantida no limite de 400 linhas. | Une configuração, dashboard, prévia, diff, ações e modais por hooks/componentes menores. |
 | `src/features/git/model/pr/*` | Modelos puros separados de React, IO e serviços. | Identidade, consulta, navegação, conteúdo, diff, CI, configuração e ações. |
 | `src/features/git/services/github/*` | Transporte `gh` sem shell e adaptadores tipados. | Auth, busca, detalhes, diff, workflows, leituras e mutações explícitas. |
 | `src/features/git/services/pr-*` | Coordenação e efeitos isolados. | Sessão/cache, ações, checkout, watches e notificações. |
 | `src/features/git/storage/pr/config.ts` | YAML versionado, atômico e modo `0600`. | Perfis independentes por raiz canônica e mapa de clones. |
 | `src/features/git/ui/pr/*` | UI decomposta e testável. | Seções, lista, prévia, diff, escopo opcional, gerenciador e confirmações. |
-| `src/features/git/tutorial/*` | Tour estável com dados fictícios. | Ensina Base/PR/Issues sem consultar GitHub. |
+| `src/features/git/tutorial/*` | Tour estável com dados fictícios. | Ensina Diffs/PR/Issues sem consultar GitHub. |
 | `src/app/feature-registry.ts` | Escopo e disposer Git registrados. | Impede vazamento de atalhos e encerra recursos pertencentes ao Git. |
 
-A Base atual faz refresh periódico somente quando ativa. O wrapper precisa passar
-`active=false` para Base quando PR está selecionado ou um modal global a bloqueia,
+Diffs faz refresh periódico somente quando ativo. O wrapper precisa passar
+`active=false` para Diffs quando PR está selecionado ou um modal global o bloqueia,
 sem destruir seus estados. PR só inicia leitura/autenticação ao ser visitado.
-Nenhuma consulta GitHub deve acontecer ao iniciar Runner/Banco/HTTP ou abrir Base.
+Nenhuma consulta GitHub deve acontecer ao iniciar Runner/Banco/HTTP ou abrir Diffs.
 
 A implementação não acopla PR a HTTP, Runner ou Banco. Dois erros de lint já
 presentes no armazenamento HTTP foram apenas tipados para que o gate global do
@@ -115,7 +119,7 @@ de leitura não equivale a concluir este plano.
 
 | ID | Requisito | Evidência de conclusão | Fase |
 | --- | --- | --- | --- |
-| R01 | Base/PR dentro de Git | `[1]`/`[2]`, mouse, preservação de estado e modo isolado funcionando. | 1 |
+| R01 | Diffs/PR dentro de Git | `[1]`/`[2]`, mouse, preservação de estado e modo isolado funcionando. | 1 |
 | R02 | Listar vários repositórios | Uma seção agrega PRs de ao menos três repos, com identidade sem colisões. | 3 |
 | R03 | Seções personalizadas | Criar, editar, duplicar, ordenar, excluir; presets meus/revisar/atribuídos/CI falhando. | 3 |
 | R04 | Filtrar repo, autor, branch e label | Busca temporária, validação, salvamento explícito e escopo visível. | 3 |
@@ -162,14 +166,13 @@ Fonte: [busca de PRs](https://cli.github.com/manual/gh_search_prs).
   diretório canônico de lançamento. Não usar apenas nome da pasta.
 - Perfil A e perfil B têm seções, repos, queries salvas e preferência de layout
   independentes, seguindo a convenção de sessões por projeto já usada no Runner.
-- O primeiro uso abre diretamente no escopo da conta autenticada, sem exigir o
-  cadastro de um repositório. Esse escopo reúne os repositórios do viewer, das
-  organizações às quais ele pertence e colaborações diretas externas; consultas
-  relativas ao viewer, como
-  `author:@me`, continuam globais para também alcançar contribuições externas.
-- A lista de repositórios do perfil é um filtro restritivo opcional. Vazia significa
-  conta completa; ao adicionar `owner/repo`, todas as seções daquele perfil passam
-  a consultar somente a lista. Não é necessário clonar repos para listá-los.
+- O primeiro uso não exige cadastro: dentro de um repositório Git com `origin`
+  reconhecido, PR e Issues começam restritos ao `owner/repo` atual; fora de Git
+  começam em `TODOS`, o escopo completo da conta autenticada.
+- A aba Repositórios do gerenciador GitHub lista `TODOS`, projetos do viewer, das
+  organizações às quais ele pertence e colaborações diretas externas. A lista
+  explicitamente vazia significa conta completa; uma ou mais escolhas restringem
+  todas as seções de PR e Issues. Não é necessário clonar repos para listá-los.
 - Um template global pode servir de ponto de partida; salvar no perfil não altera
   outros projetos. Interface mostra sempre host, conta e escopo efetivo.
 - Mapas de clones locais são por host/repositório e podem ter mais de uma pasta;
@@ -398,8 +401,8 @@ em modelos, serviços, armazenamento, hooks e componentes, sem scaffolding vazio
 src/features/git/
   index.ts                       API pública para App
   keyboard.ts                    posse de teclado Base/PR/Issues, modais e inputs
-  GitFeatureWorkspace.tsx        composição leve [1] Base / [2] PR / [3] Issues
-  GitWorkspace.tsx               tela Base local existente, preservada
+  GitFeatureWorkspace.tsx        composição leve [1] Diffs / [2] PR / [3] Issues / [4] Inbox
+  GitWorkspace.tsx               tela Diffs local e alvo selecionável
   PullRequestsWorkspace.tsx      composição de seções/lista/prévia
   model/
     workspace.ts                 estado da subaba local
@@ -436,8 +439,7 @@ src/features/git/
     PreviewTabContent.tsx        conteúdo das cinco abas
     PrDiffView.tsx               diff remoto focado
     SectionEditorModal.tsx       criação/edição de seção
-    SectionManagerModal.tsx      CRUD e ordenação
-    RepositorySetupModal.tsx     configuração de repositórios/clones
+    ../config/GitConfigurationModal.tsx  CRUD conjunto de PR/Issues e repositórios
     ActionMenuModal.tsx          disponibilidade de ações
     PullRequestActionModal.tsx   entrada e confirmação contextual
 ```
@@ -795,3 +797,29 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
 - 2026-09-04: o escopo padrão foi corrigido após validação real: lista vazia de
   repositórios agora significa toda a conta autenticada, queries amplas recebem
   limites de viewer/organizações e repositórios manuais são apenas filtros.
+- 2026-09-08: paginação passou a iniciar no fim da lista, refresh periódico passou
+  a atualizar todas as seções preservando a profundidade carregada e o editor
+  ganhou autocomplete de qualificadores e repositórios do perfil. `[4] Inbox` foi
+  entregue em plano próprio.
+- 2026-09-08: a configuração de PR e Issues foi unificada na opção GitHub de `[,]`
+  na tela Git. O modal lista todos os repositórios acessíveis mais `TODOS`; perfis
+  novos usam o `origin` atual quando o lançamento ocorre dentro de Git e usam
+  `TODOS` fora dele. Os antigos atalhos locais `[Ctrl+E]`, `[S]` e `[+]` saíram.
+- 2026-09-08: `[1] Base` passou a se chamar `[1] Diffs`. `[Ctrl+P]` abre a aba
+  Diffs da configuração Git para escolher outro repositório existente na máquina
+  e uma de suas branches locais. O alvo fica em `git-diffs.json` e sua revisão é
+  independente do escopo remoto de PR, Issues e Inbox.
+- 2026-09-08: `[C]` passou a alternar a primeira aba entre `Git · Diffs` e
+  `Git · Comparar`. O comparador reutiliza o projeto local, escolhe uma branch base
+  e outra comparada entre refs locais/remotas já conhecidas, renderiza
+  `base...comparada` e não executa checkout nem inclui alterações não commitadas.
+- 2026-09-08: o resultado de `Git · Comparar` ganhou árvore de arquivos agrupada
+  em pastas e passou a renderizar somente o arquivo selecionado. Com as três
+  escolhas aplicadas, os cartões ficam em uma linha nas telas largas e empilhados
+  nas estreitas. A barra fixa preserva os atalhos, e a célula flexível da visão
+  intralinha deixou de ultrapassar o painel ao lado do gutter.
+- 2026-09-08: Diffs e Comparar passaram a usar `[Tab]`, `[H/L]` e `[←/→]`
+  exclusivamente para alternar árvore/diff; o Log local mudou de `[L]` para `[O]`.
+  A barra fixa de atalhos permanece acima do conteúdo rolável, `[V]` identifica a
+  visualização ativa e a árvore local removeu marcadores redundantes, colorindo os
+  dois caracteres de status Git e as pastas de forma distinta.
