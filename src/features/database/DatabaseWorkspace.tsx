@@ -54,6 +54,7 @@ import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
 import { DatabaseBatchExportModal } from "./ui/DatabaseBatchExportModal"
 import { DatabaseChangesModal, type DatabaseChangeReviewItem } from "./ui/DatabaseChangesModal"
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
+import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { MountWhen } from "../../shared/ui/MountWhen"
@@ -1942,6 +1943,7 @@ export function DatabaseViewer({
             id="tutorial-db-grid"
             key={LAYOUT.compact ? "database-table-compact" : "database-table-framed"}
             style={{
+              position: "relative",
               flexGrow: 1,
               ...panelBorder(activePane === "grid" ? COLORS.database : COLORS.border),
               backgroundColor:
@@ -2430,11 +2432,7 @@ export function DatabaseViewer({
               ) : !selectedTable ? (
                 <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
                   <text
-                    content={
-                      catalogLoading
-                        ? `${LOADING_FRAMES[motionFrame]} CARREGANDO CATÁLOGO`
-                        : `${catalog?.tables.length ?? 0} objetos em ${schemaCount} schema${schemaCount === 1 ? "" : "s"}`
-                    }
+                    content={`${catalog?.tables.length ?? 0} objetos em ${schemaCount} schema${schemaCount === 1 ? "" : "s"}`}
                     style={{ fg: COLORS.database }}
                   />
                   <text
@@ -2447,12 +2445,7 @@ export function DatabaseViewer({
                   ) : null}
                 </box>
               ) : rowsLoading || !pageData ? (
-                <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-                  <text
-                    content={`${LOADING_FRAMES[motionFrame]} CONSULTANDO BANCO`}
-                    style={{ fg: COLORS.database }}
-                  />
-                </box>
+                <box style={{ flexGrow: 1 }} />
               ) : view === "columns" ? (
                 <box style={{ flexGrow: 1 }}>
                   <text
@@ -2484,12 +2477,7 @@ export function DatabaseViewer({
                     content={`${fitCell(translateUi("ÍNDICE"), indexNameWidth)}${fitCell(translateUi("TIPO"), indexTypeWidth)}${fitCell(translateUi("DEFINIÇÃO / COLUNAS"), indexDefinitionWidth)}`}
                     style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
                   />
-                  {indexesLoading ? (
-                    <text
-                      content={`${LOADING_FRAMES[motionFrame]} carregando índices`}
-                      style={{ fg: COLORS.database }}
-                    />
-                  ) : indexes?.length ? (
+                  {indexesLoading ? null : indexes?.length ? (
                     indexes.map((index) => (
                       <text
                         key={index.name}
@@ -2515,12 +2503,7 @@ export function DatabaseViewer({
                     },
                   }}
                 >
-                  {structureLoading ? (
-                    <text
-                      content={`${LOADING_FRAMES[motionFrame]} ${translateUi("carregando schema")}`}
-                      style={{ fg: COLORS.database }}
-                    />
-                  ) : tableStructure ? (
+                  {structureLoading ? null : tableStructure ? (
                     <>
                       <text
                         content="◆ DDL"
@@ -2898,6 +2881,13 @@ export function DatabaseViewer({
                 </box>
               </box>
             ) : null}
+            <DatabaseLoadingOverlay
+              catalog={!queryOpen && catalogLoading && !catalog && !selectedTable}
+              rows={!queryOpen && rowsLoading}
+              indexes={!queryOpen && view === "indexes" && indexesLoading}
+              schema={!queryOpen && view === "schema" && structureLoading}
+              background={LAYOUT.alternatePanel}
+            />
           </box>
         </>
       )}

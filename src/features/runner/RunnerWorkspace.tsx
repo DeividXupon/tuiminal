@@ -29,6 +29,7 @@ import {
   startRunnerProcess,
   waitForRunnerHealthCheck,
 } from "./services/runner"
+import { RunnerLoadingOverlay } from "./ui/RunnerLoadingOverlay"
 import {
   discoverRunnerEnvironmentProfiles,
   exportRunnerLog,
@@ -1638,6 +1639,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
         <box
           key={LAYOUT.compact ? "runner-picker-compact" : "runner-picker-framed"}
           style={{
+            position: "relative",
             flexGrow: 1,
             ...panelBorder(COLORS.runner),
             backgroundColor: COLORS.panel,
@@ -1687,18 +1689,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               marginBottom: 1,
             }}
           />
-          {projectsLoading || directoryLoading ? (
-            <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-              <text
-                content={
-                  projectsLoading
-                    ? "◐ Procurando repositórios Git no computador…"
-                    : "◐ Abrindo pasta…"
-                }
-                style={{ fg: COLORS.runner }}
-              />
-            </box>
-          ) : projectPickerError ? (
+          {projectPickerError ? (
             <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
               <text content={projectPickerError} style={{ fg: COLORS.danger }} />
             </box>
@@ -1777,6 +1768,10 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               }}
             />
           )}
+          <RunnerLoadingOverlay
+            active={projectsLoading || directoryLoading}
+            kind={projectsLoading ? "projects" : "directory"}
+          />
         </box>
       ) : projectAvailable === false ? (
         <box
@@ -1852,6 +1847,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                 id="runner-command-panel"
                 focusable
                 style={{
+                  position: "relative",
                   height: "100%",
                   flexShrink: 0,
                   ...panelBorder(focusPane === "commands" ? COLORS.runner : COLORS.border),
@@ -1997,8 +1993,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                       />
                     </box>
                   )
-                ) : loading ? (
-                  <text content="◐ Detectando scripts…" style={{ fg: COLORS.runner }} />
                 ) : discoveryError ? (
                   <text content={discoveryError} style={{ fg: COLORS.danger }} />
                 ) : commandOptions.length ? (
@@ -2094,6 +2088,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     />
                   </box>
                 ) : null}
+                <RunnerLoadingOverlay active={listMode === "commands" && loading} kind="commands" />
               </box>
             </box>
           ) : null}
