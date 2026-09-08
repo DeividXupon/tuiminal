@@ -7,10 +7,12 @@ Funcionalidades atuais:
 - Navegação por tabs
 - Explorador de bancos MySQL, PostgreSQL e SQLite, além de servidores MCP compatíveis
 - Workspace Git no estilo lazygit para o repositório de onde o app foi iniciado
-- Git `[1] Base` / `[2] PR`, com dashboard multirrepositório, prévia, diff, CI e ações seguras
+- Git `[1] Base` / `[2] PR` / `[3] Issues`, com dashboards multirrepositório,
+  prévias, diff/CI de PR e ações remotas seguras
 - Runner de scripts com logs ao vivo, processos simultâneos e histórico da sessão
 - Cliente HTTP com métodos, headers, body, resposta formatada e histórico
 - Free Terminal com sessões PTY persistentes, splits e comandos livres
+- Notificações flutuantes globais para informações, sucessos, avisos e erros relevantes
 - Busca de tabelas, paginação adaptativa e navegação horizontal por colunas
 - Mascaramento automático de colunas sensíveis
 
@@ -22,10 +24,12 @@ Ele é um roteiro evolutivo, não uma especificação definitiva: fases, comando
 decisões técnicas podem mudar depois de protótipos, testes e feedback. Nada nesse
 plano deve ser interpretado como funcionalidade já disponível.
 
-O [plano Git Base/PR](./GIT_PR_PLAN.md) detalha a futura aba `[1] Base` / `[2] PR`,
-com dashboard multirrepositório inspirado no gh-dash. A
-[especificação de interface](./docs/design/git-pr-interface.md) reúne imagens de
-referência, wireframes, atalhos e critérios de layout. Ainda não está implementado.
+O [plano Git Base/PR](./GIT_PR_PLAN.md) e o
+[plano de Issues](./GIT_ISSUES_PLAN.md) registram os dashboards implementados a
+partir do gh-dash. As especificações de interface de
+[PR](./docs/design/git-pr-interface.md) e
+[Issues](./docs/design/git-issues-interface.md) reúnem referências, wireframes,
+atalhos, diferenças deliberadas e critérios de layout.
 
 ## Executar
 
@@ -118,6 +122,13 @@ Toda a interface também pode ser operada com o mouse. Clique nas tabs, botões,
 campos, projetos, arquivos e commits; use a roda do mouse nas listas, diffs e
 respostas HTTP. Os atalhos de teclado continuam disponíveis em paralelo.
 
+Notificações relevantes do Banco, Git, Runner, HTTP e Free Terminal aparecem em
+cards flutuantes no canto inferior direito sem retirar o foco do painel atual.
+Informações e sucessos desaparecem automaticamente, avisos permanecem um pouco
+mais e erros ficam visíveis até serem dispensados pelo controle `×`. Até três
+cards são mantidos; terminais baixos mostram somente os mais recentes. A mensagem
+também continua disponível no painel de origem quando esse contexto é útil.
+
 Os atalhos entre colchetes, como `[Ctrl+S]` e `[H/←]`, usam o azul `#4B75FF`,
 a mesma cor do nome **TUIMINAL** no topo, em todas as paletas. O restante dos
 rótulos conserva suas cores; logs, código e dados não recebem esse destaque.
@@ -147,6 +158,12 @@ catálogo, tabelas abertas, filtros, estrutura, seleção e exportação em lote
 escrita preparada, revisão transacional, inspetor e paginação. Use `[←/↑]` para
 voltar, `[→/↓/Enter]` para avançar e `[Esc]` para encerrar; os controles do card
 também aceitam clique e nenhum banco real é acessado durante o tour.
+No HTTP, o tour também usa somente dados simulados: percorre documentos, omnibar,
+coleção, builder, automação/segurança e inspeção de resposta sem escanear o projeto
+nem fazer requisições de rede.
+No Git, a demonstração local apresenta Base, PR e Issues, incluindo seções, lista,
+prévia, diff/CI e as ações de issue inspiradas no gh-dash, sem consultar nem
+alterar o GitHub.
 
 ## Banco
 
@@ -294,10 +311,11 @@ usam o idioma configurado para formatar data e hora.
 
 A aba Git detecta automaticamente o repositório e o branch a partir do
 diretório onde o Tuiminal foi iniciado. `[1] Base` abre o workspace local atual;
-`[2] PR` abre o dashboard de Pull Requests. Base continua funcionando offline e
-não inicia o GitHub CLI enquanto PR não for visitado.
+`[2] PR` abre o dashboard de Pull Requests e `[3] Issues` abre a fila de Issues.
+Base continua funcionando offline; PR e Issues são montados separadamente e não
+iniciam o GitHub CLI antes do primeiro acesso à respectiva aba.
 
-PR requer GitHub CLI 2.40.0 ou mais recente e uma sessão autenticada. O Tuiminal
+PR e Issues requerem GitHub CLI 2.40.0 ou mais recente e uma sessão autenticada. O Tuiminal
 reutiliza a identidade do `gh`, não lê nem salva o token. Prepare uma vez com:
 
 ```bash
@@ -305,21 +323,23 @@ gh auth login --hostname github.com
 tuiminal git /caminho/do/projeto
 ```
 
-No primeiro acesso a `[2] PR`, o dashboard já consulta a conta autenticada: inclui
+No primeiro acesso a `[2] PR` ou `[3] Issues`, o dashboard já consulta a conta autenticada: inclui
 os repositórios de `@você`, das organizações às quais você pertence, colaborações
-diretas externas e pesquisas pessoais como `author:@me` ou `review-requested:@me`
+diretas externas e pesquisas pessoais como `author:@me`, `assignee:@me` ou
+`review-requested:@me`
 em qualquer repositório. Uma query ampla, como um texto livre, é limitada
 automaticamente a esse escopo; ela não pesquisa o GitHub inteiro.
 
-O perfil é salvo pela raiz canônica do projeto em
-`~/.config/tuiminal/git-pr.yaml`: abrir outro projeto cria seções, filtros e
-posição de prévia independentes. `[+]` cria uma seção e `[Ctrl+E]` gerencia as
+Os perfis são salvos pela raiz canônica do projeto em
+`~/.config/tuiminal/git-pr.yaml` e `~/.config/tuiminal/git-issues.yaml`: abrir
+outro projeto cria seções, filtros e posição de prévia independentes. `[+]` cria
+uma seção e `[Ctrl+E]` gerencia as
 seções. A lista de repositórios em `[Ctrl+E]` é opcional: vazia significa todos os
 projetos da conta; ao adicionar `owner/repo`, todas as buscas daquele perfil ficam
 restritas aos repositórios listados. Cada seção pode definir query, colunas, ordem
 e limite.
 
-- `[1]` / `[2]`: alternar entre Base e PR
+- `[1]` / `[2]` / `[3]`: alternar entre Base, PR e Issues
 - `[J/K]` ou `[↑/↓]`: navegar pelos PRs
 - `[G/Home]` / `[Shift+G/End]`: ir ao primeiro / último PR carregado
 - `[H/L]` ou `[←/→]`: mover o foco entre lista e prévia
@@ -339,14 +359,26 @@ e limite.
 - `[M]` / `[X]` / `[Shift+X]`: preparar merge / fechar / reabrir
 - `[Ctrl+A]` em Checks: revisar e autorizar uma execução elegível de fork
 
+Em `[3] Issues`, a lista usa duas linhas por item e a prévia alterna entre Visão
+geral e Atividade. Os atalhos compartilhados de navegação, seções, query,
+paginação, prévia, navegador e cópia permanecem iguais. As ações específicas são:
+
+- `[C]`: comentar
+- `[A]` / `[Shift+A]`: adicionar / remover responsáveis
+- `[Shift+L]`: editar o conjunto de labels
+- `[Shift+C]`: criar e fazer checkout da branch com `gh issue develop`
+- `[X]` / `[Shift+X]`: fechar / reabrir a issue
+- `[?]`: abrir a lista completa com disponibilidade e motivo
+
 A prévia tem Visão geral, Checks, Atividade, Commits e Arquivos. Descrições em
 Markdown são apresentadas como texto terminal seguro; imagens não são baixadas e
 HTML não é executado. Commits permitem copiar o SHA completo, conexões paginadas
 indicam quando há mais dados e o diff remoto é preso aos SHAs exibidos.
 
-Toda escrita abre uma preparação com host, repositório, PR e commit. Nada é enviado
-até `[Ctrl+S]`; a identidade e o head são revalidados e um timeout após o envio é
-tratado como resultado incerto, sem repetição automática. Checkout bloqueia clone
+Toda escrita abre uma preparação com o alvo exato. Nada é enviado até `[Ctrl+S]`;
+PR revalida identidade e head, enquanto Issues revalida identidade, estado e
+`updatedAt`. Um timeout após o envio é tratado como resultado incerto, sem
+repetição automática. Checkout bloqueia clone
 errado, worktree suja e operações Git em andamento. Merge nunca acrescenta bypass
 administrativo nem apaga branch. O acompanhamento de CI só começa por `[W]`, tem
 limite de dez PRs e termina ao fechar o Tuiminal.
@@ -544,15 +576,23 @@ Extrações marcadas como secretas vivem somente em memória e são redigidas de
 URLs, erros e relatórios.
 
 Em `[1] Opções`, `[T]` percorre timeout herdado e valores explícitos, enquanto
-`[R]` percorre redirects herdados, seguir e manual. Uma escolha explícita no
-request sempre vence o default do projeto e continua explícita ao salvar em
-`.http`.
+`[R]` percorre redirects herdados, seguir e manual. `[C]` inclui ou ignora o cookie
+jar por request; ao ignorá-lo, o envio não lê nem grava cookies. O campo Proxy
+aceita uma URL HTTP/HTTPS explícita ou uma variável privada. `[V]` alterna a
+verificação TLS: o modo inseguro fica vermelho e exige `[I]` por destino, ambiente
+e sessão antes de qualquer conexão. `[L]` controla o registro no histórico. Uma
+escolha explícita no request sempre vence o default do projeto e continua explícita
+ao salvar em `.http`; as opções usam `# @no-cookie-jar`, `# @proxy` e
+`# @insecure-tls`.
 
 `[E]` abre o gerenciador de ambientes. Ele permite escolher “Sem ambiente”, usar
 um ambiente público/privado detectado ou criar uma variável privada. O arquivo
-`http-client.private.env.json` é salvo com permissão `0600`; a inclusão no
-`.gitignore` é uma escolha explícita. `[Ctrl+K]` guarda o valor no gerenciador de
-credenciais do sistema e deixa somente uma referência opaca no JSON.
+`http-client.private.env.json` é salvo ao lado do `.http` ativo com permissão
+`0600` — ou na raiz para scratch — e a inclusão no `.gitignore` é uma escolha
+explícita. O nome selecionado é procurado do diretório do request até a raiz; o
+primeiro escopo que o define vence por inteiro, o privado sobrescreve o público no
+mesmo diretório e ambientes irmãos não são importados. `[Ctrl+K]` guarda o valor no
+gerenciador de credenciais do sistema e deixa somente uma referência opaca no JSON.
 Na lista de ambientes, `[W]` abre os defaults não secretos do workspace: ambiente,
 timeout, redirects, headers e persistência opcional de histórico. Eles são gravados
 atomicamente em `.tuiminal/http/config.json` com permissão `0600`.
@@ -569,17 +609,28 @@ Atalhos principais:
 - `[Ctrl+↑/↓]`: ajustar o split; `[Ctrl+O]`: abrir o jump mode;
 - `[Esc]`: desfocar ou fechar somente a camada superior.
 
+O separador entre request e response também pode ser arrastado com o mouse; ele
+altera a mesma proporção por documento usada por `[Ctrl+↑/↓]` e respeita os
+limites responsivos do workspace.
+
 Coleções usam `.http`/`.rest` versionável e são atualizadas por watcher. O
 Tuiminal preserva conteúdo fora do bloco editado. Quando o arquivo muda fora do
 aplicativo, um diff redigido permite recarregar a versão externa, aplicar a versão
-local ou salvá-la como cópia; nada é sobrescrito silenciosamente. A sidebar permite importar Postman
+local ou salvá-la como cópia; nada é sobrescrito silenciosamente. Blocos com
+scripts, redirects de saída, protocolos ou diretivas ainda não suportados abrem
+com o conteúdo raw original completo e ficam somente leitura: o Tuiminal não os
+executa, edita, move, duplica ou reserializa parcialmente. A sidebar permite importar Postman
 v2.1 ou OpenAPI 3.x com preview e relatório, e executar a coleção inteira ou um
-alvo com dataset JSON/CSV e concorrência limitada. Em Mais também é possível
+alvo com dataset JSON/CSV e concorrência limitada. O import OpenAPI resolve `$ref`
+local, servers e overrides de parâmetros; referências externas e construções com
+perda aparecem no relatório e não são seguidas. Em Mais também é possível
 importar e exportar cURL com credenciais mascaradas.
 
 O parser aceita nomes `# @name`/`# @name =`, diretivas iniciadas por `#` ou `//`,
 GET abreviado, URLs multilinha e `@timeout` com `ms`, `s` ou `m` — sem unidade, o
-valor segue a convenção JetBrains e representa segundos. Blocos com scripts,
+valor segue a convenção JetBrains e representa segundos. `@no-cookie-jar`,
+`@proxy` e `@insecure-tls` fazem round-trip; `-x`/`--proxy` e `-k`/`--insecure`
+também são preservados ao importar ou exportar cURL. Blocos com scripts,
 diretivas ou handlers ainda não suportados ficam marcados como somente leitura e
 não são executados nem regravados de forma parcial.
 
@@ -601,17 +652,23 @@ O mesmo pipeline é usado pelo workbench e pelo modo headless:
 ```bash
 tuiminal http run api.http#buscar-usuario --env local --report text
 tuiminal http run api.http --data cases.json --concurrency 4 --report junit
+tuiminal http run api.http --allow-insecure-tls --report json
 tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 ```
 
 Os relatórios aceitam `text`, `json` e `junit`. O exit code é `0` para sucesso,
 `2` para entrada/configuração inválida, `3` para falha de preparação ou
-transporte e `4` para assertion reprovada.
+transporte e `4` para assertion reprovada. `--allow-insecure-tls` é um opt-in
+explícito do processo headless e autoriza todos os destinos daquele run; sem ele,
+um request `@insecure-tls` falha antes do transporte.
 
 URLs sem protocolo recebem `http://`. JSON ganha `Content-Type` quando necessário.
-O timeout padrão é 30 segundos, a captura visual é limitada a cerca de 1,5 MB e
-o histórico mantém até 30 execuções com orçamento global de corpos. Respostas
+O timeout padrão é 30 segundos e a captura é limitada a cerca de 1,5 MB. Para
+manter a TUI responsiva, o pane mostra até 50 mil caracteres de uma resposta
+grande em um único documento nativo; `Salvar` preserva todos os bytes capturados e
+`Baixar completo` refaz GETs truncados com segurança. O histórico mantém até 30
+execuções com orçamento global de corpos. Respostas
 podem ser buscadas, dobradas, inspecionadas por JSONPath, copiadas, salvas,
 comparadas ou baixadas integralmente quando o reenvio for seguro.
 Ao sair do Tuiminal com algum draft HTTP modificado, uma confirmação permite

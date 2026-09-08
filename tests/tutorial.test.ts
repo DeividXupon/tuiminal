@@ -8,10 +8,13 @@ const DATABASE_TUTORIAL_SOURCE = await Bun.file(
 const GIT_TUTORIAL_SOURCE = await Bun.file(
   new URL("../src/features/git/tutorial/GitTutorialDemo.tsx", import.meta.url),
 ).text()
+const HTTP_TUTORIAL_SOURCE = await Bun.file(
+  new URL("../src/features/http/tutorial/HttpTutorialDemo.tsx", import.meta.url),
+).text()
 
 describe("contextual tutorial", () => {
   test("keeps non-database tours focused on the active tool", () => {
-    for (const screen of ["runner", "http", "terminal"]) {
+    for (const screen of ["runner", "terminal"]) {
       const steps = getTutorialSteps(screen)
       expect(steps.map((step) => step.targetId)).toEqual(["tutorial-current-tool"])
       expect(steps.some((step) => step.targetId === "tutorial-app-header")).toBe(false)
@@ -19,10 +22,23 @@ describe("contextual tutorial", () => {
     }
   })
 
-  test("covers the Git Base/PR flow with a stable local demo target for every step", () => {
+  test("covers the HTTP request/response flow with translated stable demo targets", () => {
+    const steps = getTutorialSteps("http")
+    expect(steps.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(steps.map((step) => step.targetId)).size).toBe(steps.length)
+    for (const step of steps) {
+      expect(HTTP_TUTORIAL_SOURCE).toContain(`id="${step.targetId}"`)
+      for (const value of [step.group, step.title, step.description, step.hint]) {
+        if (value) expect(translateUi(value, "en")).not.toBe(value)
+      }
+    }
+  })
+
+  test("covers the Git Base/PR/Issues flow with a stable local demo target for every step", () => {
     const steps = getTutorialSteps("git")
     expect(steps.length).toBeGreaterThanOrEqual(6)
     expect(new Set(steps.map((step) => step.targetId)).size).toBe(steps.length)
+    expect(steps.map((step) => step.targetId)).toContain("tutorial-git-issues")
     for (const step of steps) {
       expect(GIT_TUTORIAL_SOURCE).toContain(`id="${step.targetId}"`)
       for (const value of [step.group, step.title, step.description, step.hint]) {

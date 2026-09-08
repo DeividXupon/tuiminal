@@ -35,13 +35,16 @@ This file records durable project conventions, architectural decisions, and recu
 - `[Esc]` closes only the topmost active layer. A modal must consume the event with `preventDefault()` and `stopPropagation()` and must not allow the same keypress to close its parent screen or the application.
 - Application-level Database exit on `[Esc]` must wait for local workspace handlers to consume the event. Grid/query batch selection uses `[Esc]` to clear itself even when no modal input owns focus; never quit synchronously before checking `defaultPrevented`.
 - Any focusable modal control must be recognized by its feature's `keyboard.ts` scope, consumed by the application-level guard in `src/app/App.tsx`, including empty modal states where the dialog itself receives focus. Preserve local Escape handling and event consumption.
+- Do not mount closed modal components that subscribe through `useKeyboard` or `useTerminalDimensions`. Render them only while open so hidden tools and dialogs do not accumulate global OpenTUI listeners; mounted inactive SQL tabs are the deliberate exception because their editor/result state must survive tab switches.
+- OpenTUI adds one renderer `selection` listener per mounted scrollbox. Workspaces that intentionally retain several editor trees, such as HTTP's six documents, must configure a bounded renderer listener budget derived from their documented limits; keep separate regressions for leak-sensitive `resize` and `keypress` listener counts.
 - Text inputs follow a focus stack: `[Esc]` first dismisses autocomplete or unfocuses the active input, a later `[Esc]` closes its containing screen, and only the final global action may exit the app.
 - Never let global shortcuts fire while a text input, SQL editor, terminal, picker, or modal owns the keyboard.
 - Both layout modes are first-class: `framed` uses gaps and borders; `compact` removes gaps and most borders and separates panels through subtle background differences.
 - Settings are contextual. In the Database tab or isolated Database mode, `CONFIGURAÇÕES DO BANCO` appears first and contains sensitive-data terms and SQL history, followed by `CONFIGURAÇÕES GLOBAIS`. In every other tool, hide both Database sections entirely and show only the global divider with palette, layout, language, and tutorial. Keyboard section cycling must use this same visible order and never focus a hidden section. Keep a one-row vertical gap between option groups, scroll whole section groups into view, and keep viewport culling disabled in this short list; culling causes partially redrawn rows when navigating back upward in OpenTUI.
 - Avoid decorative boxes around every element. Prefer simple `─` and `│` separators where maximizing content space matters.
-- Animations must not remount inputs, reset focus, or make syntax highlighting flicker. Keep editor/renderable refs stable and update highlights in place.
+- Animations and appearance changes must not remount inputs, reset focus, or make syntax highlighting flicker. Keep editor/renderable refs stable and update highlights in place. In particular, never key a mounted `Tabs.List` or its tab tree by palette, language, or layout: tuiparts requires each live tab value to stay unique while React reconciles the update.
 - Keep selected/focused states obvious through accent color and background, not only through a subtle border.
+- Relevant information, success, warning, and error events from every top-level tool use the shared floating notification center. Keep at most three cards, show only the newest cards when height is constrained, auto-dismiss transient states, and keep errors until the user dismisses them with the mouse-accessible `×` control. Notifications must not steal keyboard focus or own `[Esc]`; retain local inline feedback when it provides useful context.
 - In compact layout, inactive inline controls inherit the surrounding panel instead of painting `panel` rectangles. Active Database cells and inspector fields use the palette's dark `databaseSelectionBg` with normal text; reserve the bright database accent as a solid selection background for framed layout so 256-color terminals keep states distinct.
 
 ## Appearance, language, and tutorial
@@ -58,8 +61,11 @@ This file records durable project conventions, architectural decisions, and recu
 
 ## Git workspace
 
-- `GIT_PR_PLAN.md` and `docs/design/git-pr-interface.md` specify the completed `[1] Base` / `[2] PR` workspace inspired by gh-dash. Preserve Base as the offline local Git workspace; keep PR responsibilities in separate models/services/UI and retain fake `gh`/fixture coverage for every remote read or write. Review both documents before changing navigation, capabilities, safety, limits or persistence, and update their evidence when behavior changes.
+- `GIT_PR_PLAN.md` / `docs/design/git-pr-interface.md` and `GIT_ISSUES_PLAN.md` / `docs/design/git-issues-interface.md` specify the completed `[1] Base` / `[2] PR` / `[3] Issues` workspace inspired by gh-dash. Preserve Base as the offline local Git workspace; keep PR and Issues responsibilities in separate models/services/UI and retain fake `gh`/fixture coverage for every remote read or write. Review the relevant documents before changing navigation, capabilities, safety, limits or persistence, and update their evidence when behavior changes.
 - PR searches default to the complete authenticated account scope without initial setup: repositories owned by the viewer, their organizations, and external repositories where they are a direct collaborator, plus viewer-relative searches such as `author:@me` across GitHub. A broad custom query is automatically scoped with `user:<viewer>`, `org:<membership>`, and external `repo:<owner/name>` qualifiers so it never becomes an accidental GitHub-wide search. The repositories saved in a project profile are optional restrictive filters; an empty list means account scope, not an unconfigured state.
+- Issue searches use the same account-scope rule, always add `is:issue` and `archived:false`, and reject `is:pr`. The dense two-line list and Overview/Activity preview support configurable sections, columns, sort and limits; wide, medium and narrow terminals use side-by-side, stacked and one-pane layouts respectively.
+- Issue writes cover comment, assign/unassign, label deltas, `gh issue develop --checkout`, close and reopen. Keep the prepare/re-authenticate/re-read/execute-once/reconcile flow; pin host, node ID, repository, number, state, `updatedAt` and auth generation. Timeout/cancellation after dispatch remains uncertain with no retry. Label and assignee edits must use complete details rather than search summaries, and checkout must pass the existing clone/remote/clean-worktree checks.
+- Issue configuration lives in `~/.config/tuiminal/git-issues.yaml`, atomically written with mode `0600` and scoped by canonical project root. An empty repository list means account scope. Base, PR and Issues mount lazily and preserve independent state; shutting down Git must dispose both remote resource groups.
 - Git behaves like a compact lazygit-style workspace for the repository from which Tuiminal was launched.
 - The changed-file tree is grouped into real folders and distinguishes staged and unstaged changes. Staging one file or all files must refresh the view without losing useful selection context.
 - A small commit graph remains visible under the file tree; fullscreen graph mode replaces the code/diff area. Graph rows show short hash and author initials.
@@ -121,12 +127,28 @@ This file records durable project conventions, architectural decisions, and recu
   redacted URL, headers with inheritance origin, resolved variables, execution
   options, and bounded body before sending. Exiting the application while any HTTP
   draft is dirty requires a top-level confirmation and must suspend the HTTP layer.
+- Request Options exposes `[C]` to include or ignore the cookie jar per request.
+  Ignoring it must suppress both cookie reads and `Set-Cookie` writes, appear in
+  Preview, and round-trip through the interoperable `# @no-cookie-jar` directive.
+- Request Options accepts an explicit HTTP/HTTPS proxy and uses `[V]` for TLS
+  verification. Proxy credentials must come from private variables and remain
+  redacted in previews, conflicts, cURL, reports, and transport errors. Insecure
+  TLS is opt-in per request, appears literally in red, and requires `[I]` approval
+  scoped to target, selected environment, and the current session; every new
+  HTTPS redirect target requires its own approval. Headless runs require the
+  explicit `--allow-insecure-tls` flag.
 - `[E]` opens the HTTP environment manager; it no longer cycles environments
   blindly. Creating a private value writes `http-client.private.env.json`
   atomically with mode `0600`, offers an explicit `.gitignore` rule, rejects
   symlinks/external races, and masks the input. Optional `[Ctrl+K]` persistence
   stores only an opaque `$tuiminal.keychain.*` reference in JSON and resolves the
   real value through Bun's system credential manager.
+- Resolve the selected HTTP environment name independently for each saved request,
+  from its `.http` directory toward the project root. The nearest directory that
+  defines the name wins as a whole; private values override public values only
+  within that same directory, and sibling-only environments never leak across
+  services. Scratch uses the root scope. Create private values beside the active
+  `.http` file and show that destination before saving.
 - The environment manager exposes `[W]` workspace defaults even when no environment
   exists. Non-secret environment, timeout, redirect, header, and history defaults
   persist atomically in `.tuiminal/http/config.json` with mode `0600`. An explicit
@@ -137,7 +159,29 @@ This file records durable project conventions, architectural decisions, and recu
   directives, `# @name =`, short GET, and indented multiline URLs are accepted.
   A block containing an unsupported directive, pre-request script, response
   handler, or redirect is read-only and must not be executed or partially
-  reserialized as if Tuiminal understood its semantics.
+  reserialized as if Tuiminal understood its semantics. Open these blocks in a
+  scrollable raw pane containing the exact original block; do not leave the visual
+  builder or editable omnibar active for them. Keep the versioned compatibility
+  matrix under `tests/fixtures/http/` aligned with the JetBrains syntax boundary.
+- Keep narrow HTTP panes clipped to their bounds. At low heights, compress the
+  local `Mais` tab strip to one row, keep Options scrollable, and put its execution
+  controls before metadata so keyboard and mouse actions remain reachable.
+- Keep large HTTP responses bounded twice: capture at 1.5 MB, then render at most
+  50,000 characters in the live pane as one native text document. Show
+  `TRUNCADO` in fixed response chrome; saving preserves all captured bytes and a
+  safe full GET download remains a separate action.
+- The HTTP request/response split has both `[Ctrl+↑/↓]` buttons and a real mouse
+  drag handle. Both routes update the same per-document ratio and keep it between
+  25% and 70% across horizontal and vertical responsive compositions.
+- The HTTP tutorial uses a simulated local workspace and response, with no
+  project scan or network access. Keep stable targets for documents, omnibar,
+  collection, request builder, automation/security, and response inspection, and
+  cover every target and translation in regression tests.
+- Postman v2.1 and OpenAPI 3.0/3.1 import compatibility is recorded under
+  `tests/fixtures/http/import/`. OpenAPI local `$ref`, parameter overrides, and
+  root/path/operation servers are supported; external refs and lossy constructs
+  must be reported without exposing their URLs or contents. Imported literal
+  secrets use unique private-variable placeholders per request and field.
 
 ## Free Terminal
 

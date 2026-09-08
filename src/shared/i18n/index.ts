@@ -1,5 +1,6 @@
 import stringWidth from "string-width"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
+import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
@@ -9,12 +10,15 @@ import { HTTP_PATTERNS } from "./http-patterns"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
+import { HTTP_TRANSPORT_MESSAGES } from "./http-transport-catalog"
+import { HTTP_TUTORIAL_MESSAGES } from "./http-tutorial-catalog"
 import { HTTP_RESPONSE_MESSAGES, HTTP_RESPONSE_PATTERNS } from "./http-response-catalog"
 import { HTTP_RUNNER_MESSAGES, HTTP_RUNNER_PATTERNS } from "./http-runner-catalog"
 import {
   HTTP_WORKSPACE_SETTINGS_MESSAGES,
   HTTP_WORKSPACE_SETTINGS_PATTERNS,
 } from "./http-workspace-settings-catalog"
+import { NOTIFICATION_MESSAGES, NOTIFICATION_PATTERNS } from "./notification-catalog"
 
 export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko"
 
@@ -4995,12 +4999,17 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_OVERLAY_MESSAGES,
   ...HTTP_PROJECT_MESSAGES,
   ...HTTP_REQUEST_MESSAGES,
+  ...HTTP_TRANSPORT_MESSAGES,
+  ...HTTP_TUTORIAL_MESSAGES,
   ...HTTP_PREVIEW_MESSAGES,
   ...HTTP_RESPONSE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,
   ...HTTP_WORKSPACE_SETTINGS_MESSAGES,
-  // Git / Pull Requests.
+  // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
+  ...GIT_ISSUE_MESSAGES,
+  // Notificações globais.
+  ...NOTIFICATION_MESSAGES,
   // Terminal livre.
   [
     "❯ FREE TERMINAL",
@@ -5100,6 +5109,7 @@ const CATALOGS = Object.fromEntries(
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
 const PATTERNS: readonly Pattern[] = [
+  ...NOTIFICATION_PATTERNS,
   ...HTTP_WORKSPACE_SETTINGS_PATTERNS,
   [
     /^… \+(\d+) parâmetro\(s\)$/,

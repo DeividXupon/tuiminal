@@ -52,6 +52,15 @@ describe("internationalization", () => {
     expect(translateUi("[Ctrl+X] Cancelar", "en")).toBe("[Ctrl+X] Cancel")
     expect(translateUi("[Ctrl+X]", "en")).toBe("[Ctrl+X]")
     expect(translateUi("[Ctrl+S] Salvar comando", "en")).toBe("[Ctrl+S] Save command")
+    expect(translateUi("SUCESSO", "ja")).toBe("成功")
+    expect(translateUi("Banco · Escrita", "zh-CN")).toBe("数据库 · 写入")
+    expect(translateUi("api iniciado em projeto.", "en")).toBe("api started in projeto.")
+    expect(translateUi("build: processo concluído.", "ko")).toBe(
+      "build: 프로세스가 완료되었습니다.",
+    )
+    expect(translateUi("GET health: request cancelado.", "es")).toBe(
+      "GET health: solicitud cancelada.",
+    )
     expect(translateUi("◆ Salvar comando [Ctrl+S]", "en")).toBe("◆ Save command [Ctrl+S]")
     expect(translateUi("PTY cria um terminal interativo ligado ao comando.", "es")).toBe(
       "PTY crea un terminal interactivo conectado al comando.",
@@ -148,6 +157,9 @@ describe("internationalization", () => {
       "Accepts custom methods such as PROPFIND.",
     )
     expect(translateUi("[T] Timeout: 30s", "zh-CN")).toBe("[T] 超时：30s")
+    expect(translateUi("O tempo limite de 250 ms foi excedido.", "en")).toBe(
+      "The 250 ms timeout was exceeded.",
+    )
     expect(translateUi("[L] Histórico: não registrar", "en")).toBe("[L] History: do not record")
     expect(translateUi("[4] Preview", "zh-CN")).toBe("[4] 预览")
     expect(translateUi("REQUISIÇÃO PREPARADA", "ja")).toBe("準備済みリクエスト")
@@ -205,6 +217,20 @@ describe("internationalization", () => {
       "saved for this project",
     )
     expect(translateUi("right", "ja")).toBe("右")
+  })
+
+  test("translates GitHub Issues layout, actions and safety reasons", () => {
+    expect(translateUi("Criadas por mim", "en")).toBe("Created by me")
+    expect(translateUi("Atribuídas a mim", "es")).toBe("Asignadas a mí")
+    expect(translateUi("[E] Expandir descrição", "ja")).toContain("説明")
+    expect(translateUi("◆ AÇÕES DA ISSUE", "zh-CN")).toBe("◆ ISSUE 操作")
+    expect(translateUi("cannot-update-issue", "ko")).toContain("업데이트")
+    expect(
+      translateUi(
+        "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações",
+        "en",
+      ),
+    ).toContain("[P] Preview")
   })
 
   test("measures, truncates, and pads wide characters", () => {
