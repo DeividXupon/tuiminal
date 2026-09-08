@@ -24,7 +24,6 @@ import {
 import {
   createIssueSectionId,
   duplicateIssueSection,
-  issueSectionManagerAction,
   makeIssueSection,
   moveIssueSection,
   parseIssueSectionOptions,
@@ -74,7 +73,6 @@ describe("Git Issues workspace model", () => {
         key,
         focus,
         hasSelection: true,
-        canConfigure: true,
         canLoadMore: true,
         canLoadPreview: true,
       })
@@ -96,6 +94,8 @@ describe("Git Issues workspace model", () => {
     })
     expect(action({ name: "n" }, "preview")).toEqual({ type: "load-preview-more" })
     expect(action({ name: "escape" }, "preview")).toEqual({ type: "focus", target: "list" })
+    expect(action({ name: "e", ctrl: true })).toBeNull()
+    expect(action({ name: "+" })).toBeNull()
     expect(moveIssueIndex(0, 3, -1)).toBe(0)
     expect(moveIssueIndex(2, 3, 1)).toBe(2)
     expect(adjacentIssuePreviewTab("overview", -1)).toBe("activity")
@@ -276,12 +276,5 @@ describe("Issue sections", () => {
     expect(() =>
       parseIssueSectionOptions({ columns: "bad", sort: "updated-desc", limit: "20" }),
     ).toThrow("valid column")
-    expect(
-      issueSectionManagerAction({
-        key: { name: "down", option: true },
-        tab: "sections",
-        hasSelection: true,
-      }),
-    ).toEqual({ type: "move-section", delta: 1 })
   })
 })

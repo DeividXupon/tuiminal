@@ -26,6 +26,13 @@ describe("internationalization", () => {
     expect(translateUi("[Esc] Fechar", "en")).toBe("[Esc] Close")
     expect(translateUi("CONFIGURAÇÕES DO BANCO", "en")).toBe("DATABASE SETTINGS")
     expect(translateUi("CONFIGURAÇÕES GLOBAIS", "zh-CN")).toBe("全局设置")
+    expect(translateUi("CONFIGURAÇÕES DO GIT", "en")).toBe("GIT SETTINGS")
+    expect(translateUi("[1] Diffs", "ja")).toBe("[1] Diff")
+    expect(translateUi("[4] Repositórios", "ja")).toBe("[4] リポジトリ")
+    expect(translateUi("[Ctrl+P] Alterar projeto/branch", "en")).toBe(
+      "[Ctrl+P] Change project/branch",
+    )
+    expect(translateUi("PROJETO LOCAL", "ko")).toBe("로컬 프로젝트")
     expect(translateUi("[Ctrl+F] Favoritas 3", "zh-CN")).toBe("[Ctrl+F] 收藏 3")
     expect(translateUi("  Célula  ", "ja")).toBe("  セル  ")
     expect(translateUi("[H/←] [L/→] navegação contextual · GRADE", "en")).toBe(

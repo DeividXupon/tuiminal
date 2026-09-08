@@ -435,6 +435,38 @@ describe("Pull request session coordination", () => {
       hasNextPage: false,
       fromCache: false,
     })
+    expect(await session.refreshSections(root, ["mine"], "mine", null)).toMatchObject({
+      status: "ready",
+      loadedCount: 2,
+      hasNextPage: false,
+    })
+    session.dispose()
+  })
+
+  test("refreshes every configured section while returning the active section", async () => {
+    const root = temporaryDirectory
+    const configPath = join(temporaryDirectory, "refresh-all-config.yaml")
+    const config = structuredClone(DEFAULT_PULL_REQUEST_CONFIG)
+    config.profiles[root] = {
+      host: "github.com",
+      repositories: ["team/api"],
+      sections: [
+        { id: "mine", title: "Mine", query: "is:open author:@me" },
+        { id: "review", title: "Review", query: "is:open review-requested:@me" },
+      ],
+    }
+    savePullRequestConfig(config, configPath)
+    const session = new PullRequestSession({
+      configPath,
+      transport: { executable: fakeGh },
+    })
+    const refreshed = await session.refreshSections(root, ["mine", "review"], "mine", null)
+    expect(refreshed).toMatchObject({ status: "ready", section: { id: "mine" } })
+    expect(await session.loadSection(root, "review")).toMatchObject({
+      status: "ready",
+      section: { id: "review" },
+      fromCache: true,
+    })
     session.dispose()
   })
 

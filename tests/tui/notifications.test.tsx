@@ -183,7 +183,7 @@ test("Git PR failures reach the global center", async () => {
   process.env.TUIMINAL_GH_EXECUTABLE = "/does/not/exist/gh"
   delete process.env.TUIMINAL_GIT_PR_DEMO
   tui = await testRender(<App />, { width: 120, height: 30 })
-  await settle(() => tui?.captureCharFrame().includes("GIT · BASE LOCAL") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
   act(() => tui?.mockInput.pressKey("2"))
   await settle(() => tui?.captureCharFrame().includes("ERRO · Git · PR") ?? false)
 })

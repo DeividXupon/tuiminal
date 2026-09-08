@@ -1,13 +1,24 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { prepareIssueAction } from "../src/features/git/model/issue/actions"
+import { DEFAULT_ISSUE_CONFIG } from "../src/features/git/model/issue/config"
 import { DEMO_ISSUES } from "../src/features/git/model/issue/fixtures"
 import { executeIssueMutation } from "../src/features/git/services/github/issue-mutations"
 import { openIssueInBrowser } from "../src/features/git/services/github/issue-read-actions"
 import { searchIssuesPage } from "../src/features/git/services/github/issue-search"
 import { IssueActionCoordinator } from "../src/features/git/services/issue-actions"
+import { IssueSession } from "../src/features/git/services/issue-session"
+import { saveIssueConfig } from "../src/features/git/storage/issue/config"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-issue-actions-"))
 const executable = join(directory, "gh")
@@ -32,7 +43,9 @@ import { appendFileSync, existsSync, writeFileSync } from "node:fs"
 const args = process.argv.slice(2)
 const stdin = await Bun.stdin.text()
 appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args, stdin, cwd: process.cwd() }) + "\\n")
-if (process.env.FAKE_COORDINATOR === "1") {
+if (args[0] === "--version") {
+  console.log("gh version 2.83.2 (fixture)")
+} else if (process.env.FAKE_COORDINATOR === "1") {
   if (args[0] === "api" && args.at(-1) === "user") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
@@ -58,7 +71,9 @@ if (process.env.FAKE_COORDINATOR === "1") {
     process.exit(2)
   }
 } else if (process.env.FAKE_SEARCH === "1") {
-  if (args[0] === "api" && args[1] === "graphql") {
+  if (args[0] === "api" && args.at(-1) === "user") {
+    console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
+  } else if (args[0] === "api" && args[1] === "graphql") {
     console.log(JSON.stringify({ data: { search: {
       issueCount: 1, pageInfo: { hasNextPage: false, endCursor: null },
       nodes: [{
@@ -197,7 +212,7 @@ describe("Issue mutation transport", () => {
     ])
     expect(recorded[3]).toMatchObject({
       args: ["issue", "develop", "318", "--repo", "equipe/api", "--checkout"],
-      cwd: directory,
+      cwd: realpathSync(directory),
     })
     expect(recorded[4]?.args.slice(0, 2)).toEqual(["issue", "close"])
     expect(recorded[5]?.args.slice(0, 2)).toEqual(["issue", "reopen"])
@@ -257,5 +272,36 @@ describe("Issue mutation transport", () => {
       commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue comment"),
     ).toHaveLength(1)
     expect(commands().filter((command) => command.args[1] === "graphql")).toHaveLength(2)
+  })
+})
+
+describe("Issue session refresh", () => {
+  test("refreshes every configured section and caches non-active results", async () => {
+    writeFileSync(logPath, "")
+    const root = directory
+    const configPath = join(directory, "issue-refresh.yaml")
+    const config = structuredClone(DEFAULT_ISSUE_CONFIG)
+    config.profiles[root] = {
+      host: "github.com",
+      repositories: ["team/api"],
+      sections: [
+        { id: "created", title: "Created", query: "is:open author:@me" },
+        { id: "assigned", title: "Assigned", query: "is:open assignee:@me" },
+      ],
+    }
+    saveIssueConfig(config, configPath)
+    const session = new IssueSession({
+      configPath,
+      transport: { executable, env: { FAKE_LOG: logPath, FAKE_SEARCH: "1" } },
+    })
+    expect(
+      await session.refreshSections(root, ["created", "assigned"], "created", null),
+    ).toMatchObject({ status: "ready", section: { id: "created" } })
+    expect(await session.loadSection(root, "assigned")).toMatchObject({
+      status: "ready",
+      section: { id: "assigned" },
+      fromCache: true,
+    })
+    session.dispose()
   })
 })

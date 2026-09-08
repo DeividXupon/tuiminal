@@ -25,7 +25,6 @@ import {
   makePullRequestSection,
   movePullRequestSection,
   removePullRequestSection,
-  sectionManagerAction,
   updatePullRequestSection,
 } from "../src/features/git/model/pr/sections"
 import type { PullRequestAuthContext } from "../src/features/git/model/pr/types"
@@ -50,7 +49,7 @@ const auth: PullRequestAuthContext = {
   generation: 3,
 }
 
-describe("Git Base/PR workspace", () => {
+describe("Git Diffs/PR workspace", () => {
   test("keeps terminal GitHub failures consistent between header and state panel", () => {
     expect(
       pullRequestDashboardPresentation(
@@ -74,7 +73,7 @@ describe("Git Base/PR workspace", () => {
     ).toBe("AUTENTICAÇÃO GITHUB NECESSÁRIA")
   })
 
-  test("opens on Base and maps only local number shortcuts", () => {
+  test("opens on Diffs and maps only local number shortcuts", () => {
     expect(DEFAULT_GIT_WORKSPACE_TAB).toBe("base")
     expect(gitWorkspaceTabForKey("1")).toBe("base")
     expect(gitWorkspaceTabForKey("2")).toBe("pr")
@@ -118,7 +117,6 @@ describe("Git Base/PR workspace", () => {
         keyName: "/",
         focus: "list",
         hasSelection: true,
-        canConfigure: true,
       }),
     ).toEqual({ type: "edit-query" })
     expect(
@@ -126,24 +124,21 @@ describe("Git Base/PR workspace", () => {
         keyName: "+",
         focus: "list",
         hasSelection: true,
-        canConfigure: true,
       }),
-    ).toEqual({ type: "create-section" })
+    ).toBeNull()
     expect(
       pullRequestWorkspaceAction({
         keyName: "e",
         ctrl: true,
         focus: "list",
         hasSelection: true,
-        canConfigure: true,
       }),
-    ).toEqual({ type: "manage" })
+    ).toBeNull()
     expect(
       pullRequestWorkspaceAction({
         keyName: "p",
         focus: "list",
         hasSelection: true,
-        canConfigure: true,
       }),
     ).toEqual({ type: "toggle-preview" })
     expect(
@@ -152,7 +147,6 @@ describe("Git Base/PR workspace", () => {
         ctrl: true,
         focus: "preview",
         hasSelection: true,
-        canConfigure: true,
       }),
     ).toEqual({ type: "scroll-preview", delta: 10 })
     expect(
@@ -161,7 +155,6 @@ describe("Git Base/PR workspace", () => {
         shift: true,
         focus: "list",
         hasSelection: true,
-        canConfigure: true,
       }),
     ).toEqual({ type: "cycle-preview-position" })
     expect(
@@ -372,21 +365,5 @@ describe("Pull request sections", () => {
         "mine",
       ),
     ).toThrow("one section")
-  })
-
-  test("maps manager keys without coupling them to UI state", () => {
-    expect(
-      sectionManagerAction({ key: { name: "n" }, tab: "sections", hasSelection: false }),
-    ).toEqual({ type: "create" })
-    expect(
-      sectionManagerAction({
-        key: { name: "down", option: true },
-        tab: "sections",
-        hasSelection: true,
-      }),
-    ).toEqual({ type: "move-section", delta: 1 })
-    expect(
-      sectionManagerAction({ key: { name: "+" }, tab: "repositories", hasSelection: false }),
-    ).toEqual({ type: "add-repository" })
   })
 })

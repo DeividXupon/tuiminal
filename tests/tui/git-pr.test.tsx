@@ -1,5 +1,9 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
+import { execFileSync } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
@@ -11,10 +15,11 @@ import {
   updateUiSettings,
 } from "../../src/core/settings/theme"
 import { GitViewer } from "../../src/features/git"
+import { GitCompareWorkspace } from "../../src/features/git/GitCompareWorkspace"
+import { GitBaseWorkspace } from "../../src/features/git/GitWorkspace"
 import { PullRequestsWorkspace } from "../../src/features/git/PullRequestsWorkspace"
-import { RepositorySetupModal } from "../../src/features/git/ui/pr/RepositorySetupModal"
+import { loadLocalGitTarget } from "../../src/features/git/services/local-target"
 import { SectionEditorModal } from "../../src/features/git/ui/pr/SectionEditorModal"
-import { SectionManagerModal } from "../../src/features/git/ui/pr/SectionManagerModal"
 import type { LanguageId } from "../../src/shared/i18n"
 
 let tui: TestRendererSetup | undefined
@@ -26,7 +31,10 @@ async function key(
   name: string,
   options: { shift?: boolean; ctrl?: boolean; option?: boolean } = {},
 ) {
-  act(() => tui?.mockInput.pressKey(name, options))
+  act(() => {
+    if (name.toLowerCase() === "tab") tui?.mockInput.pressTab(options)
+    else tui?.mockInput.pressKey(name, options)
+  })
   if (name.toLowerCase() === "escape") {
     await act(async () => Bun.sleep(60))
   }
@@ -56,7 +64,7 @@ afterEach(() => {
   else process.env.TUIMINAL_ONLY_TAB = initialOnlyTab
 })
 
-test("isolated Git starts on offline Base outside a repository and can enter PR", async () => {
+test("isolated Git starts on offline Diffs outside a repository and can enter PR", async () => {
   process.env.TUIMINAL_ONLY_TAB = "git"
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
   updateUiSettings({ layout: "compact", language: "pt-BR" })
@@ -75,13 +83,13 @@ test("isolated Git starts on offline Base outside a repository and can enter PR"
   expect(tui.captureCharFrame()).toContain("Nenhum repositório Git encontrado")
 })
 
-test("Git opens on Base, lazy mounts PR and preserves both tab states", async () => {
+test("Git opens on Diffs, lazy mounts PR and preserves both tab states", async () => {
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
   updateUiSettings({ layout: "compact", language: "pt-BR" })
   tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
   await tui.renderOnce()
 
-  expect(tui.captureCharFrame()).toContain("[1] GIT · BASE LOCAL")
+  expect(tui.captureCharFrame()).toContain("[C] GIT · DIFFS")
   expect(tui.captureCharFrame()).not.toContain("PULL REQUESTS · DEMO")
 
   await key("2")
@@ -109,6 +117,253 @@ test("Git opens on Base, lazy mounts PR and preserves both tab states", async ()
   expect(tui.captureCharFrame()).not.toContain("PULL REQUESTS · DEMO")
   await key("2")
   expect(tui.captureCharFrame()).toContain("review-requested:@me")
+})
+
+test("Diffs opens its local project and branch settings directly", async () => {
+  let opened = 0
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
+  tui = await testRender(<GitViewer active onOpenLocalConfiguration={() => (opened += 1)} />, {
+    width: 140,
+    height: 32,
+  })
+  await tui.renderOnce()
+
+  expect(tui.captureCharFrame()).toContain("[Ctrl+P] Alterar projeto/branch")
+  await key("p", { ctrl: true })
+  expect(opened).toBe(1)
+  await click("git-open-local-configuration")
+  expect(opened).toBe(2)
+})
+
+test("Diffs keeps shortcuts visible and moves between its file tree and diff", async () => {
+  const repository = mkdtempSync(join(tmpdir(), "tuiminal-diffs-tui-"))
+  execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository])
+  writeFileSync(join(repository, "README.md"), "base\n")
+  execFileSync("git", ["-C", repository, "add", "README.md"])
+  execFileSync("git", [
+    "-C",
+    repository,
+    "-c",
+    "user.name=Tuiminal Test",
+    "-c",
+    "user.email=tuiminal@example.test",
+    "commit",
+    "--quiet",
+    "-m",
+    "base",
+  ])
+  writeFileSync(join(repository, "README.md"), "base\nchanged\n")
+
+  try {
+    updateUiSettings({ layout: "compact", language: "pt-BR" })
+    tui = await testRender(<GitBaseWorkspace active targetDirectory={repository} />, {
+      width: 120,
+      height: 30,
+    })
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+      if (tui.captureCharFrame().includes("README.md")) break
+    }
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+
+    const frame = tui.captureCharFrame()
+    const fileRow = frame.split("\n").find((line) => line.slice(0, 40).includes("M README.md"))
+    expect(fileRow).toBeDefined()
+    expect(fileRow?.slice(0, 40)).not.toMatch(/[●○◐]/)
+    expect(frame).toContain("[V] Unificado")
+    expect(frame).toContain("[O] Log")
+    expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff")
+    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
+    expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
+
+    await key("l")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-diff")
+    await key("h")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
+    act(() => tui?.mockInput.pressArrow("right"))
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-diff")
+    await key("tab")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
+
+    await key("o")
+    expect(tui.captureCharFrame()).toContain("HISTÓRICO DO BRANCH")
+    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    rmSync(repository, { recursive: true, force: true })
+  }
+})
+
+test("Diffs toggles into the local branch comparison selector", async () => {
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
+  tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
+  await tui.renderOnce()
+
+  expect(tui.captureCharFrame()).toContain("[1]  [C] GIT · DIFFS")
+  await key("c")
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    if (tui.captureCharFrame().includes("BRANCH COMPARADA")) break
+  }
+  const compareFrame = tui.captureCharFrame()
+  expect(compareFrame).toContain("[C] GIT · COMPARAR")
+  expect(compareFrame).toContain("PROJETO")
+  expect(compareFrame).toContain("BRANCH BASE")
+  expect(compareFrame).toContain("BRANCH COMPARADA")
+  expect(compareFrame).toContain("Nenhum checkout será realizado")
+
+  act(() => tui?.mockInput.pressEscape())
+  await act(async () => Bun.sleep(60))
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("[C] GIT · DIFFS")
+
+  await click("git-mode-compare")
+  expect(tui.captureCharFrame()).toContain("[C] GIT · COMPARAR")
+  await click("git-compare-base")
+  expect(tui.captureCharFrame()).toContain("ESCOLHER BRANCH BASE")
+  await act(async () => {
+    tui?.mockInput.pressEscape()
+    await Bun.sleep(60)
+  })
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).not.toContain("ESCOLHER BRANCH BASE")
+  expect(tui.captureCharFrame()).toContain("[C] GIT · COMPARAR")
+})
+
+test("branch comparison selects two refs and renders their diff without checkout", async () => {
+  const repository = mkdtempSync(join(tmpdir(), "tuiminal-compare-tui-"))
+  execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository])
+  writeFileSync(join(repository, "README.md"), "base\n")
+  execFileSync("git", ["-C", repository, "add", "README.md"])
+  execFileSync("git", [
+    "-C",
+    repository,
+    "-c",
+    "user.name=Tuiminal Test",
+    "-c",
+    "user.email=tuiminal@example.test",
+    "commit",
+    "--quiet",
+    "-m",
+    "base",
+  ])
+  execFileSync("git", ["-C", repository, "switch", "--quiet", "-c", "feature"])
+  writeFileSync(join(repository, "feature.ts"), "export const ready = true\n")
+  execFileSync("git", ["-C", repository, "add", "feature.ts"])
+  execFileSync("git", [
+    "-C",
+    repository,
+    "-c",
+    "user.name=Tuiminal Test",
+    "-c",
+    "user.email=tuiminal@example.test",
+    "commit",
+    "--quiet",
+    "-m",
+    "feature",
+  ])
+
+  try {
+    tui = await testRender(
+      <GitCompareWorkspace active targetDirectory={repository} onExit={() => {}} />,
+      { width: 120, height: 32 },
+    )
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+      if (tui.captureCharFrame().includes("feature")) break
+    }
+
+    await click("git-compare-base")
+    await act(async () => Bun.sleep(10))
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-branch-list")
+    act(() => tui?.mockInput.pressArrow("down"))
+    await tui.renderOnce()
+    act(() => tui?.mockInput.pressEnter())
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).toContain("main")
+
+    await click("git-compare-compared")
+    await act(async () => Bun.sleep(10))
+    act(() => tui?.mockInput.pressEnter())
+    await tui.renderOnce()
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+      const currentFrame = tui.captureCharFrame()
+      if (currentFrame.includes("ARQUIVOS 1") && currentFrame.includes("feature.ts")) break
+    }
+    const frame = tui.captureCharFrame()
+    expect(frame).toContain("main → feature")
+    expect(frame).toContain("1 ARQUIVOS")
+    expect(frame).toContain("ARQUIVOS 1")
+    expect(frame).toContain("feature.ts")
+    expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff")
+    expect(tui.renderer.root.findDescendantById("git-compare-file-list")).not.toBeNull()
+    expect(tui.renderer.root.findDescendantById("git-compare-shortcut-footer")?.zIndex).toBe(30)
+
+    await act(async () => Bun.sleep(20))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-file-list")
+    await key("l")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-diff")
+    await key("h")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-file-list")
+    act(() => tui?.mockInput.pressArrow("right"))
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-diff")
+    await key("tab")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-compare-file-list")
+
+    const wideLines = frame.split("\n")
+    const wideProjectRow = wideLines.findIndex((line) => line.includes("PROJETO"))
+    expect(wideLines.findIndex((line) => line.includes("BRANCH BASE"))).toBe(wideProjectRow)
+    expect(wideLines.findIndex((line) => line.includes("BRANCH COMPARADA"))).toBe(wideProjectRow)
+
+    await key("v")
+    await key("v")
+    const inlineFrame = tui.captureCharFrame()
+    expect(inlineFrame).toContain("[V] Intralinha")
+    expect(inlineFrame).toContain("ARQUIVOS 1")
+    expect(inlineFrame).toContain("feature.ts")
+    expect(inlineFrame).toContain("export const ready = true")
+
+    act(() => tui?.resize(90, 36))
+    await tui.renderOnce()
+    const narrowFrame = tui.captureCharFrame()
+    const narrowLines = narrowFrame.split("\n")
+    const projectRow = narrowLines.findIndex((line) => line.includes("PROJETO"))
+    const baseRow = narrowLines.findIndex((line) => line.includes("BRANCH BASE"))
+    const comparedRow = narrowLines.findIndex((line) => line.includes("BRANCH COMPARADA"))
+    expect(projectRow).toBeLessThan(baseRow)
+    expect(baseRow).toBeLessThan(comparedRow)
+    expect(narrowFrame).toContain("[Tab/H/L] Painel")
+    expect(narrowFrame).toContain("[C/Esc] Diffs")
+    expect((await loadLocalGitTarget(repository)).branch).toBe("feature")
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    rmSync(repository, { recursive: true, force: true })
+  }
 })
 
 test("narrow PR view moves between list and preview with Vim keys", async () => {
@@ -216,33 +471,6 @@ test("PR dashboard survives the documented size, language, palette and layout ma
   }
 })
 
-test("repository modal unfocuses its input before Escape closes it", async () => {
-  let closes = 0
-  tui = await testRender(
-    <RepositorySetupModal
-      open
-      root={process.cwd()}
-      host="github.com"
-      onClose={() => {
-        closes += 1
-      }}
-      onSaved={() => undefined}
-    />,
-    { width: 100, height: 28 },
-  )
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    await act(async () => Bun.sleep(5))
-    await tui.renderOnce()
-    if (tui.renderer.currentFocusedRenderable?.id === "git-pr-repository-input") break
-  }
-  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-repository-input")
-  await key("ESCAPE")
-  expect(closes).toBe(0)
-  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-repository-modal")
-  await key("ESCAPE")
-  expect(closes).toBe(1)
-})
-
 test("query editor applies explicitly and Escape follows the input focus stack", async () => {
   let applied = ""
   let closes = 0
@@ -276,46 +504,6 @@ test("query editor applies explicitly and Escape follows the input focus stack",
   expect(closes).toBe(1)
 })
 
-test("section manager exposes section and repository actions by keyboard", async () => {
-  let created = 0
-  let addedRepository = 0
-  let removedRepository = ""
-  tui = await testRender(
-    <SectionManagerModal
-      open
-      sections={[{ id: "mine", title: "Meus PRs", query: "is:open author:@me" }]}
-      repositories={["team/api"]}
-      onClose={() => undefined}
-      onCreate={() => {
-        created += 1
-      }}
-      onEdit={() => undefined}
-      onDuplicate={() => undefined}
-      onMove={() => undefined}
-      onDelete={() => undefined}
-      onAddRepository={() => {
-        addedRepository += 1
-      }}
-      onRemoveRepository={(repository) => {
-        removedRepository = repository
-      }}
-    />,
-    { width: 110, height: 30 },
-  )
-  await act(async () => Bun.sleep(10))
-  await tui.renderOnce()
-  await key("n")
-  expect(created).toBe(1)
-  await key("2")
-  await key("+")
-  expect(addedRepository).toBe(1)
-  await key("x")
-  expect(removedRepository).toBe("")
-  expect(tui.captureCharFrame()).toContain("novamente")
-  await key("x")
-  expect(removedRepository).toBe("team/api")
-})
-
 test("action input owns number keys and Escape unwinds one focus layer at a time", async () => {
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
   updateUiSettings({ layout: "compact", language: "pt-BR" })
@@ -331,7 +519,7 @@ test("action input owns number keys and Escape unwinds one focus layer at a time
   await tui.renderOnce()
   expect(tui.captureCharFrame()).toContain("COMENTAR")
   expect(tui.captureCharFrame()).toContain("2 comentário")
-  expect(tui.captureCharFrame()).not.toContain("GIT · BASE LOCAL\n")
+  expect(tui.captureCharFrame()).not.toContain("GIT · DIFFS\n")
 
   await key("ESCAPE")
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-action-modal")

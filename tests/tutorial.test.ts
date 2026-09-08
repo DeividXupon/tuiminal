@@ -34,11 +34,12 @@ describe("contextual tutorial", () => {
     }
   })
 
-  test("covers the Git Base/PR/Issues flow with a stable local demo target for every step", () => {
+  test("covers the Git Diffs/PR/Issues/Inbox flow with a stable local demo target for every step", () => {
     const steps = getTutorialSteps("git")
     expect(steps.length).toBeGreaterThanOrEqual(6)
     expect(new Set(steps.map((step) => step.targetId)).size).toBe(steps.length)
     expect(steps.map((step) => step.targetId)).toContain("tutorial-git-issues")
+    expect(steps.map((step) => step.targetId)).toContain("tutorial-git-inbox")
     for (const step of steps) {
       expect(GIT_TUTORIAL_SOURCE).toContain(`id="${step.targetId}"`)
       for (const value of [step.group, step.title, step.description, step.hint]) {

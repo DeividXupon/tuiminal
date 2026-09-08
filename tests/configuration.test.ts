@@ -6,7 +6,7 @@ import {
 
 describe("contextual settings", () => {
   test("shows Database settings first only in the Database context", () => {
-    expect(configurationSectionsForContext(true)).toEqual([
+    expect(configurationSectionsForContext("database")).toEqual([
       "sensitive",
       "history",
       "palette",
@@ -14,7 +14,14 @@ describe("contextual settings", () => {
       "language",
       "tutorial",
     ])
-    expect(configurationSectionsForContext(false)).toEqual([
+    expect(configurationSectionsForContext("git")).toEqual([
+      "git",
+      "palette",
+      "layout",
+      "language",
+      "tutorial",
+    ])
+    expect(configurationSectionsForContext("global")).toEqual([
       "palette",
       "layout",
       "language",
@@ -23,9 +30,9 @@ describe("contextual settings", () => {
   })
 
   test("moves focus away from a hidden Database section", () => {
-    expect(normalizeConfigurationSectionForContext("history", false)).toBe("palette")
-    expect(normalizeConfigurationSectionForContext("sensitive", false)).toBe("palette")
-    expect(normalizeConfigurationSectionForContext("history", true)).toBe("history")
-    expect(normalizeConfigurationSectionForContext("language", false)).toBe("language")
+    expect(normalizeConfigurationSectionForContext("history", "global")).toBe("palette")
+    expect(normalizeConfigurationSectionForContext("sensitive", "git")).toBe("git")
+    expect(normalizeConfigurationSectionForContext("history", "database")).toBe("history")
+    expect(normalizeConfigurationSectionForContext("language", "global")).toBe("language")
   })
 })
