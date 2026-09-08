@@ -124,6 +124,12 @@ Toda a interface também pode ser operada com o mouse. Clique nas tabs, botões,
 campos, projetos, arquivos e commits; use a roda do mouse nas listas, diffs e
 respostas HTTP. Os atalhos de teclado continuam disponíveis em paralelo.
 
+Ao abrir a interface, os quatro blocos da marca caem e se encaixam em sequência;
+em seguida, o nome Tuiminal aparece com a tipografia ASCII geométrica. A abertura
+se adapta a terminais menores e pode ser adiantada com `[Enter]`, `[Esc]` ou um
+clique. As ferramentas só são montadas depois dela, enquanto comandos HTTP sem
+interface continuam iniciando diretamente.
+
 Notificações relevantes do Banco, Git, Runner, HTTP e Free Terminal aparecem em
 cards flutuantes no canto inferior direito sem retirar o foco do painel atual.
 Informações e sucessos desaparecem automaticamente, avisos permanecem um pouco
@@ -134,6 +140,11 @@ também continua disponível no painel de origem quando esse contexto é útil.
 Os atalhos entre colchetes, como `[Ctrl+S]` e `[H/←]`, usam o azul `#4B75FF`,
 a mesma cor do nome **TUIMINAL** no topo, em todas as paletas. O restante dos
 rótulos conserva suas cores; logs, código e dados não recebem esse destaque.
+
+Quando um painel inteiro está carregando, seu fundo usa uma animação plasma em
+ASCII com a mensagem de estado legível por cima. Ao concluir, o efeito se dissolve
+rapidamente no conteúdo pronto sem deslocar o layout. Paginação e atualizações em
+segundo plano continuam usando indicadores pequenos dentro da própria lista.
 
 ## Configurações
 
@@ -371,7 +382,8 @@ repositórios do perfil: `[Ctrl+N/P]` navega e `[Ctrl+Y]` aplica a sugestão.
 
 - `[1]` / `[2]` / `[3]` / `[4]`: alternar entre Diffs, PR, Issues e Inbox
 - `[C]`: em Diffs, alternar entre alterações locais e comparação de branches
-- `[Tab]`, `[H/L]` ou `[←/→]`: em Diffs, alternar o foco entre a árvore e o diff
+- `[Tab]`, `[H/L]` ou `[←/→]`: em Diffs, alternar o foco entre a árvore e a prévia; a borda destaca o painel focado
+- `[J/K]` ou `[↑/↓]`: navegar na árvore de arquivos, no Log ou na Árvore Git quando o respectivo painel está focado
 - `[V]` / `[O]`: em Diffs, mudar a visualização / abrir o Log
 - `[B]` / `[T]`: em Comparar, escolher branch base / branch comparada
 - `[Tab/H/L/←/→]` / `[J/K]` / `[V]`: em Comparar, trocar árvore/diff, navegar/rolar e mudar a visualização

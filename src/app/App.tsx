@@ -45,6 +45,7 @@ import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
+import { withStartupAnimation } from "./ui/StartupAnimation"
 
 function AppContent() {
   const renderer = useRenderer()
@@ -76,8 +77,7 @@ function AppContent() {
   const queryRerunCounterRef = useRef(0)
   const exit = useApplicationExit(renderer, visitedTabsRef)
   const gitConfiguration = useGitConfigurationLayer()
-  const compactNavigation = terminal.width < 150
-  const minimalNavigation = terminal.width < 82
+  const [compactNavigation, minimalNavigation] = [terminal.width < 150, terminal.width < 82]
   const tutorialScreen = ONLY_TAB ?? activeTab
   const configurationContext = configurationContextForTool(tutorialScreen)
   const configurationSections = useMemo(
@@ -580,4 +580,4 @@ function AppContent() {
   )
 }
 
-export const App = withNotifications(AppContent)
+export const App = withNotifications(withStartupAnimation(AppContent))
