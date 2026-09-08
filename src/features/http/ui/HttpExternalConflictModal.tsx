@@ -1,14 +1,15 @@
-import { SyntaxStyle, type BoxRenderable } from "@opentui/core"
+import type { BoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS, panelBorder } from "../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { createUiSyntaxStyle } from "../../../shared/ui/syntax-style"
 import type {
   HttpExternalConflictPreview,
   HttpExternalConflictResolution,
 } from "../storage/conflicts"
 
-const DIFF_SYNTAX = SyntaxStyle.fromStyles({ default: { fg: COLORS.text } })
+const DIFF_SYNTAX = createUiSyntaxStyle()
 
 function conflictDiffContent(conflict: HttpExternalConflictPreview) {
   return conflict.diff

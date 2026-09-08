@@ -1,7 +1,8 @@
-import { SyntaxStyle, type InputRenderable, type ScrollBoxRenderable } from "@opentui/core"
+import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useMemo, useRef } from "react"
-import { COLORS, panelBorder } from "../../../core/settings/theme"
+import { COLORS, focusedPanelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
+import { createUiSyntaxStyle } from "../../../shared/ui/syntax-style"
 import { findHttpTextMatches } from "../model/response"
 import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
@@ -11,15 +12,7 @@ import { HttpResponseState } from "./HttpResponseState"
 import { HttpResponseToolbar } from "./HttpResponseToolbar"
 import { HttpResponseHeader } from "./HttpResponseHeader"
 
-const RESPONSE_SYNTAX = SyntaxStyle.fromStyles({
-  default: { fg: COLORS.text },
-  string: { fg: "#c3e88d" },
-  number: { fg: "#f78c6c" },
-  property: { fg: "#80cbc4" },
-  constant: { fg: "#f78c6c" },
-  punctuation: { fg: "#a6accd" },
-  keyword: { fg: "#c792ea", bold: true },
-})
+const RESPONSE_SYNTAX = createUiSyntaxStyle()
 const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
 
 function HttpResponseDocument({
@@ -128,7 +121,7 @@ export function HttpResponsePane({
       style={{
         position: "absolute",
         ...position,
-        ...panelBorder(focused ? COLORS.http : COLORS.border),
+        ...focusedPanelBorder(focused, COLORS.http),
         backgroundColor: COLORS.panelAlt,
         paddingLeft: 1,
         paddingRight: 1,

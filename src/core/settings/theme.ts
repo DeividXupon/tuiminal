@@ -7,170 +7,23 @@ import {
   normalizeSensitiveTerms,
   setActiveSensitiveTerms,
 } from "../../shared/security/sensitive-data"
+import { DARK_PALETTES } from "./dark-palettes"
+import { LIGHT_PALETTES } from "./light-palettes"
+import type { ColorPalette, PaletteId } from "./theme-types"
 
-export type PaletteId = "prime" | "midnight" | "nord" | "gruvbox"
+export type { ColorPalette, PaletteId } from "./theme-types"
 export type LayoutMode = "framed" | "compact"
+export type ColorMode = "dark" | "light"
 
 export type UiSettings = {
+  colorMode: ColorMode
   palette: PaletteId
   layout: LayoutMode
   language: LanguageId
   sensitiveTerms: string[]
 }
 
-export type ColorPalette = {
-  canvas: string
-  panel: string
-  panelAlt: string
-  panelRaised: string
-  border: string
-  muted: string
-  text: string
-  focus: string
-  graphAccent: string
-  database: string
-  git: string
-  runner: string
-  http: string
-  terminal: string
-  success: string
-  warning: string
-  danger: string
-  diffAddedBg: string
-  diffRemovedBg: string
-  diffModifiedBg: string
-  diffChangedBg: string
-  diffRemovedChangedBg: string
-  diffHunkBg: string
-  diffGutterBg: string
-  databaseEditedBg: string
-  databaseDeletedBg: string
-  databaseInsertedBg: string
-  databaseSelectionBg: string
-}
-
-export const PALETTES: Record<PaletteId, ColorPalette> = {
-  prime: {
-    canvas: "#080b10",
-    panel: "#0f141c",
-    panelAlt: "#111923",
-    panelRaised: "#171e29",
-    border: "#263143",
-    muted: "#8290a3",
-    text: "#f3f6fa",
-    focus: "#ff7a90",
-    graphAccent: "#64d8ff",
-    database: "#a78bfa",
-    git: "#f7c873",
-    runner: "#64d8ff",
-    http: "#fb923c",
-    terminal: "#5ee6a8",
-    success: "#5ee6a8",
-    warning: "#f7c873",
-    danger: "#ff6b6b",
-    diffAddedBg: "#132a21",
-    diffRemovedBg: "#321a21",
-    diffModifiedBg: "#17263a",
-    diffChangedBg: "#246b49",
-    diffRemovedChangedBg: "#7a2938",
-    diffHunkBg: "#192338",
-    diffGutterBg: "#111821",
-    databaseEditedBg: "#3b2a14",
-    databaseDeletedBg: "#35191f",
-    databaseInsertedBg: "#102c42",
-    databaseSelectionBg: "#292344",
-  },
-  midnight: {
-    canvas: "#050814",
-    panel: "#0a1020",
-    panelAlt: "#0d1528",
-    panelRaised: "#151f38",
-    border: "#273555",
-    muted: "#7f8faa",
-    text: "#e8eefb",
-    focus: "#7aa2f7",
-    graphAccent: "#7dcfff",
-    database: "#bb9af7",
-    git: "#e0af68",
-    runner: "#7dcfff",
-    http: "#ff9e64",
-    terminal: "#9ece6a",
-    success: "#9ece6a",
-    warning: "#e0af68",
-    danger: "#f7768e",
-    diffAddedBg: "#11281f",
-    diffRemovedBg: "#311923",
-    diffModifiedBg: "#142543",
-    diffChangedBg: "#245e43",
-    diffRemovedChangedBg: "#713047",
-    diffHunkBg: "#17213b",
-    diffGutterBg: "#0d1528",
-    databaseEditedBg: "#382b18",
-    databaseDeletedBg: "#351822",
-    databaseInsertedBg: "#102b47",
-    databaseSelectionBg: "#252343",
-  },
-  nord: {
-    canvas: "#1d2129",
-    panel: "#252a34",
-    panelAlt: "#292f3a",
-    panelRaised: "#343b49",
-    border: "#4c566a",
-    muted: "#8b97aa",
-    text: "#eceff4",
-    focus: "#bf616a",
-    graphAccent: "#88c0d0",
-    database: "#b48ead",
-    git: "#ebcb8b",
-    runner: "#81a1c1",
-    http: "#d08770",
-    terminal: "#a3be8c",
-    success: "#a3be8c",
-    warning: "#ebcb8b",
-    danger: "#bf616a",
-    diffAddedBg: "#2a3b35",
-    diffRemovedBg: "#422d34",
-    diffModifiedBg: "#29394a",
-    diffChangedBg: "#476b59",
-    diffRemovedChangedBg: "#70434e",
-    diffHunkBg: "#303946",
-    diffGutterBg: "#222832",
-    databaseEditedBg: "#4a402c",
-    databaseDeletedBg: "#482d35",
-    databaseInsertedBg: "#283f4d",
-    databaseSelectionBg: "#403849",
-  },
-  gruvbox: {
-    canvas: "#1b1b19",
-    panel: "#282724",
-    panelAlt: "#2d2b27",
-    panelRaised: "#3a3833",
-    border: "#504d45",
-    muted: "#a89984",
-    text: "#ebdbb2",
-    focus: "#fb4934",
-    graphAccent: "#83a598",
-    database: "#d3869b",
-    git: "#fabd2f",
-    runner: "#83a598",
-    http: "#fe8019",
-    terminal: "#b8bb26",
-    success: "#b8bb26",
-    warning: "#fabd2f",
-    danger: "#fb4934",
-    diffAddedBg: "#26351f",
-    diffRemovedBg: "#402421",
-    diffModifiedBg: "#26343b",
-    diffChangedBg: "#4f682f",
-    diffRemovedChangedBg: "#783c32",
-    diffHunkBg: "#34312b",
-    diffGutterBg: "#24231f",
-    databaseEditedBg: "#4a371c",
-    databaseDeletedBg: "#48221f",
-    databaseInsertedBg: "#223b46",
-    databaseSelectionBg: "#423238",
-  },
-}
+export const PALETTES: Record<PaletteId, ColorPalette> = DARK_PALETTES
 
 export const PALETTE_OPTIONS: ReadonlyArray<{
   id: PaletteId
@@ -181,9 +34,13 @@ export const PALETTE_OPTIONS: ReadonlyArray<{
   { id: "midnight", label: "Midnight", description: "azul noturno e contraste frio" },
   { id: "nord", label: "Nord", description: "cinza ártico e tons suaves" },
   { id: "gruvbox", label: "Gruvbox", description: "tons quentes com visual retrô" },
+  { id: "dracula", label: "Dracula", description: "roxo vibrante e contraste gótico" },
+  { id: "catppuccin", label: "Catppuccin", description: "tons pastel suaves e modernos" },
+  { id: "tokyo-night", label: "Tokyo Night", description: "azul urbano e acentos neon" },
 ]
 
 const DEFAULT_SETTINGS: UiSettings = {
+  colorMode: "dark",
   palette: "prime",
   layout: "framed",
   language: DEFAULT_LANGUAGE,
@@ -201,11 +58,20 @@ function isLayout(value: unknown): value is LayoutMode {
   return value === "framed" || value === "compact"
 }
 
+function isColorMode(value: unknown): value is ColorMode {
+  return value === "dark" || value === "light"
+}
+
+export function paletteFor(palette: PaletteId, colorMode: ColorMode) {
+  return colorMode === "light" ? LIGHT_PALETTES[palette] : PALETTES[palette]
+}
+
 function loadSettings(): UiSettings {
   try {
     if (!existsSync(UI_SETTINGS_PATH)) return { ...DEFAULT_SETTINGS }
     const parsed = JSON.parse(readFileSync(UI_SETTINGS_PATH, "utf8")) as Partial<UiSettings>
     return {
+      colorMode: isColorMode(parsed.colorMode) ? parsed.colorMode : DEFAULT_SETTINGS.colorMode,
       palette: isPalette(parsed.palette) ? parsed.palette : DEFAULT_SETTINGS.palette,
       layout: isLayout(parsed.layout) ? parsed.layout : DEFAULT_SETTINGS.layout,
       language: isLanguage(parsed.language) ? parsed.language : DEFAULT_SETTINGS.language,
@@ -220,16 +86,24 @@ let currentSettings: UiSettings = {
   ...DEFAULT_SETTINGS,
   sensitiveTerms: [...DEFAULT_SETTINGS.sensitiveTerms],
 }
+const themeListeners = new Set<() => void>()
 
-export const COLORS: ColorPalette = { ...PALETTES[currentSettings.palette] }
+export const COLORS: ColorPalette = {
+  ...paletteFor(currentSettings.palette, currentSettings.colorMode),
+}
 
 /** Explicit startup boundary: importing UI modules never reads user configuration. */
 export function initializeUiSettings() {
   currentSettings = loadSettings()
   setLanguage(currentSettings.language)
   setActiveSensitiveTerms(currentSettings.sensitiveTerms)
-  Object.assign(COLORS, PALETTES[currentSettings.palette])
+  Object.assign(COLORS, paletteFor(currentSettings.palette, currentSettings.colorMode))
   return getUiSettings()
+}
+
+export function subscribeUiTheme(listener: () => void) {
+  themeListeners.add(listener)
+  return () => themeListeners.delete(listener)
 }
 
 export const LAYOUT = {
@@ -263,6 +137,19 @@ export function panelBorder(borderColor = COLORS.border) {
       }
 }
 
+export function focusedPanelBorder(focused: boolean, borderColor = COLORS.focus) {
+  if (LAYOUT.compact) {
+    return focused
+      ? {
+          border: ["left"] as ["left"],
+          borderStyle: "single" as const,
+          borderColor,
+        }
+      : { border: false as const }
+  }
+  return panelBorder(focused ? borderColor : COLORS.border)
+}
+
 export function separatorBorder(borderColor = COLORS.border) {
   return LAYOUT.compact
     ? { border: false as const }
@@ -287,6 +174,7 @@ export function updateUiSettings(patch: Partial<UiSettings>): {
   error: string | null
 } {
   const next: UiSettings = {
+    colorMode: isColorMode(patch.colorMode) ? patch.colorMode : currentSettings.colorMode,
     palette: isPalette(patch.palette) ? patch.palette : currentSettings.palette,
     layout: isLayout(patch.layout) ? patch.layout : currentSettings.layout,
     language: isLanguage(patch.language) ? patch.language : currentSettings.language,
@@ -295,10 +183,13 @@ export function updateUiSettings(patch: Partial<UiSettings>): {
         ? [...currentSettings.sensitiveTerms]
         : normalizeSensitiveTerms(patch.sensitiveTerms),
   }
+  const themeChanged =
+    next.colorMode !== currentSettings.colorMode || next.palette !== currentSettings.palette
   currentSettings = next
   setLanguage(next.language)
   setActiveSensitiveTerms(next.sensitiveTerms)
-  Object.assign(COLORS, PALETTES[next.palette])
+  Object.assign(COLORS, paletteFor(next.palette, next.colorMode))
+  if (themeChanged) for (const listener of themeListeners) listener()
 
   try {
     mkdirSync(dirname(UI_SETTINGS_PATH), { recursive: true })

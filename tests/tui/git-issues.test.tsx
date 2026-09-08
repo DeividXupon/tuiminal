@@ -5,6 +5,7 @@ import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import {
   getUiSettings,
+  PALETTES,
   type LayoutMode,
   type PaletteId,
   updateUiSettings,
@@ -144,7 +145,7 @@ test("Issues dashboard survives supported sizes, languages, palettes and layouts
     [90, 28],
     [140, 36],
   ] as const
-  const palettes: PaletteId[] = ["prime", "midnight", "nord", "gruvbox"]
+  const palettes = Object.keys(PALETTES) as PaletteId[]
   const layouts: LayoutMode[] = ["framed", "compact"]
   for (const [languageIndex, language] of languages.entries()) {
     for (const [sizeIndex, [width, height]] of sizes.entries()) {

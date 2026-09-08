@@ -1,4 +1,5 @@
 import stringWidth from "string-width"
+import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
@@ -115,6 +116,25 @@ const MESSAGES: readonly Message[] = [
   ],
   ["PALETA", "PALETTE", "PALETA", "パレット", "配色", "팔레트"],
   ["[←/→] alterar", "[←/→] change", "[←/→] cambiar", "[←/→] 変更", "[←/→] 更改", "[←/→] 변경"],
+  ["MODO DE COR", "COLOR MODE", "MODO DE COLOR", "カラーモード", "颜色模式", "색상 모드"],
+  ["DARK", "DARK", "OSCURO", "ダーク", "深色", "다크"],
+  ["LIGHT", "LIGHT", "CLARO", "ライト", "浅色", "라이트"],
+  [
+    "fundos escuros · contraste noturno",
+    "dark backgrounds · nighttime contrast",
+    "fondos oscuros · contraste nocturno",
+    "暗い背景・夜向けのコントラスト",
+    "深色背景 · 夜间对比度",
+    "어두운 배경 · 야간 대비",
+  ],
+  [
+    "fundos claros · contraste diurno",
+    "light backgrounds · daytime contrast",
+    "fondos claros · contraste diurno",
+    "明るい背景・昼向けのコントラスト",
+    "浅色背景 · 日间对比度",
+    "밝은 배경 · 주간 대비",
+  ],
   ["LAYOUT", "LAYOUT", "DISEÑO", "レイアウト", "布局", "레이아웃"],
   ["[↑/↓] seção", "[↑/↓] section", "[↑/↓] sección", "[↑/↓] セクション", "[↑/↓] 分区", "[↑/↓] 섹션"],
   ["MOLDURADO", "FRAMED", "CON MARCO", "フレーム", "边框", "프레임"],
@@ -5048,6 +5068,7 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_RESPONSE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,
   ...HTTP_WORKSPACE_SETTINGS_MESSAGES,
+  ...APPEARANCE_MESSAGES,
   // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
   ...GIT_ISSUE_MESSAGES,

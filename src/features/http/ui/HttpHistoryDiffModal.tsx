@@ -1,11 +1,11 @@
-import { SyntaxStyle } from "@opentui/core"
 import { COLORS, panelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { createUiSyntaxStyle } from "../../../shared/ui/syntax-style"
 import { diffHttpHistoryEntries } from "../model/history"
 import type { HttpHistoryEntry } from "../model/types"
 
-const DIFF_SYNTAX = SyntaxStyle.fromStyles({ default: { fg: COLORS.text } })
+const DIFF_SYNTAX = createUiSyntaxStyle()
 
 function diffContent(left: HttpHistoryEntry, right: HttpHistoryEntry) {
   const lines = diffHttpHistoryEntries(left, right)

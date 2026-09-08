@@ -24,12 +24,11 @@ import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
 import type { DatabaseQueryHistoryEntry } from "../features/database"
 import { databaseQueryHistoryCanRerun, listDatabaseQueryHistory } from "../features/database"
-import { LANGUAGE_OPTIONS, translateUi } from "../shared/i18n/index"
+import { translateUi } from "../shared/i18n/index"
 import {
   COLORS,
   getUiSettings,
   LAYOUT,
-  PALETTE_OPTIONS,
   resetUiSettings,
   separatorBorder,
   type UiSettings,
@@ -45,6 +44,7 @@ import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
+import { configurationSettingPatch } from "./model/configuration-options"
 import { withStartupAnimation } from "./ui/StartupAnimation"
 
 function AppContent() {
@@ -86,15 +86,12 @@ function AppContent() {
   )
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
   const interactionBlocked = settingsOpen || gitConfiguration.open || tutorialOpen || exit.open
-  const applySettings = useCallback(
-    (patch: Partial<Pick<UiSettings, "palette" | "layout" | "language" | "sensitiveTerms">>) => {
-      const result = updateUiSettings(patch)
-      settingsRef.current = result.settings
-      setSettings(result.settings)
-      setSettingsNotice(result.error ?? "Configuração salva")
-    },
-    [],
-  )
+  const applySettings = useCallback((patch: Partial<UiSettings>) => {
+    const result = updateUiSettings(patch)
+    settingsRef.current = result.settings
+    setSettings(result.settings)
+    setSettingsNotice(result.error ?? "Configuração salva")
+  }, [])
   const selectConfigurationSection = useCallback((section: ConfigurationSection) => {
     configurationSectionRef.current = section
     setConfigurationSection(section)
@@ -175,27 +172,12 @@ function AppContent() {
   const cycleConfiguration = useCallback(
     (direction: -1 | 1) => {
       const currentSettings = settingsRef.current
-      if (["tutorial", "history", "sensitive", "git"].includes(configurationSectionRef.current))
-        return
-      if (configurationSectionRef.current === "language") {
-        const index = LANGUAGE_OPTIONS.findIndex(
-          (language) => language.id === currentSettings.language,
-        )
-        const nextIndex = (index + direction + LANGUAGE_OPTIONS.length) % LANGUAGE_OPTIONS.length
-        const next = LANGUAGE_OPTIONS[nextIndex]
-        if (next) applySettings({ language: next.id })
-        return
-      }
-      if (configurationSectionRef.current === "layout") {
-        applySettings({
-          layout: currentSettings.layout === "framed" ? "compact" : "framed",
-        })
-        return
-      }
-      const index = PALETTE_OPTIONS.findIndex((palette) => palette.id === currentSettings.palette)
-      const nextIndex = (index + direction + PALETTE_OPTIONS.length) % PALETTE_OPTIONS.length
-      const next = PALETTE_OPTIONS[nextIndex]
-      if (next) applySettings({ palette: next.id })
+      const patch = configurationSettingPatch(
+        configurationSectionRef.current,
+        currentSettings,
+        direction,
+      )
+      if (patch) applySettings(patch)
     },
     [applySettings],
   )
@@ -347,6 +329,7 @@ function AppContent() {
             onClose={() => setSettingsOpen(false)}
             onSectionChange={selectConfigurationSection}
             onPaletteChange={(palette) => applySettings({ palette })}
+            onColorModeChange={(colorMode) => applySettings({ colorMode })}
             onLayoutChange={(layout) => applySettings({ layout })}
             onLanguageChange={(language) => applySettings({ language })}
             onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
@@ -539,6 +522,7 @@ function AppContent() {
           onClose={() => setSettingsOpen(false)}
           onSectionChange={selectConfigurationSection}
           onPaletteChange={(palette) => applySettings({ palette })}
+          onColorModeChange={(colorMode) => applySettings({ colorMode })}
           onLayoutChange={(layout) => applySettings({ layout })}
           onLanguageChange={(language) => applySettings({ language })}
           onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}

@@ -65,16 +65,36 @@ afterEach(() => {
 test("switches from framed to compact without registering duplicate global tabs", async () => {
   selectInitialTool("runner")
   updateUiSettings({ layout: "framed", language: "pt-BR" })
-  tui = await testRender(<App />, { width: 120, height: 30 })
+  tui = await testRender(<App />, { width: 80, height: 20 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 
-  await key(",")
+  await click("tutorial-settings-button")
+  await key("ARROW_DOWN")
   await key("ARROW_DOWN")
   await key("ARROW_RIGHT")
 
   expect(getUiSettings().layout).toBe("compact")
-  expect(tui.captureCharFrame()).toContain("CONFIGURAÇÕES GLOBAIS")
+  expect(tui.renderer.root.findDescendantById("configuration-section-layout")).toBeDefined()
   expect(tui.renderer.root.findDescendantById("tutorial-app-header")).toBeDefined()
+})
+
+test("switches from the default Dark mode to Light in global settings", async () => {
+  selectInitialTool("runner")
+  updateUiSettings({ colorMode: "dark", language: "pt-BR" })
+  tui = await testRender(<App />, { width: 80, height: 20 })
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
+
+  await click("tutorial-settings-button")
+  expect(tui.captureCharFrame()).toContain("MODO DE COR")
+  expect(tui.captureCharFrame()).toContain("DARK")
+  expect(tui.captureCharFrame()).toContain("LIGHT")
+  expect(tui.captureCharFrame()).toContain("Dracula")
+  expect(tui.captureCharFrame()).toContain("Catppuccin")
+  expect(tui.captureCharFrame()).toContain("Tokyo Night")
+  await key("ARROW_RIGHT")
+
+  expect(getUiSettings().colorMode).toBe("light")
+  expect(tui.renderer.root.findDescendantById("configuration-section-colorMode")).toBeDefined()
 })
 
 test("global shortcuts leave Git PR after its local controls have focus", async () => {

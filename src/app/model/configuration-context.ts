@@ -2,6 +2,7 @@ import type { ToolId } from "../tool-catalog"
 
 export type ConfigurationSection =
   | "git"
+  | "colorMode"
   | "palette"
   | "layout"
   | "language"
@@ -12,6 +13,7 @@ export type ConfigurationSection =
 export type ConfigurationContext = "database" | "git" | "global"
 
 const GLOBAL_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
+  "colorMode",
   "palette",
   "layout",
   "language",
@@ -41,7 +43,7 @@ export function normalizeConfigurationSectionForContext(
   context: ConfigurationContext,
 ) {
   const sections = configurationSectionsForContext(context)
-  return sections.includes(section) ? section : (sections[0] ?? "palette")
+  return sections.includes(section) ? section : (sections[0] ?? "colorMode")
 }
 
 export function activateConfigurationSection(

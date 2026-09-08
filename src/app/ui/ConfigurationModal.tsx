@@ -5,15 +5,13 @@ import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef } from "react"
 import {
   LANGUAGE_OPTIONS,
-  padDisplayEnd,
   translateUi,
   truncateDisplay,
   type LanguageId,
 } from "../../shared/i18n/index"
 import {
   COLORS,
-  PALETTES,
-  PALETTE_OPTIONS,
+  type ColorMode,
   type LayoutMode,
   type PaletteId,
   type UiSettings,
@@ -21,6 +19,8 @@ import {
 import { InlineButton } from "../../shared/ui/InlineButton"
 import type { ConfigurationContext, ConfigurationSection } from "../model/configuration-context"
 import { GitConfigurationGroup } from "./GitConfigurationGroup"
+import { ColorModeConfigurationGroup } from "./ColorModeConfigurationGroup"
+import { PaletteConfigurationGroup } from "./PaletteConfigurationGroup"
 
 export {
   configurationSectionsForContext,
@@ -37,6 +37,7 @@ type ConfigurationModalProps = {
   onClose: () => void
   onSectionChange: (section: ConfigurationSection) => void
   onPaletteChange: (palette: PaletteId) => void
+  onColorModeChange: (mode: ColorMode) => void
   onLayoutChange: (layout: LayoutMode) => void
   onLanguageChange: (language: LanguageId) => void
   onOpenSensitiveTerms: () => void
@@ -55,51 +56,6 @@ function ConfigurationDivider({ label }: { label: string }) {
       content={`── ${translateUi(label)} ${"─".repeat(64)}`}
       style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
     />
-  )
-}
-
-function PaletteChoice({
-  id,
-  label,
-  description,
-  selected,
-  compact = false,
-  onPress,
-}: {
-  id: PaletteId
-  label: string
-  description: string
-  selected: boolean
-  compact?: boolean
-  onPress: () => void
-}) {
-  const palette = PALETTES[id]
-  return (
-    <Button onPress={onPress} width={compact ? "50%" : "100%"} height={1} flexShrink={0}>
-      {(state) => (
-        <box
-          style={{
-            height: 1,
-            flexShrink: 0,
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: selected || state.focused ? COLORS.panelRaised : COLORS.panel,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`${selected ? "◆" : "◇"} ${padDisplayEnd(label, 10)}`}
-            style={{ width: 13, flexShrink: 0, fg: selected ? COLORS.focus : COLORS.text }}
-          />
-          <text content=" ◆" style={{ fg: palette.focus }} />
-          <text content="◆" style={{ fg: palette.database }} />
-          <text content="◆" style={{ fg: palette.git }} />
-          <text content="◆ " style={{ fg: palette.terminal }} />
-          {compact ? null : <text content={description} style={{ fg: COLORS.muted }} />}
-        </box>
-      )}
-    </Button>
   )
 }
 
@@ -206,6 +162,7 @@ export function ConfigurationModal({
   onClose,
   onSectionChange,
   onPaletteChange,
+  onColorModeChange,
   onLayoutChange,
   onLanguageChange,
   onOpenSensitiveTerms,
@@ -449,60 +406,23 @@ export function ConfigurationModal({
               />
             )}
 
-            <box
-              id="configuration-group-palette"
-              style={{ height: compact ? 3 : 5, flexShrink: 0 }}
-            >
-              <box
-                id="configuration-section-palette"
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  backgroundColor: section === "palette" ? COLORS.panelRaised : COLORS.canvas,
-                }}
-              >
-                <text
-                  content={`${section === "palette" ? "◆" : "◇"} ${translateUi("PALETA")}`}
-                  style={{ fg: COLORS.text }}
-                />
-                <ShortcutText content="[←/→] alterar" style={{ fg: COLORS.muted }} />
-              </box>
-
-              {compact
-                ? [PALETTE_OPTIONS.slice(0, 2), PALETTE_OPTIONS.slice(2, 4)].map((row) => (
-                    <box
-                      key={row.map((palette) => palette.id).join("-")}
-                      style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-                    >
-                      {row.map((palette) => (
-                        <PaletteChoice
-                          key={palette.id}
-                          {...palette}
-                          compact
-                          selected={settings.palette === palette.id}
-                          onPress={() => {
-                            onSectionChange("palette")
-                            onPaletteChange(palette.id)
-                          }}
-                        />
-                      ))}
-                    </box>
-                  ))
-                : PALETTE_OPTIONS.map((palette) => (
-                    <PaletteChoice
-                      key={palette.id}
-                      {...palette}
-                      selected={settings.palette === palette.id}
-                      onPress={() => {
-                        onSectionChange("palette")
-                        onPaletteChange(palette.id)
-                      }}
-                    />
-                  ))}
-            </box>
-
+            <ColorModeConfigurationGroup
+              selected={section === "colorMode"}
+              mode={settings.colorMode}
+              palette={settings.palette}
+              compact={compact}
+              onSelect={() => onSectionChange("colorMode")}
+              onChange={onColorModeChange}
+            />
+            <box style={{ height: 1, flexShrink: 0 }} />
+            <PaletteConfigurationGroup
+              selected={section === "palette"}
+              palette={settings.palette}
+              colorMode={settings.colorMode}
+              compact={compact}
+              onSelect={() => onSectionChange("palette")}
+              onChange={onPaletteChange}
+            />
             <box style={{ height: 1, flexShrink: 0 }} />
 
             <box id="configuration-group-layout" style={{ height: compact ? 2 : 5, flexShrink: 0 }}>
