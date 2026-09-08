@@ -42,6 +42,7 @@ type DashboardPanelsProps = {
   onLoadMoreDetails: () => void
   workflows: PullRequestWorkflowRun[]
   workflowError: string
+  loadingMore: boolean
   onOpenWorkflow: (runId: number) => void
 }
 
@@ -73,6 +74,7 @@ function DashboardPanels({
   onPreviewTab,
   workflows,
   workflowError,
+  loadingMore,
   onOpenWorkflow,
 }: DashboardPanelsProps) {
   const showList = layout !== "single" || focus === "list"
@@ -103,6 +105,7 @@ function DashboardPanels({
             focused={focus === "list"}
             width={listWidth}
             onSelect={onSelectRow}
+            loadingMore={loadingMore}
             {...(presentation.section.columns ? { columns: presentation.section.columns } : {})}
           />
         </box>
@@ -179,11 +182,10 @@ export function PullRequestDashboardView({
   workflowError,
   onOpenWorkflow,
   onSelectSection,
-  onCreate,
-  onManage,
   onEditQuery,
   notice,
   loadingMore,
+  refreshing,
   onSelectRow,
   onPreviewTab,
   onRetry,
@@ -195,11 +197,9 @@ export function PullRequestDashboardView({
 }: DashboardPanelsProps & {
   dashboard: PullRequestDashboardState
   onSelectSection: (index: number) => void
-  onCreate: (() => void) | null
-  onManage: (() => void) | null
   onEditQuery: () => void
   notice: string
-  loadingMore: boolean
+  refreshing: boolean
   onRetry: () => void
   onLoadMore: () => void
   previewPosition: PullRequestPreviewConfig["position"]
@@ -230,7 +230,7 @@ export function PullRequestDashboardView({
       >
         <text content={translateUi(presentation.title)} style={{ fg: COLORS.git }} />
         <text
-          content={translateUi(presentation.meta)}
+          content={`${translateUi(presentation.meta)}${refreshing ? ` · ${translateUi("ATUALIZANDO TODAS AS SEÇÕES…")}` : ""}`}
           style={{ fg: dashboard.status === "demo" ? COLORS.warning : COLORS.muted }}
         />
       </box>
@@ -253,8 +253,6 @@ export function PullRequestDashboardView({
         activeIndex={presentation.sections.indexOf(presentation.section)}
         counts={presentation.counts}
         onSelect={onSelectSection}
-        {...(onCreate ? { onCreate } : {})}
-        {...(onManage ? { onManage } : {})}
       />
       <box
         style={{
@@ -302,6 +300,7 @@ export function PullRequestDashboardView({
           onLoadMoreDetails={onLoadMoreDetails}
           workflows={workflows}
           workflowError={workflowError}
+          loadingMore={loadingMore}
           onOpenWorkflow={onOpenWorkflow}
         />
       ) : (

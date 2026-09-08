@@ -11,6 +11,8 @@ import { type GitHubAccountScope, loadGitHubAccountScope } from "./github/accoun
 import { assertAllowedGitHubHost } from "./github/host"
 import { searchPullRequestsPage } from "./github/search"
 import type { GhTransportOptions } from "./github/transport"
+import { cachedSectionPageDepth } from "./page-depth"
+import { resolveGitProjectContext } from "./git"
 
 const pullRequestSessionDisposers = new Set<() => void | Promise<void>>()
 
@@ -40,6 +42,7 @@ export type PullRequestSessionResult =
       loadedCount: number
       fromCache: boolean
       cachedAt: number
+      refreshSeconds: number
       scope: {
         mode: "account" | "repositories"
         sourceCount: number
@@ -58,6 +61,7 @@ type PullRequestCacheEntry = Extract<PullRequestSessionResult, { status: "ready"
   expiresAt: number
   sources: PullRequestSourceCursor[]
   dataErrors: boolean
+  pageDepth: number
 }
 
 async function mapWithConcurrency<T, R>(
@@ -112,7 +116,13 @@ function cacheKey({
 }
 
 function publicCacheEntry(entry: PullRequestCacheEntry, fromCache: boolean) {
-  const { expiresAt: _expiresAt, sources: _sources, dataErrors: _dataErrors, ...result } = entry
+  const {
+    expiresAt: _expiresAt,
+    sources: _sources,
+    dataErrors: _dataErrors,
+    pageDepth: _pageDepth,
+    ...result
+  } = entry
   return { ...result, fromCache }
 }
 
@@ -147,6 +157,7 @@ export class PullRequestSession {
     sectionId?: string,
     queryOverride?: string | null,
     force = false,
+    refreshAccountScope = force,
   ): Promise<PullRequestSessionResult> {
     this.activeController?.abort()
     const controller = new AbortController()
@@ -155,7 +166,10 @@ export class PullRequestSession {
       ? loadPullRequestConfig(this.options.configPath)
       : loadPullRequestConfig()
     if (loaded.error) return { status: "config-error", error: loaded.error }
-    const profile = pullRequestProfileForRoot(loaded.config, root)
+    const fallback = loaded.config.profiles[root]
+      ? null
+      : (await resolveGitProjectContext(root)).remote
+    const profile = pullRequestProfileForRoot(loaded.config, root, fallback)
     const host = assertAllowedGitHubHost(profile.host, [loaded.config.defaults.host, profile.host])
     const transport = { ...this.options.transport, host, signal: controller.signal }
     const capabilities = await detectGhCapabilities(transport)
@@ -174,7 +188,7 @@ export class PullRequestSession {
       profile.sections.find((candidate) => candidate.id === sectionId) ?? profile.sections[0]
     if (!section) return { status: "config-error", error: "No pull request section configured" }
     const effectiveSection = queryOverride ? { ...section, query: queryOverride } : section
-    if (force && !profile.repositories.length) this.accountScope = null
+    if (refreshAccountScope && !profile.repositories.length) this.accountScope = null
     if (!profile.repositories.length && !this.accountScope) {
       this.accountScope = await loadGitHubAccountScope({
         host,
@@ -229,6 +243,7 @@ export class PullRequestSession {
       loadedCount: aggregate.items.length,
       fromCache: false,
       cachedAt,
+      refreshSeconds: loaded.config.defaults.refreshSeconds,
       scope,
       expiresAt: cachedAt + loaded.config.defaults.refreshSeconds * 1_000,
       sources: pages.map((page, index) => ({
@@ -237,6 +252,7 @@ export class PullRequestSession {
         hasNextPage: page.hasNextPage,
       })),
       dataErrors: pages.some((page) => page.partial),
+      pageDepth: 1,
     }
     this.cache.set(key, entry)
     return publicCacheEntry(entry, false)
@@ -305,9 +321,55 @@ export class PullRequestSession {
       expiresAt: Date.now() + loaded.config.defaults.refreshSeconds * 1_000,
       sources,
       dataErrors,
+      pageDepth: current.pageDepth + 1,
     }
     this.cache.set(key, next)
     return publicCacheEntry(next, false)
+  }
+
+  async refreshSections(
+    root: string,
+    sectionIds: readonly string[],
+    activeSectionId: string | undefined,
+    queryOverride: string | null,
+  ): Promise<PullRequestSessionResult> {
+    let activeResult: PullRequestSessionResult | null = null
+    const sectionDepths = new Map(
+      sectionIds.map((sectionId) => [
+        sectionId,
+        cachedSectionPageDepth(this.cache.values(), root, sectionId, null),
+      ]),
+    )
+    const overrideDepth = queryOverride
+      ? cachedSectionPageDepth(this.cache.values(), root, activeSectionId, queryOverride)
+      : 1
+    for (const [index, sectionId] of sectionIds.entries()) {
+      let result = await this.loadSection(root, sectionId, null, true, index === 0)
+      for (
+        let page = 1;
+        page < (sectionDepths.get(sectionId) ?? 1) &&
+        result.status === "ready" &&
+        result.hasNextPage;
+        page += 1
+      ) {
+        result = await this.loadNextPage(root, sectionId, null)
+      }
+      if (sectionId === activeSectionId) activeResult = result
+    }
+    if (queryOverride) {
+      let result = await this.loadSection(root, activeSectionId, queryOverride, true, false)
+      for (
+        let page = 1;
+        page < overrideDepth && result.status === "ready" && result.hasNextPage;
+        page += 1
+      ) {
+        result = await this.loadNextPage(root, activeSectionId, queryOverride)
+      }
+      return result
+    }
+    return (
+      activeResult ?? this.loadSection(root, activeSectionId, null, true, sectionIds.length === 0)
+    )
   }
 
   cancelActiveLoad() {

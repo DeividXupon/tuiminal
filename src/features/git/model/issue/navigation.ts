@@ -12,7 +12,7 @@ export type IssueWorkspaceAction =
   | { type: "focus"; target: IssueFocus }
   | { type: "move-preview-tab"; delta: -1 | 1 }
   | { type: "scroll-preview"; delta: number }
-  | { type: "edit-query" | "manage" | "create-section" | "refresh" | "load-more" }
+  | { type: "edit-query" | "refresh" | "load-more" }
   | { type: "load-preview-more" | "open-action-menu" | "toggle-description" }
   | { type: "toggle-preview" | "cycle-preview-position" }
   | { type: "open-browser" | "copy-url" | "copy-number" }
@@ -48,18 +48,9 @@ export function adjacentIssuePreviewTab(current: IssuePreviewTab, delta: -1 | 1)
   return ISSUE_PREVIEW_TABS[next] ?? "overview"
 }
 
-function configurationAction(key: IssueKey, canConfigure: boolean): IssueWorkspaceAction | null {
+function configurationAction(key: IssueKey): IssueWorkspaceAction | null {
   if (key.name === "p") return { type: key.shift ? "cycle-preview-position" : "toggle-preview" }
   if (key.name === "/") return { type: "edit-query" }
-  if ((key.name === "s" || (key.name === "e" && key.ctrl)) && canConfigure) {
-    return { type: "manage" }
-  }
-  if (
-    canConfigure &&
-    (key.name === "+" || key.sequence === "+" || (key.name === "=" && key.shift))
-  ) {
-    return { type: "create-section" }
-  }
   return null
 }
 
@@ -143,18 +134,16 @@ export function issueWorkspaceAction({
   key,
   focus,
   hasSelection,
-  canConfigure,
   canLoadMore,
   canLoadPreview,
 }: {
   key: IssueKey
   focus: IssueFocus
   hasSelection: boolean
-  canConfigure: boolean
   canLoadMore: boolean
   canLoadPreview: boolean
 }): IssueWorkspaceAction | null {
-  const configuration = configurationAction(key, canConfigure)
+  const configuration = configurationAction(key)
   if (configuration) return configuration
   const loading = loadingAction(key, focus, canLoadMore, canLoadPreview)
   if (loading) return loading

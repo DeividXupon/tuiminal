@@ -96,17 +96,19 @@ export function addPullRequestProfileRepository({
 export function updatePullRequestProfile({
   root,
   update,
+  fallbackProfile,
   path = PULL_REQUEST_CONFIG_PATH,
 }: {
   root: string
   update: (profile: PullRequestProfile) => PullRequestProfile
+  fallbackProfile?: PullRequestProfile
   path?: string
 }) {
   const loaded = loadPullRequestConfig(path)
   if (loaded.error) throw new Error(loaded.error)
   const profileRoot = resolvePullRequestProfileRoot(root)
   loaded.config.profiles[profileRoot] = update(
-    structuredClone(pullRequestProfileForRoot(loaded.config, profileRoot)),
+    structuredClone(fallbackProfile ?? pullRequestProfileForRoot(loaded.config, profileRoot)),
   )
   return savePullRequestConfig(loaded.config, path)
 }

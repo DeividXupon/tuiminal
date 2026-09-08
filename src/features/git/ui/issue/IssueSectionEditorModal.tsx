@@ -10,6 +10,8 @@ import { ISSUE_COLUMNS } from "../../model/issue/config"
 import { normalizeIssueQuery } from "../../model/issue/query"
 import { parseIssueSectionOptions } from "../../model/issue/sections"
 import type { IssueColumn, IssueSort } from "../../model/issue/types"
+import { GitHubQuerySuggestions } from "../query/GitHubQuerySuggestions"
+import { useGitHubQueryAutocomplete } from "../query/useGitHubQueryAutocomplete"
 
 export type IssueSectionEditorMode = "query" | "create" | "edit"
 export type IssueSectionEditorValues = {
@@ -29,6 +31,7 @@ export function IssueSectionEditorModal({
   initialColumns = ISSUE_COLUMNS,
   initialSort = "updated-desc",
   initialLimit = 20,
+  repositories = [],
   onClose,
   onApply,
   onSave,
@@ -39,6 +42,7 @@ export function IssueSectionEditorModal({
   initialColumns?: readonly IssueColumn[]
   initialSort?: IssueSort
   initialLimit?: number
+  repositories?: readonly string[]
   onClose: () => void
   onApply: (query: string) => void
   onSave: (values: IssueSectionEditorValues) => void
@@ -92,6 +96,22 @@ export function IssueSectionEditorModal({
     onSave(result)
   }, [onSave, validate])
 
+  const update = (field: keyof InputValues, value: string) => {
+    const next = { ...valuesRef.current, [field]: value }
+    valuesRef.current = next
+    setValues(next)
+    setError("")
+  }
+
+  const autocomplete = useGitHubQueryAutocomplete({
+    active: true,
+    inputId: "git-issue-section-editor-query",
+    query: values.query,
+    kind: "issue",
+    repositories,
+    onChange: (query) => update("query", query),
+  })
+
   useEffect(() => {
     valuesRef.current = initialValues
     setValues(initialValues)
@@ -131,12 +151,6 @@ export function IssueSectionEditorModal({
     }
   })
 
-  const update = (field: keyof InputValues, value: string) => {
-    const next = { ...valuesRef.current, [field]: value }
-    valuesRef.current = next
-    setValues(next)
-    setError("")
-  }
   const width = Math.max(42, Math.min(92, terminal.width - 4))
   const title =
     mode === "query"
@@ -230,7 +244,7 @@ export function IssueSectionEditorModal({
           focusable
           style={{
             width,
-            height: hasTitle ? 21 : 12,
+            height: hasTitle ? 25 : 16,
             border: true,
             borderStyle: "rounded",
             borderColor: COLORS.git,
@@ -286,6 +300,15 @@ export function IssueSectionEditorModal({
               />
             </box>
           ))}
+          <GitHubQuerySuggestions
+            suggestions={autocomplete.suggestions}
+            selectedIndex={autocomplete.selectedIndex}
+            width={Math.max(20, width - 4)}
+            onSelect={(index) => {
+              autocomplete.apply(index)
+              queryRef.current?.focus()
+            }}
+          />
           <text
             content={
               error ||

@@ -7,6 +7,7 @@ import {
 } from "../../model/issue/fixtures"
 import { orderIssueItems } from "../../model/issue/sections"
 import type { IssueSection, IssueSummary } from "../../model/issue/types"
+import { repositorySelectionLabel } from "../../model/git-configuration"
 import type { IssueDashboardState } from "./useIssueDashboard"
 
 export type IssueDashboardPresentation = {
@@ -82,7 +83,7 @@ function dashboardScope(dashboard: IssueDashboardState) {
     const scope =
       dashboard.scope.mode === "account"
         ? translateUi("TODOS OS PROJETOS DA CONTA")
-        : `${dashboard.profile.repositories.length} ${translateUi("REPOSITÓRIOS")}`
+        : repositorySelectionLabel(dashboard.profile.repositories, translateUi("REPOSITÓRIOS"))
     const scopeState = dashboard.scope.partial ? ` · ${translateUi("ESCOPO PARCIAL")}` : ""
     return `${scope}${scopeState} · ${dashboard.loadedCount}/${total} ISSUES · ${state}`
   }

@@ -10,6 +10,8 @@ import { PULL_REQUEST_COLUMNS } from "../../model/pr/config"
 import { normalizePullRequestQuery } from "../../model/pr/query"
 import { parsePullRequestSectionOptions } from "../../model/pr/sections"
 import type { PullRequestColumn, PullRequestSort } from "../../model/pr/types"
+import { GitHubQuerySuggestions } from "../query/GitHubQuerySuggestions"
+import { useGitHubQueryAutocomplete } from "../query/useGitHubQueryAutocomplete"
 
 export type SectionEditorMode = "query" | "create" | "edit"
 
@@ -37,6 +39,7 @@ export function SectionEditorModal({
   initialColumns = PULL_REQUEST_COLUMNS,
   initialSort = "updated-desc",
   initialLimit = 20,
+  repositories = [],
   onClose,
   onApply,
   onSave,
@@ -48,6 +51,7 @@ export function SectionEditorModal({
   initialColumns?: readonly PullRequestColumn[]
   initialSort?: PullRequestSort
   initialLimit?: number
+  repositories?: readonly string[]
   onClose: () => void
   onApply: (query: string) => void
   onSave: (values: SectionEditorValues) => void
@@ -108,6 +112,22 @@ export function SectionEditorModal({
     onSave(result)
   }, [onSave, validate])
 
+  const update = (field: keyof SectionEditorInputValues, value: string) => {
+    const next = { ...valuesRef.current, [field]: value }
+    valuesRef.current = next
+    setValues(next)
+    setError("")
+  }
+
+  const autocomplete = useGitHubQueryAutocomplete({
+    active: open,
+    inputId: "git-pr-section-editor-query",
+    query: values.query,
+    kind: "pr",
+    repositories,
+    onChange: (query) => update("query", query),
+  })
+
   useEffect(() => {
     if (!open) return
     const next = initialValues
@@ -159,12 +179,6 @@ export function SectionEditorModal({
       : mode === "create"
         ? "◆ NOVA SEÇÃO"
         : "◆ EDITAR SEÇÃO"
-  const update = (field: keyof SectionEditorInputValues, value: string) => {
-    const next = { ...valuesRef.current, [field]: value }
-    valuesRef.current = next
-    setValues(next)
-    setError("")
-  }
   return (
     <>
       <Button
@@ -196,7 +210,7 @@ export function SectionEditorModal({
           focusable
           style={{
             width,
-            height: hasTitle ? 21 : 12,
+            height: hasTitle ? 25 : 16,
             border: true,
             borderStyle: "rounded",
             borderColor: COLORS.git,
@@ -238,6 +252,15 @@ export function SectionEditorModal({
             placeholder="is:open author:@me"
             onInput={(value) => update("query", value)}
             onSubmit={mode === "query" ? apply : save}
+          />
+          <GitHubQuerySuggestions
+            suggestions={autocomplete.suggestions}
+            selectedIndex={autocomplete.selectedIndex}
+            width={Math.max(20, width - 4)}
+            onSelect={(index) => {
+              autocomplete.apply(index)
+              queryRef.current?.focus()
+            }}
           />
           {hasTitle ? (
             <>

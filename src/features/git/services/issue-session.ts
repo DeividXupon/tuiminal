@@ -7,6 +7,8 @@ import { type GitHubAccountScope, loadGitHubAccountScope } from "./github/accoun
 import { assertAllowedGitHubHost } from "./github/host"
 import { searchIssuesPage } from "./github/issue-search"
 import type { GhTransportOptions } from "./github/transport"
+import { cachedSectionPageDepth } from "./page-depth"
+import { resolveGitProjectContext } from "./git"
 
 const issueResourceDisposers = new Set<() => void | Promise<void>>()
 const ISSUE_SECTION_CACHE_LIMIT = 64
@@ -37,6 +39,7 @@ export type IssueSessionResult =
       loadedCount: number
       fromCache: boolean
       cachedAt: number
+      refreshSeconds: number
       scope: { mode: "account" | "repositories"; sourceCount: number; partial: boolean }
       root: string
     }
@@ -46,6 +49,7 @@ type IssueCacheEntry = Extract<IssueSessionResult, { status: "ready" }> & {
   expiresAt: number
   sources: IssueSourceCursor[]
   dataErrors: boolean
+  pageDepth: number
 }
 
 async function mapWithConcurrency<T, R>(
@@ -95,7 +99,13 @@ function cacheKey(
 }
 
 function publicCacheEntry(entry: IssueCacheEntry, fromCache: boolean) {
-  const { expiresAt: _expiresAt, sources: _sources, dataErrors: _dataErrors, ...result } = entry
+  const {
+    expiresAt: _expiresAt,
+    sources: _sources,
+    dataErrors: _dataErrors,
+    pageDepth: _pageDepth,
+    ...result
+  } = entry
   return { ...result, fromCache }
 }
 
@@ -134,6 +144,7 @@ export class IssueSession {
     sectionId?: string,
     queryOverride?: string | null,
     force = false,
+    refreshAccountScope = force,
   ): Promise<IssueSessionResult> {
     this.activeController?.abort()
     const controller = new AbortController()
@@ -142,7 +153,10 @@ export class IssueSession {
       ? loadIssueConfig(this.options.configPath)
       : loadIssueConfig()
     if (loaded.error) return { status: "config-error", error: loaded.error }
-    const profile = issueProfileForRoot(loaded.config, root)
+    const fallback = loaded.config.profiles[root]
+      ? null
+      : (await resolveGitProjectContext(root)).remote
+    const profile = issueProfileForRoot(loaded.config, root, fallback)
     const host = assertAllowedGitHubHost(profile.host, [loaded.config.defaults.host, profile.host])
     const transport = { ...this.options.transport, host, signal: controller.signal }
     const capabilities = await detectGhCapabilities(transport)
@@ -161,7 +175,7 @@ export class IssueSession {
       profile.sections.find((candidate) => candidate.id === sectionId) ?? profile.sections[0]
     if (!section) return { status: "config-error", error: "No issue section configured" }
     const effectiveSection = queryOverride ? { ...section, query: queryOverride } : section
-    if (force && !profile.repositories.length) this.accountScope = null
+    if (refreshAccountScope && !profile.repositories.length) this.accountScope = null
     if (!profile.repositories.length && !this.accountScope) {
       this.accountScope = await loadGitHubAccountScope({
         host,
@@ -214,6 +228,7 @@ export class IssueSession {
       loadedCount: aggregate.items.length,
       fromCache: false,
       cachedAt,
+      refreshSeconds: loaded.config.defaults.refreshSeconds,
       scope,
       expiresAt: cachedAt + loaded.config.defaults.refreshSeconds * 1_000,
       sources: pages.map((page, index) => ({
@@ -222,6 +237,7 @@ export class IssueSession {
         hasNextPage: page.hasNextPage,
       })),
       dataErrors: pages.some((page) => page.partial),
+      pageDepth: 1,
     }
     this.remember(key, entry)
     return publicCacheEntry(entry, false)
@@ -279,9 +295,55 @@ export class IssueSession {
       expiresAt: Date.now() + loaded.config.defaults.refreshSeconds * 1_000,
       sources,
       dataErrors,
+      pageDepth: current.pageDepth + 1,
     }
     this.remember(key, next)
     return publicCacheEntry(next, false)
+  }
+
+  async refreshSections(
+    root: string,
+    sectionIds: readonly string[],
+    activeSectionId: string | undefined,
+    queryOverride: string | null,
+  ): Promise<IssueSessionResult> {
+    let activeResult: IssueSessionResult | null = null
+    const sectionDepths = new Map(
+      sectionIds.map((sectionId) => [
+        sectionId,
+        cachedSectionPageDepth(this.cache.values(), root, sectionId, null),
+      ]),
+    )
+    const overrideDepth = queryOverride
+      ? cachedSectionPageDepth(this.cache.values(), root, activeSectionId, queryOverride)
+      : 1
+    for (const [index, sectionId] of sectionIds.entries()) {
+      let result = await this.loadSection(root, sectionId, null, true, index === 0)
+      for (
+        let page = 1;
+        page < (sectionDepths.get(sectionId) ?? 1) &&
+        result.status === "ready" &&
+        result.hasNextPage;
+        page += 1
+      ) {
+        result = await this.loadNextPage(root, sectionId, null)
+      }
+      if (sectionId === activeSectionId) activeResult = result
+    }
+    if (queryOverride) {
+      let result = await this.loadSection(root, activeSectionId, queryOverride, true, false)
+      for (
+        let page = 1;
+        page < overrideDepth && result.status === "ready" && result.hasNextPage;
+        page += 1
+      ) {
+        result = await this.loadNextPage(root, activeSectionId, queryOverride)
+      }
+      return result
+    }
+    return (
+      activeResult ?? this.loadSection(root, activeSectionId, null, true, sectionIds.length === 0)
+    )
   }
 
   cancelActiveLoad() {

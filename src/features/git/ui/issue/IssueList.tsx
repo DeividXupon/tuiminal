@@ -106,6 +106,7 @@ export function IssueList({
   focused,
   width,
   onSelect,
+  loadingMore = false,
   columns = ISSUE_COLUMNS,
 }: {
   items: readonly IssueSummary[]
@@ -113,6 +114,7 @@ export function IssueList({
   focused: boolean
   width: number
   onSelect: (index: number) => void
+  loadingMore?: boolean
   columns?: readonly IssueColumn[]
 }) {
   const listRef = useRef<ScrollBoxRenderable | null>(null)
@@ -139,6 +141,13 @@ export function IssueList({
               onSelect={onSelect}
             />
           ))}
+          {loadingMore ? (
+            <text
+              id="git-issue-page-loader"
+              content={`◷ ${translateUi("Carregando mais issues…")}`}
+              style={{ height: 1, flexShrink: 0, fg: COLORS.git }}
+            />
+          ) : null}
         </scrollbox>
       ) : (
         <text content={translateUi("Nenhuma issue nesta seção.")} style={{ fg: COLORS.muted }} />

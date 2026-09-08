@@ -130,6 +130,7 @@ export function PullRequestList({
   focused,
   width,
   onSelect,
+  loadingMore = false,
   columns = PULL_REQUEST_COLUMNS,
 }: {
   items: readonly PullRequestSummary[]
@@ -137,6 +138,7 @@ export function PullRequestList({
   focused: boolean
   width: number
   onSelect: (index: number) => void
+  loadingMore?: boolean
   columns?: readonly PullRequestColumn[]
 }) {
   const listRef = useRef<ScrollBoxRenderable | null>(null)
@@ -163,6 +165,13 @@ export function PullRequestList({
               columns={columns}
             />
           ))}
+          {loadingMore ? (
+            <text
+              id="git-pr-page-loader"
+              content={`◷ ${translateUi("Carregando mais pull requests…")}`}
+              style={{ height: 1, flexShrink: 0, fg: COLORS.git }}
+            />
+          ) : null}
         </scrollbox>
       ) : (
         <text content={translateUi("Nenhum PR nesta seção.")} style={{ fg: COLORS.muted }} />

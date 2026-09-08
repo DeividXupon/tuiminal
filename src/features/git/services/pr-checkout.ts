@@ -3,6 +3,9 @@ import { existsSync, statSync } from "node:fs"
 import { realpath } from "node:fs/promises"
 import { isAbsolute, resolve } from "node:path"
 import type { PullRequestIdentity } from "../model/pr/types"
+import { parseGitHubRemote } from "../model/repository"
+
+export { parseGitHubRemote } from "../model/repository"
 
 export type CheckoutCloneInspection = {
   eligible: boolean
@@ -24,20 +27,6 @@ function runGit(cwd: string, args: readonly string[]) {
       },
     )
   })
-}
-
-export function parseGitHubRemote(remote: string) {
-  const value = remote.trim().replace(/\.git$/, "")
-  const ssh = value.match(/^git@([^:]+):([^/]+)\/(.+)$/)
-  if (ssh) return { host: ssh[1]?.toLowerCase() ?? "", repository: `${ssh[2]}/${ssh[3]}` }
-  try {
-    const url = new URL(value)
-    if (url.protocol !== "https:" && url.protocol !== "ssh:") return null
-    const repository = url.pathname.replace(/^\//, "")
-    return repository.includes("/") ? { host: url.hostname.toLowerCase(), repository } : null
-  } catch {
-    return null
-  }
 }
 
 function operationInProgress(gitDirectory: string) {

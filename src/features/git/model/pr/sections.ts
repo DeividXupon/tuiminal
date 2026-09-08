@@ -2,14 +2,6 @@ import { PULL_REQUEST_COLUMNS, PULL_REQUEST_SORTS } from "./config"
 import { normalizePullRequestQuery } from "./query"
 import type { PullRequestColumn, PullRequestSection, PullRequestSort } from "./types"
 
-export type SectionManagerTab = "sections" | "repositories"
-export type SectionManagerAction =
-  | { type: "close" }
-  | { type: "select-tab"; tab: SectionManagerTab }
-  | { type: "move-selection"; delta: -1 | 1 }
-  | { type: "create" | "edit" | "duplicate" | "delete" | "add-repository" }
-  | { type: "move-section"; delta: -1 | 1 }
-
 const SECTION_ID_PATTERN = /[^a-z0-9]+/g
 
 export function createPullRequestSectionId(title: string, sections: readonly PullRequestSection[]) {
@@ -159,49 +151,4 @@ export function movePullRequestSection(
 export function removePullRequestSection(sections: readonly PullRequestSection[], id: string) {
   if (sections.length <= 1) throw new Error("At least one section is required")
   return sections.filter((section) => section.id !== id)
-}
-
-function sectionTabAction(
-  key: { name: string; option?: boolean },
-  hasSelection: boolean,
-): SectionManagerAction | null {
-  if (key.name === "n") return { type: "create" }
-  if (hasSelection && (key.name === "e" || key.name === "return")) return { type: "edit" }
-  if (hasSelection && key.name === "d") return { type: "duplicate" }
-  if (hasSelection && key.option && key.name === "up") return { type: "move-section", delta: -1 }
-  if (hasSelection && key.option && key.name === "down") return { type: "move-section", delta: 1 }
-  if (hasSelection && key.name === "x") return { type: "delete" }
-  return null
-}
-
-function repositoryTabAction(
-  key: { name: string; sequence?: string },
-  hasSelection: boolean,
-): SectionManagerAction | null {
-  if (key.name === "+" || key.sequence === "+") return { type: "add-repository" }
-  if (hasSelection && key.name === "x") return { type: "delete" }
-  return null
-}
-
-export function sectionManagerAction({
-  key,
-  tab,
-  hasSelection,
-}: {
-  key: { name: string; sequence?: string; option?: boolean }
-  tab: SectionManagerTab
-  hasSelection: boolean
-}): SectionManagerAction | null {
-  if (key.name === "escape") return { type: "close" }
-  if (key.name === "1") return { type: "select-tab", tab: "sections" }
-  if (key.name === "2") return { type: "select-tab", tab: "repositories" }
-  if (tab === "sections" && key.option) {
-    const reorder = sectionTabAction(key, hasSelection)
-    if (reorder) return reorder
-  }
-  if (key.name === "j" || key.name === "down") return { type: "move-selection", delta: 1 }
-  if (key.name === "k" || key.name === "up") return { type: "move-selection", delta: -1 }
-  return tab === "sections"
-    ? sectionTabAction(key, hasSelection)
-    : repositoryTabAction(key, hasSelection)
 }

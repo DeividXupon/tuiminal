@@ -10,7 +10,6 @@ export function useIssueWorkspaceKeyboard({
   blocked,
   focus,
   hasSelection,
-  canConfigure,
   canLoadMore,
   canLoadPreview,
   onWorkspaceAction,
@@ -19,7 +18,6 @@ export function useIssueWorkspaceKeyboard({
   blocked: boolean
   focus: IssueFocus
   hasSelection: boolean
-  canConfigure: boolean
   canLoadMore: boolean
   canLoadPreview: boolean
   onWorkspaceAction: (action: IssueWorkspaceAction) => void
@@ -35,7 +33,6 @@ export function useIssueWorkspaceKeyboard({
       },
       focus,
       hasSelection,
-      canConfigure,
       canLoadMore,
       canLoadPreview,
     })

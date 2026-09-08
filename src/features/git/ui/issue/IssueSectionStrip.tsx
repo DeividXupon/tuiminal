@@ -8,15 +8,11 @@ export function IssueSectionStrip({
   activeIndex,
   counts,
   onSelect,
-  onCreate,
-  onManage,
 }: {
   sections: readonly IssueSection[]
   activeIndex: number
   counts: Readonly<Record<string, number | null>>
   onSelect: (index: number) => void
-  onCreate?: () => void
-  onManage?: () => void
 }) {
   return (
     <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
@@ -39,20 +35,6 @@ export function IssueSectionStrip({
         label="[>]"
         accent={COLORS.git}
         onPress={() => onSelect((activeIndex + 1) % sections.length)}
-      />
-      <InlineButton
-        id="git-issue-add"
-        label="[+]"
-        accent={COLORS.git}
-        disabled={!onCreate}
-        onPress={() => onCreate?.()}
-      />
-      <InlineButton
-        id="git-issue-manage-sections"
-        label="[Ctrl+E]"
-        accent={COLORS.git}
-        disabled={!onManage}
-        onPress={() => onManage?.()}
       />
     </box>
   )

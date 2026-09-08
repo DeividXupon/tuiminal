@@ -10,6 +10,7 @@ import {
 } from "./model/issue/navigation"
 import { issueIdentityKey } from "./model/issue/query"
 import type { IssuePreviewTab } from "./model/issue/types"
+import { remoteDashboardHasNextPage } from "./model/remote-pagination"
 import { IssueDashboardView } from "./ui/issue/IssueDashboardView"
 import { issueDashboardPresentation } from "./ui/issue/presentation"
 import { useIssueActions } from "./ui/issue/useIssueActions"
@@ -18,6 +19,7 @@ import { useIssueDashboard } from "./ui/issue/useIssueDashboard"
 import { useIssueDetails } from "./ui/issue/useIssueDetails"
 import { useIssueNotifications } from "./ui/issue/useIssueNotifications"
 import { useIssueWorkspaceKeyboard } from "./ui/issue/useIssueWorkspaceKeyboard"
+import { useAutoPage } from "./ui/useAutoPagination"
 import {
   issueDashboardAuth,
   issueDashboardProfileTarget,
@@ -26,9 +28,11 @@ import {
 
 export function IssuesWorkspace({
   active,
+  configurationRevision = 0,
   onLocalCheckout = () => undefined,
 }: {
   active: boolean
+  configurationRevision?: number
   onLocalCheckout?: () => void
 }) {
   const renderer = useRenderer()
@@ -48,12 +52,13 @@ export function IssuesWorkspace({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [notice, setNotice] = useState("")
   const [sectionCounts, setSectionCounts] = useState<Record<string, number | null>>({})
-  const {
-    state: dashboard,
-    refresh,
-    loadMore,
-    loadingMore,
-  } = useIssueDashboard(active, requestedSectionId, queryOverride)
+  const dashboardFlow = useIssueDashboard(
+    active,
+    requestedSectionId,
+    queryOverride,
+    configurationRevision,
+  )
+  const { state: dashboard, refresh, loadMore, loadingMore, refreshing } = dashboardFlow
   const basePresentation = issueDashboardPresentation(dashboard, sectionIndex)
   const queryPresentation = queryOverride
     ? { ...basePresentation, section: { ...basePresentation.section, query: queryOverride } }
@@ -79,14 +84,6 @@ export function IssuesWorkspace({
     refresh: () => void refresh(),
     applyQuery: setQueryOverride,
     clearQuery: () => setQueryOverride(null),
-    selectCreated: (id, index) => {
-      setRequestedSectionId(id)
-      setSectionIndex(index)
-    },
-    selectFallback: (id) => {
-      setRequestedSectionId(id)
-      setSectionIndex(0)
-    },
     setNotice,
   })
   const issueActions = useIssueActions({
@@ -156,6 +153,9 @@ export function IssuesWorkspace({
     }))
   }, [dashboard, queryOverride])
 
+  const hasNextPage = remoteDashboardHasNextPage(dashboard)
+  useAutoPage(resolvedSelectedIndex, presentation.items.length, hasNextPage, loadingMore, loadMore)
+
   const copy = (value: string, success: string) => {
     const copied = renderer.copyToClipboardOSC52(value)
     setNotice(copied ? success : translateUi("O terminal não aceitou a cópia OSC52."))
@@ -205,12 +205,6 @@ export function IssuesWorkspace({
       case "edit-query":
         configuration.openQuery()
         break
-      case "manage":
-        configuration.openManager()
-        break
-      case "create-section":
-        configuration.openCreateSection()
-        break
       case "refresh":
         void refresh()
         break
@@ -241,7 +235,6 @@ export function IssuesWorkspace({
     blocked: modalOpen,
     focus,
     hasSelection: Boolean(selected),
-    canConfigure: Boolean(profileTarget),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
     canLoadPreview: details.status === "ready" && details.details.commentPage.hasNextPage,
     onWorkspaceAction: handleAction,
@@ -271,6 +264,7 @@ export function IssuesWorkspace({
         previewVisible={previewVisible}
         notice={notice}
         loadingMore={loadingMore}
+        refreshing={refreshing}
         onSelectRow={(index) => {
           selectRow(index)
           setFocus("list")
@@ -286,8 +280,6 @@ export function IssuesWorkspace({
         onOpenActions={issueActions.openMenu}
         onLoadMoreDetails={() => void loadMoreDetails()}
         onSelectSection={selectSection}
-        onCreate={profileTarget ? configuration.openCreateSection : null}
-        onManage={profileTarget ? configuration.openManager : null}
         onEditQuery={configuration.openQuery}
         onRetry={() => void refresh()}
         onLoadMore={() => void loadMore()}

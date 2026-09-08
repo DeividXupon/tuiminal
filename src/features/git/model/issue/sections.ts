@@ -2,14 +2,6 @@ import { ISSUE_COLUMNS, ISSUE_SORTS } from "./config"
 import { normalizeIssueQuery } from "./query"
 import type { IssueColumn, IssueSection, IssueSort, IssueSummary } from "./types"
 
-export type IssueSectionManagerTab = "sections" | "repositories"
-export type IssueSectionManagerAction =
-  | { type: "close" }
-  | { type: "select-tab"; tab: IssueSectionManagerTab }
-  | { type: "move-selection"; delta: -1 | 1 }
-  | { type: "create" | "edit" | "duplicate" | "delete" | "add-repository" }
-  | { type: "move-section"; delta: -1 | 1 }
-
 const SECTION_ID_PATTERN = /[^a-z0-9]+/g
 
 export function createIssueSectionId(title: string, sections: readonly IssueSection[]) {
@@ -140,52 +132,4 @@ export function moveIssueSection(sections: readonly IssueSection[], id: string, 
 export function removeIssueSection(sections: readonly IssueSection[], id: string) {
   if (sections.length <= 1) throw new Error("At least one section is required")
   return sections.filter((section) => section.id !== id)
-}
-
-function issueSectionTabAction(
-  key: { name: string; option?: boolean },
-  hasSelection: boolean,
-): IssueSectionManagerAction | null {
-  if (key.name === "n") return { type: "create" }
-  if (hasSelection && ["e", "return", "enter"].includes(key.name)) return { type: "edit" }
-  if (hasSelection && key.name === "d") return { type: "duplicate" }
-  if (hasSelection && key.option && key.name === "up") {
-    return { type: "move-section", delta: -1 }
-  }
-  if (hasSelection && key.option && key.name === "down") {
-    return { type: "move-section", delta: 1 }
-  }
-  return hasSelection && key.name === "x" ? { type: "delete" } : null
-}
-
-function issueRepositoryTabAction(
-  key: { name: string; sequence?: string },
-  hasSelection: boolean,
-): IssueSectionManagerAction | null {
-  if (key.name === "+" || key.sequence === "+") return { type: "add-repository" }
-  return hasSelection && key.name === "x" ? { type: "delete" } : null
-}
-
-export function issueSectionManagerAction({
-  key,
-  tab,
-  hasSelection,
-}: {
-  key: { name: string; sequence?: string; option?: boolean }
-  tab: IssueSectionManagerTab
-  hasSelection: boolean
-}): IssueSectionManagerAction | null {
-  if (key.name === "escape") return { type: "close" }
-  if (key.name === "1" || key.name === "2") {
-    return { type: "select-tab", tab: key.name === "1" ? "sections" : "repositories" }
-  }
-  if (tab === "sections" && key.option) {
-    const reorder = issueSectionTabAction(key, hasSelection)
-    if (reorder) return reorder
-  }
-  if (key.name === "j" || key.name === "down") return { type: "move-selection", delta: 1 }
-  if (key.name === "k" || key.name === "up") return { type: "move-selection", delta: -1 }
-  return tab === "sections"
-    ? issueSectionTabAction(key, hasSelection)
-    : issueRepositoryTabAction(key, hasSelection)
 }

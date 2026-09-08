@@ -15,8 +15,6 @@ export type PullRequestNavigationAction =
 export type PullRequestWorkspaceAction =
   | PullRequestNavigationAction
   | { type: "edit-query" }
-  | { type: "manage" }
-  | { type: "create-section" }
   | { type: "refresh" }
   | { type: "load-more" }
   | { type: "load-preview-more" }
@@ -142,7 +140,6 @@ export function pullRequestWorkspaceAction({
   shift,
   focus,
   hasSelection,
-  canConfigure,
   canLoadMore,
   canLoadPreview,
   ctrl,
@@ -152,17 +149,13 @@ export function pullRequestWorkspaceAction({
   shift?: boolean
   focus: PullRequestFocus
   hasSelection: boolean
-  canConfigure: boolean
   canLoadMore?: boolean
   canLoadPreview?: boolean
   ctrl?: boolean
 }): PullRequestWorkspaceAction | null {
   const configuration = pullRequestConfigurationAction({
     keyName,
-    sequence,
     shift,
-    ctrl,
-    canConfigure,
   })
   if (configuration) return configuration
   if (keyName === "r") return { type: "refresh" }
@@ -186,23 +179,13 @@ export function pullRequestWorkspaceAction({
 
 function pullRequestConfigurationAction({
   keyName,
-  sequence,
   shift,
-  ctrl,
-  canConfigure,
 }: {
   keyName: string
-  sequence?: string | undefined
   shift?: boolean | undefined
-  ctrl?: boolean | undefined
-  canConfigure: boolean
 }): PullRequestWorkspaceAction | null {
   if (keyName === "p") return { type: shift ? "cycle-preview-position" : "toggle-preview" }
   if (keyName === "/") return { type: "edit-query" }
-  if ((keyName === "s" || (keyName === "e" && ctrl)) && canConfigure) return { type: "manage" }
-  if (canConfigure && (keyName === "+" || sequence === "+" || (keyName === "=" && shift))) {
-    return { type: "create-section" }
-  }
   return null
 }
 

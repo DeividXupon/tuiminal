@@ -12,6 +12,7 @@ import {
 } from "./model/pr/navigation"
 import { pullRequestIdentityKey } from "./model/pr/query"
 import type { PullRequestPreviewTab } from "./model/pr/types"
+import { remoteDashboardHasNextPage } from "./model/remote-pagination"
 import { PrDiffView } from "./ui/pr/PrDiffView"
 import { PullRequestDashboardView } from "./ui/pr/PullRequestDashboardView"
 import { pullRequestDashboardPresentation } from "./ui/pr/presentation"
@@ -23,6 +24,7 @@ import { usePullRequestWatch } from "./ui/pr/usePullRequestWatch"
 import { usePullRequestWorkflows } from "./ui/pr/usePullRequestWorkflows"
 import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspaceKeyboard"
 import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
+import { useAutoPage } from "./ui/useAutoPagination"
 import {
   dashboardAuth,
   dashboardProfileTarget,
@@ -33,9 +35,11 @@ import {
 
 export function PullRequestsWorkspace({
   active,
+  configurationRevision = 0,
   onLocalCheckout = () => undefined,
 }: {
   active: boolean
+  configurationRevision?: number
   onLocalCheckout?: () => void
 }) {
   const renderer = useRenderer()
@@ -63,12 +67,13 @@ export function PullRequestsWorkspace({
   const [notice, setNotice] = useState("")
   const [sectionCounts, setSectionCounts] = useState<Record<string, number | null>>({})
   const watch = usePullRequestWatch(setNotice)
-  const {
-    state: dashboard,
-    refresh,
-    loadMore,
-    loadingMore,
-  } = usePullRequestDashboard(active, requestedSectionId, queryOverride)
+  const dashboardFlow = usePullRequestDashboard(
+    active,
+    requestedSectionId,
+    queryOverride,
+    configurationRevision,
+  )
+  const { state: dashboard, refresh, loadMore, loadingMore, refreshing } = dashboardFlow
   const basePresentation = pullRequestDashboardPresentation(dashboard, sectionIndex)
   const queryPresentation = queryOverride
     ? {
@@ -113,14 +118,6 @@ export function PullRequestsWorkspace({
     refresh: () => void refresh(),
     applyQuery: setQueryOverride,
     clearQuery: () => setQueryOverride(null),
-    selectCreated: (id, index) => {
-      setRequestedSectionId(id)
-      setSectionIndex(index)
-    },
-    selectFallback: (id) => {
-      setRequestedSectionId(id)
-      setSectionIndex(0)
-    },
     setNotice,
   })
   const responsiveLayout = resolvePullRequestLayout(
@@ -217,6 +214,9 @@ export function PullRequestsWorkspace({
     }))
   }, [dashboard, queryOverride])
 
+  const hasNextPage = remoteDashboardHasNextPage(dashboard)
+  useAutoPage(resolvedSelectedIndex, presentation.items.length, hasNextPage, loadingMore, loadMore)
+
   const handleNavigation = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     if (!action) return
     if (action.type === "move-section") {
@@ -242,12 +242,6 @@ export function PullRequestsWorkspace({
     switch (action.type) {
       case "edit-query":
         configuration.openQuery()
-        return true
-      case "manage":
-        configuration.openManager()
-        return true
-      case "create-section":
-        configuration.openCreateSection()
         return true
       case "refresh":
         void refresh()
@@ -288,7 +282,6 @@ export function PullRequestsWorkspace({
     blocked: modalOpen || Boolean(diffTarget),
     focus,
     hasSelection: Boolean(selected),
-    canConfigure: Boolean(profileTarget),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
     canLoadPreview:
       details.status === "ready" &&
@@ -347,9 +340,8 @@ export function PullRequestsWorkspace({
         previewItemIndex={previewItemIndex}
         loadingMoreDetails={loadingMoreDetails}
         loadingMore={loadingMore}
+        refreshing={refreshing}
         onSelectSection={selectSection}
-        onCreate={profileTarget ? configuration.openCreateSection : null}
-        onManage={profileTarget ? configuration.openManager : null}
         onEditQuery={configuration.openQuery}
         onCyclePreviewPosition={configuration.cyclePreviewPosition}
         onTogglePreview={togglePreview}

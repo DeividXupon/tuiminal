@@ -1,5 +1,6 @@
 import type { GitFile, GitCommit, GitSnapshot } from "../model/types"
 export type * from "../model/types"
+import { parseGitHubRemote, type GitHubRepositoryReference } from "../model/repository"
 import { basename, resolve } from "node:path"
 import { spawn } from "node:child_process"
 
@@ -10,9 +11,16 @@ type GitCommandResult = {
 }
 
 export const GIT_LAUNCH_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
-let cachedRepositoryRoot: string | null = null
+const projectContextCache = new Map<string, Promise<GitProjectContext>>()
 
-async function runGit(cwd: string, args: string[]): Promise<GitCommandResult> {
+export type GitProjectContext = {
+  launchDirectory: string
+  root: string
+  isRepository: boolean
+  remote: GitHubRepositoryReference | null
+}
+
+export async function runGitCommand(cwd: string, args: string[]): Promise<GitCommandResult> {
   return new Promise((resolveCommand, rejectCommand) => {
     const child = spawn("git", ["-C", cwd, ...args], {
       env: { ...process.env, LC_ALL: "C" },
@@ -36,10 +44,33 @@ async function runGit(cwd: string, args: string[]): Promise<GitCommandResult> {
   })
 }
 
-export async function resolveGitProjectScope(directory = GIT_LAUNCH_DIRECTORY) {
+async function inspectGitProjectContext(directory: string): Promise<GitProjectContext> {
   const requested = resolve(directory)
-  const rootResult = await runGit(requested, ["rev-parse", "--show-toplevel"])
-  return rootResult.exitCode === 0 ? resolve(rootResult.stdout.trim()) : requested
+  const rootResult = await runGitCommand(requested, ["rev-parse", "--show-toplevel"])
+  if (rootResult.exitCode !== 0) {
+    return { launchDirectory: requested, root: requested, isRepository: false, remote: null }
+  }
+  const root = resolve(rootResult.stdout.trim())
+  const remote = await runGitCommand(root, ["remote", "get-url", "origin"])
+  return {
+    launchDirectory: requested,
+    root,
+    isRepository: true,
+    remote: remote.exitCode === 0 ? parseGitHubRemote(remote.stdout) : null,
+  }
+}
+
+export function resolveGitProjectContext(directory = GIT_LAUNCH_DIRECTORY) {
+  const requested = resolve(directory)
+  const cached = projectContextCache.get(requested)
+  if (cached) return cached
+  const pending = inspectGitProjectContext(requested)
+  projectContextCache.set(requested, pending)
+  return pending
+}
+
+export async function resolveGitProjectScope(directory = GIT_LAUNCH_DIRECTORY) {
+  return (await resolveGitProjectContext(directory)).root
 }
 
 function parseStatus(output: string): GitFile[] {
@@ -118,33 +149,34 @@ export function trimGitPatchTerminator(output: string) {
   return output
 }
 
-export async function loadGitSnapshot(): Promise<GitSnapshot> {
-  if (!cachedRepositoryRoot) {
-    const rootResult = await runGit(GIT_LAUNCH_DIRECTORY, ["rev-parse", "--show-toplevel"])
-
-    if (rootResult.exitCode !== 0) {
-      return {
-        isRepository: false,
-        launchDirectory: GIT_LAUNCH_DIRECTORY,
-        root: null,
-        repositoryName: basename(GIT_LAUNCH_DIRECTORY),
-        branch: "—",
-        upstream: null,
-        ahead: 0,
-        behind: 0,
-        files: [],
-        commits: [],
-      }
+export async function loadGitSnapshot(directory = GIT_LAUNCH_DIRECTORY): Promise<GitSnapshot> {
+  const context = await resolveGitProjectContext(directory)
+  if (!context.isRepository) {
+    return {
+      isRepository: false,
+      launchDirectory: context.launchDirectory,
+      root: null,
+      repositoryName: basename(context.launchDirectory),
+      branch: "—",
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      files: [],
+      commits: [],
     }
-    cachedRepositoryRoot = rootResult.stdout.trim()
   }
-
-  const root = cachedRepositoryRoot
+  const root = context.root
   const [branchResult, statusResult, upstreamResult, logResult] = await Promise.all([
-    runGit(root, ["symbolic-ref", "--short", "-q", "HEAD"]),
-    runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"]),
-    runGit(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
-    runGit(root, [
+    runGitCommand(root, ["symbolic-ref", "--short", "-q", "HEAD"]),
+    runGitCommand(root, [
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all",
+      "--no-renames",
+    ]),
+    runGitCommand(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+    runGitCommand(root, [
       "log",
       "--all",
       "--topo-order",
@@ -162,7 +194,7 @@ export async function loadGitSnapshot(): Promise<GitSnapshot> {
 
   let branch = branchResult.stdout.trim()
   if (!branch) {
-    const headResult = await runGit(root, ["rev-parse", "--short", "HEAD"])
+    const headResult = await runGitCommand(root, ["rev-parse", "--short", "HEAD"])
     branch = headResult.exitCode === 0 ? `HEAD@${headResult.stdout.trim()}` : "sem commits"
   }
 
@@ -171,7 +203,7 @@ export async function loadGitSnapshot(): Promise<GitSnapshot> {
   let behind = 0
 
   if (upstream) {
-    const distanceResult = await runGit(root, [
+    const distanceResult = await runGitCommand(root, [
       "rev-list",
       "--left-right",
       "--count",
@@ -186,7 +218,7 @@ export async function loadGitSnapshot(): Promise<GitSnapshot> {
 
   return {
     isRepository: true,
-    launchDirectory: GIT_LAUNCH_DIRECTORY,
+    launchDirectory: context.launchDirectory,
     root,
     repositoryName: basename(root),
     branch,
@@ -202,7 +234,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
   const sections: string[] = []
 
   if (file.staged) {
-    const stagedResult = await runGit(root, [
+    const stagedResult = await runGitCommand(root, [
       "diff",
       "--cached",
       "--no-ext-diff",
@@ -217,7 +249,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
   }
 
   if (file.untracked) {
-    const untrackedResult = await runGit(root, [
+    const untrackedResult = await runGitCommand(root, [
       "diff",
       "--no-index",
       "--no-color",
@@ -230,7 +262,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
       sections.push("── UNTRACKED ──", trimGitPatchTerminator(untrackedResult.stdout))
     }
   } else if (file.unstaged) {
-    const unstagedResult = await runGit(root, [
+    const unstagedResult = await runGitCommand(root, [
       "diff",
       "--no-ext-diff",
       "--no-color",
@@ -250,7 +282,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
 }
 
 export async function loadCommitDiff(root: string, commitHash: string) {
-  const result = await runGit(root, [
+  const result = await runGitCommand(root, [
     "show",
     "--format=",
     "--no-ext-diff",
@@ -269,19 +301,19 @@ export async function loadCommitDiff(root: string, commitHash: string) {
 
 export async function toggleGitFile(root: string, file: GitFile) {
   if (file.unstaged) {
-    const addResult = await runGit(root, ["add", "--", file.path])
+    const addResult = await runGitCommand(root, ["add", "--", file.path])
     if (addResult.exitCode !== 0) {
       throw commandError(addResult, `Não foi possível adicionar ${file.path}.`)
     }
     return "Alterações adicionadas ao stage."
   }
 
-  const restoreResult = await runGit(root, ["restore", "--staged", "--", file.path])
+  const restoreResult = await runGitCommand(root, ["restore", "--staged", "--", file.path])
   if (restoreResult.exitCode === 0) {
     return "Alterações removidas do stage."
   }
 
-  const fallbackResult = await runGit(root, ["rm", "--cached", "--", file.path])
+  const fallbackResult = await runGitCommand(root, ["rm", "--cached", "--", file.path])
   if (fallbackResult.exitCode !== 0) {
     throw commandError(restoreResult, `Não foi possível remover ${file.path} do stage.`)
   }
@@ -291,14 +323,14 @@ export async function toggleGitFile(root: string, file: GitFile) {
 
 export async function toggleAllGitFiles(root: string, files: GitFile[]) {
   if (files.some((file) => file.unstaged)) {
-    const addResult = await runGit(root, ["add", "--all"])
+    const addResult = await runGitCommand(root, ["add", "--all"])
     if (addResult.exitCode !== 0) {
       throw commandError(addResult, "Não foi possível adicionar as alterações.")
     }
     return "Todas as alterações foram adicionadas ao stage."
   }
 
-  const restoreResult = await runGit(root, ["restore", "--staged", "--", "."])
+  const restoreResult = await runGitCommand(root, ["restore", "--staged", "--", "."])
   if (restoreResult.exitCode !== 0) {
     throw commandError(restoreResult, "Não foi possível limpar o stage.")
   }

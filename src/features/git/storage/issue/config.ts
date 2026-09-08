@@ -66,17 +66,19 @@ export function saveIssueConfig(config: IssueConfig, path = ISSUE_CONFIG_PATH) {
 export function updateIssueProfile({
   root,
   update,
+  fallbackProfile,
   path = ISSUE_CONFIG_PATH,
 }: {
   root: string
   update: (profile: IssueProfile) => IssueProfile
+  fallbackProfile?: IssueProfile
   path?: string
 }) {
   const loaded = loadIssueConfig(path)
   if (loaded.error) throw new Error(loaded.error)
   const profileRoot = resolveIssueProfileRoot(root)
   loaded.config.profiles[profileRoot] = update(
-    structuredClone(issueProfileForRoot(loaded.config, profileRoot)),
+    structuredClone(fallbackProfile ?? issueProfileForRoot(loaded.config, profileRoot)),
   )
   return saveIssueConfig(loaded.config, path)
 }

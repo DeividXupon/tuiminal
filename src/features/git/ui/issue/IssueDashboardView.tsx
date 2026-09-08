@@ -33,6 +33,7 @@ type IssuePanelsProps = {
   onCopyNumber: () => void
   onOpenActions: () => void
   onLoadMoreDetails: () => void
+  loadingMore: boolean
 }
 
 function IssuePanels(props: IssuePanelsProps) {
@@ -64,6 +65,7 @@ function IssuePanels(props: IssuePanelsProps) {
             focused={props.focus === "list"}
             width={props.listWidth}
             onSelect={props.onSelectRow}
+            loadingMore={props.loadingMore}
             {...(props.presentation.section.columns
               ? { columns: props.presentation.section.columns }
               : {})}
@@ -121,6 +123,7 @@ export function IssueDashboardView({
   previewVisible,
   notice,
   loadingMore,
+  refreshing,
   onSelectRow,
   onPreviewTab,
   onToggleDescription,
@@ -130,8 +133,6 @@ export function IssueDashboardView({
   onOpenActions,
   onLoadMoreDetails,
   onSelectSection,
-  onCreate,
-  onManage,
   onEditQuery,
   onRetry,
   onLoadMore,
@@ -142,10 +143,8 @@ export function IssueDashboardView({
   previewPosition: IssuePreviewConfig["position"]
   previewVisible: boolean
   notice: string
-  loadingMore: boolean
+  refreshing: boolean
   onSelectSection: (index: number) => void
-  onCreate: (() => void) | null
-  onManage: (() => void) | null
   onEditQuery: () => void
   onRetry: () => void
   onLoadMore: () => void
@@ -175,7 +174,7 @@ export function IssueDashboardView({
       >
         <text content={translateUi(presentation.title)} style={{ fg: COLORS.git }} />
         <text
-          content={translateUi(presentation.meta)}
+          content={`${translateUi(presentation.meta)}${refreshing ? ` · ${translateUi("ATUALIZANDO TODAS AS SEÇÕES…")}` : ""}`}
           style={{ fg: dashboard.status === "demo" ? COLORS.warning : COLORS.muted }}
         />
       </box>
@@ -198,8 +197,6 @@ export function IssueDashboardView({
         activeIndex={presentation.sections.indexOf(presentation.section)}
         counts={presentation.counts}
         onSelect={onSelectSection}
-        {...(onCreate ? { onCreate } : {})}
-        {...(onManage ? { onManage } : {})}
       />
       <box
         style={{
@@ -231,6 +228,7 @@ export function IssueDashboardView({
           previewScrollOffset={previewScrollOffset}
           descriptionExpanded={descriptionExpanded}
           loadingMoreDetails={loadingMoreDetails}
+          loadingMore={loadingMore}
           onSelectRow={onSelectRow}
           onPreviewTab={onPreviewTab}
           onToggleDescription={onToggleDescription}

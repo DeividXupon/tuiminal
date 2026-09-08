@@ -187,11 +187,15 @@ export function parseIssueConfig(value: unknown): IssueConfig {
   }
 }
 
-export function issueProfileForRoot(config: IssueConfig, root: string): IssueProfile {
+export function issueProfileForRoot(
+  config: IssueConfig,
+  root: string,
+  fallback?: { host: string; repository: string } | null,
+): IssueProfile {
   return (
     config.profiles[root] ?? {
-      host: config.defaults.host,
-      repositories: [],
+      host: fallback?.host ?? config.defaults.host,
+      repositories: fallback ? [fallback.repository] : [],
       sections: DEFAULT_ISSUE_SECTIONS.map((section) => ({ ...section })),
       previewPosition: config.defaults.preview.position,
     }

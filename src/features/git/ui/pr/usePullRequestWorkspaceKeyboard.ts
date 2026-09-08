@@ -40,7 +40,6 @@ export function usePullRequestWorkspaceKeyboard({
   blocked,
   focus,
   hasSelection,
-  canConfigure,
   canLoadMore,
   canLoadPreview,
   previewTab,
@@ -54,7 +53,6 @@ export function usePullRequestWorkspaceKeyboard({
   blocked: boolean
   focus: PullRequestFocus
   hasSelection: boolean
-  canConfigure: boolean
   canLoadMore: boolean
   canLoadPreview: boolean
   previewTab: PullRequestPreviewTab
@@ -85,7 +83,6 @@ export function usePullRequestWorkspaceKeyboard({
       shift: key.shift,
       focus,
       hasSelection,
-      canConfigure,
       canLoadMore,
       canLoadPreview,
       ctrl: key.ctrl,

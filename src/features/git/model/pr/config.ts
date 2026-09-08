@@ -199,11 +199,15 @@ export function parsePullRequestConfig(value: unknown): PullRequestConfig {
   }
 }
 
-export function pullRequestProfileForRoot(config: PullRequestConfig, root: string) {
+export function pullRequestProfileForRoot(
+  config: PullRequestConfig,
+  root: string,
+  fallback?: { host: string; repository: string } | null,
+) {
   return (
     config.profiles[root] ?? {
-      host: config.defaults.host,
-      repositories: [],
+      host: fallback?.host ?? config.defaults.host,
+      repositories: fallback ? [fallback.repository] : [],
       sections: DEFAULT_PULL_REQUEST_SECTIONS.map((section) => ({ ...section })),
       previewPosition: config.defaults.preview.position,
     }

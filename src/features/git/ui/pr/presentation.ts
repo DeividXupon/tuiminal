@@ -6,6 +6,7 @@ import {
 } from "../../model/pr/fixtures"
 import { orderPullRequestItems } from "../../model/pr/sections"
 import type { PullRequestSection, PullRequestSummary } from "../../model/pr/types"
+import { repositorySelectionLabel } from "../../model/git-configuration"
 import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 
 export type PullRequestDashboardPresentation = {
@@ -83,7 +84,7 @@ function dashboardScope(dashboard: PullRequestDashboardState) {
     const scope =
       dashboard.scope.mode === "account"
         ? translateUi("TODOS OS PROJETOS DA CONTA")
-        : `${dashboard.profile.repositories.length} ${translateUi("REPOSITÓRIOS")}`
+        : repositorySelectionLabel(dashboard.profile.repositories, translateUi("REPOSITÓRIOS"))
     const scopeState = dashboard.scope.partial ? ` · ${translateUi("ESCOPO PARCIAL")}` : ""
     return `${scope}${scopeState} · ${dashboard.loadedCount}/${total} PRs · ${translateUi(state)}`
   }
