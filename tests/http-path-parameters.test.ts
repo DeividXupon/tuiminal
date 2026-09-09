@@ -15,6 +15,34 @@ function preparedUrl(url: string, path: HttpKeyValue[], variables?: HttpVariable
 }
 
 describe("HTTP path parameters", () => {
+  test.each([
+    "//{host}.example.test/:id",
+    "https:///{host}.example.test/:id",
+    "https://\n/{host}.example.test/:id",
+  ])("preserves authority in URLs normalized from %s", (url) => {
+    const expected = new URL(url.startsWith("//") ? `http://${url}` : url)
+    expected.pathname = "/42"
+    expect(preparedUrl(url, [parameter("host", "changed"), parameter("id", "42")])).toBe(
+      expected.href,
+    )
+  })
+
+  test("normalizes path separators without rewriting query or fragment backslashes", () => {
+    expect(
+      preparedUrl("https://example.test\\:id?next=\\:id#\\{id}", [parameter("id", "42")]),
+    ).toBe("https://example.test/42?next=\\:id#\\{id}")
+  })
+
+  test.each(["https://example.test\\users\\:id", "example.test\\users\\:id"])(
+    "resolves tokens after HTTP path separators are normalized in %s",
+    (url) => {
+      const expected = url.startsWith("https:")
+        ? "https://example.test/users/42"
+        : "http://example.test/users/42"
+      expect(preparedUrl(url, [parameter("id", "42")])).toBe(expected)
+    },
+  )
+
   test.each([false, true])(
     "matches overlapping names independently of row order (%s)",
     (reverse) => {

@@ -1,7 +1,8 @@
 import type { HttpKeyValue, HttpVariableContext } from "./types"
 import { resolveHttpTemplate } from "./variables"
+import { httpUrlWithProtocol } from "./url-input"
 
-const URL_PATH_PATTERN = /^((?:[a-z][a-z\d+.-]*:\/\/)?[^/?#]*)([^?#]*)/i
+const URL_PATH_PATTERN = /^([a-z][a-z\d+.-]*:[\\/]+[^\\/?#]*)([^?#]*)/i
 const PATH_PARAMETER_PATTERN = /(^|\/):([^/{}]+)(?=\/|$)|(?<!\{)\{([^{}]+)\}(?!\})/g
 
 function replacePathTokens(
@@ -32,10 +33,12 @@ export function resolveHttpPathParameters(
     }
   }
   const resolved = resolveHttpTemplate(source, variables).trim()
+  if (!resolved) return resolved
   // Resolve raw path tokens before URL encodes braces, preserving every other URL component.
-  return resolved.replace(
+  // HTTP URL parsing treats backslashes as path separators and consumes all leading slashes.
+  return httpUrlWithProtocol(resolved).replace(
     URL_PATH_PATTERN,
     (_match, authority: string, pathname: string) =>
-      `${authority}${replacePathTokens(pathname, parameters, variables)}`,
+      `${authority}${replacePathTokens(pathname.replaceAll("\\", "/"), parameters, variables)}`,
   )
 }

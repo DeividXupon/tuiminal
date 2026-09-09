@@ -12,6 +12,7 @@ import { resolveHttpTemplate } from "../model/variables"
 import { validateHttpRequestAutomation } from "../model/automation"
 import { isValidHttpMethod } from "../model/request-validation"
 import { resolveHttpPathParameters } from "../model/path-parameters"
+import { httpUrlWithProtocol } from "../model/url-input"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 
@@ -31,7 +32,7 @@ export function normalizeHttpUrl(source: string) {
     throw new HttpRequestValidationError("Informe uma URL para enviar a requisição.", "url")
   }
 
-  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`
+  const withProtocol = httpUrlWithProtocol(value)
   let url: URL
   try {
     url = new URL(withProtocol)
