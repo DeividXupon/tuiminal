@@ -16,6 +16,7 @@
     "check:architecture": "bun scripts/check-architecture.ts",
     "check:maintainability": "bun scripts/check-maintainability.ts",
     "build:release": "bun scripts/build-release.ts",
+    "docs:demos": "bun scripts/generate-readme-demos.tsx",
     "format": "biome format --write src bin tests scripts package.json tsconfig.json biome.json .dependency-cruiser.cjs",
     "format:check": "biome format src bin tests scripts package.json tsconfig.json biome.json .dependency-cruiser.cjs",
     "dev": "bun --watch src/index.tsx",

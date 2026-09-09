@@ -25,6 +25,7 @@
     "bin/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx"
   ]
 }

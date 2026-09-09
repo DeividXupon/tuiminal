@@ -16,6 +16,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Update this file whenever a task establishes a reusable UI rule, architectural decision, important workflow, or non-obvious implementation constraint.
 - Record information that will still matter in future tasks. Do not add temporary progress, debugging logs, secrets, credentials, or machine-specific transient paths.
 - When adding or substantially changing a feature, update both this file and `README.md` if the user-facing behavior or documented shortcuts changed.
+- The public README keeps one animated demo for each top-level tool under `docs/media/`. Regenerate them with `bun run docs:demos` after material layout or workflow changes. The generator must use simulated data or disposable local fixtures, never user credentials, repositories, databases, network services, or persistent configuration.
 - Keep existing user work intact. The worktree may contain intentional uncommitted changes from ongoing development.
 - Do not commit, push, publish, change repository visibility, or kill user processes unless the user explicitly requests that action.
 
