@@ -91,7 +91,7 @@ No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combina�
 ## Banco
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DeividXupon/tuiminal/main/docs/media/database.gif" alt="Demonstração da tab Banco do Tuiminal" width="100%">
+  <img src="./docs/media/database.gif" alt="Demonstração da tab Banco do Tuiminal" width="100%">
 </p>
 
 Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL. Nenhuma conexão é criada automaticamente: a primeira abertura leva ao gerenciador de conexões.
@@ -146,7 +146,7 @@ Configurações, termos sensíveis e até 100 leituras recentes ficam em `~/.con
 ## Git
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DeividXupon/tuiminal/main/docs/media/git.gif" alt="Demonstração da tab Git do Tuiminal" width="100%">
+  <img src="./docs/media/git.gif" alt="Demonstração da tab Git do Tuiminal" width="100%">
 </p>
 
 Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-dash. Diffs funciona offline; PR, Issues e Inbox são carregados separadamente somente quando você os abre.
@@ -209,7 +209,7 @@ O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separa
 ## Runner
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DeividXupon/tuiminal/main/docs/media/runner.gif" alt="Demonstração da tab Runner do Tuiminal" width="100%">
+  <img src="./docs/media/runner.gif" alt="Demonstração da tab Runner do Tuiminal" width="100%">
 </p>
 
 O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia processos de curta ou longa duração e mantém logs, entrada e histórico dentro do mesmo workspace.
@@ -275,7 +275,7 @@ Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. L
 ## HTTP
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DeividXupon/tuiminal/main/docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
+  <img src="./docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
 </p>
 
 Um cliente de API compacto com documentos, coleção, builder, resposta e automação. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
@@ -337,7 +337,7 @@ Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada 
 ## Free Terminal
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DeividXupon/tuiminal/main/docs/media/terminal.gif" alt="Demonstração da tab Free Terminal do Tuiminal" width="100%">
+  <img src="./docs/media/terminal.gif" alt="Demonstração da tab Free Terminal do Tuiminal" width="100%">
 </p>
 
 Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada painel usa um PTY real e pode executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
