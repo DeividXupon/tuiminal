@@ -235,6 +235,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
 
   if (file.staged) {
     const stagedResult = await runGitCommand(root, [
+      "--literal-pathspecs",
       "diff",
       "--cached",
       "--no-ext-diff",
@@ -263,6 +264,7 @@ export async function loadGitDiff(root: string, file: GitFile) {
     }
   } else if (file.unstaged) {
     const unstagedResult = await runGitCommand(root, [
+      "--literal-pathspecs",
       "diff",
       "--no-ext-diff",
       "--no-color",
@@ -301,19 +303,31 @@ export async function loadCommitDiff(root: string, commitHash: string) {
 
 export async function toggleGitFile(root: string, file: GitFile) {
   if (file.unstaged) {
-    const addResult = await runGitCommand(root, ["add", "--", file.path])
+    const addResult = await runGitCommand(root, ["--literal-pathspecs", "add", "--", file.path])
     if (addResult.exitCode !== 0) {
       throw commandError(addResult, `Não foi possível adicionar ${file.path}.`)
     }
     return "Alterações adicionadas ao stage."
   }
 
-  const restoreResult = await runGitCommand(root, ["restore", "--staged", "--", file.path])
+  const restoreResult = await runGitCommand(root, [
+    "--literal-pathspecs",
+    "restore",
+    "--staged",
+    "--",
+    file.path,
+  ])
   if (restoreResult.exitCode === 0) {
     return "Alterações removidas do stage."
   }
 
-  const fallbackResult = await runGitCommand(root, ["rm", "--cached", "--", file.path])
+  const fallbackResult = await runGitCommand(root, [
+    "--literal-pathspecs",
+    "rm",
+    "--cached",
+    "--",
+    file.path,
+  ])
   if (fallbackResult.exitCode !== 0) {
     throw commandError(restoreResult, `Não foi possível remover ${file.path} do stage.`)
   }
