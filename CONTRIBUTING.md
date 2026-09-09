@@ -76,3 +76,8 @@ pequenas e testáveis mesmo quando uma redução em outra função cria margem n
 Prefira reduzir as exceções. Alterar o baseline exige justificativa e revisão.
 `bun scripts/check-maintainability.ts --write-baseline` é uma operação **explícita de
 manutenção**, nunca uma etapa automática do check ou do CI.
+
+## Licença das contribuições
+
+Ao enviar uma contribuição ao Tuiminal, você concorda que ela seja licenciada sob
+a [Apache License 2.0](./LICENSE), salvo quando houver um acordo escrito diferente.

@@ -813,6 +813,14 @@ mouse.
 As sessões são iniciadas no mesmo projeto aberto pelo Tuiminal. Ao fechar o
 aplicativo, todos os processos criados pelo Free Terminal são encerrados.
 
+## Licença
+
+Copyright 2026 DeividXupon.
+
+O Tuiminal é distribuído sob a [Apache License 2.0](./LICENSE). Ela permite usar,
+modificar e distribuir o projeto, inclusive comercialmente, desde que seus termos
+e avisos sejam preservados.
+
 ## Validação
 
 `bun run check` executa typecheck, formatação, lint, verificações de arquitetura e

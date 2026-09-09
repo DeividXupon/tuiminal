@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import {
   mainPackageJson,
@@ -13,6 +13,7 @@ const root = resolve(import.meta.dir, "..")
 const packageMetadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
   version: string
 }
+const licensePath = join(root, "LICENSE")
 const requestedTarget = process.argv[2] ?? "all"
 const selectedTarget = releaseTarget(requestedTarget)
 const targets: readonly ReleaseTarget[] =
@@ -67,6 +68,7 @@ for (const target of targets) {
     target,
   )
   writeJson(join(packageRoot, "package.json"), platformPackageJson(target, packageMetadata.version))
+  copyFileSync(licensePath, join(packageRoot, "LICENSE"))
   writeFileSync(
     join(packageRoot, "README.md"),
     "# " + target.npmPackage + "\n\nPlatform executable used by the `tuiminal` npm package.\n",
@@ -78,6 +80,7 @@ const mainBinRoot = join(mainRoot, "bin")
 rmSync(mainRoot, { recursive: true, force: true })
 mkdirSync(mainBinRoot, { recursive: true })
 writeJson(join(mainRoot, "package.json"), mainPackageJson(packageMetadata.version))
+copyFileSync(licensePath, join(mainRoot, "LICENSE"))
 writeFileSync(join(mainBinRoot, "tuiminal.js"), npmLauncherSource())
 chmodSync(join(mainBinRoot, "tuiminal.js"), 0o755)
 writeFileSync(
