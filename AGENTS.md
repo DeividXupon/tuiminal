@@ -186,7 +186,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Keep narrow HTTP panes clipped to their bounds. At low heights, compress the
   local `Mais` tab strip to one row, keep Options scrollable, and put its execution
   controls before metadata so keyboard and mouse actions remain reachable.
-- Keep viewport culling disabled for the bounded HTTP Options list. Culling can erase its visible controls after option updates on Linux, including the cookie and TLS state indicators; retain the scrollbox and input instances.
+- HTTP More needs its compact padding and one-row tabs whenever the request pane is shorter than 14 rows, even while the pane title/footer remain visible. In a 10-row framed pane, normal More chrome leaves only a one-row viewport and places cookie/TLS controls outside it. Verify control bounds against the actual scroll viewport across resize and option updates; rendering outside a clipped viewport must not be treated as visibility.
 - Keep large HTTP responses bounded twice: capture at 1.5 MB, then render at most
   50,000 characters in the live pane as one native text document. Show
   `TRUNCADO` in fixed response chrome; saving preserves all captured bytes and a

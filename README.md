@@ -297,7 +297,7 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit.
 - **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema.
-- **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
+- **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. Em painéis baixos, Mais compacta seus espaços e tabs para manter os controles visíveis. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 
 ### Atalhos essenciais do HTTP
 
