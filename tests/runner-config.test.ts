@@ -91,6 +91,40 @@ procs:
     ])
   })
 
+  test("never starts imported mprocs commands automatically, even with explicit autostart", () => {
+    const parsed = parseMprocsConfig(
+      `
+procs:
+  web:
+    shell: npm run dev
+    autostart: true
+    autorestart: true
+  worker:
+    cmd: [bun, worker.ts]
+    autostart: false
+`,
+      "/tmp/project",
+    )
+    expect(parsed).toMatchObject([
+      { label: "web", command: "npm run dev", autostart: false, restartPolicy: "on-failure" },
+      { label: "worker", command: "bun worker.ts", autostart: false },
+    ])
+  })
+
+  test("only literal true in Tuiminal configuration opts into autostart", () => {
+    const parsed = parseTuiminalRunnerConfig(
+      `
+commands:
+  enabled: { command: echo enabled, autostart: true }
+  disabled: { command: echo disabled, autostart: false }
+  quoted: { command: echo quoted, autostart: "true" }
+  default: echo default
+`,
+      "/tmp/project",
+    )
+    expect(parsed.commands.map((command) => command.autostart)).toEqual([true, false, false, false])
+  })
+
   test("layers environment files and explicit variables", () => {
     const root = mkdtempSync(join(tmpdir(), "tuiminal-runner-env-"))
     const profileFile = join(root, ".env.profile")
