@@ -335,6 +335,8 @@ tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Segredos são removidos de preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
+Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
+
 <a id="free-terminal"></a>
 
 ## Free Terminal

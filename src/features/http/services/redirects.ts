@@ -31,10 +31,11 @@ function redirectHeaders(
   headers: Array<[string, string]>,
   crossOrigin: boolean,
   dropsBody: boolean,
+  sensitiveHeaderNames: ReadonlySet<string>,
 ) {
   return headers.filter(([name]) => {
     const normalized = name.toLowerCase()
-    if (crossOrigin && CROSS_ORIGIN_HEADERS.has(normalized)) return false
+    if (crossOrigin && sensitiveHeaderNames.has(normalized)) return false
     if (dropsBody && (normalized === "content-type" || normalized === "content-length"))
       return false
     return true
@@ -90,6 +91,10 @@ export async function fetchWithHttpRedirects(
   let body = request.body
   const visited = new Set<string>()
   const redirects: HttpRedirectHop[] = []
+  const sensitiveHeaderNames = new Set([
+    ...CROSS_ORIGIN_HEADERS,
+    ...(request.sensitiveHeaderNames ?? []).map((name) => name.toLowerCase()),
+  ])
 
   while (true) {
     const insecureTls = validateRedirectHop(request, url, visited, authorizeInsecureTls)
@@ -117,7 +122,7 @@ export async function fetchWithHttpRedirects(
     await response.body?.cancel()
     const nextMethod = redirectedMethod(response.status, method)
     const dropsBody = nextMethod !== method
-    headers = redirectHeaders(headers, crossOrigin, dropsBody)
+    headers = redirectHeaders(headers, crossOrigin, dropsBody, sensitiveHeaderNames)
     method = nextMethod
     if (dropsBody) body = undefined
     url = nextUrl
