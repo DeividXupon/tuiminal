@@ -89,7 +89,7 @@ export function mainPackageJson(version: string) {
     description: "An integrated terminal workspace for databases, Git, processes, HTTP, and PTYs",
     license: "UNLICENSED",
     type: "module",
-    bin: { tuiminal: "./bin/tuiminal.js" },
+    bin: { tuiminal: "bin/tuiminal.js" },
     files: ["bin"],
     engines: { node: ">=18" },
     optionalDependencies: Object.fromEntries(

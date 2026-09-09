@@ -25,7 +25,7 @@ describe("standalone npm release", () => {
   test("publishes one optional package for every standalone executable", () => {
     const version = "0.2.0-pre-alpha.0"
     const manifest = mainPackageJson(version)
-    expect(manifest.bin).toEqual({ tuiminal: "./bin/tuiminal.js" })
+    expect(manifest.bin).toEqual({ tuiminal: "bin/tuiminal.js" })
     expect(manifest.engines).toEqual({ node: ">=18" })
     expect(Object.keys(manifest.optionalDependencies)).toHaveLength(RELEASE_TARGETS.length)
     expect(Object.values(manifest.optionalDependencies).every((value) => value === version)).toBe(
