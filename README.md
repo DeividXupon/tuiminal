@@ -103,6 +103,7 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 - **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
 - **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
+- **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
 - **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado.
 - **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
 - **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
