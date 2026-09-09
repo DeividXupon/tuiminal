@@ -178,6 +178,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Keep narrow HTTP panes clipped to their bounds. At low heights, compress the
   local `Mais` tab strip to one row, keep Options scrollable, and put its execution
   controls before metadata so keyboard and mouse actions remain reachable.
+- Keep viewport culling disabled for the bounded HTTP Options list. Culling can erase its visible controls after option updates on Linux, including the cookie and TLS state indicators; retain the scrollbox and input instances.
 - Keep large HTTP responses bounded twice: capture at 1.5 MB, then render at most
   50,000 characters in the live pane as one native text document. Show
   `TRUNCADO` in fixed response chrome; saving preserves all captured bytes and a
