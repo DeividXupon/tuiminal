@@ -4,28 +4,30 @@ import type { RunnerHealthCheck } from "../storage/runner-config"
 export function sleep(milliseconds: number, signal?: AbortSignal) {
   return new Promise<void>((resolveSleep) => {
     if (signal?.aborted) return resolveSleep()
-    const timeout = setTimeout(resolveSleep, milliseconds)
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timeout)
-        resolveSleep()
-      },
-      { once: true },
-    )
+    const finish = () => {
+      clearTimeout(timeout)
+      signal?.removeEventListener("abort", finish)
+      resolveSleep()
+    }
+    const timeout = setTimeout(finish, milliseconds)
+    signal?.addEventListener("abort", finish, { once: true })
   })
 }
 
-export async function isRunnerPortOpen(host: string, port: number) {
+export async function isRunnerPortOpen(host: string, port: number, signal?: AbortSignal) {
   return new Promise<boolean>((resolveCheck) => {
+    if (signal?.aborted) return resolveCheck(false)
     const socket = connect({ host, port })
     let resolved = false
     const finish = (open: boolean) => {
       if (resolved) return
       resolved = true
+      signal?.removeEventListener("abort", abort)
       socket.destroy()
       resolveCheck(open)
     }
+    const abort = () => finish(false)
+    signal?.addEventListener("abort", abort, { once: true })
     socket.setTimeout(500)
     socket.once("connect", () => finish(true))
     socket.once("timeout", () => finish(false))
@@ -33,23 +35,46 @@ export async function isRunnerPortOpen(host: string, port: number) {
   })
 }
 
+async function isRunnerHttpHealthy(url: string, signal: AbortSignal) {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  const timeout = setTimeout(abort, 2_000)
+  signal.addEventListener("abort", abort, { once: true })
+  if (signal.aborted) abort()
+  try {
+    const response = await fetch(url, { method: "GET", signal: controller.signal })
+    await response.body?.cancel()
+    return response.ok && !controller.signal.aborted
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+    signal.removeEventListener("abort", abort)
+    controller.abort()
+  }
+}
+
 export async function waitForRunnerHealthCheck(
   check: Exclude<RunnerHealthCheck, { type: "log" }>,
   signal?: AbortSignal,
 ) {
-  const startedAt = Date.now()
-  while (!signal?.aborted && Date.now() - startedAt < check.timeoutMs) {
-    const healthy =
-      check.type === "port"
-        ? await isRunnerPortOpen(check.host, check.port)
-        : await fetch(check.url, {
-            method: "GET",
-            signal: AbortSignal.timeout(Math.min(2_000, check.timeoutMs)),
-          })
-            .then((response) => response.ok)
-            .catch(() => false)
-    if (healthy) return true
-    await sleep(300, signal)
+  if (signal?.aborted || check.timeoutMs <= 0) return false
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  const timeout = setTimeout(abort, check.timeoutMs)
+  signal?.addEventListener("abort", abort, { once: true })
+  try {
+    while (!controller.signal.aborted) {
+      const healthy =
+        check.type === "port"
+          ? await isRunnerPortOpen(check.host, check.port, controller.signal)
+          : await isRunnerHttpHealthy(check.url, controller.signal)
+      if (healthy) return !controller.signal.aborted
+      await sleep(300, controller.signal)
+    }
+    return false
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener("abort", abort)
   }
-  return false
 }

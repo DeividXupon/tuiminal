@@ -227,6 +227,8 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 
 Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode iniciar um processo automaticamente.
 
+Health checks HTTP e de porta respeitam um prazo total, incluindo tentativas e intervalos. Parar o processo cancela também a verificação em andamento.
+
 ```yaml
 version: 1
 
