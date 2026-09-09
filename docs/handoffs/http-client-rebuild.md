@@ -157,6 +157,9 @@ quando houver a evidência e os critérios de segurança definidos no plano.
   transporte, não a um componente React.
 - Segredos não entram em arquivo público, preview aberto, histórico, logs,
   conflito, export ou mensagem de erro. Arquivos privados usam `0600`.
+- Headers de API keys personalizadas, campos sensíveis e valores privados
+  resolvidos preservam sua classificação no request preparado. Após um redirect
+  mudar a origem, eles não são enviados em nenhum hop restante desse fluxo.
 - Um bloco `.http` parcialmente compreendido nunca é executado nem salvo como se
   fosse seguro. Preservar texto é preferível a uma conversão destrutiva.
 - Requests usam `explícito > workspace > base`; valores de ambiente continuam

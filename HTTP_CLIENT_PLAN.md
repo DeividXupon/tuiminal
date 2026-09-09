@@ -984,7 +984,9 @@ Requisitos obrigatórios antes de persistência ou import:
 - preservar dados brutos somente em memória/arquivo protegido e renderizar uma view
   segura;
 - remover `Authorization`, `Proxy-Authorization`, `Cookie` e headers configuráveis ao
-  redirecionar para outra origem;
+  redirecionar para outra origem, incluindo nomes personalizados de API key,
+  campos marcados como sensíveis e headers com valores privados resolvidos;
+  manter a remoção nos próximos hops mesmo se o fluxo voltar à origem inicial;
 - limitar quantidade de redirects e detectar loops;
 - aplicar limite depois de descompressão e ter proteção contra payload comprimido
   desproporcional;

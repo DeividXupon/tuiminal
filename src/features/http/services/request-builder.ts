@@ -11,6 +11,7 @@ import type {
 import { resolveHttpTemplate } from "../model/variables"
 import { validateHttpRequestAutomation } from "../model/automation"
 import { isValidHttpMethod } from "../model/request-validation"
+import { httpSensitiveHeaderNames } from "../model/secrets"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 
@@ -311,6 +312,7 @@ export function prepareHttpRequest(
     method,
     url: url.toString(),
     headers,
+    sensitiveHeaderNames: httpSensitiveHeaderNames(request, headers, variables),
     ...preparedBody,
     timeoutMs: request.options.timeoutMs,
     followRedirects: request.options.followRedirects,
