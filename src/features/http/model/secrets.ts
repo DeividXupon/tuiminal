@@ -1,6 +1,6 @@
 import { httpHeaderSensitivity } from "./key-value"
 import type { HttpRequestDefinition, HttpVariableContext } from "./types"
-import { resolveHttpTemplate } from "./variables"
+import { httpTemplateReferencesSecret, resolveHttpTemplate } from "./variables"
 
 function resolved(value: string, variables: HttpVariableContext) {
   try {
@@ -48,18 +48,18 @@ export function httpSensitiveHeaderNames(
 ) {
   const names = new Set(
     request.headers
-      .filter((entry) => entry.enabled && entry.sensitivity !== "normal")
+      .filter(
+        (entry) =>
+          entry.enabled &&
+          (entry.sensitivity !== "normal" || httpTemplateReferencesSecret(entry.value, variables)),
+      )
       .map((entry) => entry.name.trim().toLowerCase()),
   )
   if (request.auth.kind === "api-key" && request.auth.placement === "header") {
     names.add(request.auth.name.toLowerCase())
   }
-  const secretValues = httpRequestSecretValues(request, variables)
-  for (const [name, value] of headers) {
-    if (
-      httpHeaderSensitivity(name) !== "normal" ||
-      secretValues.some((secret) => value.includes(secret))
-    ) {
+  for (const [name] of headers) {
+    if (httpHeaderSensitivity(name) !== "normal") {
       names.add(name.toLowerCase())
     }
   }

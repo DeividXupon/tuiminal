@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { createHttpVariableContext } from "../src/features/http/model/variables"
+import {
+  createHttpVariableContext,
+  httpTemplateReferencesSecret,
+} from "../src/features/http/model/variables"
 import { createScratchRequest } from "../src/features/http/model/workspace"
 import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
 import { fetchWithHttpRedirects } from "../src/features/http/services/redirects"
@@ -74,6 +77,72 @@ const credentialHeaders = {
 }
 
 describe("HTTP redirect credential isolation", () => {
+  test("tracks nested private references even when values are empty and stops on cycles", () => {
+    const variables = createHttpVariableContext([
+      { origin: "private", secret: true, values: { credential: "" } },
+      {
+        origin: "public",
+        values: {
+          outer: "Bearer {{inner}}",
+          inner: "{{credential}}",
+          cycleA: "{{cycleB}}",
+          cycleB: "{{cycleA}}",
+        },
+      },
+    ])
+    expect(httpTemplateReferencesSecret("{{outer}}", variables)).toBe(true)
+    expect(httpTemplateReferencesSecret("{{cycleA}} {{outer}}", variables)).toBe(true)
+    expect(httpTemplateReferencesSecret("{{cycleA}}", variables)).toBe(false)
+    expect(httpTemplateReferencesSecret("public value {{missing}}", variables)).toBe(false)
+    expect(httpTemplateReferencesSecret("{{credential}}")).toBe(false)
+  })
+
+  test("does not strip public headers because unused private values happen to overlap", async () => {
+    const request = createScratchRequest("public-headers", "https://one.test/start")
+    request.method = "POST"
+    request.body = { ...request.body, kind: "json", text: "{}" }
+    request.headers = [
+      {
+        id: "version",
+        enabled: true,
+        name: "X-Api-Version",
+        value: "v1",
+        sensitivity: "normal",
+      },
+      {
+        id: "disabled-secret",
+        enabled: false,
+        name: "X-Disabled",
+        value: "json",
+        sensitivity: "literal-secret",
+      },
+    ]
+    const variables = createHttpVariableContext([
+      {
+        origin: "private",
+        secret: true,
+        values: {
+          unusedPin: "1",
+          unusedName: "application",
+        },
+      },
+    ])
+    const prepared = prepareHttpRequest(request, "public-headers", 0, variables)
+    const seen: Array<Record<string, string>> = []
+    const fetcher = (async (_url: string | URL | Request, init?: RequestInit) => {
+      seen.push(Object.fromEntries(new Headers(init?.headers)))
+      return seen.length === 1
+        ? new Response(null, { status: 307, headers: { location: "https://two.test/next" } })
+        : new Response("ok")
+    }) as typeof fetch
+    await fetchWithHttpRedirects(prepared, new AbortController().signal, fetcher)
+    expect(seen).toEqual([
+      { "x-api-version": "v1", "content-type": "application/json" },
+      { "x-api-version": "v1", "content-type": "application/json" },
+    ])
+    expect(prepared.sensitiveHeaderNames).toEqual([])
+  })
+
   test("preserves credentials on the original origin and removes them before another port", async () => {
     const seen: Array<Record<string, string>> = []
     const target = Bun.serve({
