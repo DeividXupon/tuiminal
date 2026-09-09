@@ -764,7 +764,7 @@ export function DatabaseQueryWorkspace({
         })
         const nextResultTable = nextResult.mutating
           ? null
-          : databaseEditableQueryTable(plan.sql, tables)
+          : databaseEditableQueryTable(plan.sql, tables, connection.driver)
         lastExecutedSqlRef.current = plan.sql
         setExecutedStatementPosition(
           statement ? { index: statement.index, total: statement.total } : null,
@@ -809,6 +809,7 @@ export function DatabaseQueryWorkspace({
     },
     [
       busy,
+      connection.driver,
       connectionId,
       onDatabaseChanged,
       querySensitiveVisibility,

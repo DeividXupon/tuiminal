@@ -116,6 +116,10 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
 
+Resultados SQL só permitem edição quando selecionam diretamente colunas ou `*` de uma única tabela. Expressões, colunas renomeadas, agrupamentos e `DISTINCT` permanecem somente leitura; editar ou excluir também exige todas as colunas da chave primária no resultado.
+
+No MySQL, campos não qualificados entre aspas duplas ficam somente leitura, pois podem ser textos literais; prefira identificadores entre crases. Colunas entre aspas duplas continuam editáveis no PostgreSQL e SQLite.
+
 Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
 
 ### Atalhos essenciais do Banco
