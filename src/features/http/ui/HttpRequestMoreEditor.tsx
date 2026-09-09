@@ -79,7 +79,7 @@ function RequestOptions({
   const methodInputRef = useRef<InputRenderable | null>(null)
   const proxyInputRef = useRef<InputRenderable | null>(null)
   return (
-    <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: dense ? 0 : 1 }}>
+    <scrollbox scrollY viewportCulling={false} style={{ flexGrow: 1, paddingTop: dense ? 0 : 1 }}>
       <text content={translateUi("OPÇÕES DA REQUISIÇÃO")} style={{ fg: COLORS.text }} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton
