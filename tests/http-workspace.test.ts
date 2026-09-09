@@ -263,7 +263,7 @@ describe("HTTP workspace state", () => {
       documentId: "two",
       pane: "response",
     })
-    expect(state.documents.find((document) => document.request.id === "one")?.splitRatio).toBe(0.4)
+    expect(state.documents.find((document) => document.request.id === "one")?.splitRatio).toBe(0.5)
     expect(state.documents.find((document) => document.request.id === "two")).toMatchObject({
       splitRatio: 0.55,
       maximizedPane: "response",
@@ -348,7 +348,7 @@ describe("HTTP workspace state", () => {
       request: saved,
       revision: 1,
       savedRevision: 1,
-      splitRatio: 0.4,
+      splitRatio: 0.5,
     })
   })
 })

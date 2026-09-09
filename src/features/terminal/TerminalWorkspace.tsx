@@ -692,7 +692,9 @@ export function FreeTerminal({ active }: { active: boolean }) {
         case "g":
         case "escape":
           terminalRefs.current.get(activeSessionRef.current ?? "")?.blur()
-          setNotice("Terminal liberado: use [@] [#] [$] [%] [^] para trocar de ferramenta.")
+          setNotice(
+            "Terminal liberado: use [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5] para trocar de ferramenta.",
+          )
           break
       }
       return

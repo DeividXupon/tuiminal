@@ -1,9 +1,42 @@
-import { ShortcutText } from "../../../shared/ui/ShortcutText"
 import type { BoxRenderable, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { RenderableEvents, RGBA } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { COLORS, databaseSelectionColors } from "../../../core/settings/theme"
+import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
+import {
+  DEFAULT_SENSITIVE_VISIBILITY,
+  nextSensitiveVisibility,
+  type SensitiveVisibility,
+  sensitiveDataIsMasked,
+} from "../../../shared/security/sensitive-data"
+import { InlineButton } from "../../../shared/ui/InlineButton"
+import { ShortcutText } from "../../../shared/ui/ShortcutText"
+import { useDatabaseQueryNotifications } from "../hooks/use-database-notifications"
+import { useDatabaseSelectionSweep } from "../hooks/use-database-selection-sweep"
+import { useIdentifiedQueryRows } from "../hooks/use-identified-query-rows"
+import { useQueryResultHorizontalNavigation } from "../hooks/use-query-result-horizontal-navigation"
+import {
+  type DatabaseBatchSelectedRow,
+  databaseBatchRowIdentity,
+  databaseBatchSweepShortcut,
+  toggleDatabaseBatchRow,
+} from "../model/batch"
+import { databaseResultScrollTop } from "../model/layout"
+import {
+  databaseEditableQueryTable,
+  databaseQueryResultColumns,
+  databaseQueryResultRowKey,
+} from "../model/query-edit"
+import { getSqlCompletionContext, sqlAutocompleteTableKey } from "../model/sql-autocomplete"
+import { sqlStatementAtOffset } from "../model/sql-statements"
+import {
+  resizeSqlEditorRatio,
+  type SqlWorkspaceMode,
+  sqlSplitEditorHeight,
+  toggleSqlWorkspaceMode,
+} from "../model/sql-workspace"
 import type {
   DatabaseColumn,
   DatabaseConnectionProfile,
@@ -12,10 +45,38 @@ import type {
   DatabaseTable,
 } from "../model/types"
 import {
+  batchRow,
+  changeTableKey,
+  type DatabaseGridRow,
+  type DatabaseQueryRerunRequest,
+  type DatabaseSqlTab,
+  rowKeyFingerprint,
+  type SqlAutocompleteState,
+  type StagedDatabaseChange,
+  stageBatchDeletes,
+  stageBatchUpdates,
+  tableKey,
+  valuesMatch,
+} from "../model/workspace"
+import {
+  BATCH_SELECTOR_WIDTH,
+  COMPACT_ACTIONS_BREAKPOINT,
+  QUERY_CELL_WIDTH,
+  SQL_SYNTAX_STYLE,
+  SQL_TAB_LIMIT,
+} from "../rendering/constants"
+import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
+import {
+  fitCell,
+  queryPlaceholder,
+  shorten,
+  suggestedQueryName,
+} from "../rendering/workspace-shared"
+import {
+  DatabaseQueryCancelledError,
   databaseConnectionCanWrite,
   databaseDriverLabel,
   databaseSavedQueryIsDirty,
-  DatabaseQueryCancelledError,
   executeDatabaseQuery,
   listDatabaseSavedQueries,
   loadDatabaseTableColumns,
@@ -23,77 +84,13 @@ import {
   removeDatabaseSavedQuery,
   saveDatabaseQuery,
 } from "../services/database"
-import {
-  databaseBatchRowIdentity,
-  toggleDatabaseBatchPage,
-  toggleDatabaseBatchRow,
-  type DatabaseBatchSelectedRow,
-} from "../model/batch"
-import { translateUi, truncateDisplay } from "../../../shared/i18n/index"
-import {
-  databaseHorizontalKeyDirection,
-  databaseResultHorizontalNavigationAction,
-} from "../model/layout"
-import {
-  databaseEditableQueryTable,
-  databaseQueryResultColumns,
-  databaseQueryResultRowKey,
-} from "../model/query-edit"
-import { getSqlCompletionContext, sqlAutocompleteTableKey } from "../model/sql-autocomplete"
-import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
-import { sqlStatementAtOffset } from "../model/sql-statements"
-import {
-  resizeSqlEditorRatio,
-  sqlSplitEditorHeight,
-  toggleSqlWorkspaceMode,
-  type SqlWorkspaceMode,
-} from "../model/sql-workspace"
-import {
-  DEFAULT_SENSITIVE_VISIBILITY,
-  nextSensitiveVisibility,
-  sensitiveDataIsMasked,
-  type SensitiveVisibility,
-} from "../../../shared/security/sensitive-data"
-import { COLORS, databaseSelectionColors } from "../../../core/settings/theme"
-import { DatabaseCellEditor } from "../ui/DatabaseCellEditor"
 import { DatabaseBatchExportModal } from "../ui/DatabaseBatchExportModal"
+import { DatabaseCellEditor } from "../ui/DatabaseCellEditor"
 import {
   DatabaseQueryFavoritesModal,
   type DatabaseQueryFavoritesMode,
 } from "../ui/DatabaseQueryFavoritesModal"
-import { InlineButton } from "../../../shared/ui/InlineButton"
-import { useDatabaseQueryNotifications } from "../hooks/use-database-notifications"
-import { useIdentifiedQueryRows } from "../hooks/use-identified-query-rows"
-
-import {
-  COMPACT_ACTIONS_BREAKPOINT,
-  QUERY_CELL_WIDTH,
-  BATCH_SELECTOR_WIDTH,
-  SQL_TAB_LIMIT,
-  SQL_SYNTAX_STYLE,
-} from "../rendering/constants"
-import {
-  type DatabaseSqlTab,
-  type DatabaseQueryRerunRequest,
-  type StagedDatabaseChange,
-  type DatabaseGridRow,
-  type SqlAutocompleteState,
-  tableKey,
-  changeTableKey,
-  rowKeyFingerprint,
-  valuesMatch,
-  batchRow,
-  stageBatchUpdates,
-  stageBatchDeletes,
-} from "../model/workspace"
-import {
-  fitCell,
-  shorten,
-  queryPlaceholder,
-  suggestedQueryName,
-} from "../rendering/workspace-shared"
 import { RowInspector } from "../ui/RowInspector"
-
 export function DatabaseQueryWorkspace({
   active,
   tabId,
@@ -108,6 +105,7 @@ export function DatabaseQueryWorkspace({
   rerunRequest,
   onRerunRequestHandled,
   onClose,
+  onReturnToCatalog,
   onDatabaseChanged,
   stagedChanges,
   setStagedChanges,
@@ -134,6 +132,7 @@ export function DatabaseQueryWorkspace({
   rerunRequest: DatabaseQueryRerunRequest | null
   onRerunRequestHandled: () => void
   onClose: () => void
+  onReturnToCatalog: () => void
   onDatabaseChanged: () => void
   stagedChanges: StagedDatabaseChange[]
   setStagedChanges: (update: (current: StagedDatabaseChange[]) => StagedDatabaseChange[]) => void
@@ -278,14 +277,10 @@ export function DatabaseQueryWorkspace({
       }))
     return [...persistedRows, ...insertedRows]
   }, [identifiedRows, resultTableChanges, resultTableColumns])
-  const resultBatchPageRows = useMemo(() => queryGridRows.map(batchRow), [queryGridRows])
   const resultBatchRowIds = useMemo(
     () => new Set(resultBatchRows.map((row) => row.id)),
     [resultBatchRows],
   )
-  const allResultPageRowsSelected =
-    resultBatchPageRows.length > 0 &&
-    resultBatchPageRows.every((row) => resultBatchRowIds.has(row.id))
   const selectedResultGridRow = queryGridRows[selectedResultRowIndex] ?? null
   const selectedResultBatchRowId = selectedResultGridRow
     ? databaseBatchRowIdentity(selectedResultGridRow.rowKey, selectedResultGridRow.id)
@@ -564,13 +559,19 @@ export function DatabaseQueryWorkspace({
   }, [resultInspectorColumns.length])
 
   useEffect(() => {
-    if (!result?.columns.length) return
-    resultScrollRef.current?.scrollChildIntoView(
-      queryElementId(`result-row-${selectedResultRowIndex}`),
+    const scroll = resultScrollRef.current
+    if (!result?.columns.length || !scroll) return
+    scroll.scrollTo(
+      databaseResultScrollTop({
+        selectedRowIndex: selectedResultRowIndex,
+        currentScrollTop: scroll.scrollTop,
+        viewportHeight: scroll.viewport.height,
+        rowCount: queryGridRows.length,
+      }),
     )
     resultDeleteSequenceArmedRef.current = false
     setResultDeleteSequenceArmed(false)
-  }, [queryElementId, result?.columns.length, selectedResultRowIndex])
+  }, [queryGridRows.length, result?.columns.length, selectedResultRowIndex])
 
   useEffect(() => {
     if (resultPane !== "inspector") return
@@ -958,14 +959,28 @@ export function DatabaseQueryWorkspace({
     [result?.columns.length, selectResultGridColumn, selectedResultGridColumnIndex],
   )
 
+  const navigateResultHorizontally = useQueryResultHorizontalNavigation({
+    columnCount: result?.columns.length ?? 0,
+    selectedColumnIndex: selectedResultGridColumnIndex,
+    pane: resultPane,
+    inspectorVisible: resultInspectorVisible,
+    moveColumn: moveResultGridColumn,
+    focusPane: focusResultPane,
+    onReturnToCatalog,
+  })
+
   const toggleResultBatchRow = useCallback((gridRow: DatabaseGridRow) => {
     const row = batchRow(gridRow)
     setResultBatchRows((current) => toggleDatabaseBatchRow(current, row))
   }, [])
 
-  const toggleResultBatchPage = useCallback(() => {
-    setResultBatchRows((current) => toggleDatabaseBatchPage(current, resultBatchPageRows))
-  }, [resultBatchPageRows])
+  const selectionSweep = useDatabaseSelectionSweep({
+    rows: queryGridRows,
+    selectedIndexRef: selectedResultRowIndexRef,
+    updateSelectedRows: setResultBatchRows,
+    moveRow: moveResultRow,
+    resetKey: result,
+  })
 
   const stageQueryBatchValue = useCallback(
     (value: unknown) => {
@@ -1498,10 +1513,10 @@ export function DatabaseQueryWorkspace({
       refreshAutocomplete(true)
       return
     }
-    if (!editorFocused && manualAutocompleteKey && result?.columns.length) {
+    if (!editorFocused && databaseBatchSweepShortcut(key) && result?.columns.length) {
       key.preventDefault()
       key.stopPropagation()
-      toggleResultBatchPage()
+      selectionSweep.toggle()
       return
     }
     const completion = autocompleteRef.current
@@ -1549,8 +1564,9 @@ export function DatabaseQueryWorkspace({
     if (key.name === "escape") {
       key.preventDefault()
       key.stopPropagation()
-      if (!editorFocused && resultBatchRows.length) {
+      if (!editorFocused && (resultBatchRows.length || selectionSweep.active)) {
         setResultBatchRows([])
+        selectionSweep.clear()
         setResultNotice("Seleção limpa.")
         return
       }
@@ -1588,21 +1604,9 @@ export function DatabaseQueryWorkspace({
       (key.name === "h" || key.name === "l" || key.name === "left" || key.name === "right") &&
       result?.columns.length
     ) {
-      const direction = databaseHorizontalKeyDirection(key.name)
-      if (!direction) return
-      const navigationAction = databaseResultHorizontalNavigationAction({
-        pane: resultPane,
-        direction,
-        selectedColumnIndex: selectedResultGridColumnIndex,
-        columnCount: result.columns.length,
-        inspectorVisible: resultInspectorVisible,
-      })
-      if (!navigationAction) return
+      if (!navigateResultHorizontally(key.name)) return
       key.preventDefault()
       key.stopPropagation()
-      if (navigationAction === "previous-column") moveResultGridColumn(-1)
-      else if (navigationAction === "next-column") moveResultGridColumn(1)
-      else focusResultPane(navigationAction === "previous-pane" ? "grid" : "inspector")
     } else if (key.name === "l" && !busy) {
       key.preventDefault()
       key.stopPropagation()
@@ -1646,12 +1650,14 @@ export function DatabaseQueryWorkspace({
           resultDeleteSequenceTimeoutRef.current = null
         }, 1_200)
       }
-    } else if ((key.name === "up" || key.name === "down") && result?.columns.length) {
+    } else if (
+      resultPane === "inspector" &&
+      (key.name === "up" || key.name === "down") &&
+      result?.columns.length
+    ) {
       key.preventDefault()
       key.stopPropagation()
-      const delta = key.name === "up" ? -1 : 1
-      if (resultPane === "inspector") moveResultColumn(delta)
-      else moveResultRow(delta)
+      moveResultColumn(key.name === "up" ? -1 : 1)
     }
   })
 
@@ -2111,11 +2117,11 @@ export function DatabaseQueryWorkspace({
                 }}
               />
               <InlineButton
-                label={compactActions ? "[Ctrl+Space] Pg" : "[Ctrl+Space] Selecionar página"}
+                label={compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"}
                 accent={COLORS.database}
-                active={allResultPageRowsSelected}
-                disabled={!resultBatchPageRows.length}
-                onPress={toggleResultBatchPage}
+                active={selectionSweep.active}
+                disabled={!queryGridRows.length}
+                onPress={selectionSweep.toggle}
               />
               {!resultBatchRows.length ? (
                 <InlineButton
@@ -2214,16 +2220,16 @@ export function DatabaseQueryWorkspace({
                 <box style={{ flexGrow: 1 }}>
                   <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
                     <Button
-                      id={queryElementId("select-page")}
-                      onPress={toggleResultBatchPage}
+                      id={queryElementId("selection-sweep")}
+                      onPress={selectionSweep.toggle}
                       height={1}
                       width={BATCH_SELECTOR_WIDTH}
                       flexShrink={0}
                     >
                       <text
-                        content={allResultPageRowsSelected ? "● " : "○ "}
+                        content={selectionSweep.active ? "◆ " : "◇ "}
                         style={{
-                          fg: allResultPageRowsSelected ? COLORS.database : COLORS.muted,
+                          fg: selectionSweep.active ? COLORS.database : COLORS.muted,
                           bg: COLORS.panelRaised,
                         }}
                       />
@@ -2245,9 +2251,11 @@ export function DatabaseQueryWorkspace({
                       )
                     })}
                   </box>
+                  {/* biome-ignore lint/a11y/noStaticElementInteractions: capture row keys before native scroll */}
                   <scrollbox
                     ref={setResultScrollRef}
                     id={queryElementId("results")}
+                    onKeyDown={selectionSweep.handleVerticalKey}
                     scrollY
                     viewportCulling
                     style={{ flexGrow: 1, backgroundColor: COLORS.panel }}

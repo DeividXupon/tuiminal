@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   DEFAULT_PULL_REQUEST_CONFIG,
+  DEFAULT_PULL_REQUEST_SECTIONS,
   parsePullRequestConfig,
   pullRequestProfileForRoot,
 } from "../src/features/git/model/pr/config"
@@ -21,6 +22,58 @@ const configPath = join(temporaryDirectory, "nested", "git-pr.yaml")
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))
 
 describe("Pull request configuration", () => {
+  test("starts new profiles with only the English My PRs and Review requested selectors", () => {
+    expect(pullRequestProfileForRoot(DEFAULT_PULL_REQUEST_CONFIG, "/project/new").sections).toEqual(
+      [...DEFAULT_PULL_REQUEST_SECTIONS],
+    )
+    expect(DEFAULT_PULL_REQUEST_SECTIONS).toEqual([
+      { id: "mine", title: "My PRs", query: "is:open author:@me" },
+      { id: "review", title: "Review requested", query: "is:open review-requested:@me" },
+    ])
+  })
+
+  test("migrates only the untouched legacy selector set", () => {
+    const legacy = parsePullRequestConfig({
+      version: 1,
+      profiles: {
+        "/project/legacy": {
+          repositories: [],
+          sections: [
+            { id: "mine", title: "Meus PRs", query: "is:open author:@me" },
+            {
+              id: "review",
+              title: "Aguardando minha revisão",
+              query: "is:open review-requested:@me",
+            },
+            { id: "assigned", title: "Atribuídos a mim", query: "is:open assignee:@me" },
+            { id: "failing", title: "CI falhando", query: "is:open status:failure" },
+          ],
+        },
+      },
+    })
+    expect(legacy.profiles["/project/legacy"]?.sections).toEqual([...DEFAULT_PULL_REQUEST_SECTIONS])
+
+    const customized = parsePullRequestConfig({
+      version: 1,
+      profiles: {
+        "/project/custom": {
+          repositories: [],
+          sections: [
+            { id: "mine", title: "Created by me", query: "is:open author:@me" },
+            {
+              id: "review",
+              title: "Aguardando minha revisão",
+              query: "is:open review-requested:@me",
+            },
+            { id: "assigned", title: "Atribuídos a mim", query: "is:open assignee:@me" },
+            { id: "failing", title: "CI falhando", query: "is:open status:failure" },
+          ],
+        },
+      },
+    })
+    expect(customized.profiles["/project/custom"]?.sections).toHaveLength(4)
+  })
+
   test("uses safe defaults for unknown schema versions", () => {
     expect(parsePullRequestConfig({ version: 99 })).toEqual(DEFAULT_PULL_REQUEST_CONFIG)
   })

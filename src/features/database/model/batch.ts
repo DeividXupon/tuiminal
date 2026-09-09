@@ -8,6 +8,32 @@ export type DatabaseBatchSelectedRow = {
   rowKey: Record<string, unknown> | null
 }
 
+type DatabaseBatchShortcutKey = {
+  name: string
+  sequence?: string
+  raw?: string
+  ctrl?: boolean
+  meta?: boolean
+  option?: boolean
+  shift?: boolean
+}
+
+export function databaseBatchSweepShortcut(key: DatabaseBatchShortcutKey) {
+  if (key.ctrl) return false
+  const values = [key.name, key.sequence, key.raw]
+  return (
+    (key.name === "space" && Boolean(key.option || key.meta)) ||
+    values.includes("\u00a0") ||
+    values.includes("\u001b ")
+  )
+}
+
+export function databaseBatchRangeDirection(keyName: string): -1 | 1 | null {
+  if (keyName === "up" || keyName === "k") return -1
+  if (keyName === "down" || keyName === "j") return 1
+  return null
+}
+
 export function jsonValue(_key: string, value: unknown) {
   if (typeof value === "bigint") return value.toString()
   if (value instanceof Uint8Array) {
@@ -63,17 +89,24 @@ export function toggleDatabaseBatchRow(
   return [...selected, row]
 }
 
-export function toggleDatabaseBatchPage(
+export function selectDatabaseBatchRow(
   selected: DatabaseBatchSelectedRow[],
-  pageRows: DatabaseBatchSelectedRow[],
+  row: DatabaseBatchSelectedRow,
 ) {
-  if (!pageRows.length) return selected
-  const pageIds = new Set(pageRows.map((row) => row.id))
-  const selectedIds = new Set(selected.map((row) => row.id))
-  const allSelected = pageRows.every((row) => selectedIds.has(row.id))
-  if (allSelected) return selected.filter((row) => !pageIds.has(row.id))
-  const outsidePage = selected.filter((row) => !pageIds.has(row.id))
-  return [...outsidePage, ...pageRows]
+  if (selected.some((candidate) => candidate.id === row.id)) return selected
+  return [...selected, row]
+}
+
+export function databaseBatchRange(
+  rows: DatabaseBatchSelectedRow[],
+  anchorIndex: number,
+  currentIndex: number,
+) {
+  if (!rows.length) return []
+  const lastIndex = rows.length - 1
+  const anchor = Math.max(0, Math.min(lastIndex, anchorIndex))
+  const current = Math.max(0, Math.min(lastIndex, currentIndex))
+  return rows.slice(Math.min(anchor, current), Math.max(anchor, current) + 1)
 }
 
 export function delimitedValue(value: unknown, delimiter: string) {

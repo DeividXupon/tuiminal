@@ -3,8 +3,11 @@ import {
   databaseActionRowCount,
   databaseHorizontalKeyDirection,
   databaseHorizontalNavigationAction,
+  databaseLoadingInsets,
   databasePageChromeRows,
+  databasePageSize,
   databaseResultHorizontalNavigationAction,
+  databaseResultScrollTop,
   databaseSidebarWidth,
   nextDatabaseTableSort,
   preserveDatabasePageSelection,
@@ -53,6 +56,31 @@ describe("database responsive layout", () => {
         compactActions: false,
       }),
     ).toBe(13)
+  })
+
+  test("uses every terminal row available below the table controls", () => {
+    expect(databasePageSize(20, 12)).toBe(8)
+    expect(databasePageSize(53, 15)).toBe(38)
+    expect(databasePageSize(3, 12)).toBe(4)
+  })
+
+  test("keeps loading overlays between table controls and pagination", () => {
+    expect(
+      databaseLoadingInsets({
+        hasTableHistory: true,
+        hasSelectedTable: true,
+        actionRowCount: 2,
+        compactActions: false,
+      }),
+    ).toEqual({ top: 4, bottom: 2 })
+    expect(
+      databaseLoadingInsets({
+        hasTableHistory: false,
+        hasSelectedTable: true,
+        actionRowCount: 3,
+        compactActions: true,
+      }),
+    ).toEqual({ top: 3, bottom: 3 })
   })
 
   test("maps H/L and horizontal arrows to the same directions", () => {
@@ -185,7 +213,34 @@ describe("database responsive layout", () => {
         columnCount: 3,
         inspectorVisible: true,
       }),
-    ).toBeNull()
+    ).toBe("previous-workspace-pane")
+  })
+
+  test("keeps every selected SQL result row inside the scroll viewport", () => {
+    expect(
+      databaseResultScrollTop({
+        selectedRowIndex: 8,
+        currentScrollTop: 0,
+        viewportHeight: 5,
+        rowCount: 20,
+      }),
+    ).toBe(4)
+    expect(
+      databaseResultScrollTop({
+        selectedRowIndex: 19,
+        currentScrollTop: 4,
+        viewportHeight: 5,
+        rowCount: 20,
+      }),
+    ).toBe(15)
+    expect(
+      databaseResultScrollTop({
+        selectedRowIndex: 2,
+        currentScrollTop: 10,
+        viewportHeight: 5,
+        rowCount: 20,
+      }),
+    ).toBe(2)
   })
 
   test("preserves the absolute selected record when page size changes", () => {

@@ -69,4 +69,36 @@ describe("terminal and runner commands", () => {
     })
     expect(lines).toContain("received:hello")
   })
+
+  test("forces a process group to stop when SIGTERM is ignored", async () => {
+    if (process.platform === "win32") return
+    const lines: string[] = []
+    const result = await new Promise<{ signal: NodeJS.Signals | null; stopped: boolean }>(
+      (resolve, reject) => {
+        let handle: ReturnType<typeof startRunnerProcess> | undefined
+        const timeout = setTimeout(() => {
+          handle?.stop()
+          reject(new Error("runner ignored both graceful and forced stop"))
+        }, 5_000)
+        handle = startRunnerProcess(
+          tmpdir(),
+          createShellRunnerCommand("trap '' TERM; echo ready; while :; do sleep 1; done"),
+          {
+            onLine: (line) => {
+              lines.push(line)
+              if (line === "ready") handle?.stop()
+            },
+            onExit: (exit) => {
+              clearTimeout(timeout)
+              resolve(exit)
+            },
+          },
+        )
+      },
+    )
+
+    expect(lines).toContain("ready")
+    expect(result.stopped).toBe(true)
+    expect(result.signal).toBe("SIGKILL")
+  })
 })

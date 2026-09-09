@@ -98,8 +98,8 @@ describe("internationalization", () => {
     expect(translateUi("Nenhum relacionamento encontrado.", "ja")).toBe(
       "リレーションがありません。",
     )
-    expect(translateUi("[Ctrl+Space] Selecionar página", "en")).toBe("[Ctrl+Space] Select page")
-    expect(translateUi("[Ctrl+Space] Pg", "zh-CN")).toBe("[Ctrl+Space] 本页")
+    expect(translateUi("[Alt+Space] Selecionar intervalo", "en")).toBe("[Alt+Space] Select range")
+    expect(translateUi("[Alt+Space] Sel", "zh-CN")).toBe("[Alt+Space] 选择")
     expect(translateUi("[E] Editar 4", "zh-CN")).toBe("[E] 编辑 4 行")
     expect(translateUi("◆ EDITAR 3 LINHA(S)", "ja")).toBe("◆ 3行を編集")
     expect(translateUi("2 linha(s) copiadas como CSV.", "ko")).toBe(

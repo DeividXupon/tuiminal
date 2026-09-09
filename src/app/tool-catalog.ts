@@ -3,12 +3,12 @@ export type ToolId = "database" | "git" | "runner" | "http" | "terminal"
 export const DEFAULT_TOOL: ToolId = "runner"
 
 export const TOOL_SHORTCUTS = [
-  { tab: "database", symbol: "@", key: "2" },
-  { tab: "git", symbol: "#", key: "3" },
-  { tab: "runner", symbol: "$", key: "4" },
-  { tab: "http", symbol: "%", key: "5" },
-  { tab: "terminal", symbol: "^", key: "6" },
-] as const satisfies ReadonlyArray<{ tab: ToolId; symbol: string; key: string }>
+  { tab: "database", key: "1" },
+  { tab: "git", key: "2" },
+  { tab: "runner", key: "3" },
+  { tab: "http", key: "4" },
+  { tab: "terminal", key: "5" },
+] as const satisfies ReadonlyArray<{ tab: ToolId; key: string }>
 
 export const TOOL_LABELS: Record<ToolId, string> = {
   database: "BANCO",

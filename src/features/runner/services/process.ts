@@ -11,6 +11,8 @@ import type {
 import { bunRuntime } from "./pty-runtime"
 import { activeProcesses } from "./process-registry"
 
+const RUNNER_PROCESS_STOP_GRACE_MS = 1_000
+
 export function signalProcess(child: ChildProcess, signal: NodeJS.Signals) {
   if (!child.pid) return
   try {
@@ -74,6 +76,8 @@ export function startRunnerProcess(
     }
     let stopped = false
     let closed = false
+    let exited = false
+    let forceStopTimer: ReturnType<typeof setTimeout> | null = null
     let handle: RunnerProcessHandle
     const subprocess = bunRuntime.spawn([command.program, ...command.args], {
       cwd: workingDirectory,
@@ -106,6 +110,21 @@ export function startRunnerProcess(
         // A PTY may already be closed after its child exits.
       }
     }
+    const signalSubprocess = (signal: NodeJS.Signals) => {
+      try {
+        if (process.platform !== "win32" && subprocess.pid > 1) {
+          process.kill(-subprocess.pid, signal)
+        } else {
+          subprocess.kill(signal)
+        }
+      } catch {
+        try {
+          subprocess.kill(signal)
+        } catch {
+          // The process already exited.
+        }
+      }
+    }
     handle = {
       pid: subprocess.pid,
       interactive: true,
@@ -120,24 +139,18 @@ export function startRunnerProcess(
         } catch {
           // A process that already exited no longer accepts input.
         }
-        try {
-          if (process.platform !== "win32" && subprocess.pid > 1) {
-            process.kill(-subprocess.pid, "SIGTERM")
-          } else {
-            subprocess.kill("SIGTERM")
-          }
-        } catch {
-          try {
-            subprocess.kill("SIGTERM")
-          } catch {
-            // The process already exited.
-          }
-        }
+        signalSubprocess("SIGTERM")
+        forceStopTimer = setTimeout(() => {
+          forceStopTimer = null
+          if (!exited) signalSubprocess("SIGKILL")
+        }, RUNNER_PROCESS_STOP_GRACE_MS)
         closeTerminal()
       },
     }
     activeProcesses.add(handle)
     void subprocess.exited.then((code) => {
+      exited = true
+      if (forceStopTimer) clearTimeout(forceStopTimer)
       activeProcesses.delete(handle)
       closeTerminal()
       callbacks.onExit({
@@ -151,6 +164,7 @@ export function startRunnerProcess(
 
   let stopped = false
   let exited = false
+  let forceStopTimer: ReturnType<typeof setTimeout> | null = null
   const child = spawn(command.program, command.args, {
     cwd: workingDirectory,
     env: environment,
@@ -167,6 +181,10 @@ export function startRunnerProcess(
       if (exited || stopped) return
       stopped = true
       signalProcess(child, "SIGTERM")
+      forceStopTimer = setTimeout(() => {
+        forceStopTimer = null
+        if (!exited) signalProcess(child, "SIGKILL")
+      }, RUNNER_PROCESS_STOP_GRACE_MS)
     },
   }
   activeProcesses.add(handle)
@@ -178,6 +196,7 @@ export function startRunnerProcess(
   })
   child.once("close", (code, signal) => {
     exited = true
+    if (forceStopTimer) clearTimeout(forceStopTimer)
     activeProcesses.delete(handle)
     callbacks.onExit({ code, signal, stopped })
   })

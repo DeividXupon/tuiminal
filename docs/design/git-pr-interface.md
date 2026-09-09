@@ -86,9 +86,9 @@ imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo
 ### 4.1. Terminal largo — estrutura principal
 
 ```text
-◆ TUIMINAL    [@] Banco  [#] Git  [$] Runner  [%] HTTP  [^] Terminal   [,] Config
+◆ TUIMINAL    [Alt+1] Banco  [Alt+2] Git  [Alt+3] Runner  [Alt+4] HTTP  [Alt+5] Terminal   [,] Config
 GIT  [1] Diffs  [2] PR  [3] Issues                 github.com · @usuario
- [<]  Meus PRs 12  │  Revisar 4  │  Atribuídos 3  │  CI falhando 2  [>] [+]
+ [<]  My PRs 12  │  Review requested 4  [>] [+]
 [/] is:open review-requested:@me             Escopo: todos os projetos da conta
 ───────────────────────────────────────────┬──────────────────────────────────
    Repo       PR / Título          Rev CI ± │ equipe/api #142
@@ -115,7 +115,7 @@ Busca, título e tabs não devem reservar várias linhas vazias.
 
 ```text
 GIT [1] Diffs [2] PR [3] Issues             github.com · @usuario
-[<] Meus PRs 12 │ Revisar 4 │ Atribuídos 3 [>] [+]
+[<] My PRs 12 │ Review requested 4 [>] [+]
 [/] is:open review-requested:@me
    Repo      PR / Título                         Rev CI
 ▶  api       #142 Corrigir cache                  ?   ×
@@ -132,7 +132,7 @@ Descrição…                     Revisores e code owners…
 
 ```text
 GIT [1] Diffs [2] PR [3] Issues
-[<] Revisar · 4 [>] [+]
+[<] Review requested · 4 [>] [+]
 [/] review-requested:@me
 ▶ #142 Corrigir cache
   equipe/api · @ana · CI falhou
@@ -205,6 +205,8 @@ repositórios. O formulário oferece nome, filtros, ordenação, limite e coluna
 além de salvar, renomear, duplicar, reordenar e excluir configuração.
 Excluir uma seção nunca fecha PRs nem remove repositórios locais/remotos.
 Somente salvar promove a query temporária da busca a uma configuração persistente.
+Perfis novos começam somente com `My PRs` e `Review requested`; os títulos dos
+presets permanecem em inglês em todos os idiomas da interface.
 
 ## 5. Contrato responsivo
 
@@ -274,7 +276,8 @@ operam no PR ativo, não em seleção em lote.
 Mouse: clicar seção/aba/linha/ação; roda no painel apontado; clicar comentário ou
 responsável não dispara mutações. Expor todas as operações pelo menu `[?]`/Ações.
 Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]`, `[3]`,
-`[q]`, `[#]`, letras, pontuação e Ctrl+A permanecem edição, não atalhos globais.
+`[q]`, letras, pontuação, `[Ctrl+A]` e `[Alt+1]`–`[Alt+5]` permanecem sob o
+controle do editor, não da navegação global.
 
 ## 7. Estados que precisam de tela própria
 

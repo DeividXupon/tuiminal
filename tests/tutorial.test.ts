@@ -86,10 +86,15 @@ describe("contextual tutorial", () => {
 
   test("reserves enough card height for word wrapping and wide glyphs", () => {
     expect(
-      estimateTutorialTextHeight("◇ [Space] linha · [Ctrl+Space] página · [Esc] limpar", 28, 1, 4),
-    ).toBe(3)
+      estimateTutorialTextHeight(
+        "◇ [Alt+Space] iniciar/finalizar · [↑/↓] ajustar · [Esc] limpar",
+        28,
+        1,
+        4,
+      ),
+    ).toBeGreaterThanOrEqual(3)
     expect(
-      estimateTutorialTextHeight("◇ [Space] 行 · [Ctrl+Space] 页面 · [Esc] 清除", 28, 1, 4),
+      estimateTutorialTextHeight("◇ [Alt+Space] 开始/结束 · [↑/↓] 调整 · [Esc] 清除", 28, 1, 4),
     ).toBeGreaterThanOrEqual(2)
   })
 })

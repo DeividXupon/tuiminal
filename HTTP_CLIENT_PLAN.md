@@ -480,9 +480,9 @@ escolhe um modo se todos os mínimos couberem; caso contrário, desce para o pr�
 
 | Modo | Condição inicial | Composição | Restrições principais |
 | --- | --- | --- | --- |
-| Panorama | `W ≥ 132` e `H ≥ 24` | `navegação │ request │ response` | Navegação 22–32 colunas, request 42–54 e response mínimo 60. Response absorve todo excedente. |
-| Workbench | `W ≥ 96` e `H ≥ 22` | `navegação │ request sobre response` | Navegação 22–30; área direita mínima 65. Request começa em 40% da altura útil e response em 60%. |
-| Foco | `W ≥ 72` e `H ≥ 18` | request sobre response, sem sidebar fixa | Coleção/history abrem como drawer; cada pane mantém altura mínima e o response recebe o excedente. |
+| Panorama | `W ≥ 132` e `H ≥ 24` | `navegação │ request │ response` | Navegação 22–32 colunas; request e response começam com larguras iguais e mantêm mínimos de 42. |
+| Workbench | `W ≥ 96` e `H ≥ 22` | `navegação │ request sobre response` | Navegação 22–30; área direita mínima 65. Request e response começam com a mesma altura. |
+| Foco | `W ≥ 72` e `H ≥ 18` | request sobre response, sem sidebar fixa | Coleção/history abrem como drawer; request e response começam com a mesma altura e mantêm seus mínimos. |
 | Mínimo | abaixo desses limites | um pane por vez | Omnibar em duas linhas e seletor local Coleção/Request/Response; nenhuma função desaparece. |
 
 Prioridade de degradação: recolher navegação, mover request para cima do response,
@@ -514,8 +514,8 @@ excessivamente longas.
 
 - Inspirado na leitura imediata do post-tui e na hierarquia do Posting, mas com
   mínimos que impedem a divisão fixa observada em post-tui/ATAC.
-- Request tem largura máxima; ganhar 50 colunas não deve fazer um formulário curto
-  roubar espaço do response.
+- Request e response começam com larguras iguais; o divisor continua respeitando
+  a largura mínima de ambos ao ser movido.
 - O divisor navegação/request e o divisor request/response são arrastáveis. Duplo
   clique restaura o tamanho recomendado; o controle também existe por teclado.
 
@@ -536,7 +536,7 @@ e dá largura integral ao conteúdo do request/response.
 └─────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
-- O split inicia em 40/60, mas o response cresce primeiro em altura.
+- O split inicia em 50/50.
 - `[Ctrl+↑/↓]` ajusta em passos estáveis; `[F10]` maximiza o pane focado e restaura
   exatamente o split anterior.
 - Coleção e Histórico são dois modos da mesma sidebar, não duas listas permanentes.

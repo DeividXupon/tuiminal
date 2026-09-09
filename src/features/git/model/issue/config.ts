@@ -47,6 +47,10 @@ export type IssueConfig = {
 }
 
 export const DEFAULT_ISSUE_SECTIONS: readonly IssueSection[] = [
+  { id: "mine", title: "My Issues", query: "is:open author:@me" },
+]
+
+const LEGACY_DEFAULT_ISSUE_SECTIONS: readonly IssueSection[] = [
   { id: "created", title: "Criadas por mim", query: "is:open author:@me" },
   { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
   { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
@@ -102,7 +106,7 @@ function parsedSectionOptions(section: Record<string, unknown>) {
 function sectionsValue(value: unknown): IssueSection[] {
   if (!Array.isArray(value)) return DEFAULT_ISSUE_SECTIONS.map((section) => ({ ...section }))
   const identifiers = new Set<string>()
-  return value.flatMap((entry) => {
+  const sections = value.flatMap((entry) => {
     const section = objectValue(entry)
     const id = typeof section?.id === "string" ? section.id.trim() : ""
     const title = typeof section?.title === "string" ? section.title.trim() : ""
@@ -111,6 +115,20 @@ function sectionsValue(value: unknown): IssueSection[] {
     identifiers.add(id)
     return [{ id, title, query, ...parsedSectionOptions(section) }]
   })
+  const isLegacyDefault =
+    sections.length === LEGACY_DEFAULT_ISSUE_SECTIONS.length &&
+    sections.every((section, index) => {
+      const legacy = LEGACY_DEFAULT_ISSUE_SECTIONS[index]
+      return (
+        legacy?.id === section.id &&
+        legacy.title === section.title &&
+        legacy.query === section.query &&
+        section.columns === undefined &&
+        section.sort === undefined &&
+        section.limit === undefined
+      )
+    })
+  return isLegacyDefault ? DEFAULT_ISSUE_SECTIONS.map((section) => ({ ...section })) : sections
 }
 
 function profileValue(value: unknown, defaultHost: string): IssueProfile | null {

@@ -16,14 +16,13 @@ export function NavigationTab({
   shortcut: string
   minimal?: boolean
 }) {
-  const symbol = shortcut.slice(1, -1)
   return (
     <Tabs.Tab value={value} flexShrink={0}>
       {(state) => (
         <ShortcutText
           content={
             minimal
-              ? ` ${state.selected ? "◆" : "◇"}${symbol} `
+              ? ` ${state.selected ? "◆" : "◇"} ${shortcut} `
               : ` ${state.selected ? "◆" : "◇"} ${translateUi(label)} ${shortcut} `
           }
           style={{

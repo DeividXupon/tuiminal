@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
+import packageMetadata from "../package.json" with { type: "json" }
 
 async function runCli(argument: string) {
   const configRoot = mkdtempSync(resolve(tmpdir(), "tuiminal-cli-test-"))
@@ -28,7 +29,7 @@ describe("Tuiminal CLI", () => {
     const result = await runCli("--version")
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout.trim()).toBe("0.2.0")
+    expect(result.stdout.trim()).toBe(packageMetadata.version)
     expect(result.stderr).toBe("")
   })
 

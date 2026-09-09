@@ -8,7 +8,7 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 ```text
 ┌ [1] [C] GIT · DIFFS  [2] PR  [3] ISSUES  [4] INBOX ─────────────────────┐
 │ ISSUES                                      github.com · @viewer          │
-│ [<] Criadas 12  Atribuídas 4  Envolvido 21  Mencionaram 3 [>]          │
+│ [<] My Issues 12 [>]                                                    │
 │ [/] is:open author:@me       TODOS OS PROJETOS · 20/42 · ATUALIZADO     │
 ├───────────────────────────────┬───────────────────────────────────────────┤
 │ ▶ ◆ owner/api #318 Título 6 ♥4│ owner/api #318 · Título                  │
@@ -22,6 +22,8 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 As seções ficam horizontais; não existe sidebar permanente de repositórios. A
 query permanece visível. Duas linhas mantêm densidade sem esconder autoria,
 responsáveis e labels.
+Um perfil novo começa somente com `My Issues`; o preset permanece em inglês em
+todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 
 ## Composições responsivas
 

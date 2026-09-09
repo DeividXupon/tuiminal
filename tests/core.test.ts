@@ -8,6 +8,7 @@ import { runnerKeyboardScope } from "../src/features/runner/keyboard"
 import { databaseKeyboardScope } from "../src/features/database/keyboard"
 import { terminalKeyboardScope } from "../src/features/terminal/keyboard"
 import { isToolId, resolveToolLaunch, TOOL_COMMANDS, TOOL_SHORTCUTS } from "../src/app/tool-catalog"
+import { globalApplicationShortcut } from "../src/app/global-shortcuts"
 
 describe("application boundaries", () => {
   test("focused modal and input scopes retain keyboard ownership", () => {
@@ -66,12 +67,25 @@ describe("application boundaries", () => {
 
   test("every CLI alias resolves to a unique registered tab", () => {
     expect(new Set(TOOL_SHORTCUTS.map((tool) => tool.tab)).size).toBe(5)
-    expect(TOOL_SHORTCUTS.map((tool) => tool.symbol)).toEqual(["@", "#", "$", "%", "^"])
+    expect(TOOL_SHORTCUTS.map((tool) => tool.key)).toEqual(["1", "2", "3", "4", "5"])
     for (const tool of Object.values(TOOL_COMMANDS)) expect(isToolId(tool)).toBe(true)
     expect(isToolId("unknown")).toBe(false)
     expect(isToolId("pomodoro")).toBe(false)
     expect(Object.hasOwn(TOOL_COMMANDS, "pomo")).toBe(false)
     expect(Object.hasOwn(TOOL_COMMANDS, "pomodoro")).toBe(false)
+  })
+
+  test("global tool shortcuts require Alt and preserve local number and symbol keys", () => {
+    expect(globalApplicationShortcut({ name: "1", meta: true }, true, false)).toBe("database")
+    expect(globalApplicationShortcut({ name: "2", option: true }, true, false)).toBe("git")
+    expect(globalApplicationShortcut({ name: "3", meta: true }, true, false)).toBe("runner")
+    expect(globalApplicationShortcut({ name: "4", option: true }, true, false)).toBe("http")
+    expect(globalApplicationShortcut({ name: "5", meta: true }, true, false)).toBe("terminal")
+    expect(globalApplicationShortcut({ name: "1" }, true, false)).toBeNull()
+    expect(globalApplicationShortcut({ name: "1", ctrl: true }, true, false)).toBeNull()
+    expect(globalApplicationShortcut({ name: "@", shift: true }, true, false)).toBeNull()
+    expect(globalApplicationShortcut({ name: "1", meta: true }, false, false)).toBeNull()
+    expect(globalApplicationShortcut({ name: "1", meta: true }, true, true)).toBeNull()
   })
 
   test("launches Runner by default and safely ignores obsolete tool IDs", () => {

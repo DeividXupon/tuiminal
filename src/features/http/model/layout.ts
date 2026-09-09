@@ -31,6 +31,7 @@ type ResolveHttpWorkspaceLayoutOptions = {
 }
 
 const GAP = 1
+export const DEFAULT_HTTP_SPLIT_RATIO = 0.5
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))
@@ -54,7 +55,7 @@ export function resolveHttpLayout({
   width,
   height,
   contentHeight,
-  splitRatio = 0.4,
+  splitRatio = DEFAULT_HTTP_SPLIT_RATIO,
   navigationWidth,
   requestWidth,
 }: ResolveHttpLayoutOptions): HttpLayout {
@@ -65,7 +66,11 @@ export function resolveHttpLayout({
   if (safeWidth >= 132 && safeHeight >= 24) {
     const navWidth = clamp(navigationWidth ?? Math.floor(safeWidth * 0.2), 22, 32)
     const available = safeWidth - navWidth - GAP * 2
-    const builderWidth = clamp(requestWidth ?? Math.floor(available * splitRatio), 42, 54)
+    const builderWidth = clamp(
+      requestWidth ?? Math.floor(available * splitRatio),
+      42,
+      Math.max(42, available - 42),
+    )
     return {
       mode: "panorama",
       omnibarRows: 1,

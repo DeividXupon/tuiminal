@@ -47,3 +47,36 @@ export function gitBaseShortcutHint(width: number, historyView: boolean) {
 export function gitFileTreeIsActive(active: boolean, narrow: boolean, pane: NarrowGitPane) {
   return active && (!narrow || pane === "files")
 }
+
+export function gitMiniGraphLayout({
+  panelWidth,
+  panelHeight,
+  fallbackHeight,
+  compact,
+  focused,
+  allowGraph,
+}: {
+  panelWidth: number
+  panelHeight: number
+  fallbackHeight: number
+  compact: boolean
+  focused: boolean
+  allowGraph: boolean
+}) {
+  const filesContentWidth = Math.max(16, panelWidth - 2 - (compact ? (focused ? 1 : 0) : 2))
+  const contentHeight = Math.max(4, (panelHeight || fallbackHeight) - (compact ? 0 : 2))
+  const showMiniGraph = allowGraph && contentHeight >= 8
+  const compactGraphHeight = showMiniGraph
+    ? Math.max(5, Math.min(8, Math.floor(contentHeight * 0.4)))
+    : 0
+  const miniGraphWidth = Math.max(4, filesContentWidth - (compact && focused ? 1 : 0))
+  return {
+    filesContentWidth,
+    showMiniGraph,
+    compactGraphHeight,
+    compactGraphRowLimit: Math.max(1, compactGraphHeight - 3),
+    fileTreeHeight: Math.max(2, contentHeight - compactGraphHeight - 1),
+    miniGraphWidth,
+    miniGraphContentWidth: Math.max(4, miniGraphWidth - (compact ? 2 : 4)),
+  }
+}

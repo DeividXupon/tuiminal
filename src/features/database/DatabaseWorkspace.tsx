@@ -1,17 +1,82 @@
-import { ShortcutText } from "../../shared/ui/ShortcutText"
 import type { InputRenderable, ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  COLORS,
+  databaseSelectionColors,
+  focusedPanelBorder,
+  LAYOUT,
+} from "../../core/settings/theme"
+import { translateUi, truncateDisplay } from "../../shared/i18n/index"
+import {
+  DEFAULT_SENSITIVE_VISIBILITY,
+  nextSensitiveVisibility,
+  type SensitiveVisibility,
+  sensitiveDataIsMasked,
+  sensitiveTermsSignature,
+} from "../../shared/security/sensitive-data"
+import { InlineButton } from "../../shared/ui/InlineButton"
+import { MountWhen } from "../../shared/ui/MountWhen"
+import { ShortcutText } from "../../shared/ui/ShortcutText"
+import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
+import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
+import { useDatabaseSelectionSweep } from "./hooks/use-database-selection-sweep"
+import {
+  type DatabaseBatchSelectedRow,
+  databaseBatchRowIdentity,
+  databaseBatchSweepShortcut,
+  toggleDatabaseBatchRow,
+} from "./model/batch"
+import {
+  databaseActionRowCount,
+  databaseHorizontalKeyDirection,
+  databaseHorizontalNavigationAction,
+  databaseLoadingInsets,
+  databasePageChromeRows,
+  databasePageSize,
+  databaseSidebarWidth,
+  nextDatabaseTableSort,
+  preserveDatabasePageSelection,
+} from "./model/layout"
+import { nextSqlTabIndex } from "./model/sql-workspace"
 import type {
   DatabaseCatalog,
   DatabaseConnectionProfile,
   DatabaseIndex,
-  DatabaseTableQuery,
   DatabaseTable,
+  DatabaseTableQuery,
   DatabaseTableStructure,
   TablePage,
 } from "./model/types"
+import {
+  batchRow,
+  type CatalogEntry,
+  changeTableKey,
+  type DatabaseGridRow,
+  type DatabasePane,
+  type DatabaseQueryRerunRequest,
+  type DatabaseSqlTab,
+  type DatabaseView,
+  rowKeyFingerprint,
+  type StagedDatabaseChange,
+  stageBatchDeletes,
+  stageBatchUpdates,
+  tableKey,
+  valuesMatch,
+} from "./model/workspace"
+import { DatabaseQueryWorkspace } from "./query/DatabaseQueryWorkspace"
+import {
+  BATCH_SELECTOR_WIDTH,
+  CELL_WIDTH,
+  COMPACT_ACTIONS_BREAKPOINT,
+  EMPTY_TABLE_QUERY,
+  LOADING_FRAMES,
+  ROW_INSPECTOR_BREAKPOINT,
+  SQL_TAB_LIMIT,
+  TABLE_HISTORY_LIMIT,
+} from "./rendering/constants"
+import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
 import {
   applyTableMutations,
   databaseConnectionCanWrite,
@@ -25,77 +90,15 @@ import {
   previewTableMutation,
   setDefaultDatabaseConnection,
 } from "./services/database"
-import {
-  databaseBatchRowIdentity,
-  toggleDatabaseBatchPage,
-  toggleDatabaseBatchRow,
-  type DatabaseBatchSelectedRow,
-} from "./model/batch"
-import { translateUi, truncateDisplay } from "../../shared/i18n/index"
-import {
-  databaseActionRowCount,
-  databaseHorizontalKeyDirection,
-  databaseHorizontalNavigationAction,
-  databasePageChromeRows,
-  databaseSidebarWidth,
-  nextDatabaseTableSort,
-  preserveDatabasePageSelection,
-} from "./model/layout"
-import { nextSqlTabIndex } from "./model/sql-workspace"
-import {
-  DEFAULT_SENSITIVE_VISIBILITY,
-  nextSensitiveVisibility,
-  sensitiveDataIsMasked,
-  sensitiveTermsSignature,
-  type SensitiveVisibility,
-} from "../../shared/security/sensitive-data"
-import {
-  COLORS,
-  databaseSelectionColors,
-  focusedPanelBorder,
-  LAYOUT,
-  panelBorder,
-} from "../../core/settings/theme"
-import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
+import { DatabaseTutorialDemo } from "./tutorial/DatabaseTutorialDemo"
 import { DatabaseBatchExportModal } from "./ui/DatabaseBatchExportModal"
-import { DatabaseChangesModal, type DatabaseChangeReviewItem } from "./ui/DatabaseChangesModal"
+import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
+import { type DatabaseChangeReviewItem, DatabaseChangesModal } from "./ui/DatabaseChangesModal"
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
+import { DatabaseEmptyState } from "./ui/DatabaseEmptyState"
 import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
-import { InlineButton } from "../../shared/ui/InlineButton"
-import { MountWhen } from "../../shared/ui/MountWhen"
-import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
-import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
-import {
-  CELL_WIDTH,
-  ROW_INSPECTOR_BREAKPOINT,
-  COMPACT_ACTIONS_BREAKPOINT,
-  BATCH_SELECTOR_WIDTH,
-  TABLE_HISTORY_LIMIT,
-  SQL_TAB_LIMIT,
-  EMPTY_TABLE_QUERY,
-  LOADING_FRAMES,
-} from "./rendering/constants"
-import {
-  type DatabaseView,
-  type DatabasePane,
-  type DatabaseSqlTab,
-  type DatabaseQueryRerunRequest,
-  type StagedDatabaseChange,
-  type DatabaseGridRow,
-  type CatalogEntry,
-  tableKey,
-  changeTableKey,
-  rowKeyFingerprint,
-  valuesMatch,
-  batchRow,
-  stageBatchUpdates,
-  stageBatchDeletes,
-} from "./model/workspace"
-import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
-import { DatabaseQueryWorkspace } from "./query/DatabaseQueryWorkspace"
 import { RowInspector } from "./ui/RowInspector"
-import { DatabaseTutorialDemo } from "./tutorial/DatabaseTutorialDemo"
 
 export function DatabaseViewer({
   active,
@@ -180,7 +183,6 @@ export function DatabaseViewer({
     activePaneRef.current = pane
     setActivePane(pane)
   }, [])
-
   const activeConnection = connections.find((profile) => profile.id === activeConnectionId) ?? null
   const activeTableQueryKey =
     activeConnectionId && selectedTable ? changeTableKey(activeConnectionId, selectedTable) : ""
@@ -195,7 +197,6 @@ export function DatabaseViewer({
   const revealSensitive = sensitiveVisibility === "visible"
   const sensitiveDataMasked = sensitiveDataIsMasked(sensitiveVisibility)
   const connectionCanWrite = activeConnection ? databaseConnectionCanWrite(activeConnection) : false
-  const tableListHeight = Math.max(5, terminal.height - 14)
   const sidebarWidth = databaseSidebarWidth(terminal.width)
   // Account for the outer gap, panel border and horizontal padding.
   const tableAreaWidth = Math.max(16, terminal.width - sidebarWidth - 7)
@@ -235,7 +236,13 @@ export function DatabaseViewer({
     actionRowCount,
     compactActions,
   })
-  const pageSize = Math.max(4, Math.min(30, terminal.height - pageChromeRows))
+  const pageSize = databasePageSize(terminal.height, pageChromeRows)
+  const loadingInsets = databaseLoadingInsets({
+    hasTableHistory: Boolean(tableHistory.length && selectedTable),
+    hasSelectedTable: Boolean(selectedTable),
+    actionRowCount,
+    compactActions,
+  })
   const compactEmptyState = terminal.height < 24 || terminal.width < 72
   const metadataNameWidth = Math.max(10, Math.min(28, Math.floor(tableAreaWidth * 0.34)))
   const metadataTypeWidth = Math.max(9, Math.min(24, Math.floor(tableAreaWidth * 0.3)))
@@ -337,10 +344,6 @@ export function DatabaseViewer({
     () => new Set(currentBatchRows.map((row) => row.id)),
     [currentBatchRows],
   )
-  const currentBatchPageRows = useMemo(() => gridRows.map(batchRow), [gridRows])
-  const allCurrentPageRowsSelected =
-    currentBatchPageRows.length > 0 &&
-    currentBatchPageRows.every((row) => currentBatchRowIds.has(row.id))
   const selectedGridRow = gridRows[selectedRowIndex] ?? null
   const selectedBatchRowId = selectedGridRow
     ? databaseBatchRowIdentity(selectedGridRow.rowKey, selectedGridRow.id)
@@ -711,9 +714,13 @@ export function DatabaseViewer({
     [updateCurrentBatchRows],
   )
 
-  const toggleCurrentBatchPage = useCallback(() => {
-    updateCurrentBatchRows((current) => toggleDatabaseBatchPage(current, currentBatchPageRows))
-  }, [currentBatchPageRows, updateCurrentBatchRows])
+  const selectionSweep = useDatabaseSelectionSweep({
+    rows: gridRows,
+    selectedIndexRef: selectedRowIndexRef,
+    updateSelectedRows: updateCurrentBatchRows,
+    moveRow: moveSelectedRow,
+    resetKey: `${currentTableChangeKey}:${pageIndex}`,
+  })
 
   const clearCurrentBatchRows = useCallback(() => {
     updateCurrentBatchRows(() => [])
@@ -1506,22 +1513,19 @@ export function DatabaseViewer({
       return
     }
 
-    if (key.name === "escape" && currentBatchRows.length) {
+    if (key.name === "escape" && (currentBatchRows.length || selectionSweep.active)) {
       key.preventDefault()
       key.stopPropagation()
       clearCurrentBatchRows()
+      selectionSweep.clear()
       setWriteNotice("Seleção limpa.")
       return
     }
 
-    if (
-      key.ctrl &&
-      (key.name === "space" || key.name === "@" || key.sequence === "\0" || key.raw === "\0") &&
-      view === "data"
-    ) {
+    if (databaseBatchSweepShortcut(key) && view === "data" && activePaneRef.current !== "catalog") {
       key.preventDefault()
       key.stopPropagation()
-      toggleCurrentBatchPage()
+      selectionSweep.toggle()
       return
     }
 
@@ -1683,7 +1687,7 @@ export function DatabaseViewer({
           moveSelectedColumn(1)
         } else if (selectedTable && view === "data" && gridRows.length) {
           key.preventDefault()
-          moveSelectedRow(1)
+          selectionSweep.move(1)
         }
         break
       case "k":
@@ -1696,7 +1700,7 @@ export function DatabaseViewer({
           moveSelectedColumn(-1)
         } else if (selectedTable && view === "data" && gridRows.length) {
           key.preventDefault()
-          moveSelectedRow(-1)
+          selectionSweep.move(-1)
         }
         break
       case "h":
@@ -1773,62 +1777,15 @@ export function DatabaseViewer({
       }}
     >
       {connections.length === 0 ? (
-        <box
-          id="tutorial-db-empty"
+        <DatabaseEmptyState
           key={LAYOUT.compact ? "database-empty-compact" : "database-empty-framed"}
-          style={{
-            width: Math.max(1, Math.min(70, terminal.width - 4)),
-            ...panelBorder(COLORS.database),
-            backgroundColor: COLORS.panel,
-            padding: compactEmptyState ? 1 : 2,
+          compact={compactEmptyState}
+          terminalWidth={terminal.width}
+          onOpenConnections={() => {
+            setConnectionModalStartsInForm(false)
+            setConnectionModalOpen(true)
           }}
-        >
-          <text content="◆ BANCO DE DADOS" style={{ fg: COLORS.database }} />
-          <text
-            content="Nenhuma conexão configurada"
-            style={{ fg: COLORS.text, marginTop: compactEmptyState ? 0 : 1 }}
-          />
-          <text
-            content={
-              compactEmptyState
-                ? "Adicione um banco para explorar tabelas e registros."
-                : "Adicione um banco para explorar schemas, tabelas, colunas, índices e registros."
-            }
-            style={{ fg: COLORS.muted }}
-          />
-          <box
-            style={{
-              marginTop: compactEmptyState ? 0 : 1,
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
-          >
-            <text
-              content="MySQL  ·  PostgreSQL  ·  SQLite  ·  MCP"
-              style={{ fg: COLORS.database }}
-            />
-            {compactEmptyState ? null : (
-              <text content="◇ leitura somente" style={{ fg: COLORS.success }} />
-            )}
-          </box>
-          <box style={{ marginTop: compactEmptyState ? 0 : 1, flexDirection: "row" }}>
-            <InlineButton
-              id="tutorial-db-empty-add"
-              label="[C] Criar nova / conexões"
-              accent={COLORS.database}
-              onPress={() => {
-                setConnectionModalStartsInForm(false)
-                setConnectionModalOpen(true)
-              }}
-            />
-          </box>
-          {compactEmptyState ? null : (
-            <text
-              content="As senhas podem ser guardadas no gerenciador seguro do sistema."
-              style={{ fg: COLORS.muted, marginTop: 1 }}
-            />
-          )}
-        </box>
+        />
       ) : (
         <>
           <box
@@ -1918,7 +1875,9 @@ export function DatabaseViewer({
               wrapSelection
               style={{
                 width: Math.max(8, sidebarWidth - 4),
-                height: tableListHeight,
+                minHeight: 5,
+                flexGrow: 1,
+                flexShrink: 1,
                 backgroundColor: COLORS.panel,
                 focusedBackgroundColor: COLORS.panel,
                 textColor: COLORS.muted,
@@ -2169,12 +2128,14 @@ export function DatabaseViewer({
                       }}
                     />
                     <InlineButton
-                      id="database-select-current-page"
-                      label={compactActions ? "[Ctrl+Space] Pg" : "[Ctrl+Space] Selecionar página"}
+                      id="database-selection-sweep"
+                      label={
+                        compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"
+                      }
                       accent={COLORS.database}
-                      active={allCurrentPageRowsSelected}
-                      disabled={!currentBatchPageRows.length}
-                      onPress={toggleCurrentBatchPage}
+                      active={selectionSweep.active}
+                      disabled={!gridRows.length}
+                      onPress={selectionSweep.toggle}
                     />
                     {!veryNarrowActions ? (
                       <>
@@ -2385,6 +2346,10 @@ export function DatabaseViewer({
                       }
                       onRerunRequestHandled={onQueryRerunRequestHandled}
                       onClose={closeQueryWorkspace}
+                      onReturnToCatalog={() => {
+                        setQueryOpen(false)
+                        focusPane("catalog")
+                      }}
                       onSelectTab={setActiveQueryTabId}
                       onNewTab={() => createQueryTab()}
                       onCloseTab={closeQueryTab}
@@ -2607,16 +2572,16 @@ export function DatabaseViewer({
                       {visibleColumns.length ? (
                         <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
                           <Button
-                            id="database-select-visible-page"
-                            onPress={toggleCurrentBatchPage}
+                            id="database-selection-sweep-gutter"
+                            onPress={selectionSweep.toggle}
                             height={1}
                             width={BATCH_SELECTOR_WIDTH}
                             flexShrink={0}
                           >
                             <text
-                              content={allCurrentPageRowsSelected ? "● " : "○ "}
+                              content={selectionSweep.active ? "◆ " : "◇ "}
                               style={{
-                                fg: allCurrentPageRowsSelected ? COLORS.database : COLORS.muted,
+                                fg: selectionSweep.active ? COLORS.database : COLORS.muted,
                                 bg: COLORS.panelRaised,
                               }}
                             />
@@ -2888,11 +2853,14 @@ export function DatabaseViewer({
               </box>
             ) : null}
             <DatabaseLoadingOverlay
+              id="database-content-loader"
               catalog={!queryOpen && catalogLoading && !catalog && !selectedTable}
               rows={!queryOpen && rowsLoading}
               indexes={!queryOpen && view === "indexes" && indexesLoading}
               schema={!queryOpen && view === "schema" && structureLoading}
               background={LAYOUT.alternatePanel}
+              top={loadingInsets.top}
+              bottom={loadingInsets.bottom}
             />
           </box>
         </>

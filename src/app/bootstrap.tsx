@@ -10,6 +10,7 @@ const renderer = await createCliRenderer({
   exitOnCtrlC: false,
   useMouse: true,
   enableMouseMovement: true,
+  useKittyKeyboard: { allKeysAsEscapes: true },
 })
 
 createRoot(renderer).render(<App />)

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { definedProperties } from "../../../shared/data/defined-properties"
 import {
   accessSync,
   chmodSync,
@@ -11,38 +10,38 @@ import {
 } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { definedProperties } from "../../../shared/data/defined-properties"
 import {
   DEFAULT_SENSITIVE_TERMS,
   isSensitiveColumnName,
 } from "../../../shared/security/sensitive-data"
-
 import type {
-  DatabaseDriver,
-  DatabaseConnectionProfile,
-  DatabaseConnectionDraft,
-  DatabaseTable,
-  DatabaseColumn,
-  DatabaseIndex,
-  DatabaseConstraint,
-  DatabaseRelationship,
-  DatabaseTableStructure,
   DatabaseCatalog,
-  TablePage,
-  DatabaseTableQuery,
-  DatabaseTableMutation,
+  DatabaseColumn,
+  DatabaseConnectionDraft,
+  DatabaseConnectionProfile,
+  DatabaseConstraint,
+  DatabaseDriver,
+  DatabaseIndex,
   DatabaseMutationPreview,
-  DatabaseQueryResult,
-  DatabaseQueryPlan,
   DatabaseQueryExecutionOptions,
-  DatabaseSavedQuery,
+  DatabaseQueryHistoryEntry,
   DatabaseQueryHistoryParameter,
   DatabaseQueryHistorySessionParameter,
-  DatabaseQueryHistoryEntry,
+  DatabaseQueryPlan,
+  DatabaseQueryResult,
+  DatabaseRelationship,
+  DatabaseSavedQuery,
+  DatabaseTable,
+  DatabaseTableMutation,
   DatabaseTablePageOptions,
+  DatabaseTableQuery,
+  DatabaseTableStructure,
+  TablePage,
 } from "../model/types"
+import { sqliteQueryProcessCommand } from "./sqlite-query-runtime"
 
 export function databaseSavedQueryIsDirty(query: DatabaseSavedQuery | null, currentSql: string) {
   return Boolean(query && query.sql !== currentSql)
@@ -152,10 +151,7 @@ export function releaseSqliteQuerySession(session: SqliteQuerySession) {
 export function createSqliteQuerySession(key: string) {
   let session: SqliteQuerySession | null = null
   const subprocess = Bun.spawn({
-    cmd: [
-      process.execPath,
-      fileURLToPath(new URL("../drivers/sqlite-query-process.ts", import.meta.url)),
-    ],
+    cmd: sqliteQueryProcessCommand(),
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",

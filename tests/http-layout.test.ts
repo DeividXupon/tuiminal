@@ -22,6 +22,17 @@ describe("HTTP adaptive layout", () => {
     expect(layout.response.left + layout.response.width).toBe(140)
   })
 
+  test.each([
+    [160, 40],
+    [110, 30],
+    [80, 24],
+  ] as const)("starts request and response at equal size in %ix%i", (width, height) => {
+    const layout = resolveHttpLayout({ width, height })
+    const requestSize = layout.mode === "panorama" ? layout.request.width : layout.request.height
+    const responseSize = layout.mode === "panorama" ? layout.response.width : layout.response.height
+    expect(Math.abs(requestSize - responseSize)).toBeLessThanOrEqual(1)
+  })
+
   test("uses one full pane and a two-row omnibar at the minimum size", () => {
     const layout = resolveHttpLayout({ width: 42, height: 12, contentHeight: 5 })
     expect(layout.omnibarRows).toBe(2)

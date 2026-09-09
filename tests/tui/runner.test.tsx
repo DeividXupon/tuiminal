@@ -1,5 +1,6 @@
 import "./setup"
 import { afterEach, describe, expect, test } from "bun:test"
+import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
@@ -7,6 +8,7 @@ import { Runner } from "../../src/features/runner/RunnerWorkspace"
 import { RunnerSaveCommandModal } from "../../src/features/runner/ui/RunnerSaveCommandModal"
 import { App } from "../../src/app/App"
 import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
+import { BRAND_COLOR } from "../../src/shared/ui/brand"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -23,13 +25,22 @@ async function settle(until: () => boolean) {
   throw new Error(`TUI did not settle:\n${tui.captureCharFrame()}`)
 }
 
-async function key(name: string, ctrl = false) {
-  act(() => tui?.mockInput.pressKey(name, { ctrl }))
+async function key(name: string, ctrl = false, meta = false) {
+  act(() => tui?.mockInput.pressKey(name, { ctrl, meta }))
   // A lone Escape waits for the terminal's escape-sequence disambiguation timer.
   await act(async () => {
     await Bun.sleep(60)
   })
   await tui?.renderOnce()
+}
+
+function colorOf(text: string) {
+  const span = tui
+    ?.captureSpans()
+    .lines.flatMap((line) => line.spans)
+    .find((candidate) => candidate.text.includes(text))
+  if (!span) throw new Error(`Trecho colorido ausente: ${text}\n${tui?.captureCharFrame()}`)
+  return span.fg.toInts()
 }
 
 afterEach(() => {
@@ -39,7 +50,7 @@ afterEach(() => {
 })
 
 describe("Runner TUI behavior", () => {
-  test("normal startup opens Runner without the removed tab or shortcut", async () => {
+  test("normal startup opens Runner with Alt+number global shortcuts", async () => {
     const initialTab = process.env.TUIMINAL_INITIAL_TAB
     const onlyTab = process.env.TUIMINAL_ONLY_TAB
     try {
@@ -48,16 +59,22 @@ describe("Runner TUI behavior", () => {
       tui = await testRender(<App />, { width: 180, height: 36 })
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
       const frame = tui.captureCharFrame()
-      expect(frame).toContain("◆ Runner [$]")
-      for (const shortcut of ["[@]", "[#]", "[%]", "[^]"]) expect(frame).toContain(shortcut)
+      expect(frame).toContain("◆ Runner [Alt+3]")
+      for (const shortcut of ["[Alt+1]", "[Alt+2]", "[Alt+4]", "[Alt+5]"]) {
+        expect(frame).toContain(shortcut)
+      }
+      expect(frame).toContain("[+] EXECUTAR EM OUTRO PROJETO…")
+      expect(colorOf("[+]")).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
       expect(frame).not.toMatch(/pomodoro/i)
       expect(frame).not.toContain("[!]")
       expect(frame).not.toContain("MODO ISOLADO")
       await key("!")
       expect(tui.renderer.currentFocusedRenderable?.id).toBe("runner-command-list")
-      expect(tui.captureCharFrame()).toContain("◆ Runner [$]")
+      expect(tui.captureCharFrame()).toContain("◆ Runner [Alt+3]")
       await key("%")
-      await settle(() => tui?.captureCharFrame().includes("◆ HTTP [%]") ?? false)
+      expect(tui.captureCharFrame()).toContain("◆ Runner [Alt+3]")
+      await key("4", false, true)
+      await settle(() => tui?.captureCharFrame().includes("◆ HTTP [Alt+4]") ?? false)
       expect(tui.captureCharFrame()).not.toContain("LOG DO PROCESSO")
     } finally {
       if (initialTab === undefined) delete process.env.TUIMINAL_INITIAL_TAB

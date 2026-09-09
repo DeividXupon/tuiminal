@@ -51,6 +51,11 @@ export type PullRequestConfig = {
 }
 
 export const DEFAULT_PULL_REQUEST_SECTIONS: readonly PullRequestSection[] = [
+  { id: "mine", title: "My PRs", query: "is:open author:@me" },
+  { id: "review", title: "Review requested", query: "is:open review-requested:@me" },
+]
+
+const LEGACY_DEFAULT_PULL_REQUEST_SECTIONS: readonly PullRequestSection[] = [
   { id: "mine", title: "Meus PRs", query: "is:open author:@me" },
   { id: "review", title: "Aguardando minha revisão", query: "is:open review-requested:@me" },
   { id: "assigned", title: "Atribuídos a mim", query: "is:open assignee:@me" },
@@ -108,7 +113,7 @@ function parsedSectionOptions(section: Record<string, unknown>) {
 function sectionsValue(value: unknown): PullRequestSection[] {
   if (!Array.isArray(value)) return DEFAULT_PULL_REQUEST_SECTIONS.map((section) => ({ ...section }))
   const identifiers = new Set<string>()
-  return value.flatMap((entry) => {
+  const sections = value.flatMap((entry) => {
     const section = objectValue(entry)
     const id = typeof section?.id === "string" ? section.id.trim() : ""
     const title = typeof section?.title === "string" ? section.title.trim() : ""
@@ -117,6 +122,22 @@ function sectionsValue(value: unknown): PullRequestSection[] {
     identifiers.add(id)
     return [{ id, title, query, ...parsedSectionOptions(section) }]
   })
+  const isLegacyDefault =
+    sections.length === LEGACY_DEFAULT_PULL_REQUEST_SECTIONS.length &&
+    sections.every((section, index) => {
+      const legacy = LEGACY_DEFAULT_PULL_REQUEST_SECTIONS[index]
+      return (
+        legacy?.id === section.id &&
+        legacy.title === section.title &&
+        legacy.query === section.query &&
+        section.columns === undefined &&
+        section.sort === undefined &&
+        section.limit === undefined
+      )
+    })
+  return isLegacyDefault
+    ? DEFAULT_PULL_REQUEST_SECTIONS.map((section) => ({ ...section }))
+    : sections
 }
 
 function profileValue(value: unknown, defaultHost: string): PullRequestProfile | null {

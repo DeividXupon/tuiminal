@@ -401,32 +401,32 @@ function AppContent() {
             minimal={minimalNavigation}
             value="database"
             label={compactNavigation ? "DB" : translateUi("Banco")}
-            shortcut="[@]"
+            shortcut="[Alt+1]"
           />
           <NavigationTab
             minimal={minimalNavigation}
             value="git"
             label={compactNavigation ? "G" : "Git"}
-            shortcut="[#]"
+            shortcut="[Alt+2]"
           />
           <NavigationTab
             minimal={minimalNavigation}
             value="runner"
             label={compactNavigation ? "Run" : "Runner"}
-            shortcut="[$]"
+            shortcut="[Alt+3]"
           />
-          <NavigationTab minimal={minimalNavigation} value="http" label="HTTP" shortcut="[%]" />
+          <NavigationTab minimal={minimalNavigation} value="http" label="HTTP" shortcut="[Alt+4]" />
           <NavigationTab
             minimal={minimalNavigation}
             value="terminal"
             label={compactNavigation ? "FT" : translateUi("Terminal")}
-            shortcut="[^]"
+            shortcut="[Alt+5]"
           />
         </Tabs.List>
         <box style={{ flexDirection: "row", alignItems: "center" }}>
           {compactNavigation ? null : (
             <ShortcutText
-              content={`[@ # $ % ^] ${translateUi("MUDAR")}  `}
+              content={`[Alt+1–5] ${translateUi("MUDAR")}  `}
               style={{ fg: COLORS.muted }}
             />
           )}

@@ -1,17 +1,15 @@
 #!/usr/bin/env bun
 
-import { readFileSync, statSync } from "node:fs"
+import { statSync } from "node:fs"
 import { resolve } from "node:path"
-import { translateUi } from "../src/shared/i18n/index"
-import { initializeUiSettings } from "../src/core/settings/theme"
+import packageMetadata from "../package.json" with { type: "json" }
 import { DEFAULT_TOOL, TOOL_COMMANDS, type ToolId as ToolCommand } from "../src/app/tool-catalog"
+import { initializeUiSettings } from "../src/core/settings/theme"
+import { translateUi } from "../src/shared/i18n/index"
 
 initializeUiSettings()
 
-const packageJson = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-) as { version: string }
-const VERSION = packageJson.version
+const VERSION = packageMetadata.version
 const args = process.argv.slice(2)
 
 function printHelp() {

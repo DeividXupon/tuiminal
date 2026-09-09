@@ -17,6 +17,10 @@ export function PlasmaLoadingOverlay({
   background = COLORS.panel,
   id,
   animate,
+  top = 0,
+  right = 0,
+  bottom = 0,
+  left = 0,
 }: {
   active: boolean
   label: string
@@ -25,6 +29,10 @@ export function PlasmaLoadingOverlay({
   background?: string
   id?: string
   animate?: boolean
+  top?: number
+  right?: number
+  bottom?: number
+  left?: number
 }) {
   const animationEnabled = animate ?? process.env.TUIMINAL_TEST_STATIC_LOADERS !== "1"
   const [visible, setVisible] = useState(active)
@@ -91,10 +99,10 @@ export function PlasmaLoadingOverlay({
       onSizeChange={measure}
       style={{
         position: "absolute",
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
+        top,
+        right,
+        bottom,
+        left,
         zIndex: 40,
         overflow: "hidden",
         alignItems: "center",

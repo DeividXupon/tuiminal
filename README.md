@@ -33,7 +33,28 @@ partir do gh-dash. As especificações de interface de
 [Inbox](./docs/design/git-inbox-interface.md), reúnem referências, wireframes,
 atalhos, diferenças deliberadas e critérios de layout.
 
-## Executar
+## Instalar a pré-alfa
+
+A distribuição pelo npm contém um executável autossuficiente. O usuário não
+precisa instalar Bun:
+
+```bash
+npm install --global tuiminal@pre-alpha
+tuiminal
+```
+
+O instalador seleciona somente o pacote compatível com macOS, Linux glibc ou
+Windows, em arquiteturas x64 e ARM64. Node.js 18 ou superior é necessário apenas
+para o pequeno launcher instalado pelo npm; Banco, Git, Runner, HTTP e Free
+Terminal executam no binário que já incorpora o runtime.
+
+Para remover:
+
+```bash
+npm uninstall --global tuiminal
+```
+
+## Desenvolvimento
 
 Use Bun **1.3.14**, registrado em `.bun-version` e `package.json`.
 
@@ -75,9 +96,9 @@ O código é um **monólito modular**: `src/app` compõe as ferramentas,
 O uso do aplicativo e os arquivos de sessão/configuração continuam iguais.
 Os testes de interface podem ser executados separadamente com `bun run test:tui`.
 
-## Usar como comando
+## Usar o checkout local como comando
 
-Instale o projeto local como um comando global uma vez:
+Durante o desenvolvimento, instale o checkout como um comando global uma vez:
 
 ```bash
 bun add --global "$PWD"
@@ -112,13 +133,17 @@ comando, confira se `~/.bun/bin` está no `PATH`. Para removê-lo, execute
 
 ## Navegação
 
-- `@`: abrir Banco
-- `#`: abrir Git
-- `$`: abrir Runner
-- `%`: abrir HTTP
-- `^`: abrir Free Terminal
-- `,`: abrir as configurações de aparência
-- `q`, `Esc` ou `Ctrl+C`: sair
+- `[Alt+1]`: abrir Banco
+- `[Alt+2]`: abrir Git
+- `[Alt+3]`: abrir Runner
+- `[Alt+4]`: abrir HTTP
+- `[Alt+5]`: abrir Free Terminal
+- `[,]`: abrir as configurações de aparência
+- `[Q]`, `[Esc]` ou `[Ctrl+C]`: sair
+
+No macOS, `Alt` corresponde a `Option`. Se o emulador não enviar combinações
+Option como Meta, ative a configuração “Use Option as Meta key” ou equivalente.
+Os números `1`–`5` sem modificador continuam reservados às ações locais.
 
 Toda a interface também pode ser operada com o mouse. Clique nas tabs, botões,
 campos, projetos, arquivos e commits; use a roda do mouse nas listas, diffs e
@@ -193,7 +218,7 @@ alterar o GitHub.
 - `[F]`: alternar a coluna selecionada entre ordem normal, crescente e decrescente
 - `[S]`: buscar um valor semelhante em todas as colunas da tabela
 - `[Space]`: marcar ou desmarcar a linha atual para ações em lote
-- `[Ctrl+Space]`: marcar ou desmarcar todas as linhas da página atual
+- `[Alt+Space]`: fixar a linha inicial e selecionar um intervalo contínuo com `[↑/↓]`
 - `[X]`: exportar as linhas marcadas como CSV, TSV ou JSON
 - `[N]` / `[P]`: próxima página ou página anterior
 - `[A]`: abrir ou retornar ao workspace SQL; `[Ctrl+A]` executa somente o comando sob o cursor
@@ -222,8 +247,10 @@ que procura o texto em todas as colunas, sem diferenciar maiúsculas, usando a
 correspondência `%texto%`. `[Enter]` aplica, `[Ctrl+L]` limpa e `[Esc]` cancela.
 A busca e a ordenação permanecem separadas por conexão e tabela durante a sessão.
 Linhas podem ser marcadas pelo indicador `○`/`●`, por `[Space]` ou pelo mouse;
-`[Ctrl+Space]` alterna a página visível e a seleção continua disponível ao mudar
-de página. Com linhas marcadas, `[E]` aplica o novo valor da coluna atual a
+`[Alt+Space]` ativa o indicador `◇`/`◆` e fixa a linha inicial. `[↑/↓]` expande
+ou reduz um intervalo contínuo entre essa âncora e a linha atual, inclusive ao
+inverter a direção. A seleção continua disponível ao mudar de página. Com linhas
+marcadas, `[E]` aplica o novo valor da coluna atual a
 todas elas, `[dd]` prepara uma exclusão por chave primária e `[U]` desfaz as
 alterações preparadas daquele conjunto. Cada linha continua aparecendo como um
 comando independente na revisão de `[Ctrl+S]`, e o lote aprovado é executado em
@@ -261,6 +288,11 @@ selecionada e também permite editá-los. Alterações continuam locais até a
 segunda confirmação da revisão. Consultas com `JOIN`, CTE, união, subquery ou
 sem a chave primária necessária permanecem somente leitura.
 
+Nos resultados, `[J/K]` ou `[↑/↓]` movem a linha ativa, e o scroll acompanha essa
+seleção até o primeiro e o último registro. A partir da primeira coluna, `[H/←]`
+fecha a visualização da query e devolve o foco ao catálogo; `[A]` reabre a query
+com seu estado preservado.
+
 No formulário de conexão, `[Tab]` e `[Shift+Tab]` passam por drivers, inputs,
 TLS, keychain, acesso e ações. `[Ctrl+D]` troca o driver, `[Ctrl+T]` alterna
 TLS, `[Ctrl+K]` alterna o keychain, `[Ctrl+W]` alterna leitura/escrita,
@@ -282,8 +314,10 @@ TUIMINAL_MYSQL_MCP_COMMAND=/caminho/para/mysql-mcp bun run start
 ```
 
 A aplicação não contém credenciais. Perfis começam em somente leitura e a
-escrita precisa ser habilitada explicitamente. A interface adapta a quantidade
-de registros e as barras de ação ao espaço disponível no terminal. Campos como
+escrita precisa ser habilitada explicitamente. A lista do catálogo e a quantidade
+de registros da grade ocupam a altura disponível no terminal e se reajustam ao
+redimensionar. O loader de dados fica restrito ao corpo dinâmico, sem cobrir abas,
+ações ou paginação. Campos como
 senhas, tokens, chaves, documentos, e-mails e telefones começam visíveis na
 grade e nos resultados do editor SQL. `[V]` ativa o mascaramento; para voltar a
 revelá-los, pressione `[V]` novamente para confirmar. O controle aparece em
@@ -373,7 +407,10 @@ outro projeto cria seções, filtros e posição de prévia independentes. Na te
 seletores de PR, seletores de Issues e repositórios. A aba de
 repositórios lista `TODOS` e todos os projetos acessíveis da conta; `TODOS`
 mantém o escopo completo, enquanto uma ou mais escolhas restringem todas as
-buscas de PR e Issues. Cada seção pode definir query, colunas, ordem e limite.
+buscas de PR e Issues. Um perfil novo começa com apenas três seletores, todos em
+inglês: `My PRs` e `Review requested` em PR, e `My Issues` em Issues. O conjunto
+legado é atualizado somente quando ainda está intacto; seletores personalizados
+são preservados. Cada seção pode definir query, colunas, ordem e limite.
 
 As listas remotas carregam a próxima página automaticamente quando a seleção
 chega ao último item e mostram um loader dentro da própria lista. O intervalo
@@ -507,9 +544,11 @@ a mesma linha mostra a porta, como
 `127.0.0.1:8000`; ela também aparece no respectivo painel do modo múltiplo. A
 porta selecionada pode ser aberta no navegador, copiada ou enviada à aba HTTP.
 Processos aceitam entrada por `stdin`; comandos marcados como interativos usam
-um PTY real.
+um PTY real. Ao encerrar um processo, o Runner envia primeiro um encerramento
+gracioso e, se ele não responder em um segundo, força o fim somente do grupo de
+processos que o próprio Runner iniciou.
 
-A última opção da lista, `[+] EXECUTAR EM OUTRO PROJETO…`, abre o seletor de
+A ação ao fim da lista, `[+] EXECUTAR EM OUTRO PROJETO…`, abre o seletor de
 projetos. Pressione `+` para abrir essa mesma tela sem navegar até a opção;
 enquanto um campo de texto estiver focado, `+` continua sendo texto. O seletor procura repositórios Git
 no computador, permite filtrar por nome/caminho e inclui um navegador para
@@ -669,8 +708,8 @@ Atalhos principais:
 - `[Esc]`: desfocar ou fechar somente a camada superior.
 
 O separador entre request e response também pode ser arrastado com o mouse; ele
-altera a mesma proporção por documento usada por `[Ctrl+↑/↓]` e respeita os
-limites responsivos do workspace.
+começa em 50/50, altera a mesma proporção por documento usada por `[Ctrl+↑/↓]` e
+respeita os limites responsivos do workspace.
 
 Coleções usam `.http`/`.rest` versionável e são atualizadas por watcher. O
 Tuiminal preserva conteúdo fora do bloco editado. Quando o arquivo muda fora do

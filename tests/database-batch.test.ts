@@ -3,13 +3,16 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
-  databaseBatchDeleteMutations,
-  databaseBatchRowIdentity,
-  databaseBatchUpdateMutations,
-  serializeDatabaseBatchRows,
-  toggleDatabaseBatchPage,
-  toggleDatabaseBatchRow,
   type DatabaseBatchSelectedRow,
+  databaseBatchDeleteMutations,
+  databaseBatchRange,
+  databaseBatchRangeDirection,
+  databaseBatchRowIdentity,
+  databaseBatchSweepShortcut,
+  databaseBatchUpdateMutations,
+  selectDatabaseBatchRow,
+  serializeDatabaseBatchRows,
+  toggleDatabaseBatchRow,
 } from "../src/features/database/model/batch"
 import { saveDatabaseBatchExport } from "../src/features/database/storage/batch-export"
 
@@ -25,10 +28,25 @@ const second: DatabaseBatchSelectedRow = {
   rowKey: { id: 2 },
   data: { id: 2, name: "Beto", note: "linha\nnova" },
 }
+const third: DatabaseBatchSelectedRow = {
+  id: "key-3",
+  rowKey: { id: 3 },
+  data: { id: 3, name: "Caio", note: "fim" },
+}
 
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))
 
 describe("database batch selection and export", () => {
+  test("recognizes sweep shortcuts without stealing Ctrl+Space", () => {
+    expect(databaseBatchSweepShortcut({ name: "space", option: true })).toBe(true)
+    expect(databaseBatchSweepShortcut({ name: "space", meta: true })).toBe(true)
+    expect(databaseBatchSweepShortcut({ name: " " })).toBe(true)
+    expect(databaseBatchSweepShortcut({ name: "space", sequence: "\u001b " })).toBe(true)
+    expect(databaseBatchSweepShortcut({ name: "space", shift: true })).toBe(false)
+    expect(databaseBatchSweepShortcut({ name: "space" })).toBe(false)
+    expect(databaseBatchSweepShortcut({ name: "space", ctrl: true })).toBe(false)
+  })
+
   test("creates stable identities from composite keys", () => {
     expect(databaseBatchRowIdentity({ tenant_id: 2, id: 8 }, "ignored")).toBe(
       databaseBatchRowIdentity({ id: 8, tenant_id: 2 }, "other"),
@@ -36,11 +54,26 @@ describe("database batch selection and export", () => {
     expect(databaseBatchRowIdentity(null, "page-3-row-2")).toBe("local:page-3-row-2")
   })
 
-  test("toggles individual rows and the complete visible page", () => {
+  test("toggles and adds individual rows idempotently", () => {
     expect(toggleDatabaseBatchRow([], first)).toEqual([first])
     expect(toggleDatabaseBatchRow([first], first)).toEqual([])
-    expect(toggleDatabaseBatchPage([first], [first, second])).toEqual([first, second])
-    expect(toggleDatabaseBatchPage([first, second], [first, second])).toEqual([])
+    expect(selectDatabaseBatchRow([first], second)).toEqual([first, second])
+    expect(selectDatabaseBatchRow([first, second], second)).toEqual([first, second])
+  })
+
+  test("builds a contiguous anchored range in either direction", () => {
+    const rows = [first, second, third]
+    expect(databaseBatchRange(rows, 0, 2)).toEqual(rows)
+    expect(databaseBatchRange(rows, 2, 1)).toEqual([second, third])
+    expect(databaseBatchRange(rows, 1, 1)).toEqual([second])
+  })
+
+  test("maps arrows and Vim keys to range navigation", () => {
+    expect(databaseBatchRangeDirection("up")).toBe(-1)
+    expect(databaseBatchRangeDirection("k")).toBe(-1)
+    expect(databaseBatchRangeDirection("down")).toBe(1)
+    expect(databaseBatchRangeDirection("j")).toBe(1)
+    expect(databaseBatchRangeDirection("pageup")).toBeNull()
   })
 
   test("builds safe per-primary-key mutations and skips unidentified rows", () => {

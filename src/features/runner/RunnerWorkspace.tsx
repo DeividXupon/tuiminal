@@ -93,7 +93,6 @@ const CATEGORY_ICONS: Record<RunnerCommand["category"], string> = {
   custom: "❯",
 }
 
-const PROJECT_PICKER_OPTION = "__runner:project-picker__"
 const DIRECTORY_PICKER_OPTION = "__runner:directory-picker__"
 const USE_DIRECTORY_OPTION = "__runner:use-directory__"
 const PROJECT_TAB_SHORTCUTS = ["1", "2", "3", "4"] as const
@@ -1374,8 +1373,8 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
     return activeByCommand
   }, [executions])
   const commandOptions = useMemo(
-    () => [
-      ...commands.map((command) => {
+    () =>
+      commands.map((command) => {
         const key = commandKey(projectRoot, command.id)
         const commandIsActive = activeExecutionByCommandId.has(key)
         const selection = selectedCommandKeys.has(key)
@@ -1387,12 +1386,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           value: command.id,
         }
       }),
-      {
-        name: "[+] EXECUTAR EM OUTRO PROJETO…",
-        description: "Escolher outra pasta",
-        value: PROJECT_PICKER_OPTION,
-      },
-    ],
     [activeExecutionByCommandId, commands, groupSelectionMode, projectRoot, selectedCommandKeys],
   )
   const normalizedProjectSearch = projectSearch.trim().toLocaleLowerCase()
@@ -2003,16 +1996,11 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     selectedIndex={selectedCommandIndex}
                     onChange={(_index, option) => {
                       if (typeof option?.value === "string") {
-                        if (option.value === PROJECT_PICKER_OPTION) return
                         selectCommand(option.value)
                       }
                     }}
                     onSelect={(_index, option) => {
                       if (typeof option?.value !== "string") return
-                      if (option.value === PROJECT_PICKER_OPTION) {
-                        void openProjectPicker()
-                        return
-                      }
                       if (groupSelectionMode) {
                         selectCommand(option.value)
                         toggleCommandGroup(option.value)
@@ -2056,6 +2044,14 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                     />
                   </box>
                 )}
+                {listMode === "commands" ? (
+                  <InlineButton
+                    id="runner-open-project"
+                    label="[+] EXECUTAR EM OUTRO PROJETO…"
+                    accent={COLORS.runner}
+                    onPress={() => void openProjectPicker()}
+                  />
+                ) : null}
                 {selectedCommand && showCommandDetails ? (
                   <box
                     style={{

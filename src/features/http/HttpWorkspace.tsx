@@ -2,7 +2,11 @@ import type { InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useReducer, useRef, useState } from "react"
 import { COLORS, LAYOUT } from "../../core/settings/theme"
-import { resizeHttpSplitRatio, resolveHttpWorkspaceLayout } from "./model/layout"
+import {
+  DEFAULT_HTTP_SPLIT_RATIO,
+  resizeHttpSplitRatio,
+  resolveHttpWorkspaceLayout,
+} from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
 import type {
   HttpAuth,
@@ -148,7 +152,7 @@ function HttpInteractiveClient({
     appHeaderRows: LAYOUT.compact ? 1 : 2,
     outerPadding: LAYOUT.outerPadding,
     spacing: LAYOUT.headerSpacing,
-    splitRatio: activeDocument?.splitRatio ?? 0.4,
+    splitRatio: activeDocument?.splitRatio ?? DEFAULT_HTTP_SPLIT_RATIO,
   })
   const panelSpacing = layout.mode === "minimum" ? 0 : LAYOUT.headerSpacing
   useHttpResponseFocus({

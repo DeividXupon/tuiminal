@@ -1,8 +1,8 @@
-import { ShortcutText } from "../../../shared/ui/ShortcutText"
 import { useTerminalDimensions } from "@opentui/react"
-import { translateUi } from "../../../shared/i18n/index"
 import { COLORS, LAYOUT, panelBorder } from "../../../core/settings/theme"
+import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { ShortcutText } from "../../../shared/ui/ShortcutText"
 
 import { SIDEBAR_WIDTH } from "../rendering/constants"
 import { fitCell, shorten } from "../rendering/workspace-shared"
@@ -275,7 +275,7 @@ export function DatabaseTutorialDemo() {
           >
             <InlineButton label="[Space] ●" accent={COLORS.database} active onPress={noop} />
             <InlineButton
-              label={narrow ? "[Ctrl+Space] Pg" : "[Ctrl+Space] Selecionar página"}
+              label={narrow ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"}
               accent={COLORS.database}
               onPress={noop}
             />

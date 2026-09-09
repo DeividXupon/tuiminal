@@ -1,3 +1,4 @@
+import type { BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -17,6 +18,7 @@ import {
   gitBaseShortcutHint,
   gitFileTreeIsActive,
   gitHistoryNavigationDelta,
+  gitMiniGraphLayout,
   gitPaneFocusTarget,
   isGitHistoryFocused,
 } from "./model/base-navigation"
@@ -94,6 +96,7 @@ export function GitBaseWorkspace({
   const [motionFrame, setMotionFrame] = useState(0)
   const [narrowPane, setNarrowPane] = useState<NarrowGitPane>("files")
   const [focusedPane, setFocusedPane] = useState<NarrowGitPane>("files")
+  const [filesPanelSize, setFilesPanelSize] = useState({ width: 0, height: 0 })
   const handlePreviewFocus = useCallback(() => setFocusedPane("preview"), [])
   const { setDiffScrollRef, setHistoryPanelRef, focusDiff, focusHistory, scrollDiff } =
     useGitPreviewFocus(handlePreviewFocus)
@@ -181,13 +184,21 @@ export function GitBaseWorkspace({
     ? Math.max(16, terminal.width - 6)
     : Math.max(24, terminal.width - FILES_PANEL_WIDTH - 9)
   const compactPreviewActions = compactGitActionFooter(previewWidth)
-  const filesContentWidth = narrowGit ? Math.max(16, terminal.width - 8) : FILES_PANEL_WIDTH - 4
-  const showMiniGraph = terminal.height >= 22
-  const compactGraphHeight = showMiniGraph
-    ? Math.max(5, Math.min(8, Math.floor(estimatedMainHeight * 0.4)))
-    : 0
-  const compactGraphRowLimit = Math.max(1, compactGraphHeight - 3)
-  const fileTreeHeight = Math.max(2, estimatedMainHeight - compactGraphHeight - 3)
+  const miniGraphLayout = gitMiniGraphLayout({
+    panelWidth: filesPanelSize.width || (narrowGit ? terminal.width : FILES_PANEL_WIDTH),
+    panelHeight: filesPanelSize.height,
+    fallbackHeight: estimatedMainHeight,
+    compact: LAYOUT.compact,
+    focused: active && focusedPane === "files",
+    allowGraph: terminal.height >= 22,
+  })
+  const measureFilesPanel = useCallback(function (this: BoxRenderable) {
+    setFilesPanelSize((current) =>
+      current.width === this.width && current.height === this.height
+        ? current
+        : { width: this.width, height: this.height },
+    )
+  }, [])
   const showPreviewPane = useCallback(() => {
     if (narrowGit) setNarrowPane("preview")
   }, [narrowGit])
@@ -381,7 +392,7 @@ export function GitBaseWorkspace({
     Math.min(selectedGraphRowIndex - Math.floor(maxGraphRows / 2), graphRows.length - maxGraphRows),
   )
   const visibleGraphRows = graphRows.slice(graphWindowStart, graphWindowStart + maxGraphRows)
-  const compactGraphRows = graphRows.slice(0, compactGraphRowLimit)
+  const compactGraphRows = graphRows.slice(0, miniGraphLayout.compactGraphRowLimit)
   const compactGraphColumnWidth = Math.min(
     8,
     Math.max(3, ...compactGraphRows.map((row) => formatGraph(row.graph).length)),
@@ -545,6 +556,7 @@ export function GitBaseWorkspace({
             <box
               id="git-base-files-panel"
               key={LAYOUT.compact ? "git-files-compact" : "git-files-framed"}
+              onSizeChange={measureFilesPanel}
               onMouseDown={() => setFocusedPane("files")}
               style={{
                 width: narrowGit ? "100%" : FILES_PANEL_WIDTH,
@@ -565,23 +577,26 @@ export function GitBaseWorkspace({
                   id="git-file-list"
                   options={fileOptions}
                   selectedIndex={selectedTreeIndex}
-                  width={filesContentWidth}
-                  height={fileTreeHeight}
+                  width={miniGraphLayout.filesContentWidth}
+                  height={miniGraphLayout.fileTreeHeight}
                   onMove={selectFileTreeOption}
                   onActivate={activateFileTreeOption}
                 />
               ) : (
-                <box style={{ height: fileTreeHeight, justifyContent: "center" }}>
+                <box style={{ height: miniGraphLayout.fileTreeHeight, justifyContent: "center" }}>
                   <text content="✓ Working tree limpo" style={{ fg: COLORS.success }} />
                 </box>
               )}
 
-              {showMiniGraph ? (
+              {miniGraphLayout.showMiniGraph ? (
                 <box
+                  id="git-base-mini-graph"
                   key={LAYOUT.compact ? "git-mini-graph-compact" : "git-mini-graph-framed"}
                   style={{
-                    height: compactGraphHeight,
+                    width: miniGraphLayout.miniGraphWidth,
+                    height: miniGraphLayout.compactGraphHeight,
                     flexShrink: 0,
+                    overflow: "hidden",
                     ...panelBorder(),
                     backgroundColor: COLORS.canvas,
                     paddingLeft: 1,
@@ -644,7 +659,12 @@ export function GitBaseWorkspace({
                             <text
                               content={fillLine(
                                 label,
-                                Math.max(4, filesContentWidth - compactGraphColumnWidth - 6),
+                                Math.max(
+                                  4,
+                                  miniGraphLayout.miniGraphContentWidth -
+                                    compactGraphColumnWidth -
+                                    4,
+                                ),
                               )}
                               style={{
                                 fg: selected ? COLORS.text : COLORS.muted,

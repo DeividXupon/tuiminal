@@ -62,6 +62,9 @@ acidentais. Resultados são deduplicados por host e node ID.
 Cada seção persiste título, query, colunas, ordem e limite. Na tela Git, `[,]`
 expõe a opção GitHub: seu gerenciador único cria, edita, duplica, move e exclui
 seletores de PR/Issues e salva o mesmo filtro de repositórios para os dois.
+Perfis novos trazem somente o seletor `My Issues`, com `is:open author:@me`. O
+conjunto legado de quatro seletores é migrado apenas quando permanece exatamente
+igual ao padrão antigo; qualquer personalização é preservada.
 
 ## Ações e segurança
 
@@ -111,3 +114,7 @@ Repositórios passou a carregar todos os projetos acessíveis e a oferecer `TODO
 O carregamento inicial e o de detalhes usam o plasma ASCII compartilhado com
 texto de estado e dissolução curta; paginação e refresh preservam o indicador
 inline para não cobrir issues já utilizáveis.
+
+Em 2026-09-09, o padrão inicial foi reduzido ao seletor inglês `My Issues`. A
+migração reconhece somente o conjunto legado intacto, sem sobrescrever seletores
+editados pelo usuário.

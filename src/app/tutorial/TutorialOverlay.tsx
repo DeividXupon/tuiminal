@@ -1,13 +1,13 @@
-import { ShortcutText } from "../../shared/ui/ShortcutText"
 import type { Renderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { displayWidth, translateUi } from "../../shared/i18n/index"
 import { COLORS } from "../../core/settings/theme"
-import { InlineButton } from "../../shared/ui/InlineButton"
 import { GIT_TUTORIAL_STEPS } from "../../features/git"
 import { HTTP_TUTORIAL_STEPS } from "../../features/http"
+import { displayWidth, translateUi } from "../../shared/i18n/index"
+import { InlineButton } from "../../shared/ui/InlineButton"
+import { ShortcutText } from "../../shared/ui/ShortcutText"
 
 export type TutorialStep = {
   targetId: string
@@ -169,8 +169,8 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     group: "DADOS · SELEÇÃO EM LOTE",
     title: "Selecionar várias linhas",
     description:
-      "Marque a linha atual ou toda a página. A seleção acompanha a tabela ao navegar entre páginas.",
-    hint: "[Space] linha · [Ctrl+Space] página · [Esc] limpar",
+      "[Alt+Space] fixa a linha inicial. [↑/↓] ajusta um intervalo contínuo entre ela e a linha atual.",
+    hint: "[Alt+Space] iniciar/finalizar · [↑/↓] ajustar · [Esc] limpar",
     kind: "action",
     accent: COLORS.database,
   },

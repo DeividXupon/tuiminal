@@ -34,7 +34,7 @@ Criar um dashboard de Pull Requests **dentro da ferramenta Git**:
 
 - `[1] [C] Diffs`: arquivos, stage/unstage, commits, grafo e diffs do projeto local escolhido; `[C]` alterna para comparação entre branches.
 - `[2] PR`: seções configuráveis, PRs de vários repositórios, detalhes, diff e ações.
-- `[#]` continua abrindo Git; `tuiminal git [diretório]` continua válido.
+- `[Alt+2]` continua abrindo Git; `tuiminal git [diretório]` continua válido.
 - Ao abrir Git pela primeira vez, selecionar Diffs; ao alternar outras ferramentas
   durante a mesma sessão, conservar a última subaba e o estado de ambas.
 - PRs não dependem de haver um checkout local, exceto a ação de checkout.
@@ -121,7 +121,7 @@ de leitura não equivale a concluir este plano.
 | --- | --- | --- | --- |
 | R01 | Diffs/PR dentro de Git | `[1]`/`[2]`, mouse, preservação de estado e modo isolado funcionando. | 1 |
 | R02 | Listar vários repositórios | Uma seção agrega PRs de ao menos três repos, com identidade sem colisões. | 3 |
-| R03 | Seções personalizadas | Criar, editar, duplicar, ordenar, excluir; presets meus/revisar/atribuídos/CI falhando. | 3 |
+| R03 | Seções personalizadas | Criar, editar, duplicar, ordenar e excluir; novos perfis usam apenas `My PRs` e `Review requested`. | 3 |
 | R04 | Filtrar repo, autor, branch e label | Busca temporária, validação, salvamento explícito e escopo visível. | 3 |
 | R05 | Todos os campos da lista | Estado, repo, título, autor, responsáveis, base, comentários, revisão, CI, labels e linhas. | 3–4 |
 | R06 | Prévia detalhada | Identidade estável, carregamento parcial e cinco abas navegáveis. | 4 |
@@ -148,10 +148,8 @@ de leitura não equivale a concluir este plano.
 
 | Seção | Filtro de referência |
 | --- | --- |
-| Meus PRs | `is:open author:@me` |
-| Aguardando minha revisão | `is:open review-requested:@me` |
-| Atribuídos a mim | `is:open assignee:@me` |
-| CI falhando | `is:open status:failure` |
+| My PRs | `is:open author:@me` |
+| Review requested | `is:open review-requested:@me` |
 | Exemplo de seção de equipe | `is:open author:ana base:main label:bug` |
 
 Os exemplos seguem a busca do GitHub; o adaptador deve validar os qualificadores
@@ -496,10 +494,10 @@ profiles:
     repositories: []
     sections:
       - id: mine
-        title: Meus PRs
+        title: My PRs
         filters: is:open author:@me
       - id: review
-        title: Aguardando minha revisão
+        title: Review requested
         filters: is:open review-requested:@me
 repoPaths:
   github.com/equipe/api: [/caminho/canonico/projeto]
@@ -507,8 +505,8 @@ repoPaths:
 
 Planejar validação de nomes, IDs duplicados, proporções, limites, hosts, repos,
 colunas e caminhos. Caminhos são normalizados; `~` só é expandido no campo de
-caminho escolhido pelo usuário, nunca como shell. Presets adicionais são criados
-pela UI/defaults, não omitidos da entrega por não estarem neste exemplo curto.
+caminho escolhido pelo usuário, nunca como shell. Seletores adicionais são
+criados explicitamente pela UI; novos perfis não recebem outros presets.
 
 Persistir configuração de seções, mapas e preferências. Sessão contém apenas
 identificadores, seção/preview/offset e interesse de watch para eventual retomada.
@@ -813,6 +811,9 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
   `Git · Comparar`. O comparador reutiliza o projeto local, escolhe uma branch base
   e outra comparada entre refs locais/remotas já conhecidas, renderiza
   `base...comparada` e não executa checkout nem inclui alterações não commitadas.
+- 2026-09-09: perfis novos passaram a criar somente `My PRs` e
+  `Review requested`; o carregamento migra apenas o conjunto legado exato e
+  preserva qualquer seletor personalizado.
 - 2026-09-08: o resultado de `Git · Comparar` ganhou árvore de arquivos agrupada
   em pastas e passou a renderizar somente o arquivo selecionado. Com as três
   escolhas aplicadas, os cartões ficam em uma linha nas telas largas e empilhados

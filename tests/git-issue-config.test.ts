@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   DEFAULT_ISSUE_CONFIG,
+  DEFAULT_ISSUE_SECTIONS,
   issueProfileForRoot,
   parseIssueConfig,
 } from "../src/features/git/model/issue/config"
@@ -22,6 +23,49 @@ const configPath = join(temporaryDirectory, "nested", "git-issues.yaml")
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))
 
 describe("Issue configuration", () => {
+  test("starts new profiles with only the English My Issues selector", () => {
+    expect(issueProfileForRoot(DEFAULT_ISSUE_CONFIG, "/project/new").sections).toEqual([
+      ...DEFAULT_ISSUE_SECTIONS,
+    ])
+    expect(DEFAULT_ISSUE_SECTIONS).toEqual([
+      { id: "mine", title: "My Issues", query: "is:open author:@me" },
+    ])
+  })
+
+  test("migrates only the untouched legacy selector set", () => {
+    const legacy = parseIssueConfig({
+      version: 1,
+      profiles: {
+        "/project/legacy": {
+          repositories: [],
+          sections: [
+            { id: "created", title: "Criadas por mim", query: "is:open author:@me" },
+            { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
+            { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
+            { id: "mentioned", title: "Mencionaram-me", query: "is:open mentions:@me" },
+          ],
+        },
+      },
+    })
+    expect(legacy.profiles["/project/legacy"]?.sections).toEqual([...DEFAULT_ISSUE_SECTIONS])
+
+    const customized = parseIssueConfig({
+      version: 1,
+      profiles: {
+        "/project/custom": {
+          repositories: [],
+          sections: [
+            { id: "created", title: "Created by me", query: "is:open author:@me" },
+            { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
+            { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
+            { id: "mentioned", title: "Mencionaram-me", query: "is:open mentions:@me" },
+          ],
+        },
+      },
+    })
+    expect(customized.profiles["/project/custom"]?.sections).toHaveLength(4)
+  })
+
   test("uses safe defaults for unknown schema versions", () => {
     expect(parseIssueConfig({ version: 99 })).toEqual(DEFAULT_ISSUE_CONFIG)
   })

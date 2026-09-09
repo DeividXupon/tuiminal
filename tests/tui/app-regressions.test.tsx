@@ -24,7 +24,7 @@ async function settle(until: () => boolean) {
   )
 }
 
-async function key(name: string, options: { ctrl?: boolean } = {}) {
+async function key(name: string, options: { ctrl?: boolean; meta?: boolean } = {}) {
   await act(async () => {
     tui?.mockInput.pressKey(name, options)
     await Bun.sleep(name === "ESCAPE" ? 60 : 5)
@@ -67,6 +67,9 @@ test("switches from framed to compact without registering duplicate global tabs"
   updateUiSettings({ layout: "framed", language: "pt-BR" })
   tui = await testRender(<App />, { width: 80, height: 20 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
+  for (const shortcut of ["[Alt+1]", "[Alt+2]", "[Alt+3]", "[Alt+4]", "[Alt+5]"]) {
+    expect(tui.captureCharFrame()).toContain(shortcut)
+  }
 
   await click("tutorial-settings-button")
   await key("ARROW_DOWN")
@@ -100,11 +103,11 @@ test("switches from the default Dark mode to Light in global settings", async ()
 test("global shortcuts leave Git PR after its local controls have focus", async () => {
   selectInitialTool("git")
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
-  tui = await testRender(<App />, { width: 120, height: 30 })
+  tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
   await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
   await key("2")
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("git-pr-query")))
-  await key("$")
+  await key("3", { meta: true })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 })
 
@@ -168,31 +171,31 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
 
 test("global shortcuts leave Database after closing the connection form", async () => {
   selectInitialTool("database")
-  tui = await testRender(<App />, { width: 120, height: 30 })
+  tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "db-connection-name")
   await key("ESCAPE")
   await key("ESCAPE")
-  await key("$")
+  await key("3", { meta: true })
   await settle(() => tui?.captureCharFrame().includes("LOG DO PROCESSO") ?? false)
 })
 
 test("global shortcuts leave HTTP after its URL input releases focus", async () => {
   selectInitialTool("http")
-  tui = await testRender(<App />, { width: 120, height: 30 })
+  tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
   await key("ESCAPE")
-  await key("$")
+  await key("3", { meta: true })
   await settle(() => tui?.captureCharFrame().includes("LOG DO PROCESSO") ?? false)
 })
 
 test("keeps global listener counts bounded after visiting multiple tools", async () => {
   selectInitialTool("runner")
-  tui = await testRender(<App />, { width: 120, height: 30 })
+  tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 
-  await key("#")
+  await key("2", { meta: true })
   await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
-  await key("@")
+  await key("1", { meta: true })
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "db-connection-name")
 
   expect(tui.renderer.listenerCount("resize")).toBeLessThanOrEqual(10)

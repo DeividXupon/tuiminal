@@ -156,7 +156,7 @@ function createDocument(request: HttpRequestDefinition): HttpDocumentState {
       jsonPath: "",
       moreView: "summary",
     },
-    splitRatio: 0.4,
+    splitRatio: 0.5,
     maximizedPane: null,
     execution: { status: "idle" },
   }

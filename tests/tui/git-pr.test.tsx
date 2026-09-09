@@ -74,6 +74,54 @@ function renderableBorderSides(panel: BoxRenderable) {
   ).borderSides
 }
 
+function expectMiniGraphAnchored(layout: LayoutMode) {
+  if (!tui) throw new Error("TUI Git não montada")
+  const filesPanel = tui.renderer.root.findDescendantById("git-base-files-panel") as BoxRenderable
+  const miniGraph = tui.renderer.root.findDescendantById("git-base-mini-graph") as BoxRenderable
+  expect(miniGraph.screenX).toBeGreaterThanOrEqual(filesPanel.screenX)
+  expect(miniGraph.screenX + miniGraph.width).toBeLessThanOrEqual(
+    filesPanel.screenX + filesPanel.width,
+  )
+  expect(miniGraph.screenX - filesPanel.screenX).toBe(
+    filesPanel.screenX + filesPanel.width - (miniGraph.screenX + miniGraph.width),
+  )
+  expect(miniGraph.screenY).toBeGreaterThan(filesPanel.screenY)
+  expect(filesPanel.screenY + filesPanel.height - (miniGraph.screenY + miniGraph.height)).toBe(
+    layout === "framed" ? 1 : 0,
+  )
+}
+
+async function waitForMiniGraphAnchor(layout: LayoutMode) {
+  const expectedInset = layout === "framed" ? 1 : 0
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await act(async () => Bun.sleep(10))
+    await tui?.renderOnce()
+    const filesPanel = tui?.renderer.root.findDescendantById("git-base-files-panel")
+    const miniGraph = tui?.renderer.root.findDescendantById("git-base-mini-graph")
+    if (
+      filesPanel &&
+      miniGraph &&
+      miniGraph.screenX - filesPanel.screenX ===
+        filesPanel.screenX + filesPanel.width - (miniGraph.screenX + miniGraph.width) &&
+      filesPanel.screenY + filesPanel.height - (miniGraph.screenY + miniGraph.height) ===
+        expectedInset
+    ) {
+      expectMiniGraphAnchored(layout)
+      return
+    }
+  }
+  const filesPanel = tui?.renderer.root.findDescendantById("git-base-files-panel") as BoxRenderable
+  const miniGraph = tui?.renderer.root.findDescendantById("git-base-mini-graph") as BoxRenderable
+  const geometry = {
+    files: [filesPanel?.screenX, filesPanel?.screenY, filesPanel?.width, filesPanel?.height],
+    graph: [miniGraph?.screenX, miniGraph?.screenY, miniGraph?.width, miniGraph?.height],
+    borders: filesPanel ? renderableBorderSides(filesPanel) : undefined,
+  }
+  throw new Error(
+    `Mini grafo não ancorado no layout ${layout}: ${JSON.stringify(geometry)}\n${tui?.captureCharFrame()}`,
+  )
+}
+
 afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
@@ -210,6 +258,7 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(frame).toContain("[V] Unificado")
     expect(frame).toContain("[O] Log")
     expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff")
+    await waitForMiniGraphAnchor("framed")
     expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
     expect(
@@ -269,6 +318,20 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(tui.captureCharFrame()).toContain("ÁRVORE DE COMMITS")
     await key("j")
     expect(tui.captureCharFrame()).toContain("2/2  [J/K/↑/↓]")
+
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    updateUiSettings({ layout: "compact", language: "pt-BR" })
+    tui = await testRender(<GitBaseWorkspace active targetDirectory={repository} />, {
+      width: 120,
+      height: 30,
+    })
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+      if (tui.captureCharFrame().includes("README.md")) break
+    }
+    await waitForMiniGraphAnchor("compact")
   } finally {
     act(() => tui?.renderer.destroy())
     tui = undefined

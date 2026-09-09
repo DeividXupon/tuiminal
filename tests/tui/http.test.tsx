@@ -702,8 +702,10 @@ describe("HTTP TUI", () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-split-handle")))
     const request = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")
+    const response = tui.renderer.root.findDescendantById("http-response-pane-http-scratch-1")
     const handle = tui.renderer.root.findDescendantById("http-split-handle")
-    if (!request || !handle) throw new Error("Split HTTP não renderizado")
+    if (!request || !response || !handle) throw new Error("Split HTTP não renderizado")
+    expect(Math.abs(request.height - response.height)).toBeLessThanOrEqual(1)
     const initialHeight = request.height
     await act(async () => {
       await tui?.mockMouse.drag(

@@ -32,12 +32,36 @@ export function databasePageChromeRows({
   return 12 + historyRows + Math.max(0, actionRowCount - 1) + (compactActions ? 1 : 0)
 }
 
+export function databasePageSize(terminalHeight: number, chromeRows: number) {
+  return Math.max(4, Math.floor(terminalHeight) - Math.max(0, Math.floor(chromeRows)))
+}
+
+export function databaseLoadingInsets({
+  hasTableHistory,
+  hasSelectedTable,
+  actionRowCount,
+  compactActions,
+}: {
+  hasTableHistory: boolean
+  hasSelectedTable: boolean
+  actionRowCount: number
+  compactActions: boolean
+}) {
+  return {
+    top: (hasTableHistory ? 2 : 0) + (hasSelectedTable ? actionRowCount : 0),
+    bottom: compactActions ? 3 : 2,
+  }
+}
+
 export type DatabaseHorizontalPane = "catalog" | "grid" | "inspector"
 export type DatabaseHorizontalNavigationAction =
   | "previous-column"
   | "next-column"
   | "previous-pane"
   | "next-pane"
+export type DatabaseResultHorizontalNavigationAction =
+  | DatabaseHorizontalNavigationAction
+  | "previous-workspace-pane"
 
 export function databaseHorizontalKeyDirection(keyName: string): -1 | 1 | null {
   if (keyName === "h" || keyName === "left") return -1
@@ -90,14 +114,38 @@ export function databaseResultHorizontalNavigationAction({
   selectedColumnIndex: number
   columnCount: number
   inspectorVisible: boolean
-}): DatabaseHorizontalNavigationAction | null {
+}): DatabaseResultHorizontalNavigationAction | null {
   if (pane === "inspector") return direction === -1 ? "previous-pane" : null
 
   const lastColumnIndex = Math.max(0, columnCount - 1)
   if (direction === -1 && selectedColumnIndex > 0) return "previous-column"
+  if (direction === -1) return "previous-workspace-pane"
   if (direction === 1 && selectedColumnIndex < lastColumnIndex) return "next-column"
   if (direction === 1 && inspectorVisible) return "next-pane"
   return null
+}
+
+export function databaseResultScrollTop({
+  selectedRowIndex,
+  currentScrollTop,
+  viewportHeight,
+  rowCount,
+}: {
+  selectedRowIndex: number
+  currentScrollTop: number
+  viewportHeight: number
+  rowCount: number
+}) {
+  const visibleRows = Math.max(1, Math.floor(viewportHeight))
+  const lastRowIndex = Math.max(0, Math.floor(rowCount) - 1)
+  const selected = Math.max(0, Math.min(lastRowIndex, Math.floor(selectedRowIndex)))
+  const maximumScrollTop = Math.max(0, lastRowIndex - visibleRows + 1)
+  const current = Math.max(0, Math.min(maximumScrollTop, Math.floor(currentScrollTop)))
+  if (selected < current) return selected
+  if (selected >= current + visibleRows) {
+    return Math.min(maximumScrollTop, selected - visibleRows + 1)
+  }
+  return current
 }
 
 export function preserveDatabasePageSelection({
