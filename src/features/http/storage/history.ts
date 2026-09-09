@@ -2,6 +2,7 @@ import { chmod, mkdir, open, readFile, rename, stat, unlink } from "node:fs/prom
 import { dirname, resolve } from "node:path"
 import type { HttpHistoryEntry, HttpRedirectHop, HttpResponseBodyKind } from "../model/types"
 import { budgetHttpHistory, redactHttpDiagnostic, redactHttpHistoryUrl } from "../model/history"
+import { redactHttpHistoryEntry } from "../model/history-privacy"
 import type { HttpWorkspaceConfig } from "./config"
 
 const HISTORY_VERSION = 1
@@ -26,7 +27,7 @@ type PersistedResponse = {
   bodyBase64?: string
 }
 
-type PersistedEntry = Omit<HttpHistoryEntry, "response" | "persisted"> & {
+type PersistedEntry = Omit<HttpHistoryEntry, "response" | "persisted" | "privacy"> & {
   response?: PersistedResponse
 }
 
@@ -42,7 +43,7 @@ function serializedResponse(
 ): PersistedResponse | undefined {
   const response = entry.response
   if (!response) return undefined
-  const body = includeBody ? response.body : undefined
+  const body = includeBody && !entry.privacy?.hasSecrets ? response.body : undefined
   return {
     url: redactHttpHistoryUrl(response.url),
     status: response.status,
@@ -68,12 +69,13 @@ function serializedResponse(
   }
 }
 
-function persistableEntry(entry: HttpHistoryEntry, includeBody: boolean): PersistedEntry {
+function persistableEntry(original: HttpHistoryEntry, includeBody: boolean): PersistedEntry {
+  const entry = redactHttpHistoryEntry(original)
   const response = serializedResponse(entry, includeBody)
   return {
-    id: entry.id,
+    id: entry.privacy.redactText(entry.id),
     createdAt: entry.createdAt,
-    requestId: entry.requestId,
+    requestId: entry.privacy.redactText(entry.requestId),
     requestName: entry.requestName,
     environmentName: entry.environmentName,
     method: entry.method,

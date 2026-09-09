@@ -357,6 +357,7 @@ function AppContent() {
           <DatabaseQueryHistoryModal
             open
             entries={queryHistoryEntries}
+            onEntriesChanged={setQueryHistoryEntries}
             canRerun={queryHistoryCanRerun}
             onClose={() => setQueryHistoryOpen(false)}
             onRerun={rerunHistoryQuery}
@@ -550,6 +551,7 @@ function AppContent() {
         <DatabaseQueryHistoryModal
           open
           entries={queryHistoryEntries}
+          onEntriesChanged={setQueryHistoryEntries}
           canRerun={queryHistoryCanRerun}
           onClose={() => setQueryHistoryOpen(false)}
           onRerun={rerunHistoryQuery}

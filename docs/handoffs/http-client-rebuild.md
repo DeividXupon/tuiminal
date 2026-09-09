@@ -17,6 +17,26 @@ concluídas. A regra para as próximas mudanças é preservar o que funciona, tr
 Fase 5 somente quando houver demanda/evidência e manter o gate `bun run check`
 verde.
 
+**Ressalva de prontidão (9/9/2026):** a conclusão funcional acima não aprova uma
+alfa. A auditoria `ALPHA_READINESS_PLAN.md` reproduziu falhas posteriores de
+segredos, redirects, cookies e filesystem. A correção local de A04 leva contexto
+privado não serializável de `request-builder`/`redirects` ao `collection-runner`,
+hooks, `model/history-privacy.ts` e storage. Metadados/diagnósticos são mascarados;
+corpos com segredos conhecidos nunca são persistidos automaticamente, mesmo com
+opt-in. O corpo ativo continua exato em memória. Não confundir isso com correção
+de A05/A06 nem com limpeza de históricos/exportações/backups legados.
+
+A05 agora tem implementação local em `model/redirect-policy.ts`, nos serviços
+`redirect-authorization`, `redirect-approvals`, `redirect-cookies` e no modal/hook
+de aprovações. Transporte, envio individual, coleção, download e CLI compartilham
+a autorização do próximo salto sem repetir requests anteriores. Não reutilizar o
+antigo fluxo de erro/novo envio para consentimento TLS. Headers privados são
+removidos por proveniência/valor e a origem dos cookies é acompanhada por toda a
+sequência, inclusive saltos same-origin posteriores. A fila limita 16 confirmações,
+descarta decisões antigas/repetidas e cancela no timeout/abort/unmount. A05 ainda
+depende da validação do candidato/binário; isso não resolve os sufixos públicos de
+A06 nem a fronteira de filesystem A09.
+
 ## Onde cada responsabilidade está
 
 - `src/features/http/HttpWorkspace.tsx`: composição da feature; deve permanecer
@@ -155,8 +175,10 @@ quando houver a evidência e os critérios de segurança definidos no plano.
   entregar resultado a outro documento.
 - Timeout, cancelamento e limites de memória continuam pertencendo ao serviço de
   transporte, não a um componente React.
-- Segredos não entram em arquivo público, preview aberto, histórico, logs,
-  conflito, export ou mensagem de erro. Arquivos privados usam `0600`.
+- Valores conhecidos como secretos são mascarados em metadados de histórico,
+  reports, preview, conflito e erros. Contextos de privacidade só vivem em memória;
+  respostas brutas também podem existir na sessão e em exportações explícitas.
+  Arquivos privados usam `0600`, o que não substitui a política de conteúdo.
 - Um bloco `.http` parcialmente compreendido nunca é executado nem salvo como se
   fosse seguro. Preservar texto é preferível a uma conversão destrutiva.
 - Requests usam `explícito > workspace > base`; valores de ambiente continuam

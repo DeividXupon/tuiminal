@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { DATABASE_PRIVACY_MESSAGES } from "../src/shared/i18n/database-privacy-catalog"
+import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../src/shared/i18n/http-workspace-settings-catalog"
 import {
   displayWidth,
   formatUiDateTime,
@@ -13,6 +15,39 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates the HTTP body policy and preparation failure into %s",
+    (language) => {
+      const messages = HTTP_WORKSPACE_SETTINGS_MESSAGES.filter(
+        ([message]) =>
+          message.startsWith("Com segredos conhecidos,") ||
+          message.startsWith("Não foi possível preparar a requisição"),
+      )
+      expect(messages).toHaveLength(2)
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of messages) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing HTTP privacy translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every database privacy message into %s",
+    (language) => {
+      for (const [message] of DATABASE_PRIVACY_MESSAGES)
+        expect(translateUi(message, language)).not.toBe(message)
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates the conservative SQL safety explanation into %s",
+    (language) => {
+      const message =
+        "Esta conexão está em somente leitura. Comandos com efeitos, SELECT INTO e rotinas não reconhecidas exigem escrita habilitada."
+      expect(translateUi(message, language)).not.toBe(message)
+      expect(translateUi(message, language)).toContain("SELECT INTO")
+    },
+  )
   test("validates and changes supported languages", () => {
     expect(isLanguage("zh-CN")).toBe(true)
     expect(isLanguage("fr")).toBe(false)

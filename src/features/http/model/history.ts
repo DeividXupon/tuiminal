@@ -1,6 +1,14 @@
-import type { HttpDocumentState, HttpHistoryEntry, HttpResponseSnapshot } from "./types"
+import type {
+  HttpDocumentState,
+  HttpHistoryEntry,
+  HttpPrivacyContext,
+  HttpResponseSnapshot,
+} from "./types"
 import type { HttpWorkspaceState } from "./types"
 import { diffHttpText, responseBodyText } from "./response"
+import { redactHttpHistoryEntry } from "./history-privacy"
+import { combineHttpPrivacy, requestHttpPrivacy } from "./secrets"
+export { redactHttpDiagnostic, redactHttpHistoryUrl } from "./history-privacy"
 
 export const HTTP_SESSION_HISTORY_LIMIT = 30
 export const HTTP_SESSION_BODY_BUDGET = 12_000_000
@@ -62,50 +70,28 @@ export function reduceHttpHistoryAction(
   }
 }
 
-const SENSITIVE_QUERY_NAME = /(?:token|key|secret|password|passwd|authorization|session|cookie)/i
-
-export function redactHttpHistoryUrl(value: string) {
-  try {
-    const url = new URL(value)
-    for (const name of new Set(url.searchParams.keys())) {
-      if (SENSITIVE_QUERY_NAME.test(name)) url.searchParams.set(name, "<redacted>")
-    }
-    return url.toString()
-  } catch {
-    return value.replace(
-      /([?&](?:token|key|secret|password|authorization|session)=)[^&\s]*/gi,
-      "$1<redacted>",
-    )
-  }
-}
-
-export function redactHttpDiagnostic(value: string) {
-  return value
-    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 <redacted>")
-    .replace(/([?&](?:token|key|secret|password|authorization|session)=)[^&\s]*/gi, "$1<redacted>")
-}
-
 export function createHttpSuccessHistoryEntry(
   document: HttpDocumentState,
   response: HttpResponseSnapshot,
   environmentName: string | null,
   createdAt = Date.now(),
 ): HttpHistoryEntry {
-  return {
+  return redactHttpHistoryEntry({
+    privacy: combineHttpPrivacy(response.privacy, requestHttpPrivacy(document.request)),
     id: response.executionId,
     createdAt,
     requestId: document.request.id,
     requestName: document.request.name,
     environmentName,
     method: document.request.method,
-    url: redactHttpHistoryUrl(response.url),
+    url: response.url,
     status: response.status,
     durationMs: response.timings.totalMs,
     error: null,
     response: { ...response, body: response.body },
     bodyDiscarded: false,
     persisted: false,
-  }
+  })
 }
 
 export function createHttpErrorHistoryEntry(
@@ -114,21 +100,23 @@ export function createHttpErrorHistoryEntry(
   error: string,
   environmentName: string | null,
   createdAt = Date.now(),
+  privacy?: HttpPrivacyContext,
 ): HttpHistoryEntry {
-  return {
+  return redactHttpHistoryEntry({
+    privacy: combineHttpPrivacy(privacy, requestHttpPrivacy(document.request)),
     id: executionId,
     createdAt,
     requestId: document.request.id,
     requestName: document.request.name,
     environmentName,
     method: document.request.method,
-    url: redactHttpHistoryUrl(document.request.url),
+    url: document.request.url,
     status: null,
     durationMs: null,
     error,
     bodyDiscarded: false,
     persisted: false,
-  }
+  })
 }
 
 export function budgetHttpHistory(

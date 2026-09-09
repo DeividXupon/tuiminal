@@ -8,6 +8,7 @@ import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/c
 import { saveCapturedHttpResponse } from "../storage/responses"
 import { httpResponseOpenCommand, isSafeHttpResponseOpenType } from "../services/open-response"
 import { httpInsecureTlsApproval, type HttpInsecureTlsApproval } from "../model/tls-policy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 type HttpClipboard = {
   copyToClipboardOSC52: (content: string) => boolean
@@ -31,6 +32,7 @@ export function useHttpResponse({
   workspaceConfig,
   variablesForRequest,
   isInsecureTlsApproved,
+  authorizeRedirect,
 }: {
   documents: HttpDocumentState[]
   environmentName: string | null
@@ -39,6 +41,7 @@ export function useHttpResponse({
   workspaceConfig: HttpWorkspaceConfig
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext
   isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
+  authorizeRedirect: HttpRedirectAuthorizer
 }) {
   const cookieJars = useRef(new Map<string, HttpCookieJar>())
   const [, setCookieRevision] = useState(0)
@@ -121,6 +124,8 @@ export function useHttpResponse({
           cookieJar,
           authorizeInsecureTls: (url) =>
             isInsecureTlsApproved(httpInsecureTlsApproval(url, environmentName)),
+          authorizeRedirect: (approval, signal) =>
+            authorizeRedirect(Object.freeze({ ...approval, environmentName }), signal),
         })
         setNotice(`DOWNLOAD COMPLETO · ${result.bytes} BYTES · ${result.path}`)
       } catch (error) {
@@ -137,6 +142,7 @@ export function useHttpResponse({
     },
     [
       cookieJar,
+      authorizeRedirect,
       documents,
       download,
       environmentName,

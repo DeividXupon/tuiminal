@@ -2,21 +2,26 @@ import { useCallback } from "react"
 import type {
   HttpDocumentState,
   HttpHistoryEntry,
+  HttpPrivacyContext,
   HttpProjectRequestItem,
   HttpRequestDefinition,
   HttpResponseSnapshot,
   HttpVariableContext,
 } from "../model/types"
 import { isOpaqueHttpRequest } from "../model/request-capabilities"
+import { requestHttpPrivacy, combineHttpPrivacy } from "../model/secrets"
+import {
+  HTTP_ENVIRONMENT_PREPARATION_ERROR,
+  httpHistoryErrorPrivacy,
+} from "../model/history-privacy"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 import type { HttpWorkspaceAction } from "../model/workspace"
 import { newHttpExecutionId, type HttpDocumentRefs } from "../runtime"
 import { runHttpCollectionCase, type HttpRunCase } from "../services/collection-runner"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
 import type { HttpCookieJar } from "../services/cookies"
 import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
-
-export type HttpPendingTlsApproval = HttpInsecureTlsApproval & { documentId: string }
 
 type HistoryTools = {
   success: (
@@ -29,6 +34,7 @@ type HistoryTools = {
     executionId: string,
     error: string,
     environmentName: string | null,
+    privacy?: HttpPrivacyContext,
   ) => HttpHistoryEntry
 }
 
@@ -47,7 +53,7 @@ type SendContext = {
   abortControllers: { current: Map<string, AbortController> }
   dispatch: (action: HttpWorkspaceAction) => void
   setNotice: (notice: string) => void
-  setPendingTlsApproval: (approval: HttpPendingTlsApproval | null) => void
+  authorizeRedirect: HttpRedirectAuthorizer
 }
 
 type ExecutionDetails = {
@@ -89,10 +95,17 @@ function executionHistory(
   document: HttpDocumentState,
   executionId: string,
   message: string,
+  privacy?: HttpPrivacyContext,
 ) {
   return document.request.options.noLog
     ? null
-    : context.historyTools.failure(document, executionId, message, context.activeEnvironmentName)
+    : context.historyTools.failure(
+        document,
+        executionId,
+        message,
+        context.activeEnvironmentName,
+        privacy,
+      )
 }
 
 function handleChainResult(
@@ -107,20 +120,8 @@ function handleChainResult(
     return
   }
   const result = chain.items.find((item) => item.requestId === document.request.id)
+  const privacy = combineHttpPrivacy(...chain.items.map((item) => item.privacy))
   const failed = result?.error ?? chain.items.findLast((item) => item.error)?.error
-  if (failed?.approval) {
-    context.dispatch({
-      type: "fail-execution",
-      ...details,
-      kind: "tls",
-      message: failed.message,
-      historyEntry: null,
-    })
-    context.setPendingTlsApproval({ ...failed.approval, documentId: details.documentId })
-    context.blurDocumentControls()
-    context.dispatch({ type: "open-overlay", overlay: "insecure-tls-confirmation" })
-    return
-  }
   if (!result?.response || failed) {
     const message = failed?.message ?? "O request não foi executado após suas dependências."
     context.dispatch({
@@ -128,12 +129,13 @@ function handleChainResult(
       ...details,
       kind: failed?.kind ?? "parse",
       message,
-      historyEntry: executionHistory(context, document, details.executionId, message),
+      historyEntry: executionHistory(context, document, details.executionId, message, privacy),
     })
     return
   }
   const response = {
     ...result.response,
+    privacy,
     executionId: details.executionId,
     requestId: details.documentId,
     requestRevision: details.requestRevision,
@@ -161,13 +163,23 @@ function handleUnexpectedError(
     context.dispatch({ type: "cancel-execution", ...details })
     return
   }
-  const message = error instanceof Error ? error.message : String(error)
+  let privacy = requestHttpPrivacy(document.request)
+  let message = HTTP_ENVIRONMENT_PREPARATION_ERROR
+  try {
+    privacy = requestHttpPrivacy(document.request, context.variablesForRequest(document.request))
+    message = httpHistoryErrorPrivacy(
+      privacy,
+      error instanceof Error ? error.message : String(error),
+    )
+  } catch {
+    // The resolver may fail before providing its secrets; never print its raw error.
+  }
   context.dispatch({
     type: "fail-execution",
     ...details,
     kind: "parse",
     message,
-    historyEntry: executionHistory(context, document, details.executionId, message),
+    historyEntry: executionHistory(context, document, details.executionId, message, privacy),
   })
 }
 
@@ -193,6 +205,7 @@ async function sendHttpDocument(context: SendContext, documentId: string) {
       cookieJar: context.cookieJar,
       environmentName: context.activeEnvironmentName,
       isInsecureTlsApproved: context.isInsecureTlsApproved,
+      authorizeRedirect: context.authorizeRedirect,
     })
     handleChainResult(context, document, details, controller, chain)
   } catch (error) {

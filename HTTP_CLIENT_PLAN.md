@@ -15,6 +15,18 @@
 > [handoff da reconstrução HTTP](./docs/handoffs/http-client-rebuild.md). Ele
 > registra o mapa do código entregue, as invariantes e a ordem das pendências.
 
+### Revisão de prontidão — 9 de setembro de 2026
+
+A conclusão histórica das fases funcionais não é aprovação para lançamento.
+A auditoria em `ALPHA_READINESS_PLAN.md` encontrou falhas de privacidade e
+isolamento ainda em correção. O histórico passou a transportar contexto privado
+volátil de ponta a ponta (A04), com regressões de encodings, auth, cookies,
+extrações, troca de escopo, sucesso/erro e envio pela TUI. Redirects entre origens
+(A05) também têm implementação e regressões no checkpoint, ainda sem aceite do
+candidato/binário. Política de domínio de cookies (A06), filesystem e limites
+globais permanecem pendentes. A seção 9 do plano de alfa consolida a retomada;
+não deduzir segurança dessas superfícies pelo passe do histórico.
+
 ## Resumo executivo
 
 O cliente HTTP deve evoluir de uma chamada avulsa com histórico de sessão para um
@@ -815,6 +827,13 @@ Authorization: Bearer {{apiToken}}
 - Histórico persistente é opt-in por projeto. Por padrão guarda apenas metadados e
   preview redigido em arquivo `0600`.
 - Guardar corpo completo exige opt-in separado, limite por item e limite global.
+- Mesmo com esse opt-in, execuções com segredos conhecidos não persistem corpos.
+  O contexto privado acompanha todos os saltos, cookies enviados/recebidos e
+  extrações antes do histórico, sem serializar uma lista de valores secretos.
+  Metadados, erros e assertions mascaram também formas comuns percent-encoded,
+  double-encoded, form e JSON. O snapshot ativo permanece exato e volátil;
+  exportação manual é uma decisão separada. Não prometer sanitização completa de
+  corpos arbitrários ou limpeza retroativa de arquivos e backups antigos.
 - Requests podem declarar `@no-log`; ações com auth literal sugerem não persistir.
 - Histórico se agrupa por request estável, permite reabrir e comparar duas respostas.
 - Rerun usa o ambiente atual e passa pela preparação/confirmação normal; nunca
@@ -985,6 +1004,19 @@ Requisitos obrigatórios antes de persistência ou import:
   segura;
 - remover `Authorization`, `Proxy-Authorization`, `Cookie` e headers configuráveis ao
   redirecionar para outra origem;
+- a correção local de A05 preserva a proveniência de autenticação e valores
+  privados dos headers; cookies aprendidos numa origem não reaparecem noutra em
+  saltos posteriores. Cookies próprios do destino continuam disponíveis;
+- pausar o transporte corrente para confirmar body/URL privada cross-origin,
+  downgrade ou TLS inseguro não aprovado. `[Y]` confirma somente o salto; `[I]`
+  continua reservado à aprovação TLS por target/ambiente/sessão. Nenhum caminho
+  deve reexecutar POSTs/dependências para retomar um redirect. A fila de 16 itens
+  aceita decisões únicas e descarta abort/timeout/unmount;
+- headless exige `--allow-private-redirect-to <origin>` para body/URL privada e
+  `--allow-http-redirect-to <origin>` para downgrade, com origem exata e flags
+  repetíveis; TLS inseguro permanece independente em `--allow-insecure-tls`.
+  Credenciais da origem continuam removidas após consentimento. Protocolos não
+  HTTP/HTTPS e credenciais na URL do redirect permanecem bloqueados;
 - limitar quantidade de redirects e detectar loops;
 - aplicar limite depois de descompressão e ter proteção contra payload comprimido
   desproporcional;

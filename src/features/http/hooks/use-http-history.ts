@@ -3,6 +3,7 @@ import { createHttpErrorHistoryEntry, createHttpSuccessHistoryEntry } from "../m
 import type {
   HttpDocumentState,
   HttpHistoryEntry,
+  HttpPrivacyContext,
   HttpProjectRequestItem,
   HttpResponseSnapshot,
 } from "../model/types"
@@ -56,7 +57,18 @@ export function useHttpHistory({
       executionId: string,
       error: string,
       environmentName: string | null,
-    ) => persist(createHttpErrorHistoryEntry(document, executionId, error, environmentName)),
+      privacy?: HttpPrivacyContext,
+    ) =>
+      persist(
+        createHttpErrorHistoryEntry(
+          document,
+          executionId,
+          error,
+          environmentName,
+          Date.now(),
+          privacy,
+        ),
+      ),
     [persist],
   )
 

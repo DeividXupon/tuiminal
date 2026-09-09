@@ -27,6 +27,7 @@ import { databaseResultScrollTop } from "../model/layout"
 import {
   databaseEditableQueryTable,
   databaseQueryResultColumns,
+  databaseQueryTableWriteBlockReason,
   databaseQueryResultRowKey,
 } from "../model/query-edit"
 import { getSqlCompletionContext, sqlAutocompleteTableKey } from "../model/sql-autocomplete"
@@ -310,8 +311,13 @@ export function DatabaseQueryWorkspace({
     ? (resultTableColumns?.find((column) => column.field === selectedResultColumn.field) ?? null)
     : null
   const resultHasPrimaryKey = resultTableColumns?.some((column) => column.key === "PRI") ?? false
-  const resultTableCanWrite =
-    canWrite && resultTable?.type === "table" && Boolean(resultTableColumns)
+  const resultBaseWriteBlockReason = databaseQueryTableWriteBlockReason(
+    canWrite,
+    resultTable,
+    resultTableColumns,
+    result?.columns ?? [],
+  )
+  const resultTableCanWrite = resultBaseWriteBlockReason === null
   const selectedResultRowCanWrite =
     resultTableCanWrite &&
     Boolean(writableSelectedResultColumn) &&
@@ -322,38 +328,26 @@ export function DatabaseQueryWorkspace({
     resultTableCanWrite &&
     resultHasPrimaryKey &&
     resultBatchRows.every((row) => Boolean(row.rowKey && Object.keys(row.rowKey).length))
-  const resultWriteBlockReason = !canWrite
-    ? "Conexão em somente leitura. Use [C] > [E] e habilite LEITURA + ESCRITA."
-    : !resultTable
-      ? "A edição exige um SELECT simples de uma única tabela."
-      : resultTable.type !== "table"
-        ? "Views e resultados derivados são somente leitura."
-        : !resultTableColumns
-          ? "Carregando a estrutura da tabela…"
-          : !selectedResultGridRow
-            ? "Selecione uma linha antes de editar ou excluir."
-            : !writableSelectedResultColumn
-              ? "Esta coluna do resultado não corresponde a uma coluna editável."
-              : selectedResultGridRow.change?.mutation.kind === "insert"
-                ? null
-                : !resultHasPrimaryKey || !selectedResultGridRow.rowKey
-                  ? "Inclua a chave primária no SELECT para editar ou excluir linhas."
-                  : null
-  const resultBatchWriteBlockReason = !canWrite
-    ? "Conexão em somente leitura. Use [C] > [E] e habilite LEITURA + ESCRITA."
-    : !resultTable
-      ? "A edição exige um SELECT simples de uma única tabela."
-      : resultTable.type !== "table"
-        ? "Views e resultados derivados são somente leitura."
-        : !resultTableColumns
-          ? "Carregando a estrutura da tabela…"
-          : !resultHasPrimaryKey
-            ? "Inclua a chave primária no SELECT para alterar as linhas selecionadas."
-            : resultBatchRows.some((row) => !row.rowKey || !Object.keys(row.rowKey).length)
-              ? "Uma ou mais linhas selecionadas não puderam ser identificadas pela chave primária."
-              : !writableSelectedResultColumn
-                ? "Esta coluna do resultado não corresponde a uma coluna editável."
-                : null
+  const resultWriteBlockReason =
+    resultBaseWriteBlockReason ??
+    (!selectedResultGridRow
+      ? "Selecione uma linha antes de editar ou excluir."
+      : !writableSelectedResultColumn
+        ? "Esta coluna do resultado não corresponde a uma coluna editável."
+        : selectedResultGridRow.change?.mutation.kind === "insert"
+          ? null
+          : !resultHasPrimaryKey || !selectedResultGridRow.rowKey
+            ? "Inclua a chave primária no SELECT para editar ou excluir linhas."
+            : null)
+  const resultBatchWriteBlockReason =
+    resultBaseWriteBlockReason ??
+    (!resultHasPrimaryKey
+      ? "Inclua a chave primária no SELECT para alterar as linhas selecionadas."
+      : resultBatchRows.some((row) => !row.rowKey || !Object.keys(row.rowKey).length)
+        ? "Uma ou mais linhas selecionadas não puderam ser identificadas pela chave primária."
+        : !writableSelectedResultColumn
+          ? "Esta coluna do resultado não corresponde a uma coluna editável."
+          : null)
   const compactActions = availableWidth < COMPACT_ACTIONS_BREAKPOINT
   const selectionColors = databaseSelectionColors()
   const autocompleteVisibleLimit = Math.max(2, Math.min(6, editorHeight - 3))
@@ -764,7 +758,7 @@ export function DatabaseQueryWorkspace({
         })
         const nextResultTable = nextResult.mutating
           ? null
-          : databaseEditableQueryTable(plan.sql, tables)
+          : databaseEditableQueryTable(plan.sql, tables, connection.driver)
         lastExecutedSqlRef.current = plan.sql
         setExecutedStatementPosition(
           statement ? { index: statement.index, total: statement.total } : null,
@@ -809,6 +803,7 @@ export function DatabaseQueryWorkspace({
     },
     [
       busy,
+      connection.driver,
       connectionId,
       onDatabaseChanged,
       querySensitiveVisibility,
@@ -1194,6 +1189,7 @@ export function DatabaseQueryWorkspace({
   const stageQueryResultCellValue = useCallback(
     (value: unknown) => {
       if (
+        !resultTableCanWrite ||
         !resultTable ||
         !resultTableColumns ||
         !selectedResultGridRow ||
@@ -1276,6 +1272,7 @@ export function DatabaseQueryWorkspace({
       connectionId,
       resultChangeKey,
       resultTable,
+      resultTableCanWrite,
       resultTableColumns,
       selectedResultGridRow,
       setStagedChanges,
@@ -1289,7 +1286,7 @@ export function DatabaseQueryWorkspace({
       return
     }
     const targetRow = queryGridRows[selectedResultRowIndexRef.current] ?? selectedResultGridRow
-    if (!targetRow || !resultTable || !resultTableColumns) return
+    if (!resultTableCanWrite || !targetRow || !resultTable || !resultTableColumns) return
     if (targetRow.change?.mutation.kind === "insert") {
       setStagedChanges((current) => current.filter((change) => change.id !== targetRow.change?.id))
       setSelectedResultRowIndex((current) => {
@@ -1336,6 +1333,7 @@ export function DatabaseQueryWorkspace({
     resultChangeKey,
     resultHasPrimaryKey,
     resultTable,
+    resultTableCanWrite,
     resultTableColumns,
     resultWriteBlockReason,
     selectedResultGridRow,

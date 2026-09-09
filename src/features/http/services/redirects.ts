@@ -1,5 +1,18 @@
-import type { HttpPreparedRequest, HttpRedirectHop } from "../model/types"
+import type { HttpPreparedRequest, HttpPrivacyContext, HttpRedirectHop } from "../model/types"
 import type { HttpCookieJar } from "./cookies"
+import { combineHttpPrivacy, httpHeadersPrivacy } from "../model/secrets"
+import { httpHeaderSensitivity } from "../model/key-value"
+import {
+  httpRedirectRisks,
+  httpRedirectUrl,
+  redirectedHttpHeaders,
+  redirectedHttpMethod,
+  HttpRedirectError,
+  type HttpRedirectAuthorizer,
+} from "../model/redirect-policy"
+import { authorizeHttpRedirect } from "./redirect-authorization"
+import { HttpRedirectCookiePolicy } from "./redirect-cookies"
+export { HttpRedirectError } from "../model/redirect-policy"
 import {
   allowsInsecureTls,
   HttpInsecureTlsApprovalError,
@@ -7,52 +20,49 @@ import {
 } from "../model/tls-policy"
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
-const CROSS_ORIGIN_HEADERS = new Set([
-  "authorization",
-  "proxy-authorization",
-  "cookie",
-  "x-api-key",
-])
-
-export class HttpRedirectError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "HttpRedirectError"
-  }
+function privateRedirectUrl(url: URL, privacy: HttpPrivacyContext) {
+  return (
+    privacy.redactText(url.href) !== url.href ||
+    [...url.searchParams].some(([name, value]) => value && httpHeaderSensitivity(name) !== "normal")
+  )
 }
 
-function redirectedMethod(status: number, method: string) {
-  if (status === 303 && method !== "HEAD") return "GET"
-  if ((status === 301 || status === 302) && method === "POST") return "GET"
-  return method
-}
-
-function redirectHeaders(
-  headers: Array<[string, string]>,
-  crossOrigin: boolean,
-  dropsBody: boolean,
-) {
-  return headers.filter(([name]) => {
-    const normalized = name.toLowerCase()
-    if (crossOrigin && CROSS_ORIGIN_HEADERS.has(normalized)) return false
-    if (dropsBody && (normalized === "content-type" || normalized === "content-length"))
-      return false
-    return true
-  })
-}
-
-function validateRedirectHop(
+async function approveHop(
   request: HttpPreparedRequest,
-  url: string,
-  visited: Set<string>,
-  authorizeInsecureTls: HttpInsecureTlsAuthorizer,
+  from: URL,
+  to: URL,
+  method: string,
+  body: BodyInit | undefined,
+  hop: number,
+  privacy: HttpPrivacyContext,
+  signal: AbortSignal,
+  tlsAuthorizer: HttpInsecureTlsAuthorizer,
+  authorize?: HttpRedirectAuthorizer,
 ) {
-  if (visited.has(url)) throw new HttpRedirectError("A requisição entrou em um loop de redirects.")
-  visited.add(url)
-  const insecureTls = request.tlsVerification === "insecure" && new URL(url).protocol === "https:"
-  if (insecureTls && !allowsInsecureTls(authorizeInsecureTls, url)) {
-    throw new HttpInsecureTlsApprovalError(url)
-  }
+  const insecureTls = request.tlsVerification === "insecure" && to.protocol === "https:"
+  const needsTls = insecureTls && !allowsInsecureTls(tlsAuthorizer, to.href)
+  if (needsTls && !authorize) throw new HttpInsecureTlsApprovalError(to.href)
+  const risks = httpRedirectRisks({
+    from,
+    to,
+    body: body !== undefined && body !== "",
+    privateUrl: privateRedirectUrl(to, privacy),
+    insecureTls: needsTls,
+  })
+  await authorizeHttpRedirect(
+    Object.freeze({
+      executionId: request.executionId,
+      requestId: request.requestId,
+      hop,
+      fromOrigin: from.origin,
+      toOrigin: to.origin,
+      method,
+      displayUrl: privacy.redactUrl(to.href),
+      risks: Object.freeze(risks),
+    }),
+    signal,
+    authorize,
+  )
   return insecureTls
 }
 
@@ -82,6 +92,8 @@ export async function fetchWithHttpRedirects(
   maximumRedirects = 10,
   cookieJar?: HttpCookieJar,
   authorizeInsecureTls: HttpInsecureTlsAuthorizer = false,
+  onPrivacy?: (privacy: HttpPrivacyContext) => void,
+  authorizeRedirect?: HttpRedirectAuthorizer,
 ) {
   const activeCookieJar = request.useCookieJar === false ? undefined : cookieJar
   let url = request.url
@@ -90,36 +102,77 @@ export async function fetchWithHttpRedirects(
   let body = request.body
   const visited = new Set<string>()
   const redirects: HttpRedirectHop[] = []
+  let privacy = combineHttpPrivacy(request.privacy, httpHeadersPrivacy(request.headers))
+  let previousUrl = url
+  const cookiePolicy = new HttpRedirectCookiePolicy()
+  cookiePolicy.learn(httpRedirectUrl(url).origin, privacy)
 
   while (true) {
-    const insecureTls = validateRedirectHop(request, url, visited, authorizeInsecureTls)
-    const cookie = activeCookieJar?.header(url)
+    const target = httpRedirectUrl(url)
+    const previous = httpRedirectUrl(previousUrl)
+    if (visited.has(target.href))
+      throw new HttpRedirectError("A requisição entrou em um loop de redirects.")
+    visited.add(target.href)
+    const insecureTls = await approveHop(
+      request,
+      previous,
+      target,
+      method,
+      body,
+      redirects.length,
+      privacy,
+      signal,
+      authorizeInsecureTls,
+      authorizeRedirect,
+    )
+    const cookie = cookiePolicy.header(target.origin, activeCookieJar?.header(url))
     const requestHeaders =
       cookie && !headers.some(([name]) => name.toLowerCase() === "cookie")
         ? [...headers, ["Cookie", cookie] as [string, string]]
         : headers
+    privacy = combineHttpPrivacy(privacy, httpHeadersPrivacy(requestHeaders))
+    cookiePolicy.learn(target.origin, httpHeadersPrivacy(requestHeaders))
+    onPrivacy?.(privacy)
     const response = await fetcher(
       url,
       redirectFetchInit(request, method, requestHeaders, body, signal, insecureTls),
     )
+    const responsePrivacy = combineHttpPrivacy(
+      httpHeadersPrivacy([...response.headers.entries()]),
+      httpHeadersPrivacy(response.headers.getSetCookie().map((value) => ["set-cookie", value])),
+    )
+    privacy = combineHttpPrivacy(privacy, responsePrivacy)
+    cookiePolicy.learn(target.origin, responsePrivacy)
+    onPrivacy?.(privacy)
     activeCookieJar?.store(url, response.headers)
     const location = response.headers.get("location")
     if (!request.followRedirects || !location || !REDIRECT_STATUSES.has(response.status)) {
-      return { response, redirects }
+      return { response, redirects, privacy }
     }
     if (redirects.length >= maximumRedirects) {
       await response.body?.cancel()
       throw new HttpRedirectError(`O limite de ${maximumRedirects} redirects foi excedido.`)
     }
-    const nextUrl = new URL(location, url).toString()
-    const crossOrigin = new URL(nextUrl).origin !== new URL(url).origin
-    redirects.push({ status: response.status, url, location: nextUrl, crossOrigin })
-    await response.body?.cancel()
-    const nextMethod = redirectedMethod(response.status, method)
+    let nextUrl: URL
+    try {
+      nextUrl = httpRedirectUrl(location, url)
+    } finally {
+      await response.body?.cancel()
+    }
+    const crossOrigin = nextUrl.origin !== target.origin
+    redirects.push({ status: response.status, url, location: nextUrl.href, crossOrigin })
+    const nextMethod = redirectedHttpMethod(response.status, method)
     const dropsBody = nextMethod !== method
-    headers = redirectHeaders(headers, crossOrigin, dropsBody)
+    headers = redirectedHttpHeaders(
+      headers,
+      crossOrigin,
+      dropsBody,
+      privacy,
+      request.credentialHeaderNames,
+    )
     method = nextMethod
     if (dropsBody) body = undefined
-    url = nextUrl
+    previousUrl = url
+    url = nextUrl.href
   }
 }

@@ -30,6 +30,8 @@ describe("application boundaries", () => {
     expect(ownsKeyboardFocus(gitKeyboardScope, "git-pr-action-modal")).toBe(true)
     expect(ownsKeyboardFocus(gitKeyboardScope, "git-pr-open-browser")).toBe(false)
     expect(ownsKeyboardFocus(httpKeyboardScope, "http-url-input")).toBe(true)
+    expect(ownsKeyboardFocus(httpKeyboardScope, "http-redirect-approval-modal")).toBe(true)
+    expect(ownsKeyboardFocus(httpKeyboardScope, "http-redirect-approval-confirm")).toBe(true)
     expect(ownsKeyboardFocus(httpKeyboardScope, "http-response-scroll-scratch")).toBe(false)
   })
 

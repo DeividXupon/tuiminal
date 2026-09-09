@@ -1,5 +1,29 @@
 import { randomUUID } from "node:crypto"
 import {
+  databaseQueryHistoryParameterPreview,
+  databaseQueryHistorySessionParameterPreview,
+  normalizeQueryHistoryParameterPreview,
+} from "../model/history-parameters"
+export {
+  DATABASE_QUERY_HISTORY_PARAMETER_LIMIT,
+  DATABASE_QUERY_HISTORY_PARAMETER_NAME_LIMIT,
+  DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT,
+  DATABASE_QUERY_HISTORY_SENSITIVE_TERMS,
+  limitQueryHistoryParameterText,
+  queryHistoryParameterValue,
+  queryHistoryParameterIsSensitive,
+  databaseQueryHistoryParameterPreview,
+  databaseQueryHistorySessionParameterPreview,
+  normalizeQueryHistoryParameterPreview,
+} from "../model/history-parameters"
+import { historyEntryIsRead, metadataOnlyHistoryEntry } from "../model/history-privacy"
+import {
+  clearHistoryContent,
+  rememberHistoryContent,
+  restoreHistoryContent,
+  retainHistoryContent,
+} from "./history-content"
+import {
   accessSync,
   chmodSync,
   constants,
@@ -13,10 +37,20 @@ import { dirname, isAbsolute, join, resolve } from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { definedProperties } from "../../../shared/data/defined-properties"
+import { isReadOnlySql } from "../model/sql-read-policy"
 import {
-  DEFAULT_SENSITIVE_TERMS,
-  isSensitiveColumnName,
-} from "../../../shared/security/sensitive-data"
+  nativeReadOnlyQuery,
+  readOnlyClientIsInvalid,
+  type CancelableDatabaseQuery,
+  type RuntimeSqlClient,
+  type RuntimeSqlExecutor,
+} from "./read-only-query"
+export type {
+  CancelableDatabaseQuery,
+  RuntimeSqlClient,
+  RuntimeSqlExecutor,
+} from "./read-only-query"
+import { isSensitiveColumnName } from "../../../shared/security/sensitive-data"
 import type {
   DatabaseCatalog,
   DatabaseColumn,
@@ -59,22 +93,6 @@ export type McpTextContent = {
   type: "text"
   text: string
 }
-
-export type CancelableDatabaseQuery<T = unknown> = PromiseLike<T> & {
-  execute: () => CancelableDatabaseQuery<T>
-  cancel: () => CancelableDatabaseQuery<T>
-}
-
-export type RuntimeSqlClient = {
-  unsafe: (
-    query: string,
-    parameters?: unknown[] | Record<string, unknown>,
-  ) => CancelableDatabaseQuery<unknown>
-  begin: <T>(callback: (transaction: RuntimeSqlExecutor) => T | Promise<T>) => Promise<T>
-  close: (options?: { timeout?: number }) => Promise<void>
-}
-
-export type RuntimeSqlExecutor = Pick<RuntimeSqlClient, "unsafe">
 
 export class DatabaseQueryCancelledError extends Error {
   constructor() {
@@ -302,24 +320,11 @@ export const DRIVER_LABELS: Record<DatabaseDriver, string> = {
 export const nativeClients = new Map<string, Promise<RuntimeSqlClient>>()
 export const mcpClients = new Map<string, Promise<Client>>()
 export const sessionPasswords = new Map<string, string>()
-export const queryHistorySessionParameters = new Map<
-  string,
-  DatabaseQueryHistorySessionParameter[]
->()
 export const schemaCache = new Map<string, DatabaseColumn[]>()
 export const QUERY_RESULT_LIMIT = 500
 export const QUERY_TEXT_LIMIT = 100_000
 export const DATABASE_QUERY_HISTORY_READ_LIMIT = 100
 export const DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS = 184
-export const DATABASE_QUERY_HISTORY_PARAMETER_LIMIT = 64
-export const DATABASE_QUERY_HISTORY_PARAMETER_NAME_LIMIT = 128
-export const DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT = 240
-export const DATABASE_QUERY_HISTORY_SENSITIVE_TERMS = DEFAULT_SENSITIVE_TERMS.map((term) =>
-  term
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/[\s._-]+/g, ""),
-)
 
 export const DATABASE_DRIVER_OPTIONS: ReadonlyArray<{
   id: DatabaseDriver
@@ -404,114 +409,6 @@ export function normalizeSavedQueries(value: unknown): Record<string, DatabaseSa
   return normalized
 }
 
-export function limitQueryHistoryParameterText(value: string, limit: number) {
-  const characters = Array.from(value)
-  return characters.length <= limit
-    ? value
-    : `${characters.slice(0, Math.max(1, limit - 1)).join("")}…`
-}
-
-export function queryHistoryParameterValue(value: unknown) {
-  if (value === null) return "NULL"
-  if (value === undefined) return "undefined"
-  if (typeof value === "bigint") return `${value}n`
-  if (typeof value === "number" && !Number.isFinite(value)) return String(value)
-  if (ArrayBuffer.isView(value)) return `${value.constructor.name}(${value.byteLength} bytes)`
-  if (value instanceof ArrayBuffer) return `ArrayBuffer(${value.byteLength} bytes)`
-  try {
-    const serialized = JSON.stringify(value, (_key, nested) =>
-      typeof nested === "bigint" ? `${nested}n` : nested,
-    )
-    return serialized ?? String(value)
-  } catch {
-    return String(value)
-  }
-}
-
-export function queryHistoryParameterIsSensitive(name: string) {
-  if (isSensitiveColumnName(name)) return true
-  const comparableName = name
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/[\s._-]+/g, "")
-  return DATABASE_QUERY_HISTORY_SENSITIVE_TERMS.some((term) => comparableName.includes(term))
-}
-
-export function databaseQueryHistoryParameterPreview(
-  parameters: readonly unknown[],
-  names: readonly string[],
-): DatabaseQueryHistoryParameter[] {
-  return parameters.slice(0, DATABASE_QUERY_HISTORY_PARAMETER_LIMIT).map((value, index) => {
-    const name = limitQueryHistoryParameterText(
-      names[index]?.trim() || `param_${index + 1}`,
-      DATABASE_QUERY_HISTORY_PARAMETER_NAME_LIMIT,
-    )
-    const masked = queryHistoryParameterIsSensitive(name)
-    return {
-      position: index + 1,
-      name,
-      value: masked
-        ? "<mascarado>"
-        : limitQueryHistoryParameterText(
-            queryHistoryParameterValue(value),
-            DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT,
-          ),
-      masked,
-    }
-  })
-}
-
-export function databaseQueryHistorySessionParameterPreview(
-  parameters: readonly unknown[],
-  preview: readonly DatabaseQueryHistoryParameter[],
-): DatabaseQueryHistorySessionParameter[] {
-  return preview
-    .filter((parameter) => parameter.masked)
-    .map((parameter) => ({
-      position: parameter.position,
-      value: limitQueryHistoryParameterText(
-        queryHistoryParameterValue(parameters[parameter.position - 1]),
-        DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT,
-      ),
-    }))
-}
-
-export function normalizeQueryHistoryParameterPreview(
-  value: unknown,
-): DatabaseQueryHistoryParameter[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .slice(0, DATABASE_QUERY_HISTORY_PARAMETER_LIMIT)
-    .map((item, index): DatabaseQueryHistoryParameter | null => {
-      if (!item || typeof item !== "object") return null
-      const candidate = item as Partial<DatabaseQueryHistoryParameter>
-      if (typeof candidate.name !== "string" || typeof candidate.value !== "string") {
-        return null
-      }
-      const masked = candidate.masked === true
-      return {
-        position:
-          typeof candidate.position === "number" &&
-          Number.isSafeInteger(candidate.position) &&
-          candidate.position > 0
-            ? candidate.position
-            : index + 1,
-        name: limitQueryHistoryParameterText(
-          candidate.name,
-          DATABASE_QUERY_HISTORY_PARAMETER_NAME_LIMIT,
-        ),
-        value: masked
-          ? "<mascarado>"
-          : limitQueryHistoryParameterText(
-              candidate.value,
-              DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT,
-            ),
-        masked,
-      }
-    })
-    .filter((item): item is DatabaseQueryHistoryParameter => Boolean(item))
-}
-
 export function normalizeQueryHistoryEntry(value: unknown): DatabaseQueryHistoryEntry | null {
   if (!value || typeof value !== "object") return null
   const candidate = value as Partial<DatabaseQueryHistoryEntry>
@@ -535,6 +432,9 @@ export function normalizeQueryHistoryEntry(value: unknown): DatabaseQueryHistory
     connectionScope: candidate.connectionScope,
     connectionName: candidate.connectionName,
     driver: candidate.driver,
+    ...(candidate.storage === "metadata-only"
+      ? { storage: candidate.storage, readOnly: candidate.readOnly === true }
+      : {}),
     sql: candidate.sql,
     command: candidate.command,
     status: candidate.status,
@@ -548,9 +448,7 @@ export function normalizeQueryHistoryEntry(value: unknown): DatabaseQueryHistory
   }
 }
 
-export function databaseQueryHistoryEntryIsRead(entry: Pick<DatabaseQueryHistoryEntry, "sql">) {
-  return isReadOnlyEditorQuery(entry.sql)
-}
+export const databaseQueryHistoryEntryIsRead = historyEntryIsRead
 
 export function filterDatabaseQueryHistory(
   entries: readonly DatabaseQueryHistoryEntry[],
@@ -809,29 +707,13 @@ export function removeDatabaseSavedQuery(connectionId: string, queryId: string) 
 
 export function listDatabaseQueryHistory(connectionId?: string) {
   const settings = readSettings()
-  const storedIds = new Set(settings.queryHistory.map((entry) => entry.id))
-  for (const entryId of queryHistorySessionParameters.keys()) {
-    if (!storedIds.has(entryId)) queryHistorySessionParameters.delete(entryId)
-  }
+  retainHistoryContent(settings.queryHistory)
   const entries = connectionId
     ? settings.queryHistory.filter(
         (entry) => entry.connectionScope === savedQueryScopeKey(connectionId),
       )
     : settings.queryHistory
-  return entries.map((entry) => {
-    const sessionParameters = queryHistorySessionParameters.get(entry.id)
-    if (!sessionParameters?.length) return entry
-    const sessionValues = new Map(
-      sessionParameters.map((parameter) => [parameter.position, parameter.value]),
-    )
-    return {
-      ...entry,
-      parameterPreview: entry.parameterPreview.map((parameter) => {
-        const revealedValue = sessionValues.get(parameter.position)
-        return revealedValue === undefined ? parameter : { ...parameter, revealedValue }
-      }),
-    }
-  })
+  return entries.map(restoreHistoryContent)
 }
 
 export function databaseQueryHistoryCanRerun(entry: DatabaseQueryHistoryEntry) {
@@ -867,11 +749,13 @@ export function appendDatabaseQueryHistory(
     ...persistedEntry,
     parameterPreview: normalizeQueryHistoryParameterPreview(persistedEntry.parameterPreview),
   }
-  settings.queryHistory = retainSortedDatabaseQueryHistory([saved, ...settings.queryHistory])
+  settings.queryHistory = retainSortedDatabaseQueryHistory([
+    metadataOnlyHistoryEntry(saved),
+    ...settings.queryHistory,
+  ])
   writeSettings(settings)
-  if (sessionParameterPreview?.length) {
-    queryHistorySessionParameters.set(id, sessionParameterPreview)
-  }
+  rememberHistoryContent(saved, sessionParameterPreview)
+  retainHistoryContent(settings.queryHistory)
 }
 
 export function appendDatabaseQueryHistoryBatch(
@@ -897,14 +781,25 @@ export function appendDatabaseQueryHistoryBatch(
       sessionParameterPreview,
     }
   })
-  const saved = prepared.map((entry) => entry.saved).reverse()
+  const saved = prepared.map((entry) => metadataOnlyHistoryEntry(entry.saved)).reverse()
   settings.queryHistory = retainSortedDatabaseQueryHistory([...saved, ...settings.queryHistory])
   writeSettings(settings)
   for (const entry of prepared) {
-    if (entry.sessionParameterPreview?.length) {
-      queryHistorySessionParameters.set(entry.saved.id, entry.sessionParameterPreview)
-    }
+    rememberHistoryContent(entry.saved, entry.sessionParameterPreview)
   }
+  retainHistoryContent(settings.queryHistory)
+}
+
+/** Explicit UI confirmation is required; never rewrite legacy SQL on load. */
+export function clearLegacyDatabaseQueryHistoryContent() {
+  const settings = readSettings()
+  writeSettings({
+    ...settings,
+    queryHistory: settings.queryHistory.map((entry) =>
+      entry.storage === "metadata-only" ? entry : metadataOnlyHistoryEntry(entry),
+    ),
+  })
+  return listDatabaseQueryHistory()
 }
 
 export function normalizedDraft(draft: DatabaseConnectionDraft): DatabaseConnectionDraft {
@@ -1000,7 +895,7 @@ export function profileFromDraft(
   draft: DatabaseConnectionDraft,
   id = `database-${randomUUID()}`,
 ): DatabaseConnectionProfile {
-  return definedProperties({ id, source: "saved" as const, ...normalizedDraft(draft) })
+  return definedProperties({ ...normalizedDraft(draft), id, source: "saved" as const })
 }
 
 export async function testDatabaseConnection(draft: DatabaseConnectionDraft, password: string) {
@@ -1013,7 +908,7 @@ export async function testDatabaseConnection(draft: DatabaseConnectionDraft, pas
       await client.close()
     } else {
       const client = await createNativeClient(profile)
-      await nativeQuery(client, "SELECT 1 AS connection_ok")
+      await nativeQuery(client, "SELECT 1 AS connection_ok", profile.driver)
       await client.close({ timeout: 1 })
     }
   } finally {
@@ -1235,33 +1130,15 @@ export function queryCommand(sql: string) {
   )
 }
 
-export function sqlForClassification(sql: string) {
-  return sqlWithoutLeadingComments(sql)
-    .replace(/\$\$[\s\S]*?\$\$/g, "")
-    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$/g, "")
-    .replace(/'(?:''|\\.|[^'])*'/g, "''")
-    .replace(/"(?:""|\\.|[^"])*"/g, '""')
-    .replace(/`(?:``|\\.|[^`])*`/g, "``")
-    .replace(/--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g, " ")
-}
-
-export function isReadOnlyEditorQuery(sql: string) {
-  const normalized = sqlForClassification(sql)
-  const command = queryCommand(normalized)
-  if (/^(SHOW|DESCRIBE|DESC|EXPLAIN|PRAGMA)$/.test(command)) return true
-  if (command === "SELECT") return !/\bINTO\b/i.test(normalized)
-  if (command !== "WITH" || !/\bSELECT\b/i.test(normalized)) return false
-  return !/\b(INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE|CALL|COPY|GRANT|REVOKE|VACUUM|REINDEX|ATTACH|DETACH)\b/i.test(
-    normalized,
-  )
+export function isReadOnlyEditorQuery(sql: string, driver: DatabaseDriver = "postgres") {
+  return isReadOnlySql(sql, driver)
 }
 
 export function assertEditorQueryAllowed(profile: DatabaseConnectionProfile, sql: string) {
-  if (databaseConnectionCanWrite(profile) || isReadOnlyEditorQuery(sql)) return
-  if (queryCommand(sql) !== "SELECT") {
-    throw new Error("Esta conexão está em somente leitura. Habilite a escrita para alterar dados.")
-  }
-  throw new Error("SELECT INTO foi bloqueado porque esta conexão está em somente leitura.")
+  if (databaseConnectionCanWrite(profile) || isReadOnlyEditorQuery(sql, profile.driver)) return
+  throw new Error(
+    "Esta conexão está em somente leitura. Comandos com efeitos, SELECT INTO e rotinas não reconhecidas exigem escrita habilitada.",
+  )
 }
 
 export function quoteIdentifier(profile: DatabaseConnectionProfile, identifier: string) {
@@ -1324,9 +1201,15 @@ export async function readMcpQuery(client: Client, sql: string) {
   return mcpQuery(client, sql)
 }
 
-export async function nativeQuery(client: RuntimeSqlClient, sql: string) {
+export async function nativeQuery(
+  client: RuntimeSqlClient,
+  sql: string,
+  driver: DatabaseDriver = "postgres",
+) {
   assertReadOnly(sql)
-  return rowsFromResult(await client.unsafe(sql))
+  return rowsFromResult(
+    await (driver === "sqlite" ? client.unsafe(sql) : nativeReadOnlyQuery(client, sql, driver)),
+  )
 }
 
 export async function createMcpClient(profile: DatabaseConnectionProfile) {
@@ -1393,6 +1276,10 @@ export async function getMcpClient(profile: DatabaseConnectionProfile) {
 
 export async function getNativeClient(profile: DatabaseConnectionProfile) {
   let pending = nativeClients.get(profile.id)
+  if (pending && readOnlyClientIsInvalid(await pending)) {
+    if (nativeClients.get(profile.id) === pending) nativeClients.delete(profile.id)
+    pending = nativeClients.get(profile.id)
+  }
   if (!pending) {
     pending = createNativeClient(profile).catch((error) => {
       nativeClients.delete(profile.id)
@@ -1416,7 +1303,7 @@ export async function readQuery(connectionId: string, sql: string) {
   const profile = connectionProfile(connectionId)
   return profile.driver === "mcp-mysql"
     ? readMcpQuery(await getMcpClient(profile), sql)
-    : nativeQuery(await getNativeClient(profile), sql)
+    : nativeQuery(await getNativeClient(profile), sql, profile.driver)
 }
 
 export function queryResultColumns(result: unknown, rows: Array<Record<string, unknown>>) {
@@ -1457,6 +1344,50 @@ export function affectedRowCount(result: unknown) {
   return null
 }
 
+function visibleQueryRows(rows: Array<Record<string, unknown>>, revealSensitive: boolean) {
+  return rows
+    .slice(0, QUERY_RESULT_LIMIT)
+    .map((row) =>
+      Object.fromEntries(
+        Object.entries(row).map(([column, value]) => [
+          column,
+          !revealSensitive && isSensitiveColumnName(column) && value !== null
+            ? "<mascarado>"
+            : ArrayBuffer.isView(value)
+              ? `<binário ${value.byteLength} bytes>`
+              : value,
+        ]),
+      ),
+    )
+}
+
+async function editorQueryRows(
+  profile: DatabaseConnectionProfile,
+  plan: DatabaseQueryPlan,
+  signal?: AbortSignal,
+) {
+  if (profile.driver === "mcp-mysql") {
+    const rows = await mcpQuery(await getMcpClient(profile), plan.sql, signal)
+    return { rawResult: rows, rows }
+  }
+  if (profile.driver === "sqlite") {
+    const rawResult = await executeSqliteProcessQuery(
+      { ...profile, writeEnabled: databaseConnectionCanWrite(profile) && plan.mutating },
+      plan.sql,
+      signal,
+    )
+    return { rawResult, rows: rawResult.rows }
+  }
+  const client = await getNativeClient(profile)
+  const query = plan.mutating
+    ? client.unsafe(plan.sql)
+    : nativeReadOnlyQuery(client, plan.sql, profile.driver)
+  const rawResult = await awaitCancelableDatabaseQuery(query, signal, () =>
+    forceCloseNativeClient(profile.id, client),
+  )
+  return { rawResult, rows: rowsFromResult(rawResult) }
+}
+
 export async function executeDatabaseQuery(
   connectionId: string,
   sql: string,
@@ -1468,22 +1399,7 @@ export async function executeDatabaseQuery(
   try {
     plan = previewDatabaseQuery(connectionId, sql)
     const profile = connectionProfile(connectionId)
-    let rawResult: unknown
-    let rows: Array<Record<string, unknown>>
-    if (profile.driver === "mcp-mysql") {
-      rows = await mcpQuery(await getMcpClient(profile), plan.sql, options.signal)
-      rawResult = rows
-    } else if (profile.driver === "sqlite") {
-      const processResult = await executeSqliteProcessQuery(profile, plan.sql, options.signal)
-      rows = processResult.rows
-      rawResult = processResult
-    } else {
-      const client = await getNativeClient(profile)
-      rawResult = await awaitCancelableDatabaseQuery(client.unsafe(plan.sql), options.signal, () =>
-        forceCloseNativeClient(profile.id, client),
-      )
-      rows = rowsFromResult(rawResult)
-    }
+    const { rawResult, rows } = await editorQueryRows(profile, plan, options.signal)
 
     if (plan.mutating) {
       for (const key of schemaCache.keys()) {
@@ -1491,20 +1407,7 @@ export async function executeDatabaseQuery(
       }
     }
 
-    const visibleRows = rows
-      .slice(0, QUERY_RESULT_LIMIT)
-      .map((row) =>
-        Object.fromEntries(
-          Object.entries(row).map(([column, value]) => [
-            column,
-            !revealSensitive && isSensitiveColumnName(column) && value !== null
-              ? "<mascarado>"
-              : ArrayBuffer.isView(value)
-                ? `<binário ${value.byteLength} bytes>`
-                : value,
-          ]),
-        ),
-      )
+    const visibleRows = visibleQueryRows(rows, revealSensitive)
     const result: DatabaseQueryResult = {
       command: plan.command,
       mutating: plan.mutating,
@@ -1561,7 +1464,7 @@ export function previewDatabaseQuery(connectionId: string, sql: string): Databas
   return {
     sql: statement,
     command,
-    mutating: !isReadOnlyEditorQuery(statement),
+    mutating: !isReadOnlyEditorQuery(statement, profile.driver),
   }
 }
 
@@ -2630,5 +2533,5 @@ export async function closeDatabaseConnection() {
     ...sqliteProcesses.map((subprocess) => subprocess.exited),
   ])
   schemaCache.clear()
-  queryHistorySessionParameters.clear()
+  clearHistoryContent()
 }

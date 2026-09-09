@@ -117,6 +117,12 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 
 Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
 
+A edição de resultados SQL exige colunas diretas, sem renomeações ou duplicações, de uma única tabela identificável; expressões, agregações e consultas ambíguas ficam somente leitura. Alterar/excluir registros exige a chave primária completa no resultado.
+
+Leituras nativas usam transações `READ ONLY` em PostgreSQL, proteção de transação e sessão em MySQL/MariaDB e um arquivo aberto em modo readonly no editor SQLite, inclusive quando o perfil permite escrita. Rotinas não reconhecidas, PRAGMAs de alteração e comandos com efeitos exigem escrita habilitada e confirmação. Use também credenciais com privilégios mínimos no servidor: o modo do aplicativo não é um sandbox para rotinas do banco. No MCP opcional, a restrição de escrita precisa ser aplicada pelo servidor MCP e pelas credenciais dele.
+
+O histórico SQL salva apenas metadados das novas execuções. SQL completo, parâmetros e mensagens de erro detalhadas ficam na sessão, em um cache limitado a 200 entradas e 2 MB. Após encerrar o app ou atingir esse limite, ficam os metadados sem reexecução. Nas configurações do Banco, `[D]` abre a limpeza do conteúdo antigo e `[Y]` confirma: preserva metadados e favoritos, mas não pode ser desfeito e não remove backups. **Favoritos salvos explicitamente continuam gravando o SQL completo em disco**; evite salvar segredos neles.
+
 ### Atalhos essenciais do Banco
 
 | Ação | Atalho |
@@ -291,6 +297,7 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit.
 - **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema.
 - **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
+- **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
 
 ### Atalhos essenciais do HTTP
 
@@ -330,7 +337,20 @@ tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 ```
 
-Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Segredos são removidos de preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
+No modo sem interface, redirects que transportam corpo/URL privada exigem
+`--allow-private-redirect-to https://destino.example`; downgrade exige
+`--allow-http-redirect-to http://destino.example`. As flags aceitam somente uma
+origem exata (protocolo, host e porta), podem ser repetidas para outros destinos e
+valem apenas para o comando atual. Quando os dois riscos existem, as duas
+autorizações são necessárias. `--allow-insecure-tls` é uma autorização separada.
+Mesmo com aprovação, headers privados/autenticação da origem não são encaminhados.
+A continuação não repete o envio anterior nem as dependências da coleção. Timeout
+e cancelamento descartam confirmações pendentes; autorizações atrasadas não enviam
+requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sessão.
+
+Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
+
+O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
 
 <a id="free-terminal"></a>
 
@@ -417,6 +437,10 @@ Antes de contribuir, leia:
 ## Arquitetura e próximos passos
 
 O código atual é um monólito modular: `src/app` compõe a aplicação, `src/core` contém infraestrutura, `src/shared` oferece peças reutilizáveis e `src/features` separa cada ferramenta.
+
+O [plano de prontidão para alfa](./ALPHA_READINESS_PLAN.md) reúne os bloqueadores,
+correções parciais, evidências e checklist de retomada na seção 9. O checkpoint em
+`development` não é uma alfa aprovada nem uma nova versão publicada no npm.
 
 O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o mesmo SDK público de plugins. Os documentos abaixo registram direção e evidências atuais; são planos evolutivos, não promessas de API congelada:
 

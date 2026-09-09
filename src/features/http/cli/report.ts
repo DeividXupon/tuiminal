@@ -1,4 +1,6 @@
 import type { HttpRunCase } from "../services/collection-runner"
+import { combineHttpPrivacy } from "../model/secrets"
+import { redactHttpAssertions, httpHistoryErrorPrivacy } from "../model/history-privacy"
 
 export type HttpReportKind = "text" | "json" | "junit"
 
@@ -94,7 +96,33 @@ function junitReport(cases: HttpRunCase[]) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="tuiminal-http" tests="${tests.length}" failures="${failures}" errors="${errors}">${tests.join("")}</testsuite>\n`
 }
 
-export function formatHttpRunReport(cases: HttpRunCase[], kind: HttpReportKind) {
+export function formatHttpRunReport(rawCases: HttpRunCase[], kind: HttpReportKind) {
+  const cases = rawCases.map((testCase) => {
+    const privacy = combineHttpPrivacy(
+      ...testCase.items.flatMap((item) => [item.privacy, item.response?.privacy]),
+    )
+    const text = (value: string) => httpHistoryErrorPrivacy(privacy, value)
+    return {
+      name: text(testCase.name),
+      items: testCase.items.map((item) => ({
+        ...item,
+        requestName: text(item.requestName),
+        method: text(item.method),
+        url: privacy.redactUrl(item.url),
+        ...(item.error
+          ? { error: { kind: item.error.kind, message: text(item.error.message) } }
+          : {}),
+        ...(item.response
+          ? {
+              response: {
+                ...item.response,
+                assertions: redactHttpAssertions(item.response.assertions ?? [], privacy),
+              },
+            }
+          : {}),
+      })),
+    }
+  })
   if (kind === "json") return `${JSON.stringify(reportData(cases), null, 2)}\n`
   if (kind === "junit") return junitReport(cases)
   return textReport(cases)

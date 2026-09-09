@@ -4,6 +4,7 @@ import type { HttpPreparedRequest } from "../model/types"
 import type { HttpCookieJar } from "./cookies"
 import { fetchWithHttpRedirects } from "./redirects"
 import type { HttpInsecureTlsAuthorizer } from "../model/tls-policy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 function safeStem(value: string) {
   return (
@@ -44,6 +45,7 @@ export async function downloadCompleteHttpResponse({
   signal,
   cookieJar,
   authorizeInsecureTls = false,
+  authorizeRedirect,
   now = new Date(),
 }: {
   root: string
@@ -52,6 +54,7 @@ export async function downloadCompleteHttpResponse({
   signal: AbortSignal
   cookieJar?: HttpCookieJar
   authorizeInsecureTls?: HttpInsecureTlsAuthorizer
+  authorizeRedirect?: HttpRedirectAuthorizer
   now?: Date
 }) {
   if (request.method.toUpperCase() !== "GET") {
@@ -66,6 +69,8 @@ export async function downloadCompleteHttpResponse({
     10,
     cookieJar,
     authorizeInsecureTls,
+    undefined,
+    authorizeRedirect,
   )
   const directory = resolve(root, "tuiminal-exports", "http")
   await mkdir(directory, { recursive: true, mode: 0o700 })

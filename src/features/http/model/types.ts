@@ -139,12 +139,22 @@ export type HttpVariableValue = {
 
 export type HttpVariableContext = ReadonlyMap<string, HttpVariableValue>
 
+// Values are captured privately by these functions, never as serializable fields.
+export type HttpPrivacyContext = {
+  readonly hasSecrets: boolean
+  redactText: (value: string) => string
+  redactUrl: (value: string) => string
+  toJSON: () => undefined
+}
+
 export type HttpProjectRequestItem = {
   filePath: string
   request: HttpRequestDefinition
 }
 
 export type HttpPreparedRequest = {
+  privacy?: HttpPrivacyContext
+  credentialHeaderNames?: readonly string[]
   executionId: string
   requestId: string
   requestRevision: number
@@ -171,6 +181,7 @@ export type HttpPreparedRequest = {
 }
 
 export type HttpResponseSnapshot = {
+  privacy?: HttpPrivacyContext
   executionId: string
   requestId: string
   requestRevision: number
@@ -234,6 +245,7 @@ export type HttpDocumentState = {
 }
 
 export type HttpHistoryEntry = {
+  privacy?: HttpPrivacyContext
   id: string
   createdAt: number
   requestId: string

@@ -175,6 +175,7 @@ export function HttpCollectionRunnerModal({
       <RunnerResults cases={cases} width={contentWidth} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
         <InlineButton
+          id="http-collection-runner-run"
           label={status === "running" ? "[X] Cancelar" : "[Ctrl+Enter] Executar"}
           accent={status === "running" ? COLORS.danger : COLORS.http}
           onPress={onRun}

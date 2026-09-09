@@ -20,6 +20,7 @@ function printHelp() {
 ${translateUi("Uso:")}
   tuiminal [${directory}]
   tuiminal <${tool}> [${directory}]
+  tuiminal http run <file.http>[#request] [--env <name>] [--report text|json|junit]
 
 ${translateUi("Exemplos:")}
   tuiminal
@@ -36,7 +37,12 @@ ${translateUi("Ferramentas:")}
 
 ${translateUi("Opções:")}
   -h, --help       ${translateUi("Exibir esta ajuda")}
-  -v, --version    ${translateUi("Exibir a versão")}`)
+  -v, --version    ${translateUi("Exibir a versão")}
+
+HTTP run:
+  --allow-private-redirect-to <origin>  ${translateUi("Autorizar body/URL privada para esta origem exata")}
+  --allow-http-redirect-to <origin>     ${translateUi("Autorizar downgrade HTTPS → HTTP para esta origem exata")}
+  --allow-insecure-tls                 ${translateUi("Autorizar TLS sem verificação neste comando")}`)
 }
 
 if (args.includes("--help") || args.includes("-h")) {

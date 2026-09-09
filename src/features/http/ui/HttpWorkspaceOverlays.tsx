@@ -29,7 +29,6 @@ import { HttpHistoryDiffModal } from "./HttpHistoryDiffModal"
 import { HttpRequestFileModal } from "./HttpRequestFileModal"
 import { HttpWorkspaceOverlay } from "./HttpWorkspaceOverlay"
 import { HttpWorkspaceSettingsModal } from "./HttpWorkspaceSettingsModal"
-import { HttpInsecureTlsModal } from "./HttpInsecureTlsModal"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 export function HttpWorkspaceOverlays({
@@ -57,9 +56,6 @@ export function HttpWorkspaceOverlays({
   pendingCloseName,
   onConfirmCloseDocument,
   onCancelCloseDocument,
-  pendingTlsApproval,
-  onConfirmInsecureTls,
-  onCancelInsecureTls,
 }: {
   overlay: HttpWorkspaceOverlayKind
   document: HttpDocumentState
@@ -131,9 +127,6 @@ export function HttpWorkspaceOverlays({
   pendingCloseName: string
   onConfirmCloseDocument: () => void
   onCancelCloseDocument: () => void
-  pendingTlsApproval: HttpInsecureTlsApproval | null
-  onConfirmInsecureTls: () => void
-  onCancelInsecureTls: () => void
 }) {
   return (
     <>
@@ -256,15 +249,6 @@ export function HttpWorkspaceOverlays({
           terminalHeight={terminalHeight}
           onConfirm={onConfirmCloseDocument}
           onClose={onCancelCloseDocument}
-        />
-      ) : null}
-      {overlay === "insecure-tls-confirmation" && pendingTlsApproval ? (
-        <HttpInsecureTlsModal
-          approval={pendingTlsApproval}
-          terminalWidth={terminalWidth}
-          terminalHeight={terminalHeight}
-          onConfirm={onConfirmInsecureTls}
-          onClose={onCancelInsecureTls}
         />
       ) : null}
     </>

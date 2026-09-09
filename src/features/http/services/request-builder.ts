@@ -11,6 +11,7 @@ import type {
 import { resolveHttpTemplate } from "../model/variables"
 import { validateHttpRequestAutomation } from "../model/automation"
 import { isValidHttpMethod } from "../model/request-validation"
+import { requestHttpPrivacy } from "../model/secrets"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 
@@ -306,6 +307,15 @@ export function prepareHttpRequest(
 
   return {
     executionId,
+    privacy: requestHttpPrivacy(request, variables),
+    credentialHeaderNames: [
+      ...request.headers
+        .filter((entry) => entry.sensitivity !== "normal")
+        .map((entry) => entry.name),
+      ...(request.auth.kind === "api-key" && request.auth.placement === "header"
+        ? [request.auth.name]
+        : []),
+    ],
     requestId: request.id,
     requestRevision,
     method,

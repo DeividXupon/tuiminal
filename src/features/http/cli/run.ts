@@ -10,6 +10,7 @@ import {
 } from "../services/collection-runner"
 import { environmentVariableContext, loadHttpEnvironments } from "../storage/environments"
 import { formatHttpRunReport, httpRunExitCode, type HttpReportKind } from "./report"
+import { parseHttpRedirectFlags } from "./redirect-flags"
 
 type RunOptions = {
   file: string
@@ -65,7 +66,8 @@ function projectItems(source: string, path: string): HttpProjectRequestItem[] {
 
 export async function runHttpHeadless(args: string[], root = process.cwd()) {
   try {
-    const options = parseRunOptions(args)
+    const redirectFlags = parseHttpRedirectFlags(args)
+    const options = parseRunOptions(redirectFlags.args)
     const target = resolveHttpRunFile(root, options.file)
     const source = await readFile(target.path, "utf8")
     const projectRoot = resolve(root)
@@ -96,6 +98,7 @@ export async function runHttpHeadless(args: string[], root = process.cwd()) {
         root: projectRoot,
         environmentName: options.environment ?? null,
         isInsecureTlsApproved: () => options.allowInsecureTls,
+        authorizeRedirect: redirectFlags.authorize,
       })
     })
     process.stdout.write(formatHttpRunReport(cases, options.report))

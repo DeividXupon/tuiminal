@@ -3,7 +3,20 @@ import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { DatabaseQueryHistoryEntry, DatabaseQueryHistoryParameter } from "../model/types"
+import type { DatabaseQueryHistoryEntry } from "../model/types"
+import {
+  historyDuration,
+  historyAmount,
+  historySqlPreview,
+  historyParameterText,
+  historySqlText,
+  historyRerunUnavailableReason,
+} from "./history-presentation"
+import {
+  DatabaseHistoryPrivacyBar,
+  historyPrivacyLayout,
+  useHistoryPrivacy,
+} from "./use-history-privacy"
 import {
   DATABASE_QUERY_HISTORY_READ_LIMIT,
   databaseQueryHistoryEntryIsRead,
@@ -18,56 +31,23 @@ import {
 import { COLORS } from "../../../core/settings/theme"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 
-function historyDuration(durationMs: number) {
-  return durationMs >= 1_000
-    ? `${(durationMs / 1_000).toFixed(2)} s`
-    : `${durationMs.toFixed(1)} ms`
-}
-
-function historyAmount(entry: DatabaseQueryHistoryEntry) {
-  if (entry.status === "error") return translateUi("ERRO")
-  if (entry.affectedRows !== null) {
-    return `${entry.affectedRows} ${translateUi("linha(s) afetada(s)")}`
-  }
-  return `${entry.rowCount ?? 0} ${translateUi("linha(s)")}`
-}
-
-function historySqlPreview(sql: string, width: number) {
-  return truncateDisplay(sql.replace(/\s+/g, " ").trim(), width)
-}
-
-function historyParameterText(
-  parameter: DatabaseQueryHistoryParameter,
-  sensitiveVisibility: SensitiveVisibility,
-) {
-  let value = parameter.value
-  if (parameter.masked) {
-    const revealable = parameter.revealedValue !== undefined
-    if (revealable && sensitiveVisibility === "visible") {
-      value = parameter.revealedValue ?? parameter.value
-    } else if (revealable && sensitiveVisibility === "confirm") {
-      value = translateUi("<confirmar [V]>")
-    } else {
-      value = translateUi(revealable ? "<mascarada [V]>" : "<mascarada>")
-    }
-  }
-  return `$${parameter.position} ${parameter.name} = ${value}`
-}
-
 export function DatabaseQueryHistoryModal({
   open,
   entries,
   canRerun,
   onClose,
   onRerun,
+  onEntriesChanged,
 }: {
   open: boolean
   entries: DatabaseQueryHistoryEntry[]
   canRerun: (entry: DatabaseQueryHistoryEntry) => boolean
   onClose: () => void
   onRerun: (entry: DatabaseQueryHistoryEntry) => void
+  onEntriesChanged: (entries: DatabaseQueryHistoryEntry[]) => void
 }) {
   const terminal = useTerminalDimensions()
+  const privacy = useHistoryPrivacy(entries, onEntriesChanged)
   const modalRef = useRef<BoxRenderable | null>(null)
   const listRef = useRef<ScrollBoxRenderable | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -99,9 +79,10 @@ export function DatabaseQueryHistoryModal({
     ? `${translateUi("Leituras")}: ${readCount}/${DATABASE_QUERY_HISTORY_READ_LIMIT} · ${translateUi("Alterações em 6 meses")}: ${changeCount}`
     : `${translateUi("Leituras recentes")}: ${readCount}/${DATABASE_QUERY_HISTORY_READ_LIMIT} · ${translateUi("Alterações nos últimos 6 meses")}: ${changeCount}`
   const parameterSpace = Math.min(selectedEntry?.parameterPreview.length ?? 0, compact ? 2 : 4)
+  const headerHeight = 3 + historyPrivacyLayout(privacy, Math.max(1, width - 6)).height
   const listHeight = Math.max(
     4,
-    Math.floor((height - 9) * (compact ? 0.52 : 0.58)) - parameterSpace,
+    Math.floor((height - 6 - headerHeight) * (compact ? 0.52 : 0.58)) - parameterSpace,
   )
   const rowWidth = Math.max(12, width - 8)
   const parameterLimit = compact ? 2 : 4
@@ -112,11 +93,10 @@ export function DatabaseQueryHistoryModal({
   )
   const sqlLines = useMemo(
     () =>
-      (selectedEntry?.sql.split("\n") ?? []).slice(
-        0,
-        compact ? 2 : selectedEntry?.parameterPreview.length ? 4 : 6,
-      ),
-    [compact, selectedEntry?.parameterPreview.length, selectedEntry?.sql],
+      historySqlText(selectedEntry)
+        .split("\n")
+        .slice(0, compact ? 2 : selectedEntry?.parameterPreview.length ? 4 : 6),
+    [compact, selectedEntry],
   )
 
   useEffect(() => {
@@ -168,6 +148,7 @@ export function DatabaseQueryHistoryModal({
     if (!open) return
     key.preventDefault()
     key.stopPropagation()
+    if (privacy.handleKey(key)) return
     if (key.name === "escape") {
       onClose()
       return
@@ -180,12 +161,11 @@ export function DatabaseQueryHistoryModal({
       toggleReads()
       return
     }
-    if (key.name === "up" || key.name === "k") {
-      setSelectedIndex((current) => Math.max(0, current - 1))
-      return
-    }
-    if (key.name === "down" || key.name === "j") {
-      setSelectedIndex((current) => Math.min(Math.max(0, visibleEntries.length - 1), current + 1))
+    if (["up", "k", "down", "j"].includes(key.name)) {
+      const direction = ["up", "k"].includes(key.name) ? -1 : 1
+      setSelectedIndex((current) =>
+        Math.max(0, Math.min(visibleEntries.length - 1, current + direction)),
+      )
       return
     }
     if ((key.name === "enter" || key.name === "return") && selectedEntry && selectedCanRerun) {
@@ -237,7 +217,7 @@ export function DatabaseQueryHistoryModal({
         >
           <box
             style={{
-              height: 3,
+              height: headerHeight,
               flexShrink: 0,
               border: ["bottom"],
               borderColor: COLORS.border,
@@ -259,8 +239,9 @@ export function DatabaseQueryHistoryModal({
             </box>
             <text
               content={truncateDisplay(retentionSummary, Math.max(8, width - 6))}
-              style={{ fg: COLORS.muted }}
+              style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
             />
+            <DatabaseHistoryPrivacyBar privacy={privacy} width={Math.max(1, width - 6)} />
           </box>
 
           {visibleEntries.length ? (
@@ -323,7 +304,7 @@ export function DatabaseQueryHistoryModal({
                             />
                           </box>
                           <text
-                            content={`  ${historySqlPreview(entry.sql, rowWidth)}`}
+                            content={`  ${historySqlPreview(historySqlText(entry), rowWidth)}`}
                             style={{ fg: selected ? COLORS.text : COLORS.muted }}
                           />
                         </box>
@@ -415,11 +396,7 @@ export function DatabaseQueryHistoryModal({
                     ) : null}
                     {!selectedCanRerun ? (
                       <text
-                        content={translateUi(
-                          selectedEntry.rerunnable
-                            ? "Reexecução indisponível neste modo ou porque a conexão original mudou."
-                            : "Reexecução desativada: alterações da grade exigem nova revisão.",
-                        )}
+                        content={translateUi(historyRerunUnavailableReason(selectedEntry))}
                         style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
                       />
                     ) : null}
@@ -442,7 +419,7 @@ export function DatabaseQueryHistoryModal({
 
           <box
             style={{
-              height: 1,
+              height: 2,
               flexShrink: 0,
               flexDirection: "row",
               justifyContent: "space-between",
@@ -485,7 +462,7 @@ export function DatabaseQueryHistoryModal({
               <InlineButton
                 label={compact ? "[Enter]" : translateUi("[Enter] Reexecutar")}
                 accent={COLORS.success}
-                disabled={!selectedCanRerun}
+                disabled={privacy.confirming || !selectedCanRerun}
                 onPress={() => {
                   if (selectedEntry && selectedCanRerun) onRerun(selectedEntry)
                 }}

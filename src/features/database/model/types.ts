@@ -145,6 +145,8 @@ export type DatabaseQueryHistorySessionParameter = {
 }
 
 export type DatabaseQueryHistoryEntry = {
+  storage?: "metadata-only"
+  readOnly?: boolean
   id: string
   connectionId: string
   connectionScope: string

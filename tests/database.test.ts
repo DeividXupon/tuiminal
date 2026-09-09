@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { clearHistoryContent } from "../src/features/database/services/history-content"
 
 const originalConfigRoot = process.env.XDG_CONFIG_HOME
 const configRoot = mkdtempSync(join(tmpdir(), "tuiminal-database-test-"))
@@ -125,6 +126,7 @@ const {
   applyTableMutations,
   awaitCancelableDatabaseQuery,
   closeDatabaseConnection,
+  clearLegacyDatabaseQueryHistoryContent,
   coerceDatabaseCellValue,
   databaseConnectionCanWrite,
   databaseQueryHistoryEntryIsRead,
@@ -145,11 +147,15 @@ const {
   loadTableIndexes,
   loadTablePage,
   previewDatabaseQuery,
+  profileFromDraft,
   previewDatabaseTablePageQuery,
   previewTableMutation,
   removeDatabaseConnection,
   removeDatabaseSavedQuery,
   retainDatabaseQueryHistory,
+  normalizeQueryHistoryEntry,
+  readSettings,
+  writeSettings,
   saveDatabaseQuery,
   setDefaultDatabaseConnection,
   testDatabaseConnection,
@@ -170,6 +176,14 @@ afterAll(async () => {
 })
 
 describe("database query safety", () => {
+  test("does not inherit an existing connection's identity when copying a draft", () => {
+    const original = listDatabaseConnections().find((profile) => profile.id === "write-one")
+    if (!original) throw new Error("Missing fixture")
+    const copy = profileFromDraft({ ...original, writeEnabled: false })
+    expect(copy.id).not.toBe(original.id)
+    expect(copy.writeEnabled).toBe(false)
+    expect(profileFromDraft(original, "explicit-new-id").id).toBe("explicit-new-id")
+  })
   test("cancels a running native query through its real query handle", async () => {
     let cancelled = false
     let rejectQuery: (error: Error) => void = () => undefined
@@ -232,6 +246,25 @@ describe("database query safety", () => {
     expect(() => previewDatabaseQuery("read-only", "DELETE FROM users WHERE id = 1")).toThrow(
       "somente leitura",
     )
+  })
+
+  test("does not misclassify SQLite setting PRAGMAs as reads", async () => {
+    expect(previewDatabaseQuery("write-one", "PRAGMA user_version = 7").mutating).toBe(true)
+    expect(() => previewDatabaseQuery("read-only", "PRAGMA user_version = 7")).toThrow(
+      "somente leitura",
+    )
+    await expect(executeDatabaseQuery("read-only", "PRAGMA user_version = 7")).rejects.toThrow(
+      "somente leitura",
+    )
+    expect((await executeDatabaseQuery("read-only", "PRAGMA user_version")).rows[0]).toEqual({
+      user_version: 0,
+    })
+    const result = await executeDatabaseQuery("write-one", "PRAGMA user_version = 7")
+    expect(result.mutating).toBe(true)
+    expect((await executeDatabaseQuery("write-one", "PRAGMA user_version")).rows[0]).toEqual({
+      user_version: 7,
+    })
+    await executeDatabaseQuery("write-one", "PRAGMA user_version = 0")
   })
 
   test("rejects multiple or incomplete statements", () => {
@@ -736,6 +769,86 @@ describe("SQL execution", () => {
     expect(listDatabaseQueryHistory()).toContainEqual(selected)
   })
 
+  test("persists only execution metadata, not ad-hoc SQL, comments, literals or driver errors", async () => {
+    const secret = "SQL_HISTORY_FAKE_PRIVATE_VALUE"
+    for (const sql of [
+      `SELECT '${secret}' AS value /* https://example.test/${secret} */`,
+      `UPDATE audit_log SET message = '${secret}'`,
+      `INSERT INTO audit_log (message) VALUES ('${secret}')`,
+    ])
+      await executeDatabaseQuery("write-two", sql)
+    await expect(
+      executeDatabaseQuery("write-two", `SELECT * FROM missing_${secret}`),
+    ).rejects.toThrow()
+    const entries = listDatabaseQueryHistory("write-two").filter((entry) =>
+      entry.sql.includes(secret),
+    )
+    expect(entries).toHaveLength(4)
+    expect(entries.every(databaseQueryHistoryCanRerun)).toBe(true)
+    const persisted = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
+    expect(persisted).not.toContain(secret)
+    const stored = JSON.parse(persisted).queryHistory.find(
+      (entry: { id: string }) => entry.id === entries[0]?.id,
+    )
+    expect(stored).toMatchObject({
+      storage: "metadata-only",
+      sql: "",
+      rerunnable: false,
+      parameterPreview: [],
+    })
+    expect(stored.error).toBe("Não foi possível executar a consulta.")
+    clearHistoryContent()
+    for (const old of entries) {
+      const restarted = listDatabaseQueryHistory("write-two").find((entry) => entry.id === old.id)
+      expect(restarted?.sql).toBe("")
+      if (!restarted) throw new Error("Missing retained metadata")
+      expect(databaseQueryHistoryCanRerun(restarted)).toBe(false)
+      expect(databaseQueryHistoryEntryIsRead(restarted)).toBe(databaseQueryHistoryEntryIsRead(old))
+      expect(normalizeQueryHistoryEntry(restarted)).toEqual(restarted)
+    }
+  })
+
+  test("legacy cleanup is explicit, preserves metadata and never removes saved favorites", async () => {
+    await executeDatabaseQuery("write-two", "SELECT 42 AS answer")
+    const current = listDatabaseQueryHistory("write-two")[0]
+    if (!current) throw new Error("Missing fixture execution")
+    const legacy = {
+      ...current,
+      id: "legacy-privacy-fixture",
+      sql: "SELECT 'LEGACY_FAKE_SECRET'",
+      storage: undefined,
+      readOnly: undefined,
+    }
+    const { storage: _storage, readOnly: _readOnly, ...legacyEntry } = legacy
+    const settings = readSettings()
+    writeSettings({ ...settings, queryHistory: [legacyEntry, ...settings.queryHistory] })
+    const favorite = saveDatabaseQuery("write-two", {
+      name: "Explicit favorite",
+      sql: "SELECT 'FAVORITE_FAKE_SECRET'",
+    })
+    await executeDatabaseQuery("write-two", "SELECT 43 AS answer")
+    expect(readFileSync(join(settingsDirectory, "databases.json"), "utf8")).toContain(
+      "LEGACY_FAKE_SECRET",
+    )
+    expect(
+      listDatabaseQueryHistory("write-two").find((entry) => entry.id === legacyEntry.id)?.sql,
+    ).toBe(legacyEntry.sql)
+    clearLegacyDatabaseQueryHistoryContent()
+    const cleaned = listDatabaseQueryHistory("write-two").find(
+      (entry) => entry.id === legacyEntry.id,
+    )
+    expect(cleaned).toMatchObject({
+      id: legacyEntry.id,
+      sql: "",
+      storage: "metadata-only",
+      executedAt: current.executedAt,
+    })
+    const persisted = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
+    expect(persisted).not.toContain("LEGACY_FAKE_SECRET")
+    expect(persisted).toContain("FAVORITE_FAKE_SECRET")
+    removeDatabaseSavedQuery("write-two", favorite.id)
+  })
+
   test("returns query metadata and caps large result sets", async () => {
     const result = await executeDatabaseQuery(
       "write-one",
@@ -1017,7 +1130,7 @@ describe("staged table mutations", () => {
       },
     ])
     const persistedHistory = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
-    expect(persistedHistory).toContain("Atomic commit")
+    expect(persistedHistory).not.toContain("Atomic commit")
     expect(persistedHistory).not.toContain("atomic@example.test")
     expect(persistedHistory).not.toContain("revealedValue")
 

@@ -1,4 +1,5 @@
 import stringWidth from "string-width"
+import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
@@ -6,6 +7,7 @@ import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
+import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
 import { HTTP_IMPORT_MESSAGES, HTTP_IMPORT_PATTERNS } from "./http-import-catalog"
@@ -87,6 +89,7 @@ type Message = readonly [
 ]
 
 const MESSAGES: readonly Message[] = [
+  ...DATABASE_PRIVACY_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [
@@ -4076,14 +4079,6 @@ const MESSAGES: readonly Message[] = [
     "SQL 명령이 완전하지 않습니다.",
   ],
   [
-    "Esta conexão está em somente leitura. Habilite a escrita para alterar dados.",
-    "This connection is read-only. Enable writing to change data.",
-    "Esta conexión es de solo lectura. Habilita la escritura para modificar datos.",
-    "この接続は読み取り専用です。データを変更するには書き込みを有効にしてください。",
-    "此连接为只读。请启用写入以更改数据。",
-    "이 연결은 읽기 전용입니다. 데이터를 변경하려면 쓰기를 활성화하세요.",
-  ],
-  [
     "SELECT INTO foi bloqueado porque esta conexão está em somente leitura.",
     "SELECT INTO was blocked because this connection is read-only.",
     "SELECT INTO se bloqueó porque esta conexión es de solo lectura.",
@@ -5056,6 +5051,7 @@ const MESSAGES: readonly Message[] = [
 
   // Cliente HTTP.
   ...HTTP_MESSAGES,
+  ...HTTP_REDIRECT_MESSAGES,
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,
   ...HTTP_IMPORT_MESSAGES,

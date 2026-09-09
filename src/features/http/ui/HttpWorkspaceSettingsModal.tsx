@@ -302,7 +302,7 @@ export function HttpWorkspaceSettingsModal({
       />
       <text
         content={translateUi(
-          "Bodies persistidos usam limites e redação, mas ampliam o risco local.",
+          "Com segredos conhecidos, bodies ficam só na sessão. Outros bodies podem conter dados privados.",
         )}
         style={{ fg: config.history.persistBodies ? COLORS.warning : COLORS.muted }}
       />

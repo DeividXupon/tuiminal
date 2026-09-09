@@ -1,4 +1,9 @@
-import type { HttpFailureKind, HttpPreparedRequest, HttpResponseSnapshot } from "../model/types"
+import type {
+  HttpFailureKind,
+  HttpPreparedRequest,
+  HttpPrivacyContext,
+  HttpResponseSnapshot,
+} from "../model/types"
 import {
   classifyResponseBody,
   DEFAULT_HTTP_CAPTURE_LIMIT,
@@ -8,6 +13,7 @@ import { fetchWithHttpRedirects, HttpRedirectError } from "./redirects"
 import type { HttpCookieJar } from "./cookies"
 import { HttpInsecureTlsApprovalError, type HttpInsecureTlsAuthorizer } from "../model/tls-policy"
 import { redactHttpUrlSecrets, redactKnownHttpSecrets } from "../model/secrets"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 export type HttpExecutionErrorKind = Extract<
   HttpFailureKind,
@@ -18,6 +24,7 @@ export class HttpExecutionError extends Error {
   constructor(
     readonly kind: HttpExecutionErrorKind,
     message: string,
+    readonly privacy?: HttpPrivacyContext,
   ) {
     super(message)
     this.name = "HttpExecutionError"
@@ -68,8 +75,13 @@ function decodedProxyCredentials(proxyUrl: string) {
   }
 }
 
-function safeNetworkErrorDetail(error: unknown, request: HttpPreparedRequest) {
-  const detail = error instanceof Error ? error.message : String(error)
+function safeNetworkErrorDetail(
+  error: unknown,
+  request: HttpPreparedRequest,
+  privacy?: HttpPrivacyContext,
+) {
+  const raw = error instanceof Error ? error.message : String(error)
+  const detail = privacy?.redactText(raw) ?? raw
   if (!request.proxyUrl) return detail
   const credentials = decodedProxyCredentials(request.proxyUrl)
   return redactKnownHttpSecrets(
@@ -95,19 +107,25 @@ export async function executePreparedHttpRequest(
   captureLimit = DEFAULT_HTTP_CAPTURE_LIMIT,
   cookieJar?: HttpCookieJar,
   authorizeInsecureTls: HttpInsecureTlsAuthorizer = false,
+  authorizeRedirect?: HttpRedirectAuthorizer,
 ): Promise<HttpResponseSnapshot> {
   const timeoutSignal = AbortSignal.timeout(request.timeoutMs)
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
   const startedAt = performance.now()
+  let executionPrivacy = request.privacy
 
   try {
-    const { response, redirects } = await fetchWithHttpRedirects(
+    const { response, redirects, privacy } = await fetchWithHttpRedirects(
       request,
       combinedSignal,
       fetch,
       10,
       cookieJar,
       authorizeInsecureTls,
+      (privacy) => {
+        executionPrivacy = privacy
+      },
+      authorizeRedirect,
     )
     const headersAt = performance.now()
     const { body, truncated } = await readLimitedResponseBody(response, captureLimit)
@@ -116,6 +134,7 @@ export async function executePreparedHttpRequest(
     const declaredBytes = declaredLength(response.headers)
 
     return {
+      privacy,
       executionId: request.executionId,
       requestId: request.requestId,
       requestRevision: request.requestRevision,
@@ -139,18 +158,28 @@ export async function executePreparedHttpRequest(
       },
     }
   } catch (error) {
-    if (signal?.aborted) throw new HttpExecutionError("cancelled", "Requisição cancelada.")
+    if (signal?.aborted)
+      throw new HttpExecutionError("cancelled", "Requisição cancelada.", executionPrivacy)
     if (timeoutSignal.aborted) {
-      throw new HttpExecutionError("timeout", formatHttpTimeoutError(request.timeoutMs))
+      throw new HttpExecutionError(
+        "timeout",
+        formatHttpTimeoutError(request.timeoutMs),
+        executionPrivacy,
+      )
     }
     if (error instanceof HttpRedirectError) {
-      throw new HttpExecutionError("redirect", error.message)
+      throw new HttpExecutionError(
+        "redirect",
+        safeNetworkErrorDetail(error, request, executionPrivacy),
+        executionPrivacy,
+      )
     }
     if (error instanceof HttpInsecureTlsApprovalError) throw error
-    const detail = safeNetworkErrorDetail(error, request)
+    const detail = safeNetworkErrorDetail(error, request, executionPrivacy)
     throw new HttpExecutionError(
       networkErrorKind(error),
       `Não foi possível concluir a requisição: ${detail}`,
+      executionPrivacy,
     )
   }
 }

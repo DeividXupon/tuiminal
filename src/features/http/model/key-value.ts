@@ -25,7 +25,9 @@ export function completeHttpKeyValueName(value: string, suggestions: readonly st
 }
 
 export function httpHeaderSensitivity(name: string): HttpKeyValue["sensitivity"] {
-  return /authorization|proxy-authorization|cookie|token|secret|api[-_ ]?key/i.test(name)
+  return /authorization|proxy-authorization|cookie|token|secret|password|passwd|session|api[-_ ]?key|(?:^|[-_ ])key(?:$|[-_ ])/i.test(
+    name,
+  )
     ? "literal-secret"
     : "normal"
 }

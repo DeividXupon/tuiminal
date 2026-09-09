@@ -49,7 +49,9 @@ import { useHttpPreview } from "./hooks/use-http-request-preview"
 import { useHttpUnsavedChanges } from "./hooks/use-http-unsaved-changes"
 import { useHttpDocumentRefs } from "./hooks/use-http-document-refs"
 import { useHttpTlsApprovals } from "./hooks/use-http-tls-approvals"
-import { useHttpSendDocument, type HttpPendingTlsApproval } from "./hooks/use-http-send-document"
+import { useHttpSendDocument } from "./hooks/use-http-send-document"
+import { useHttpRedirectApprovals } from "./hooks/use-http-redirect-approvals"
+import { HttpRedirectApprovalModal } from "./ui/HttpRedirectApprovalModal"
 import { HttpTutorialDemo } from "./tutorial/HttpTutorialDemo"
 import { useNotificationFromValue } from "../../shared/notifications/index"
 import { useHttpExecutionNotifications } from "./hooks/use-http-execution-notifications"
@@ -92,8 +94,8 @@ function HttpInteractiveClient({
   const abortControllers = useRef(new Map<string, AbortController>())
   const documentCounter = useRef(1)
   const [notice, setNotice] = useState("")
-  const [pendingTlsApproval, setPendingTlsApproval] = useState<HttpPendingTlsApproval | null>(null)
   const tlsApprovals = useHttpTlsApprovals()
+  const redirectApprovals = useHttpRedirectApprovals(tlsApprovals.approve)
   const activeDocument =
     state.documents.find((document) => document.request.id === state.activeDocumentId) ??
     state.documents[0]
@@ -124,6 +126,7 @@ function HttpInteractiveClient({
     workspaceConfig,
     variablesForRequest,
     isInsecureTlsApproved: tlsApprovals.isApproved,
+    authorizeRedirect: redirectApprovals.authorize,
   })
   useHttpUnsavedChanges(state.documents, onUnsavedChangesChange)
   const preparedPreview = useHttpPreview(activeDocument, workspaceConfig, variablesForRequest)
@@ -219,7 +222,7 @@ function HttpInteractiveClient({
     abortControllers,
     dispatch,
     setNotice,
-    setPendingTlsApproval,
+    authorizeRedirect: redirectApprovals.authorize,
   })
   const openEnvironmentManager = useCallback(() => {
     blurDocumentControls()
@@ -274,22 +277,11 @@ function HttpInteractiveClient({
     environmentName: activeEnvironmentName,
     isInsecureTlsApproved: tlsApprovals.isApproved,
     approveInsecureTls: tlsApprovals.approve,
+    authorizeRedirect: redirectApprovals.authorize,
   })
-  const confirmInsecureTls = useCallback(() => {
-    if (!pendingTlsApproval) return
-    const pendingDocumentId = pendingTlsApproval.documentId
-    tlsApprovals.approve(pendingTlsApproval)
-    setPendingTlsApproval(null)
-    closeOverlay()
-    setTimeout(() => void sendDocument(pendingDocumentId), 0)
-  }, [closeOverlay, pendingTlsApproval, sendDocument, tlsApprovals.approve])
-  const cancelInsecureTls = useCallback(() => {
-    setPendingTlsApproval(null)
-    closeOverlay()
-  }, [closeOverlay])
 
   useKeyboard((key) => {
-    if (!active || !activeDocument) return
+    if (!active || !activeDocument || redirectApprovals.pending) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     const documentId = activeDocument.request.id
     const command = resolveHttpKeyboardCommand({
@@ -389,7 +381,6 @@ function HttpInteractiveClient({
       case "close-overlay":
         if (state.overlay === "collection-runner") collectionRunner.cancel()
         if (state.overlay === "discard-document") cancelPendingClose()
-        if (state.overlay === "insecure-tls-confirmation") setPendingTlsApproval(null)
         requestPersistence.cancelExternalConflict()
         closeOverlay()
         return
@@ -414,8 +405,6 @@ function HttpInteractiveClient({
         else if (state.overlay === "discard-document") {
           confirmCloseDocument()
           closeOverlay()
-        } else if (state.overlay === "insecure-tls-confirmation" && pendingTlsApproval) {
-          confirmInsecureTls()
         } else void requestFiles.apply(state.overlay)
         return
       case "toggle-import-format":
@@ -700,10 +689,15 @@ function HttpInteractiveClient({
           cancelPendingClose()
           closeOverlay()
         }}
-        pendingTlsApproval={pendingTlsApproval}
-        onConfirmInsecureTls={confirmInsecureTls}
-        onCancelInsecureTls={cancelInsecureTls}
       />
+      {active && redirectApprovals.pending ? (
+        <HttpRedirectApprovalModal
+          pending={redirectApprovals.pending}
+          decide={redirectApprovals.decide}
+          terminalWidth={terminal.width}
+          terminalHeight={terminal.height}
+        />
+      ) : null}
     </box>
   )
 }

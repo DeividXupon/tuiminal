@@ -12,6 +12,7 @@ import {
   type HttpRunCase,
 } from "../services/collection-runner"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 type RunnerStatus = "idle" | "running" | "complete" | "cancelled"
 
@@ -27,6 +28,7 @@ export function useHttpCollectionRunner({
   environmentName,
   isInsecureTlsApproved,
   approveInsecureTls,
+  authorizeRedirect,
 }: {
   root: string
   items: HttpProjectRequestItem[]
@@ -34,6 +36,7 @@ export function useHttpCollectionRunner({
   environmentName: string | null
   isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
   approveInsecureTls: (approval: HttpInsecureTlsApproval) => void
+  authorizeRedirect: HttpRedirectAuthorizer
 }) {
   const [targetId, setTargetId] = useState<string | null>(null)
   const [datasetPath, setDatasetPath] = useState("")
@@ -105,6 +108,7 @@ export function useHttpCollectionRunner({
             signal: controller.signal,
             environmentName,
             isInsecureTlsApproved,
+            authorizeRedirect,
           })
         },
         controller.signal,
@@ -124,6 +128,7 @@ export function useHttpCollectionRunner({
     }
   }, [
     cancel,
+    authorizeRedirect,
     concurrency,
     datasetPath,
     environmentName,

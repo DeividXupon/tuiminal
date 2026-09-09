@@ -2,8 +2,15 @@ import { readFile, realpath, stat } from "node:fs/promises"
 import { resolve, sep } from "node:path"
 import { evaluateHttpAssertions } from "../model/assertions"
 import { redactHttpDiagnostic, redactHttpHistoryUrl } from "../model/history"
+import { HTTP_ENVIRONMENT_PREPARATION_ERROR } from "../model/history-privacy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 import { evaluateHttpJsonPath } from "../model/response"
-import { redactHttpUrlSecrets, redactKnownHttpSecrets } from "../model/secrets"
+import {
+  combineHttpPrivacy,
+  requestHttpPrivacy,
+  redactHttpUrlSecrets,
+  redactKnownHttpSecrets,
+} from "../model/secrets"
 import type {
   HttpProjectRequestItem,
   HttpFailureKind,
@@ -11,6 +18,7 @@ import type {
   HttpResponseSnapshot,
   HttpVariableContext,
   HttpVariableValue,
+  HttpPrivacyContext,
 } from "../model/types"
 import { executePreparedHttpRequest, HttpExecutionError } from "./fetch-transport"
 import { HttpRequestValidationError, prepareHttpRequest } from "./request-builder"
@@ -23,6 +31,7 @@ import {
 } from "../model/tls-policy"
 
 export type HttpRunItem = {
+  privacy?: HttpPrivacyContext
   requestId: string
   requestName: string
   method: string
@@ -104,11 +113,7 @@ export function redactHttpRunDiagnostic(value: string, variables: HttpVariableCo
   const secrets = [...variables.values()]
     .filter((item) => item.secret && item.value)
     .map((item) => item.value)
-  let redacted = redactKnownHttpSecrets(value, secrets)
-  for (const secret of secrets) {
-    redacted = redacted.replaceAll(encodeURIComponent(secret), "%3Credacted%3E")
-  }
-  return redactHttpDiagnostic(redacted)
+  return redactHttpDiagnostic(redactKnownHttpSecrets(value, secrets))
 }
 
 function extractVariables(
@@ -133,7 +138,7 @@ function extractVariables(
 
 function collectionRunError(
   error: unknown,
-  context: HttpVariableContext,
+  privacy: HttpPrivacyContext,
   environmentName: string | null,
 ): NonNullable<HttpRunItem["error"]> {
   const kind =
@@ -144,9 +149,8 @@ function collectionRunError(
         : "parse"
   return {
     kind,
-    message: redactHttpRunDiagnostic(
-      error instanceof Error ? error.message : String(error),
-      context,
+    message: redactHttpDiagnostic(
+      privacy.redactText(error instanceof Error ? error.message : String(error)),
     ),
     ...(error instanceof HttpInsecureTlsApprovalError
       ? { approval: httpInsecureTlsApproval(error.url, environmentName) }
@@ -165,6 +169,7 @@ export async function runHttpCollectionCase({
   cookieJar,
   environmentName = null,
   isInsecureTlsApproved,
+  authorizeRedirect,
 }: {
   name: string
   items: HttpProjectRequestItem[]
@@ -176,17 +181,24 @@ export async function runHttpCollectionCase({
   cookieJar?: HttpCookieJar
   environmentName?: string | null
   isInsecureTlsApproved?: (approval: HttpInsecureTlsApproval) => boolean
+  authorizeRedirect?: HttpRedirectAuthorizer
 }): Promise<HttpRunCase> {
   const selected = selectedRequests(items, selector)
   const results: HttpRunItem[] = []
   const extracted = new Map<string, HttpVariableValue>()
   const activeCookieJar = cookieJar ?? new HttpCookieJar()
+  let casePrivacy = combineHttpPrivacy()
 
   for (const item of selected) {
     if (signal?.aborted) break
     const request = item.request
-    const context = runnerContext(request, variables, extracted, variablesForRequest)
+    let context = variables
+    let contextReady = false
+    let privacy = combineHttpPrivacy(casePrivacy, requestHttpPrivacy(request, context))
     try {
+      context = runnerContext(request, variables, extracted, variablesForRequest)
+      contextReady = true
+      privacy = combineHttpPrivacy(privacy, requestHttpPrivacy(request, context))
       const executionId = `http-run-${Date.now()}-${results.length}`
       const prepared = prepareHttpRequest(request, executionId, 0, context, root)
       const received = await executePreparedHttpRequest(
@@ -195,31 +207,60 @@ export async function runHttpCollectionCase({
         undefined,
         activeCookieJar,
         (url) => isInsecureTlsApproved?.(httpInsecureTlsApproval(url, environmentName)) ?? false,
+        authorizeRedirect
+          ? (approval, signal) =>
+              authorizeRedirect(Object.freeze({ ...approval, environmentName }), signal)
+          : undefined,
       )
       const response = {
         ...received,
         assertions: evaluateHttpAssertions(request.assertions, received),
       }
+      privacy = combineHttpPrivacy(privacy, received.privacy)
       extractVariables(request, response, extracted)
+      privacy = combineHttpPrivacy(
+        privacy,
+        requestHttpPrivacy(request, chainedContext(context, extracted)),
+      )
+      casePrivacy = privacy
       results.push({
+        privacy,
         requestId: request.id,
-        requestName: request.name,
+        requestName: privacy.redactText(request.name),
         method: prepared.method,
-        url: redactHttpRunUrl(prepared.url, context),
-        response,
+        url: redactHttpHistoryUrl(privacy.redactUrl(prepared.url)),
+        response: { ...response, privacy },
       })
     } catch (error) {
+      privacy = combineHttpPrivacy(
+        privacy,
+        error instanceof HttpExecutionError ? error.privacy : undefined,
+        requestHttpPrivacy(request, chainedContext(context, extracted)),
+      )
+      casePrivacy = privacy
       results.push({
+        privacy,
         requestId: request.id,
-        requestName: request.name,
+        requestName: privacy.redactText(request.name),
         method: request.method,
-        url: redactHttpHistoryUrl(request.url),
-        error: collectionRunError(error, context, environmentName),
+        url: redactHttpHistoryUrl(privacy.redactUrl(request.url)),
+        error: collectionRunError(
+          contextReady ? error : new Error(HTTP_ENVIRONMENT_PREPARATION_ERROR),
+          privacy,
+          environmentName,
+        ),
       })
       break
     }
   }
-  return { name, items: results }
+  return {
+    name,
+    items: results.map((item) => ({
+      ...item,
+      privacy: casePrivacy,
+      ...(item.response ? { response: { ...item.response, privacy: casePrivacy } } : {}),
+    })),
+  }
 }
 
 function csvRows(source: string) {
