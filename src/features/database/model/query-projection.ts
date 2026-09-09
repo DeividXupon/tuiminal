@@ -1,6 +1,9 @@
+import type { DatabaseDriver } from "./types"
+
 type SqlToken = {
   kind: "word" | "identifier" | "literal" | "symbol"
   value: string
+  doubleQuoted?: boolean
 }
 
 type QueryRelation = { schema: string | null; name: string; alias: string | null }
@@ -67,6 +70,7 @@ function quotedToken(raw: string): SqlToken {
   return {
     kind: "identifier",
     value: raw.slice(1, -1).replaceAll(quote + quote, quote),
+    doubleQuoted: quote === '"',
   }
 }
 
@@ -156,7 +160,16 @@ function directProjectionQualifier(parts: string[], relation: QueryRelation) {
   return parts.length === 0
 }
 
-function directProjection(tokens: SqlToken[], relation: QueryRelation) {
+function directProjection(tokens: SqlToken[], relation: QueryRelation, driver?: DatabaseDriver) {
+  // MySQL treats unqualified double quotes as strings unless ANSI_QUOTES is set.
+  // A qualified reference cannot be a string, and quoting a column alias is safe.
+  if (
+    driver !== "postgres" &&
+    driver !== "sqlite" &&
+    tokens[0]?.doubleQuoted &&
+    !symbol(tokens[1], ".")
+  )
+    return false
   const parts: string[] = []
   let index = 0
   while (identifier(tokens[index])) {
@@ -183,7 +196,7 @@ function directProjection(tokens: SqlToken[], relation: QueryRelation) {
   return index === tokens.length
 }
 
-export function directQueryRelation(sql: string): QueryRelation | null {
+export function directQueryRelation(sql: string, driver?: DatabaseDriver): QueryRelation | null {
   const tokens = queryTokens(sql)
   if (!tokens || !keyword(tokens[0], "SELECT")) return null
   if (
@@ -202,7 +215,7 @@ export function directQueryRelation(sql: string): QueryRelation | null {
   let start = keyword(tokens[1], "ALL") ? 2 : 1
   for (let index = start; index <= from; index += 1) {
     if (index !== from && !symbol(tokens[index], ",")) continue
-    if (!directProjection(tokens.slice(start, index), relation)) return null
+    if (!directProjection(tokens.slice(start, index), relation, driver)) return null
     start = index + 1
   }
   return relation

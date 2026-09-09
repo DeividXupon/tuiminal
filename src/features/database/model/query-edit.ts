@@ -1,11 +1,12 @@
-import type { DatabaseColumn, DatabaseTable } from "./types"
+import type { DatabaseColumn, DatabaseDriver, DatabaseTable } from "./types"
 import { directQueryRelation } from "./query-projection"
 
 export function databaseEditableQueryTable(
   sql: string,
   tables: DatabaseTable[],
+  driver?: DatabaseDriver,
 ): DatabaseTable | null {
-  const relation = directQueryRelation(sql)
+  const relation = directQueryRelation(sql, driver)
   if (!relation) return null
   const matches = tables.filter(
     (table) =>

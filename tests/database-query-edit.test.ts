@@ -99,7 +99,7 @@ describe("editable SQL query results", () => {
   test("retains quoted identifier boundaries and rejects incomplete syntax", () => {
     const unusualTable: DatabaseTable = { schema: "main", name: "from,join", type: "table" }
     expect(
-      databaseEditableQueryTable('SELECT "id,group" FROM "from,join"', [unusualTable]),
+      databaseEditableQueryTable('SELECT "id,group" FROM "from,join"', [unusualTable], "sqlite"),
     ).toEqual(unusualTable)
     expect(databaseEditableQueryTable("SELECT [id] FROM [users]", tables)).toEqual(tables[0])
     expect(databaseEditableQueryTable("SELECT `id` FROM `users`", tables)).toEqual(tables[0])
@@ -127,6 +127,59 @@ describe("editable SQL query results", () => {
       "SELECT different.id, name FROM users",
     ]) {
       expect(databaseEditableQueryTable(sql, tables)).toBeNull()
+    }
+  })
+
+  test("blocks a MySQL double-quoted literal from identifying a different text primary key", () => {
+    const database = new Database(":memory:")
+    try {
+      database.exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT)")
+      database.exec("INSERT INTO users VALUES ('user-1', 'Ada'), ('id', 'Grace')")
+      const mysqlSql = 'SELECT "id" AS "id", name FROM users WHERE id = \'user-1\''
+      // In MySQL without ANSI_QUOTES, "id" is a string. Use its explicit literal
+      // equivalent in this SQLite fixture, whose double quotes mean identifiers.
+      const row = database
+        .query("SELECT 'id' AS id, name FROM users WHERE id = 'user-1'")
+        .get() as Record<string, unknown>
+      const key = databaseQueryResultRowKey(row, [{ ...columns[1], type: "TEXT" }])
+      expect(row).toEqual({ id: "id", name: "Ada" })
+      expect(key).toEqual({ id: "id" })
+      expect(database.query("SELECT name FROM users WHERE id = ?").get(String(key?.id))).toEqual({
+        name: "Grace",
+      })
+      expect(databaseEditableQueryTable(mysqlSql, tables, "mysql")).toBeNull()
+      expect(databaseEditableQueryTable(mysqlSql, tables, "mcp-mysql")).toBeNull()
+      expect(databaseEditableQueryTable(mysqlSql, tables)).toBeNull()
+    } finally {
+      database.close()
+    }
+  })
+
+  test("keeps double-quoted direct columns editable on PostgreSQL and SQLite", () => {
+    for (const driver of ["postgres", "sqlite"] as const) {
+      for (const sql of [
+        'SELECT "id", "name" FROM "users"',
+        'SELECT "id" AS "id", name FROM users',
+        'SELECT u."id", u."name" FROM users AS u',
+      ]) {
+        expect(databaseEditableQueryTable(sql, tables, driver)).toEqual(tables[0])
+      }
+    }
+  })
+
+  test("preserves unambiguous MySQL columns, qualified references, and unchanged aliases", () => {
+    for (const sql of [
+      "SELECT id, name FROM users",
+      "SELECT `id`, `name` FROM `users`",
+      'SELECT id AS "id", name FROM users',
+      'SELECT u."id", u.name FROM users u',
+      'SELECT "u"."id", "u".name FROM users "u"',
+      'SELECT * FROM users WHERE name = "Ada"',
+    ]) {
+      expect(databaseEditableQueryTable(sql, tables, "mysql")).toEqual(tables[0])
+    }
+    for (const sql of ['SELECT "id", name FROM users', 'SELECT "id" id, name FROM users']) {
+      expect(databaseEditableQueryTable(sql, tables, "mysql")).toBeNull()
     }
   })
 
