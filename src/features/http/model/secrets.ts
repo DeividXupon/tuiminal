@@ -20,6 +20,7 @@ export function httpRequestSecretValues(
   const structured = [
     ...request.headers,
     ...request.query,
+    ...request.path,
     ...request.body.form,
     ...(request.body.multipart ?? []),
   ]

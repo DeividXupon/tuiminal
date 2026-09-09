@@ -343,6 +343,8 @@ Redirects que mudam o host, a porta ou o protocolo removem headers de autentica�
 
 Em Params → Path, use segmentos `:id` ou tokens explícitos `{id}` (por exemplo, `/users/:id` ou `/reports/{id}.json`). A substituição ocorre apenas no caminho, preserva nomes como `id` e `id2` e usa a primeira linha ativa quando o nome se repete. Query, host e porta continuam independentes desses parâmetros.
 
+Valores de Path marcados como sensíveis seguem essa proteção, inclusive em URLs codificadas e linhas desativadas. Para salvar esses parâmetros em `.http`, use referências a variáveis privadas; valores secretos literais são recusados sem alterar o arquivo.
+
 <a id="free-terminal"></a>
 
 ## Free Terminal
