@@ -200,6 +200,7 @@ This file records durable project conventions, architectural decisions, and recu
 ## Free Terminal
 
 - This is a generic Free Terminal, not an AI-only tab. It can host shells and any CLI, including Codex, Claude, database clients, or internal tools.
+- Pass custom command text unchanged to the selected shell. Do not prepend `exec`: it replaces the shell before later `&&`, `||`, or `;` commands can run and breaks leading assignments and compound statements.
 - Sessions use real Bun PTYs and remain alive across tab switches. Terminal colors, cursor, interactive prompts, and fullscreen TUIs must keep working.
 - Give PTYs nearly all available space. Panels are separated with simple lines rather than padded cards.
 - A section supports a maximum `2 × 2` layout: at most two horizontal panes and one lower row, with up to four terminals per section. Additional terminals go into another section; the overall session limit is 12.

@@ -29,7 +29,7 @@ describe("terminal and runner commands", () => {
       label: "codex",
       shortLabel: "COD",
       displayCommand: "/usr/local/bin/codex --help",
-      command: [shell, "-lc", "exec /usr/local/bin/codex --help"],
+      command: [shell, "-lc", "/usr/local/bin/codex --help"],
     })
   })
 
