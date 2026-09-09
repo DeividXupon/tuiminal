@@ -332,6 +332,8 @@ tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Segredos são removidos de preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
+Em Params → Path, use segmentos `:id` ou tokens explícitos `{id}` (por exemplo, `/users/:id` ou `/reports/{id}.json`). A substituição ocorre apenas no caminho, preserva nomes como `id` e `id2` e usa a primeira linha ativa quando o nome se repete. Query, host e porta continuam independentes desses parâmetros.
+
 <a id="free-terminal"></a>
 
 ## Free Terminal
