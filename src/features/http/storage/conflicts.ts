@@ -68,7 +68,7 @@ function redactedRequest(request: HttpRequestDefinition, secrets: readonly strin
           : request.auth
   return {
     ...request,
-    url: redactKnownHttpSecrets(request.url, secrets),
+    url: redactHttpUrlSecrets(request.url, secrets),
     query: request.query.map((entry) => redactEntry(entry, secrets)),
     path: request.path.map((entry) => redactEntry(entry, secrets)),
     headers: request.headers.map((entry) => redactEntry(entry, secrets)),

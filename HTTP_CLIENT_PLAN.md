@@ -991,6 +991,10 @@ Requisitos obrigatórios antes de persistência ou import:
 - limitar preview e leitura de arquivo de body; caminhos relativos ficam dentro da
   coleção, salvo aprovação explícita para arquivo externo;
 - nunca escrever auth, cookie, query sensível ou body cru em log de erro;
+- incluir Path sensível no conjunto de segredos usado em preview, cURL, conflitos,
+  URLs de relatório, textos de assertions já avaliadas e diagnósticos, mesmo em
+  linhas desativadas; bloquear a escrita de literais no `.http` público e manter
+  referências privadas e o valor enviado;
 - exports com segredo são redigidos por padrão; revelar/exportar requer ação clara;
 - scripts importados permanecem desabilitados. Futuro scripting deve usar processo
   ou worker isolado, timeout, limite de memória, API reduzida e permissões declaradas;

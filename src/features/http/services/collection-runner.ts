@@ -3,7 +3,11 @@ import { resolve, sep } from "node:path"
 import { evaluateHttpAssertions } from "../model/assertions"
 import { redactHttpDiagnostic, redactHttpHistoryUrl } from "../model/history"
 import { evaluateHttpJsonPath } from "../model/response"
-import { redactHttpUrlSecrets, redactKnownHttpSecrets } from "../model/secrets"
+import {
+  httpRequestSecretValues,
+  redactHttpUrlSecrets,
+  redactKnownHttpSecrets,
+} from "../model/secrets"
 import type {
   HttpProjectRequestItem,
   HttpFailureKind,
@@ -93,22 +97,50 @@ function runnerContext(
   return chainedContext(context, extracted)
 }
 
-export function redactHttpRunUrl(value: string, variables: HttpVariableContext) {
-  const secrets = [...variables.values()]
-    .filter((item) => item.secret && item.value)
-    .map((item) => item.value)
+export function redactHttpRunUrl(
+  value: string,
+  variables: HttpVariableContext,
+  requestSecrets: readonly string[] = [],
+) {
+  const secrets = [
+    ...requestSecrets,
+    ...[...variables.values()]
+      .filter((item) => item.secret && item.value)
+      .map((item) => item.value),
+  ]
   return redactHttpHistoryUrl(redactHttpUrlSecrets(value, secrets))
 }
 
-export function redactHttpRunDiagnostic(value: string, variables: HttpVariableContext) {
-  const secrets = [...variables.values()]
-    .filter((item) => item.secret && item.value)
-    .map((item) => item.value)
+export function redactHttpRunDiagnostic(
+  value: string,
+  variables: HttpVariableContext,
+  requestSecrets: readonly string[] = [],
+) {
+  const secrets = [
+    ...requestSecrets,
+    ...[...variables.values()]
+      .filter((item) => item.secret && item.value)
+      .map((item) => item.value),
+  ]
   let redacted = redactKnownHttpSecrets(value, secrets)
   for (const secret of secrets) {
     redacted = redacted.replaceAll(encodeURIComponent(secret), "%3Credacted%3E")
   }
   return redactHttpDiagnostic(redacted)
+}
+
+function evaluateRedactedAssertions(
+  request: HttpRequestDefinition,
+  response: HttpResponseSnapshot,
+  context: HttpVariableContext,
+  requestSecrets: readonly string[],
+) {
+  return evaluateHttpAssertions(request.assertions, response).map((assertion) => ({
+    ...assertion,
+    expression: redactHttpRunDiagnostic(assertion.expression, context, requestSecrets),
+    actual: redactHttpRunDiagnostic(assertion.actual, context, requestSecrets),
+    message: redactHttpRunDiagnostic(assertion.message, context, requestSecrets),
+  }))
 }
 
 function extractVariables(
@@ -135,6 +167,7 @@ function collectionRunError(
   error: unknown,
   context: HttpVariableContext,
   environmentName: string | null,
+  requestSecrets: readonly string[],
 ): NonNullable<HttpRunItem["error"]> {
   const kind =
     error instanceof HttpInsecureTlsApprovalError
@@ -147,6 +180,7 @@ function collectionRunError(
     message: redactHttpRunDiagnostic(
       error instanceof Error ? error.message : String(error),
       context,
+      requestSecrets,
     ),
     ...(error instanceof HttpInsecureTlsApprovalError
       ? { approval: httpInsecureTlsApproval(error.url, environmentName) }
@@ -186,6 +220,7 @@ export async function runHttpCollectionCase({
     if (signal?.aborted) break
     const request = item.request
     const context = runnerContext(request, variables, extracted, variablesForRequest)
+    const requestSecrets = httpRequestSecretValues(request, context)
     try {
       const executionId = `http-run-${Date.now()}-${results.length}`
       const prepared = prepareHttpRequest(request, executionId, 0, context, root)
@@ -198,14 +233,14 @@ export async function runHttpCollectionCase({
       )
       const response = {
         ...received,
-        assertions: evaluateHttpAssertions(request.assertions, received),
+        assertions: evaluateRedactedAssertions(request, received, context, requestSecrets),
       }
       extractVariables(request, response, extracted)
       results.push({
         requestId: request.id,
         requestName: request.name,
         method: prepared.method,
-        url: redactHttpRunUrl(prepared.url, context),
+        url: redactHttpRunUrl(prepared.url, context, requestSecrets),
         response,
       })
     } catch (error) {
@@ -213,8 +248,8 @@ export async function runHttpCollectionCase({
         requestId: request.id,
         requestName: request.name,
         method: request.method,
-        url: redactHttpHistoryUrl(request.url),
-        error: collectionRunError(error, context, environmentName),
+        url: redactHttpRunUrl(request.url, context, requestSecrets),
+        error: collectionRunError(error, context, environmentName, requestSecrets),
       })
       break
     }

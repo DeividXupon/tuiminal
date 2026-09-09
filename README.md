@@ -332,6 +332,8 @@ tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Segredos são removidos de preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
+Valores de Path marcados como sensíveis seguem essa proteção, inclusive em URLs codificadas e linhas desativadas. Para salvar esses parâmetros em `.http`, use referências a variáveis privadas; valores secretos literais são recusados sem alterar o arquivo.
+
 <a id="free-terminal"></a>
 
 ## Free Terminal
