@@ -156,6 +156,8 @@ export function HttpRequestPane({
   const request = document.request
   const dirty = document.revision !== document.savedRevision
   const dense = position.height < 10
+  // More needs four visible option rows in addition to the pane and local tab chrome.
+  const denseMore = position.height < 14
   const bodyDisabled = request.body.kind === "none"
   const textBody =
     request.body.kind === "json" || request.body.kind === "text" || request.body.kind === "xml"
@@ -358,12 +360,12 @@ export function HttpRequestPane({
             right: 0,
             top: 0,
             bottom: 0,
-            padding: dense ? 0 : 1,
+            padding: denseMore ? 0 : 1,
           }}
         >
           <HttpRequestMoreEditor
             document={document}
-            dense={dense}
+            dense={denseMore}
             onSelectView={onSelectMoreView}
             onNameChange={onNameChange}
             onMethodChange={onMethodChange}
