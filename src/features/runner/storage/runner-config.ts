@@ -153,7 +153,6 @@ function configuredCommand(
     root: string
     source: RunnerConfiguredCommand["source"]
     profiles?: Record<string, RunnerEnvironmentProfile>
-    explicitAutostartOnly?: boolean
   },
 ): RunnerConfiguredCommand | null {
   const definition = objectValue(value)
@@ -165,7 +164,6 @@ function configuredCommand(
 
   const profileName = stringValue(definition?.profile)
   const profile = profileName ? options.profiles?.[profileName] : undefined
-  const explicitAutostart = definition?.autostart === true
   const autorestart = definition?.autorestart === true
   const restartPolicy = autorestart
     ? "on-failure"
@@ -184,9 +182,7 @@ function configuredCommand(
     },
     envFile: resolveInside(options.root, stringValue(definition?.envFile) ?? profile?.envFile),
     interactive: booleanValue(definition?.interactive),
-    autostart: options.explicitAutostartOnly
-      ? explicitAutostart
-      : booleanValue(definition?.autostart),
+    autostart: options.source === "tuiminal" && definition?.autostart === true,
     restartPolicy,
     restartDelayMs: numberValue(definition?.restartDelayMs, 1_000, 100, 300_000),
     maxRestarts: numberValue(definition?.maxRestarts, 5, 0, 100),
@@ -228,7 +224,6 @@ export function parseTuiminalRunnerConfig(
         root,
         source: "tuiminal",
         profiles,
-        explicitAutostartOnly: true,
       }),
     )
     .filter((command): command is RunnerConfiguredCommand => Boolean(command))
@@ -243,7 +238,6 @@ export function parseMprocsConfig(source: string, root: string) {
       configuredCommand(name, value, {
         root,
         source: "mprocs",
-        explicitAutostartOnly: true,
       }),
     )
     .filter((command): command is RunnerConfiguredCommand => Boolean(command))
@@ -261,7 +255,6 @@ export function parseProcfile(source: string, root: string) {
     const parsed = configuredCommand(name, command, {
       root,
       source: "procfile",
-      explicitAutostartOnly: true,
     })
     return parsed ? [parsed] : []
   })
