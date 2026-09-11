@@ -58,6 +58,31 @@ export function httpRequestSecretValues(
   return [...new Set(values.filter(Boolean))].sort((left, right) => right.length - left.length)
 }
 
+export function httpSensitiveHeaderNames(
+  request: HttpRequestDefinition,
+  headers: ReadonlyArray<readonly [string, string]>,
+  variables: HttpVariableContext = new Map(),
+) {
+  const names = new Set(
+    request.headers
+      .filter(
+        (entry) =>
+          entry.enabled &&
+          (entry.sensitivity !== "normal" || httpTemplateReferencesSecret(entry.value, variables)),
+      )
+      .map((entry) => entry.name.trim().toLowerCase()),
+  )
+  if (request.auth.kind === "api-key" && request.auth.placement === "header") {
+    names.add(request.auth.name.toLowerCase())
+  }
+  for (const [name] of headers) {
+    if (httpHeaderSensitivity(name) !== "normal") {
+      names.add(name.toLowerCase())
+    }
+  }
+  return [...names]
+}
+
 export function redactKnownHttpSecrets(value: string, secretValues: readonly string[]) {
   return secretRedactor(secretValues)(value)
 }

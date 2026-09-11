@@ -39,6 +39,9 @@ Criar um dashboard de Pull Requests **dentro da ferramenta Git**:
   durante a mesma sessão, conservar a última subaba e o estado de ambas.
 - PRs não dependem de haver um checkout local, exceto a ação de checkout.
 - Diffs funciona sem internet, GitHub CLI ou conta GitHub.
+- Preview e stage/unstage de um arquivo usam caminhos literais, sem expandir
+  wildcards ou magic de pathspec. `tests/git-file-paths.test.ts` cobre nomes
+  especiais, preservação de arquivos vizinhos e unstage antes do primeiro commit.
 
 Stack proposto: Bun + TypeScript + React + OpenTUI existentes; Git local para
 operações locais; GitHub CLI (`gh`) como transporte autenticado e comandos; APIs

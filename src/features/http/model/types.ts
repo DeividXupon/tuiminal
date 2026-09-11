@@ -153,6 +153,7 @@ export type HttpPreparedRequest = {
   method: string
   url: string
   headers: Array<[string, string]>
+  sensitiveHeaderNames?: readonly string[]
   body?: string | Blob | FormData
   bodyDescriptor?:
     | { kind: "file"; path: string }

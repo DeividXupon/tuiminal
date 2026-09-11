@@ -103,6 +103,7 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 - **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
 - **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
+- **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
 - **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado.
 - **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
 - **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
@@ -114,6 +115,10 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 3. Confira os indicadores de alterações locais na grade.
 4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
+
+Resultados SQL só permitem edição quando selecionam diretamente colunas ou `*` de uma única tabela. Expressões, colunas renomeadas, agrupamentos e `DISTINCT` permanecem somente leitura; editar ou excluir também exige todas as colunas da chave primária no resultado.
+
+No MySQL, campos não qualificados entre aspas duplas ficam somente leitura, pois podem ser textos literais; prefira identificadores entre crases. Colunas entre aspas duplas continuam editáveis no PostgreSQL e SQLite.
 
 Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
 
@@ -164,7 +169,7 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
 - Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos.
 - Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre o histórico detalhado.
-- `[Space]` aplica ou remove stage do arquivo; `[A]` faz o mesmo para todos.
+- `[Space]` aplica ou remove stage somente do arquivo selecionado, inclusive nomes com `*`, `?`, colchetes ou `:`; `[A]` faz o mesmo para todos.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox.
 
@@ -361,6 +366,12 @@ Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada 
 
 O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
 
+Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
+
+Em Params → Path, use segmentos `:id` ou tokens explícitos `{id}` (por exemplo, `/users/:id` ou `/reports/{id}.json`). A substituição ocorre apenas no caminho, preserva nomes como `id` e `id2` e usa a primeira linha ativa quando o nome se repete. Query, host e porta continuam independentes desses parâmetros.
+
+Valores de Path marcados como sensíveis seguem essa proteção, inclusive em URLs codificadas e linhas desativadas. Para salvar esses parâmetros em `.http`, use referências a variáveis privadas; valores secretos literais são recusados sem alterar o arquivo.
+
 <a id="free-terminal"></a>
 
 ## Free Terminal
@@ -370,6 +381,8 @@ O histórico persistente é opcional e mascara os segredos conhecidos também na
 </p>
 
 Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada painel usa um PTY real e pode executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
+
+Comandos personalizados aceitam expressões completas do shell, incluindo `&&`, `||`, `;`, pipes, variáveis e laços. Por exemplo, `npm install && npm run dev` executa a segunda etapa se a primeira terminar com sucesso.
 
 ### O que você pode fazer
 

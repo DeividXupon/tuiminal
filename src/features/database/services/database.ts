@@ -74,6 +74,8 @@ import {
   executeDatabaseMutationTransaction,
 } from "./database-mutations"
 
+export { coerceDatabaseCellValue } from "../model/cell-value"
+
 export function databaseSavedQueryIsDirty(query: DatabaseSavedQuery | null, currentSql: string) {
   return Boolean(query && query.sql !== currentSql)
 }
@@ -1530,37 +1532,6 @@ export function previewDatabaseQuery(connectionId: string, sql: string): Databas
 
 export function databaseConnectionCanWrite(profile: DatabaseConnectionProfile) {
   return profile.source === "saved" && profile.writeEnabled && profile.driver !== "mcp-mysql"
-}
-
-export function coerceDatabaseCellValue(column: DatabaseColumn, text: string): unknown {
-  const type = column.type.trim().toLocaleLowerCase()
-  if (/\b(bool|boolean)\b/.test(type)) {
-    const normalized = text.trim().toLocaleLowerCase()
-    if (["true", "1", "sim", "yes"].includes(normalized)) return true
-    if (["false", "0", "não", "nao", "no"].includes(normalized)) return false
-    throw new Error("Use true/false ou 1/0 para um valor booleano.")
-  }
-  if (/\b(json|jsonb)\b/.test(type)) {
-    try {
-      return JSON.parse(text)
-    } catch {
-      throw new Error("Digite um JSON válido.")
-    }
-  }
-  if (/\b(tinyint|smallint|mediumint|int|integer|bigint|serial|bigserial)\b/.test(type)) {
-    const normalized = text.trim()
-    if (!/^[+-]?\d+$/.test(normalized)) throw new Error("Digite um número inteiro válido.")
-    const integer = BigInt(normalized)
-    return integer >= BigInt(Number.MIN_SAFE_INTEGER) && integer <= BigInt(Number.MAX_SAFE_INTEGER)
-      ? Number(integer)
-      : integer
-  }
-  if (/\b(decimal|numeric|real|float|double|money)\b/.test(type)) {
-    const number = Number(text.trim())
-    if (!text.trim() || !Number.isFinite(number)) throw new Error("Digite um número válido.")
-    return number
-  }
-  return text
 }
 
 export async function writeQuery(connectionId: string, sql: string, parameters: unknown[]) {

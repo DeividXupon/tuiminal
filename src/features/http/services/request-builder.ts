@@ -39,7 +39,7 @@ export function normalizeHttpUrl(source: string) {
     throw new HttpRequestValidationError("Informe uma URL para enviar a requisição.", "url")
   }
 
-  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`
+  const withProtocol = httpUrlWithProtocol(value)
   let url: URL
   try {
     url = new URL(withProtocol)
@@ -73,19 +73,6 @@ export function normalizeHttpProxyUrl(source: string) {
 
 function enabledValues(entries: HttpKeyValue[]) {
   return entries.filter((entry) => entry.enabled && entry.name.trim())
-}
-
-function applyPathParameters(
-  source: string,
-  entries: HttpKeyValue[],
-  variables?: HttpVariableContext,
-) {
-  let result = resolveHttpTemplate(source, variables)
-  for (const entry of enabledValues(entries)) {
-    const encoded = encodeURIComponent(resolveHttpTemplate(entry.value, variables))
-    result = result.replaceAll(`:${entry.name}`, encoded).replaceAll(`{${entry.name}}`, encoded)
-  }
-  return result
 }
 
 function validateHeader(name: string, value: string) {
@@ -385,6 +372,7 @@ export function prepareHttpRequest(
     method,
     url: url.toString(),
     headers,
+    sensitiveHeaderNames: httpSensitiveHeaderNames(request, headers, variables),
     ...preparedBody,
     timeoutMs: request.options.timeoutMs,
     followRedirects: request.options.followRedirects,

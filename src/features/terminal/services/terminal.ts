@@ -92,7 +92,7 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     label,
     shortLabel: label.slice(0, 3).toUpperCase(),
     displayCommand: command,
-    command: [shell, "-lc", `exec ${command}`],
+    command: [shell, "-lc", command],
     accent: "#f7c873",
   }
 }

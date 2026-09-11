@@ -102,10 +102,17 @@ function runnerContext(
   return chainedContext(context, extracted)
 }
 
-export function redactHttpRunUrl(value: string, variables: HttpVariableContext) {
-  const secrets = [...variables.values()]
-    .filter((item) => item.secret && item.value)
-    .map((item) => item.value)
+export function redactHttpRunUrl(
+  value: string,
+  variables: HttpVariableContext,
+  requestSecrets: readonly string[] = [],
+) {
+  const secrets = [
+    ...requestSecrets,
+    ...[...variables.values()]
+      .filter((item) => item.secret && item.value)
+      .map((item) => item.value),
+  ]
   return redactHttpHistoryUrl(redactHttpUrlSecrets(value, secrets))
 }
 
@@ -114,6 +121,20 @@ export function redactHttpRunDiagnostic(value: string, variables: HttpVariableCo
     .filter((item) => item.secret && item.value)
     .map((item) => item.value)
   return redactHttpDiagnostic(redactKnownHttpSecrets(value, secrets))
+}
+
+function evaluateRedactedAssertions(
+  request: HttpRequestDefinition,
+  response: HttpResponseSnapshot,
+  context: HttpVariableContext,
+  requestSecrets: readonly string[],
+) {
+  return evaluateHttpAssertions(request.assertions, response).map((assertion) => ({
+    ...assertion,
+    expression: redactHttpRunDiagnostic(assertion.expression, context, requestSecrets),
+    actual: redactHttpRunDiagnostic(assertion.actual, context, requestSecrets),
+    message: redactHttpRunDiagnostic(assertion.message, context, requestSecrets),
+  }))
 }
 
 function extractVariables(
@@ -140,6 +161,7 @@ function collectionRunError(
   error: unknown,
   privacy: HttpPrivacyContext,
   environmentName: string | null,
+  requestSecrets: readonly string[],
 ): NonNullable<HttpRunItem["error"]> {
   const kind =
     error instanceof HttpInsecureTlsApprovalError
@@ -220,7 +242,7 @@ export async function runHttpCollectionCase({
       )
       const response = {
         ...received,
-        assertions: evaluateHttpAssertions(request.assertions, received),
+        assertions: evaluateRedactedAssertions(request, received, context, requestSecrets),
       }
       privacy = combineHttpPrivacy(privacy, received.privacy)
       extractVariables(request, response, extracted)

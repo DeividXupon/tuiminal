@@ -56,6 +56,27 @@ export function resolveHttpTemplate(source: string, context?: HttpVariableContex
   )
 }
 
+function referencesSecret(
+  source: string,
+  context: HttpVariableContext,
+  visited: Set<string>,
+): boolean {
+  for (const match of source.matchAll(VARIABLE_PATTERN)) {
+    const name = match[1] ?? ""
+    if (visited.has(name)) continue
+    const definition = context.get(name)
+    if (!definition) continue
+    if (definition.secret) return true
+    visited.add(name)
+    if (referencesSecret(definition.value, context, visited)) return true
+  }
+  return false
+}
+
+export function httpTemplateReferencesSecret(source: string, context?: HttpVariableContext) {
+  return context ? referencesSecret(source, context, new Set()) : false
+}
+
 export function redactHttpTemplate(source: string, context?: HttpVariableContext) {
   if (!context || !source.includes("{{")) return source
   return source.replace(VARIABLE_PATTERN, (match, name: string) => {

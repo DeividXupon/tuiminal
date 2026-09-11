@@ -340,7 +340,7 @@ export function HttpRequestPane({
             right: 0,
             top: 0,
             bottom: 0,
-            padding: dense ? 0 : 1,
+            padding: denseMore ? 0 : 1,
           }}
         >
           <HttpRequestMoreEditor

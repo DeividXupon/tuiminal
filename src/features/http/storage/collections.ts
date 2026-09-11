@@ -83,19 +83,14 @@ function secretUsesOnlyReferences(value: string) {
 
 function assertNoLiteralProjectSecrets(request: HttpRequestDefinition) {
   const secretValues = [
-    ...request.headers
-      .filter((entry) => entry.sensitivity === "literal-secret")
-      .map((entry) => entry.value),
-    ...request.query
-      .filter((entry) => entry.sensitivity === "literal-secret")
-      .map((entry) => entry.value),
-    ...request.body.form
-      .filter((entry) => entry.sensitivity === "literal-secret")
-      .map((entry) => entry.value),
-    ...(request.body.multipart ?? [])
-      .filter((entry) => entry.sensitivity === "literal-secret")
-      .map((entry) => entry.value),
+    ...request.headers,
+    ...request.query,
+    ...request.path,
+    ...request.body.form,
+    ...(request.body.multipart ?? []),
   ]
+    .filter((entry) => entry.sensitivity === "literal-secret")
+    .map((entry) => entry.value)
   if (request.auth.kind === "bearer") secretValues.push(request.auth.token)
   if (request.auth.kind === "basic") secretValues.push(request.auth.password)
   if (request.auth.kind === "api-key") secretValues.push(request.auth.value)

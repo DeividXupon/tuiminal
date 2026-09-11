@@ -747,6 +747,9 @@ afirmar foco, conteúdo preservado e camada fechada por `[Esc]`.
   resolvida sem revelar segredos;
 - query e path params em tabelas de key/value com enable/disable, duplicatas, ordem e
   sincronização previsível com a URL, reunidos visualmente na tab `Params`;
+- path params substituem segmentos completos `:name` ou tokens `{name}` apenas no
+  pathname, sem alterar authority, query ou fragment; a primeira linha ativa vence
+  duplicatas e o valor resolvido é codificado uma vez, sem novas substituições;
 - headers em tabela com autocomplete de nomes/valores, duplicatas e indicação dos
   headers adicionados automaticamente ou herdados, incluindo badge de origem;
 - auth: No Auth, Bearer, Basic e API Key na primeira versão estruturada; Digest,
@@ -1046,6 +1049,10 @@ Requisitos obrigatórios antes de persistência ou import:
 - limitar preview e leitura de arquivo de body; caminhos relativos ficam dentro da
   coleção, salvo aprovação explícita para arquivo externo;
 - nunca escrever auth, cookie, query sensível ou body cru em log de erro;
+- incluir Path sensível no conjunto de segredos usado em preview, cURL, conflitos,
+  URLs de relatório, textos de assertions já avaliadas e diagnósticos, mesmo em
+  linhas desativadas; bloquear a escrita de literais no `.http` público e manter
+  referências privadas e o valor enviado;
 - exports com segredo são redigidos por padrão; revelar/exportar requer ação clara;
 - abrir a resposta no handler do sistema exige allowlist de imagem raster e magic
   bytes compatíveis; SVG, PDF e MIME/extensão conflitantes nunca são abertos
