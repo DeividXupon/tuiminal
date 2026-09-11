@@ -23,6 +23,19 @@ let root = ""
 beforeAll(async () => {
   root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-runner-"))
   server = createServer((request, response) => {
+    if (request.url === "/cookie/source") {
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "set-cookie": "scoped=source; Path=/",
+      })
+      response.end('{"stored":true}')
+      return
+    }
+    if (request.url === "/cookie/target") {
+      response.writeHead(200, { "content-type": "application/json" })
+      response.end(JSON.stringify({ cookie: request.headers.cookie ?? null }))
+      return
+    }
     if (request.url === "/login") {
       response.writeHead(200, { "content-type": "application/json" })
       response.end('{"token":"very-secret"}')
@@ -69,6 +82,23 @@ Authorization: Bearer {{token}}
   }))
 }
 
+function scopedCookieCollection() {
+  const sourceFile = parseHttpFile(
+    `### Source\n# @name source\nGET ${baseUrl}/cookie/source\n`,
+    "services/a/source.http",
+  )
+  const targetFile = parseHttpFile(
+    `### Target\n# @name target\n# @depends source\nGET ${baseUrl}/cookie/target\n`,
+    "services/b/target.http",
+  )
+  return [sourceFile, targetFile].flatMap((file) =>
+    file.requests.map((block) => ({
+      filePath: file.path,
+      request: requestFromHttpFile(file, block),
+    })),
+  )
+}
+
 describe("HTTP headless collection runner", () => {
   test("runs dependencies, keeps extracted secrets in memory and evaluates assertions", async () => {
     const items = collection()
@@ -85,6 +115,22 @@ describe("HTTP headless collection runner", () => {
     const report = formatHttpRunReport([result], "json")
     expect(report).not.toContain("very-secret")
     expect(httpRunExitCode([result])).toBe(0)
+  })
+
+  test("does not share collection cookies between sibling request scopes", async () => {
+    const items = scopedCookieCollection()
+    const result = await runHttpCollectionCase({
+      name: "scoped-cookies",
+      items,
+      selector: "target",
+      variables: environmentVariableContext(undefined),
+      root,
+      environmentName: "local",
+    })
+
+    expect(result.items).toHaveLength(2)
+    const targetBody = new TextDecoder().decode(result.items[1]?.response?.body)
+    expect(JSON.parse(targetBody)).toEqual({ cookie: null })
   })
 
   test("redacts private values even when URL fields have harmless names", () => {

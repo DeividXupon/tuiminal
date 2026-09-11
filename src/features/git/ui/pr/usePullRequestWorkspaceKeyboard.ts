@@ -79,13 +79,14 @@ export function usePullRequestWorkspaceKeyboard({
     }
     const action = pullRequestWorkspaceAction({
       keyName: key.name,
-      sequence: key.sequence,
       shift: key.shift,
       focus,
       hasSelection,
       canLoadMore,
       canLoadPreview,
       ctrl: key.ctrl,
+      option: key.option,
+      meta: key.meta,
     })
     if (!action) return
     key.preventDefault()

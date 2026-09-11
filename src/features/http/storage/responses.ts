@@ -1,6 +1,8 @@
-import { mkdir, open } from "node:fs/promises"
-import { resolve } from "node:path"
 import type { HttpResponseSnapshot } from "../model/types"
+import {
+  atomicWriteProjectFile,
+  ProjectFileSafetyError,
+} from "../../../shared/storage/project-files"
 
 function safeStem(value: string) {
   return (
@@ -31,23 +33,22 @@ export async function saveCapturedHttpResponse(
   response: HttpResponseSnapshot,
   now = new Date(),
 ) {
-  const directory = resolve(root, "tuiminal-exports", "http")
-  await mkdir(directory, { recursive: true, mode: 0o700 })
   const stem = `${safeStem(requestName)}-${timestampForFile(now)}`
   const extension = responseExtension(response)
   for (let suffix = 0; suffix < 1_000; suffix += 1) {
-    const path = resolve(directory, `${stem}${suffix ? `-${suffix + 1}` : ""}.${extension}`)
+    const relativePath = `tuiminal-exports/http/${stem}${suffix ? `-${suffix + 1}` : ""}.${extension}`
     try {
-      const handle = await open(path, "wx", 0o600)
-      try {
-        await handle.writeFile(response.body)
-        await handle.sync()
-      } finally {
-        await handle.close()
-      }
-      return path
+      return await atomicWriteProjectFile(root, relativePath, response.body, {
+        expectedHash: null,
+        exclusive: true,
+      })
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+      if (
+        (error as NodeJS.ErrnoException).code !== "EEXIST" &&
+        !(error instanceof ProjectFileSafetyError && error.message.includes("existir"))
+      ) {
+        throw error
+      }
     }
   }
   throw new Error("Não foi possível escolher um nome livre para salvar a resposta.")

@@ -10,6 +10,7 @@ export function HttpClientFooter({
   document,
   activePane,
   notice,
+  responseJsonTree,
   dispatch,
   onJump,
   onHelp,
@@ -21,6 +22,7 @@ export function HttpClientFooter({
   document: HttpDocumentState
   activePane: HttpPane
   notice: string
+  responseJsonTree: boolean
   dispatch: (action: HttpWorkspaceAction) => void
   onJump: () => void
   onHelp: () => void
@@ -51,6 +53,7 @@ export function HttpClientFooter({
       onHelp={onHelp}
       onSave={onSave}
       notice={notice}
+      responseJsonTree={responseJsonTree}
     />
   )
 }

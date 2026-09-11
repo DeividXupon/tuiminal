@@ -1,20 +1,15 @@
 import type { InputRenderable } from "@opentui/core"
 import { useRef } from "react"
-import { COLORS } from "../../../core/settings/theme"
+import { COLORS, focusedPanelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { ShortcutText } from "../../../shared/ui/ShortcutText"
 import type { HttpKeyValue } from "../model/types"
-import { completeHttpKeyValueName, httpHeaderSensitivity } from "../model/key-value"
-
-function newEntry(prefix: string): HttpKeyValue {
-  return {
-    id: `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    enabled: true,
-    name: "",
-    value: "",
-    sensitivity: "normal",
-  }
-}
+import {
+  completeHttpKeyValueName,
+  createHttpKeyValueEntry,
+  httpHeaderSensitivity,
+} from "../model/key-value"
 
 export function HttpKeyValueEditor({
   idPrefix,
@@ -25,6 +20,9 @@ export function HttpKeyValueEditor({
   detectSensitiveNames = false,
   nameSuggestions = [],
   dense = false,
+  showAddAction = true,
+  sectionFocused,
+  onSectionFocus,
 }: {
   idPrefix: string
   title: string
@@ -34,6 +32,9 @@ export function HttpKeyValueEditor({
   detectSensitiveNames?: boolean
   nameSuggestions?: readonly string[]
   dense?: boolean
+  showAddAction?: boolean
+  sectionFocused?: boolean
+  onSectionFocus?: () => void
 }) {
   const inputs = useRef(new Map<string, InputRenderable>())
   const patchEntry = (id: string, patch: Partial<HttpKeyValue>) =>
@@ -50,16 +51,38 @@ export function HttpKeyValueEditor({
           : entry,
       ),
     )
+  const addEntry = () => {
+    onSectionFocus?.()
+    onChange([...entries, createHttpKeyValueEntry(idPrefix)])
+  }
 
   return (
-    <box style={{ flexGrow: 1, minHeight: dense ? 2 : 3 }}>
+    <box
+      id={`http-key-value-section-${idPrefix}`}
+      {...(onSectionFocus ? { onMouseDown: onSectionFocus } : {})}
+      style={{
+        ...(sectionFocused === undefined ? {} : focusedPanelBorder(sectionFocused, COLORS.http)),
+        flexGrow: 1,
+        minHeight: dense ? 2 : 3,
+      }}
+    >
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", alignItems: "center" }}>
-        <text content={translateUi(title)} style={{ flexGrow: 1, fg: COLORS.muted }} />
-        <InlineButton
-          label="[+] Adicionar"
-          accent={COLORS.http}
-          onPress={() => onChange([...entries, newEntry(idPrefix)])}
-        />
+        {sectionFocused ? (
+          <ShortcutText
+            content={`${translateUi(title)}  ${translateUi("[J/K] [↑/↓] Foco")}`}
+            style={{ flexGrow: 1, fg: COLORS.http }}
+          />
+        ) : (
+          <text content={translateUi(title)} style={{ flexGrow: 1, fg: COLORS.muted }} />
+        )}
+        {showAddAction ? (
+          <InlineButton
+            id={`http-key-value-add-${idPrefix}`}
+            label="[N] Adicionar"
+            accent={COLORS.http}
+            onPress={addEntry}
+          />
+        ) : null}
       </box>
       {dense ? null : (
         <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
@@ -97,7 +120,10 @@ export function HttpKeyValueEditor({
                   event.stopPropagation()
                   patchEntry(entry.id, { name: suggestion })
                 }}
-                onMouseDown={() => inputs.current.get(`${entry.id}-name`)?.focus()}
+                onMouseDown={() => {
+                  onSectionFocus?.()
+                  inputs.current.get(`${entry.id}-name`)?.focus()
+                }}
                 style={{
                   backgroundColor: COLORS.canvas,
                   focusedBackgroundColor: COLORS.panelRaised,
@@ -113,7 +139,10 @@ export function HttpKeyValueEditor({
                 placeholder={translateUi("VALOR")}
                 width="42%"
                 onInput={(value) => patchEntry(entry.id, { value })}
-                onMouseDown={() => inputs.current.get(`${entry.id}-value`)?.focus()}
+                onMouseDown={() => {
+                  onSectionFocus?.()
+                  inputs.current.get(`${entry.id}-value`)?.focus()
+                }}
                 style={{
                   backgroundColor: COLORS.canvas,
                   focusedBackgroundColor: COLORS.panelRaised,

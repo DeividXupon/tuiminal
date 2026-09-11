@@ -19,6 +19,12 @@ import {
   saveRunnerHistoryEntry,
   saveRunnerSession,
 } from "../src/features/runner/storage/runner-config"
+import {
+  approveRunnerAutostart,
+  createRunnerAutostartReview,
+  isRunnerAutostartTrusted,
+} from "../src/features/runner/storage/autostart-trust"
+import { createShellRunnerCommand } from "../src/features/runner/services/shell-command"
 
 describe("runner configuration", () => {
   test("parses Tuiminal commands, profiles and policies", () => {
@@ -76,6 +82,7 @@ procs:
   web: npm run dev
   worker:
     shell: bun worker.ts
+    autostart: true
 `,
         "/tmp/project",
       ),
@@ -89,6 +96,63 @@ procs:
       { label: "web", command: "npm start", source: "procfile" },
       { label: "worker", command: "bun worker.ts", source: "procfile" },
     ])
+  })
+
+  test("requires per-project trust for the exact autostart configuration", () => {
+    const root = mkdtempSync(join(tmpdir(), "tuiminal-runner-autostart-"))
+    const trustPath = join(root, "config", "trust.json")
+    const command = createShellRunnerCommand("bun run dev", {
+      id: "tuiminal:dev",
+      label: "Dev",
+      source: "tuiminal",
+      workingDirectory: join(root, "service"),
+      env: { PUBLIC_FLAG: "enabled", SECRET_TOKEN: "secret-value" },
+      envFile: join(root, ".env.dev"),
+      autostart: true,
+      interactive: true,
+      restartPolicy: "on-failure",
+    })
+    const profile = {
+      id: "config:dev",
+      label: "dev",
+      env: { PROFILE_FLAG: "one" },
+      envFile: join(root, ".env.profile"),
+    }
+    const review = createRunnerAutostartReview(root, [command], profile)
+    if (!review) throw new Error("Expected an autostart review")
+
+    expect(isRunnerAutostartTrusted(review, trustPath)).toBe(false)
+    expect(review.commands[0]).toMatchObject({
+      command: "bun run dev",
+      cwd: join(root, "service"),
+      environmentNames: ["PUBLIC_FLAG", "SECRET_TOKEN"],
+      interactive: true,
+    })
+    approveRunnerAutostart(review, trustPath)
+    expect(isRunnerAutostartTrusted(review, trustPath)).toBe(true)
+    expect(statSync(trustPath).mode & 0o777).toBe(0o600)
+    const stored = readFileSync(trustPath, "utf8")
+    expect(stored).not.toContain("secret-value")
+    expect(stored).not.toContain("bun run dev")
+
+    const changedCommand = createRunnerAutostartReview(
+      root,
+      [{ ...command, displayCommand: "bun run changed" }],
+      profile,
+    )
+    const changedEnvironment = createRunnerAutostartReview(
+      root,
+      [{ ...command, env: { ...command.env, SECRET_TOKEN: "changed" } }],
+      profile,
+    )
+    const changedProfile = createRunnerAutostartReview(root, [command], {
+      ...profile,
+      env: { PROFILE_FLAG: "two" },
+    })
+    expect(changedCommand?.fingerprint).not.toBe(review.fingerprint)
+    expect(changedEnvironment?.fingerprint).not.toBe(review.fingerprint)
+    expect(changedProfile?.fingerprint).not.toBe(review.fingerprint)
+    expect(isRunnerAutostartTrusted(changedCommand!, trustPath)).toBe(false)
   })
 
   test("layers environment files and explicit variables", () => {

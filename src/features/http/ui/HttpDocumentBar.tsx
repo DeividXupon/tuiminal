@@ -54,7 +54,7 @@ export function HttpDocumentBar({
         )
       })}
       <InlineButton
-        label="[+]"
+        label="[Ctrl+N]"
         accent={COLORS.http}
         disabled={documents.length >= HTTP_DOCUMENT_LIMIT}
         onPress={onAdd}

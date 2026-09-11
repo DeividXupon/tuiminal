@@ -7,10 +7,6 @@ import type { HttpDocumentState, HttpJumpTarget, HttpPane } from "../model/types
 
 const JUMP_ACTIONS: ReadonlyArray<{ target: HttpJumpTarget; label: string }> = [
   { target: "url", label: "[U] URL" },
-  { target: "params", label: "[P] Parâmetros" },
-  { target: "headers", label: "[H] Headers" },
-  { target: "body", label: "[B] Body" },
-  { target: "auth", label: "[A] Autenticação" },
   { target: "response", label: "[R] Resposta" },
   { target: "collection", label: "[C] Coleção" },
   { target: "history", label: "[Y] Histórico" },
@@ -18,27 +14,29 @@ const JUMP_ACTIONS: ReadonlyArray<{ target: HttpJumpTarget; label: string }> = [
 
 function contextualHelp(document: HttpDocumentState, activePane: HttpPane) {
   if (activePane === "response") {
+    const jsonNavigation =
+      document.execution.status === "success" &&
+      document.execution.response.bodyKind === "json" &&
+      document.responseView === "pretty"
     return [
-      "[V] Alternar Pretty, Raw, Headers, Timing e Mais",
-      "[↑/↓] Rolar resposta · [F10] Maximizar",
-      "[Ctrl+↑/↓] Ajustar divisão · [S] Enviar novamente",
+      "[A←]/[F→] Alternar Pretty, Raw, Headers, Timing e Mais",
+      jsonNavigation
+        ? "[↑/↓] Blocos JSON · [←/→/Enter] recolher ou expandir"
+        : "[↑/↓] Rolar resposta · [F10] Maximizar",
+      "[Tab/Shift+Tab/H/L] Alternar painéis",
     ]
   }
   if (activePane === "navigation") {
     return [
       "[C] Coleção · [Y] Histórico",
       "[Enter] Abrir item · [Esc] Fechar navegação",
-      "[Ctrl+N/W] Criar ou fechar request scratch",
+      "[Tab/Shift+Tab/H/L] Alternar painéis",
     ]
   }
-  const editorHint =
-    document.requestView === "body" || document.requestView === "headers"
-      ? "[Esc] Sair primeiro do editor"
-      : "[P/H/B/A/O] Alternar área da requisição"
   return [
     "[/] Focar URL · [M] Trocar método · [S] Enviar",
-    editorHint,
-    "[Ctrl+O] Ir para · [F10] Maximizar",
+    "[A←]/[F→] Alternar Params, Headers, Body, Auth e Mais",
+    "[Tab/Shift+Tab/H/L] Alternar painéis",
   ]
 }
 

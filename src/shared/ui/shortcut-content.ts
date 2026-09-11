@@ -13,7 +13,13 @@ export function shortcutContent(content: string): string | StyledText {
     if (match.index > offset) {
       chunks.push({ __isChunk: true, text: content.slice(offset, match.index) })
     }
-    chunks.push({ __isChunk: true, text: match[0], fg: shortcutColor })
+    const directional = match[0].match(/^\[([AFZV])([←→])\]$/)
+    if (directional) {
+      chunks.push({ __isChunk: true, text: `[${directional[1]}`, fg: shortcutColor })
+      chunks.push({ __isChunk: true, text: `${directional[2]}]` })
+    } else {
+      chunks.push({ __isChunk: true, text: match[0], fg: shortcutColor })
+    }
     offset = match.index + match[0].length
   }
   if (!chunks.length) return content

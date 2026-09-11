@@ -16,6 +16,7 @@ import type {
   HttpNavigationView,
   HttpProjectRequestItem,
   HttpMultipartPart,
+  HttpPane,
   HttpRequestView,
   HttpRequestMoreView,
   HttpResponseView,
@@ -40,8 +41,8 @@ type HttpWorkspaceBodyProps = {
   onSelectDocument: (documentId: string) => void
   onNavigationView: (view: HttpNavigationView) => void
   onCloseNavigation: () => void
-  onSelectPane: (pane: "navigation" | "request" | "response") => void
-  onSelectRequestView: (documentId: string, view: HttpRequestView) => void
+  onSelectPane: (pane: HttpPane) => void
+  onSelectRequestView: (documentId: string, view: HttpRequestView, focusControl?: boolean) => void
   onSelectRequestMoreView: (documentId: string, view: HttpRequestMoreView) => void
   onSelectResponseView: (documentId: string, view: HttpResponseView) => void
   onResponsePresentationChange: (
@@ -223,7 +224,7 @@ export function HttpWorkspaceBody({
           active &&
           !navigationOverlayOpen &&
           (!maximizedPane || maximizedPane === "request") &&
-          (layout.simultaneousPanes || state.activePane === "request")
+          (layout.simultaneousPanes || state.activePane === "request" || state.activePane === "url")
         const responseVisible =
           active &&
           !navigationOverlayOpen &&
@@ -240,7 +241,9 @@ export function HttpWorkspaceBody({
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
               registerRawScroll={(scroll) => registerRawScroll(document.request.id, scroll)}
-              onSelectView={(view) => onSelectRequestView(document.request.id, view)}
+              onSelectView={(view, focusControl) =>
+                onSelectRequestView(document.request.id, view, focusControl)
+              }
               onSelectMoreView={(view) => onSelectRequestMoreView(document.request.id, view)}
               onQueryChange={(entries) => onQueryChange(document.request.id, entries)}
               onPathChange={(entries) => onPathChange(document.request.id, entries)}

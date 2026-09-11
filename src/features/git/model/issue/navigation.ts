@@ -1,6 +1,7 @@
 import type { IssueActionKind } from "./actions"
 import type { IssuePreviewConfig } from "./config"
 import type { IssuePreviewTab } from "./types"
+import { directionalShortcutDirection } from "../../../../shared/ui/directional-shortcut"
 
 export type IssueLayoutMode = "side-by-side" | "stacked" | "single"
 export type IssueFocus = "list" | "preview"
@@ -54,7 +55,13 @@ function configurationAction(key: IssueKey): IssueWorkspaceAction | null {
   return null
 }
 
-type IssueKey = { name: string; sequence?: string; shift?: boolean; ctrl?: boolean }
+type IssueKey = {
+  name: string
+  shift?: boolean
+  ctrl?: boolean
+  option?: boolean
+  meta?: boolean
+}
 
 function selectedAction(key: IssueKey, focus: IssueFocus): IssueWorkspaceAction | null {
   if (key.name === "?") return { type: "open-action-menu" }
@@ -83,13 +90,8 @@ function loadingAction(
 }
 
 function sectionAction(key: IssueKey): IssueWorkspaceAction | null {
-  if (key.name === "<" || key.sequence === "<" || (key.name === "," && key.shift)) {
-    return { type: "move-section", delta: -1 }
-  }
-  if (key.name === ">" || key.sequence === ">" || (key.name === "." && key.shift)) {
-    return { type: "move-section", delta: 1 }
-  }
-  return null
+  const direction = directionalShortcutDirection(key)
+  return direction ? { type: "move-section", delta: direction } : null
 }
 
 function listNavigationAction(key: IssueKey, hasSelection: boolean): IssueWorkspaceAction | null {
@@ -101,7 +103,14 @@ function listNavigationAction(key: IssueKey, hasSelection: boolean): IssueWorksp
   }
   if (key.name === "j" || key.name === "down") return { type: "move-row", delta: 1 }
   if (key.name === "k" || key.name === "up") return { type: "move-row", delta: -1 }
-  if (["l", "right", "enter", "return"].includes(key.name) && hasSelection) {
+  if (
+    ["l", "right", "enter", "return"].includes(key.name) &&
+    !key.ctrl &&
+    !key.shift &&
+    !key.option &&
+    !key.meta &&
+    hasSelection
+  ) {
     return { type: "focus", target: "preview" }
   }
   return null
@@ -111,9 +120,8 @@ function previewNavigationAction(key: IssueKey): IssueWorkspaceAction | null {
   if (key.name === "h" || key.name === "left" || key.name === "escape") {
     return { type: "focus", target: "list" }
   }
-  if (key.name === "[" || key.name === "]") {
-    return { type: "move-preview-tab", delta: key.name === "[" ? -1 : 1 }
-  }
+  const direction = directionalShortcutDirection(key, "nested")
+  if (direction) return { type: "move-preview-tab", delta: direction }
   if (key.name === "j" || key.name === "down") return { type: "scroll-preview", delta: 1 }
   if (key.name === "k" || key.name === "up") return { type: "scroll-preview", delta: -1 }
   return null
@@ -147,9 +155,13 @@ export function issueWorkspaceAction({
   if (configuration) return configuration
   const loading = loadingAction(key, focus, canLoadMore, canLoadPreview)
   if (loading) return loading
+  const section = sectionAction(key)
+  if (section) return section
+  const navigation = paneAction(key, focus, hasSelection)
+  if (navigation) return navigation
   if (hasSelection) {
     const selected = selectedAction(key, focus)
     if (selected) return selected
   }
-  return sectionAction(key) ?? paneAction(key, focus, hasSelection)
+  return null
 }

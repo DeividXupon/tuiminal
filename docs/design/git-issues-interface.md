@@ -8,7 +8,7 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 ```text
 ┌ [1] [C] GIT · DIFFS  [2] PR  [3] ISSUES  [4] INBOX ─────────────────────┐
 │ ISSUES                                      github.com · @viewer          │
-│ [<] My Issues 12 [>]                                                    │
+│ [A←] My Issues 12 [F→]                                                  │
 │ [/] is:open author:@me       TODOS OS PROJETOS · 20/42 · ATUALIZADO     │
 ├───────────────────────────────┬───────────────────────────────────────────┤
 │ ▶ ◆ owner/api #318 Título 6 ♥4│ owner/api #318 · Título                  │
@@ -16,7 +16,7 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 │   ◆ owner/web #204 Outro 3 ♥8 │ [O] Abrir [Y] nº [Shift+Y] URL [?] Ações│
 │     @rui · → @viewer · a11y    │ descrição, metadados ou comentários     │
 └───────────────────────────────┴───────────────────────────────────────────┘
- [J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações
+ [J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações
 ```
 
 As seções ficam horizontais; não existe sidebar permanente de repositórios. A
@@ -37,9 +37,9 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 ## Foco, camadas e estados
 
 - Lista: `[J/K]`, setas, `[G/Home]` e `[Shift+G/End]`.
-- Seções: `[<]`/`[>]`; `[/]` edita a query ativa. Criação, edição, ordem e
+- Seções: `[A←]`/`[F→]`; `[/]` edita a query ativa. Criação, edição, ordem e
   repositórios ficam no modal Git aberto por `[,]` nas configurações do Git.
-- Prévia: `[[]/[]]` alterna abas; `[J/K]` rola; `[Ctrl+D/U]` pagina; `[E]`
+- Prévia: `[Z←]`/`[V→]` alterna abas; `[J/K]` rola; `[Ctrl+D/U]` pagina; `[E]`
   expande/recolhe a descrição.
 - `[?]` mostra disponibilidade e motivo de todas as ações.
 - Inputs detêm letras, números e atalhos globais. `[Esc]` primeiro desfoca, depois
@@ -54,10 +54,12 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 
 ## Diferenças deliberadas do gh-dash
 
-- `[H/L]` é foco; seções usam `[</>]`.
+- `[H/L]` é foco; seções usam `[A←]`/`[F→]`.
 - Labels usa `[Shift+L]`, sem conflitar com `[L]` para abrir a prévia.
 - Escritas exigem `[Ctrl+S]` e revalidação; não há comandos arbitrários ou lote.
-- Checkout não clona e opera somente em clone local elegível.
+- Checkout não clona e opera somente em clone local elegível, sob a mesma guarda
+  canônica e fail-closed de PR; erro de inspeção ou mudança após confirmação
+  impede o despacho.
 - Diffs, PR e Issues são áreas separadas e com estado independente.
 - A última linha inicia a próxima página com loader; o refresh automático cobre
   todas as seções e a profundidade já carregada sem limpar a lista, e a query tem
@@ -65,3 +67,6 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 - O carregamento inicial e o de detalhes ocupam o painel com plasma ASCII e texto
   legível, dissolvendo rapidamente quando os dados chegam. Paginação e refresh
   permanecem inline.
+- `gh` ausente ou antigo substitui o conteúdo por explicação e um mini terminal
+  responsivo. O comando fica visível e só começa por `[I]`/clique; o PTY aceita a
+  interação solicitada pelo sistema, valida a versão e recarrega Issues ao final.

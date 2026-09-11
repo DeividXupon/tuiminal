@@ -266,6 +266,14 @@ export const HTTP_RESPONSE_MESSAGES = [
     "전체 다운로드는 GET 요청만 안전하게 다시 보낼 수 있습니다.",
   ],
   [
+    "O download excede o limite de 256 MB.",
+    "The download exceeds the 256 MB limit.",
+    "La descarga supera el límite de 256 MB.",
+    "ダウンロードが256 MBの上限を超えています。",
+    "下载超过 256 MB 限制。",
+    "다운로드가 256MB 제한을 초과합니다.",
+  ],
+  [
     "Não foi possível escolher um nome livre para o download.",
     "Could not choose an available name for the download.",
     "No se pudo elegir un nombre disponible para la descarga.",
@@ -350,5 +358,13 @@ export const HTTP_RESPONSE_PATTERNS = [
     "$1回のリダイレクト上限を超えました。",
     "已超过 $1 次重定向限制。",
     "$1회 리디렉션 한도를 초과했습니다.",
+  ],
+  [
+    /^O download foi recusado pelo servidor com status HTTP (\d+)\.$/,
+    "The server refused the download with HTTP status $1.",
+    "El servidor rechazó la descarga con estado HTTP $1.",
+    "サーバーがHTTPステータス$1でダウンロードを拒否しました。",
+    "服务器以 HTTP 状态 $1 拒绝了下载。",
+    "서버가 HTTP 상태 $1로 다운로드를 거부했습니다.",
   ],
 ] as const

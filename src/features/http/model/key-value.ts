@@ -1,4 +1,31 @@
-import type { HttpKeyValue } from "./types"
+import type { HttpKeyValue, HttpMultipartPart } from "./types"
+
+export function httpKeyValueTextInputOwnsKeyboard(id: string) {
+  return ["http-key-value-name-", "http-key-value-value-", "http-key-value-file-"].some((prefix) =>
+    id.startsWith(prefix),
+  )
+}
+
+export function createHttpKeyValueEntry(prefix: string): HttpKeyValue {
+  return {
+    id: `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    enabled: true,
+    name: "",
+    value: "",
+    sensitivity: "normal",
+  }
+}
+
+export function createHttpMultipartPart(requestId: string): HttpMultipartPart {
+  return {
+    id: `${requestId}-part-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    enabled: true,
+    name: "",
+    value: "",
+    kind: "text",
+    sensitivity: "normal",
+  }
+}
 
 export const COMMON_HTTP_HEADER_NAMES = [
   "Accept",

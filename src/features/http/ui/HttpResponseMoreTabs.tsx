@@ -1,5 +1,7 @@
 import { COLORS } from "../../../core/settings/theme"
+import { DirectionalButton } from "../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { HTTP_RESPONSE_MORE_VIEWS, nextHttpResponseMoreView } from "../model/nested-view-navigation"
 import type { HttpResponseMoreView, HttpResponseSnapshot } from "../model/types"
 
 function moreTabLabel(
@@ -21,17 +23,27 @@ export function HttpResponseMoreTabs({
   active,
   response,
   cookieCount,
+  focused,
   onChange,
 }: {
   active: HttpResponseMoreView
   response: HttpResponseSnapshot
   cookieCount: number
+  focused: boolean
   onChange: (moreView: HttpResponseMoreView) => void
 }) {
-  const views: HttpResponseMoreView[] = ["summary", "cookies", "redirects", "assertions", "console"]
   return (
     <box style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}>
-      {views.map((view) => (
+      {focused ? (
+        <DirectionalButton
+          id="http-response-more-previous"
+          direction={-1}
+          level="nested"
+          accent={COLORS.http}
+          onPress={() => onChange(nextHttpResponseMoreView(active, -1))}
+        />
+      ) : null}
+      {HTTP_RESPONSE_MORE_VIEWS.map((view) => (
         <InlineButton
           key={view}
           label={moreTabLabel(view, response, cookieCount)}
@@ -40,6 +52,15 @@ export function HttpResponseMoreTabs({
           onPress={() => onChange(view)}
         />
       ))}
+      {focused ? (
+        <DirectionalButton
+          id="http-response-more-next"
+          direction={1}
+          level="nested"
+          accent={COLORS.http}
+          onPress={() => onChange(nextHttpResponseMoreView(active, 1))}
+        />
+      ) : null}
     </box>
   )
 }

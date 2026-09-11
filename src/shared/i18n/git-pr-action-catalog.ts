@@ -1,4 +1,5 @@
 import { GIT_PR_MERGE_MESSAGES } from "./git-pr-merge-catalog"
+import { GIT_CHECKOUT_MESSAGES } from "./git-checkout-catalog"
 
 export const GIT_PR_ACTION_MESSAGES = [
   [
@@ -335,6 +336,7 @@ export const GIT_PR_ACTION_MESSAGES = [
     "工作树有本地更改",
     "워크트리에 로컬 변경 사항이 있음",
   ],
+  ...GIT_CHECKOUT_MESSAGES,
   [
     "auth-context-changed",
     "the GitHub account changed; review the action again",

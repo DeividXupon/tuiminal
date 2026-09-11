@@ -9,5 +9,5 @@ export const runnerKeyboardScope = {
     "runner-project-list",
     "runner-directory-list",
   ],
-  prefixes: ["runner-save-command-"],
+  prefixes: ["runner-save-command-", "runner-autostart-trust-"],
 } as const satisfies KeyboardScope

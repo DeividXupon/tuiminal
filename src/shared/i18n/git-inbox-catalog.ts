@@ -390,11 +390,11 @@ export const GIT_INBOX_MESSAGES = [
   ["com comentários", "with comments", "con comentarios", "コメントあり", "有评论", "댓글 있음"],
   ["com reações", "with reactions", "con reacciones", "リアクションあり", "有回应", "반응 있음"],
   [
-    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar",
-    "[J/K] Navigate  [H/L] Focus  [</>] Section  [R] Refresh  [O] Open  [M] Read  [B] Save  [D] Done  [U] Unsubscribe",
-    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [R] Actualizar  [O] Abrir  [M] Leída  [B] Guardar  [D] Completar  [U] Dejar de seguir",
-    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [R] 更新  [O] 開く  [M] 既読  [B] 保存  [D] 完了  [U] 購読解除",
-    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [R] 刷新  [O] 打开  [M] 已读  [B] 保存  [D] 完成  [U] 取消订阅",
-    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [R] 새로고침  [O] 열기  [M] 읽음  [B] 저장  [D] 완료  [U] 구독 해제",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar",
+    "[J/K] Navigate  [H/L] Focus  [A←] [F→] Section  [R] Refresh  [O] Open  [M] Read  [B] Save  [D] Done  [U] Unsubscribe",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Sección  [R] Actualizar  [O] Abrir  [M] Leída  [B] Guardar  [D] Completar  [U] Dejar de seguir",
+    "[J/K] 移動  [H/L] フォーカス  [A←] [F→] セクション  [R] 更新  [O] 開く  [M] 既読  [B] 保存  [D] 完了  [U] 購読解除",
+    "[J/K] 导航  [H/L] 焦点  [A←] [F→] 分区  [R] 刷新  [O] 打开  [M] 已读  [B] 保存  [D] 完成  [U] 取消订阅",
+    "[J/K] 탐색  [H/L] 포커스  [A←] [F→] 섹션  [R] 새로고침  [O] 열기  [M] 읽음  [B] 저장  [D] 완료  [U] 구독 해제",
   ],
 ] as const

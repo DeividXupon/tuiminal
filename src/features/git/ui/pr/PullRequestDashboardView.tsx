@@ -158,6 +158,7 @@ function DashboardPanels({
 }
 
 export function PullRequestDashboardView({
+  active,
   dashboard,
   presentation,
   layout,
@@ -199,6 +200,7 @@ export function PullRequestDashboardView({
   onCyclePreviewPosition,
   onTogglePreview,
 }: DashboardPanelsProps & {
+  active: boolean
   dashboard: PullRequestDashboardState
   onSelectSection: (index: number) => void
   onEditQuery: () => void
@@ -309,7 +311,7 @@ export function PullRequestDashboardView({
           onOpenWorkflow={onOpenWorkflow}
         />
       ) : (
-        <DashboardStatePanel state={dashboard} onRetry={onRetry} />
+        <DashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />
       )}
       <PlasmaLoadingOverlay
         active={dashboard.status === "loading" || dashboard.status === "idle"}
@@ -331,7 +333,7 @@ export function PullRequestDashboardView({
       >
         <ShortcutText
           content={translateUi(
-            "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [D] Diff  [?] Ações",
+            "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [D] Diff  [?] Ações",
           )}
           style={{ fg: COLORS.muted }}
         />

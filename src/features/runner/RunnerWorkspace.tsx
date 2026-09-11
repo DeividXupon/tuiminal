@@ -63,7 +63,21 @@ import {
 import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { MountWhen } from "../../shared/ui/MountWhen"
+import { directionalShortcutDirection } from "../../shared/ui/directional-shortcut"
 import { type RunnerCommandSaveInput, RunnerSaveCommandModal } from "./ui/RunnerSaveCommandModal"
+import { RunnerAutostartTrustModal } from "./ui/RunnerAutostartTrustModal"
+import {
+  type ProjectPickerMode,
+  RUNNER_CATEGORY_ICONS,
+  RUNNER_DIRECTORY_PICKER_OPTION,
+  type RunnerListMode,
+  RUNNER_PROJECT_TAB_SHORTCUTS,
+  RUNNER_USE_DIRECTORY_OPTION,
+  runnerLogFilterLabel,
+  type RunnerViewMode,
+  type RunnerWorkspaceProps,
+} from "./model/workspace"
+import { useRunnerAutostart } from "./hooks/use-runner-autostart"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
 import type { ExecutionLog, RunnerExecution } from "./model/execution"
 import {
@@ -74,32 +88,6 @@ import {
   useRunnerNotifications,
 } from "./hooks/use-runner-notifications"
 import { restoredRunnerExecution } from "./state/restored-execution"
-
-const CATEGORY_ICONS: Record<RunnerCommand["category"], string> = {
-  package: "◇",
-  composer: "◒",
-  php: "◆",
-  python: "◈",
-  go: "◎",
-  rust: "⬢",
-  ruby: "◇",
-  java: "◉",
-  dotnet: "◫",
-  deno: "◐",
-  task: "▣",
-  make: "◆",
-  just: "◈",
-  docker: "⬡",
-  custom: "❯",
-}
-
-const DIRECTORY_PICKER_OPTION = "__runner:directory-picker__"
-const USE_DIRECTORY_OPTION = "__runner:use-directory__"
-const PROJECT_TAB_SHORTCUTS = ["1", "2", "3", "4"] as const
-
-type RunnerViewMode = "single" | "multi"
-type RunnerListMode = "commands" | "active"
-type ProjectPickerMode = "closed" | "projects" | "directories"
 
 import {
   fitLine,
@@ -113,12 +101,7 @@ import {
 } from "./rendering/presentation"
 import { MultiProcessPanel } from "./ui/MultiProcessPanel"
 
-type RunnerProps = {
-  active: boolean
-  onOpenHttp?: (url: string) => void
-}
-
-export function Runner({ active, onOpenHttp }: RunnerProps) {
+export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const shortRunner = terminal.height < 24
@@ -140,7 +123,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
   const healthTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const restartTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
   const executionLogsRef = useRef(new Map<string, ExecutionLog[]>())
-  const autostartedRef = useRef(new Set<string>())
   const executionSequence = useRef(0)
   const logSequence = useRef(0)
   const discoverySequence = useRef(0)
@@ -156,7 +138,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       initialProjectRoot,
       ...initialSession.openedProjects.filter((path) => path !== initialProjectRoot),
     ]
-    return paths.slice(0, PROJECT_TAB_SHORTCUTS.length).map((path) => ({
+    return paths.slice(0, RUNNER_PROJECT_TAB_SHORTCUTS.length).map((path) => ({
       path,
       name: basename(path),
       displayPath: path,
@@ -272,7 +254,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       healthTimersRef.current.clear()
       for (const timer of restartTimersRef.current) clearTimeout(timer)
       restartTimersRef.current.clear()
-      for (const handle of handlesRef.current.values()) handle.stop()
+      for (const handle of handlesRef.current.values()) void handle.stop().catch(() => undefined)
       handlesRef.current.clear()
     }
   }, [])
@@ -651,16 +633,24 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
     [projectRoot, refreshCommands],
   )
 
-  useEffect(() => {
-    if (!active || discoveredProjectRootRef.current !== projectRoot) return
-    for (const command of commands) {
-      if (!command.autostart) continue
-      const key = commandKey(projectRoot, command.id)
-      if (autostartedRef.current.has(key)) continue
-      autostartedRef.current.add(key)
-      runCommand(command)
-    }
-  }, [active, commands, projectRoot, runCommand])
+  const selectedProfileId = profileSelections[projectRoot]
+  const selectedProfile = environmentProfiles.find((profile) => profile.id === selectedProfileId)
+  const {
+    pendingReview: pendingAutostartReview,
+    approve: approveAutostart,
+    dismiss: dismissAutostart,
+  } = useRunnerAutostart({
+    active,
+    loading,
+    projectRoot,
+    discoveredProjectRoot: discoveredProjectRootRef.current,
+    commands,
+    selectedProfile,
+    runCommand,
+    notify,
+    setRunnerNotice,
+    focusCommands: () => commandListRef.current?.focus(),
+  })
 
   const openProjectPicker = useCallback(async () => {
     setPickerMode("projects")
@@ -726,7 +716,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       setOpenedProjects((current) => {
         if (current.some((project) => project.path === root)) return current
         return [...current, { path: root, name: basename(root), displayPath: root }].slice(
-          -PROJECT_TAB_SHORTCUTS.length,
+          -RUNNER_PROJECT_TAB_SHORTCUTS.length,
         )
       })
       activateProject(root)
@@ -781,9 +771,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
   const selectedExecution =
     executions.find((execution) => execution.id === selectedExecutionId) ??
     executions.find((execution) => execution.projectRoot === projectRoot)
-  const selectedProfileId = profileSelections[projectRoot]
-  const selectedProfile = environmentProfiles.find((profile) => profile.id === selectedProfileId)
-
   const cycleEnvironmentProfile = useCallback(() => {
     const options = [undefined, ...environmentProfiles.map((profile) => profile.id)]
     const currentIndex = options.indexOf(profileSelections[projectRoot])
@@ -847,7 +834,11 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       if (!keys.has(execution.commandKey)) continue
       const handle = handlesRef.current.get(execution.id)
       if (!handle) continue
-      handle.stop()
+      void handle.stop().catch((error) => {
+        const message = error instanceof Error ? error.message : "O processo não encerrou."
+        appendLog(execution.id, message, "system")
+        notify({ source: "Runner", kind: "error", message })
+      })
       appendLog(execution.id, "encerrando processo…", "system")
     }
     setExecutions((current) =>
@@ -857,20 +848,28 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           : execution,
       ),
     )
-  }, [appendLog, executions, groupCommands, projectRoot, selectedCommand])
+  }, [appendLog, executions, groupCommands, notify, projectRoot, selectedCommand])
 
   const restartCommandGroup = useCallback(() => {
     const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
     const keys = new Set(targets.map((command) => commandKey(projectRoot, command.id)))
-    for (const execution of executions) {
-      if (keys.has(execution.commandKey)) handlesRef.current.get(execution.id)?.stop()
-    }
-    const timer = setTimeout(() => {
-      restartTimersRef.current.delete(timer)
+    const stops = executions.flatMap((execution) => {
+      if (!keys.has(execution.commandKey)) return []
+      const handle = handlesRef.current.get(execution.id)
+      return handle ? [handle.stop()] : []
+    })
+    void Promise.allSettled(stops).then((results) => {
+      if (!mountedRef.current) return
+      const failure = results.find((result) => result.status === "rejected")
+      if (failure?.status === "rejected") {
+        const message =
+          failure.reason instanceof Error ? failure.reason.message : "Um processo não encerrou."
+        notify({ source: "Runner", kind: "error", message })
+        return
+      }
       for (const command of targets) runCommand(command)
-    }, 350)
-    restartTimersRef.current.add(timer)
-  }, [executions, groupCommands, projectRoot, runCommand, selectedCommand])
+    })
+  }, [executions, groupCommands, notify, projectRoot, runCommand, selectedCommand])
 
   const deleteSelectedSavedCommand = useCallback(() => {
     if (selectedCommand?.source !== "saved") return
@@ -883,14 +882,18 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
     if (!selectedExecution) return
     const handle = handlesRef.current.get(selectedExecution.id)
     if (!handle) return
-    handle.stop()
+    void handle.stop().catch((error) => {
+      const message = error instanceof Error ? error.message : "O processo não encerrou."
+      appendLog(selectedExecution.id, message, "system")
+      notify({ source: "Runner", kind: "error", message })
+    })
     appendLog(selectedExecution.id, "encerrando processo…", "system")
     setExecutions((current) =>
       current.map((execution) =>
         execution.id === selectedExecution.id ? { ...execution, status: "stopping" } : execution,
       ),
     )
-  }, [appendLog, selectedExecution])
+  }, [appendLog, notify, selectedExecution])
 
   const clearSelectedLogs = useCallback(() => {
     if (!selectedExecution) return
@@ -1118,7 +1121,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
 
   useKeyboard((key) => {
     if (!active) return
-    if (saveCommandModalOpen) return
+    if ([saveCommandModalOpen, Boolean(pendingAutostartReview)].includes(true)) return
     const focusedId = renderer.currentFocusedRenderable?.id
     const editingText =
       focusedId === "runner-command-input" ||
@@ -1221,7 +1224,20 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       void openProjectPicker()
       return
     }
-    if (key.name === "a" && !groupSelectionMode) {
+    const multiWindowDirection = viewMode === "multi" ? directionalShortcutDirection(key) : null
+    if (multiWindowDirection) {
+      key.preventDefault()
+      slideMultiWindow(multiWindowDirection)
+      return
+    }
+    if (
+      key.name === "a" &&
+      !groupSelectionMode &&
+      !key.ctrl &&
+      !key.option &&
+      !key.meta &&
+      (viewMode !== "multi" || key.shift)
+    ) {
       setMoreActionsOpen((current) => !current)
       return
     }
@@ -1250,7 +1266,13 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       cycleEnvironmentProfile()
       return
     }
-    if (key.name === "f") {
+    if (
+      key.name === "f" &&
+      !key.ctrl &&
+      !key.option &&
+      !key.meta &&
+      (viewMode !== "multi" || key.shift)
+    ) {
       setLogFilterOpen(true)
       setTimeout(() => logFilterRef.current?.focus(), 0)
       return
@@ -1292,16 +1314,6 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       return
     }
     if (viewMode === "multi") {
-      const previousWindow =
-        key.name === "<" ||
-        key.sequence === "<" ||
-        key.raw === "<" ||
-        (key.shift && key.name === ",")
-      const nextWindow =
-        key.name === ">" ||
-        key.sequence === ">" ||
-        key.raw === ">" ||
-        (key.shift && key.name === ".")
       if (key.name === "m") {
         toggleViewMode()
         return
@@ -1313,17 +1325,9 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
       if (key.name === "right") {
         cycleActiveExecution(1)
         return
-      } else if (previousWindow) {
-        key.preventDefault()
-        slideMultiWindow(-1)
-        return
-      } else if (nextWindow) {
-        key.preventDefault()
-        slideMultiWindow(1)
-        return
       }
     }
-    const projectShortcutIndex = PROJECT_TAB_SHORTCUTS.findIndex(
+    const projectShortcutIndex = RUNNER_PROJECT_TAB_SHORTCUTS.findIndex(
       (shortcut) => !key.shift && key.name === shortcut,
     )
     const shortcutProject = openedProjects[projectShortcutIndex]
@@ -1381,7 +1385,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
         return {
           name: groupSelectionMode
             ? `${selection ? "☑" : "☐"} ${commandIsActive ? "● RODANDO ·" : ""} ${command.label}`
-            : `${commandIsActive ? "● RODANDO ·" : CATEGORY_ICONS[command.category]} ${command.label}`,
+            : `${commandIsActive ? "● RODANDO ·" : RUNNER_CATEGORY_ICONS[command.category]} ${command.label}`,
           description: command.displayCommand,
           value: command.id,
         }
@@ -1405,7 +1409,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
     {
       name: "⌕ PROCURAR NOS ARQUIVOS…",
       description: "Navegar até qualquer pasta do computador",
-      value: DIRECTORY_PICKER_OPTION,
+      value: RUNNER_DIRECTORY_PICKER_OPTION,
     },
   ]
   const filteredDirectoryEntries = directoryEntries.filter(
@@ -1416,7 +1420,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
     {
       name: "✓ USAR ESTA PASTA",
       description: browserDirectory,
-      value: USE_DIRECTORY_OPTION,
+      value: RUNNER_USE_DIRECTORY_OPTION,
     },
     ...(browserDirectory !== dirname(browserDirectory)
       ? [
@@ -1590,7 +1594,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
         <box style={{ flexGrow: 1, flexDirection: "row", alignItems: "center" }}>
           <text content="▶ RUNNER / " style={{ fg: COLORS.runner }} />
           {openedProjects.map((project, index) => {
-            const shortcut = PROJECT_TAB_SHORTCUTS[index]
+            const shortcut = RUNNER_PROJECT_TAB_SHORTCUTS[index]
             if (!shortcut) return null
             const selected = project.path === projectRoot
             return (
@@ -1693,7 +1697,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               options={projectOptions}
               onSelect={(_index, option) => {
                 if (typeof option?.value !== "string") return
-                if (option.value === DIRECTORY_PICKER_OPTION) {
+                if (option.value === RUNNER_DIRECTORY_PICKER_OPTION) {
                   setProjectSearch("")
                   void loadDirectory(homedir())
                   return
@@ -1730,7 +1734,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               options={directoryOptions}
               onSelect={(_index, option) => {
                 if (typeof option?.value !== "string") return
-                if (option.value === USE_DIRECTORY_OPTION) {
+                if (option.value === RUNNER_USE_DIRECTORY_OPTION) {
                   switchProject(browserDirectory)
                   return
                 }
@@ -1789,7 +1793,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
             style={{ fg: COLORS.muted }}
           />
           <InlineButton
-            label="[+] Escolher projeto"
+            label="[N] Escolher projeto"
             accent={COLORS.runner}
             onPress={() => void openProjectPicker()}
           />
@@ -2047,7 +2051,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
                 {listMode === "commands" ? (
                   <InlineButton
                     id="runner-open-project"
-                    label="[+] EXECUTAR EM OUTRO PROJETO…"
+                    label="[N] EXECUTAR EM OUTRO PROJETO…"
                     accent={COLORS.runner}
                     onPress={() => void openProjectPicker()}
                   />
@@ -2398,13 +2402,12 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
             <text content="LOG   " style={{ fg: COLORS.muted }} />
             <InlineButton
-              label={
-                narrowRunner
-                  ? "[F]"
-                  : compactActions
-                    ? "[F] Filtro"
-                    : `[F] Filtrar${logFilter ? `: ${logFilter}` : ""}`
-              }
+              label={runnerLogFilterLabel({
+                viewMode,
+                narrow: narrowRunner,
+                compact: compactActions,
+                filter: logFilter,
+              })}
               accent={COLORS.runner}
               active={logFilterOpen || Boolean(logFilter)}
               onPress={() => {
@@ -2500,7 +2503,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           </>
         ) : projectAvailable === false ? (
           <InlineButton
-            label="[+] Escolher projeto"
+            label="[N] Escolher projeto"
             accent={COLORS.runner}
             onPress={() => void openProjectPicker()}
           />
@@ -2600,7 +2603,7 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
               </>
             ) : null}
             <InlineButton
-              label="[A] Mais…"
+              label="[Shift+A] Mais…"
               accent={COLORS.runner}
               active={moreActionsOpen}
               onPress={() => setMoreActionsOpen((current) => !current)}
@@ -2692,6 +2695,13 @@ export function Runner({ active, onOpenHttp }: RunnerProps) {
           onSave={confirmSaveManualCommand}
         />
       </MountWhen>
+      {pendingAutostartReview ? (
+        <RunnerAutostartTrustModal
+          review={pendingAutostartReview}
+          onApprove={approveAutostart}
+          onClose={dismissAutostart}
+        />
+      ) : null}
     </box>
   )
 }

@@ -232,7 +232,7 @@ export function IssuesWorkspace({
 
   useIssueWorkspaceKeyboard({
     active,
-    blocked: modalOpen,
+    blocked: modalOpen || dashboard.status === "requirements",
     focus,
     hasSelection: Boolean(selected),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
@@ -248,6 +248,7 @@ export function IssuesWorkspace({
   return (
     <>
       <IssueDashboardView
+        active={active}
         dashboard={dashboard}
         presentation={presentation}
         layout={layout}

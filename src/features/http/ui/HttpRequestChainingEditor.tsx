@@ -9,11 +9,13 @@ import type { HttpChainExtraction, HttpRequestDefinition } from "../model/types"
 export function HttpRequestChainingEditor({
   requestId,
   chain,
+  focused,
   onChange,
   onFocus,
 }: {
   requestId: string
   chain: NonNullable<HttpRequestDefinition["chain"]>
+  focused: boolean
   onChange: (chain: NonNullable<HttpRequestDefinition["chain"]>) => void
   onFocus: () => void
 }) {
@@ -60,7 +62,14 @@ export function HttpRequestChainingEditor({
       />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <text content={translateUi("EXTRAÇÕES")} style={{ flexGrow: 1, fg: COLORS.text }} />
-        <InlineButton label="[N] Adicionar" accent={COLORS.http} onPress={add} />
+        {focused ? (
+          <InlineButton
+            id="http-extraction-add"
+            label="[N] Adicionar"
+            accent={COLORS.http}
+            onPress={add}
+          />
+        ) : null}
       </box>
       <scrollbox scrollY viewportCulling style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
         {chain.extract.length ? (

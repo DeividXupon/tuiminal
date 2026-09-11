@@ -19,22 +19,36 @@ export function classifyResponseBody(contentType: string): HttpResponseBodyKind 
 }
 
 export function sanitizeTerminalText(value: string) {
-  return Array.from(value, (character) => {
-    const code = character.charCodeAt(0)
-    const unsafe = code <= 8 || (code >= 11 && code <= 31) || (code >= 127 && code <= 159)
-    if (!unsafe) return character
-    return code === 27 ? "␛" : "�"
-  }).join("")
+  let output = ""
+  let safeStart = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    const unsafe = code <= 0x08 || (code >= 0x0b && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)
+    if (!unsafe) continue
+    output += value.slice(safeStart, index)
+    output += code === 0x1b ? "␛" : "�"
+    safeStart = index + 1
+  }
+  return safeStart ? output + value.slice(safeStart) : value
 }
 
-export function responseBodyText(response: HttpResponseSnapshot, pretty = true) {
+export function responseBodyText(
+  response: HttpResponseSnapshot,
+  pretty = true,
+  maximumCharacters?: number,
+) {
   if (response.bodyKind === "binary") {
     return sanitizeTerminalText(
       `Resposta binária · ${response.contentType || "tipo desconhecido"} · ${response.capturedBytes} bytes`,
     )
   }
 
-  const text = new TextDecoder().decode(response.body)
+  const byteLimit =
+    maximumCharacters === undefined
+      ? response.body.length
+      : Math.min(response.body.length, (maximumCharacters + 1) * 4)
+  const decoded = new TextDecoder().decode(response.body.subarray(0, byteLimit))
+  const text = maximumCharacters === undefined ? decoded : decoded.slice(0, maximumCharacters + 1)
   if (!pretty || response.bodyKind !== "json" || !text.trim()) return sanitizeTerminalText(text)
   try {
     return sanitizeTerminalText(JSON.stringify(JSON.parse(text), null, 2))

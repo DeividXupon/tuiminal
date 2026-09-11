@@ -2,6 +2,7 @@ import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ISSUE_CONFIG_PATH } from "../../storage/issue/config"
+import { GitHubCliRequirementPanel } from "../shared/GitHubCliRequirementPanel"
 import type { IssueDashboardState } from "./useIssueDashboard"
 
 function stateCopy(state: IssueDashboardState) {
@@ -24,12 +25,23 @@ function stateCopy(state: IssueDashboardState) {
 }
 
 export function IssueDashboardStatePanel({
+  active,
   state,
   onRetry,
 }: {
+  active: boolean
   state: IssueDashboardState
   onRetry: () => void
 }) {
+  if (state.status === "requirements") {
+    return (
+      <GitHubCliRequirementPanel
+        active={active}
+        capabilities={state.capabilities}
+        onRetry={onRetry}
+      />
+    )
+  }
   const copy = stateCopy(state)
   return (
     <box

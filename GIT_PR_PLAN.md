@@ -201,12 +201,22 @@ vizinho somente para navegação, nunca para reapontar uma confirmação já abe
 
 ### 6.1. Transporte e autenticação
 
-`gh` já foi detectado localmente na versão 2.83.2. O primeiro adaptador fixa
-**gh 2.40.0** como versão mínima conservadora e ainda testa capacidades/formato
-de saída; não atualizar instalações do usuário automaticamente. Essa versão pode
-subir caso testes de integração revelem uma dependência mais nova.
+O primeiro adaptador fixa **gh 2.40.0** como versão mínima conservadora e ainda
+testa capacidades/formato de saída. Quando o binário está ausente ou antigo, PR,
+Issues e Inbox compartilham uma tela explicativa que detecta um gerenciador
+conhecido, mostra o comando antes de qualquer execução e oferece um mini terminal
+PTY. Nada começa automaticamente: somente `[I]` ou o controle de mouse inicia a
+instalação/atualização. Ao terminar, o Tuiminal valida novamente a versão e
+recarrega a área Git. Essa versão mínima pode subir caso testes de integração
+revelem uma dependência mais nova.
 
 - Detectar binário, versão e flags necessárias sem bloquear Base.
+- Aceitar somente comandos fixos de gerenciadores conhecidos; nunca interpolar
+  query, repositório ou texto remoto no instalador. Encerrar somente o grupo de
+  processo pertencente ao mini terminal quando a tela desmontar.
+- Manter senha e demais entradas somente no fluxo PTY: não capturar, persistir ou
+  copiar credenciais para logs do Tuiminal. Autenticação GitHub continua sendo a
+  etapa explícita `gh auth login`, separada da instalação.
 - Reusar autenticação do GitHub CLI; consultar a identidade efetiva do viewer.
 - Não chamar `gh auth token` para copiar segredo para o app e não registrar tokens.
 - Sem login, mostrar instrução `gh auth login --hostname <host>` e verificar de novo.
@@ -270,10 +280,11 @@ head SHA conhecido, dados de permissão e instante da leitura. Revalidar antes d
 confirmar; mudanças relevantes exigem revisão do usuário. Bloquear clique duplo e
 repetição de tecla; serializar escritas por PR e por clone no caso de checkout.
 
-Se um timeout ocorrer depois de enviar, o resultado é **incerto**, não falha
-segura para repetir. Consultar o estado remoto e oferecer verificação; comentários
-e reviews não podem ser reenviados automaticamente. Desabilitar retry de POST por
-default. Cancelar o cliente não desfaz uma mutação aceita pelo servidor.
+Se timeout, cancelamento ou excesso de saída ocorrer depois de despachar, o
+resultado é **incerto**, não falha segura para repetir. Consultar o estado remoto
+e oferecer verificação; comentários e reviews não podem ser reenviados
+automaticamente. Desabilitar retry de POST por default. Cancelar o cliente não
+desfaz uma mutação aceita pelo servidor.
 
 ### 7.2. Matriz de operações
 
@@ -318,12 +329,17 @@ Fontes: [comandos PR](https://cli.github.com/manual/gh_pr),
 1. Resolver host/owner/repo e mapear clones, incluindo worktrees existentes.
 2. Pedir pasta quando não houver mapa; mostrar escolha quando houver vários.
 3. Validar Git root, remote esperado e pasta real, não só o nome de diretório.
-4. Verificar staged, unstaged, untracked e operação Git em andamento.
+4. Verificar staged, unstaged, untracked, index/gitdir legíveis e operação Git em
+   andamento. Erro, timeout ou exit code inesperado em qualquer probe bloqueia.
 5. Com trabalho local pendente, bloquear o checkout automático desta versão e
    explicar como resolver; nunca executar stash/reset/clean para continuar.
 6. Mostrar branch atual, PR/head de destino e efeitos de fetch/checkout.
-7. Executar somente após confirmação; não rodar scripts, installs ou testes do PR.
-8. Atualizar Base se for seu clone; se for outro, informar a pasta utilizada e
+7. Serializar pelo clone canônico e repetir toda a inspeção imediatamente antes
+   do único despacho; uma alteração feita enquanto a confirmação estava aberta
+   invalida a operação.
+8. Executar somente após confirmação; não rodar scripts, installs ou testes do PR.
+   Revalidar a pós-condição e manter resultado incerto se ela não puder ser lida.
+9. Atualizar Base se for seu clone; se for outro, informar a pasta utilizada e
    oferecer abertura explícita, sem trocar silenciosamente o projeto lançado.
 
 Worktree novo e clone automático são evoluções separadas. O caminho local salvo
@@ -558,7 +574,7 @@ registram o estado final validado no worktree isolado.
 ### Fase 0 — contratos, referência e fixtures
 
 - [x] Revisar wireframes e validar navegação/responsividade em protótipo nativo.
-- [x] Registrar default Base, H/L de foco, seções `<`/`>`, modais e estados de erro.
+- [x] Registrar default Base, H/L de foco, seções `A←`/`F→`, modais e estados de erro.
 - [x] Fixar versão mínima/capacidades de `gh`, APIs e suporte de host.
 - [x] Criar fixtures fictícias: PRs abertos/draft/merged/closed, forks e permissão negada.
 - [x] Criar contratos normalizados, máquina de ações e testes de consulta/identidade.
@@ -671,7 +687,9 @@ Saída: funcionalidade completa somente quando todos os requisitos têm evidênc
   atualização de head, descoberta tardia e deduplicação de notificações.
 - Tentativas de injeção em args, Markdown, OSC52, URL, título, path e branch.
 - Escritas não disparadas por leitura; nenhuma repetição automática após timeout.
-- Checkout com repo errado, sujo, worktree, múltiplos clones e operação em andamento.
+- Checkout com repo errado, sujo, linked worktree, múltiplos clones, operação em
+  andamento, timeout, status/index/gitdir inválido, mudança após confirmação e
+  duas operações concorrentes no mesmo clone.
 
 ### 12.2. Integração de TUI
 
@@ -723,7 +741,7 @@ Relatório final separa testes locais, remotos opt-in, visuais e o que não foi 
 | R08 | Concluído | Commits paginados, seleção e cópia do SHA completo em `PreviewTabContent.tsx`/`usePullRequestWorkspaceKeyboard.ts`; transporte em testes. |
 | R09 | Concluído | Limite de 256 KiB, controles removidos, HTML inerte, links HTTPS e expansão em `model/pr/content.ts`, `rendering/pr-markdown.tsx` e `tests/git-pr-runtime.test.ts`. |
 | R10 | Concluído | Diff de PR/arquivo/commit, SHAs imutáveis, unificado/split/intraline e casos especiais em `model/pr/diff.ts`, `PrDiffView.tsx` e `tests/git-pr-runtime.test.ts`. |
-| R11 | Concluído | Escolha/mapeamento de clone, remote correto, árvore limpa, operações Git e worktree real em `services/pr-checkout.ts` e `tests/git-pr-runtime.test.ts`. |
+| R11 | Concluído | Escolha/mapeamento de clone, remote correto, linked worktree, inspeção fail-closed, revalidação antes/depois do despacho e lock pelo clone canônico em `services/pr-checkout.ts` e `tests/git-pr-runtime.test.ts`; Issues compartilha a mesma guarda. |
 | R12 | Concluído | Adição/remoção de responsáveis, picker e reconciliação em `AssigneePicker.tsx`, `services/github/mutations.ts` e `tests/git-pr-actions.test.ts`. |
 | R13 | Concluído | Comentário por stdin, draft em memória, execução única e resultado incerto em `usePullRequestActions.tsx`, `services/pr-actions.ts` e testes de ações. |
 | R14 | Concluído | Aprovação vinculada ao commit, comentário configurável opcional e sem autoenvio em `mutations.ts` e `tests/git-pr-actions.test.ts`. |
@@ -746,7 +764,7 @@ em PRs reais.
 
 | Risco/decisão | Default proposto e momento de validação |
 | --- | --- |
-| Fidelidade visual versus foco consistente | Estrutura gh-dash; H/L foco, `<`/`>` seções. Validar no protótipo fase 0. |
+| Fidelidade visual versus foco consistente | Estrutura gh-dash; H/L foco, `A←`/`F→` seções. Validar no protótipo fase 0. |
 | `gh` instalado não tem flag/campo recente | Feature detection e versão mínima testada, fase 2; Base não é bloqueada. |
 | GraphQL/busca ampla e limites | Paginação e enriquecimento em lote; medir custo com múltiplas seções, fase 3. |
 | Review/merge baseado em head antigo | Identidade imutável e SHA esperado; escrita com estado incerto não repete. |
@@ -802,7 +820,7 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
 - 2026-09-08: a configuração de PR e Issues foi unificada na opção GitHub de `[,]`
   na tela Git. O modal lista todos os repositórios acessíveis mais `TODOS`; perfis
   novos usam o `origin` atual quando o lançamento ocorre dentro de Git e usam
-  `TODOS` fora dele. Os antigos atalhos locais `[Ctrl+E]`, `[S]` e `[+]` saíram.
+  `TODOS` fora dele. Os antigos atalhos locais de configuração foram removidos.
 - 2026-09-08: `[1] Base` passou a se chamar `[1] Diffs`. `[Ctrl+P]` abre a aba
   Diffs da configuração Git para escolher outro repositório existente na máquina
   e uma de suas branches locais. O alvo fica em `git-diffs.json` e sua revisão é

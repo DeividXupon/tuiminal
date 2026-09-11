@@ -20,7 +20,7 @@ import type { HttpWorkspaceAction } from "../model/workspace"
 import { newHttpExecutionId, type HttpDocumentRefs } from "../runtime"
 import { runHttpCollectionCase, type HttpRunCase } from "../services/collection-runner"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
-import type { HttpCookieJar } from "../services/cookies"
+import type { HttpCookieJarResolver } from "../services/cookies"
 import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
 
 type HistoryTools = {
@@ -45,7 +45,7 @@ type SendContext = {
   activeEnvironmentName: string | null
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext
   historyTools: HistoryTools
-  cookieJar: HttpCookieJar
+  cookieJarForRequest: HttpCookieJarResolver
   responseCompleted: () => void
   isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
   refsFor: (documentId: string) => HttpDocumentRefs
@@ -202,7 +202,7 @@ async function sendHttpDocument(context: SendContext, documentId: string) {
       variablesForRequest: context.variablesForRequest,
       root: HTTP_WORKING_DIRECTORY,
       signal: controller.signal,
-      cookieJar: context.cookieJar,
+      cookieJarForRequest: context.cookieJarForRequest,
       environmentName: context.activeEnvironmentName,
       isInsecureTlsApproved: context.isInsecureTlsApproved,
       authorizeRedirect: context.authorizeRedirect,

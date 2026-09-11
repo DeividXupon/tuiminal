@@ -6,7 +6,6 @@ import {
   HttpRequestDefinition,
   HttpRequestMoreView,
   HttpRequestView,
-  HttpResponseMoreView,
   HttpResponseSnapshot,
   HttpResponseView,
   HttpWorkspaceOverlay,
@@ -60,17 +59,7 @@ export type HttpWorkspaceAction =
   | {
       type: "update-response-presentation"
       documentId: string
-      patch: Partial<{
-        wrap: boolean
-        lineNumbers: boolean
-        foldDepth: number | null
-        searchOpen: boolean
-        searchQuery: string
-        searchMatchIndex: number
-        jsonPathOpen: boolean
-        jsonPath: string
-        moreView: HttpResponseMoreView
-      }>
+      patch: Partial<HttpDocumentState["responsePresentation"]>
     }
   | { type: "select-pane"; pane: HttpPane }
   | { type: "set-split-ratio"; documentId: string; ratio: number }
@@ -149,6 +138,8 @@ function createDocument(request: HttpRequestDefinition): HttpDocumentState {
       wrap: false,
       lineNumbers: false,
       foldDepth: null,
+      jsonSelectedPath: null,
+      jsonCollapsedPaths: [],
       searchOpen: false,
       searchQuery: "",
       searchMatchIndex: 0,
@@ -168,7 +159,7 @@ export function createHttpWorkspaceState(
   return {
     documents: [createDocument(request)],
     activeDocumentId: request.id,
-    activePane: "request",
+    activePane: "url",
     navigationView: "collection",
     navigationOpen: false,
     overlay: null,
@@ -247,6 +238,8 @@ function reduceHttpExecution(state: HttpWorkspaceState, action: HttpExecutionAct
       responsePresentation: {
         ...candidate.responsePresentation,
         searchMatchIndex: 0,
+        jsonSelectedPath: null,
+        jsonCollapsedPaths: [],
       },
     }))
     if (action.historyEntry === null) return next
@@ -289,7 +282,7 @@ export function httpWorkspaceReducer(
         ...state,
         documents: [...state.documents, createDocument(action.request)],
         activeDocumentId: action.request.id,
-        activePane: "request",
+        activePane: "url",
       }
     case "select-document":
       return state.documents.some((document) => document.request.id === action.documentId)

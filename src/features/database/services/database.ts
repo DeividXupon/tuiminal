@@ -23,17 +23,9 @@ import {
   restoreHistoryContent,
   retainHistoryContent,
 } from "./history-content"
-import {
-  accessSync,
-  chmodSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs"
+import { accessSync, constants, existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, isAbsolute, join, resolve } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { definedProperties } from "../../../shared/data/defined-properties"
@@ -43,7 +35,6 @@ import {
   readOnlyClientIsInvalid,
   type CancelableDatabaseQuery,
   type RuntimeSqlClient,
-  type RuntimeSqlExecutor,
 } from "./read-only-query"
 export type {
   CancelableDatabaseQuery,
@@ -51,6 +42,7 @@ export type {
   RuntimeSqlExecutor,
 } from "./read-only-query"
 import { isSensitiveColumnName } from "../../../shared/security/sensitive-data"
+import { atomicWriteFileSync, fileContentHash } from "../../../shared/storage/atomic-file"
 import type {
   DatabaseCatalog,
   DatabaseColumn,
@@ -59,10 +51,10 @@ import type {
   DatabaseConstraint,
   DatabaseDriver,
   DatabaseIndex,
+  DatabaseMutationBatchResult,
   DatabaseMutationPreview,
   DatabaseQueryExecutionOptions,
   DatabaseQueryHistoryEntry,
-  DatabaseQueryHistoryParameter,
   DatabaseQueryHistorySessionParameter,
   DatabaseQueryPlan,
   DatabaseQueryResult,
@@ -76,6 +68,11 @@ import type {
   TablePage,
 } from "../model/types"
 import { sqliteQueryProcessCommand } from "./sqlite-query-runtime"
+import {
+  databaseMutationConnectionFailureMayBeUncertain,
+  emptyDatabaseMutationExecutionState,
+  executeDatabaseMutationTransaction,
+} from "./database-mutations"
 
 export function databaseSavedQueryIsDirty(query: DatabaseSavedQuery | null, currentSql: string) {
   return Boolean(query && query.sql !== currentSql)
@@ -98,6 +95,26 @@ export class DatabaseQueryCancelledError extends Error {
   constructor() {
     super("Consulta cancelada.")
     this.name = "DatabaseQueryCancelledError"
+  }
+}
+
+export class DatabaseMutationConflictError extends Error {
+  constructor(message = "O registro foi alterado desde a revisão. Recarregue e revise novamente.") {
+    super(message)
+    this.name = "DatabaseMutationConflictError"
+  }
+}
+
+export class DatabaseMutationCommitUncertainError extends Error {
+  readonly cause: unknown
+
+  constructor(cause: unknown) {
+    super(
+      "A conexão foi perdida durante a gravação e não foi possível confirmar o commit. " +
+        "Recarregue os dados antes de tentar novamente.",
+    )
+    this.name = "DatabaseMutationCommitUncertainError"
+    this.cause = cause
   }
 }
 
@@ -322,6 +339,8 @@ export const mcpClients = new Map<string, Promise<Client>>()
 export const sessionPasswords = new Map<string, string>()
 export const schemaCache = new Map<string, DatabaseColumn[]>()
 export const QUERY_RESULT_LIMIT = 500
+export const QUERY_RESULT_FETCH_LIMIT = QUERY_RESULT_LIMIT + 1
+export const QUERY_RESULT_CELL_LIMIT_BYTES = 256_000
 export const QUERY_TEXT_LIMIT = 100_000
 export const DATABASE_QUERY_HISTORY_READ_LIMIT = 100
 export const DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS = 184
@@ -495,6 +514,8 @@ export function normalizeQueryHistory(value: unknown): DatabaseQueryHistoryEntry
 }
 
 let storedSettingsCache: StoredDatabaseSettings | null = null
+let storedSettingsSourceHash: string | null = null
+let storedSettingsReadError = ""
 
 export function emptyStoredSettings(): StoredDatabaseSettings {
   return {
@@ -507,15 +528,16 @@ export function emptyStoredSettings(): StoredDatabaseSettings {
 }
 
 export function readSettings(): StoredDatabaseSettings {
-  if (storedSettingsCache) return storedSettingsCache
+  if (storedSettingsCache) return structuredClone(storedSettingsCache)
   try {
     if (!existsSync(DATABASE_SETTINGS_PATH)) {
       storedSettingsCache = emptyStoredSettings()
-      return storedSettingsCache
+      storedSettingsSourceHash = null
+      storedSettingsReadError = ""
+      return structuredClone(storedSettingsCache)
     }
-    const parsed = JSON.parse(
-      readFileSync(DATABASE_SETTINGS_PATH, "utf8"),
-    ) as Partial<StoredDatabaseSettings>
+    const source = readFileSync(DATABASE_SETTINGS_PATH, "utf8")
+    const parsed = JSON.parse(source) as Partial<StoredDatabaseSettings>
     storedSettingsCache = {
       version: 1,
       defaultConnectionId:
@@ -528,21 +550,47 @@ export function readSettings(): StoredDatabaseSettings {
       savedQueries: normalizeSavedQueries(parsed.savedQueries),
       queryHistory: normalizeQueryHistory(parsed.queryHistory),
     }
-    return storedSettingsCache
-  } catch {
+    storedSettingsSourceHash = fileContentHash(source)
+    storedSettingsReadError = ""
+    return structuredClone(storedSettingsCache)
+  } catch (error) {
+    try {
+      storedSettingsSourceHash = fileContentHash(readFileSync(DATABASE_SETTINGS_PATH))
+    } catch {
+      storedSettingsSourceHash = null
+    }
+    storedSettingsReadError =
+      error instanceof Error ? error.message : "A configuração do banco é inválida."
     storedSettingsCache = emptyStoredSettings()
-    return storedSettingsCache
+    return structuredClone(storedSettingsCache)
   }
 }
 
-export function writeSettings(settings: StoredDatabaseSettings) {
-  mkdirSync(dirname(DATABASE_SETTINGS_PATH), { recursive: true })
-  writeFileSync(DATABASE_SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`, {
-    encoding: "utf8",
+export function writeSettings(
+  settings: StoredDatabaseSettings,
+  options: { recoverCorrupted?: boolean } = {},
+) {
+  if (storedSettingsReadError && !options.recoverCorrupted) {
+    throw new Error(
+      "databases.json está corrompido; preserve o arquivo e use a recuperação explícita antes de salvar.",
+    )
+  }
+  const content = `${JSON.stringify(settings, null, 2)}\n`
+  storedSettingsSourceHash = atomicWriteFileSync(DATABASE_SETTINGS_PATH, content, {
+    expectedHash: storedSettingsSourceHash,
     mode: 0o600,
+    backup: true,
   })
-  chmodSync(DATABASE_SETTINGS_PATH, 0o600)
-  storedSettingsCache = settings
+  storedSettingsReadError = ""
+  storedSettingsCache = structuredClone(settings)
+}
+
+export function recoverDatabaseSettings(settings: StoredDatabaseSettings) {
+  writeSettings(settings, { recoverCorrupted: true })
+}
+
+export function databaseSettingsStorageError() {
+  return storedSettingsReadError
 }
 
 export function canExecute(command: string) {
@@ -1355,10 +1403,21 @@ function visibleQueryRows(rows: Array<Record<string, unknown>>, revealSensitive:
             ? "<mascarado>"
             : ArrayBuffer.isView(value)
               ? `<binário ${value.byteLength} bytes>`
-              : value,
+              : typeof value === "string" &&
+                  Buffer.byteLength(value) > QUERY_RESULT_CELL_LIMIT_BYTES
+                ? `${new TextDecoder().decode(
+                    Buffer.from(value).subarray(0, QUERY_RESULT_CELL_LIMIT_BYTES - 32),
+                  )}… <célula truncada>`
+                : value,
         ]),
       ),
     )
+}
+
+function boundedEditorQuery(plan: DatabaseQueryPlan) {
+  if (plan.mutating || plan.command !== "SELECT") return plan.sql
+  const source = plan.sql.replace(/;\s*$/u, "")
+  return `SELECT * FROM (${source}) AS __tuiminal_bounded_result LIMIT ${QUERY_RESULT_FETCH_LIMIT}`
 }
 
 async function editorQueryRows(
@@ -1366,14 +1425,15 @@ async function editorQueryRows(
   plan: DatabaseQueryPlan,
   signal?: AbortSignal,
 ) {
+  const querySql = boundedEditorQuery(plan)
   if (profile.driver === "mcp-mysql") {
-    const rows = await mcpQuery(await getMcpClient(profile), plan.sql, signal)
+    const rows = await mcpQuery(await getMcpClient(profile), querySql, signal)
     return { rawResult: rows, rows }
   }
   if (profile.driver === "sqlite") {
     const rawResult = await executeSqliteProcessQuery(
       { ...profile, writeEnabled: databaseConnectionCanWrite(profile) && plan.mutating },
-      plan.sql,
+      querySql,
       signal,
     )
     return { rawResult, rows: rawResult.rows }
@@ -1381,7 +1441,7 @@ async function editorQueryRows(
   const client = await getNativeClient(profile)
   const query = plan.mutating
     ? client.unsafe(plan.sql)
-    : nativeReadOnlyQuery(client, plan.sql, profile.driver)
+    : nativeReadOnlyQuery(client, querySql, profile.driver)
   const rawResult = await awaitCancelableDatabaseQuery(query, signal, () =>
     forceCloseNativeClient(profile.id, client),
   )
@@ -1413,7 +1473,7 @@ export async function executeDatabaseQuery(
       mutating: plan.mutating,
       columns: queryResultColumns(rawResult, rows),
       rows: visibleRows,
-      rowCount: rows.length,
+      rowCount: visibleRows.length,
       affectedRows: plan.mutating ? affectedRowCount(rawResult) : null,
       durationMs: performance.now() - startedAt,
       truncated: rows.length > QUERY_RESULT_LIMIT,
@@ -1650,18 +1710,16 @@ export function tableMutationParameterNames(
   return primaryNames
 }
 
-export async function loadSchema(connectionId: string, table: DatabaseTable) {
-  const profile = connectionProfile(connectionId)
-  const cacheKey = `${connectionId}:${table.schema}:${table.name}`
-  const cached = schemaCache.get(cacheKey)
-  if (cached) return cached
-
+async function inspectTableSchema(
+  profile: DatabaseConnectionProfile,
+  table: DatabaseTable,
+  query: (sql: string) => Promise<Array<Record<string, unknown>>>,
+) {
   let rows: Array<Record<string, unknown>>
   if (profile.driver === "mysql" || profile.driver === "mcp-mysql") {
-    rows = await readQuery(connectionId, `DESCRIBE ${qualifiedTable(profile, table)}`)
+    rows = await query(`DESCRIBE ${qualifiedTable(profile, table)}`)
   } else if (profile.driver === "postgres") {
-    rows = await readQuery(
-      connectionId,
+    rows = await query(
       `SELECT c.column_name AS field, c.data_type AS type, c.is_nullable AS nullable, ` +
         `COALESCE(c.column_default, '') AS default_value, ` +
         `CASE WHEN pk.column_name IS NULL THEN '' ELSE 'PRI' END AS key_name ` +
@@ -1677,13 +1735,10 @@ export async function loadSchema(connectionId: string, table: DatabaseTable) {
         `AND c.table_name = ${sqlLiteral(table.name)} ORDER BY c.ordinal_position`,
     )
   } else {
-    rows = await readQuery(
-      connectionId,
-      `PRAGMA table_info(${quoteIdentifier(profile, table.name)})`,
-    )
+    rows = await query(`PRAGMA table_info(${quoteIdentifier(profile, table.name)})`)
   }
 
-  const columns = rows.map((row) => {
+  return rows.map((row) => {
     if (profile.driver === "mysql" || profile.driver === "mcp-mysql") {
       return {
         field: String(row.Field ?? ""),
@@ -1716,6 +1771,15 @@ export async function loadSchema(connectionId: string, table: DatabaseTable) {
         row.dflt_value === null || row.dflt_value === undefined ? null : String(row.dflt_value),
     }
   })
+}
+
+export async function loadSchema(connectionId: string, table: DatabaseTable) {
+  const profile = connectionProfile(connectionId)
+  const cacheKey = `${connectionId}:${table.schema}:${table.name}`
+  const cached = schemaCache.get(cacheKey)
+  if (cached) return cached
+
+  const columns = await inspectTableSchema(profile, table, (sql) => readQuery(connectionId, sql))
   schemaCache.set(cacheKey, columns)
   return columns
 }
@@ -1986,12 +2050,19 @@ export async function updateTableRow(
   table: DatabaseTable,
   rowKey: Record<string, unknown>,
   changes: Record<string, unknown>,
+  originalRow: Record<string, unknown>,
 ) {
   const profile = connectionProfile(connectionId)
   writableTable(profile, table)
   const columns = await loadSchema(connectionId, table)
-  const statement = buildUpdateStatement(profile, table, columns, rowKey, changes)
-  await writeQuery(connectionId, statement.sql, statement.parameters)
+  return applyTableMutations(connectionId, [
+    {
+      table,
+      columns,
+      mutation: { kind: "update", rowKey, values: changes },
+      originalRow,
+    },
+  ])
 }
 
 export async function insertTableRow(
@@ -2002,20 +2073,23 @@ export async function insertTableRow(
   const profile = connectionProfile(connectionId)
   writableTable(profile, table)
   const columns = await loadSchema(connectionId, table)
-  const statement = buildInsertStatement(profile, table, columns, valuesByColumn)
-  await writeQuery(connectionId, statement.sql, statement.parameters)
+  return applyTableMutations(connectionId, [
+    { table, columns, mutation: { kind: "insert", values: valuesByColumn }, originalRow: null },
+  ])
 }
 
 export async function deleteTableRow(
   connectionId: string,
   table: DatabaseTable,
   rowKey: Record<string, unknown>,
+  originalRow: Record<string, unknown>,
 ) {
   const profile = connectionProfile(connectionId)
   writableTable(profile, table)
   const columns = await loadSchema(connectionId, table)
-  const statement = buildDeleteStatement(profile, table, columns, rowKey)
-  await writeQuery(connectionId, statement.sql, statement.parameters)
+  return applyTableMutations(connectionId, [
+    { table, columns, mutation: { kind: "delete", rowKey }, originalRow },
+  ])
 }
 
 export async function applyTableMutations(
@@ -2024,67 +2098,46 @@ export async function applyTableMutations(
     table: DatabaseTable
     columns: DatabaseColumn[]
     mutation: DatabaseTableMutation
+    originalRow: Record<string, unknown> | null
   }>,
-) {
+): Promise<DatabaseMutationBatchResult> {
   if (!changes.length) throw new Error("Nenhuma alteração foi aprovada.")
   const profile = connectionProfile(connectionId)
   if (!databaseConnectionCanWrite(profile)) {
     throw new Error("A escrita não está habilitada para esta conexão.")
   }
   const statements = changes.map((change) => ({
+    ...change,
     ...previewTableMutation(connectionId, change.table, change.columns, change.mutation),
     parameterNames: tableMutationParameterNames(change.columns, change.mutation),
   }))
   const client = await getNativeClient(profile)
-  const executions: Array<{
-    sql: string
-    durationMs: number
-    affectedRows: number | null
-    error: string | null
-    parameterPreview: DatabaseQueryHistoryParameter[]
-    sessionParameterPreview: DatabaseQueryHistorySessionParameter[]
-  }> = []
+  const state = emptyDatabaseMutationExecutionState()
+  const runtime = {
+    conflict: (message?: string) => new DatabaseMutationConflictError(message),
+    rowsFromResult,
+    inspectSchema: inspectTableSchema,
+    quoteIdentifier,
+    parameterMarker,
+    primaryKeyWhere,
+    qualifiedTable,
+    affectedRowCount,
+    parameterPreview: databaseQueryHistoryParameterPreview,
+    sessionParameterPreview: databaseQueryHistorySessionParameterPreview,
+  }
   try {
-    await client.begin(async (transaction) => {
-      for (const statement of statements) {
-        const startedAt = performance.now()
-        const parameterPreview = databaseQueryHistoryParameterPreview(
-          statement.parameters,
-          statement.parameterNames,
-        )
-        const sessionParameterPreview = databaseQueryHistorySessionParameterPreview(
-          statement.parameters,
-          parameterPreview,
-        )
-        try {
-          const result = await transaction.unsafe(statement.sql, statement.parameters)
-          executions.push({
-            sql: statement.sql,
-            durationMs: performance.now() - startedAt,
-            affectedRows: affectedRowCount(result),
-            error: null,
-            parameterPreview,
-            sessionParameterPreview,
-          })
-        } catch (error) {
-          executions.push({
-            sql: statement.sql,
-            durationMs: performance.now() - startedAt,
-            affectedRows: null,
-            error: error instanceof Error ? error.message : "Falha desconhecida",
-            parameterPreview,
-            sessionParameterPreview,
-          })
-          throw error
-        }
-      }
-    })
+    await executeDatabaseMutationTransaction({ profile, statements, client, state, runtime })
   } catch (error) {
-    const transactionError = error instanceof Error ? error.message : "Falha desconhecida"
+    const uncertain =
+      state.callbackCompleted ||
+      (state.sentStatements > 0 && databaseMutationConnectionFailureMayBeUncertain(error))
+    const surfacedError = uncertain ? new DatabaseMutationCommitUncertainError(error) : error
+    const transactionError =
+      surfacedError instanceof Error ? surfacedError.message : "Falha desconhecida"
     try {
       appendDatabaseQueryHistoryBatch(
         connectionId,
-        executions.map((execution) => ({
+        state.executions.map((execution) => ({
           sql: execution.sql,
           command: queryCommand(execution.sql),
           status: "error",
@@ -2101,12 +2154,12 @@ export async function applyTableMutations(
     } catch {
       // Preserva o erro original da transação se o histórico não puder ser salvo.
     }
-    throw error
+    throw surfacedError
   }
   try {
     appendDatabaseQueryHistoryBatch(
       connectionId,
-      executions.map((execution) => ({
+      state.executions.map((execution) => ({
         sql: execution.sql,
         command: queryCommand(execution.sql),
         status: "success",
@@ -2123,7 +2176,15 @@ export async function applyTableMutations(
   } catch {
     // A falha ao persistir histórico não deve invalidar uma transação confirmada.
   }
-  return statements.length
+  return {
+    plannedStatements: statements.length,
+    sentStatements: state.sentStatements,
+    matchedRows: state.matchedRows,
+    affectedRows: state.affectedRowsKnown ? state.affectedRows : null,
+    confirmedRows: state.confirmedRows,
+    noOpStatements: state.noOpStatements,
+    transactional: true,
+  }
 }
 
 export async function loadTableIndexes(

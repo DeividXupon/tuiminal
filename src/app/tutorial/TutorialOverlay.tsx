@@ -82,7 +82,7 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     title: "Criar query",
     description:
       "Abre o workspace SQL com até seis editores e resultados independentes. Autocomplete, favoritos e histórico respeitam a conexão ativa.",
-    hint: "[A] abre · [Ctrl+A] executa somente o comando atual",
+    hint: "[W] abre · [Ctrl+A] executa somente o comando atual",
     kind: "action",
   },
   {
@@ -109,7 +109,7 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     title: "Tabelas abertas",
     description:
       "Mantém até seis tabelas abertas sem duplicar nomes. Ao reabrir uma tabela, o foco volta para a aba existente.",
-    hint: "Atalhos: [<] e [>]",
+    hint: "Atalhos: [A←] e [F→]",
     kind: "control",
   },
   {
@@ -160,7 +160,7 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     group: "DADOS · FILTRO",
     title: "Ordenar e buscar",
     description:
-      "[F] alterna a coluna ativa entre ordem normal, crescente e decrescente. [S] busca um texto em todas as colunas.",
+      "[O] alterna a coluna ativa entre ordem normal, crescente e decrescente. [S] busca um texto em todas as colunas.",
     hint: "A ordenação e a busca ficam isoladas por conexão e tabela.",
     kind: "action",
   },

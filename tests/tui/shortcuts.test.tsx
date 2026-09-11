@@ -75,3 +75,15 @@ test("translation and wide glyphs retain their text and shortcut accent", async 
   expect(tui.captureCharFrame()).not.toContain("Digite uma URL")
   expect(colorOf("[Enter]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
 })
+
+test("directional hints distinguish the A/F key from the semantic arrow", async () => {
+  tui = await testRender(
+    <ShortcutText content="[A←] anterior  [F→] próximo" style={{ fg: "#A0A0A0" }} />,
+    { width: 40, height: 4 },
+  )
+  await tui.renderOnce()
+  expect(colorOf("[A")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+  expect(colorOf("[F")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+  expect(colorOf("←]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
+  expect(colorOf("→]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
+})

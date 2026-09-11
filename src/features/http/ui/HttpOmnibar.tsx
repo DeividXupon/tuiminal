@@ -6,10 +6,12 @@ import type { HttpRequestDefinition } from "../model/types"
 
 type HttpOmnibarProps = {
   request: HttpRequestDefinition
+  focused: boolean
   twoRows: boolean
   running: boolean
   readOnly: boolean
   urlRef: RefObject<InputRenderable | null>
+  onFocus: () => void
   onUrlChange: (value: string) => void
   onCycleMethod: (direction: number) => void
   onSend: () => void
@@ -27,6 +29,7 @@ function EnvironmentAndSend({
   environmentName,
   productionEnvironment,
   onOpenEnvironment,
+  onFocus,
 }: Pick<
   HttpOmnibarProps,
   | "running"
@@ -36,6 +39,7 @@ function EnvironmentAndSend({
   | "environmentName"
   | "productionEnvironment"
   | "onOpenEnvironment"
+  | "onFocus"
 >) {
   return (
     <box style={{ height: 1, flexShrink: 0, flexDirection: "row", alignItems: "center" }}>
@@ -45,7 +49,10 @@ function EnvironmentAndSend({
           label={environmentName ? `[E] ${environmentName}` : "[E] Sem ambiente"}
           accent={productionEnvironment ? COLORS.danger : COLORS.http}
           active={environmentName !== null}
-          onPress={onOpenEnvironment}
+          onPress={() => {
+            onFocus()
+            onOpenEnvironment()
+          }}
         />
       </box>
       <InlineButton
@@ -53,7 +60,11 @@ function EnvironmentAndSend({
         label={running ? "[X] Cancelar" : "[S] Enviar"}
         accent={running ? COLORS.warning : COLORS.http}
         disabled={readOnly && !running}
-        onPress={running ? onCancel : onSend}
+        onPress={() => {
+          onFocus()
+          if (running) onCancel()
+          else onSend()
+        }}
       />
     </box>
   )
@@ -61,10 +72,12 @@ function EnvironmentAndSend({
 
 export function HttpOmnibar({
   request,
+  focused,
   twoRows,
   running,
   readOnly,
   urlRef,
+  onFocus,
   onUrlChange,
   onCycleMethod,
   onSend,
@@ -81,7 +94,10 @@ export function HttpOmnibar({
         accent={COLORS.http}
         active
         disabled={readOnly}
-        onPress={() => onCycleMethod(1)}
+        onPress={() => {
+          onFocus()
+          onCycleMethod(1)
+        }}
       />
       {readOnly ? (
         <text
@@ -104,7 +120,10 @@ export function HttpOmnibar({
           value={request.url}
           placeholder="http://localhost:3000/api"
           onInput={onUrlChange}
-          onMouseDown={() => urlRef.current?.focus()}
+          onMouseDown={() => {
+            onFocus()
+            urlRef.current?.focus()
+          }}
           onSubmit={() => onSend()}
           style={{
             backgroundColor: COLORS.panelRaised,
@@ -123,11 +142,16 @@ export function HttpOmnibar({
   )
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the OpenTUI box is the keyboard focus region for the route and also has focusable child controls.
     <box
+      id="http-url-pane"
+      onMouseDown={onFocus}
       style={{
         height: twoRows ? 2 : 1,
         flexShrink: 0,
-        backgroundColor: COLORS.panel,
+        backgroundColor: focused ? COLORS.panelRaised : COLORS.panel,
+        border: focused ? (["left"] as ["left"]) : false,
+        borderColor: COLORS.http,
         paddingLeft: 1,
         paddingRight: 1,
       }}
@@ -143,6 +167,7 @@ export function HttpOmnibar({
             environmentName={environmentName}
             productionEnvironment={productionEnvironment}
             onOpenEnvironment={onOpenEnvironment}
+            onFocus={onFocus}
           />
         </>
       ) : (
@@ -153,14 +178,21 @@ export function HttpOmnibar({
             label={environmentName ? `[E] ${environmentName}` : "[E] Sem ambiente"}
             accent={productionEnvironment ? COLORS.danger : COLORS.http}
             active={environmentName !== null}
-            onPress={onOpenEnvironment}
+            onPress={() => {
+              onFocus()
+              onOpenEnvironment()
+            }}
           />
           <InlineButton
             id="http-send-button"
             label={running ? "[X] Cancelar" : "[S] Enviar"}
             accent={running ? COLORS.warning : COLORS.http}
             disabled={readOnly && !running}
-            onPress={running ? onCancel : onSend}
+            onPress={() => {
+              onFocus()
+              if (running) onCancel()
+              else onSend()
+            }}
           />
         </box>
       )}

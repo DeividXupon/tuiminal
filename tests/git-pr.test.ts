@@ -9,6 +9,7 @@ import {
   movePullRequestIndex,
   nextPullRequestPreviewPosition,
   pullRequestNavigationAction,
+  pullRequestActionKindForShortcut,
   pullRequestWorkspaceAction,
   resolvePullRequestLayout,
 } from "../src/features/git/model/pr/navigation"
@@ -116,6 +117,13 @@ describe("Git Diffs/PR workspace", () => {
     expect(adjacentPreviewTab("files", 1)).toBe("overview")
   })
 
+  test("keeps PR action shortcuts available inside the action menu", () => {
+    expect(pullRequestActionKindForShortcut({ name: "a" })).toBe("assign")
+    expect(pullRequestActionKindForShortcut({ name: "a", shift: true })).toBe("unassign")
+    expect(pullRequestActionKindForShortcut({ name: "a", ctrl: true })).toBe("approve-workflow")
+    expect(pullRequestActionKindForShortcut({ name: "f" })).toBeNull()
+  })
+
   test("maps list, preview and section navigation without UI state", () => {
     expect(
       pullRequestNavigationAction({ keyName: "j", focus: "list", hasSelection: true }),
@@ -127,8 +135,25 @@ describe("Git Diffs/PR workspace", () => {
       pullRequestNavigationAction({ keyName: "h", focus: "preview", hasSelection: true }),
     ).toEqual({ type: "focus", target: "list" })
     expect(
-      pullRequestNavigationAction({ keyName: ".", shift: true, focus: "list", hasSelection: true }),
+      pullRequestNavigationAction({ keyName: "v", focus: "preview", hasSelection: true }),
+    ).toEqual({ type: "move-preview-tab", delta: 1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "z", focus: "preview", hasSelection: true }),
+    ).toEqual({ type: "move-preview-tab", delta: -1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "f", focus: "list", hasSelection: true }),
     ).toEqual({ type: "move-section", delta: 1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "a", focus: "list", hasSelection: true }),
+    ).toEqual({ type: "move-section", delta: -1 })
+    expect(
+      pullRequestNavigationAction({
+        keyName: "f",
+        shift: true,
+        focus: "list",
+        hasSelection: true,
+      }),
+    ).toBeNull()
     expect(
       pullRequestWorkspaceAction({
         keyName: "/",
@@ -138,7 +163,7 @@ describe("Git Diffs/PR workspace", () => {
     ).toEqual({ type: "edit-query" })
     expect(
       pullRequestWorkspaceAction({
-        keyName: "+",
+        keyName: "#",
         focus: "list",
         hasSelection: true,
       }),

@@ -65,7 +65,7 @@ export function InboxWorkspace({
   })
   useInboxWorkspaceKeyboard({
     active,
-    blocked: Boolean(actions.pendingAction),
+    blocked: Boolean(actions.pendingAction) || state.status === "requirements",
     itemCount: items.length,
     onMove: (delta) =>
       setSelectedIndex((current) =>
@@ -90,6 +90,7 @@ export function InboxWorkspace({
   return (
     <>
       <InboxDashboardView
+        active={active}
         state={state}
         refreshing={refreshing}
         sections={INBOX_SECTIONS}

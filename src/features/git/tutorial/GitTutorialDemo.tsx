@@ -145,7 +145,7 @@ export function GitTutorialDemo() {
         </box>
       </box>
       <ShortcutText
-        content="[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Layout  [D] Diff  [?] Ações"
+        content="[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Layout  [D] Diff  [?] Ações"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>

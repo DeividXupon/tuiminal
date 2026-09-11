@@ -1,4 +1,5 @@
 import { ShortcutText } from "../../../shared/ui/ShortcutText"
+import { directionalShortcutLabel } from "../../../shared/ui/directional-shortcut"
 import { Button } from "@tuiparts/react/button"
 import type { RunnerExecution } from "../model/execution"
 import type { RunnerListeningPort } from "../model/types"
@@ -94,7 +95,7 @@ export function MultiProcessPanel({
                   backgroundColor: COLORS.panelRaised,
                 }}
               >
-                <text content="<" style={{ fg: COLORS.runner }} />
+                <ShortcutText content={directionalShortcutLabel(-1)} style={{ fg: COLORS.muted }} />
                 <text content={`+${hiddenMultiBefore}`} style={{ fg: COLORS.text }} />
               </box>
             </Button>
@@ -201,7 +202,7 @@ export function MultiProcessPanel({
                 }}
               >
                 <text content={`+${hiddenMultiAfter}`} style={{ fg: COLORS.text }} />
-                <text content=">" style={{ fg: COLORS.runner }} />
+                <ShortcutText content={directionalShortcutLabel(1)} style={{ fg: COLORS.muted }} />
               </box>
             </Button>
           ) : null}

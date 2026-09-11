@@ -3,7 +3,9 @@ import { useKeyboard } from "@opentui/react"
 import { useEffect, useRef, type RefObject } from "react"
 import { COLORS } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
+import { DirectionalButton } from "../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { HTTP_RESPONSE_VIEWS, nextHttpResponseView } from "../model/nested-view-navigation"
 import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
 import { HttpResponseMoreTabs } from "./HttpResponseMoreTabs"
@@ -314,7 +316,15 @@ export function HttpResponseToolbar({
           overflow: "hidden",
         }}
       >
-        {(["pretty", "raw", "headers", "timing", "more"] as const).map((view) => (
+        {active ? (
+          <DirectionalButton
+            id="http-response-view-previous"
+            direction={-1}
+            accent={COLORS.http}
+            onPress={() => onSelectView(nextHttpResponseView(document.responseView, -1))}
+          />
+        ) : null}
+        {HTTP_RESPONSE_VIEWS.map((view) => (
           <InlineButton
             key={view}
             label={viewLabel(view)}
@@ -326,12 +336,21 @@ export function HttpResponseToolbar({
             }}
           />
         ))}
+        {active ? (
+          <DirectionalButton
+            id="http-response-view-next"
+            direction={1}
+            accent={COLORS.http}
+            onPress={() => onSelectView(nextHttpResponseView(document.responseView, 1))}
+          />
+        ) : null}
       </box>
       {response && document.responseView === "more" ? (
         <HttpResponseMoreTabs
           active={presentation.moreView}
           response={response}
           cookieCount={cookies.length}
+          focused={active}
           onChange={(moreView) => onChange({ moreView })}
         />
       ) : null}

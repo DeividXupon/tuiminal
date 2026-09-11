@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test"
+import type { ChildProcess } from "node:child_process"
+import { PassThrough } from "node:stream"
 import {
   appendRunnerLogToBuffer,
   buildRunnerLogDocument,
   filterRunnerLogs,
   RUNNER_LOG_BUFFER_LIMIT,
+  RUNNER_LOG_BUFFER_MAX_CHARS,
+  RUNNER_LOG_ENTRY_MAX_CHARS,
   RUNNER_LOG_FLUSH_INTERVAL_MS,
   RUNNER_LOG_TRIM_HEADROOM,
   type RunnerLogEntry,
   runnerLogPresentation,
   serializeRunnerLogs,
 } from "../src/features/runner/rendering/log-document"
+import { pipeLines } from "../src/features/runner/services/process"
 
 const palette = {
   canvas: "#000000",
@@ -93,6 +98,33 @@ describe("Runner log rendering", () => {
     appendRunnerLogToBuffer(logs, runnerLog(beforeTrim, `linha ${beforeTrim}`))
     expect(logs).toHaveLength(RUNNER_LOG_BUFFER_LIMIT)
     expect(logs[0]?.id).toBe(RUNNER_LOG_TRIM_HEADROOM + 1)
+  })
+
+  test("bounds individual and aggregate logs even without line breaks", () => {
+    const logs: RunnerLogEntry[] = []
+    for (let index = 0; index < 300; index += 1) {
+      appendRunnerLogToBuffer(logs, runnerLog(index, "x".repeat(RUNNER_LOG_ENTRY_MAX_CHARS * 2)))
+    }
+    expect(Math.max(...logs.map((entry) => entry.text.length))).toBeLessThanOrEqual(
+      RUNNER_LOG_ENTRY_MAX_CHARS,
+    )
+    expect(logs.reduce((total, entry) => total + entry.text.length, 0)).toBeLessThanOrEqual(
+      RUNNER_LOG_BUFFER_MAX_CHARS,
+    )
+    expect(logs.at(-1)?.text).toContain("truncada")
+  })
+
+  test("flushes a continuous process stream in bounded fragments", async () => {
+    const stdout = new PassThrough()
+    const lines: string[] = []
+    pipeLines({ stdout } as unknown as ChildProcess, "stdout", (line) => lines.push(line))
+    stdout.end("x".repeat(2_000_000))
+    await new Promise((resolve) => stdout.once("close", resolve))
+    expect(lines.length).toBeGreaterThan(100)
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(
+      RUNNER_LOG_ENTRY_MAX_CHARS,
+    )
+    expect(lines.at(-1)?.length).toBeGreaterThan(0)
   })
 
   test("keeps wide Unicode log lines inside the terminal width", () => {

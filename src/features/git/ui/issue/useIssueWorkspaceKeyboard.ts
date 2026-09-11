@@ -27,9 +27,10 @@ export function useIssueWorkspaceKeyboard({
     const action = issueWorkspaceAction({
       key: {
         name: key.name,
-        sequence: key.sequence,
         shift: key.shift,
         ctrl: key.ctrl,
+        option: key.option,
+        meta: key.meta,
       },
       focus,
       hasSelection,

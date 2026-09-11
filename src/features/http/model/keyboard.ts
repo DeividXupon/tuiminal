@@ -3,93 +3,33 @@ import type {
   HttpPane,
   HttpRequestMoreView,
   HttpRequestView,
+  HttpResponseMoreView,
+  HttpResponseView,
   HttpWorkspaceOverlay,
 } from "./types"
+import {
+  contextualNavigationCommand,
+  contextualRequestCommand,
+  contextualResponseCommand,
+} from "./keyboard-context"
+import type { HttpKey, HttpKeyboardCommand } from "./keyboard-types"
 import { resolveSpecialHttpOverlayCommand } from "./overlay-keyboard"
+import { httpJsonTreeActionForKey } from "./json-tree"
+import { httpPaneCycleDirection } from "./pane-navigation"
+import { cycledHttpRequestView } from "./request-view-navigation"
+import { httpKeyValueTextInputOwnsKeyboard } from "./key-value"
 
-export function isHttpRequestJumpTarget(
-  target: HttpJumpTarget,
-): target is "params" | "headers" | "body" | "auth" {
-  return target === "params" || target === "headers" || target === "body" || target === "auth"
-}
-
-type HttpKey = {
-  name: string
-  ctrl?: boolean
-  shift?: boolean
-  option?: boolean
-}
-
-export type HttpKeyboardCommand =
-  | {
-      kind: "none" | "ignore" | "blur-url" | "blur-editor" | "blur-control" | "send" | "cancel"
-    }
-  | {
-      kind:
-        | "add-document"
-        | "close-document"
-        | "cycle-response"
-        | "close-navigation"
-        | "save-document"
-        | "open-environment-manager"
-        | "open-response-search"
-        | "open-response"
-        | "focus-collection-search"
-        | "blur-navigation-control"
-        | "duplicate-document"
-        | "toggle-import-format"
-        | "back-import-preview"
-        | "cycle-runner-target"
-        | "cycle-runner-concurrency"
-        | "approve-runner-insecure-tls"
-        | "add-automation-row"
-        | "cycle-request-timeout"
-        | "toggle-request-redirects"
-        | "toggle-request-cookie-jar"
-        | "toggle-request-tls-verification"
-        | "toggle-request-no-log"
-    }
-  | {
-      kind: "resolve-external-conflict"
-      resolution: "reload" | "apply-local" | "save-copy"
-    }
-  | { kind: "toggle-maximize" }
-  | { kind: "open-overlay"; overlay: Exclude<HttpWorkspaceOverlay, null> }
-  | { kind: "close-overlay" }
-  | { kind: "apply-overlay" }
-  | { kind: "close-response-control"; control: "search" | "jsonpath" }
-  | { kind: "jump"; target: HttpJumpTarget }
-  | { kind: "resize-split"; direction: -1 | 1 }
-  | { kind: "cycle-document" | "cycle-method"; direction: -1 | 1 }
-  | { kind: "focus-url" }
-  | { kind: "request-view"; view: HttpRequestView }
-  | { kind: "request-more-view"; view: HttpRequestMoreView }
-  | { kind: "navigation"; view: "collection" | "history" }
-  | { kind: "pane"; pane: "request" | "response" }
-
-const REQUEST_VIEWS: Partial<Record<string, HttpRequestView>> = {
-  p: "params",
-  h: "headers",
-  b: "body",
-  a: "auth",
-  o: "more",
-}
+export type { HttpKey, HttpKeyboardCommand } from "./keyboard-types"
 
 const JUMP_TARGETS: Partial<Record<string, HttpJumpTarget>> = {
   u: "url",
-  p: "params",
-  h: "headers",
-  b: "body",
-  a: "auth",
   r: "response",
   c: "collection",
   y: "history",
 }
-
 const DIRECT_COMMANDS: Partial<Record<string, HttpKeyboardCommand>> = {
   "/": { kind: "focus-url" },
   e: { kind: "open-environment-manager" },
-  v: { kind: "cycle-response" },
   f10: { kind: "toggle-maximize" },
   f1: { kind: "open-overlay", overlay: "help" },
   "?": { kind: "open-overlay", overlay: "help" },
@@ -172,7 +112,19 @@ function editorCommand(key: HttpKey): HttpKeyboardCommand {
   return key.name === "escape" ? { kind: "blur-editor" } : { kind: "ignore" }
 }
 
-function focusedCommand(focusedId: string, key: HttpKey): HttpKeyboardCommand | null {
+function focusedCommand(
+  focusedId: string,
+  key: HttpKey,
+  responseJsonTree: boolean,
+): HttpKeyboardCommand | null {
+  if (key.name === "tab") return { kind: "cycle-pane", direction: key.shift ? -1 : 1 }
+  if (
+    responseJsonTree &&
+    focusedId.startsWith("http-response-scroll-") &&
+    httpJsonTreeActionForKey(key.name)
+  ) {
+    return { kind: "ignore" }
+  }
   if (focusedId.startsWith("http-response-search-")) {
     return key.name === "escape"
       ? { kind: "close-response-control", control: "search" }
@@ -191,7 +143,7 @@ function focusedCommand(focusedId: string, key: HttpKey): HttpKeyboardCommand | 
     return editorCommand(key)
   }
   if (
-    focusedId.startsWith("http-key-value-") ||
+    httpKeyValueTextInputOwnsKeyboard(focusedId) ||
     focusedId.startsWith("http-auth-") ||
     focusedId.startsWith("http-automation-") ||
     focusedId.startsWith("http-custom-method-") ||
@@ -215,54 +167,6 @@ function modifiedCommand(key: HttpKey): HttpKeyboardCommand | null {
   return null
 }
 
-function contextualNavigationCommand(
-  key: HttpKey,
-  activePane: HttpPane,
-  navigationView: "collection" | "history",
-): HttpKeyboardCommand | null {
-  if (activePane !== "navigation" || navigationView !== "collection") return null
-  if (key.name === "f") return { kind: "focus-collection-search" }
-  if (key.name === "i") return { kind: "open-overlay", overlay: "collection-import" }
-  if (key.name === "r") return { kind: "open-overlay", overlay: "collection-runner" }
-  return null
-}
-
-function contextualRequestCommand(
-  key: HttpKey,
-  activePane: HttpPane,
-  requestView: HttpRequestView,
-  requestMoreView: HttpRequestMoreView,
-  running: boolean,
-): HttpKeyboardCommand | null {
-  if (activePane !== "request" || requestView !== "more") return null
-  const moreView = (
-    {
-      "1": "options",
-      "2": "assertions",
-      "3": "chaining",
-      "4": "preview",
-    } as const
-  )[key.name]
-  if (moreView) return { kind: "request-more-view", view: moreView }
-  if (key.name === "n" && ["assertions", "chaining"].includes(requestMoreView)) {
-    return { kind: "add-automation-row" }
-  }
-  if (requestMoreView === "options" && key.name === "t") return { kind: "cycle-request-timeout" }
-  if (requestMoreView === "options" && key.name === "r") {
-    return { kind: "toggle-request-redirects" }
-  }
-  if (requestMoreView === "options" && key.name === "l") return { kind: "toggle-request-no-log" }
-  if (requestMoreView === "options" && key.name === "c") {
-    return { kind: "toggle-request-cookie-jar" }
-  }
-  if (requestMoreView === "options" && key.name === "v") {
-    return { kind: "toggle-request-tls-verification" }
-  }
-  if (key.name === "i") return { kind: "open-overlay", overlay: "curl-import" }
-  if (key.name === "x" && !running) return { kind: "open-overlay", overlay: "curl-export" }
-  return key.name === "d" && requestMoreView === "options" ? { kind: "duplicate-document" } : null
-}
-
 function unfocusedCommand({
   key,
   navigationOpen,
@@ -272,6 +176,9 @@ function unfocusedCommand({
   navigationView,
   requestView,
   requestMoreView,
+  responseView,
+  responseMoreView,
+  responseJsonTree,
 }: {
   key: HttpKey
   navigationOpen: boolean
@@ -281,14 +188,25 @@ function unfocusedCommand({
   navigationView: "collection" | "history"
   requestView: HttpRequestView
   requestMoreView: HttpRequestMoreView
+  responseView: HttpResponseView
+  responseMoreView: HttpResponseMoreView
+  responseJsonTree: boolean
 }): HttpKeyboardCommand {
   if (navigationOpen && key.name === "escape") return { kind: "close-navigation" }
   const modified = modifiedCommand(key)
   if (modified) return modified
-  if (activePane === "response" && key.ctrl && key.name === "f") {
-    return { kind: "open-response-search" }
-  }
-  if (activePane === "response" && key.name === "o") return { kind: "open-response" }
+  const responseCommand = contextualResponseCommand(
+    key,
+    activePane,
+    responseView,
+    responseMoreView,
+    responseJsonTree,
+  )
+  if (responseCommand) return responseCommand
+  const paneDirection = httpPaneCycleDirection(key, responseJsonTree)
+  if (paneDirection) return { kind: "cycle-pane", direction: paneDirection }
+  const cycledView = activePane === "request" ? cycledHttpRequestView(requestView, key) : null
+  if (cycledView) return { kind: "request-view", view: cycledView }
   const navigationCommand = contextualNavigationCommand(key, activePane, navigationView)
   if (navigationCommand) return navigationCommand
   const requestCommand = contextualRequestCommand(
@@ -300,8 +218,6 @@ function unfocusedCommand({
   )
   if (requestCommand) return requestCommand
 
-  const requestedView = REQUEST_VIEWS[key.name]
-  if (requestedView) return { kind: "request-view", view: requestedView }
   return primaryShortcutCommand(key, running, minimum)
 }
 
@@ -335,6 +251,9 @@ export function resolveHttpKeyboardCommand({
   navigationView = "collection",
   requestView = "params",
   requestMoreView = "options",
+  responseView = "pretty",
+  responseMoreView = "summary",
+  responseJsonTree = false,
 }: {
   key: HttpKey
   focusedId: string
@@ -346,10 +265,13 @@ export function resolveHttpKeyboardCommand({
   navigationView?: "collection" | "history"
   requestView?: HttpRequestView
   requestMoreView?: HttpRequestMoreView
+  responseView?: HttpResponseView
+  responseMoreView?: HttpResponseMoreView
+  responseJsonTree?: boolean
 }): HttpKeyboardCommand {
   return (
     overlayCommand(overlay, key, focusedId) ??
-    focusedCommand(focusedId, key) ??
+    focusedCommand(focusedId, key, responseJsonTree) ??
     unfocusedCommand({
       key,
       navigationOpen,
@@ -359,6 +281,9 @@ export function resolveHttpKeyboardCommand({
       navigationView,
       requestView,
       requestMoreView,
+      responseView,
+      responseMoreView,
+      responseJsonTree,
     })
   )
 }

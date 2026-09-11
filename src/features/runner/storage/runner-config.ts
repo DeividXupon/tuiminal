@@ -7,20 +7,12 @@ import type {
   RunnerSessionState,
 } from "../model/config"
 export type * from "../model/config"
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, isAbsolute, join, resolve } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 import { parse as parseYaml } from "yaml"
 import { definedProperties } from "../../../shared/data/defined-properties"
+import { RunnerSettingsFileState } from "./runner-settings-file"
 
 type RunnerSettings = {
   version: 2
@@ -38,6 +30,7 @@ const EMPTY_SETTINGS: RunnerSettings = {
   sessions: {},
   history: [],
 }
+const runnerSettingsFile = new RunnerSettingsFileState<RunnerSettings>()
 
 function emptyRunnerSession(): RunnerSessionState {
   return {
@@ -153,7 +146,6 @@ function configuredCommand(
     root: string
     source: RunnerConfiguredCommand["source"]
     profiles?: Record<string, RunnerEnvironmentProfile>
-    explicitAutostartOnly?: boolean
   },
 ): RunnerConfiguredCommand | null {
   const definition = objectValue(value)
@@ -184,9 +176,7 @@ function configuredCommand(
     },
     envFile: resolveInside(options.root, stringValue(definition?.envFile) ?? profile?.envFile),
     interactive: booleanValue(definition?.interactive),
-    autostart: options.explicitAutostartOnly
-      ? explicitAutostart
-      : booleanValue(definition?.autostart),
+    autostart: options.source === "tuiminal" && explicitAutostart,
     restartPolicy,
     restartDelayMs: numberValue(definition?.restartDelayMs, 1_000, 100, 300_000),
     maxRestarts: numberValue(definition?.maxRestarts, 5, 0, 100),
@@ -228,7 +218,6 @@ export function parseTuiminalRunnerConfig(
         root,
         source: "tuiminal",
         profiles,
-        explicitAutostartOnly: true,
       }),
     )
     .filter((command): command is RunnerConfiguredCommand => Boolean(command))
@@ -243,7 +232,6 @@ export function parseMprocsConfig(source: string, root: string) {
       configuredCommand(name, value, {
         root,
         source: "mprocs",
-        explicitAutostartOnly: true,
       }),
     )
     .filter((command): command is RunnerConfiguredCommand => Boolean(command))
@@ -261,52 +249,42 @@ export function parseProcfile(source: string, root: string) {
     const parsed = configuredCommand(name, command, {
       root,
       source: "procfile",
-      explicitAutostartOnly: true,
     })
     return parsed ? [parsed] : []
   })
 }
 
-function readSettingsFile(path: string): RunnerSettings {
-  try {
-    const source = objectValue(JSON.parse(readFileSync(path, "utf8")))
-    if (!source) return structuredClone(EMPTY_SETTINGS)
-    const storedSessions = objectValue(source.sessions) ?? {}
-    const sessions = Object.fromEntries(
-      Object.entries(storedSessions).map(([root, session]) => [
-        resolve(root),
-        runnerSessionValue(session),
-      ]),
-    )
-    const legacySession = runnerSessionValue(source.session)
-    const legacyScope = legacySession.openedProjects[0]
-    if (legacyScope && !sessions[legacyScope]) {
-      sessions[legacyScope] = legacySession
-    }
-    return {
-      version: 2,
-      savedCommands: (objectValue(source.savedCommands) as RunnerSettings["savedCommands"]) ?? {},
-      sessions,
-      history: Array.isArray(source.history)
-        ? source.history
-            .filter((item): item is RunnerPersistedExecution => Boolean(objectValue(item)))
-            .slice(0, 30)
-        : [],
-    }
-  } catch {
-    return structuredClone(EMPTY_SETTINGS)
+function decodeRunnerSettings(content: string): RunnerSettings {
+  const source = objectValue(JSON.parse(content))
+  if (!source) throw new Error("A configuração do Runner não é um objeto JSON.")
+  const storedSessions = objectValue(source.sessions) ?? {}
+  const sessions = Object.fromEntries(
+    Object.entries(storedSessions).map(([root, session]) => [
+      resolve(root),
+      runnerSessionValue(session),
+    ]),
+  )
+  const legacySession = runnerSessionValue(source.session)
+  const legacyScope = legacySession.openedProjects[0]
+  if (legacyScope && !sessions[legacyScope]) sessions[legacyScope] = legacySession
+  return {
+    version: 2,
+    savedCommands: (objectValue(source.savedCommands) as RunnerSettings["savedCommands"]) ?? {},
+    sessions,
+    history: Array.isArray(source.history)
+      ? source.history
+          .filter((item): item is RunnerPersistedExecution => Boolean(objectValue(item)))
+          .slice(0, 30)
+      : [],
   }
 }
 
+function readSettingsFile(path: string) {
+  return runnerSettingsFile.read(path, decodeRunnerSettings, EMPTY_SETTINGS)
+}
+
 function writeSettingsFile(settings: RunnerSettings, path: string) {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`
-  writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  })
-  renameSync(temporary, path)
-  chmodSync(path, 0o600)
+  runnerSettingsFile.write(path, settings)
 }
 
 function mutateSettings(callback: (settings: RunnerSettings) => void, path = RUNNER_SETTINGS_PATH) {

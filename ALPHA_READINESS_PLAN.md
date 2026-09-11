@@ -1,6 +1,10 @@
 # Prontidão para alfa — auditoria e plano de atenção
 
-Data da avaliação: **9 de setembro de 2026**. Estado: **checkpoint para retomada em `development`; alfa não aprovada**. As seções 1–7 preservam o estado auditado; a seção 8 registra as correções posteriores. **Para continuar o trabalho, comece pela seção 9**, que consolida todas as pendências conhecidas e a validação do checkpoint.
+Data da avaliação: **9 de setembro de 2026**; retomada encerrada localmente em
+**10 de setembro de 2026**. Estado: **hardening local concluído; alfa ainda não
+aprovada**. As seções 1–9 preservam a auditoria e o checkpoint histórico. **Use a
+seção 10 como estado atual**, incluindo as evidências e os aceites que ainda
+dependem de ambientes nativos, estado remoto ou autorização do mantenedor.
 
 ## Parecer
 
@@ -993,3 +997,65 @@ vermelho documentado. Não foram removidos testes, elevados timeouts/baselines n
 ocultados avisos para aparentar aprovação. O próximo trabalho começa pela falha
 acima e pelo checklist, não pela publicação. Ao retomar, registrar `git rev-parse
 HEAD` e vincular novas evidências ao SHA efetivamente testado.
+
+## 10. Fechamento da retomada local — 10/9/2026
+
+Esta seção substitui o checklist aberto da seção 9 como retrato operacional. O
+trabalho possível no checkout local foi concluído, mas as alterações ainda estão
+sem commit sobre `4d7a5be58fd682dd722d8e3b89575b0502da8ef1` em `development`.
+Consequentemente, elas não formam um SHA candidato imutável e não autorizam tag,
+release GitHub ou publicação npm.
+
+### Resultado dos achados
+
+| ID | Estado local | Implementação/evidência encerrada | Aceite externo ou residual |
+| --- | --- | --- | --- |
+| A01 | **Corrigido e coberto** | Proveniência direta e única por dialeto; projeções derivadas, aliases/duplicatas e sintaxe ambígua falham fechadas. O fluxo TUI preserva a PK composta até revisão e execução. | Repetir no pacote candidato e nos drivers nativos. |
+| A02 | **Corrigido e coberto** | Classificador conservador, SQLite readonly, PostgreSQL `READ ONLY` e proteção/restauração de sessão MySQL/MariaDB, invalidando o pool quando a restauração falha. | MCP continua dependendo de servidor/credencial realmente RO; repetir matriz atual em Docker e nos sistemas anunciados. |
+| A03 | **Corrigido e coberto** | Histórico novo persiste só metadados; SQL, erros e parâmetros ficam em cache volátil limitado. Limpeza legada é explícita e preserva favoritos/metadados. | Backups e queries salvas deliberadamente não são sanitizados automaticamente. |
+| A04 | **Corrigido e coberto** | Contexto privado acompanha sucesso, falha, redirect, chaining, assertions, histórico e reports; valores e encodings conhecidos são redigidos sem alterar a resposta ativa. | Dados antigos não são apagados implicitamente; corpo público opt-in ainda pode conter segredo não reconhecido. |
+| A05 | **Corrigido e coberto** | Redirects removem credenciais por proveniência/valor, preservam a origem dos cookies e pausam body/URL privada, downgrade e TLS inseguro. Continuação, recusa, timeout e cancelamento não repetem POST/dependências. | Repetir TLS/proxy/PTY com os pacotes nos demais sistemas. |
+| A06 | **Corrigido e coberto** | Cookie jar usa PSL mantida, incluindo sufixos privados, normaliza IDN/IP, aplica prefixos seguros e limites de vida, tamanho, quantidade e header, e isola diretório/ambiente/coleção. | Validar novamente no candidato nativo. |
+| A07 | **Corrigido e coberto** | Autostart exige aprovação local da raiz canônica e fingerprint material; a revisão mostra comandos, cwd, perfil, nomes de ambiente, arquivos, PTY e políticas. Mudanças revogam confiança; Procfile/mprocs não ganham autostart. | Revisão humana do modal nos terminais-alvo. |
+| A08 | **Corrigido e coberto** | Stop de Runner/Free Terminal é assíncrono e idempotente, mantém ownership até saída observada, escala somente a árvore/grupo criado e faz restart/shutdown aguardar. Testes preservam processo sentinela externo. | Validar árvores de processos, portas e launcher em macOS/Windows; somente Linux x64 foi exercitado nesta retomada. |
+| A09 | **Corrigido e coberto localmente** | Escrita compartilhada rejeita symlinks/ancestrais, usa arquivo temporário protegido, rename atômico, hash contra escrita stale e backup de corrupção. Históricos/configurações não viram vazio silenciosamente. | Falhas reais de filesystem por falta de espaço/interrupção e concorrência multiprocesso precisam da matriz de SO. |
+| A10 | **Corrigido e coberto localmente** | Budgets agora limitam aquisição/parse/buffers de Banco, Runner, Git e HTTP; discovery, cookies, datasets, saída, células e respostas têm truncamento/cancelamento explícito. A regressão HTTP contínua passou no gate completo. | Medição comparável de pico de memória/CPU e latência nos seis sistemas permanece parte da qualificação do candidato. |
+| A11 | **Corrigido e coberto** | Escritas revalidam alvo, schema e snapshot dentro de uma transação; distinguem matched/affected/no-op/confirmed e estado de commit incerto. MySQL não transacional é bloqueado; não há retry automático. | Repetir os casos em MySQL/MariaDB/PostgreSQL atuais; Docker não estava disponível nesta WSL. |
+| A12 | **Corrigido e coberto** | Checkout falha fechado para status, timeout, gitdir/index inválido e erro de inspeção; revalida imediatamente antes do único despacho e serializa por clone, compartilhado com Issues. | Escrita remota real continua fora de escopo sem repositório de teste autorizado. |
+| A13 | **Preparado; aceite nativo pendente** | Workflow manual read-only cobre seis runners; build cruzado gerou os seis pacotes, manifests, helper e checksums. O smoke conferiu todos os tarballs e executou launcher, HTTP loopback e helper SQLite em Linux x64 com Node 22 e sem Bun no `PATH`. | O workflow ainda precisa rodar no mesmo SHA imutável; cinco runtimes nativos, PTY/shutdown, chaveiro, TLS/proxy e ciclo upgrade/uninstall continuam sem prova nesta retomada. |
+| A14 | **Corrigido e automatizado** | MCP SDK atualizado, `qs` fixado em versão corrigida, `bun audit --json` limpo, inventário reproduzível em `THIRD_PARTY_NOTICES.md` e licença exata do Bun empacotada. Audit e licenças agora fazem parte dos workflows/gates apropriados. | Inventário não substitui revisão jurídica independente do artefato final. |
+| A15 | **Controles locais prontos; governança remota pendente** | `SECURITY.md`, processo de release, hashes, conteúdo exato de pacote, ações fixadas por SHA e workflow candidato sem credenciais/permissão de publicação foram adicionados. | Revalidar proteção/bypasses/colaboradores da `main`, configurar Trusted Publishing e obter aprovação explícita de versão, SHA, tag, notas e dist-tag. |
+| A16 | **Hardening local concluído; matriz humana pendente** | Saída excessiva de `gh` vira resultado incerto com reconciliação e despacho único; abrir resposta externa aceita somente raster com MIME + magic bytes; SVG/PDF/spoof ficam bloqueados. Download cobre parcial, cancelamento, disco e status. PTY real compact/framed passou. | Matriz de terminais/idiomas/SO, revisão visual dos demos e qualquer escrita remota controlada dependem dos ambientes e autorizações indicados abaixo. |
+
+### Evidência final desta árvore de trabalho
+
+| Verificação | Resultado em 10/9/2026 | Limite |
+| --- | --- | --- |
+| `bun run check` | **Exit 0**: 611 testes unitários/integrações locais passaram, 10 foram pulados; 99 testes TUI passaram. Tipos, formato, lint, arquitetura, manutenção e licenças passaram; **448 módulos, 2.045 dependências, zero violações e zero regressões de baseline**. | Os skips são a matriz Docker/hooks e PTY opt-in; warnings de complexidade histórica e React `act(...)` permanecem visíveis. |
+| PTY opt-in | `TUIMINAL_HTTP_PTY=1 ...`: **2 pass, 14 assertions**, compact/framed em Linux x64. | Não prova outros terminais ou sistemas. |
+| Dependências | `bun audit --json`: **Exit 0, `{}`**. Frozen install Linux x64 não alterou o lockfile; SHA-256 do `bun.lock`: `6367b4692fff6e3132af99a78aaa7d31d43de8fb9a4c753f92ce869434ca942e`. | Resultado temporal; repetir no SHA candidato. |
+| Distribuição | `bun run build:release all`: seis plataformas compiladas. `bun run test:release`: **passou todos os manifests e o runtime Linux x64** com Node 22.23.2, pacote instalado em path com espaço/Unicode, sem Bun no `PATH`. | Compilação cruzada não equivale a execução nativa dos outros cinco pacotes. `dist/` é artefato ignorado e não foi publicado. |
+| Drivers reais | Não executado: comando `docker` indisponível nesta distribuição WSL 2. | A execução anterior registrada na seção 8 não substitui a repetição após A11. |
+| Demos | Tentativa feita; falhou antes da conversão porque `magick`/ImageMagick não está instalado. | Instalar a ferramenta no ambiente apropriado, executar `bun run docs:demos` e revisar os cinco GIFs. Nenhum GIF foi alterado nesta tentativa. |
+| GitHub/npm | Nenhuma consulta autenticada confiável, alteração remota ou publicação foi feita; `gh` não está disponível. | Estado efetivo de proteção, permissões, checks e registry deve ser revalidado com autorização. |
+
+### Bloqueadores restantes para aprovar a alfa
+
+Não resta implementação local conhecida dos achados A01–A16 sem uma decisão já
+registrada, mas **a release continua bloqueada** até que todos os itens abaixo
+sejam vinculados ao mesmo SHA candidato:
+
+1. criar o commit imutável somente quando o mantenedor pedir e obter o gate verde
+   do workflow comum e da matriz manual nos seis runners nativos;
+2. repetir a matriz Docker de SQLite/MySQL/MariaDB/PostgreSQL após A11;
+3. executar nos pacotes nativos a matriz de PTY/process tree, helper, TLS/proxy,
+   chaveiro, terminal/mouse/clipboard/Unicode e upgrade/uninstall;
+4. regenerar e revisar visualmente os cinco demos com ImageMagick;
+5. realizar revisão independente de segurança/licenças e revalidar governança,
+   proteção, bypasses e identidade de publicação no GitHub/npm;
+6. obter do mantenedor aprovação explícita para versão, SHA, tag, release notes e
+   dist-tag. Candidato reprovado ou resultado incerto não publica nem é repetido
+   automaticamente.
+
+Até esses aceites, o termo correto é **hardening local concluído**, não “alfa
+pronta”. Nenhuma limitação externa foi convertida em passe por inferência.

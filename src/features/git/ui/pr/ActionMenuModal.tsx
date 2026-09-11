@@ -7,6 +7,7 @@ import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { PullRequestActionAvailability, PullRequestActionKind } from "../../model/pr/actions"
+import { pullRequestActionKindForShortcut } from "../../model/pr/navigation"
 import type { PullRequestSummary } from "../../model/pr/types"
 
 export type PullRequestActionMenuItem = {
@@ -14,6 +15,26 @@ export type PullRequestActionMenuItem = {
   label: string
   shortcut: string
   availability: PullRequestActionAvailability
+}
+
+type ActionMenuCommand =
+  | { kind: "close" | "next" | "previous" | "select-current" }
+  | { kind: "select-shortcut"; action: PullRequestActionKind }
+
+function actionMenuCommand(key: {
+  name: string
+  ctrl?: boolean
+  shift?: boolean
+  option?: boolean
+  meta?: boolean
+}): ActionMenuCommand | null {
+  if (key.name === "escape" || key.name === "?") return { kind: "close" }
+  const action = pullRequestActionKindForShortcut(key)
+  if (action) return { kind: "select-shortcut", action }
+  if (key.name === "j" || key.name === "down") return { kind: "next" }
+  if (key.name === "k" || key.name === "up") return { kind: "previous" }
+  if (key.name === "enter" || key.name === "return") return { kind: "select-current" }
+  return null
 }
 
 export function ActionMenuModal({
@@ -41,16 +62,20 @@ export function ActionMenuModal({
   }, [open, renderer])
   useKeyboard((key) => {
     if (!open) return
-    if (key.name === "escape" || key.name === "?") {
-      key.preventDefault()
-      key.stopPropagation()
-      onClose()
-    } else if (key.name === "j" || key.name === "down") {
+    const command = actionMenuCommand(key)
+    if (!command) return
+    key.preventDefault()
+    key.stopPropagation()
+    if (command.kind === "close") onClose()
+    else if (command.kind === "next") {
       setIndex((current) => Math.min(actions.length - 1, current + 1))
-    } else if (key.name === "k" || key.name === "up") {
+    } else if (command.kind === "previous") {
       setIndex((current) => Math.max(0, current - 1))
-    } else if (key.name === "enter" || key.name === "return") {
-      const action = actions[index]
+    } else {
+      const action =
+        command.kind === "select-shortcut"
+          ? actions.find((candidate) => candidate.kind === command.action)
+          : actions[index]
       if (action?.availability.enabled) onSelect(action.kind)
     }
   })

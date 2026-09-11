@@ -113,8 +113,14 @@ describe("internationalization", () => {
     expect(translateUi("16 CMD  ·  6 ATIV", "en")).toBe("16 CMD  ·  6 ACT")
     expect(translateUi("6 ATIVOS  ·  2–4/6", "es")).toBe("6 ACTIVOS  ·  2–4/6")
     expect(translateUi("Escolher outra pasta", "en")).toBe("Choose another folder")
-    expect(translateUi("[+] EXECUTAR EM OUTRO PROJETO…", "en")).toBe("[+] RUN IN ANOTHER PROJECT…")
-    expect(translateUi("[+] Escolher projeto", "es")).toBe("[+] Elegir proyecto")
+    expect(translateUi("[N] EXECUTAR EM OUTRO PROJETO…", "en")).toBe("[N] RUN IN ANOTHER PROJECT…")
+    expect(translateUi("[N] Escolher projeto", "es")).toBe("[N] Elegir proyecto")
+    expect(translateUi("O download foi recusado pelo servidor com status HTTP 404.", "en")).toBe(
+      "The server refused the download with HTTP status 404.",
+    )
+    expect(translateUi("O download excede o limite de 256 MB.", "ja")).toBe(
+      "ダウンロードが256 MBの上限を超えています。",
+    )
     expect(translateUi("Pressione [M] para voltar ao modo único.", "en")).toBe(
       "Press [M] to return to single view.",
     )
@@ -188,7 +194,7 @@ describe("internationalization", () => {
     expect(translateUi("Dataset não encontrado: cases.json.", "ko")).toBe(
       "데이터셋을 찾을 수 없습니다: cases.json.",
     )
-    expect(translateUi("[2] Assertions", "zh-CN")).toBe("[2] 断言")
+    expect(translateUi("Assertions", "zh-CN")).toBe("断言")
     expect(translateUi("CHAINING DO REQUEST", "ja")).toBe("リクエストチェーン")
     expect(translateUi("Nenhuma extração configurada.", "en")).toBe("No extractions configured.")
     expect(translateUi("Assertion inválida: expect magic.", "es")).toBe(
@@ -203,7 +209,7 @@ describe("internationalization", () => {
       "The 250 ms timeout was exceeded.",
     )
     expect(translateUi("[L] Histórico: não registrar", "en")).toBe("[L] History: do not record")
-    expect(translateUi("[4] Preview", "zh-CN")).toBe("[4] 预览")
+    expect(translateUi("Preview", "zh-CN")).toBe("预览")
     expect(translateUi("REQUISIÇÃO PREPARADA", "ja")).toBe("準備済みリクエスト")
     expect(translateUi("Valores privados permanecem mascarados neste preview.", "ko")).toBe(
       "비공개 값은 이 미리보기에서도 가려집니다.",
@@ -269,7 +275,7 @@ describe("internationalization", () => {
     expect(translateUi("cannot-update-issue", "ko")).toContain("업데이트")
     expect(
       translateUi(
-        "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações",
+        "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações",
         "en",
       ),
     ).toContain("[P] Preview")

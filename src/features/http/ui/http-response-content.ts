@@ -31,7 +31,11 @@ function bodyContent(document: HttpDocumentState) {
   const explicitJsonInspection = presentation.jsonPath.trim() || presentation.foldDepth !== null
   const limitDefaultView =
     response.capturedBytes > MAX_HTTP_DISPLAY_CHARACTERS && !explicitJsonInspection
-  let content = responseBodyText(response, !limitDefaultView && document.responseView === "pretty")
+  let content = responseBodyText(
+    response,
+    !limitDefaultView && document.responseView === "pretty",
+    limitDefaultView ? MAX_HTTP_DISPLAY_CHARACTERS : undefined,
+  )
   if (prettyJson && !limitDefaultView) {
     if (presentation.jsonPath.trim()) {
       content = jsonPathContent(responseBodyText(response, false), presentation.jsonPath)

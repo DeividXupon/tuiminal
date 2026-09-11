@@ -75,12 +75,12 @@ export const GIT_ISSUE_CONFIG_MESSAGES = [
     "[J/K] 탐색  [1/2] 섹션  [Esc] 돌아가기",
   ],
   [
-    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações",
-    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[]/[]] Tab  [P] Preview  [?] Actions",
-    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[]/[]] Pestaña  [P] Vista previa  [?] Acciones",
-    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[]/[]] タブ  [P] プレビュー  [?] 操作",
-    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[]/[]] 标签  [P] 预览  [?] 操作",
-    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[]/[]] 탭  [P] 미리보기  [?] 작업",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações",
+    "[J/K] Navigate  [H/L] Focus  [A←] [F→] Section  [Z←] [V→] Tab  [P] Preview  [?] Actions",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Sección  [Z←] [V→] Pestaña  [P] Vista previa  [?] Acciones",
+    "[J/K] 移動  [H/L] フォーカス  [A←] [F→] セクション  [Z←] [V→] タブ  [P] プレビュー  [?] 操作",
+    "[J/K] 导航  [H/L] 焦点  [A←] [F→] 分区  [Z←] [V→] 标签  [P] 预览  [?] 操作",
+    "[J/K] 탐색  [H/L] 포커스  [A←] [F→] 섹션  [Z←] [V→] 탭  [P] 미리보기  [?] 작업",
   ],
   [
     "cannot-close-issue",

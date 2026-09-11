@@ -1,6 +1,7 @@
 import type { PullRequestActionKind } from "./actions"
 import type { PullRequestPreviewConfig } from "./config"
 import type { PullRequestPreviewTab } from "./types"
+import { directionalShortcutDirection } from "../../../../shared/ui/directional-shortcut"
 
 export type PullRequestLayoutMode = "side-by-side" | "stacked" | "single"
 export type PullRequestFocus = "list" | "preview"
@@ -69,20 +70,19 @@ export function adjacentPreviewTab(
 
 function sectionNavigationAction({
   keyName,
-  sequence,
+  ctrl,
   shift,
+  option,
+  meta,
 }: {
   keyName: string
-  sequence?: string | undefined
+  ctrl?: boolean | undefined
   shift?: boolean | undefined
+  option?: boolean | undefined
+  meta?: boolean | undefined
 }): PullRequestNavigationAction | null {
-  if (keyName === "<" || sequence === "<" || (keyName === "," && shift)) {
-    return { type: "move-section", delta: -1 }
-  }
-  if (keyName === ">" || sequence === ">" || (keyName === "." && shift)) {
-    return { type: "move-section", delta: 1 }
-  }
-  return null
+  const direction = directionalShortcutDirection({ name: keyName, ctrl, shift, option, meta })
+  return direction ? { type: "move-section", delta: direction } : null
 }
 
 function listNavigationAction(keyName: string, shift: boolean | undefined, hasSelection: boolean) {
@@ -102,13 +102,27 @@ function listNavigationAction(keyName: string, shift: boolean | undefined, hasSe
   return null
 }
 
-function previewNavigationAction(keyName: string) {
+function previewNavigationAction({
+  keyName,
+  ctrl,
+  shift,
+  option,
+  meta,
+}: {
+  keyName: string
+  ctrl?: boolean | undefined
+  shift?: boolean | undefined
+  option?: boolean | undefined
+  meta?: boolean | undefined
+}) {
   if (keyName === "h" || keyName === "left" || keyName === "escape") {
     return { type: "focus", target: "list" } as const
   }
-  if (keyName === "[" || keyName === "]") {
-    return { type: "move-preview-tab", delta: keyName === "[" ? -1 : 1 } as const
-  }
+  const direction = directionalShortcutDirection(
+    { name: keyName, ctrl, shift, option, meta },
+    "nested",
+  )
+  if (direction) return { type: "move-preview-tab", delta: direction } as const
   if (keyName === "j" || keyName === "down") return { type: "scroll-preview", delta: 1 } as const
   if (keyName === "k" || keyName === "up") return { type: "scroll-preview", delta: -1 } as const
   return null
@@ -116,42 +130,48 @@ function previewNavigationAction(keyName: string) {
 
 export function pullRequestNavigationAction({
   keyName,
-  sequence,
+  ctrl,
   shift,
+  option,
+  meta,
   focus,
   hasSelection,
 }: {
   keyName: string
-  sequence?: string | undefined
+  ctrl?: boolean | undefined
   shift?: boolean | undefined
+  option?: boolean | undefined
+  meta?: boolean | undefined
   focus: PullRequestFocus
   hasSelection: boolean
 }): PullRequestNavigationAction | null {
-  const sectionAction = sectionNavigationAction({ keyName, sequence, shift })
+  const sectionAction = sectionNavigationAction({ keyName, ctrl, shift, option, meta })
   if (sectionAction) return sectionAction
   return focus === "list"
     ? listNavigationAction(keyName, shift, hasSelection)
-    : previewNavigationAction(keyName)
+    : previewNavigationAction({ keyName, ctrl, shift, option, meta })
 }
 
 export function pullRequestWorkspaceAction({
   keyName,
-  sequence,
   shift,
   focus,
   hasSelection,
   canLoadMore,
   canLoadPreview,
   ctrl,
+  option,
+  meta,
 }: {
   keyName: string
-  sequence?: string
   shift?: boolean
   focus: PullRequestFocus
   hasSelection: boolean
   canLoadMore?: boolean
   canLoadPreview?: boolean
   ctrl?: boolean
+  option?: boolean
+  meta?: boolean
 }): PullRequestWorkspaceAction | null {
   const configuration = pullRequestConfigurationAction({
     keyName,
@@ -166,6 +186,12 @@ export function pullRequestWorkspaceAction({
   if (focus === "preview" && ctrl && (keyName === "d" || keyName === "u")) {
     return { type: "scroll-preview", delta: keyName === "d" ? 10 : -10 }
   }
+  const sectionAction = sectionNavigationAction({ keyName, ctrl, shift, option, meta })
+  if (sectionAction) return sectionAction
+  if (focus === "preview") {
+    const previewAction = previewNavigationAction({ keyName, ctrl, shift, option, meta })
+    if (previewAction) return previewAction
+  }
   const selectedAction = selectedPullRequestAction({
     keyName,
     ctrl,
@@ -174,7 +200,15 @@ export function pullRequestWorkspaceAction({
     hasSelection,
   })
   if (selectedAction) return selectedAction
-  return pullRequestNavigationAction({ keyName, sequence, shift, focus, hasSelection })
+  return pullRequestNavigationAction({
+    keyName,
+    ctrl,
+    shift,
+    option,
+    meta,
+    focus,
+    hasSelection,
+  })
 }
 
 function pullRequestConfigurationAction({
@@ -218,15 +252,25 @@ function mutationShortcutAction(
   shift: boolean | undefined,
   focus: PullRequestFocus,
 ): PullRequestWorkspaceAction | null {
-  if (keyName === "c" && shift) return { type: "prepare-action", kind: "checkout" }
-  if (keyName === "c") return { type: "prepare-action", kind: "comment" }
-  if (keyName === "v") return { type: "prepare-action", kind: "approve" }
-  if (keyName === "a" && ctrl) return { type: "prepare-action", kind: "approve-workflow" }
-  if (keyName === "a") return { type: "prepare-action", kind: shift ? "unassign" : "assign" }
-  if (keyName === "w" && shift) return { type: "prepare-action", kind: "ready" }
-  if (keyName === "x") return { type: "prepare-action", kind: shift ? "reopen" : "close" }
-  if (keyName === "u") return { type: "prepare-action", kind: "update-branch" }
-  if (keyName === "m") return { type: "prepare-action", kind: "merge" }
+  const kind = pullRequestActionKindForShortcut({ name: keyName, ctrl, shift })
+  if (kind) return { type: "prepare-action", kind }
   if (focus === "preview" && keyName === "e") return { type: "toggle-description" }
+  return null
+}
+
+export function pullRequestActionKindForShortcut(key: {
+  name: string
+  ctrl?: boolean | undefined
+  shift?: boolean | undefined
+}): PullRequestActionKind | null {
+  const name = key.name.toLowerCase()
+  if (name === "c") return key.shift ? "checkout" : "comment"
+  if (name === "v") return "approve"
+  if (name === "a" && key.ctrl) return "approve-workflow"
+  if (name === "a") return key.shift ? "unassign" : "assign"
+  if (name === "w" && key.shift) return "ready"
+  if (name === "x") return key.shift ? "reopen" : "close"
+  if (name === "u") return "update-branch"
+  if (name === "m") return "merge"
   return null
 }

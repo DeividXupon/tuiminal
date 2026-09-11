@@ -1,4 +1,11 @@
 import { resolve } from "node:path"
+import {
+  forceKillOwnedProcessTree,
+  OWNED_PROCESS_STOP_DEADLINE_MS,
+  OWNED_PROCESS_STOP_GRACE_MS,
+  processStopDeadlineError,
+  signalOwnedProcessGroup,
+} from "../../../core/process/owned-process"
 
 export type FreeTerminalKind = "shell" | "custom"
 
@@ -12,7 +19,7 @@ export type FreeTerminalProcessHandle = {
   pid: number
   write: (data: string | Uint8Array) => void
   resize: (columns: number, rows: number) => void
-  stop: () => void
+  stop: () => Promise<void>
 }
 
 export type FreeTerminalCommand = {
@@ -114,6 +121,12 @@ export function startFreeTerminalProcess(
 
   let stopped = false
   let closed = false
+  let exited = false
+  let forceStopTimer: ReturnType<typeof setTimeout> | null = null
+  let stopDeadlineTimer: ReturnType<typeof setTimeout> | null = null
+  let stopPromise: Promise<void> | null = null
+  let resolveStop: (() => void) | null = null
+  let rejectStop: ((error: Error) => void) | null = null
   const subprocess = bunRuntime.spawn(command, {
     cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
     env: {
@@ -158,34 +171,53 @@ export function startFreeTerminalProcess(
       terminal.resize(Math.max(20, Math.floor(columns)), Math.max(5, Math.floor(rows)))
     },
     stop() {
-      if (stopped) return
+      if (exited) return Promise.resolve()
+      if (stopPromise) return stopPromise
       stopped = true
+      stopPromise = new Promise<void>((resolve, reject) => {
+        resolveStop = resolve
+        rejectStop = reject
+      })
       try {
         terminal.write("\u0003")
       } catch {
         // A process that already exited no longer accepts input.
       }
-      let processGroupStopped = false
-      if (process.platform !== "win32" && subprocess.pid > 1) {
+      signalOwnedProcessGroup(subprocess.pid, "SIGTERM", () => {
         try {
-          process.kill(-subprocess.pid, "SIGTERM")
-          processGroupStopped = true
+          subprocess.kill("SIGTERM")
         } catch {
-          // Fall back to the child PID if it no longer owns a process group.
+          // The process may have exited between the checks.
         }
-      }
-      try {
-        if (!processGroupStopped) subprocess.kill("SIGTERM")
-      } catch {
-        // The process may have exited between the checks.
-      }
-      closeTerminal()
-      activeProcesses.delete(handle)
+      })
+      forceStopTimer = setTimeout(() => {
+        forceStopTimer = null
+        if (exited) return
+        forceKillOwnedProcessTree(subprocess.pid, () => {
+          try {
+            subprocess.kill("SIGKILL")
+          } catch {
+            // The process may have exited while escalation was scheduled.
+          }
+        })
+      }, OWNED_PROCESS_STOP_GRACE_MS)
+      stopDeadlineTimer = setTimeout(() => {
+        stopDeadlineTimer = null
+        if (!exited) {
+          rejectStop?.(processStopDeadlineError("Terminal", subprocess.pid))
+          rejectStop = null
+          resolveStop = null
+        }
+      }, OWNED_PROCESS_STOP_DEADLINE_MS)
+      return stopPromise
     },
   }
 
   activeProcesses.add(handle)
   void subprocess.exited.then((code) => {
+    exited = true
+    if (forceStopTimer) clearTimeout(forceStopTimer)
+    if (stopDeadlineTimer) clearTimeout(stopDeadlineTimer)
     activeProcesses.delete(handle)
     closeTerminal()
     options.onExit({
@@ -193,12 +225,18 @@ export function startFreeTerminalProcess(
       signal: subprocess.signalCode,
       stopped,
     })
+    resolveStop?.()
+    resolveStop = null
+    rejectStop = null
   })
 
   return handle
 }
 
-export function stopAllFreeTerminalProcesses() {
-  for (const process of [...activeProcesses]) process.stop()
-  activeProcesses.clear()
+export async function stopAllFreeTerminalProcesses() {
+  const results = await Promise.allSettled([...activeProcesses].map((process) => process.stop()))
+  const failures = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  )
+  if (failures.length) throw new AggregateError(failures, "Falha ao encerrar terminais próprios.")
 }

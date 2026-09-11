@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react"
 import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
-import { HttpCookieJar } from "../services/cookies"
+import { HttpCookieJarStore } from "../services/cookies"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
 import { downloadCompleteHttpResponse } from "../services/download"
 import { prepareHttpRequest } from "../services/request-builder"
@@ -26,6 +26,7 @@ function copiedResponseNotice(selected: boolean, label: string) {
 
 export function useHttpResponse({
   documents,
+  activeRequest,
   environmentName,
   clipboard,
   setNotice,
@@ -35,6 +36,7 @@ export function useHttpResponse({
   authorizeRedirect,
 }: {
   documents: HttpDocumentState[]
+  activeRequest: HttpRequestDefinition | undefined
   environmentName: string | null
   clipboard: HttpClipboard
   setNotice: (notice: string) => void
@@ -43,18 +45,25 @@ export function useHttpResponse({
   isInsecureTlsApproved: (approval: HttpInsecureTlsApproval) => boolean
   authorizeRedirect: HttpRedirectAuthorizer
 }) {
-  const cookieJars = useRef(new Map<string, HttpCookieJar>())
+  const cookieJars = useRef(new HttpCookieJarStore())
   const [, setCookieRevision] = useState(0)
   const [download, setDownload] = useState<{
     documentId: string
     controller: AbortController
   } | null>(null)
-  const environmentKey = environmentName ?? "__no_environment__"
-  let cookieJar = cookieJars.current.get(environmentKey)
-  if (!cookieJar) {
-    cookieJar = new HttpCookieJar()
-    cookieJars.current.set(environmentKey, cookieJar)
-  }
+  const cookieJarForRequest = useCallback(
+    (request: HttpRequestDefinition) => cookieJars.current.forRequest(request, environmentName),
+    [environmentName],
+  )
+  const cookieJar = activeRequest
+    ? cookieJarForRequest(activeRequest)
+    : cookieJars.current.forRequest(
+        {
+          id: "__scratch_cookie_scope__",
+          source: { kind: "scratch" },
+        } as HttpRequestDefinition,
+        environmentName,
+      )
   const cookies = cookieJar.list()
 
   const responseCompleted = useCallback(() => {
@@ -121,7 +130,7 @@ export function useHttpResponse({
           requestName: document.request.name,
           request: prepared,
           signal: controller.signal,
-          cookieJar,
+          cookieJar: cookieJarForRequest(document.request),
           authorizeInsecureTls: (url) =>
             isInsecureTlsApproved(httpInsecureTlsApproval(url, environmentName)),
           authorizeRedirect: (approval, signal) =>
@@ -141,7 +150,7 @@ export function useHttpResponse({
       }
     },
     [
-      cookieJar,
+      cookieJarForRequest,
       authorizeRedirect,
       documents,
       download,
@@ -160,7 +169,10 @@ export function useHttpResponse({
       const document = documents.find((candidate) => candidate.request.id === documentId)
       if (document?.execution.status !== "success") return
       const response = document.execution.response
-      if (response.bodyKind !== "binary" || !isSafeHttpResponseOpenType(response.contentType)) {
+      if (
+        response.bodyKind !== "binary" ||
+        !isSafeHttpResponseOpenType(response.contentType, response.body)
+      ) {
         setNotice("ESTE TIPO DE RESPOSTA NÃO É ABERTO EXTERNAMENTE")
         return
       }
@@ -186,6 +198,7 @@ export function useHttpResponse({
 
   return {
     cookieJar,
+    cookieJarForRequest,
     cookies,
     responseCompleted,
     copyResponse,

@@ -15,6 +15,7 @@ export function HttpWorkspaceFooter({
   onHelp,
   onSave,
   notice,
+  responseJsonTree,
 }: {
   availableWidth: number
   minimum: boolean
@@ -27,6 +28,7 @@ export function HttpWorkspaceFooter({
   onHelp: () => void
   onSave: () => void
   notice: string
+  responseJsonTree: boolean
 }) {
   const compactControls = narrow || availableWidth < 150
   const maximizeLabel = compactControls
@@ -49,11 +51,13 @@ export function HttpWorkspaceFooter({
   )
   const copy =
     notice ||
-    (readOnly
-      ? "SOMENTE LEITURA · RECURSO .HTTP NÃO SUPORTADO"
-      : minimum
-        ? "[/] URL · [S] enviar"
-        : "[/] URL · [M] método · [S] enviar · [C] coleção · [Y] histórico · [Ctrl+N/W] tabs")
+    (responseJsonTree
+      ? "[↑/↓] blocos JSON · [←/→/Enter] recolher/expandir · [Tab/H/L] painéis"
+      : readOnly
+        ? "SOMENTE LEITURA · RECURSO .HTTP NÃO SUPORTADO"
+        : minimum
+          ? "[Tab/H/L] painéis · [/] URL · [S] enviar"
+          : "[Tab/H/L] painéis · [/] URL · [M] método · [S] enviar · [C] coleção · [Y] histórico")
   const copyWidth = Math.max(1, availableWidth - controlsWidth)
 
   return (

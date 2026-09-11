@@ -1,11 +1,13 @@
 import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
+import { DirectionalButton } from "../../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { InboxNotification, InboxSection } from "../../model/inbox/types"
 import { InboxList } from "./InboxList"
 import { InboxPreview } from "./InboxPreview"
+import { GitHubCliRequirementPanel } from "../shared/GitHubCliRequirementPanel"
 import type { InboxDashboardState } from "./useInboxDashboard"
 
 export function inboxDashboardError(state: InboxDashboardState) {
@@ -87,7 +89,24 @@ function InboxReadyView(props: ReadyViewProps) {
   )
 }
 
-function InboxStatePanel({ state, onRetry }: { state: InboxDashboardState; onRetry: () => void }) {
+function InboxStatePanel({
+  active,
+  state,
+  onRetry,
+}: {
+  active: boolean
+  state: InboxDashboardState
+  onRetry: () => void
+}) {
+  if (state.status === "requirements") {
+    return (
+      <GitHubCliRequirementPanel
+        active={active}
+        capabilities={state.capabilities}
+        onRetry={onRetry}
+      />
+    )
+  }
   const loading = state.status === "loading" || state.status === "idle"
   return (
     <box
@@ -109,6 +128,7 @@ function InboxStatePanel({ state, onRetry }: { state: InboxDashboardState; onRet
 }
 
 export function InboxDashboardView({
+  active,
   state,
   refreshing,
   sections,
@@ -118,6 +138,7 @@ export function InboxDashboardView({
   readyProps,
   onRetry,
 }: {
+  active: boolean
   state: InboxDashboardState
   refreshing: boolean
   sections: readonly InboxSection[]
@@ -162,6 +183,11 @@ export function InboxDashboardView({
         ) : null}
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        <DirectionalButton
+          direction={-1}
+          accent={COLORS.git}
+          onPress={() => onSelectSection((sectionIndex - 1 + sections.length) % sections.length)}
+        />
         {sections.map((section, index) => (
           <InlineButton
             key={section.id}
@@ -172,11 +198,16 @@ export function InboxDashboardView({
             onPress={() => onSelectSection(index)}
           />
         ))}
+        <DirectionalButton
+          direction={1}
+          accent={COLORS.git}
+          onPress={() => onSelectSection((sectionIndex + 1) % sections.length)}
+        />
       </box>
       {ready ? (
         <InboxReadyView {...readyProps} />
       ) : (
-        <InboxStatePanel state={state} onRetry={onRetry} />
+        <InboxStatePanel active={active} state={state} onRetry={onRetry} />
       )}
       <PlasmaLoadingOverlay
         active={state.status === "loading" || state.status === "idle"}
@@ -186,7 +217,7 @@ export function InboxDashboardView({
         background={COLORS.canvas}
       />
       <ShortcutText
-        content="[J/K] Navegar  [H/L] Foco  [</>] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar"
+        content="[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>

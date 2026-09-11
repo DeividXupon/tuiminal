@@ -2,10 +2,11 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi, truncateDisplay } from "../../../../shared/i18n"
+import { DirectionalButton } from "../../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { nextPullRequestDetailConnection } from "../../model/pr/detail-pagination"
-import { PULL_REQUEST_PREVIEW_TABS } from "../../model/pr/navigation"
+import { adjacentPreviewTab, PULL_REQUEST_PREVIEW_TABS } from "../../model/pr/navigation"
 import type { PullRequestPreviewTab, PullRequestSummary } from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { PreviewTabContent } from "./PreviewTabContent"
@@ -165,6 +166,15 @@ export function PreviewPane({
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        {focused ? (
+          <DirectionalButton
+            id="git-pr-preview-tab-previous"
+            direction={-1}
+            level="nested"
+            accent={COLORS.git}
+            onPress={() => onTabChange(adjacentPreviewTab(activeTab, -1))}
+          />
+        ) : null}
         {PULL_REQUEST_PREVIEW_TABS.map((tab) => (
           <InlineButton
             key={tab}
@@ -175,6 +185,15 @@ export function PreviewPane({
             onPress={() => onTabChange(tab)}
           />
         ))}
+        {focused ? (
+          <DirectionalButton
+            id="git-pr-preview-tab-next"
+            direction={1}
+            level="nested"
+            accent={COLORS.git}
+            onPress={() => onTabChange(adjacentPreviewTab(activeTab, 1))}
+          />
+        ) : null}
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton

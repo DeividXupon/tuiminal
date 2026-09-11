@@ -4,6 +4,8 @@ import type { RunnerLogEntry, RunnerLogStreamFilter } from "../model/log"
 export type { RunnerLogEntry, RunnerLogStreamFilter } from "../model/log"
 
 export const RUNNER_LOG_BUFFER_LIMIT = 1200
+export const RUNNER_LOG_ENTRY_MAX_CHARS = 16_384
+export const RUNNER_LOG_BUFFER_MAX_CHARS = 2_000_000
 export const RUNNER_LOG_FLUSH_INTERVAL_MS = 80
 export const RUNNER_LOG_TRIM_HEADROOM = 200
 
@@ -17,9 +19,20 @@ type RunnerLogPalette = {
 }
 
 export function appendRunnerLogToBuffer(logs: RunnerLogEntry[], log: RunnerLogEntry) {
-  logs.push(log)
+  const boundedLog =
+    log.text.length > RUNNER_LOG_ENTRY_MAX_CHARS
+      ? {
+          ...log,
+          text: `${log.text.slice(0, RUNNER_LOG_ENTRY_MAX_CHARS - 24)}… [linha truncada]`,
+        }
+      : log
+  logs.push(boundedLog)
   if (logs.length > RUNNER_LOG_BUFFER_LIMIT + RUNNER_LOG_TRIM_HEADROOM) {
     logs.splice(0, logs.length - RUNNER_LOG_BUFFER_LIMIT)
+  }
+  let characters = logs.reduce((total, entry) => total + entry.text.length, 0)
+  while (logs.length > 1 && characters > RUNNER_LOG_BUFFER_MAX_CHARS) {
+    characters -= logs.shift()?.text.length ?? 0
   }
   return logs
 }

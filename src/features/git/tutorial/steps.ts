@@ -32,7 +32,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Seções e filtros",
     description:
       "Agrupe PRs de vários repositórios por autor, revisão, responsável, CI, branch ou label e salve a ordem por projeto.",
-    hint: "[</>] muda seção · [/] filtra · seletores e repositórios ficam em [,] Config",
+    hint: "[A←] [F→] muda seção · [/] filtra · seletores e repositórios ficam em [,] Config",
     kind: "control",
   },
   {
@@ -50,7 +50,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Cinco abas de contexto",
     description:
       "Visão geral, Checks, Atividade, Commits e Arquivos carregam detalhes paginados sem alterar o checkout local.",
-    hint: "[[]/[]] troca aba · [H/L] move foco · [P] muda a posição da prévia",
+    hint: "[Z←]/[V→] troca aba · [H/L] move foco · [P] muda a posição da prévia",
     kind: "control",
   },
   {

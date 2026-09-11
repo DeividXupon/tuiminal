@@ -77,6 +77,8 @@ describe("Git Issues workspace model", () => {
         canLoadPreview: true,
       })
     expect(action({ name: "j" })).toEqual({ type: "move-row", delta: 1 })
+    expect(action({ name: "a" })).toEqual({ type: "move-section", delta: -1 })
+    expect(action({ name: "f" })).toEqual({ type: "move-section", delta: 1 })
     expect(action({ name: "l" })).toEqual({ type: "focus", target: "preview" })
     expect(action({ name: "l", shift: true })).toEqual({
       type: "prepare-action",
@@ -93,9 +95,11 @@ describe("Git Issues workspace model", () => {
       kind: "reopen",
     })
     expect(action({ name: "n" }, "preview")).toEqual({ type: "load-preview-more" })
+    expect(action({ name: "v" }, "preview")).toEqual({ type: "move-preview-tab", delta: 1 })
+    expect(action({ name: "z" }, "preview")).toEqual({ type: "move-preview-tab", delta: -1 })
     expect(action({ name: "escape" }, "preview")).toEqual({ type: "focus", target: "list" })
     expect(action({ name: "e", ctrl: true })).toBeNull()
-    expect(action({ name: "+" })).toBeNull()
+    expect(action({ name: "#" })).toBeNull()
     expect(moveIssueIndex(0, 3, -1)).toBe(0)
     expect(moveIssueIndex(2, 3, 1)).toBe(2)
     expect(adjacentIssuePreviewTab("overview", -1)).toBe("activity")

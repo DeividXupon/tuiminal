@@ -1,4 +1,5 @@
 import type { PreparedPullRequestAction } from "../../model/pr/actions"
+import { withValidatedCheckoutClone } from "../pr-checkout"
 import { type GhTransportOptions, GitHubTransportError, runGhCommand } from "./transport"
 
 export type PullRequestMutationResult =
@@ -119,16 +120,33 @@ export async function executePullRequestMutation(
   const invalid = validateMutationPayload(action)
   if (invalid) return { status: "rejected", reason: invalid }
   try {
-    await runGhCommand(mutationRequest(action), {
-      ...options,
-      host: action.target.host,
-      ...(action.kind === "checkout" ? { cwd: stringPayload(action, "clonePath") } : {}),
-    })
+    const request = mutationRequest(action)
+    if (action.kind === "checkout") {
+      const guarded = await withValidatedCheckoutClone(
+        stringPayload(action, "clonePath"),
+        action.target,
+        (canonicalRoot) =>
+          runGhCommand(request, {
+            ...options,
+            host: action.target.host,
+            cwd: canonicalRoot,
+          }),
+      )
+      if (guarded.status === "rejected") return guarded
+      if (!guarded.after.eligible) {
+        return {
+          status: "uncertain",
+          reason: `checkout-postcondition-${guarded.after.reason ?? "unavailable"}`,
+        }
+      }
+    } else {
+      await runGhCommand(request, { ...options, host: action.target.host })
+    }
     return { status: "confirmed", message: `${action.kind}-accepted` }
   } catch (error) {
     if (
       error instanceof GitHubTransportError &&
-      (error.kind === "timeout" || error.kind === "cancelled")
+      (error.kind === "timeout" || error.kind === "cancelled" || error.kind === "output-limit")
     ) {
       return { status: "uncertain", reason: error.kind }
     }

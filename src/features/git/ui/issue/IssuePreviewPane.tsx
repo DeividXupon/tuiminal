@@ -2,10 +2,11 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { formatUiDateTime, translateUi, truncateDisplay } from "../../../../shared/i18n"
+import { DirectionalButton } from "../../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { pullRequestMarkdownLines } from "../../model/pr/content"
-import { ISSUE_PREVIEW_TABS } from "../../model/issue/navigation"
+import { adjacentIssuePreviewTab, ISSUE_PREVIEW_TABS } from "../../model/issue/navigation"
 import type { IssueDetails, IssuePreviewTab, IssueSummary } from "../../model/issue/types"
 import { PullRequestMarkdown } from "../../rendering/pr-markdown"
 import type { IssueDetailsState } from "./useIssueDetails"
@@ -197,6 +198,15 @@ export function IssuePreviewPane({
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        {focused ? (
+          <DirectionalButton
+            id="git-issue-preview-tab-previous"
+            direction={-1}
+            level="nested"
+            accent={COLORS.git}
+            onPress={() => onTabChange(adjacentIssuePreviewTab(activeTab, -1))}
+          />
+        ) : null}
         {ISSUE_PREVIEW_TABS.map((tab) => (
           <InlineButton
             key={tab}
@@ -207,6 +217,15 @@ export function IssuePreviewPane({
             onPress={() => onTabChange(tab)}
           />
         ))}
+        {focused ? (
+          <DirectionalButton
+            id="git-issue-preview-tab-next"
+            direction={1}
+            level="nested"
+            accent={COLORS.git}
+            onPress={() => onTabChange(adjacentIssuePreviewTab(activeTab, 1))}
+          />
+        ) : null}
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton

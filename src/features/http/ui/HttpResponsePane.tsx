@@ -3,6 +3,13 @@ import { useEffect, useMemo, useRef } from "react"
 import { COLORS, focusedPanelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { createUiSyntaxStyle } from "../../../shared/ui/syntax-style"
+import {
+  httpJsonPathAtLine,
+  httpJsonTreeActionForKey,
+  httpJsonTreeForDocument,
+  updateHttpJsonTree,
+  type HttpJsonTree,
+} from "../model/json-tree"
 import { findHttpTextMatches } from "../model/response"
 import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
@@ -11,6 +18,7 @@ import { httpResponseContent } from "./http-response-content"
 import { HttpResponseState } from "./HttpResponseState"
 import { HttpResponseToolbar } from "./HttpResponseToolbar"
 import { HttpResponseHeader } from "./HttpResponseHeader"
+import { buildHttpJsonDocument } from "./http-json-document"
 
 const RESPONSE_SYNTAX = createUiSyntaxStyle()
 const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
@@ -19,11 +27,43 @@ function HttpResponseDocument({
   content,
   response,
   wrap,
+  jsonTree,
+  lineNumbers,
+  focused,
 }: {
   content: string
   response: HttpResponseSnapshot
   wrap: boolean
+  jsonTree: HttpJsonTree | null
+  lineNumbers: boolean
+  focused: boolean
 }) {
+  const paletteKey = [
+    COLORS.canvas,
+    COLORS.panelAlt,
+    COLORS.panelRaised,
+    COLORS.text,
+    COLORS.muted,
+    COLORS.focus,
+    COLORS.http,
+    COLORS.success,
+    COLORS.warning,
+  ].join("\u0000")
+  const jsonDocument = useMemo(() => {
+    void paletteKey
+    return jsonTree
+      ? buildHttpJsonDocument(jsonTree, { palette: COLORS, lineNumbers, focused })
+      : null
+  }, [focused, jsonTree, lineNumbers, paletteKey])
+  if (jsonDocument && jsonTree) {
+    return (
+      <text
+        content={jsonDocument}
+        wrapMode={wrap ? "word" : "none"}
+        style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
+      />
+    )
+  }
   const filetype = responseFiletype(response)
   const height = Math.max(1, content.split("\n").length)
   const displayedContent = content || translateUi("(resposta vazia)")
@@ -87,6 +127,7 @@ export function HttpResponsePane({
   const response = document.execution.status === "success" ? document.execution.response : null
   const presentation = document.responsePresentation
   const content = useMemo(() => httpResponseContent(document, cookies), [cookies, document])
+  const jsonTree = useMemo(() => httpJsonTreeForDocument(document), [document])
   const matches = useMemo(
     () => findHttpTextMatches(content, presentation.searchQuery),
     [content, presentation.searchQuery],
@@ -109,9 +150,29 @@ export function HttpResponsePane({
     scrollRef.current?.scrollTo(Math.max(0, (matches[index]?.line ?? 1) - 1))
   }, [matches, presentation.searchMatchIndex, presentation.searchOpen])
 
+  useEffect(() => {
+    if (!focused || !jsonTree) return
+    scrollRef.current?.focus()
+    scrollRef.current?.scrollTo(Math.max(0, jsonTree.selectedLine - 1))
+  }, [focused, jsonTree])
+
   const cycleSearch = () => {
     if (!matches.length) return
     onPresentationChange({ searchMatchIndex: (presentation.searchMatchIndex + 1) % matches.length })
+  }
+
+  const handleJsonTreeKey = (event: {
+    name: string
+    preventDefault: () => void
+    stopPropagation: () => void
+  }) => {
+    if (!jsonTree) return
+    const action = httpJsonTreeActionForKey(event.name)
+    if (!action) return
+    event.preventDefault()
+    event.stopPropagation()
+    const patch = updateHttpJsonTree(document, action)
+    if (patch) onPresentationChange(patch)
   }
 
   return (
@@ -152,6 +213,7 @@ export function HttpResponsePane({
         active={visible && focused}
       />
       {response ? (
+        // biome-ignore lint/a11y/noStaticElementInteractions: the OpenTUI scrollbox is the focusable response viewport and owns structural JSON keyboard/mouse navigation.
         <scrollbox
           ref={(scroll) => {
             scrollRef.current = scroll
@@ -161,9 +223,28 @@ export function HttpResponsePane({
           scrollY
           scrollX={!presentation.wrap}
           viewportCulling
+          onKeyDown={handleJsonTreeKey}
+          onMouseDown={(event) => {
+            onFocus()
+            scrollRef.current?.focus()
+            if (!jsonTree || !scrollRef.current) return
+            const line = Math.max(
+              0,
+              Math.floor(scrollRef.current.scrollTop + event.y - scrollRef.current.screenY),
+            )
+            const jsonSelectedPath = httpJsonPathAtLine(jsonTree, line)
+            if (jsonSelectedPath !== null) onPresentationChange({ jsonSelectedPath })
+          }}
           style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
         >
-          <HttpResponseDocument content={content} response={response} wrap={presentation.wrap} />
+          <HttpResponseDocument
+            content={content}
+            response={response}
+            wrap={presentation.wrap}
+            jsonTree={jsonTree}
+            lineNumbers={presentation.lineNumbers}
+            focused={focused}
+          />
           {stale ? (
             <text
               content={translateUi("RESPOSTA DE UMA REVISÃO ANTERIOR")}

@@ -1,9 +1,14 @@
-import { chmod, mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { readFile, stat } from "node:fs/promises"
+import { resolve } from "node:path"
 import type { HttpHistoryEntry, HttpRedirectHop, HttpResponseBodyKind } from "../model/types"
 import { budgetHttpHistory, redactHttpDiagnostic, redactHttpHistoryUrl } from "../model/history"
 import { redactHttpHistoryEntry } from "../model/history-privacy"
 import type { HttpWorkspaceConfig } from "./config"
+import {
+  atomicWriteProjectFile,
+  projectFileHash,
+  resolveSafeProjectFile,
+} from "../../../shared/storage/project-files"
 
 const HISTORY_VERSION = 1
 const MAX_HISTORY_FILE_BYTES = 3_000_000
@@ -32,6 +37,7 @@ type PersistedEntry = Omit<HttpHistoryEntry, "response" | "persisted" | "privacy
 }
 
 type PersistedHistory = { version: 1; entries: PersistedEntry[] }
+type PersistedHistorySnapshot = PersistedHistory & { sourceHash: string | null }
 
 function historyPath(root: string) {
   return resolve(root, ".tuiminal", "http", "history.json")
@@ -227,40 +233,54 @@ function parsedEntry(value: unknown): PersistedEntry | null {
   }
 }
 
-async function readPersistedHistory(path: string): Promise<PersistedHistory> {
+async function readPersistedHistory(root: string): Promise<PersistedHistorySnapshot> {
+  let path: string
   try {
-    if ((await stat(path)).size > MAX_HISTORY_FILE_BYTES) return { version: 1, entries: [] }
-    const parsed = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>
+    path = (
+      await resolveSafeProjectFile(root, ".tuiminal/http/history.json", {
+        allowMissing: true,
+      })
+    ).path
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { version: 1, entries: [], sourceHash: null }
+    }
+    throw error
+  }
+  try {
+    if ((await stat(path)).size > MAX_HISTORY_FILE_BYTES) {
+      throw new Error("O histórico HTTP persistido ultrapassa 3 MB e foi preservado.")
+    }
+    const source = await readFile(path, "utf8")
+    const parsed = JSON.parse(source) as Record<string, unknown>
     if (parsed.version !== HISTORY_VERSION || !Array.isArray(parsed.entries)) {
-      return { version: 1, entries: [] }
+      throw new Error("O histórico HTTP persistido tem formato inválido e foi preservado.")
     }
     return {
       version: 1,
       entries: parsed.entries
         .map(parsedEntry)
         .filter((entry): entry is PersistedEntry => entry !== null),
+      sourceHash: projectFileHash(source),
     }
-  } catch {
-    return { version: 1, entries: [] }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { version: 1, entries: [], sourceHash: null }
+    }
+    if (error instanceof SyntaxError) {
+      throw new Error("O histórico HTTP contém JSON inválido e foi preservado.")
+    }
+    throw error
   }
 }
 
-async function writeAtomic(path: string, value: PersistedHistory) {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
-  await chmod(dirname(path), 0o700)
-  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`
-  const handle = await open(temporary, "wx", 0o600)
-  try {
-    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8")
-    await handle.sync()
-    await handle.close()
-    await rename(temporary, path)
-    await chmod(path, 0o600)
-  } catch (error) {
-    await handle.close().catch(() => undefined)
-    await unlink(temporary).catch(() => undefined)
-    throw error
-  }
+async function writeAtomic(root: string, value: PersistedHistory, expectedHash: string | null) {
+  await atomicWriteProjectFile(
+    root,
+    ".tuiminal/http/history.json",
+    `${JSON.stringify(value, null, 2)}\n`,
+    { expectedHash },
+  )
 }
 
 function restoredEntry(entry: PersistedEntry): HttpHistoryEntry | null {
@@ -311,7 +331,7 @@ function restoredEntry(entry: PersistedEntry): HttpHistoryEntry | null {
 
 export async function loadHttpHistory(root: string, config: HttpWorkspaceConfig) {
   if (!config.history.persistMetadata) return []
-  const persisted = await readPersistedHistory(historyPath(root))
+  const persisted = await readPersistedHistory(root)
   return budgetHttpHistory(
     persisted.entries
       .map(restoredEntry)
@@ -328,12 +348,12 @@ export function persistHttpHistoryEntry(
   const path = historyPath(root)
   const previous = writes.get(path) ?? Promise.resolve()
   const next = previous.then(async () => {
-    const current = await readPersistedHistory(path)
+    const current = await readPersistedHistory(root)
     const entries = enforcePersistedBodyBudget([
       persistableEntry(entry, config.history.persistBodies),
       ...current.entries.filter((candidate) => candidate.id !== entry.id),
     ]).slice(0, 30)
-    await writeAtomic(path, { version: 1, entries })
+    await writeAtomic(root, { version: 1, entries }, current.sourceHash)
   })
   const queued = next.catch(() => undefined)
   writes.set(path, queued)

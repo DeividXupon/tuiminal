@@ -29,15 +29,16 @@ export function useHttpWorkspaceLifecycle({
       documentId: document.request.id,
       patch: { method: "GET", url: initialUrlRequest.url },
     })
-    dispatch({ type: "select-pane", pane: "request" })
+    dispatch({ type: "select-pane", pane: "url" })
     setTimeout(() => urlRef.current?.focus(), 0)
   }, [dispatch, document, initialUrlRequest, urlRef])
 
   useEffect(() => {
     if (!active) return
+    dispatch({ type: "select-pane", pane: "url" })
     const timer = setTimeout(() => urlRef.current?.focus(), 0)
     return () => clearTimeout(timer)
-  }, [active, urlRef])
+  }, [active, dispatch, urlRef])
 
   useEffect(
     () => () => {

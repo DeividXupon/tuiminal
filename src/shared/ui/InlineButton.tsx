@@ -5,7 +5,7 @@ import type { Ref } from "react"
 import { translateUi } from "../i18n/index"
 import { COLORS, LAYOUT } from "../../core/settings/theme"
 
-type InlineButtonProps = {
+export type InlineButtonProps = {
   id?: string
   label: string
   onPress: () => void

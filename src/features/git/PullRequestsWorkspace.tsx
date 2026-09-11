@@ -279,7 +279,7 @@ export function PullRequestsWorkspace({
 
   usePullRequestWorkspaceKeyboard({
     active,
-    blocked: modalOpen || Boolean(diffTarget),
+    blocked: modalOpen || Boolean(diffTarget) || dashboard.status === "requirements",
     focus,
     hasSelection: Boolean(selected),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
@@ -323,6 +323,7 @@ export function PullRequestsWorkspace({
   return (
     <>
       <PullRequestDashboardView
+        active={active}
         dashboard={dashboard}
         presentation={presentation}
         layout={layout}

@@ -4,8 +4,7 @@ import { homedir } from "node:os"
 import { basename, delimiter, relative, resolve } from "node:path"
 
 import type { RunnerProject, RunnerDirectoryEntry } from "../model/types"
-import { RUNNER_WORKING_DIRECTORY } from "../services/context"
-import { fileExists } from "./shared"
+import { isGitWorktreeRoot, RUNNER_WORKING_DIRECTORY } from "../services/context"
 
 export function displayProjectPath(path: string) {
   const home = homedir()
@@ -34,6 +33,10 @@ export function shouldSkipProjectDirectory(name: string) {
   return name.startsWith(".") || IGNORED_PROJECT_DIRECTORIES.has(name)
 }
 
+function isDiscoveredGitProject(path: string, entries: Dirent<string>[]) {
+  return entries.some((entry) => entry.name === ".git") && isGitWorktreeRoot(path)
+}
+
 export async function discoverRunnerProjects(
   currentRoot = RUNNER_WORKING_DIRECTORY,
 ): Promise<RunnerProject[]> {
@@ -60,7 +63,7 @@ export async function discoverRunnerProjects(
         continue
       }
 
-      if (entries.some((entry) => entry.name === ".git")) {
+      if (isDiscoveredGitProject(item.path, entries)) {
         if (!projects.has(item.path)) {
           projects.set(item.path, {
             path: item.path,
@@ -108,7 +111,7 @@ export async function listRunnerDirectories(directory: string): Promise<RunnerDi
         return {
           path,
           name: entry.name,
-          git: await fileExists(resolve(path, ".git")),
+          git: isGitWorktreeRoot(path),
         }
       }),
   )

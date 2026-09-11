@@ -2,7 +2,9 @@ import type { InputRenderable } from "@opentui/core"
 import { useRef } from "react"
 import { COLORS } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
+import { DirectionalButton } from "../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { HTTP_AUTH_KINDS, httpAuthForKind, nextHttpAuthKind } from "../model/nested-view-navigation"
 import type { HttpAuth } from "../model/types"
 
 function AuthInput({
@@ -36,41 +38,47 @@ function AuthInput({
 export function HttpAuthEditor({
   requestId,
   auth,
+  focused,
   onChange,
 }: {
   requestId: string
   auth: HttpAuth
+  focused: boolean
   onChange: (auth: HttpAuth) => void
 }) {
+  const selectKind = (kind: HttpAuth["kind"]) => onChange(httpAuthForKind(kind))
   return (
     <box style={{ flexGrow: 1, paddingTop: 1 }}>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          label="Sem auth"
-          accent={COLORS.http}
-          active={auth.kind === "none"}
-          onPress={() => onChange({ kind: "none" })}
-        />
-        <InlineButton
-          label="Bearer"
-          accent={COLORS.http}
-          active={auth.kind === "bearer"}
-          onPress={() => onChange({ kind: "bearer", token: "" })}
-        />
-        <InlineButton
-          label="Basic"
-          accent={COLORS.http}
-          active={auth.kind === "basic"}
-          onPress={() => onChange({ kind: "basic", username: "", password: "" })}
-        />
-        <InlineButton
-          label="API Key"
-          accent={COLORS.http}
-          active={auth.kind === "api-key"}
-          onPress={() =>
-            onChange({ kind: "api-key", placement: "header", name: "X-API-Key", value: "" })
-          }
-        />
+        {focused ? (
+          <DirectionalButton
+            id="http-auth-kind-previous"
+            direction={-1}
+            level="nested"
+            accent={COLORS.http}
+            onPress={() => selectKind(nextHttpAuthKind(auth.kind, -1))}
+          />
+        ) : null}
+        {HTTP_AUTH_KINDS.map((kind) => (
+          <InlineButton
+            key={kind}
+            label={
+              { none: "Sem auth", bearer: "Bearer", basic: "Basic", "api-key": "API Key" }[kind]
+            }
+            accent={COLORS.http}
+            active={auth.kind === kind}
+            onPress={() => selectKind(kind)}
+          />
+        ))}
+        {focused ? (
+          <DirectionalButton
+            id="http-auth-kind-next"
+            direction={1}
+            level="nested"
+            accent={COLORS.http}
+            onPress={() => selectKind(nextHttpAuthKind(auth.kind, 1))}
+          />
+        ) : null}
       </box>
       {auth.kind === "none" ? (
         <text

@@ -28,7 +28,7 @@ describe("standalone npm release", () => {
     const manifest = mainPackageJson(version)
     expect(manifest.bin).toEqual({ tuiminal: "bin/tuiminal.js" })
     expect(manifest.license).toBe("Apache-2.0")
-    expect(manifest.engines).toEqual({ node: ">=18" })
+    expect(manifest.engines).toEqual({ node: ">=22" })
     expect(Object.keys(manifest.optionalDependencies)).toHaveLength(RELEASE_TARGETS.length)
     expect(Object.values(manifest.optionalDependencies).every((value) => value === version)).toBe(
       true,
@@ -42,8 +42,9 @@ describe("standalone npm release", () => {
     for (const target of RELEASE_TARGETS) {
       expect(launcher).toContain(target.npmPackage)
       const manifest = platformPackageJson(target, "1.0.0")
-      expect(manifest.files).toEqual(["bin"])
+      expect(manifest.files).toEqual(["bin", "THIRD_PARTY_NOTICES.md"])
       expect(manifest.license).toBe("Apache-2.0")
+      expect(manifest.repository.url).toBe("git+https://github.com/DeividXupon/tuiminal.git")
     }
   })
 

@@ -27,13 +27,17 @@ export function useHttpHistory({
 }) {
   useEffect(() => {
     let disposed = false
-    void loadHttpHistory(HTTP_WORKING_DIRECTORY, config).then((entries) => {
-      if (!disposed && entries.length) dispatch({ type: "hydrate-history", entries })
-    })
+    void loadHttpHistory(HTTP_WORKING_DIRECTORY, config)
+      .then((entries) => {
+        if (!disposed && entries.length) dispatch({ type: "hydrate-history", entries })
+      })
+      .catch(() => {
+        if (!disposed) setNotice("NÃO FOI POSSÍVEL LER O HISTÓRICO HTTP; O ARQUIVO FOI PRESERVADO")
+      })
     return () => {
       disposed = true
     }
-  }, [config, dispatch])
+  }, [config, dispatch, setNotice])
 
   const persist = useCallback(
     (entry: HttpHistoryEntry) => {

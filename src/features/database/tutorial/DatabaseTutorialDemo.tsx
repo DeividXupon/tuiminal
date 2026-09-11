@@ -2,8 +2,8 @@ import { useTerminalDimensions } from "@opentui/react"
 import { COLORS, LAYOUT, panelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { DirectionalButton } from "../../../shared/ui/DirectionalButton"
 import { ShortcutText } from "../../../shared/ui/ShortcutText"
-
 import { SIDEBAR_WIDTH } from "../rendering/constants"
 import { fitCell, shorten } from "../rendering/workspace-shared"
 
@@ -149,7 +149,7 @@ export function DatabaseTutorialDemo() {
         />
         <InlineButton
           id="tutorial-db-new-query"
-          label={veryNarrow ? "[A] Query" : "[A] Criar query"}
+          label={veryNarrow ? "[W] Query" : "[W] Criar query"}
           accent={COLORS.success}
           onPress={noop}
         />
@@ -199,11 +199,11 @@ export function DatabaseTutorialDemo() {
           }}
         >
           <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <InlineButton label="[<]" accent={COLORS.database} onPress={noop} />
+            <DirectionalButton direction={-1} accent={COLORS.database} onPress={noop} />
             <InlineButton label="orders" accent={COLORS.database} onPress={noop} />
             <InlineButton label="users" accent={COLORS.database} active onPress={noop} />
             <InlineButton label="products" accent={COLORS.database} onPress={noop} />
-            <InlineButton label="[>]" accent={COLORS.database} onPress={noop} />
+            <DirectionalButton direction={1} accent={COLORS.database} onPress={noop} />
           </box>
         </box>
 
@@ -238,7 +238,7 @@ export function DatabaseTutorialDemo() {
             style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
           >
             <InlineButton
-              label={narrow ? "[F]↕" : "[F] Ordem normal"}
+              label={narrow ? "[O]↕" : "[O] Ordem normal"}
               accent={COLORS.database}
               onPress={noop}
             />

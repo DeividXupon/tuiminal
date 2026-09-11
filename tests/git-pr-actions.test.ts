@@ -40,6 +40,10 @@ if (process.env.FAKE_COORDINATOR === "1") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
     const commented = existsSync(process.env.FAKE_STATE)
+    if (commented && process.env.FAKE_INVALID_RECONCILIATION === "1") {
+      console.log("not-json")
+      process.exit(0)
+    }
     const connection = (nodes) => ({ totalCount: nodes.length, pageInfo: { hasNextPage: false, endCursor: null }, nodes })
     console.log(JSON.stringify({ data: { repository: {
       viewerPermission: "WRITE", mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true,
@@ -53,7 +57,7 @@ if (process.env.FAKE_COORDINATOR === "1") {
       }
     } } }))
   } else if (args[0] === "pr" && args[1] === "comment") {
-    writeFileSync(process.env.FAKE_STATE, "commented")
+    if (process.env.FAKE_NO_RECONCILE !== "1") writeFileSync(process.env.FAKE_STATE, "commented")
     console.log("accepted")
   } else {
     console.error("unexpected coordinator command")
@@ -268,5 +272,46 @@ describe("pull request mutation transport", () => {
     })
     expect(result).toEqual({ status: "uncertain", reason: "timeout" })
     expect(commands()).toHaveLength(1)
+  })
+
+  test("classifies excessive output after dispatch as uncertain and does not retry", async () => {
+    writeFileSync(logPath, "")
+    const result = await executePullRequestMutation(prepared("comment", { body: "once" }), {
+      executable,
+      maxOutputBytes: 4,
+      env: { FAKE_LOG: logPath },
+    })
+    expect(result).toEqual({ status: "uncertain", reason: "output-limit" })
+    expect(commands()).toHaveLength(1)
+  })
+
+  test("keeps a dispatched write uncertain when its direct reconciliation is invalid", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "invalid-reconciliation-state")
+    rmSync(statePath, { force: true })
+    const preparedState = preparePullRequestAction({
+      actionId: "invalid-reconciliation",
+      kind: "comment",
+      target: item.identity,
+      expectedHeadSha: item.headSha,
+      auth,
+      payload: { body: "integrated" },
+    })
+    const result = await new PullRequestActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_INVALID_RECONCILIATION: "1",
+      },
+    }).execute(preparedState)
+    expect(result).toMatchObject({
+      status: "uncertain",
+      reason: "accepted-reconciliation-failed",
+    })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "pr comment"),
+    ).toHaveLength(1)
   })
 })

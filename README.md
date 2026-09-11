@@ -36,7 +36,7 @@ npm install --global tuiminal@pre-alpha
 tuiminal
 ```
 
-Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 18 ou superior é usado pelo pequeno launcher do pacote.
+Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 22 ou superior é usado pelo pequeno launcher do pacote.
 
 Para atualizar ou remover:
 
@@ -132,11 +132,12 @@ O histórico SQL salva apenas metadados das novas execuções. SQL completo, par
 | Navegar por linhas | `[J/K]` ou `[↑/↓]` |
 | Abrir tabela ou editar célula | `[Enter]` |
 | Buscar tabela / buscar nos dados | `[/]` / `[S]` |
-| Ordenar coluna | `[F]` |
+| Ordenar coluna | `[O]` |
 | Marcar linha / selecionar intervalo | `[Space]` / `[Alt+Space]` |
 | Exportar seleção | `[X]` |
 | Página anterior / seguinte | `[P]` / `[N]` |
-| Abrir workspace SQL | `[A]` |
+| Tabela anterior / seguinte | `[A←]` / `[F→]` |
+| Abrir workspace SQL | `[W]` |
 | Executar comando SQL atual | `[Ctrl+A]` |
 | Cancelar consulta | `[Ctrl+X]` |
 | Nova aba / fechar aba SQL | `[Ctrl+N]` / `[Ctrl+W]` |
@@ -189,7 +190,7 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
-PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) autenticado.
+PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado e oferecem um mini terminal interativo; a instalação só começa após `[I]` ou clique e a tela é recarregada automaticamente depois da validação. A autenticação continua explícita com `gh auth login`.
 
 ### Atalhos essenciais do Git
 
@@ -199,7 +200,8 @@ PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de u
 | Alternar Diffs / Comparar | `[C]` |
 | Navegar na lista | `[J/K]` ou `[↑/↓]` |
 | Alternar foco entre lista e preview | `[H/L]` ou `[←/→]` |
-| Mudar seção | `[<]` / `[>]` |
+| Mudar seção | `[A←]` / `[F→]` |
+| Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
 | Stage do arquivo / todos | `[Space]` / `[A]` |
@@ -228,10 +230,10 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 - **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
 - **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
 - **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
-- **Trocar de projeto:** `[+]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
+- **Trocar de projeto:** `[N]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
 - **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
 
-Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode iniciar um processo automaticamente.
+Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
 
 ```yaml
 version: 1
@@ -264,13 +266,14 @@ commands:
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
 | Comandos / processos ativos | `[P]` |
 | Visualização única / múltipla | `[M]` |
+| Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
 | Selecionar grupo | `[Space]` |
 | Iniciar / parar / reiniciar grupo | `[G]` / `[Shift+G]` / `[Shift+R]` |
 | Lista → log / log → lista | `[L/→]` / `[H/←]` |
 | Abrir ou recolher histórico | `[S]` |
 | Parar processo atual | `[Shift+K]` |
-| Abrir menu de ações | `[A]` |
-| Abrir outro projeto | `[+]` |
+| Abrir menu de ações | `[A]` (único) / `[Shift+A]` (múltiplo) |
+| Abrir outro projeto | `[N]` |
 | Alternar projetos do Runner | `[1]`–`[4]` |
 | Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
 
@@ -289,25 +292,31 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 ### O que você pode fazer
 
 - **Montar requests:** método, URL, query params, headers, JSON/texto/XML, form URL encoded, multipart, arquivo e autenticação Bearer, Basic ou API Key.
-- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação.
+- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores; no response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual.
 - **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
 - **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
 - **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit.
 - **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema.
-- **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
+- **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. O jar valida domínios pela Public Suffix List, impõe limites e fica isolado por ambiente e diretório da coleção; `[C]` pode desativar tanto leitura quanto escrita de cookies por request. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 - **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
+- **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas.
 
 ### Atalhos essenciais do HTTP
 
 | Ação | Atalho |
 | --- | --- |
+| Alternar rota, coleção, requisição e resposta | `[Tab]` / `[Shift+Tab]` ou `[H/L]` |
 | Focar URL / enviar / cancelar | `[/]` / `[S]` ou `[Enter]` / `[X]` |
 | Método anterior / seguinte | `[Shift+M]` / `[M]` |
-| Params, headers, body, auth e mais | `[P]`, `[H]`, `[B]`, `[A]`, `[O]` |
+| Ciclar Params, headers, body, auth e mais com a requisição focada | `[A←]` / `[F→]` |
+| Ciclar opções internas de Body, Auth ou Mais | `[Z←]` / `[V→]` |
+| Alternar Query Params / Path Params | `[J/K]` ou `[↑/↓]` |
+| Adicionar item ao subpainel focado | `[N]` |
+| Navegar / recolher / expandir JSON | `[↑/↓]` ou `[J/K]` / `[←/→]` / `[Enter]` |
 | Abrir ambientes | `[E]` |
-| Alternar visualização da resposta | `[V]` |
+| Alternar visualização principal / aba interna da resposta | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Abrir coleção / histórico | `[C]` / `[Y]` |
 | Nova tab / fechar tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Alternar documentos | `[Alt+←/→]` |
@@ -368,6 +377,7 @@ Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada pai
 - Organizar cada seção em até quatro painéis numa grade `2 × 2`.
 - Dividir o painel ativo para o lado ou criar uma linha inferior.
 - Alternar entre a seção inteira e um terminal maximizado.
+- Ao reiniciar, fechar um painel ou sair do Tuiminal, aguardar a saída observada dos processos próprios; após um período de graça, o encerramento escala para a árvore criada, sem procurar ou matar processos por nome/porta.
 - Preservar cores, cursor, prompts interativos e aplicações TUI em tela cheia.
 - Trocar de tab sem encerrar as sessões.
 - Focar, dividir, reiniciar e fechar painéis pelo teclado ou mouse.
@@ -423,14 +433,18 @@ Comandos principais:
 | `bun run test:unit` | Testar regras e integrações locais |
 | `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
 | `bun run check` | Typecheck, formato, lint, arquitetura, manutenção e testes |
+| `bun run check:licenses` | Conferir o inventário reproduzível de licenças de produção |
 | `bun run docs:demos` | Recriar os cinco GIFs deste README a partir da UI real |
 | `bun run build:release` | Gerar os pacotes de distribuição por plataforma |
+| `bun run test:release` | Validar hashes, tarballs e a instalação final sem Bun no `PATH` |
 
 `bun run docs:demos` usa dados simulados ou um repositório temporário, nunca credenciais e serviços do usuário. A conversão final dos frames requer [ImageMagick](https://imagemagick.org/).
 
 Antes de contribuir, leia:
 
 - [Guia de contribuição](./CONTRIBUTING.md)
+- [Política de segurança](./SECURITY.md)
+- [Processo de release](./docs/release-process.md)
 - [Arquitetura do projeto](./docs/architecture.md)
 - [Decisão do monólito modular](./docs/adr/0001-modular-monolith.md)
 
@@ -438,9 +452,10 @@ Antes de contribuir, leia:
 
 O código atual é um monólito modular: `src/app` compõe a aplicação, `src/core` contém infraestrutura, `src/shared` oferece peças reutilizáveis e `src/features` separa cada ferramenta.
 
-O [plano de prontidão para alfa](./ALPHA_READINESS_PLAN.md) reúne os bloqueadores,
-correções parciais, evidências e checklist de retomada na seção 9. O checkpoint em
-`development` não é uma alfa aprovada nem uma nova versão publicada no npm.
+O [plano de prontidão para alfa](./ALPHA_READINESS_PLAN.md) preserva a auditoria,
+as correções e as evidências. A seção 10 registra o hardening local concluído e os
+aceites externos que ainda bloqueiam uma alfa; isso não representa uma nova versão
+publicada no npm.
 
 O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o mesmo SDK público de plugins. Os documentos abaixo registram direção e evidências atuais; são planos evolutivos, não promessas de API congelada:
 
@@ -454,4 +469,4 @@ O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o me
 
 Copyright 2026 DeividXupon.
 
-Distribuído sob a [Apache License 2.0](./LICENSE). Você pode usar, modificar e distribuir o Tuiminal, inclusive comercialmente, desde que preserve os termos e avisos exigidos pela licença.
+Distribuído sob a [Apache License 2.0](./LICENSE). Você pode usar, modificar e distribuir o Tuiminal, inclusive comercialmente, desde que preserve os termos e avisos exigidos pela licença. Os avisos dos componentes incorporados estão em [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

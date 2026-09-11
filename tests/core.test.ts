@@ -16,6 +16,9 @@ describe("application boundaries", () => {
       ...runnerKeyboardScope.ids,
       "runner-save-command-dialog",
       "runner-save-command-name",
+      "runner-autostart-trust-modal",
+      "runner-autostart-trust-approve",
+      "runner-autostart-trust-deny",
     ]) {
       expect(ownsKeyboardFocus(runnerKeyboardScope, id)).toBe(true)
     }

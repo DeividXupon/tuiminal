@@ -17,8 +17,10 @@ import {
   sensitiveTermsSignature,
 } from "../../shared/security/sensitive-data"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import { DirectionalButton } from "../../shared/ui/DirectionalButton"
 import { MountWhen } from "../../shared/ui/MountWhen"
 import { ShortcutText } from "../../shared/ui/ShortcutText"
+import { directionalShortcutDirection } from "../../shared/ui/directional-shortcut"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../shared/ui/selectMouse"
 import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
 import { useDatabaseSelectionSweep } from "./hooks/use-database-selection-sweep"
@@ -81,6 +83,7 @@ import {
   applyTableMutations,
   databaseConnectionCanWrite,
   databaseDriverLabel,
+  DatabaseMutationCommitUncertainError,
   getDefaultDatabaseConnectionId,
   listDatabaseConnections,
   listDatabaseTables,
@@ -1158,12 +1161,13 @@ export function DatabaseViewer({
     setWriteBusy(true)
     setChangesModalNotice(`Executando ${approved.length} comando(s)…`)
     try {
-      await applyTableMutations(
+      const result = await applyTableMutations(
         connectionId,
         approved.map((change) => ({
           table: change.table,
           columns: change.columns,
           mutation: change.mutation,
+          originalRow: change.originalRow,
         })),
       )
       const completedIds = new Set(approved.map((change) => change.id))
@@ -1177,12 +1181,20 @@ export function DatabaseViewer({
       setRefreshKey((current) => current + 1)
       setChangesModalOpen(false)
       setChangesModalNotice("")
-      setWriteNotice(`✓ ${approved.length} comando(s) SQL executado(s) em uma transação`)
+      setWriteNotice(
+        result.noOpStatements
+          ? `✓ Transação confirmada · ${result.sentStatements} enviado(s), ${result.noOpStatements} sem alteração`
+          : `✓ ${result.sentStatements} comando(s) SQL executado(s) em uma transação`,
+      )
     } catch (executionFailure) {
       const executionError =
         executionFailure instanceof Error ? executionFailure.message : "A execução do SQL falhou."
       setChangesModalNotice(`Erro: ${executionError}`)
-      setWriteNotice("⚠ Transação revertida · nenhuma alteração foi aplicada")
+      setWriteNotice(
+        executionFailure instanceof DatabaseMutationCommitUncertainError
+          ? "⚠ Commit incerto · recarregue antes de tentar novamente"
+          : "⚠ Transação revertida · nenhuma alteração foi aplicada",
+      )
     } finally {
       setWriteBusy(false)
     }
@@ -1529,9 +1541,10 @@ export function DatabaseViewer({
       return
     }
 
-    if (key.name === "<" || key.name === ">") {
+    const tableHistoryDirection = directionalShortcutDirection(key)
+    if (tableHistoryDirection) {
       key.preventDefault()
-      navigateTableHistory(key.name === "<" ? -1 : 1)
+      navigateTableHistory(tableHistoryDirection)
       return
     }
 
@@ -1560,7 +1573,7 @@ export function DatabaseViewer({
         setConnectionModalStartsInForm(false)
         setConnectionModalOpen(true)
         break
-      case "a":
+      case "w":
         key.preventDefault()
         openQueryWorkspace()
         break
@@ -1606,7 +1619,7 @@ export function DatabaseViewer({
       case "v":
         toggleSensitiveData()
         break
-      case "f":
+      case "o":
         if (view === "data" && selectedTable && pageData?.columns.length) {
           key.preventDefault()
           cycleTableSort()
@@ -1897,7 +1910,7 @@ export function DatabaseViewer({
             />
             <InlineButton
               id="tutorial-db-new-query"
-              label={sidebarWidth < 28 ? "[A] Query" : "[A] Criar query"}
+              label={sidebarWidth < 28 ? "[W] Query" : "[W] Criar query"}
               accent={COLORS.success}
               active={queryOpen}
               onPress={openQueryWorkspace}
@@ -1938,8 +1951,8 @@ export function DatabaseViewer({
                     borderColor: COLORS.border,
                   }}
                 >
-                  <InlineButton
-                    label="[<]"
+                  <DirectionalButton
+                    direction={-1}
                     accent={COLORS.database}
                     disabled={currentTableHistoryIndex <= 0}
                     onPress={() => navigateTableHistory(-1)}
@@ -1957,8 +1970,8 @@ export function DatabaseViewer({
                       />
                     )
                   })}
-                  <InlineButton
-                    label="[>]"
+                  <DirectionalButton
+                    direction={1}
                     accent={COLORS.database}
                     disabled={
                       currentTableHistoryIndex < 0 ||
@@ -2035,10 +2048,10 @@ export function DatabaseViewer({
                       id="database-table-sort"
                       label={
                         compactActions
-                          ? `[F]${activeTableQuery.sort?.direction === "asc" ? "↑" : activeTableQuery.sort ? "↓" : "↕"}`
+                          ? `[O]${activeTableQuery.sort?.direction === "asc" ? "↑" : activeTableQuery.sort ? "↓" : "↕"}`
                           : activeTableQuery.sort
-                            ? `[F] ${translateUi("Ordem")} ${truncateDisplay(activeTableQuery.sort.column, 10)} ${activeTableQuery.sort.direction === "asc" ? "↑" : "↓"}`
-                            : `[F] ${translateUi("Ordem normal")}`
+                            ? `[O] ${translateUi("Ordem")} ${truncateDisplay(activeTableQuery.sort.column, 10)} ${activeTableQuery.sort.direction === "asc" ? "↑" : "↓"}`
+                            : `[O] ${translateUi("Ordem normal")}`
                       }
                       accent={COLORS.database}
                       active={Boolean(activeTableQuery.sort)}

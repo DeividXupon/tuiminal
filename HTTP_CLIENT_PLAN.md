@@ -89,7 +89,11 @@ avançada e automação entram sobre essa fundação.
   `@insecure-tls` e cURL `--insecure` também estão completos. TLS inseguro exige
   aprovação por target/ambiente/sessão na TUI ou `--allow-insecure-tls` no modo
   headless. A auditoria de carga confirmou cancelamento do stream no limite de
-  1,5 MB e motivou um preview nativo limitado a 50 mil caracteres.
+  1,5 MB e motivou um preview nativo limitado a 50 mil caracteres. Abrir no
+  desktop ficou restrito a PNG/JPEG/GIF/WebP/BMP com MIME e assinatura
+  compatíveis; SVG, PDF, binário genérico e MIME forjado só podem ser salvos.
+  Download completo reenvia apenas GET, limita 256 MB, recusa status não 2xx e
+  remove o arquivo parcial em cancelamento, stream ou disco com falha.
 - **Fase 4 — concluída no escopo atual:** Postman/OpenAPI com preview, assertions, chaining,
   extrações secretas voláteis, runner TUI com dataset/concorrência e CLI
   text/JSON/JUnit estão implementados. O envio individual usa o mesmo motor e
@@ -465,7 +469,7 @@ fileira com dois níveis de navegação misturados.
 ### Anatomia persistente
 
 ```text
- GET listar usuários ● ×   POST criar usuário ×   [+]
+ GET listar usuários ● ×   POST criar usuário ×   [Ctrl+N]
  GET ▾  https://api.exemplo.com/users/{{id}}   ambiente: dev ▾   [S] Enviar
  ─────────────────────────────────────────────────────────────────────────────
  área adaptativa: navegação | request | response
@@ -510,7 +514,7 @@ tabelas e headers. Ele aproveita terminais ultrawide sem produzir linhas JSON
 excessivamente longas.
 
 ```text
- GET listar ● ×   POST criar ×   [+]
+ GET listar ● ×   POST criar ×   [Ctrl+N]
  GET ▾  https://api.exemplo.com/users/{{id}}      dev ▾       [S] Enviar
 ┌ NAVEGAÇÃO ─────────┬ REQUEST ─────────────────┬ RESPONSE ───────────────────┐
 │ Coleção  Histórico │ Params Headers Body Auth │ 200 OK · total 143 ms       │
@@ -537,7 +541,7 @@ excessivamente longas.
 e dá largura integral ao conteúdo do request/response.
 
 ```text
- GET listar ● ×   POST criar ×   [+]
+ GET listar ● ×   POST criar ×   [Ctrl+N]
  GET ▾  https://api.exemplo.com/users/{{id}}   dev ▾   [S] Enviar
 ┌ NAVEGAÇÃO ─────────┬ REQUEST · Params Headers Body Auth Mais ───────────────┐
 │ Coleção  Histórico │ key/value, editor ou formulário da seção               │
@@ -561,7 +565,7 @@ sem desmontar os editores. Request e response continuam simultâneos enquanto a
 altura útil respeitar os mínimos.
 
 ```text
- GET listar ● ×   [+]
+ GET listar ● ×   [Ctrl+N]
  GET ▾  http://localhost:3000/users   dev ▾   [S] Enviar
  [C] Coleção  [Y] Histórico
  REQUEST · Params Headers Body Auth Mais
@@ -579,7 +583,7 @@ altura útil respeitar os mínimos.
 ### Mínimo: um pane por vez
 
 ```text
- GET listar ● ×   [+]
+ GET listar ● ×   [Ctrl+N]
  GET ▾  http://localhost:3000/users
  dev ▾                                      [S] Enviar
  [C] Coleção   [1] Request   [2] Response
@@ -616,8 +620,22 @@ mantém um primeiro nível estável e move o restante para contexto:
 
 ### Foco, navegação e mouse
 
-- `[Tab]`/`[Shift+Tab]` percorrem regiões na ordem visual; setas percorrem controles
-  dentro da região. Campos de texto mantêm navegação nativa.
+- `[Tab]`/`[Shift+Tab]` percorrem as quatro regiões na ordem estável
+  `rota → coleção → request → response`; `[H/L]` e, fora da árvore JSON,
+  `[←/→]` oferecem a mesma troca rápida. `[Tab]` sai deliberadamente de inputs do
+  HTTP, enquanto as demais teclas de texto mantêm a edição nativa.
+- Com o request focado e nenhum editor possuindo o teclado, `[A←]`/`[F→]` ciclam
+  `Params → Headers → Body → Auth → Mais`. Os controles equivalentes aparecem apenas
+  nesse foco e a troca mantém o teclado no pane para permitir ciclos consecutivos.
+- Faixas horizontais dentro da seção atual usam `[Z←]`/`[V→]`: tipos de Body,
+  tipos de Auth, subseções de request `Mais` e de response `Mais`. A faixa primária
+  da resposta usa `[A←]`/`[F→]`. Nenhum desses atalhos atravessa um editor focado.
+- Em Params, `[J/K]` ou `[↑/↓]` alterna o subpainel focado entre Query Params e
+  Path Params. Somente o subpainel focado mostra e aceita `[N] Adicionar`.
+- No Pretty de um JSON válido e limitado, `[↑/↓]` ou `[J/K]` percorrem blocos,
+  `[←/→]` recolhem ou expandem o bloco atual e `[Enter]` alterna seu estado. O
+  caminho selecionado e os blocos recolhidos pertencem ao documento e não alteram
+  o body capturado.
 - `[Ctrl+O]` abre jump mode sobre panes e ações, como no Posting, mas os targets usam
   a mesma letra em todos os breakpoints.
 - Um atalho global não ganha significado local diferente. Se houver conflito, a ação
@@ -676,8 +694,13 @@ ser documentados quando tiverem controle de mouse equivalente e teste de propaga
 | Enviar | `[S]` fora de inputs; `[Ctrl+Enter]` em qualquer editor |
 | Cancelar | `[X]` durante execução |
 | Próximo/anterior método | `[M]` / `[Shift+M]` |
-| Params / Headers / Body / Auth / Mais | `[P]` / `[H]` / `[B]` / `[A]` / `[O]` |
-| Alternar views do response | `[V]` |
+| Alternar rota / coleção / request / response | `[Tab]` / `[Shift+Tab]` ou `[H/L]` |
+| Ciclar Params / Headers / Body / Auth / Mais no request focado | `[A←]` / `[F→]` |
+| Ciclar uma faixa horizontal interna | `[Z←]` / `[V→]` |
+| Alternar Query Params / Path Params | `[J/K]` ou `[↑/↓]` |
+| Adicionar no subpainel focado | `[N]` |
+| Alternar views primárias do response | `[A←]` / `[F→]` |
+| Navegar / recolher / expandir blocos JSON | `[↑/↓]` ou `[J/K]` / `[←/→]` / `[Enter]` |
 | Buscar no response focado | `[Ctrl+F]` |
 | Abrir coleção | `[C]` |
 | Abrir/fechar histórico | `[Y]` |
@@ -1024,6 +1047,9 @@ Requisitos obrigatórios antes de persistência ou import:
   coleção, salvo aprovação explícita para arquivo externo;
 - nunca escrever auth, cookie, query sensível ou body cru em log de erro;
 - exports com segredo são redigidos por padrão; revelar/exportar requer ação clara;
+- abrir a resposta no handler do sistema exige allowlist de imagem raster e magic
+  bytes compatíveis; SVG, PDF e MIME/extensão conflitantes nunca são abertos
+  diretamente. Salvar continua uma ação separada;
 - scripts importados permanecem desabilitados. Futuro scripting deve usar processo
   ou worker isolado, timeout, limite de memória, API reduzida e permissões declaradas;
 - TLS inseguro aparece em vermelho e exige confirmação por target/ambiente;
@@ -1043,8 +1069,9 @@ Requisitos obrigatórios antes de persistência ou import:
 - preservar seleção absoluta, scroll e split em resize;
 - descoberta de `.http` ignora árvores pesadas e é incremental;
 - watchers são encerrados ao trocar raiz/fechar aplicação;
-- body completo maior que o limite pode ser salvo por streaming em arquivo `0600`
-  escolhido pelo usuário, sem ficar inteiro em memória.
+- body completo maior que o limite de captura pode ser salvo por streaming em
+  arquivo `0600`, até 256 MB, sem ficar inteiro em memória. Somente GET é reenviado
+  explicitamente; status não 2xx, cancelamento e erro removem o `.part`.
 
 ## Plano de entrega
 

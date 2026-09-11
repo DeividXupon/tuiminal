@@ -193,7 +193,12 @@ test("direct query preserves the composite key from result through staging, revi
   const change = staged[0]
   if (!change) throw new Error("Missing staged change")
   await applyTableMutations(change.connectionId, [
-    { table: change.table, columns: change.columns, mutation: change.mutation },
+    {
+      table: change.table,
+      columns: change.columns,
+      mutation: change.mutation,
+      originalRow: change.originalRow,
+    },
   ])
   const database = new Database(filename, { readonly: true })
   expect(database.query("SELECT * FROM users").all()).toEqual([

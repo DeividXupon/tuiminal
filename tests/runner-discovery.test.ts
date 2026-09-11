@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -14,6 +14,7 @@ describe("runner project detection", () => {
   beforeAll(() => {
     projectRoot = mkdtempSync(join(tmpdir(), "tuiminal-runner-test-"))
     mkdirSync(join(projectRoot, ".git"))
+    writeFileSync(join(projectRoot, ".git", "HEAD"), "ref: refs/heads/main\n")
     writeFileSync(join(projectRoot, "bun.lock"), "")
     writeFileSync(
       join(projectRoot, "package.json"),
@@ -79,13 +80,25 @@ describe("runner project detection", () => {
     const unrelated = mkdtempSync(join(tmpdir(), "tuiminal-no-project-"))
     try {
       const context = await resolveRunnerProjectContext(unrelated)
-      expect(context?.root).not.toBe(unrelated)
-      if (context) {
-        expect(context.commands).toEqual([])
-        expect(existsSync(join(context.root, ".git"))).toBe(true)
-      }
+      expect(context).toBeNull()
+      expect(resolveRunnerSessionScope(unrelated)).toBe(unrelated)
     } finally {
       rmSync(unrelated, { recursive: true, force: true })
+    }
+  })
+
+  test("ignores an empty .git marker in an ancestor", async () => {
+    const ancestor = mkdtempSync(join(tmpdir(), "tuiminal-invalid-git-"))
+    const nested = join(ancestor, "service")
+    try {
+      mkdirSync(join(ancestor, ".git"))
+      mkdirSync(nested)
+      writeFileSync(join(nested, "package.json"), JSON.stringify({ scripts: { dev: "vite" } }))
+
+      expect(resolveRunnerSessionScope(nested)).toBe(nested)
+      expect(await resolveRunnerProjectContext(nested)).toMatchObject({ root: nested })
+    } finally {
+      rmSync(ancestor, { recursive: true, force: true })
     }
   })
 })

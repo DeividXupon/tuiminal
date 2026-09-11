@@ -102,6 +102,16 @@ export type DatabaseMutationPreview = {
   parameters: unknown[]
 }
 
+export type DatabaseMutationBatchResult = {
+  plannedStatements: number
+  sentStatements: number
+  matchedRows: number
+  affectedRows: number | null
+  confirmedRows: number
+  noOpStatements: number
+  transactional: true
+}
+
 export type DatabaseQueryResult = {
   command: string
   mutating: boolean

@@ -4,20 +4,13 @@ export const RUNNER_HISTORY_VISIBLE_ITEMS = 8
 
 export function runnerProjectPickerShortcut(key: {
   name: string
-  sequence?: string
-  raw?: string
   shift?: boolean
   ctrl?: boolean
   meta?: boolean
   super?: boolean
 }) {
-  if (key.ctrl || key.meta || key.super) return false
-  return (
-    key.name === "+" ||
-    key.sequence === "+" ||
-    key.raw === "+" ||
-    (key.shift === true && key.name === "=")
-  )
+  if (key.ctrl || key.shift || key.meta || key.super) return false
+  return key.name.toLowerCase() === "n"
 }
 
 type RunnerDirectionKey = "left" | "right" | "up" | "down" | "h" | "j" | "k" | "l"

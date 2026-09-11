@@ -68,6 +68,14 @@ A06 nem a fronteira de filesystem A09.
 - Quatro modos responsivos, builder e response simultâneos, seis tabs, split,
   maximização, jump mode e método customizado.
 - Params, Headers, Body, Auth e Mais conectados ao draft.
+- Com o request focado, `[A←]`/`[F→]` ciclam Params, Headers, Body, Auth e Mais sem
+  entregar o foco ao editor; os controles contextuais somem fora desse pane e as
+  tabs não possuem atalhos diretos.
+- Rota, coleção, request e response são regiões de foco explícitas. `[Tab]`,
+  `[Shift+Tab]` e `[H/L]` percorrem a ordem de leitura sem depender do mouse.
+- O Pretty de JSON usa um documento estilizado único com seleção estrutural por
+  JSON Pointer. `[↑/↓]` ou `[J/K]` percorrem objetos/arrays, `[←/→]` os
+  recolhem/expandem e `[Enter]` alterna o bloco, sem modificar a resposta bruta.
 - Preview da requisição preparada mostra origem dos valores e mascara segredos.
 - Saída do aplicativo confirma drafts HTTP ainda não salvos.
 - A matriz automatizada cobre `60x16`, `72x18`, `80x24`, `96x24`, `120x30` e
@@ -120,6 +128,12 @@ preview e serialização completos.
 
 - Busca e folding, JSONPath, copiar/salvar, resposta binária, redirect, cookies,
   timing, histórico opt-in, comparação e download completo.
+- O botão `[O]` chama o handler externo somente para PNG/JPEG/GIF/WebP/BMP quando
+  MIME e magic bytes concordam. SVG, PDF, binário genérico e conteúdo disfarçado
+  permanecem bloqueados; o usuário ainda pode salvar explicitamente o arquivo.
+- Download completo é um novo GET explícito, nunca repete POST, recusa status não
+  2xx e arquivos acima de 256 MB. Cancelamento, stream interrompido ou erro de
+  disco removem o temporário antes de retornar falha.
 - `[C]` em Opções inclui ou ignora o cookie jar por request. O estado aparece no
   preview, faz round-trip por `# @no-cookie-jar` e, quando desativado, não lê cookies
   nem incorpora `Set-Cookie` da resposta.

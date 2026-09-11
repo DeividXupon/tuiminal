@@ -3,7 +3,7 @@ export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "O
 export type HttpMethod = (typeof HTTP_METHODS)[number] | (string & {})
 export type HttpLayoutMode = "panorama" | "workbench" | "focus" | "minimum"
 export type HttpClientUrlRequest = { id: number; url: string }
-export type HttpPane = "navigation" | "request" | "response"
+export type HttpPane = "url" | "navigation" | "request" | "response"
 export type HttpNavigationView = "collection" | "history"
 export type HttpRequestView = "params" | "headers" | "body" | "auth" | "more"
 export type HttpRequestMoreView = "options" | "assertions" | "chaining" | "preview"
@@ -25,15 +25,7 @@ export type HttpWorkspaceOverlay =
   | "workspace-settings"
   | "insecure-tls-confirmation"
   | null
-export type HttpJumpTarget =
-  | "url"
-  | "params"
-  | "headers"
-  | "body"
-  | "auth"
-  | "response"
-  | "collection"
-  | "history"
+export type HttpJumpTarget = "url" | "response" | "collection" | "history"
 export type HttpBodyKind = "none" | "json" | "text" | "xml" | "form" | "multipart" | "file"
 export type HttpResponseBodyKind = "text" | "json" | "xml" | "html" | "binary"
 export type HttpFailureKind =
@@ -232,6 +224,8 @@ export type HttpDocumentState = {
     wrap: boolean
     lineNumbers: boolean
     foldDepth: number | null
+    jsonSelectedPath: string | null
+    jsonCollapsedPaths: string[]
     searchOpen: boolean
     searchQuery: string
     searchMatchIndex: number

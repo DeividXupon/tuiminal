@@ -240,11 +240,11 @@ export const GIT_PR_DETAIL_MESSAGES = [
     "[J/K] 탐색/스크롤  [[]/[]] Hunk  [H/L] 포커스  [V] 모드  [Y] 경로 복사  [Esc] 돌아가기",
   ],
   [
-    "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [D] Diff  [?] Ações",
-    "[J/K] Navigate  [H/L] Focus  [</>] Section  [[]/[]] Tab  [D] Diff  [?] Actions",
-    "[J/K] Navegar  [H/L] Foco  [</>] Sección  [[]/[]] Pestaña  [D] Diff  [?] Acciones",
-    "[J/K] 移動  [H/L] フォーカス  [</>] セクション  [[]/[]] タブ  [D] Diff  [?] 操作",
-    "[J/K] 导航  [H/L] 焦点  [</>] 分区  [[]/[]] 标签  [D] Diff  [?] 操作",
-    "[J/K] 탐색  [H/L] 포커스  [</>] 섹션  [[]/[]] 탭  [D] Diff  [?] 작업",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [D] Diff  [?] Ações",
+    "[J/K] Navigate  [H/L] Focus  [A←] [F→] Section  [Z←] [V→] Tab  [D] Diff  [?] Actions",
+    "[J/K] Navegar  [H/L] Foco  [A←] [F→] Sección  [Z←] [V→] Pestaña  [D] Diff  [?] Acciones",
+    "[J/K] 移動  [H/L] フォーカス  [A←] [F→] セクション  [Z←] [V→] タブ  [D] Diff  [?] 操作",
+    "[J/K] 导航  [H/L] 焦点  [A←] [F→] 分区  [Z←] [V→] 标签  [D] Diff  [?] 操作",
+    "[J/K] 탐색  [H/L] 포커스  [A←] [F→] 섹션  [Z←] [V→] 탭  [D] Diff  [?] 작업",
   ],
 ] as const

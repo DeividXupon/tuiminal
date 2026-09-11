@@ -15,6 +15,10 @@ fixtures e um `gh` falso; nenhuma issue, credencial ou configuração pessoal re
 - Issues independe de checkout, exceto para criar/abrir uma branch.
 - O transporte autenticado é GitHub CLI 2.40.0 ou mais recente. O Tuiminal não lê
   nem persiste tokens.
+- Se `gh` estiver ausente ou antigo, a tela compartilhada explica o CLI, mostra o
+  comando detectado e só abre seu instalador PTY após `[I]` ou clique. A versão é
+  validada ao final e Issues recarrega automaticamente; autenticação permanece
+  uma etapa separada com `gh auth login`.
 
 Referências públicas usadas:
 
@@ -41,6 +45,8 @@ O layout completo está em
 - Composição lado a lado, empilhada ou painel único conforme o terminal.
 - `[P]` mostra/oculta; `[Shift+P]` alterna posição automática, direita e abaixo.
 - Todos os controles de teclado relevantes possuem alvo de mouse.
+- `[A←]` e `[F→]` circulam pelas seções com os mesmos controles visíveis usados
+  em PR e Inbox.
 - Chegar à última issue dispara a próxima página e mostra o loader na lista.
 - O intervalo configurado renova todas as seções e a profundidade já carregada
   sem apagar os dados visíveis; o editor de query oferece autocomplete contextual
@@ -73,7 +79,7 @@ igual ao padrão antigo; qualquer personalização é preservada.
 | Abrir | `[O]` | `gh issue view … --web` |
 | Copiar número/URL | `[Y]` / `[Shift+Y]` | OSC52 |
 | Comentar | `[C]` | `gh issue comment … --body-file -` |
-| Atribuir/desatribuir | `[A]` / `[Shift+A]` | `gh issue edit` |
+| Atribuir/desatribuir | menu `[?]` → `[A]` / `[Shift+A]` | `gh issue edit` |
 | Editar labels | `[Shift+L]` | deltas `--add-label/--remove-label` |
 | Branch e checkout | `[Shift+C]` | `gh issue develop … --checkout` |
 | Fechar/reabrir | `[X]` / `[Shift+X]` | `gh issue close/reopen` |
@@ -81,12 +87,16 @@ igual ao padrão antigo; qualquer personalização é preservada.
 Toda escrita segue `preparar → reautenticar → reler → executar uma vez → reler e
 reconciliar`. A preparação fixa host, node ID, repositório, número, estado,
 `updatedAt`, identidade e geração da autenticação. Mudanças invalidam a operação
-antes do envio. Timeout/cancelamento após despacho é incerto e nunca gera retry.
+antes do envio. Timeout, cancelamento ou excesso de saída após despacho é incerto
+e nunca gera retry.
 
 Conteúdo autoral vai por stdin e argumentos usam `execFile`, sem shell. Labels e
 responsáveis partem dos detalhes completos, não do resumo limitado da busca. O
-checkout valida raiz real, remote, host/repositório, worktree limpa e ausência de
-merge/rebase em andamento; não há clone automático.
+checkout valida raiz canônica, remote, host/repositório, worktree limpa,
+index/gitdir legíveis e ausência de merge/rebase em andamento; erro/timeout de
+probe falha fechado. A guarda é compartilhada com PR, serializa pelo clone,
+revalida imediatamente antes do despacho e confere a pós-condição. Não há clone
+automático, stash, reset, clean ou repetição automática.
 
 ## Persistência, limites e evidência
 
@@ -109,7 +119,7 @@ Qualquer alteração de consultas, ações, atalhos, confirmação, persistênci
 limites deve atualizar este documento, o design e os testes correspondentes.
 
 Em 2026-09-08, os gerenciadores locais divergentes e os atalhos `[Ctrl+E]`, `[S]`
-e `[+]` foram substituídos pelo modal contextual unificado de `[,]`. A aba
+foram substituídos pelo modal contextual unificado de `[,]`. A aba
 Repositórios passou a carregar todos os projetos acessíveis e a oferecer `TODOS`.
 O carregamento inicial e o de detalhes usam o plasma ASCII compartilhado com
 texto de estado e dissolução curta; paginação e refresh preservam o indicador
@@ -118,3 +128,10 @@ inline para não cobrir issues já utilizáveis.
 Em 2026-09-09, o padrão inicial foi reduzido ao seletor inglês `My Issues`. A
 migração reconhece somente o conjunto legado intacto, sem sobrescrever seletores
 editados pelo usuário.
+
+Em 2026-09-10, o checkout passou a usar a guarda fail-closed compartilhada com
+PR, com cobertura de clone limpo/sujo, linked worktree, metadata inválida,
+timeout, alteração durante a confirmação e serialização. Fixtures `gh` também
+confirmam que timeout, saída excessiva e reconciliação ausente permanecem
+incertos e despacham a escrita no máximo uma vez; nenhuma ação remota real foi
+executada.

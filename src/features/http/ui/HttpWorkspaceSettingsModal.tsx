@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, panelBorder } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
-import { COMMON_HTTP_HEADER_NAMES } from "../model/key-value"
+import {
+  COMMON_HTTP_HEADER_NAMES,
+  createHttpKeyValueEntry,
+  httpKeyValueTextInputOwnsKeyboard,
+} from "../model/key-value"
 import type { HttpKeyValue } from "../model/types"
 import type { HttpWorkspaceConfig } from "../storage/config"
 import type { HttpEnvironment } from "../storage/environments"
@@ -57,6 +61,7 @@ function toggleHistoryBodies(config: HttpWorkspaceConfig): HttpWorkspaceConfig {
 }
 
 type WorkspaceSettingsCommand =
+  | "add-header"
   | "close"
   | "cycle-environment"
   | "cycle-redirects"
@@ -67,14 +72,23 @@ type WorkspaceSettingsCommand =
   | "toggle-metadata"
 
 function resolveWorkspaceSettingsCommand(
-  event: { name: string; ctrl?: boolean },
+  event: {
+    name: string
+    ctrl?: boolean
+    shift?: boolean
+    option?: boolean
+    meta?: boolean
+  },
   focusedId: string,
 ): WorkspaceSettingsCommand {
-  if (focusedId.startsWith("http-key-value-")) {
+  if (httpKeyValueTextInputOwnsKeyboard(focusedId)) {
     return event.ctrl && event.name === "s" ? "save" : "ignore"
   }
   if (event.name === "escape") return "close"
   if (event.ctrl && event.name === "s") return "save"
+  if (event.name === "n" && !event.ctrl && !event.shift && !event.option && !event.meta) {
+    return "add-header"
+  }
   return (
     (
       {
@@ -192,9 +206,20 @@ export function HttpWorkspaceSettingsModal({
   const toggleBodies = useCallback(() => setConfig(toggleHistoryBodies), [])
 
   const handleKey = useCallback(
-    (event: { name: string; ctrl?: boolean; preventDefault(): void; stopPropagation(): void }) => {
+    (event: {
+      name: string
+      ctrl?: boolean
+      shift?: boolean
+      option?: boolean
+      meta?: boolean
+      preventDefault(): void
+      stopPropagation(): void
+    }) => {
       const focused = renderer.currentFocusedRenderable?.id ?? ""
       switch (resolveWorkspaceSettingsCommand(event, focused)) {
+        case "add-header":
+          setHeaders((current) => [...current, createHttpKeyValueEntry("workspace-header")])
+          break
         case "close":
           onClose()
           break

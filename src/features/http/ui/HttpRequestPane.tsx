@@ -4,10 +4,9 @@ import {
   type ScrollBoxRenderable,
   type TextareaRenderable,
 } from "@opentui/core"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { COLORS, focusedPanelBorder, LAYOUT } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
-import { InlineButton } from "../../../shared/ui/InlineButton"
 import type {
   HttpAuth,
   HttpAssertionDefinition,
@@ -20,52 +19,15 @@ import type {
   HttpRequestMoreView,
 } from "../model/types"
 import { COMMON_HTTP_HEADER_NAMES } from "../model/key-value"
+import type { HttpParameterSection } from "../model/parameter-navigation"
 import type { HttpPreparedRequestPreview } from "../services/request-preview"
 import { HttpAuthEditor } from "./HttpAuthEditor"
 import { HttpKeyValueEditor } from "./HttpKeyValueEditor"
 import { HttpMultipartEditor } from "./HttpMultipartEditor"
 import { HttpOpaqueRequestContent } from "./HttpOpaqueRequestContent"
 import { HttpRequestMoreEditor } from "./HttpRequestMoreEditor"
-
-function requestViewLabel(view: HttpRequestView, narrow = false) {
-  if (narrow) {
-    return { params: "[P]", headers: "[H]", body: "[B]", auth: "[A]", more: "[O]" }[view]
-  }
-  switch (view) {
-    case "params":
-      return "[P] Parâmetros"
-    case "headers":
-      return "[H] Headers"
-    case "body":
-      return "[B] Body"
-    case "auth":
-      return "[A] Autenticação"
-    case "more":
-      return "[O] Mais"
-  }
-}
-
-function BodyKindButtons({
-  kind,
-  onChange,
-}: {
-  kind: HttpBodyKind
-  onChange: (kind: HttpBodyKind) => void
-}) {
-  return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-      {(["none", "json", "text", "xml", "form", "multipart", "file"] as const).map((candidate) => (
-        <InlineButton
-          key={candidate}
-          label={candidate === "none" ? "Nenhum" : candidate.toUpperCase()}
-          accent={COLORS.http}
-          active={kind === candidate}
-          onPress={() => onChange(candidate)}
-        />
-      ))}
-    </box>
-  )
-}
+import { HttpBodyKindButtons, HttpRequestPaneKeyboard } from "./HttpRequestPaneControls"
+import { HttpRequestViewTabs } from "./HttpRequestViewTabs"
 
 function RequestPaneTitle({ dirty }: { dirty: boolean }) {
   return (
@@ -126,7 +88,7 @@ export function HttpRequestPane({
   registerHeaderInput: (input: InputRenderable | null) => void
   registerBodyEditor: (editor: TextareaRenderable | null) => void
   registerRawScroll: (scroll: ScrollBoxRenderable | null) => void
-  onSelectView: (view: HttpRequestView) => void
+  onSelectView: (view: HttpRequestView, focusControl?: boolean) => void
   onSelectMoreView: (view: HttpRequestMoreView) => void
   onQueryChange: (entries: HttpKeyValue[]) => void
   onPathChange: (entries: HttpKeyValue[]) => void
@@ -153,12 +115,18 @@ export function HttpRequestPane({
 }) {
   const bodyEditorRef = useRef<TextareaRenderable | null>(null)
   const fileInputRef = useRef<InputRenderable | null>(null)
+  const [parameterSection, setParameterSection] = useState<HttpParameterSection>("query")
   const request = document.request
   const dirty = document.revision !== document.savedRevision
-  const dense = position.height < 10
+  const dense = position.height <= 10
   const bodyDisabled = request.body.kind === "none"
   const textBody =
     request.body.kind === "json" || request.body.kind === "text" || request.body.kind === "xml"
+
+  const focusParameterSection = (section: HttpParameterSection) => {
+    onFocus()
+    setParameterSection(section)
+  }
 
   if (request.source.kind === "file" && request.source.supported === false) {
     return (
@@ -201,29 +169,25 @@ export function HttpRequestPane({
         overflow: "hidden",
       }}
     >
+      {visible && focused ? (
+        <HttpRequestPaneKeyboard
+          document={document}
+          parameterSection={parameterSection}
+          onParameterSectionChange={setParameterSection}
+          onQueryChange={onQueryChange}
+          onPathChange={onPathChange}
+          onHeadersChange={onHeadersChange}
+          onBodyFormChange={onBodyFormChange}
+          onBodyMultipartChange={onBodyMultipartChange}
+        />
+      ) : null}
       {dense ? null : <RequestPaneTitle dirty={dirty} />}
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          backgroundColor: COLORS.panelRaised,
-          overflow: "hidden",
-        }}
-      >
-        {(["params", "headers", "body", "auth", "more"] as const).map((view) => (
-          <InlineButton
-            key={view}
-            label={requestViewLabel(view, position.width < 80)}
-            accent={COLORS.http}
-            active={document.requestView === view}
-            onPress={() => {
-              onFocus()
-              onSelectView(view)
-            }}
-          />
-        ))}
-      </box>
+      <HttpRequestViewTabs
+        current={document.requestView}
+        focused={focused}
+        onFocus={onFocus}
+        onSelect={onSelectView}
+      />
       <box style={{ flexGrow: 1, position: "relative", backgroundColor: COLORS.canvas }}>
         <box
           visible={document.requestView === "params"}
@@ -235,6 +199,9 @@ export function HttpRequestPane({
             entries={request.query}
             onChange={onQueryChange}
             dense={dense}
+            showAddAction={focused && parameterSection === "query"}
+            sectionFocused={focused && parameterSection === "query"}
+            onSectionFocus={() => focusParameterSection("query")}
           />
           <HttpKeyValueEditor
             idPrefix={`${request.id}-path`}
@@ -242,6 +209,9 @@ export function HttpRequestPane({
             entries={request.path}
             onChange={onPathChange}
             dense={dense}
+            showAddAction={focused && parameterSection === "path"}
+            sectionFocused={focused && parameterSection === "path"}
+            onSectionFocus={() => focusParameterSection("path")}
           />
         </box>
         <box
@@ -257,13 +227,18 @@ export function HttpRequestPane({
             detectSensitiveNames
             nameSuggestions={COMMON_HTTP_HEADER_NAMES}
             dense={dense}
+            showAddAction={focused}
           />
         </box>
         <box
           visible={document.requestView === "body"}
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
         >
-          <BodyKindButtons kind={request.body.kind} onChange={onBodyKindChange} />
+          <HttpBodyKindButtons
+            kind={request.body.kind}
+            focused={focused}
+            onChange={onBodyKindChange}
+          />
           <textarea
             ref={(editor) => {
               bodyEditorRef.current = editor
@@ -297,6 +272,7 @@ export function HttpRequestPane({
               entries={request.body.form}
               onChange={onBodyFormChange}
               dense={dense}
+              showAddAction={focused}
             />
           </box>
           <box visible={request.body.kind === "multipart"} style={{ flexGrow: 1 }}>
@@ -304,6 +280,7 @@ export function HttpRequestPane({
               requestId={request.id}
               parts={request.body.multipart ?? []}
               onChange={onBodyMultipartChange}
+              active={visible && focused}
             />
           </box>
           <box visible={request.body.kind === "file"} style={{ flexGrow: 1, paddingTop: 1 }}>
@@ -348,7 +325,12 @@ export function HttpRequestPane({
           visible={document.requestView === "auth"}
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
         >
-          <HttpAuthEditor requestId={request.id} auth={request.auth} onChange={onAuthChange} />
+          <HttpAuthEditor
+            requestId={request.id}
+            auth={request.auth}
+            focused={focused}
+            onChange={onAuthChange}
+          />
         </box>
         <box
           visible={document.requestView === "more"}
@@ -364,6 +346,7 @@ export function HttpRequestPane({
           <HttpRequestMoreEditor
             document={document}
             dense={dense}
+            focused={focused}
             onSelectView={onSelectMoreView}
             onNameChange={onNameChange}
             onMethodChange={onMethodChange}

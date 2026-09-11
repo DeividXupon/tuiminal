@@ -10,8 +10,13 @@ import type {
 } from "../model/types"
 import { bunRuntime } from "./pty-runtime"
 import { activeProcesses } from "./process-registry"
-
-const RUNNER_PROCESS_STOP_GRACE_MS = 1_000
+import { RUNNER_LOG_ENTRY_MAX_CHARS } from "../rendering/log-document"
+import {
+  forceKillOwnedProcessTree,
+  OWNED_PROCESS_STOP_DEADLINE_MS,
+  OWNED_PROCESS_STOP_GRACE_MS,
+  processStopDeadlineError,
+} from "../../../core/process/owned-process"
 
 export function signalProcess(child: ChildProcess, signal: NodeJS.Signals) {
   if (!child.pid) return
@@ -36,16 +41,30 @@ export function pipeLines(
   if (!source) return
   source.setEncoding("utf8")
   let pending = ""
+  const emitBounded = (line: string) => {
+    const marker = "… [linha dividida]"
+    const chunkSize = RUNNER_LOG_ENTRY_MAX_CHARS - marker.length
+    let remaining = line
+    while (remaining.length > RUNNER_LOG_ENTRY_MAX_CHARS) {
+      const chunk = remaining.slice(0, chunkSize)
+      remaining = remaining.slice(chunkSize)
+      callback(stripVTControlCharacters(`${chunk}${marker}`), stream)
+    }
+    if (remaining) callback(stripVTControlCharacters(remaining), stream)
+  }
   const flush = (includePending: boolean) => {
     const normalized = pending.replace(/\r(?!\n)/g, "\n")
     const lines = normalized.split("\n")
-    pending = includePending ? "" : (lines.pop() ?? "")
-    for (const line of lines) {
-      if (line) callback(stripVTControlCharacters(line), stream)
-    }
-    if (includePending && pending) {
-      callback(stripVTControlCharacters(pending), stream)
-      pending = ""
+    const tail = lines.pop() ?? ""
+    pending = includePending ? "" : tail
+    for (const line of lines) emitBounded(line)
+    if (includePending) emitBounded(tail)
+    while (!includePending && pending.length > RUNNER_LOG_ENTRY_MAX_CHARS) {
+      const marker = "… [linha dividida]"
+      const chunkSize = RUNNER_LOG_ENTRY_MAX_CHARS - marker.length
+      const chunk = pending.slice(0, chunkSize)
+      pending = pending.slice(chunkSize)
+      callback(stripVTControlCharacters(`${chunk}${marker}`), stream)
     }
   }
   source.on("data", (chunk: string) => {
@@ -78,6 +97,10 @@ export function startRunnerProcess(
     let closed = false
     let exited = false
     let forceStopTimer: ReturnType<typeof setTimeout> | null = null
+    let stopDeadlineTimer: ReturnType<typeof setTimeout> | null = null
+    let stopPromise: Promise<void> | null = null
+    let resolveStop: (() => void) | null = null
+    let rejectStop: ((error: Error) => void) | null = null
     let handle: RunnerProcessHandle
     const subprocess = bunRuntime.spawn([command.program, ...command.args], {
       cwd: workingDirectory,
@@ -132,8 +155,13 @@ export function startRunnerProcess(
         if (!closed) terminal.write(data)
       },
       stop() {
-        if (stopped || closed) return
+        if (exited) return Promise.resolve()
+        if (stopPromise) return stopPromise
         stopped = true
+        stopPromise = new Promise<void>((resolve, reject) => {
+          resolveStop = resolve
+          rejectStop = reject
+        })
         try {
           terminal.write("\u0003")
         } catch {
@@ -142,15 +170,26 @@ export function startRunnerProcess(
         signalSubprocess("SIGTERM")
         forceStopTimer = setTimeout(() => {
           forceStopTimer = null
-          if (!exited) signalSubprocess("SIGKILL")
-        }, RUNNER_PROCESS_STOP_GRACE_MS)
-        closeTerminal()
+          if (!exited) {
+            forceKillOwnedProcessTree(subprocess.pid, () => signalSubprocess("SIGKILL"))
+          }
+        }, OWNED_PROCESS_STOP_GRACE_MS)
+        stopDeadlineTimer = setTimeout(() => {
+          stopDeadlineTimer = null
+          if (!exited) {
+            rejectStop?.(processStopDeadlineError("Runner", subprocess.pid))
+            rejectStop = null
+            resolveStop = null
+          }
+        }, OWNED_PROCESS_STOP_DEADLINE_MS)
+        return stopPromise
       },
     }
     activeProcesses.add(handle)
     void subprocess.exited.then((code) => {
       exited = true
       if (forceStopTimer) clearTimeout(forceStopTimer)
+      if (stopDeadlineTimer) clearTimeout(stopDeadlineTimer)
       activeProcesses.delete(handle)
       closeTerminal()
       callbacks.onExit({
@@ -158,6 +197,9 @@ export function startRunnerProcess(
         signal: subprocess.signalCode as NodeJS.Signals | null,
         stopped,
       })
+      resolveStop?.()
+      resolveStop = null
+      rejectStop = null
     })
     return handle
   }
@@ -165,6 +207,10 @@ export function startRunnerProcess(
   let stopped = false
   let exited = false
   let forceStopTimer: ReturnType<typeof setTimeout> | null = null
+  let stopDeadlineTimer: ReturnType<typeof setTimeout> | null = null
+  let stopPromise: Promise<void> | null = null
+  let resolveStop: (() => void) | null = null
+  let rejectStop: ((error: Error) => void) | null = null
   const child = spawn(command.program, command.args, {
     cwd: workingDirectory,
     env: environment,
@@ -178,13 +224,29 @@ export function startRunnerProcess(
       if (!exited && child.stdin?.writable) child.stdin.write(data)
     },
     stop() {
-      if (exited || stopped) return
+      if (exited) return Promise.resolve()
+      if (stopPromise) return stopPromise
       stopped = true
+      stopPromise = new Promise<void>((resolve, reject) => {
+        resolveStop = resolve
+        rejectStop = reject
+      })
       signalProcess(child, "SIGTERM")
       forceStopTimer = setTimeout(() => {
         forceStopTimer = null
-        if (!exited) signalProcess(child, "SIGKILL")
-      }, RUNNER_PROCESS_STOP_GRACE_MS)
+        if (!exited && child.pid) {
+          forceKillOwnedProcessTree(child.pid, () => signalProcess(child, "SIGKILL"))
+        }
+      }, OWNED_PROCESS_STOP_GRACE_MS)
+      stopDeadlineTimer = setTimeout(() => {
+        stopDeadlineTimer = null
+        if (!exited) {
+          rejectStop?.(processStopDeadlineError("Runner", child.pid ?? 0))
+          rejectStop = null
+          resolveStop = null
+        }
+      }, OWNED_PROCESS_STOP_DEADLINE_MS)
+      return stopPromise
     },
   }
   activeProcesses.add(handle)
@@ -197,13 +259,20 @@ export function startRunnerProcess(
   child.once("close", (code, signal) => {
     exited = true
     if (forceStopTimer) clearTimeout(forceStopTimer)
+    if (stopDeadlineTimer) clearTimeout(stopDeadlineTimer)
     activeProcesses.delete(handle)
     callbacks.onExit({ code, signal, stopped })
+    resolveStop?.()
+    resolveStop = null
+    rejectStop = null
   })
   return handle
 }
 
-export function stopAllRunnerProcesses() {
-  for (const handle of [...activeProcesses]) handle.stop()
-  activeProcesses.clear()
+export async function stopAllRunnerProcesses() {
+  const results = await Promise.allSettled([...activeProcesses].map((handle) => handle.stop()))
+  const failures = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  )
+  if (failures.length) throw new AggregateError(failures, "Falha ao encerrar processos do Runner.")
 }

@@ -48,7 +48,7 @@ export function HttpTutorialDemo() {
           accent={COLORS.http}
           onPress={noop}
         />
-        <InlineButton label="[+]" accent={COLORS.http} onPress={noop} />
+        <InlineButton label="[Ctrl+N]" accent={COLORS.http} onPress={noop} />
       </box>
       <box
         id="tutorial-http-omnibar"
@@ -93,16 +93,14 @@ export function HttpTutorialDemo() {
           >
             <text content={translateUi("REQUISIÇÃO")} style={{ fg: COLORS.http }} />
             <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-              {["[P] Parâmetros", "[H] Headers", "[B] Body", "[A] Autenticação", "[O] Mais"].map(
-                (label) => (
-                  <InlineButton
-                    key={label}
-                    label={translateUi(label)}
-                    accent={COLORS.http}
-                    onPress={noop}
-                  />
-                ),
-              )}
+              {["Parâmetros", "Headers", "Body", "Autenticação", "Mais"].map((label) => (
+                <InlineButton
+                  key={label}
+                  label={translateUi(label)}
+                  accent={COLORS.http}
+                  onPress={noop}
+                />
+              ))}
             </box>
             <text content="id = 42" style={{ fg: COLORS.text }} />
             <text content="Accept: application/json" style={{ fg: COLORS.text }} />

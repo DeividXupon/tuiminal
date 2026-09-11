@@ -8,6 +8,8 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
+import { httpJsonTreeForDocument } from "./model/json-tree"
+import { applyHttpViewKeyboardCommand } from "./model/workspace-keyboard-actions"
 import type {
   HttpAuth,
   HttpBodyKind,
@@ -56,6 +58,7 @@ import { HttpTutorialDemo } from "./tutorial/HttpTutorialDemo"
 import { useNotificationFromValue } from "../../shared/notifications/index"
 import { useHttpExecutionNotifications } from "./hooks/use-http-execution-notifications"
 import { ensureHttpRendererListenerBudget } from "./model/renderer-listener-budget"
+import { useHttpJsonTree } from "./hooks/use-http-json-tree"
 
 type HttpClientProps = {
   active: boolean
@@ -99,6 +102,7 @@ function HttpInteractiveClient({
   const activeDocument =
     state.documents.find((document) => document.request.id === state.activeDocumentId) ??
     state.documents[0]
+  const activeJsonTree = useHttpJsonTree(activeDocument)
   useNotificationFromValue(notice, { source: "HTTP" })
   useHttpExecutionNotifications(state.documents)
   const httpProject = useHttpProject(httpRequestFilePath(activeDocument?.request))
@@ -120,6 +124,7 @@ function HttpInteractiveClient({
   })
   const responseTools = useHttpResponse({
     documents: state.documents,
+    activeRequest: activeDocument?.request,
     environmentName: activeEnvironmentName,
     clipboard: renderer,
     setNotice,
@@ -214,7 +219,7 @@ function HttpInteractiveClient({
     activeEnvironmentName,
     variablesForRequest,
     historyTools,
-    cookieJar: responseTools.cookieJar,
+    cookieJarForRequest: responseTools.cookieJarForRequest,
     responseCompleted: responseTools.responseCompleted,
     isInsecureTlsApproved: tlsApprovals.isApproved,
     refsFor,
@@ -234,8 +239,10 @@ function HttpInteractiveClient({
       dispatch({ type: "add-document", request: item.request })
       setTimeout(() => {
         if (isOpaqueHttpRequest(item.request)) {
+          dispatch({ type: "select-pane", pane: "request" })
           refsFor(item.request.id).raw?.focus()
         } else {
+          dispatch({ type: "select-pane", pane: "url" })
           urlRef.current?.focus()
         }
       }, 0)
@@ -262,7 +269,6 @@ function HttpInteractiveClient({
     refsFor,
     urlRef,
     dispatch,
-    selectRequestView: requestEditing.selectRequestView,
   })
   const collectionImport = useHttpCollectionImport({
     root: HTTP_WORKING_DIRECTORY,
@@ -282,24 +288,51 @@ function HttpInteractiveClient({
 
   useKeyboard((key) => {
     if (!active || !activeDocument || redirectApprovals.pending) return
+    const currentState = stateRef.current
+    const currentDocument =
+      currentState.documents.find(
+        (document) => document.request.id === currentState.activeDocumentId,
+      ) ?? currentState.documents[0]
+    if (!currentDocument) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
-    const documentId = activeDocument.request.id
+    const documentId = currentDocument.request.id
+    const currentJsonTree = httpJsonTreeForDocument(currentDocument)
     const command = resolveHttpKeyboardCommand({
       key,
       focusedId,
-      navigationOpen: state.navigationOpen,
-      running: activeDocument.execution.status === "running",
+      navigationOpen: currentState.navigationOpen,
+      running: currentDocument.execution.status === "running",
       minimum: layout.mode === "minimum",
-      activePane: state.activePane,
-      overlay: state.overlay,
-      navigationView: state.navigationView,
-      requestView: activeDocument.requestView,
-      requestMoreView: activeDocument.requestMoreView,
+      activePane: currentState.activePane,
+      overlay: currentState.overlay,
+      navigationView: currentState.navigationView,
+      requestView: currentDocument.requestView,
+      requestMoreView: currentDocument.requestMoreView,
+      responseView: currentDocument.responseView,
+      responseMoreView: currentDocument.responsePresentation.moreView,
+      responseJsonTree: currentJsonTree !== null,
     })
     if (command.kind === "none" || command.kind === "ignore") return
     key.preventDefault()
     key.stopPropagation()
     if (requestEditing.applyOptionCommand(command.kind)) return
+    if (
+      applyHttpViewKeyboardCommand({
+        command,
+        state: currentState,
+        document: currentDocument,
+        renderer,
+        dispatch,
+        blurDocumentControls,
+        focusUrl: () => urlRef.current?.focus(),
+        responseTarget: () => refsFor(documentId).response,
+        selectRequestView: requestEditing.selectRequestView,
+        selectRequestMoreView: requestEditing.selectRequestMoreView,
+        addAutomationRow: requestEditing.addAutomationRow,
+      })
+    ) {
+      return
+    }
 
     switch (command.kind) {
       case "blur-url":
@@ -361,11 +394,11 @@ function HttpInteractiveClient({
         dispatch({
           type: "set-split-ratio",
           documentId,
-          ratio: resizeHttpSplitRatio(activeDocument.splitRatio, command.direction),
+          ratio: resizeHttpSplitRatio(currentDocument.splitRatio, command.direction),
         })
         return
       case "toggle-maximize": {
-        const pane = state.activePane === "response" ? "response" : "request"
+        const pane = currentState.activePane === "response" ? "response" : "request"
         dispatch({ type: "select-pane", pane })
         dispatch({ type: "toggle-maximize", documentId, pane })
         return
@@ -379,8 +412,8 @@ function HttpInteractiveClient({
         dispatch({ type: "open-overlay", overlay: command.overlay })
         return
       case "close-overlay":
-        if (state.overlay === "collection-runner") collectionRunner.cancel()
-        if (state.overlay === "discard-document") cancelPendingClose()
+        if (currentState.overlay === "collection-runner") collectionRunner.cancel()
+        if (currentState.overlay === "discard-document") cancelPendingClose()
         requestPersistence.cancelExternalConflict()
         closeOverlay()
         return
@@ -399,13 +432,13 @@ function HttpInteractiveClient({
         setTimeout(() => refsFor(documentId).response?.focus(), 0)
         return
       case "apply-overlay":
-        if (state.overlay === "curl-import") applyCurlImport()
-        else if (state.overlay === "collection-import") void collectionImport.apply()
-        else if (state.overlay === "collection-runner") void collectionRunner.run()
-        else if (state.overlay === "discard-document") {
+        if (currentState.overlay === "curl-import") applyCurlImport()
+        else if (currentState.overlay === "collection-import") void collectionImport.apply()
+        else if (currentState.overlay === "collection-runner") void collectionRunner.run()
+        else if (currentState.overlay === "discard-document") {
           confirmCloseDocument()
           closeOverlay()
-        } else void requestFiles.apply(state.overlay)
+        } else void requestFiles.apply(currentState.overlay)
         return
       case "toggle-import-format":
         collectionImport.cycleFormat()
@@ -427,26 +460,6 @@ function HttpInteractiveClient({
       case "jump":
         jumpTo(command.target)
         return
-      case "focus-url":
-        urlRef.current?.focus()
-        return
-      case "request-view":
-        requestEditing.selectRequestView(documentId, command.view)
-        return
-      case "request-more-view":
-        requestEditing.selectRequestMoreView(documentId, command.view)
-        return
-      case "add-automation-row":
-        requestEditing.addAutomationRow()
-        return
-      case "cycle-response": {
-        const views = ["pretty", "raw", "headers", "timing", "more"] as const
-        const current = views.indexOf(activeDocument.responseView)
-        const view = views[(current + 1) % views.length]
-        if (view) dispatch({ type: "select-response-view", documentId, view })
-        dispatch({ type: "select-pane", pane: "response" })
-        return
-      }
       case "navigation":
         toggleNavigation(command.view)
         return
@@ -479,10 +492,12 @@ function HttpInteractiveClient({
       />
       <HttpOmnibar
         request={activeDocument.request}
+        focused={state.activePane === "url"}
         twoRows={layout.omnibarRows === 2}
         running={running}
         readOnly={isOpaqueHttpRequest(activeDocument.request)}
         urlRef={urlRef}
+        onFocus={() => dispatch({ type: "select-pane", pane: "url" })}
         onUrlChange={(url) =>
           dispatch({
             type: "update-request",
@@ -644,6 +659,7 @@ function HttpInteractiveClient({
         narrow={layout.mode === "minimum" || layout.mode === "focus"}
         document={activeDocument}
         activePane={state.activePane}
+        responseJsonTree={state.activePane === "response" && activeJsonTree !== null}
         dispatch={dispatch}
         onJump={() => {
           blurDocumentControls()

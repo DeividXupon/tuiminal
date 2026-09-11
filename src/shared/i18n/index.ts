@@ -2,11 +2,13 @@ import stringWidth from "string-width"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
+import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
+import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
 import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
@@ -25,6 +27,7 @@ import {
   HTTP_WORKSPACE_SETTINGS_PATTERNS,
 } from "./http-workspace-settings-catalog"
 import { NOTIFICATION_MESSAGES, NOTIFICATION_PATTERNS } from "./notification-catalog"
+import { RUNNER_TRUST_MESSAGES } from "./runner-trust-catalog"
 
 export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko"
 
@@ -90,6 +93,8 @@ type Message = readonly [
 
 const MESSAGES: readonly Message[] = [
   ...DATABASE_PRIVACY_MESSAGES,
+  ...RUNNER_TRUST_MESSAGES,
+  ...GIT_CLI_INSTALLER_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [
@@ -1111,12 +1116,12 @@ const MESSAGES: readonly Message[] = [
     "최대 6개의 독립 편집기와 결과가 있는 SQL 작업 공간을 엽니다. 자동 완성, 즐겨찾기, 기록은 현재 연결별로 관리됩니다.",
   ],
   [
-    "[A] abre · [Ctrl+A] executa somente o comando atual",
-    "[A] opens · [Ctrl+A] runs only the current statement",
-    "[A] abre · [Ctrl+A] ejecuta solo la sentencia actual",
-    "[A] 開く・[Ctrl+A] 現在の文だけを実行",
-    "[A] 打开 · [Ctrl+A] 仅执行当前语句",
-    "[A] 열기 · [Ctrl+A] 현재 구문만 실행",
+    "[W] abre · [Ctrl+A] executa somente o comando atual",
+    "[W] opens · [Ctrl+A] runs only the current statement",
+    "[W] abre · [Ctrl+A] ejecuta solo la sentencia actual",
+    "[W] 開く・[Ctrl+A] 現在の文だけを実行",
+    "[W] 打开 · [Ctrl+A] 仅执行当前语句",
+    "[W] 열기 · [Ctrl+A] 현재 구문만 실행",
   ],
   [
     "Tabelas abertas",
@@ -1135,12 +1140,12 @@ const MESSAGES: readonly Message[] = [
     "중복 없이 최대 6개의 테이블을 열어 둡니다. 테이블을 다시 열면 기존 탭에 포커스합니다.",
   ],
   [
-    "Atalhos: [<] e [>]",
-    "Shortcuts: [<] and [>]",
-    "Atajos: [<] y [>]",
-    "ショートカット: [<] と [>]",
-    "快捷键：[<] 和 [>]",
-    "단축키: [<] 및 [>]",
+    "Atalhos: [A←] e [F→]",
+    "Shortcuts: [A←] and [F→]",
+    "Atajos: [A←] y [F→]",
+    "ショートカット: [A←] と [F→]",
+    "快捷键：[A←] 和 [F→]",
+    "단축키: [A←] 및 [F→]",
   ],
   [
     "DADOS · FILTRO",
@@ -1159,12 +1164,12 @@ const MESSAGES: readonly Message[] = [
     "정렬 및 검색",
   ],
   [
-    "[F] alterna a coluna ativa entre ordem normal, crescente e decrescente. [S] busca um texto em todas as colunas.",
-    "[F] cycles the active column through normal, ascending, and descending order. [S] searches text across all columns.",
-    "[F] alterna la columna activa entre orden normal, ascendente y descendente. [S] busca texto en todas las columnas.",
-    "[F]で現在の列を通常・昇順・降順に切り替えます。[S]ですべての列から文字列を検索します。",
-    "[F] 在当前列的默认、升序和降序之间切换。[S] 在所有列中搜索文本。",
-    "[F]로 현재 열을 기본, 오름차순, 내림차순으로 전환합니다. [S]는 모든 열에서 텍스트를 검색합니다.",
+    "[O] alterna a coluna ativa entre ordem normal, crescente e decrescente. [S] busca um texto em todas as colunas.",
+    "[O] cycles the active column through normal, ascending, and descending order. [S] searches text across all columns.",
+    "[O] alterna la columna activa entre orden normal, ascendente y descendente. [S] busca texto en todas las columnas.",
+    "[O]で現在の列を通常・昇順・降順に切り替えます。[S]ですべての列から文字列を検索します。",
+    "[O] 在当前列的默认、升序和降序之间切换。[S] 在所有列中搜索文本。",
+    "[O]로 현재 열을 기본, 오름차순, 내림차순으로 전환합니다. [S]는 모든 열에서 텍스트를 검색합니다.",
   ],
   [
     "A ordenação e a busca ficam isoladas por conexão e tabela.",
@@ -1262,7 +1267,7 @@ const MESSAGES: readonly Message[] = [
     "在更改写入数据库前，移除当前行或所选行集合的待处理更改。",
     "데이터베이스에 반영되기 전에 현재 행 또는 선택한 행의 준비된 변경을 제거합니다.",
   ],
-  ["[A] Query", "[A] Query", "[A] Consulta", "[A] クエリ", "[A] 查询", "[A] 쿼리"],
+  ["[W] Query", "[W] Query", "[W] Consulta", "[W] クエリ", "[W] 查询", "[W] 쿼리"],
   [
     "6 registros · 3 alterações",
     "6 records · 3 changes",
@@ -2089,12 +2094,12 @@ const MESSAGES: readonly Message[] = [
   ["Ordem normal", "Normal order", "Orden normal", "通常の順序", "正常顺序", "기본 순서"],
   ["Buscar", "Search", "Buscar", "検索", "搜索", "검색"],
   [
-    "[F] Ordem normal",
-    "[F] Normal order",
-    "[F] Orden normal",
-    "[F] 通常の順序",
-    "[F] 正常顺序",
-    "[F] 기본 순서",
+    "[O] Ordem normal",
+    "[O] Normal order",
+    "[O] Orden normal",
+    "[O] 通常の順序",
+    "[O] 正常顺序",
+    "[O] 기본 순서",
   ],
   ["[S] Buscar", "[S] Search", "[S] Buscar", "[S] 検索", "[S] 搜索", "[S] 검색"],
   ["[S] Busca", "[S] Search", "[S] Buscar", "[S] 検索", "[S] 搜索", "[S] 검색"],
@@ -2213,12 +2218,12 @@ const MESSAGES: readonly Message[] = [
     "[C] 새 연결 / 연결 관리",
   ],
   [
-    "[A] Criar query",
-    "[A] New query",
-    "[A] Crear consulta",
-    "[A] クエリを作成",
-    "[A] 新建查询",
-    "[A] 쿼리 만들기",
+    "[W] Criar query",
+    "[W] New query",
+    "[W] Crear consulta",
+    "[W] クエリを作成",
+    "[W] 新建查询",
+    "[W] 쿼리 만들기",
   ],
   [
     "[Ctrl+A] Executar",
@@ -2687,12 +2692,12 @@ const MESSAGES: readonly Message[] = [
     "활성 연결의 SQL 편집기를 열고 중앙 영역에 결과를 표시합니다.",
   ],
   [
-    "Atalhos: [A] abre · [Ctrl+A] executa",
-    "Shortcuts: [A] opens · [Ctrl+A] runs",
-    "Atajos: [A] abre · [Ctrl+A] ejecuta",
-    "ショートカット: [A]で開く・[Ctrl+A]で実行",
-    "快捷键：[A] 打开 · [Ctrl+A] 执行",
-    "단축키: [A] 열기 · [Ctrl+A] 실행",
+    "Atalhos: [W] abre · [Ctrl+A] executa",
+    "Shortcuts: [W] opens · [Ctrl+A] runs",
+    "Atajos: [W] abre · [Ctrl+A] ejecuta",
+    "ショートカット: [W]で開く・[Ctrl+A]で実行",
+    "快捷键：[W] 打开 · [Ctrl+A] 执行",
+    "단축키: [W] 열기 · [Ctrl+A] 실행",
   ],
   ["Testar", "Test", "Probar", "テスト", "测试", "테스트"],
   ["Testando…", "Testing…", "Probando…", "テスト中…", "正在测试…", "테스트 중…"],
@@ -4567,12 +4572,12 @@ const MESSAGES: readonly Message[] = [
     "이 세션에 실행 기록이 없습니다.",
   ],
   [
-    "[+] EXECUTAR EM OUTRO PROJETO…",
-    "[+] RUN IN ANOTHER PROJECT…",
-    "[+] EJECUTAR EN OTRO PROYECTO…",
-    "[+] 別のプロジェクトで実行…",
-    "[+] 在其他项目中运行…",
-    "[+] 다른 프로젝트에서 실행…",
+    "[N] EXECUTAR EM OUTRO PROJETO…",
+    "[N] RUN IN ANOTHER PROJECT…",
+    "[N] EJECUTAR EN OTRO PROYECTO…",
+    "[N] 別のプロジェクトで実行…",
+    "[N] 在其他项目中运行…",
+    "[N] 다른 프로젝트에서 실행…",
   ],
   [
     "Escolher outra pasta",
@@ -4947,12 +4952,12 @@ const MESSAGES: readonly Message[] = [
   ],
   ["[P] Projeto", "[P] Project", "[P] Proyecto", "[P] プロジェクト", "[P] 项目", "[P] 프로젝트"],
   [
-    "[+] Escolher projeto",
-    "[+] Choose project",
-    "[+] Elegir proyecto",
-    "[+] プロジェクトを選択",
-    "[+] 选择项目",
-    "[+] 프로젝트 선택",
+    "[N] Escolher projeto",
+    "[N] Choose project",
+    "[N] Elegir proyecto",
+    "[N] プロジェクトを選択",
+    "[N] 选择项目",
+    "[N] 프로젝트 선택",
   ],
   [
     "Nenhum projeto encontrado nesta pasta.",
@@ -5051,6 +5056,7 @@ const MESSAGES: readonly Message[] = [
 
   // Cliente HTTP.
   ...HTTP_MESSAGES,
+  ...HTTP_NAVIGATION_MESSAGES,
   ...HTTP_REDIRECT_MESSAGES,
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,

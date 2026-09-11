@@ -32,7 +32,7 @@ export const HTTP_TUTORIAL_STEPS = [
     title: "Builder progressivo",
     description:
       "Params, headers, body e autenticação ficam disponíveis sem retirar espaço da URL e da resposta.",
-    hint: "[P/H/B/A/O] abre Params, Headers, Body, Auth e Mais",
+    hint: "[A←]/[F→] percorre Params, Headers, Body, Auth e Mais no request focado",
     kind: "block",
   },
   {
@@ -41,7 +41,7 @@ export const HTTP_TUTORIAL_STEPS = [
     title: "Opções, assertions e chaining",
     description:
       "Mais mostra a preparação exata, dependências e extrações. Segredos ficam redigidos e valores extraídos podem ser voláteis.",
-    hint: "[1/2/3/4] navega · TLS inseguro sempre pede confirmação",
+    hint: "[Z←]/[V→] navega · TLS inseguro sempre pede confirmação",
     kind: "control",
   },
   {
@@ -50,7 +50,7 @@ export const HTTP_TUTORIAL_STEPS = [
     title: "Resposta inspecionável",
     description:
       "Status, headers, timing, busca, JSONPath e truncamento permanecem explícitos em qualquer composição responsiva.",
-    hint: "[V] muda visão · [Ctrl+F] busca · [F10] maximiza",
+    hint: "[A←]/[F→] muda visão · [Ctrl+F] busca · [F10] maximiza",
     kind: "block",
   },
 ] as const

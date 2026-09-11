@@ -70,7 +70,7 @@ inconsistência como medida confirmada; os critérios do Tuiminal estão abaixo.
 | Prévia à direita/embaixo | Acrescentar modo de painel único quando duas áreas não tiverem espaço útil. |
 | Overview, Checks e Activity | Usar Visão geral, Checks e Atividade; acrescentar Commits e Arquivos para o escopo solicitado. |
 | Busca por filtros GitHub | Acrescentar edição e salvamento de seções pela interface. |
-| Atalhos de ações familiares | Manter H/L para foco entre painéis, conforme convenção do Tuiminal; seções usam `<`/`>`. |
+| Atalhos de ações familiares | Manter H/L para foco entre painéis, conforme convenção do Tuiminal; seções usam `A←`/`F→`. |
 | Sinais compactos de revisão/CI | Sempre fornecer texto/legenda e estado desconhecido, além de cor. |
 | Ajuda contextual | Painel organizado por navegação, leitura e escrita, com clique nas ações. |
 
@@ -88,7 +88,7 @@ imagens oficiais. Medidas finais precisam ser verificadas no renderizador nativo
 ```text
 ◆ TUIMINAL    [Alt+1] Banco  [Alt+2] Git  [Alt+3] Runner  [Alt+4] HTTP  [Alt+5] Terminal   [,] Config
 GIT  [1] Diffs  [2] PR  [3] Issues                 github.com · @usuario
- [<]  My PRs 12  │  Review requested 4  [>] [+]
+ [A←]  My PRs 12  │  Review requested 4  [F→] [N]
 [/] is:open review-requested:@me             Escopo: todos os projetos da conta
 ───────────────────────────────────────────┬──────────────────────────────────
    Repo       PR / Título          Rev CI ± │ equipe/api #142
@@ -115,7 +115,7 @@ Busca, título e tabs não devem reservar várias linhas vazias.
 
 ```text
 GIT [1] Diffs [2] PR [3] Issues             github.com · @usuario
-[<] My PRs 12 │ Review requested 4 [>] [+]
+[A←] My PRs 12 │ Review requested 4 [F→] [N]
 [/] is:open review-requested:@me
    Repo      PR / Título                         Rev CI
 ▶  api       #142 Corrigir cache                  ?   ×
@@ -132,7 +132,7 @@ Descrição…                     Revisores e code owners…
 
 ```text
 GIT [1] Diffs [2] PR [3] Issues
-[<] Review requested · 4 [>] [+]
+[A←] Review requested · 4 [F→] [N]
 [/] review-requested:@me
 ▶ #142 Corrigir cache
   equipe/api · @ana · CI falhou
@@ -239,7 +239,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Contexto | Tecla | Ação |
 | --- | --- | --- |
 | Git sem editor/modal | `[1]` / `[2]` / `[3]` | Diffs / PR / Issues. Preservar estado ao alternar. |
-| PR sem editor/modal | `[<]` / `[>]` | Seção anterior / seguinte. |
+| PR sem editor/modal | `[A←]` / `[F→]` | Seção anterior / seguinte. |
 | Lista | `[j/↓]` / `[k/↑]` | PR seguinte / anterior. |
 | Lista | `[g/Home]` / `[Shift+G/End]` | Primeiro / último PR carregado; indicar paginação. |
 | Lista | `[l/→]` / `[Enter]` | Abrir e focar prévia. |
@@ -248,7 +248,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Painéis | `[Tab]` / `[Shift+Tab]` | Percorrer regiões focáveis; inputs mantêm navegação própria. |
 | Prévia fora de editor | `[Ctrl+D]` / `[Ctrl+U]` | Paginar conteúdo. Não enviar formulários. |
 | PR fora de editor | `[p]` / `[Shift+P]` | Alternar prévia / posição da prévia. |
-| Prévia | `[[]` / `[]]` | Aba interna anterior / seguinte (teclas `[` / `]`). |
+| Prévia | `[Z←]` / `[V→]` | Aba interna anterior / seguinte. |
 | Visão geral | `[e]` | Expandir/recolher descrição completa. |
 | PR | `[/]` | Editar busca; `[Enter]` aplica, `[Esc]` desfoca. |
 | PR | `[r]` | Atualizar a seção ativa, preservando seleção por identidade. |
@@ -257,7 +257,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Commits | `[y]` | Copiar SHA completo do commit selecionado; rodapé muda o rótulo. |
 | PR/arquivo/commit | `[d]` | Abrir o diff correspondente ao contexto. |
 | PR | `[Shift+C]` | Preparar checkout local. |
-| PR | `[a]` / `[Shift+A]` | Adicionar / remover responsáveis. |
+| Menu `[?]` | `[a]` / `[Shift+A]` | Adicionar / remover responsáveis sem conflitar com a navegação de seções. |
 | PR | `[c]` / `[v]` | Comentar / aprovar com comentário editável. |
 | PR | `[w]` | Alternar acompanhamento de CI. |
 | Checks | `[Ctrl+A]` | Revisar workflows elegíveis para autorização. |
@@ -269,7 +269,7 @@ Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem
 | Camada local | `[Esc]` | Desfocar, fechar camada e devolver foco; nunca atravessar camadas. |
 
 Diferença deliberada: gh-dash usa H/L para seções; aqui usamos H/L para foco e
-`<`/`>` para seções, coerente com o Tuiminal. Esta especificação permanece
+`A←`/`F→` para seções, coerente com o Tuiminal. Esta especificação permanece
 limitada a PR; `[3] Issues` é descrito em `git-issues-interface.md`. Ações só
 operam no PR ativo, não em seleção em lote.
 
@@ -278,6 +278,17 @@ responsável não dispara mutações. Expor todas as operações pelo menu `[?]`
 Atalho indisponível não executa nada e informa a razão. No input, `[1]`, `[2]`, `[3]`,
 `[q]`, letras, pontuação, `[Ctrl+A]` e `[Alt+1]`–`[Alt+5]` permanecem sob o
 controle do editor, não da navegação global.
+
+### 6.1. Requisito do GitHub CLI
+
+Quando `gh` não existe ou é anterior a 2.40.0, o dashboard troca seu corpo por
+uma composição responsiva: explicação e tutorial à esquerda, mini terminal à
+direita; em terminais estreitos os blocos são empilhados. O comando oficial
+detectado fica visível antes da execução. `[I]` ou clique inicia o gerenciador
+conhecido em PTY, permitindo responder ao próprio sistema quando ele solicitar
+elevação; `[Esc]` libera o foco do terminal. A saída bem-sucedida dispara nova
+detecção e recarga automática. O fluxo não inicia `gh auth login`, não persiste
+entrada do PTY e encerra apenas o processo que ele próprio criou ao desmontar.
 
 ## 7. Estados que precisam de tela própria
 
@@ -364,3 +375,10 @@ refresh automático, pois o conteúdo anterior continua utilizável nesses casos
 
 Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
 atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.
+
+Desde 2026-09-10, checkout de PR e Issue compartilha uma guarda pelo clone
+canônico. Falha/timeout de status ou metadata Git, index/gitdir inválido,
+operação em andamento e qualquer alteração ocorrida durante a confirmação
+bloqueiam o despacho. O clone é inspecionado novamente depois da única chamada ao
+`gh`; pós-condição ilegível e limite de saída depois do despacho são estados
+incertos, nunca um convite a repetir automaticamente.

@@ -32,6 +32,7 @@ import {
   moveHttpRequest,
   saveHttpRequest,
   scanHttpProject,
+  HTTP_PROJECT_MAX_FILES,
   watchHttpProject,
 } from "../src/features/http/storage/collections"
 import {
@@ -344,6 +345,18 @@ describe(".http project model", () => {
     expect(collection.files[0]?.requests).toHaveLength(2)
   })
 
+  test("stops project discovery at its aggregate file budget", async () => {
+    const root = await temporaryProject()
+    await Promise.all(
+      Array.from({ length: HTTP_PROJECT_MAX_FILES + 5 }, (_, index) =>
+        writeFile(resolve(root, `request-${index}.http`), `GET https://example.test/${index}\n`),
+      ),
+    )
+    const collection = await scanHttpProject(root)
+    expect(collection.files).toHaveLength(HTTP_PROJECT_MAX_FILES)
+    expect(collection.errors.some((error) => error.message.includes("500 arquivos"))).toBe(true)
+  })
+
   test("starts watching project directories created after initialization", async () => {
     const root = await temporaryProject()
     let changes = 0
@@ -386,6 +399,16 @@ describe(".http project model", () => {
         "utf8",
       ),
     ).toContain("List users copy")
+  })
+
+  test("refuses scratch writes through a symlinked project ancestor", async () => {
+    const root = await temporaryProject()
+    const outside = await temporaryProject()
+    await symlink(outside, resolve(root, ".tuiminal"))
+    const scratch = importCurl("curl https://example.test/users", "scratch")
+
+    await expect(saveHttpRequest(root, scratch)).rejects.toThrow(/symlink|fora do projeto/i)
+    expect(await Bun.file(resolve(outside, "http", "scratch.http")).exists()).toBe(false)
   })
 
   test("previews and resolves external edits without overwriting sibling blocks", async () => {

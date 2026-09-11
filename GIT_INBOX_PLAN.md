@@ -19,6 +19,10 @@ altera o funcionamento offline de `[1] Diffs`. A interface detalhada está em
 - `[O]` abre o alvo exato; `[M]` marca como lida; `[B]` salva localmente; `[D]`
   conclui; `[U]` cancela a inscrição na conversa.
 - Concluir e cancelar inscrição abrem confirmação e só despacham uma vez.
+- `[A←]` e `[F→]` circulam pelas seções, também com controles de mouse.
+- A ausência/versão antiga do `gh` usa o instalador guiado compartilhado: comando
+  fixo visível, início explícito por `[I]`/clique, PTY interativo, validação e
+  recarga automática. Login GitHub não é iniciado nem capturado por esse fluxo.
 
 ## Segurança e persistência
 

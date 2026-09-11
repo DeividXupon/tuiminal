@@ -13,42 +13,7 @@ import type {
 import type { HttpPreparedRequestPreview as PreparedPreview } from "../services/request-preview"
 import { HttpPreparedRequestPreview } from "./HttpPreparedRequestPreview"
 import { HttpRequestChainingEditor } from "./HttpRequestChainingEditor"
-
-function MoreViewTabs({
-  view,
-  dense,
-  onChange,
-}: {
-  view: HttpRequestMoreView
-  dense: boolean
-  onChange: (view: HttpRequestMoreView) => void
-}) {
-  const buttons = (
-    [
-      ["options", "[1] Opções"],
-      ["assertions", "[2] Assertions"],
-      ["chaining", "[3] Chaining"],
-      ["preview", "[4] Preview"],
-    ] as const
-  ).map(([candidate, label]) => (
-    <InlineButton
-      key={candidate}
-      label={label}
-      accent={COLORS.http}
-      active={view === candidate}
-      onPress={() => onChange(candidate)}
-    />
-  ))
-  if (dense) {
-    return <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons}</box>
-  }
-  return (
-    <box style={{ height: 2, flexShrink: 0 }}>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons.slice(0, 2)}</box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>{buttons.slice(2)}</box>
-    </box>
-  )
-}
+import { HttpRequestMoreTabs } from "./HttpRequestMoreTabs"
 
 function RequestOptions({
   request,
@@ -141,7 +106,7 @@ function RequestOptions({
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton
           label={
-            request.options.noLog ? "[L] Histórico: não registrar" : "[L] Histórico: registrar"
+            request.options.noLog ? "[⇧L] Histórico: não registrar" : "[⇧L] Histórico: registrar"
           }
           accent={request.options.noLog ? COLORS.warning : COLORS.http}
           active={request.options.noLog === true}
@@ -151,8 +116,8 @@ function RequestOptions({
           id="http-request-tls-verification"
           label={
             request.options.tlsVerification === "insecure"
-              ? "[V] TLS INSEGURO"
-              : "[V] TLS: verificar"
+              ? "[Shift+V] TLS INSEGURO"
+              : "[Shift+V] TLS: verificar"
           }
           accent={request.options.tlsVerification === "insecure" ? COLORS.danger : COLORS.http}
           active={request.options.tlsVerification === "insecure"}
@@ -231,11 +196,13 @@ function RequestOptions({
 function AssertionsEditor({
   requestId,
   assertions,
+  focused,
   onChange,
   onFocus,
 }: {
   requestId: string
   assertions: HttpAssertionDefinition[]
+  focused: boolean
   onChange: (assertions: HttpAssertionDefinition[]) => void
   onFocus: () => void
 }) {
@@ -255,7 +222,14 @@ function AssertionsEditor({
           content={translateUi("ASSERTIONS DO REQUEST")}
           style={{ flexGrow: 1, fg: COLORS.text }}
         />
-        <InlineButton label="[N] Adicionar" accent={COLORS.http} onPress={add} />
+        {focused ? (
+          <InlineButton
+            id="http-assertion-add"
+            label="[N] Adicionar"
+            accent={COLORS.http}
+            onPress={add}
+          />
+        ) : null}
       </box>
       <text
         content={translateUi("Verifique status, headers, body ou JSONPath após cada execução.")}
@@ -318,6 +292,7 @@ function AssertionsEditor({
 export function HttpRequestMoreEditor({
   document,
   dense,
+  focused,
   onSelectView,
   onNameChange,
   onMethodChange,
@@ -334,6 +309,7 @@ export function HttpRequestMoreEditor({
 }: {
   document: { request: HttpRequestDefinition; requestMoreView: HttpRequestMoreView }
   dense: boolean
+  focused: boolean
   onSelectView: (view: HttpRequestMoreView) => void
   onNameChange: (name: string) => void
   onMethodChange: (method: string) => void
@@ -351,7 +327,12 @@ export function HttpRequestMoreEditor({
   const request = document.request
   return (
     <box style={{ flexGrow: 1 }}>
-      <MoreViewTabs view={document.requestMoreView} dense={dense} onChange={onSelectView} />
+      <HttpRequestMoreTabs
+        view={document.requestMoreView}
+        dense={dense}
+        focused={focused}
+        onChange={onSelectView}
+      />
       {document.requestMoreView === "options" ? (
         <RequestOptions
           request={request}
@@ -370,6 +351,7 @@ export function HttpRequestMoreEditor({
         <AssertionsEditor
           requestId={request.id}
           assertions={request.assertions ?? []}
+          focused={focused}
           onChange={onAssertionsChange}
           onFocus={onFocus}
         />
@@ -377,6 +359,7 @@ export function HttpRequestMoreEditor({
         <HttpRequestChainingEditor
           requestId={request.id}
           chain={request.chain ?? { extract: [] }}
+          focused={focused}
           onChange={onChainChange}
           onFocus={onFocus}
         />

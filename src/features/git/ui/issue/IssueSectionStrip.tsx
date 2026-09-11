@@ -1,5 +1,6 @@
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
+import { DirectionalButton } from "../../../../shared/ui/DirectionalButton"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import type { IssueSection } from "../../model/issue/types"
 
@@ -16,8 +17,8 @@ export function IssueSectionStrip({
 }) {
   return (
     <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-      <InlineButton
-        label="[<]"
+      <DirectionalButton
+        direction={-1}
         accent={COLORS.git}
         onPress={() => onSelect((activeIndex - 1 + sections.length) % sections.length)}
       />
@@ -31,8 +32,8 @@ export function IssueSectionStrip({
           onPress={() => onSelect(index)}
         />
       ))}
-      <InlineButton
-        label="[>]"
+      <DirectionalButton
+        direction={1}
         accent={COLORS.git}
         onPress={() => onSelect((activeIndex + 1) % sections.length)}
       />

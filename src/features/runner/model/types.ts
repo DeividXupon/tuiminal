@@ -50,7 +50,7 @@ export type RunnerProcessHandle = {
   pid: number | null
   interactive: boolean
   write: (data: string | Uint8Array) => void
-  stop: () => void
+  stop: () => Promise<void>
 }
 
 export type RunnerListeningPort = {

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import type { HttpResponseSnapshot, HttpWorkspaceOverlay } from "../src/features/http/model/types"
 import { resolveHttpKeyboardCommand } from "../src/features/http/model/keyboard"
+import { httpJsonTreeForDocument, updateHttpJsonTree } from "../src/features/http/model/json-tree"
+import { nextHttpPane } from "../src/features/http/model/pane-navigation"
 import { createHttpSuccessHistoryEntry } from "../src/features/http/model/history"
 import {
   cycleHttpRequestRedirects,
@@ -44,6 +46,63 @@ function response(executionId: string, requestId: string, requestRevision: numbe
 }
 
 describe("HTTP workspace state", () => {
+  test("cycles the four workspace regions in reading order", () => {
+    expect(nextHttpPane("url", 1)).toBe("navigation")
+    expect(nextHttpPane("navigation", 1)).toBe("request")
+    expect(nextHttpPane("request", 1)).toBe("response")
+    expect(nextHttpPane("response", 1)).toBe("url")
+    expect(nextHttpPane("url", -1)).toBe("response")
+  })
+
+  test("navigates and folds individual JSON blocks without changing the response", () => {
+    const request = createScratchRequest("json-tree")
+    let state = createHttpWorkspaceState(request)
+    const body = new TextEncoder().encode(
+      JSON.stringify({ user: { profile: { name: "Ada" } }, tags: ["one", "two"] }),
+    )
+    state.documents[0]!.execution = {
+      status: "success",
+      response: {
+        ...response("json", request.id, 0),
+        body,
+        bodyKind: "json",
+        contentType: "application/json",
+        capturedBytes: body.length,
+      },
+    }
+    let document = state.documents[0]!
+    let tree = httpJsonTreeForDocument(document)
+    expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/user/profile", "/tags"])
+    expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
+      '      "name": "Ada"',
+    )
+
+    const selected = updateHttpJsonTree(document, "next")
+    expect(selected?.jsonSelectedPath).toBe("/user")
+    document = {
+      ...document,
+      responsePresentation: { ...document.responsePresentation, ...selected },
+    }
+    const collapsed = updateHttpJsonTree(document, "collapse")
+    expect(collapsed?.jsonCollapsedPaths).toEqual(["/user"])
+    document = {
+      ...document,
+      responsePresentation: { ...document.responsePresentation, ...collapsed },
+    }
+    tree = httpJsonTreeForDocument(document)
+    expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/tags"])
+    expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
+      '  ▸ "user": {… 1},',
+    )
+    expect(
+      new TextDecoder().decode(
+        document.execution.status === "success"
+          ? document.execution.response.body
+          : new Uint8Array(),
+      ),
+    ).toContain('"profile"')
+  })
+
   test("limits the rendered preview of a large captured response", () => {
     const request = createScratchRequest("large-display")
     const state = createHttpWorkspaceState(request)
@@ -355,7 +414,7 @@ describe("HTTP workspace state", () => {
 
 describe("HTTP keyboard ownership", () => {
   const command = (
-    key: { name: string; ctrl?: boolean; option?: boolean },
+    key: { name: string; ctrl?: boolean; option?: boolean; shift?: boolean },
     focusedId = "",
     navigationOpen = false,
     overlay: HttpWorkspaceOverlay = null,
@@ -412,14 +471,212 @@ describe("HTTP keyboard ownership", () => {
     expect(command({ name: "e" })).toEqual({ kind: "open-environment-manager" })
   })
 
+  test("cycles panels from inputs and maps response JSON navigation contextually", () => {
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "tab" },
+        focusedId: "http-url-input",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "url",
+      }),
+    ).toEqual({ kind: "cycle-pane", direction: 1 })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "tab", shift: true },
+        focusedId: "http-body-editor-request",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "request",
+      }),
+    ).toEqual({ kind: "cycle-pane", direction: -1 })
+    for (const [name, direction] of [
+      ["h", -1],
+      ["l", 1],
+      ["left", -1],
+      ["right", 1],
+    ] as const) {
+      expect(
+        resolveHttpKeyboardCommand({
+          key: { name },
+          focusedId: "",
+          navigationOpen: false,
+          running: false,
+          minimum: false,
+          activePane: "request",
+        }),
+      ).toEqual({ kind: "cycle-pane", direction })
+    }
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "down" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "response",
+        responseJsonTree: true,
+      }),
+    ).toEqual({ kind: "response-json", action: "next" })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "right" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "response",
+        responseJsonTree: true,
+      }),
+    ).toEqual({ kind: "response-json", action: "expand" })
+  })
+
+  test("cycles all five request views only while the request pane owns the keyboard", () => {
+    for (const [name, requestView, view] of [
+      ["f", "params", "headers"],
+      ["f", "headers", "body"],
+      ["f", "body", "auth"],
+      ["f", "auth", "more"],
+      ["f", "more", "params"],
+      ["a", "params", "more"],
+      ["a", "more", "auth"],
+    ] as const) {
+      expect(
+        resolveHttpKeyboardCommand({
+          key: { name },
+          focusedId: "",
+          navigationOpen: false,
+          running: false,
+          minimum: false,
+          activePane: "request",
+          requestView,
+        }),
+      ).toEqual({ kind: "request-view", view })
+    }
+    for (const key of [{ name: "p" }, { name: "h", shift: true }, { name: "b" }, { name: "o" }]) {
+      expect(
+        resolveHttpKeyboardCommand({
+          key,
+          focusedId: "",
+          navigationOpen: false,
+          running: false,
+          minimum: false,
+          activePane: "request",
+          requestView: "params",
+        }),
+      ).toEqual({ kind: "none" })
+    }
+    for (const key of [
+      { name: "a", ctrl: true },
+      { name: "f", shift: true },
+      { name: "a", option: true },
+    ]) {
+      expect(
+        resolveHttpKeyboardCommand({
+          key,
+          focusedId: "",
+          navigationOpen: false,
+          running: false,
+          minimum: false,
+          activePane: "request",
+          requestView: "params",
+        }),
+      ).toEqual({ kind: "none" })
+    }
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "f" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "response",
+        requestView: "params",
+      }),
+    ).toEqual({ kind: "cycle-response", direction: 1 })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "f" },
+        focusedId: "http-key-value-name-request-0",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "request",
+        requestView: "params",
+      }),
+    ).toEqual({ kind: "ignore" })
+  })
+
+  test("uses Z/V for horizontal controls nested inside the focused HTTP section", () => {
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "v" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "request",
+        requestView: "body",
+      }),
+    ).toEqual({ kind: "cycle-body-kind", direction: 1 })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "z" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "request",
+        requestView: "auth",
+      }),
+    ).toEqual({ kind: "cycle-auth-kind", direction: -1 })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "a" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "response",
+        responseView: "pretty",
+      }),
+    ).toEqual({ kind: "cycle-response", direction: -1 })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "v" },
+        focusedId: "",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "response",
+        responseView: "more",
+        responseMoreView: "summary",
+      }),
+    ).toEqual({ kind: "response-more-view", view: "cookies" })
+    expect(
+      resolveHttpKeyboardCommand({
+        key: { name: "v" },
+        focusedId: "http-body-editor-request",
+        navigationOpen: false,
+        running: false,
+        minimum: false,
+        activePane: "request",
+        requestView: "body",
+      }),
+    ).toEqual({ kind: "ignore" })
+  })
+
   test("an open overlay owns every key and jump targets", () => {
     expect(command({ name: "escape" }, "http-overlay-close", false, "help")).toEqual({
       kind: "close-overlay",
     })
-    expect(command({ name: "h" }, "http-overlay-close", false, "jump")).toEqual({
+    expect(command({ name: "r" }, "http-overlay-close", false, "jump")).toEqual({
       kind: "jump",
-      target: "headers",
+      target: "response",
     })
+    expect(command({ name: "p" }, "http-overlay-close", false, "jump")).toEqual({ kind: "ignore" })
     expect(command({ name: "s" }, "http-overlay-close", false, "help")).toEqual({
       kind: "ignore",
     })
@@ -536,7 +793,7 @@ describe("HTTP keyboard ownership", () => {
     ).toEqual({ kind: "open-overlay", overlay: "curl-import" })
     expect(
       resolveHttpKeyboardCommand({
-        key: { name: "2" },
+        key: { name: "v" },
         focusedId: "",
         navigationOpen: false,
         running: false,
@@ -547,7 +804,7 @@ describe("HTTP keyboard ownership", () => {
     ).toEqual({ kind: "request-more-view", view: "assertions" })
     expect(
       resolveHttpKeyboardCommand({
-        key: { name: "4" },
+        key: { name: "z" },
         focusedId: "",
         navigationOpen: false,
         running: false,
@@ -601,7 +858,7 @@ describe("HTTP keyboard ownership", () => {
     ] as const) {
       expect(
         resolveHttpKeyboardCommand({
-          key: { name },
+          key: { name, shift: name === "l" || name === "v" },
           focusedId: "",
           navigationOpen: false,
           running: false,

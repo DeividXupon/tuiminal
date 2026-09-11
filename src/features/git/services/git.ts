@@ -2,13 +2,14 @@ import type { GitFile, GitCommit, GitSnapshot } from "../model/types"
 export type * from "../model/types"
 import { parseGitHubRemote, type GitHubRepositoryReference } from "../model/repository"
 import { basename, resolve } from "node:path"
-import { spawn } from "node:child_process"
+import { runGitCommand, type GitCommandResult } from "./git-command"
 
-type GitCommandResult = {
-  stdout: string
-  stderr: string
-  exitCode: number
-}
+export {
+  GIT_COMMAND_MAX_OUTPUT_BYTES,
+  GIT_COMMAND_TIMEOUT_MS,
+  GitCommandBudgetError,
+  runGitCommand,
+} from "./git-command"
 
 export const GIT_LAUNCH_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
 const projectContextCache = new Map<string, Promise<GitProjectContext>>()
@@ -18,30 +19,6 @@ export type GitProjectContext = {
   root: string
   isRepository: boolean
   remote: GitHubRepositoryReference | null
-}
-
-export async function runGitCommand(cwd: string, args: string[]): Promise<GitCommandResult> {
-  return new Promise((resolveCommand, rejectCommand) => {
-    const child = spawn("git", ["-C", cwd, ...args], {
-      env: { ...process.env, LC_ALL: "C" },
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    let stdout = ""
-    let stderr = ""
-
-    child.stdout.setEncoding("utf8")
-    child.stderr.setEncoding("utf8")
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk
-    })
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk
-    })
-    child.once("error", rejectCommand)
-    child.once("close", (exitCode) => {
-      resolveCommand({ stdout, stderr, exitCode: exitCode ?? 1 })
-    })
-  })
 }
 
 async function inspectGitProjectContext(directory: string): Promise<GitProjectContext> {
@@ -139,7 +116,8 @@ function parseCommits(output: string): GitCommit[] {
 }
 
 function commandError(result: GitCommandResult, fallback: string) {
-  return new Error(result.stderr.trim() || result.stdout.trim() || fallback)
+  const message = result.stderr.trim() || result.stdout.trim() || fallback
+  return new Error(result.truncated ? `${message}\n[saída truncada pelo limite]` : message)
 }
 
 /** Remove Git's record terminator without erasing a meaningful patch marker. */

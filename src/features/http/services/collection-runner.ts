@@ -23,7 +23,7 @@ import type {
 import { executePreparedHttpRequest, HttpExecutionError } from "./fetch-transport"
 import { HttpRequestValidationError, prepareHttpRequest } from "./request-builder"
 import { responseBodyText } from "./response-reader"
-import { HttpCookieJar } from "./cookies"
+import { HttpCookieJar, HttpCookieJarStore, type HttpCookieJarResolver } from "./cookies"
 import {
   httpInsecureTlsApproval,
   HttpInsecureTlsApprovalError,
@@ -167,6 +167,7 @@ export async function runHttpCollectionCase({
   signal,
   variablesForRequest,
   cookieJar,
+  cookieJarForRequest,
   environmentName = null,
   isInsecureTlsApproved,
   authorizeRedirect,
@@ -179,6 +180,7 @@ export async function runHttpCollectionCase({
   signal?: AbortSignal
   variablesForRequest?: (request: HttpRequestDefinition) => HttpVariableContext
   cookieJar?: HttpCookieJar
+  cookieJarForRequest?: HttpCookieJarResolver
   environmentName?: string | null
   isInsecureTlsApproved?: (approval: HttpInsecureTlsApproval) => boolean
   authorizeRedirect?: HttpRedirectAuthorizer
@@ -186,12 +188,16 @@ export async function runHttpCollectionCase({
   const selected = selectedRequests(items, selector)
   const results: HttpRunItem[] = []
   const extracted = new Map<string, HttpVariableValue>()
-  const activeCookieJar = cookieJar ?? new HttpCookieJar()
+  const scopedCookieJars = new HttpCookieJarStore()
   let casePrivacy = combineHttpPrivacy()
 
   for (const item of selected) {
     if (signal?.aborted) break
     const request = item.request
+    const activeCookieJar =
+      cookieJarForRequest?.(request) ??
+      cookieJar ??
+      scopedCookieJars.forRequest(request, environmentName)
     let context = variables
     let contextReady = false
     let privacy = combineHttpPrivacy(casePrivacy, requestHttpPrivacy(request, context))

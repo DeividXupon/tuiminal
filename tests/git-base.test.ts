@@ -7,7 +7,11 @@ import {
   gitPaneFocusTarget,
 } from "../src/features/git/model/base-navigation"
 import { createFileTreeOptions } from "../src/features/git/rendering/file-tree"
-import { trimGitPatchTerminator } from "../src/features/git/services/git"
+import {
+  GitCommandBudgetError,
+  runGitCommand,
+  trimGitPatchTerminator,
+} from "../src/features/git/services/git"
 import { gitFileTreeWindowStart, gitStatusColor } from "../src/features/git/ui/base/GitFileTree"
 
 describe("Git patch rendering", () => {
@@ -26,6 +30,19 @@ describe("Git patch rendering", () => {
     const normalized = trimGitPatchTerminator(patch)
     expect(normalized.endsWith("+")).toBe(true)
     expect(() => parsePatch(normalized)).not.toThrow()
+  })
+
+  test("bounds command output and execution time", async () => {
+    await expect(
+      runGitCommand(process.cwd(), ["--version"], { maxOutputBytes: 4 }),
+    ).rejects.toBeInstanceOf(GitCommandBudgetError)
+    const startedAt = performance.now()
+    await expect(
+      runGitCommand(process.cwd(), ["-c", "alias.wait=!sleep 2", "wait"], {
+        timeoutMs: 50,
+      }),
+    ).rejects.toThrow(/prazo/i)
+    expect(performance.now() - startedAt).toBeLessThan(1_000)
   })
 })
 

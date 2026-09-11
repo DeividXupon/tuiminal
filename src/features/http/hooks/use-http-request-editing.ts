@@ -125,12 +125,13 @@ export function useHttpRequestEditing({
   )
 
   const selectRequestView = useCallback(
-    (documentId: string, view: HttpRequestView) => {
+    (documentId: string, view: HttpRequestView, focusControl = true) => {
       dispatch({ type: "select-pane", pane: "request" })
       dispatch({ type: "select-request-view", documentId, view })
       const request = documents.find((document) => document.request.id === documentId)?.request
-      if (view === "headers") setTimeout(() => refsFor(documentId).headers?.focus(), 0)
-      if (view === "body" && request?.body.kind !== "none") {
+      if (focusControl && view === "headers")
+        setTimeout(() => refsFor(documentId).headers?.focus(), 0)
+      if (focusControl && view === "body" && request?.body.kind !== "none") {
         setTimeout(() => refsFor(documentId).body?.focus(), 0)
       }
     },

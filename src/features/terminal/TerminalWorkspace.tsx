@@ -13,6 +13,7 @@ import {
   type FreeTerminalKind,
   type FreeTerminalProcessHandle,
 } from "./services/terminal"
+import { stopTerminalBeforeRestart } from "./services/terminal-lifecycle"
 import { translateUi } from "../../shared/i18n/index"
 import { COLORS, LAYOUT } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
@@ -325,17 +326,20 @@ export function FreeTerminal({ active }: { active: boolean }) {
   )
 
   const startSession = useCallback(
-    (id: string, clear = false) => {
+    async (id: string, clear = false) => {
       const command = sessionCommands.current.get(id)
       const embeddedTerminal = terminalRefs.current.get(id)
       if (!command || !embeddedTerminal) return
 
       const previous = processHandles.current.get(id)
-      if (previous) {
-        generations.current.set(id, (generations.current.get(id) ?? 0) + 1)
-        previous.stop()
-        processHandles.current.delete(id)
-      }
+      generations.current.set(id, (generations.current.get(id) ?? 0) + Number(Boolean(previous)))
+      const stopped = await stopTerminalBeforeRestart({
+        handle: previous,
+        write: (data) => embeddedTerminal.write(data),
+        onError: setNotice,
+      })
+      if (!stopped) return
+      processHandles.current.delete(id)
 
       if (clear) embeddedTerminal.write("\u001bc")
       embeddedTerminal.write(
@@ -404,7 +408,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
         columns: Math.max(20, terminal.width),
         rows: Math.max(5, terminal.height),
       })
-      if (!processHandles.current.has(id)) startSession(id)
+      if (!processHandles.current.has(id)) void startSession(id)
       if (activeSessionRef.current === id) focusTerminal(id)
     },
     [focusTerminal, startSession],
@@ -526,8 +530,17 @@ export function FreeTerminal({ active }: { active: boolean }) {
       if (!removed) return
 
       generations.current.set(id, (generations.current.get(id) ?? 0) + 1)
-      processHandles.current.get(id)?.stop()
-      processHandles.current.delete(id)
+      const handle = processHandles.current.get(id)
+      if (handle) {
+        void handle
+          .stop()
+          .then(() => processHandles.current.delete(id))
+          .catch((error) => {
+            setNotice(error instanceof Error ? error.message : "O terminal não encerrou.")
+          })
+      } else {
+        processHandles.current.delete(id)
+      }
       sessionCommands.current.delete(id)
       terminalSizes.current.delete(id)
 
@@ -549,7 +562,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
   const restartSession = useCallback(
     (id: string) => {
       setActiveSessionId(id)
-      startSession(id, true)
+      void startSession(id, true)
       focusTerminal(id)
     },
     [focusTerminal, startSession],

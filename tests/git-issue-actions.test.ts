@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { execFileSync } from "node:child_process"
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -23,6 +25,7 @@ import { saveIssueConfig } from "../src/features/git/storage/issue/config"
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-issue-actions-"))
 const executable = join(directory, "gh")
 const logPath = join(directory, "commands.jsonl")
+const checkoutClone = join(directory, "checkout-clone")
 const item = (() => {
   const candidate = DEMO_ISSUES[0]
   if (!candidate) throw new Error("missing issue fixture")
@@ -36,6 +39,21 @@ const auth = {
 }
 
 beforeAll(() => {
+  mkdirSync(checkoutClone)
+  execFileSync("git", ["-C", checkoutClone, "init", "-q"])
+  execFileSync("git", ["-C", checkoutClone, "config", "user.name", "Fixture"])
+  execFileSync("git", ["-C", checkoutClone, "config", "user.email", "fixture@example.test"])
+  execFileSync("git", [
+    "-C",
+    checkoutClone,
+    "remote",
+    "add",
+    "origin",
+    "git@github.com:equipe/api.git",
+  ])
+  writeFileSync(join(checkoutClone, "README.md"), "fixture\n")
+  execFileSync("git", ["-C", checkoutClone, "add", "README.md"])
+  execFileSync("git", ["-C", checkoutClone, "commit", "-qm", "fixture"])
   writeFileSync(
     executable,
     `#!/usr/bin/env bun
@@ -64,7 +82,7 @@ if (args[0] === "--version") {
       }
     } } }))
   } else if (args[0] === "issue" && args[1] === "comment") {
-    writeFileSync(process.env.FAKE_STATE, "commented")
+    if (process.env.FAKE_NO_RECONCILE !== "1") writeFileSync(process.env.FAKE_STATE, "commented")
     console.log("accepted")
   } else {
     console.error("unexpected coordinator command")
@@ -172,7 +190,7 @@ describe("Issue mutation transport", () => {
       }),
       { executable, env: { FAKE_LOG: logPath } },
     )
-    await executeIssueMutation(prepared("checkout", { clonePath: directory }), {
+    await executeIssueMutation(prepared("checkout", { clonePath: checkoutClone }), {
       executable,
       env: { FAKE_LOG: logPath },
     })
@@ -212,7 +230,7 @@ describe("Issue mutation transport", () => {
     ])
     expect(recorded[3]).toMatchObject({
       args: ["issue", "develop", "318", "--repo", "equipe/api", "--checkout"],
-      cwd: realpathSync(directory),
+      cwd: realpathSync(checkoutClone),
     })
     expect(recorded[4]?.args.slice(0, 2)).toEqual(["issue", "close"])
     expect(recorded[5]?.args.slice(0, 2)).toEqual(["issue", "reopen"])
@@ -246,6 +264,17 @@ describe("Issue mutation transport", () => {
     expect(commands()).toHaveLength(1)
   })
 
+  test("classifies excessive output after dispatch as uncertain and never retries", async () => {
+    writeFileSync(logPath, "")
+    const result = await executeIssueMutation(prepared("comment", { body: "once" }), {
+      executable,
+      maxOutputBytes: 4,
+      env: { FAKE_LOG: logPath },
+    })
+    expect(result).toEqual({ status: "uncertain", reason: "output-limit" })
+    expect(commands()).toHaveLength(1)
+  })
+
   test("re-authenticates, re-reads, writes once and confirms by reconciliation", async () => {
     writeFileSync(logPath, "")
     const statePath = join(directory, "coordinator-state")
@@ -272,6 +301,37 @@ describe("Issue mutation transport", () => {
       commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue comment"),
     ).toHaveLength(1)
     expect(commands().filter((command) => command.args[1] === "graphql")).toHaveLength(2)
+  })
+
+  test("keeps an accepted but unobserved write uncertain without replay", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "unobserved-coordinator-state")
+    rmSync(statePath, { force: true })
+    const preparedState = prepareIssueAction({
+      actionId: "unobserved-comment",
+      kind: "comment",
+      target: item.identity,
+      expectedUpdatedAt: item.updatedAt,
+      expectedState: item.state,
+      auth,
+      payload: { body: "integrated" },
+    })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_NO_RECONCILE: "1",
+      },
+    }).execute(preparedState)
+    expect(result).toMatchObject({
+      status: "uncertain",
+      reason: "accepted-awaiting-reconciliation",
+    })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue comment"),
+    ).toHaveLength(1)
   })
 })
 

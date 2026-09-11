@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { DEFAULT_LANGUAGE, isLanguage, setLanguage, type LanguageId } from "../../shared/i18n/index"
 import {
   DEFAULT_SENSITIVE_TERMS,
@@ -10,6 +10,7 @@ import {
 import { DARK_PALETTES } from "./dark-palettes"
 import { LIGHT_PALETTES } from "./light-palettes"
 import type { ColorPalette, PaletteId } from "./theme-types"
+import { atomicWriteFileSync, fileContentHash } from "../../shared/storage/atomic-file"
 
 export type { ColorPalette, PaletteId } from "./theme-types"
 export type LayoutMode = "framed" | "compact"
@@ -66,10 +67,20 @@ export function paletteFor(palette: PaletteId, colorMode: ColorMode) {
   return colorMode === "light" ? LIGHT_PALETTES[palette] : PALETTES[palette]
 }
 
+let settingsSourceHash: string | null = null
+let settingsLoadError = ""
+
 function loadSettings(): UiSettings {
   try {
-    if (!existsSync(UI_SETTINGS_PATH)) return { ...DEFAULT_SETTINGS }
-    const parsed = JSON.parse(readFileSync(UI_SETTINGS_PATH, "utf8")) as Partial<UiSettings>
+    if (!existsSync(UI_SETTINGS_PATH)) {
+      settingsSourceHash = null
+      settingsLoadError = ""
+      return { ...DEFAULT_SETTINGS }
+    }
+    const source = readFileSync(UI_SETTINGS_PATH, "utf8")
+    const parsed = JSON.parse(source) as Partial<UiSettings>
+    settingsSourceHash = fileContentHash(source)
+    settingsLoadError = ""
     return {
       colorMode: isColorMode(parsed.colorMode) ? parsed.colorMode : DEFAULT_SETTINGS.colorMode,
       palette: isPalette(parsed.palette) ? parsed.palette : DEFAULT_SETTINGS.palette,
@@ -77,7 +88,15 @@ function loadSettings(): UiSettings {
       language: isLanguage(parsed.language) ? parsed.language : DEFAULT_SETTINGS.language,
       sensitiveTerms: normalizeSensitiveTerms(parsed.sensitiveTerms),
     }
-  } catch {
+  } catch (error) {
+    try {
+      const source = readFileSync(UI_SETTINGS_PATH, "utf8")
+      settingsSourceHash = fileContentHash(source)
+    } catch {
+      settingsSourceHash = null
+    }
+    settingsLoadError =
+      error instanceof Error ? error.message : "O arquivo de configuração é inválido."
     return { ...DEFAULT_SETTINGS }
   }
 }
@@ -169,7 +188,25 @@ export function getUiSettings(): UiSettings {
   return { ...currentSettings, sensitiveTerms: [...currentSettings.sensitiveTerms] }
 }
 
-export function updateUiSettings(patch: Partial<UiSettings>): {
+function persistUiSettings(next: UiSettings, allowRecovery: boolean) {
+  if (settingsLoadError && !allowRecovery) {
+    throw new Error(
+      "A configuração existente está corrompida; use Restaurar para preservá-la em settings.json.bak e criar uma nova.",
+    )
+  }
+  const content = `${JSON.stringify(next, null, 2)}\n`
+  settingsSourceHash = atomicWriteFileSync(UI_SETTINGS_PATH, content, {
+    expectedHash: settingsSourceHash,
+    mode: 0o600,
+    backup: true,
+  })
+  settingsLoadError = ""
+}
+
+export function updateUiSettings(
+  patch: Partial<UiSettings>,
+  options: { recoverCorrupted?: boolean } = {},
+): {
   settings: UiSettings
   error: string | null
 } {
@@ -192,8 +229,7 @@ export function updateUiSettings(patch: Partial<UiSettings>): {
   if (themeChanged) for (const listener of themeListeners) listener()
 
   try {
-    mkdirSync(dirname(UI_SETTINGS_PATH), { recursive: true })
-    writeFileSync(UI_SETTINGS_PATH, `${JSON.stringify(next, null, 2)}\n`, "utf8")
+    persistUiSettings(next, Boolean(options.recoverCorrupted))
     return {
       settings: { ...next, sensitiveTerms: [...next.sensitiveTerms] },
       error: null,
@@ -208,5 +244,5 @@ export function updateUiSettings(patch: Partial<UiSettings>): {
 }
 
 export function resetUiSettings() {
-  return updateUiSettings(DEFAULT_SETTINGS)
+  return updateUiSettings(DEFAULT_SETTINGS, { recoverCorrupted: true })
 }

@@ -4,3 +4,6 @@ node_modules/
 demo/*.sqlite
 tuiminal-exports/
 dist/
+http-client.private.env.json
+.tuiminal/http/config.json
+.tuiminal/http/history.json

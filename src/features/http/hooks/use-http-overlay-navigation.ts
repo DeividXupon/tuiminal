@@ -1,7 +1,6 @@
 import type { InputRenderable } from "@opentui/core"
 import { useCallback, type RefObject } from "react"
-import { isHttpRequestJumpTarget } from "../model/keyboard"
-import type { HttpDocumentState, HttpJumpTarget, HttpPane, HttpRequestView } from "../model/types"
+import type { HttpDocumentState, HttpJumpTarget, HttpPane } from "../model/types"
 import type { HttpWorkspaceAction } from "../model/workspace"
 import type { HttpDocumentRefs } from "../runtime"
 
@@ -11,21 +10,19 @@ export function useHttpOverlayNavigation({
   refsFor,
   urlRef,
   dispatch,
-  selectRequestView,
 }: {
   document: HttpDocumentState | undefined
   activePane: HttpPane
   refsFor: (documentId: string) => HttpDocumentRefs
   urlRef: RefObject<InputRenderable | null>
   dispatch: (action: HttpWorkspaceAction) => void
-  selectRequestView: (documentId: string, view: HttpRequestView) => void
 }) {
   const closeOverlay = useCallback(() => {
     dispatch({ type: "close-overlay" })
     if (!document) return
     setTimeout(() => {
       if (activePane === "response") refsFor(document.request.id).response?.focus()
-      else if (activePane === "request") urlRef.current?.focus()
+      else if (activePane === "url") urlRef.current?.focus()
     }, 0)
   }, [activePane, dispatch, document, refsFor, urlRef])
 
@@ -35,12 +32,8 @@ export function useHttpOverlayNavigation({
       if (!document) return
       const documentId = document.request.id
       if (target === "url") {
-        dispatch({ type: "select-pane", pane: "request" })
+        dispatch({ type: "select-pane", pane: "url" })
         setTimeout(() => urlRef.current?.focus(), 0)
-        return
-      }
-      if (isHttpRequestJumpTarget(target)) {
-        selectRequestView(documentId, target)
         return
       }
       if (target === "response") {
@@ -51,7 +44,7 @@ export function useHttpOverlayNavigation({
       dispatch({ type: "select-navigation-view", view: target })
       dispatch({ type: "select-pane", pane: "navigation" })
     },
-    [dispatch, document, refsFor, selectRequestView, urlRef],
+    [dispatch, document, refsFor, urlRef],
   )
 
   return { closeOverlay, jumpTo }

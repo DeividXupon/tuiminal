@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { clearHistoryContent } from "../src/features/database/services/history-content"
+import type { RuntimeSqlExecutor } from "../src/features/database/services/read-only-query"
 
 const originalConfigRoot = process.env.XDG_CONFIG_HOME
 const configRoot = mkdtempSync(join(tmpdir(), "tuiminal-database-test-"))
@@ -47,6 +48,25 @@ function createFixtureDatabase(filename: string, userCount: number) {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL
     );
+    CREATE TABLE optimistic_rows (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      note TEXT NOT NULL
+    );
+    INSERT INTO optimistic_rows (id, name, note) VALUES
+      (1, 'One', 'original'),
+      (2, 'Two', 'original'),
+      (3, 'Three', 'original'),
+      (4, 'Four', 'original'),
+      (5, 'Five', 'original'),
+      (6, 'Six', 'original'),
+      (7, 'Seven', 'original');
+    CREATE TRIGGER optimistic_ignore_update
+      BEFORE UPDATE OF name ON optimistic_rows
+      WHEN NEW.name = 'blocked'
+      BEGIN
+        SELECT RAISE(IGNORE);
+      END;
   `)
   const insertUser = database.query(`
     INSERT INTO users (name, email, password, bio, payload, active)
@@ -162,7 +182,9 @@ const {
   updateDatabaseConnection,
   updateTableRow,
   DatabaseQueryCancelledError,
+  DatabaseMutationCommitUncertainError,
   DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS,
+  nativeClients,
 } = await import("../src/features/database/services/database")
 const { DEFAULT_SENSITIVE_TERMS, setActiveSensitiveTerms } = await import(
   "../src/shared/security/sensitive-data"
@@ -859,7 +881,7 @@ describe("SQL execution", () => {
       command: "SELECT",
       mutating: false,
       columns: ["id", "name", "active"],
-      rowCount: 620,
+      rowCount: 500,
       truncated: true,
     })
     expect(result.rows).toHaveLength(500)
@@ -1042,6 +1064,7 @@ describe("staged table mutations", () => {
         name: "Mutation updated",
         active: 0,
       },
+      { id, name: "Mutation target", active: 1 },
     )
     const updated = await executeDatabaseQuery(
       "write-one",
@@ -1049,7 +1072,12 @@ describe("staged table mutations", () => {
     )
     expect(updated.rows[0]).toEqual({ name: "Mutation updated", active: 0 })
 
-    await deleteTableRow("write-one", usersTable, { id })
+    await deleteTableRow(
+      "write-one",
+      usersTable,
+      { id },
+      { id, name: "Mutation updated", active: 0 },
+    )
     const deleted = await executeDatabaseQuery("write-one", `SELECT id FROM users WHERE id = ${id}`)
     expect(deleted.rows).toEqual([])
   })
@@ -1086,6 +1114,7 @@ describe("staged table mutations", () => {
         table: usersTable,
         columns: userColumns,
         mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Atomic commit" } },
+        originalRow: { id: 1, name: "User 0001" },
       },
       {
         table: usersTable,
@@ -1094,6 +1123,7 @@ describe("staged table mutations", () => {
           kind: "insert",
           values: { name: "Atomic insert", email: "atomic@example.test" },
         },
+        originalRow: null,
       },
     ])
     const committed = await executeDatabaseQuery("write-one", "SELECT name FROM users WHERE id = 1")
@@ -1140,6 +1170,7 @@ describe("staged table mutations", () => {
           table: usersTable,
           columns: userColumns,
           mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Must roll back" } },
+          originalRow: { id: 1, name: "Atomic commit" },
         },
         {
           table: usersTable,
@@ -1148,6 +1179,7 @@ describe("staged table mutations", () => {
             kind: "insert",
             values: { name: "Duplicate", email: "atomic@example.test" },
           },
+          originalRow: null,
         },
       ]),
     ).rejects.toThrow()
@@ -1163,6 +1195,180 @@ describe("staged table mutations", () => {
     expect(rolledBackWrites).toHaveLength(2)
     expect(rolledBackWrites.map((entry) => entry.command).sort()).toEqual(["INSERT", "UPDATE"])
     expect(rolledBackWrites.every((entry) => entry.error)).toBe(true)
+  })
+
+  test("rejects stale row snapshots, changed primary keys, and trigger-suppressed writes", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const external = new Database(writableDatabasePath, { strict: true })
+    external.query("UPDATE optimistic_rows SET name = 'external' WHERE id = 1").run()
+    external.query("UPDATE optimistic_rows SET note = 'external' WHERE id = 2").run()
+    external.query("UPDATE optimistic_rows SET id = 30 WHERE id = 3").run()
+    external.close()
+
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "local" } },
+          originalRow: { id: 1, name: "One", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "delete", rowKey: { id: 2 } },
+          originalRow: { id: 2, name: "Two", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 3 }, values: { name: "local" } },
+          originalRow: { id: 3, name: "Three", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 4 }, values: { name: "blocked" } },
+          originalRow: { id: 4, name: "Four", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("não confirmou os valores")
+
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(
+      database
+        .query("SELECT id, name, note FROM optimistic_rows WHERE id IN (1, 2, 4) ORDER BY id")
+        .all(),
+    ).toEqual([
+      { id: 1, name: "external", note: "original" },
+      { id: 2, name: "Two", note: "external" },
+      { id: 4, name: "Four", note: "original" },
+    ])
+    expect(database.query("SELECT id FROM optimistic_rows WHERE id IN (3, 30)").all()).toEqual([
+      { id: 30 },
+    ])
+    database.close()
+  })
+
+  test("reports no-ops and rolls back an earlier batch write when a trigger blocks a later row", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const noOp = await applyTableMutations("write-one", [
+      {
+        table,
+        columns,
+        mutation: { kind: "update", rowKey: { id: 7 }, values: { name: "Seven" } },
+        originalRow: { id: 7, name: "Seven", note: "original" },
+      },
+    ])
+    expect(noOp).toMatchObject({
+      plannedStatements: 1,
+      sentStatements: 0,
+      matchedRows: 1,
+      affectedRows: 0,
+      confirmedRows: 0,
+      noOpStatements: 1,
+      transactional: true,
+    })
+
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 5 }, values: { name: "changed" } },
+          originalRow: { id: 5, name: "Five", note: "original" },
+        },
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 4 }, values: { name: "blocked" } },
+          originalRow: { id: 4, name: "Four", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("não confirmou os valores")
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 5").get()).toEqual({
+      name: "Five",
+    })
+    database.close()
+  })
+
+  test("keeps the review outcome uncertain when the connection fails during commit", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const realPromise = nativeClients.get("write-one")
+    if (!realPromise) throw new Error("Expected an open SQLite client")
+    const realClient = await realPromise
+    const uncertainClient = {
+      unsafe: realClient.unsafe.bind(realClient),
+      begin: (async (callback: (transaction: RuntimeSqlExecutor) => unknown) => {
+        await realClient.begin(callback)
+        const error = new Error("connection lost during commit") as Error & { code: string }
+        error.code = "ECONNRESET"
+        throw error
+      }) as unknown as typeof realClient.begin,
+      close: realClient.close.bind(realClient),
+    }
+    nativeClients.set("write-one", Promise.resolve(uncertainClient))
+    try {
+      await expect(
+        applyTableMutations("write-one", [
+          {
+            table,
+            columns,
+            mutation: {
+              kind: "insert",
+              values: { id: 8, name: "Committed", note: "unknown to caller" },
+            },
+            originalRow: null,
+          },
+        ]),
+      ).rejects.toBeInstanceOf(DatabaseMutationCommitUncertainError)
+    } finally {
+      nativeClients.set("write-one", realPromise)
+    }
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 8").get()).toEqual({
+      name: "Committed",
+    })
+    database.close()
+  })
+
+  test("rejects a schema changed after review before dispatching a write", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const reviewedColumns = await loadDatabaseTableColumns("write-one", table)
+    const external = new Database(writableDatabasePath, { strict: true })
+    external.query("ALTER TABLE optimistic_rows ADD COLUMN added_later TEXT").run()
+    external.close()
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns: reviewedColumns,
+          mutation: { kind: "update", rowKey: { id: 6 }, values: { name: "local" } },
+          originalRow: { id: 6, name: "Six", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("schema da tabela mudou")
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 6").get()).toEqual({
+      name: "Six",
+    })
+    database.close()
   })
 })
 

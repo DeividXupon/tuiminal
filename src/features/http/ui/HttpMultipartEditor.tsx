@@ -3,40 +3,32 @@ import { useRef } from "react"
 import { COLORS } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import { createHttpMultipartPart } from "../model/key-value"
 import type { HttpMultipartPart } from "../model/types"
-
-function newPart(requestId: string): HttpMultipartPart {
-  return {
-    id: `${requestId}-part-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    enabled: true,
-    name: "",
-    value: "",
-    kind: "text",
-    sensitivity: "normal",
-  }
-}
 
 export function HttpMultipartEditor({
   requestId,
   parts,
   onChange,
+  active,
 }: {
   requestId: string
   parts: HttpMultipartPart[]
   onChange: (parts: HttpMultipartPart[]) => void
+  active: boolean
 }) {
   const inputs = useRef(new Map<string, InputRenderable>())
   const patchPart = (id: string, patch: Partial<HttpMultipartPart>) =>
     onChange(parts.map((part) => (part.id === id ? { ...part, ...patch } : part)))
+  const addPart = () => onChange([...parts, createHttpMultipartPart(requestId)])
+
   return (
     <box style={{ flexGrow: 1 }}>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <text content={translateUi("MULTIPART")} style={{ flexGrow: 1, fg: COLORS.muted }} />
-        <InlineButton
-          label="[+] Adicionar"
-          accent={COLORS.http}
-          onPress={() => onChange([...parts, newPart(requestId)])}
-        />
+        {active ? (
+          <InlineButton label="[N] Adicionar" accent={COLORS.http} onPress={addPart} />
+        ) : null}
       </box>
       <scrollbox scrollY viewportCulling style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
         {parts.length ? (

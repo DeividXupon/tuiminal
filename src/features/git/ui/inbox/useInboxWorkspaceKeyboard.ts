@@ -1,4 +1,5 @@
 import { useKeyboard } from "@opentui/react"
+import { directionalShortcutDirection } from "../../../../shared/ui/directional-shortcut"
 
 type InboxKeyAction =
   | "next"
@@ -32,15 +33,18 @@ const DIRECT_ACTIONS: Readonly<Record<string, InboxKeyAction>> = {
   u: "unsubscribe",
 }
 
-function inboxKeyAction(key: { name: string; sequence?: string; shift?: boolean }) {
+function inboxKeyAction(key: {
+  name: string
+  ctrl?: boolean
+  shift?: boolean
+  option?: boolean
+  meta?: boolean
+}) {
   const direct = DIRECT_ACTIONS[key.name]
   if (direct) return direct
-  if ([key.name, key.sequence].includes("<") || (key.name === "," && key.shift)) {
-    return "previous-section"
-  }
-  if ([key.name, key.sequence].includes(">") || (key.name === "." && key.shift)) {
-    return "next-section"
-  }
+  const direction = directionalShortcutDirection(key)
+  if (direction === -1) return "previous-section"
+  if (direction === 1) return "next-section"
   return null
 }
 

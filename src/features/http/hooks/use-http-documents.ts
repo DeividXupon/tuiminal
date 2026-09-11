@@ -31,6 +31,7 @@ export function useHttpDocuments({
     (documentId: string) => {
       blurDocumentControls()
       dispatch({ type: "select-document", documentId })
+      dispatch({ type: "select-pane", pane: "url" })
       setTimeout(() => urlRef.current?.focus(), 0)
     },
     [blurDocumentControls, dispatch, urlRef],
@@ -42,6 +43,7 @@ export function useHttpDocuments({
       type: "add-document",
       request: createScratchRequest(`http-scratch-${documentCounter.current}`),
     })
+    dispatch({ type: "select-pane", pane: "url" })
     setTimeout(() => urlRef.current?.focus(), 0)
   }, [documentCounter, dispatch, documents.length, urlRef])
   const cancelDocument = useCallback(
@@ -57,6 +59,7 @@ export function useHttpDocuments({
       cancelDocument(documentId)
       documentRefs.current.delete(documentId)
       dispatch({ type: "close-document", documentId })
+      dispatch({ type: "select-pane", pane: "url" })
       setTimeout(() => urlRef.current?.focus(), 0)
     },
     [cancelDocument, dispatch, documentRefs, urlRef],

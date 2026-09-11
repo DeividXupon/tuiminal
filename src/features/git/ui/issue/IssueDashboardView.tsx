@@ -109,6 +109,7 @@ function IssuePanels(props: IssuePanelsProps) {
 }
 
 export function IssueDashboardView({
+  active,
   dashboard,
   presentation,
   layout,
@@ -141,6 +142,7 @@ export function IssueDashboardView({
   onCyclePreviewPosition,
   onTogglePreview,
 }: IssuePanelsProps & {
+  active: boolean
   dashboard: IssueDashboardState
   previewPosition: IssuePreviewConfig["position"]
   previewVisible: boolean
@@ -242,7 +244,7 @@ export function IssueDashboardView({
           onLoadMoreDetails={onLoadMoreDetails}
         />
       ) : (
-        <IssueDashboardStatePanel state={dashboard} onRetry={onRetry} />
+        <IssueDashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />
       )}
       <PlasmaLoadingOverlay
         active={dashboard.status === "loading" || dashboard.status === "idle"}
@@ -265,7 +267,7 @@ export function IssueDashboardView({
       >
         <ShortcutText
           content={translateUi(
-            "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações",
+            "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações",
           )}
           style={{ fg: COLORS.muted }}
         />

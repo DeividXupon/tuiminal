@@ -16,14 +16,14 @@ gh-dash e ajustado às regras de foco, segurança e responsividade do Tuiminal.
 │   Ajustar foco · Issue ontem     │ [D] Concluir [U] Parar de acompanhar │
 │   ◷ Carregando mais notificações…│                                       │
 └──────────────────────────────────┴───────────────────────────────────────┘
- [J/K] Navegar  [H/L] Foco  [</>] Seção  [R] Atualizar
+ [J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar
 ```
 
 ## Comportamento
 
 - Larga (`≥92 × 20`): lista e prévia lado a lado; abaixo disso, painel único com
   `[L/→/Enter]` para a prévia e `[H/←]` para a lista.
-- `[</>]` circula pelas seções; cada controle também aceita mouse.
+- `[A←]`/`[F→]` circula pelas seções; cada controle também aceita mouse.
 - Ao selecionar o último item carregado, a próxima página começa uma única vez.
   O loader é filho do scrollbox e desaparece quando a página é incorporada.
 - O refresh periódico relê da primeira até a última página já alcançada. Durante
@@ -55,3 +55,6 @@ uma alteração invalida o cache quando o Inbox voltar a ficar ativo.
 O carregamento inicial ocupa o painel com plasma ASCII e mensagem em primeiro
 plano, dissolvendo rapidamente ao revelar a lista; paginação e refresh não cobrem
 conteúdo já carregado.
+Se `gh` estiver ausente ou antigo, Inbox usa a mesma explicação e mini terminal
+guiado de PR/Issues. Instalação exige `[I]` ou clique e uma versão válida recarrega
+a tela automaticamente; autenticação permanece separada.

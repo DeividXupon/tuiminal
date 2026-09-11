@@ -14,6 +14,14 @@ import { isValidHttpMethod } from "../model/request-validation"
 import { requestHttpPrivacy } from "../model/secrets"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
+export const HTTP_REQUEST_LIMITS = {
+  urlBytes: 16_384,
+  headers: 200,
+  headerBytes: 128 * 1024,
+  fields: 500,
+  bodyBytes: 8 * 1024 * 1024,
+  fileBytes: 256 * 1024 * 1024,
+} as const
 
 export class HttpRequestValidationError extends Error {
   constructor(
@@ -170,6 +178,9 @@ function prepareTextBody(
   variables?: HttpVariableContext,
 ) {
   const text = resolveHttpTemplate(request.body.text, variables)
+  if (Buffer.byteLength(text) > HTTP_REQUEST_LIMITS.bodyBytes) {
+    throw new HttpRequestValidationError("O body excede o limite de 8 MB.", "body")
+  }
   if (request.body.kind === "json") {
     try {
       JSON.parse(text)
@@ -196,10 +207,18 @@ function prepareFormBody(
     headers.push(["Content-Type", "application/x-www-form-urlencoded"])
   }
   const body = new URLSearchParams()
-  for (const entry of enabledValues(request.body.form)) {
+  const entries = enabledValues(request.body.form)
+  if (entries.length > HTTP_REQUEST_LIMITS.fields) {
+    throw new HttpRequestValidationError("O formulário excede 500 campos.", "body")
+  }
+  for (const entry of entries) {
     body.append(entry.name, resolveHttpTemplate(entry.value, variables))
   }
-  return body.toString()
+  const serialized = body.toString()
+  if (Buffer.byteLength(serialized) > HTTP_REQUEST_LIMITS.bodyBytes) {
+    throw new HttpRequestValidationError("O formulário excede o limite de 8 MB.", "body")
+  }
+  return serialized
 }
 
 function prepareFileBody(
@@ -212,6 +231,9 @@ function prepareFileBody(
     projectRoot,
     resolveHttpTemplate(request.body.filePath ?? "", variables),
   )
+  if (statSync(path).size > HTTP_REQUEST_LIMITS.fileBytes) {
+    throw new HttpRequestValidationError("O arquivo de body excede 256 MB.", "body")
+  }
   const file = Bun.file(path)
   if (!hasContentType(headers) && file.type) headers.push(["Content-Type", file.type])
   return { body: file, bodyDescriptor: { kind: "file" as const, path } }
@@ -229,10 +251,25 @@ function prepareMultipartBody(
     kind: "text" | "file"
     sensitivity: HttpMultipartPart["sensitivity"]
   }> = []
-  for (const part of request.body.multipart ?? []) {
-    if (!part.enabled || !part.name.trim()) continue
+  const enabledParts = (request.body.multipart ?? []).filter(
+    (part) => part.enabled && part.name.trim(),
+  )
+  if (enabledParts.length > HTTP_REQUEST_LIMITS.fields) {
+    throw new HttpRequestValidationError("O multipart excede 500 partes.", "body")
+  }
+  let totalBytes = 0
+  let textBytes = 0
+  for (const part of enabledParts) {
     if (part.kind === "file") {
       const path = safeProjectFile(projectRoot, resolveHttpTemplate(part.value, variables))
+      const size = statSync(path).size
+      if (
+        size > HTTP_REQUEST_LIMITS.fileBytes ||
+        totalBytes + size > HTTP_REQUEST_LIMITS.fileBytes
+      ) {
+        throw new HttpRequestValidationError("Os arquivos multipart excedem 256 MB.", "body")
+      }
+      totalBytes += size
       form.append(part.name, Bun.file(path), basename(path))
       parts.push({
         name: part.name,
@@ -242,6 +279,12 @@ function prepareMultipartBody(
       })
     } else {
       const value = resolveHttpTemplate(part.value, variables)
+      const size = Buffer.byteLength(part.name) + Buffer.byteLength(value)
+      textBytes += size
+      totalBytes += size
+      if (textBytes > HTTP_REQUEST_LIMITS.bodyBytes || totalBytes > HTTP_REQUEST_LIMITS.fileBytes) {
+        throw new HttpRequestValidationError("O texto multipart excede 8 MB.", "body")
+      }
       form.append(part.name, value)
       parts.push({ name: part.name, value, kind: "text", sensitivity: part.sensitivity })
     }
@@ -290,16 +333,37 @@ export function prepareHttpRequest(
   }
 
   const url = normalizeHttpUrl(applyPathParameters(request.url, request.path, variables))
-  for (const entry of enabledValues(request.query)) {
+  const queryEntries = enabledValues(request.query)
+  if (queryEntries.length > HTTP_REQUEST_LIMITS.fields) {
+    throw new HttpRequestValidationError("A query excede 500 parâmetros.", "url")
+  }
+  for (const entry of queryEntries) {
     url.searchParams.append(entry.name, resolveHttpTemplate(entry.value, variables))
   }
+  if (Buffer.byteLength(url.toString()) > HTTP_REQUEST_LIMITS.urlBytes) {
+    throw new HttpRequestValidationError("A URL excede o limite de 16 KB.", "url")
+  }
 
-  const headers = enabledValues(request.headers).map((entry): [string, string] => {
+  const headerEntries = enabledValues(request.headers)
+  if (headerEntries.length > HTTP_REQUEST_LIMITS.headers) {
+    throw new HttpRequestValidationError("A requisição excede 200 headers.")
+  }
+  const headers = headerEntries.map((entry): [string, string] => {
     const name = entry.name.trim()
     validateHeader(name, entry.value)
     return [name, resolveHttpTemplate(entry.value, variables)]
   })
   applyAuth(url, headers, request.auth, variables)
+  if (Buffer.byteLength(url.toString()) > HTTP_REQUEST_LIMITS.urlBytes) {
+    throw new HttpRequestValidationError("A URL excede o limite de 16 KB.", "url")
+  }
+  const headerBytes = headers.reduce(
+    (total, [name, value]) => total + Buffer.byteLength(name) + Buffer.byteLength(value) + 4,
+    0,
+  )
+  if (headerBytes > HTTP_REQUEST_LIMITS.headerBytes) {
+    throw new HttpRequestValidationError("Os headers excedem o limite de 128 KB.")
+  }
   const preparedBody = prepareBody(request, headers, variables, projectRoot)
   const proxyUrl = normalizeHttpProxyUrl(
     resolveHttpTemplate(request.options.proxy ?? "", variables),

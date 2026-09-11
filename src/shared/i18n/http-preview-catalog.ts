@@ -1,5 +1,5 @@
 export const HTTP_PREVIEW_MESSAGES = [
-  ["[4] Preview", "[4] Preview", "[4] Vista previa", "[4] プレビュー", "[4] 预览", "[4] 미리보기"],
+  ["Preview", "Preview", "Vista previa", "プレビュー", "预览", "미리보기"],
   [
     "PREVIEW INDISPONÍVEL",
     "PREVIEW UNAVAILABLE",

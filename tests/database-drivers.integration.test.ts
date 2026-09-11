@@ -259,11 +259,13 @@ suite("database driver integration", () => {
             table: fixture.usersTable,
             columns,
             mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Should rollback" } },
+            originalRow: { id: 1, name: "Alice" },
           },
           {
             table: fixture.usersTable,
             columns,
             mutation: { kind: "insert", values: { name: "Missing email" } },
+            originalRow: null,
           },
         ]),
       ).rejects.toThrow()
@@ -279,6 +281,7 @@ suite("database driver integration", () => {
           table: fixture.usersTable,
           columns,
           mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Alice Updated" } },
+          originalRow: { id: 1, name: "Alice" },
         },
       ])
       const committed = await api.executeDatabaseQuery(
