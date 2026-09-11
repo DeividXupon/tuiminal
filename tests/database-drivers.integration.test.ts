@@ -315,6 +315,7 @@ suite("database driver integration", () => {
               ),
             },
           },
+          originalRow: null,
         },
       ])
       const castType = fixture.driver === "mysql" ? "CHAR" : "TEXT"

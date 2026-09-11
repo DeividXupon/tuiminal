@@ -157,6 +157,7 @@ function configuredCommand(
 
   const profileName = stringValue(definition?.profile)
   const profile = profileName ? options.profiles?.[profileName] : undefined
+  const explicitAutostart = definition?.autostart === true
   const autorestart = definition?.autorestart === true
   const restartPolicy = autorestart
     ? "on-failure"

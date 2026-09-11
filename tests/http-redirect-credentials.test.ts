@@ -135,12 +135,21 @@ describe("HTTP redirect credential isolation", () => {
         ? new Response(null, { status: 307, headers: { location: "https://two.test/next" } })
         : new Response("ok")
     }) as typeof fetch
-    await fetchWithHttpRedirects(prepared, new AbortController().signal, fetcher)
+    await fetchWithHttpRedirects(
+      prepared,
+      new AbortController().signal,
+      fetcher,
+      10,
+      undefined,
+      false,
+      undefined,
+      () => true,
+    )
     expect(seen).toEqual([
       { "x-api-version": "v1", "content-type": "application/json" },
       { "x-api-version": "v1", "content-type": "application/json" },
     ])
-    expect(prepared.sensitiveHeaderNames).toEqual([])
+    expect(prepared.credentialHeaderNames).toEqual([])
   })
 
   test("preserves credentials on the original origin and removes them before another port", async () => {
@@ -194,7 +203,16 @@ describe("HTTP redirect credential isolation", () => {
         })
       }) as typeof fetch
 
-      await fetchWithHttpRedirects(request, new AbortController().signal, fetcher)
+      await fetchWithHttpRedirects(
+        request,
+        new AbortController().signal,
+        fetcher,
+        10,
+        undefined,
+        false,
+        undefined,
+        () => true,
+      )
       expect(Object.fromEntries(seen[0] ?? [])).toEqual(credentialHeaders)
       expect(seen[1]).toEqual([["x-trace", "public-trace"]])
       expect(seen[2]).toEqual([["x-trace", "public-trace"]])

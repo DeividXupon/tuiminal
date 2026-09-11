@@ -107,25 +107,35 @@ export function PlasmaLoadingOverlay({
         overflow: "hidden",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: background,
-        opacity: renderedPresence,
       }}
     >
-      <text
-        {...(id ? { id: `${id}-pattern` } : {})}
-        content={content}
-        selectable={false}
+      <box
         style={{
           position: "absolute",
           top: 0,
           left: 0,
-          width: dimensions.width,
-          height: dimensions.height,
-          wrapMode: "none",
-          overflow: "hidden",
-          bg: background,
+          right: 0,
+          bottom: 0,
+          backgroundColor: background,
+          opacity: renderedPresence,
         }}
-      />
+      >
+        <text
+          {...(id ? { id: `${id}-pattern` } : {})}
+          content={content}
+          selectable={false}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: dimensions.width,
+            height: dimensions.height,
+            wrapMode: "none",
+            overflow: "hidden",
+            bg: background,
+          }}
+        />
+      </box>
       <box
         {...(id ? { id: `${id}-message` } : {})}
         style={{
@@ -140,9 +150,12 @@ export function PlasmaLoadingOverlay({
           paddingRight: 2,
         }}
       >
-        <text content={translateUi(label)} style={{ fg: accent }} />
+        <text content={translateUi(label)} style={{ fg: accent, bg: COLORS.panelRaised }} />
         {detail ? (
-          <text content={translateUi(detail)} style={{ fg: COLORS.text, wrapMode: "word" }} />
+          <text
+            content={translateUi(detail)}
+            style={{ fg: COLORS.text, bg: COLORS.panelRaised, wrapMode: "word" }}
+          />
         ) : null}
       </box>
     </box>

@@ -1,6 +1,6 @@
 import { httpHeaderSensitivity } from "./key-value"
 import type { HttpPrivacyContext, HttpRequestDefinition, HttpVariableContext } from "./types"
-import { resolveHttpTemplate } from "./variables"
+import { httpTemplateReferencesSecret, resolveHttpTemplate } from "./variables"
 
 function resolved(value: string, variables: HttpVariableContext) {
   try {

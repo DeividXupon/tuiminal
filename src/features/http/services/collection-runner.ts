@@ -7,6 +7,7 @@ import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 import { evaluateHttpJsonPath } from "../model/response"
 import {
   combineHttpPrivacy,
+  httpRequestSecretValues,
   requestHttpPrivacy,
   redactHttpUrlSecrets,
   redactKnownHttpSecrets,
@@ -116,10 +117,17 @@ export function redactHttpRunUrl(
   return redactHttpHistoryUrl(redactHttpUrlSecrets(value, secrets))
 }
 
-export function redactHttpRunDiagnostic(value: string, variables: HttpVariableContext) {
-  const secrets = [...variables.values()]
-    .filter((item) => item.secret && item.value)
-    .map((item) => item.value)
+export function redactHttpRunDiagnostic(
+  value: string,
+  variables: HttpVariableContext,
+  requestSecrets: readonly string[] = [],
+) {
+  const secrets = [
+    ...requestSecrets,
+    ...[...variables.values()]
+      .filter((item) => item.secret && item.value)
+      .map((item) => item.value),
+  ]
   return redactHttpDiagnostic(redactKnownHttpSecrets(value, secrets))
 }
 
@@ -161,7 +169,6 @@ function collectionRunError(
   error: unknown,
   privacy: HttpPrivacyContext,
   environmentName: string | null,
-  requestSecrets: readonly string[],
 ): NonNullable<HttpRunItem["error"]> {
   const kind =
     error instanceof HttpInsecureTlsApprovalError
@@ -227,6 +234,7 @@ export async function runHttpCollectionCase({
       context = runnerContext(request, variables, extracted, variablesForRequest)
       contextReady = true
       privacy = combineHttpPrivacy(privacy, requestHttpPrivacy(request, context))
+      const requestSecrets = httpRequestSecretValues(request, context)
       const executionId = `http-run-${Date.now()}-${results.length}`
       const prepared = prepareHttpRequest(request, executionId, 0, context, root)
       const received = await executePreparedHttpRequest(

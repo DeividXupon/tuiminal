@@ -45,7 +45,7 @@ function createFixtureDatabase(filename: string, userCount: number) {
     );
     CREATE TABLE exact_decimal_bindings (
       id INTEGER PRIMARY KEY,
-      amount TEXT NOT NULL
+      amount DECIMAL TEXT NOT NULL
     );
     CREATE TABLE posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1115,9 +1115,7 @@ describe("staged table mutations", () => {
     const table = { schema: "main", name: "exact_decimal_bindings", type: "table" as const }
     // TEXT is intentional: SQLite NUMERIC affinity itself rounds decimal values.
     // This fixture isolates the application's actual binding path from that storage rule.
-    const columns = (await loadDatabaseTableColumns("write-one", table)).map((column) =>
-      column.field === "amount" ? { ...column, type: "DECIMAL(38,18)" } : column,
-    )
+    const columns = await loadDatabaseTableColumns("write-one", table)
     const amountColumn = columns.find((column) => column.field === "amount")
     if (!amountColumn) throw new Error("Missing decimal fixture column")
     const initial = "123456789012345678.123456789012345678"
@@ -1127,7 +1125,7 @@ describe("staged table mutations", () => {
       values: { id: 1, amount: coerceDatabaseCellValue(amountColumn, initial) },
     }
     const preview = previewTableMutation("write-one", table, columns, mutation)
-    await applyTableMutations("write-one", [{ table, columns, mutation }])
+    await applyTableMutations("write-one", [{ table, columns, mutation, originalRow: null }])
     const inserted = await executeDatabaseQuery(
       "write-one",
       "SELECT amount FROM exact_decimal_bindings",
@@ -1147,6 +1145,7 @@ describe("staged table mutations", () => {
             amount: coerceDatabaseCellValue(amountColumn, "9.007199254740993010000000000000001e15"),
           },
         },
+        originalRow: { id: 1, amount: initial },
       },
     ])
     const updated = await executeDatabaseQuery(

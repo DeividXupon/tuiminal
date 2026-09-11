@@ -10,8 +10,10 @@ import type {
 } from "../model/types"
 import { resolveHttpTemplate } from "../model/variables"
 import { validateHttpRequestAutomation } from "../model/automation"
+import { resolveHttpPathParameters } from "../model/path-parameters"
 import { isValidHttpMethod } from "../model/request-validation"
-import { requestHttpPrivacy } from "../model/secrets"
+import { httpSensitiveHeaderNames, requestHttpPrivacy } from "../model/secrets"
+import { httpUrlWithProtocol } from "../model/url-input"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 export const HTTP_REQUEST_LIMITS = {
@@ -319,7 +321,7 @@ export function prepareHttpRequest(
     throw new HttpRequestValidationError("O método HTTP contém caracteres inválidos.")
   }
 
-  const url = normalizeHttpUrl(applyPathParameters(request.url, request.path, variables))
+  const url = normalizeHttpUrl(resolveHttpPathParameters(request.url, request.path, variables))
   const queryEntries = enabledValues(request.query)
   if (queryEntries.length > HTTP_REQUEST_LIMITS.fields) {
     throw new HttpRequestValidationError("A query excede 500 parâmetros.", "url")
@@ -359,20 +361,12 @@ export function prepareHttpRequest(
   return {
     executionId,
     privacy: requestHttpPrivacy(request, variables),
-    credentialHeaderNames: [
-      ...request.headers
-        .filter((entry) => entry.sensitivity !== "normal")
-        .map((entry) => entry.name),
-      ...(request.auth.kind === "api-key" && request.auth.placement === "header"
-        ? [request.auth.name]
-        : []),
-    ],
+    credentialHeaderNames: httpSensitiveHeaderNames(request, headers, variables),
     requestId: request.id,
     requestRevision,
     method,
     url: url.toString(),
     headers,
-    sensitiveHeaderNames: httpSensitiveHeaderNames(request, headers, variables),
     ...preparedBody,
     timeoutMs: request.options.timeoutMs,
     followRedirects: request.options.followRedirects,

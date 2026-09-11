@@ -74,7 +74,10 @@ export function redirectedHttpHeaders(
       !["host", "referer"].includes(normalized) &&
       !authNames.has(normalized) &&
       httpHeaderSensitivity(name) === "normal" &&
-      privacy.redactText(value) === value
+      // Header provenance is authoritative. Keep the privacy fallback for an
+      // exact known private value without treating an incidental substring
+      // overlap (for example `application` in a content type) as a credential.
+      privacy.redactText(value) !== "<redacted>"
     )
   })
 }
