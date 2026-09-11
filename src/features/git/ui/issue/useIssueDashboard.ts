@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNotificationFromValue } from "../../../../shared/notifications"
 import { resolveGitProjectScope } from "../../services/git"
+import { GitHubAuthenticationRequiredError } from "../../services/github/auth"
 import { type GhTransportOptions, GitHubTransportError } from "../../services/github/transport"
 import { IssueSession, type IssueSessionResult } from "../../services/issue-session"
 
@@ -8,6 +9,7 @@ export type IssueDashboardState =
   | { status: "demo" }
   | { status: "idle" }
   | { status: "loading" }
+  | { status: "authentication"; host: string }
   | IssueSessionResult
   | { status: "error"; kind: string; error: string }
 
@@ -17,6 +19,9 @@ function transportFromEnvironment(): GhTransportOptions {
 }
 
 function dashboardError(error: unknown): IssueDashboardState {
+  if (error instanceof GitHubAuthenticationRequiredError) {
+    return { status: "authentication", host: error.host }
+  }
   if (error instanceof GitHubTransportError) {
     return { status: "error", kind: error.kind, error: error.message }
   }

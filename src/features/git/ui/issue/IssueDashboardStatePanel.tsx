@@ -2,7 +2,10 @@ import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ISSUE_CONFIG_PATH } from "../../storage/issue/config"
-import { GitHubCliRequirementPanel } from "../shared/GitHubCliRequirementPanel"
+import {
+  GitHubAuthenticationPanel,
+  GitHubCliRequirementPanel,
+} from "../shared/GitHubCliRequirementPanel"
 import type { IssueDashboardState } from "./useIssueDashboard"
 
 function stateCopy(state: IssueDashboardState) {
@@ -41,6 +44,9 @@ export function IssueDashboardStatePanel({
         onRetry={onRetry}
       />
     )
+  }
+  if (state.status === "authentication") {
+    return <GitHubAuthenticationPanel active={active} host={state.host} onRetry={onRetry} />
   }
   const copy = stateCopy(state)
   return (

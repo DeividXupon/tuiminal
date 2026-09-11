@@ -17,6 +17,6 @@ export const gitKeyboardScope = {
     "git-compare-branch-list",
     "git-compare-branch-search",
   ],
-  prefixes: ["git-pr-section-editor-", "git-issue-section-editor-", "git-gh-installer-"],
+  prefixes: ["git-pr-section-editor-", "git-issue-section-editor-", "git-gh-guidance-"],
   deferEscape: true,
 } as const satisfies KeyboardScope

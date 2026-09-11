@@ -14,13 +14,13 @@ export type GitHubCliInstallPlan = {
   guideUrl: string
 }
 
-export type GitHubCliInstallerExit = {
+export type GitHubCliGuidedTerminalExit = {
   code: number | null
   signal: string | null
   stopped: boolean
 }
 
-export type GitHubCliInstallerProcess = {
+export type GitHubCliGuidedTerminalProcess = {
   pid: number
   write: (data: string | Uint8Array) => void
   resize: (columns: number, rows: number) => void
@@ -200,21 +200,23 @@ function processEnvironment() {
   )
 }
 
-export function startGitHubCliInstaller(
-  plan: GitHubCliInstallPlan,
-  options: {
-    columns: number
-    rows: number
-    onData: (data: Uint8Array) => void
-    onExit: (result: GitHubCliInstallerExit) => void
-  },
-): GitHubCliInstallerProcess {
-  if (!bunRuntime || !plan.command) throw new Error("Instalador interativo indisponível.")
+function guidedShellCommand() {
+  if (process.platform === "win32") return [process.env.COMSPEC?.trim() || "cmd.exe"]
+  return [process.env.SHELL?.trim() || "/bin/sh", "-l"]
+}
+
+export function startGitHubCliGuidedTerminal(options: {
+  columns: number
+  rows: number
+  onData: (data: Uint8Array) => void
+  onExit: (result: GitHubCliGuidedTerminalExit) => void
+}): GitHubCliGuidedTerminalProcess {
+  if (!bunRuntime) throw new Error("Terminal guiado indisponível.")
   let stopped = false
   let closed = false
   let exited = false
   let forceStopTimer: ReturnType<typeof setTimeout> | null = null
-  const subprocess = bunRuntime.spawn([...plan.command], {
+  const subprocess = bunRuntime.spawn(guidedShellCommand(), {
     cwd: process.cwd(),
     env: {
       ...processEnvironment(),
@@ -240,7 +242,7 @@ export function startGitHubCliInstaller(
   const terminal = subprocess.terminal
   if (!terminal) {
     kill("SIGTERM")
-    throw new Error("O Bun não conseguiu criar o terminal PTY do instalador.")
+    throw new Error("O Bun não conseguiu criar o terminal PTY guiado.")
   }
   const closeTerminal = () => {
     if (closed) return
@@ -251,7 +253,7 @@ export function startGitHubCliInstaller(
       // The child may close the PTY before its exit promise settles.
     }
   }
-  const handle: GitHubCliInstallerProcess = {
+  const handle: GitHubCliGuidedTerminalProcess = {
     pid: subprocess.pid,
     write(data) {
       if (closed) return

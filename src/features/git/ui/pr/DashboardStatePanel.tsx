@@ -2,7 +2,10 @@ import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PULL_REQUEST_CONFIG_PATH } from "../../storage/pr/config"
-import { GitHubCliRequirementPanel } from "../shared/GitHubCliRequirementPanel"
+import {
+  GitHubAuthenticationPanel,
+  GitHubCliRequirementPanel,
+} from "../shared/GitHubCliRequirementPanel"
 import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 
 function stateCopy(state: PullRequestDashboardState) {
@@ -44,6 +47,9 @@ export function DashboardStatePanel({
         onRetry={onRetry}
       />
     )
+  }
+  if (state.status === "authentication") {
+    return <GitHubAuthenticationPanel active={active} host={state.host} onRetry={onRetry} />
   }
   const copy = stateCopy(state)
   return (

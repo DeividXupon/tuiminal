@@ -232,7 +232,8 @@ export function IssuesWorkspace({
 
   useIssueWorkspaceKeyboard({
     active,
-    blocked: modalOpen || dashboard.status === "requirements",
+    blocked:
+      modalOpen || dashboard.status === "requirements" || dashboard.status === "authentication",
     focus,
     hasSelection: Boolean(selected),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,

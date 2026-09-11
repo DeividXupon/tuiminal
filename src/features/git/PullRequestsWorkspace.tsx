@@ -279,7 +279,11 @@ export function PullRequestsWorkspace({
 
   usePullRequestWorkspaceKeyboard({
     active,
-    blocked: modalOpen || Boolean(diffTarget) || dashboard.status === "requirements",
+    blocked:
+      modalOpen ||
+      Boolean(diffTarget) ||
+      dashboard.status === "requirements" ||
+      dashboard.status === "authentication",
     focus,
     hasSelection: Boolean(selected),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,

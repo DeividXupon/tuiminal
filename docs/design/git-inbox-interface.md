@@ -55,6 +55,7 @@ uma alteração invalida o cache quando o Inbox voltar a ficar ativo.
 O carregamento inicial ocupa o painel com plasma ASCII e mensagem em primeiro
 plano, dissolvendo rapidamente ao revelar a lista; paginação e refresh não cobrem
 conteúdo já carregado.
-Se `gh` estiver ausente ou antigo, Inbox usa a mesma explicação e mini terminal
-guiado de PR/Issues. Instalação exige `[I]` ou clique e uma versão válida recarrega
-a tela automaticamente; autenticação permanece separada.
+Se `gh` estiver ausente, antigo ou sem login, Inbox usa a mesma explicação e mini
+terminal guiado de PR/Issues. `[C]` copia o comando e `[Enter]`/mouse foca o shell;
+o usuário cola e executa. Versão ou login válidos recarregam a tela automaticamente,
+sem o Tuiminal ler tokens nem iniciar os comandos exibidos.

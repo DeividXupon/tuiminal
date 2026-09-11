@@ -67,6 +67,7 @@ function dashboardMeta(dashboard: PullRequestDashboardState) {
       ? "GITHUB CLI NÃO ENCONTRADO"
       : "GITHUB CLI DESATUALIZADO"
   }
+  if (dashboard.status === "authentication") return "AUTENTICAÇÃO GITHUB NECESSÁRIA"
   if (dashboard.status === "config-error") return "ERRO NA CONFIGURAÇÃO"
   if (dashboard.status === "error") {
     return dashboard.kind === "not-authenticated"

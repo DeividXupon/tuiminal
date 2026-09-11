@@ -7,7 +7,10 @@ import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { InboxNotification, InboxSection } from "../../model/inbox/types"
 import { InboxList } from "./InboxList"
 import { InboxPreview } from "./InboxPreview"
-import { GitHubCliRequirementPanel } from "../shared/GitHubCliRequirementPanel"
+import {
+  GitHubAuthenticationPanel,
+  GitHubCliRequirementPanel,
+} from "../shared/GitHubCliRequirementPanel"
 import type { InboxDashboardState } from "./useInboxDashboard"
 
 export function inboxDashboardError(state: InboxDashboardState) {
@@ -106,6 +109,9 @@ function InboxStatePanel({
         onRetry={onRetry}
       />
     )
+  }
+  if (state.status === "authentication") {
+    return <GitHubAuthenticationPanel active={active} host={state.host} onRetry={onRetry} />
   }
   const loading = state.status === "loading" || state.status === "idle"
   return (

@@ -67,6 +67,7 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 - O carregamento inicial e o de detalhes ocupam o painel com plasma ASCII e texto
   legível, dissolvendo rapidamente quando os dados chegam. Paginação e refresh
   permanecem inline.
-- `gh` ausente ou antigo substitui o conteúdo por explicação e um mini terminal
-  responsivo. O comando fica visível e só começa por `[I]`/clique; o PTY aceita a
-  interação solicitada pelo sistema, valida a versão e recarrega Issues ao final.
+- `gh` ausente, antigo ou sem login substitui o conteúdo por explicação e um mini
+  terminal responsivo. `[C]` copia o comando e `[Enter]`/mouse foca o shell; o
+  usuário cola e executa. O Tuiminal nunca injeta o comando, apenas valida versão
+  ou autenticação e recarrega Issues ao final.

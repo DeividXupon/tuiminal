@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { resolveGitProjectScope } from "../../services/git"
+import { GitHubAuthenticationRequiredError } from "../../services/github/auth"
 import { InboxSession, type InboxSessionResult } from "../../services/inbox-session"
 import { type GhTransportOptions, GitHubTransportError } from "../../services/github/transport"
 
 export type InboxDashboardState =
   | { status: "demo" }
   | { status: "idle" | "loading" }
+  | { status: "authentication"; host: string }
   | InboxSessionResult
   | { status: "error"; kind: string; error: string }
 
@@ -15,6 +17,9 @@ function transportFromEnvironment(): GhTransportOptions {
 }
 
 function dashboardError(error: unknown): InboxDashboardState {
+  if (error instanceof GitHubAuthenticationRequiredError) {
+    return { status: "authentication", host: error.host }
+  }
   if (error instanceof GitHubTransportError) {
     return { status: "error", kind: error.kind, error: error.message }
   }

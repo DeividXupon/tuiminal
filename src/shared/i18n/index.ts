@@ -2,6 +2,7 @@ import stringWidth from "string-width"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
+import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
@@ -95,6 +96,7 @@ const MESSAGES: readonly Message[] = [
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,
+  ...GIT_CLI_GUIDANCE_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [

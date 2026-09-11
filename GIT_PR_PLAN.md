@@ -207,11 +207,11 @@ vizinho somente para navegação, nunca para reapontar uma confirmação já abe
 O primeiro adaptador fixa **gh 2.40.0** como versão mínima conservadora e ainda
 testa capacidades/formato de saída. Quando o binário está ausente ou antigo, PR,
 Issues e Inbox compartilham uma tela explicativa que detecta um gerenciador
-conhecido, mostra o comando antes de qualquer execução e oferece um mini terminal
-PTY. Nada começa automaticamente: somente `[I]` ou o controle de mouse inicia a
-instalação/atualização. Ao terminar, o Tuiminal valida novamente a versão e
-recarrega a área Git. Essa versão mínima pode subir caso testes de integração
-revelem uma dependência mais nova.
+conhecido, mostra o comando, oferece `[C]` para copiá-lo e um mini terminal PTY
+focado por mouse ou `[Enter]`. O Tuiminal abre somente o shell do usuário: nunca
+injeta nem executa o comando exibido. Ao terminar, uma verificação periódica
+valida novamente a versão e recarrega a área Git. Essa versão mínima pode subir
+caso testes de integração revelem uma dependência mais nova.
 
 - Detectar binário, versão e flags necessárias sem bloquear Base.
 - Aceitar somente comandos fixos de gerenciadores conhecidos; nunca interpolar
@@ -222,8 +222,10 @@ revelem uma dependência mais nova.
   etapa explícita `gh auth login`, separada da instalação.
 - Reusar autenticação do GitHub CLI; consultar a identidade efetiva do viewer.
 - Não chamar `gh auth token` para copiar segredo para o app e não registrar tokens.
-- Sem login, mostrar instrução `gh auth login --hostname <host>` e verificar de novo.
-  Um login interativo não deve ser disparado ocultamente por um subprocesso em pipe.
+- Sem login, compartilhar o mesmo passo guiado com explicação, `[C]` para copiar
+  `gh auth login --hostname <host> --web` e mini terminal. O usuário cola e executa
+  o comando; o Tuiminal não injeta entrada, não lê tokens e detecta o login válido
+  para o host antes de recarregar automaticamente.
 - Não trocar a conta global do `gh` sem uma ação explícita. Se a identidade mudar
   externamente, invalidar caches e confirmações; exigir nova revisão da ação.
 - Host em allowlist escolhida pelo usuário; API nunca recebe um host vindo do

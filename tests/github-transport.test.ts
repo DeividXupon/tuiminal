@@ -7,6 +7,7 @@ import { mergePullRequestDetailPage } from "../src/features/git/model/pr/detail-
 import {
   detectGhCapabilities,
   ghVersionIsSupported,
+  GitHubAuthenticationRequiredError,
   loadGhAuthContext,
   parseGhVersion,
 } from "../src/features/git/services/github/auth"
@@ -55,6 +56,10 @@ if (args[0] === "--version") {
 } else if (args[0] === "echo-stdin") {
   process.stdout.write(await Bun.stdin.text())
 } else if (args[0] === "api" && args.at(-1) === "user") {
+  if (process.env.FAKE_GH_AUTH_ERROR === "1") {
+    console.error("not logged into any GitHub hosts")
+    process.exit(1)
+  }
   const viewer = process.env.FAKE_GH_VIEWER || "fixture-user"
   console.log(JSON.stringify({ login: viewer, node_id: "node-" + viewer }))
 } else if (args[0] === "api" && args[1] === "graphql") {
@@ -492,6 +497,27 @@ describe("Pull request session coordination", () => {
       status: "requirements",
       capabilities: { available: false, version: null, supported: false, reason: "missing" },
     })
+    session.dispose()
+  })
+
+  test("keeps the host on authentication failures for the guided screen", async () => {
+    const session = new PullRequestSession({
+      transport: { executable: fakeGh, env: { FAKE_GH_AUTH_ERROR: "1" } },
+    })
+    await expect(session.loadSection(temporaryDirectory)).rejects.toEqual(
+      expect.objectContaining({
+        name: "GitHubAuthenticationRequiredError",
+        kind: "not-authenticated",
+        host: "github.com",
+      }),
+    )
+    await expect(
+      loadGhAuthContext({
+        host: "github.example.test",
+        generation: 0,
+        options: { executable: fakeGh, env: { FAKE_GH_AUTH_ERROR: "1" } },
+      }),
+    ).rejects.toBeInstanceOf(GitHubAuthenticationRequiredError)
     session.dispose()
   })
 })

@@ -236,6 +236,13 @@ campos continuam disponíveis na prévia, mesmo quando ocultos na tabela.
 Esta é a proposta do Tuiminal. Letras maiúsculas de ações distintas aparecem como
 `Shift+letra`, evitando a ambiguidade entre comentar e fazer checkout.
 
+As telas compartilhadas de instalação/atualização e autenticação do GitHub CLI
+mostram um passo a passo ao lado de um mini terminal. `[C]` copia o comando fixo,
+`[Enter]` foca o terminal e `[R]` verifica novamente; o mouse alcança os mesmos
+controles. Nenhuma tecla executa o comando sugerido: o usuário precisa colá-lo ou
+digitá-lo no shell. O Tuiminal apenas detecta a versão ou o login concluído e
+recarrega a área remota.
+
 | Contexto | Tecla | Ação |
 | --- | --- | --- |
 | Git sem editor/modal | `[1]` / `[2]` / `[3]` | Diffs / PR / Issues. Preservar estado ao alternar. |
@@ -284,11 +291,13 @@ controle do editor, não da navegação global.
 Quando `gh` não existe ou é anterior a 2.40.0, o dashboard troca seu corpo por
 uma composição responsiva: explicação e tutorial à esquerda, mini terminal à
 direita; em terminais estreitos os blocos são empilhados. O comando oficial
-detectado fica visível antes da execução. `[I]` ou clique inicia o gerenciador
-conhecido em PTY, permitindo responder ao próprio sistema quando ele solicitar
-elevação; `[Esc]` libera o foco do terminal. A saída bem-sucedida dispara nova
-detecção e recarga automática. O fluxo não inicia `gh auth login`, não persiste
-entrada do PTY e encerra apenas o processo que ele próprio criou ao desmontar.
+detectado fica visível para cópia com `[C]`; `[Enter]` ou clique foca um shell PTY
+vazio no qual o próprio usuário cola e executa o comando. O Tuiminal nunca injeta
+nem executa a instalação. `[Esc]` libera o foco do terminal e a detecção periódica
+recarrega a tela quando encontra uma versão compatível. A falta de login mostra o
+mesmo passo a passo para `gh auth login --hostname <host> --web`, sem ler ou
+persistir token nem entrada do PTY. Ao desmontar, encerra somente o shell criado
+por esse painel.
 
 ## 7. Estados que precisam de tela própria
 

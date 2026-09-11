@@ -10,6 +10,16 @@ export type GhCapabilities = {
   reason: "ready" | "missing" | "invalid-version" | "outdated"
 }
 
+export class GitHubAuthenticationRequiredError extends GitHubTransportError {
+  constructor(
+    readonly host: string,
+    message: string,
+  ) {
+    super("not-authenticated", message)
+    this.name = "GitHubAuthenticationRequiredError"
+  }
+}
+
 function versionParts(version: string) {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
   return match ? match.slice(1).map(Number) : null
@@ -63,10 +73,18 @@ export async function loadGhAuthContext({
   generation: number
   options?: GhTransportOptions
 }): Promise<PullRequestAuthContext> {
-  const viewer = await runGhJson(
-    { args: ["api", "--hostname", host, "user"] },
-    { ...options, host, validate: isViewer },
-  )
+  let viewer: { login: string; node_id: string }
+  try {
+    viewer = await runGhJson(
+      { args: ["api", "--hostname", host, "user"] },
+      { ...options, host, validate: isViewer },
+    )
+  } catch (error) {
+    if (error instanceof GitHubTransportError && error.kind === "not-authenticated") {
+      throw new GitHubAuthenticationRequiredError(host, error.message)
+    }
+    throw error
+  }
   return {
     host,
     viewerId: viewer.node_id,

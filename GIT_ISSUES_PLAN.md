@@ -16,9 +16,10 @@ fixtures e um `gh` falso; nenhuma issue, credencial ou configuração pessoal re
 - O transporte autenticado é GitHub CLI 2.40.0 ou mais recente. O Tuiminal não lê
   nem persiste tokens.
 - Se `gh` estiver ausente ou antigo, a tela compartilhada explica o CLI, mostra o
-  comando detectado e só abre seu instalador PTY após `[I]` ou clique. A versão é
-  validada ao final e Issues recarrega automaticamente; autenticação permanece
-  uma etapa separada com `gh auth login`.
+  comando detectado e oferece `[C]` para copiá-lo e `[Enter]`/mouse para focar um
+  shell PTY. O usuário cola e executa o comando; o Tuiminal apenas valida a versão.
+  A falta de login usa o mesmo tutorial e terminal para o comando de autenticação
+  preso ao host, com detecção e recarga automáticas.
 
 Referências públicas usadas:
 

@@ -65,7 +65,10 @@ export function InboxWorkspace({
   })
   useInboxWorkspaceKeyboard({
     active,
-    blocked: Boolean(actions.pendingAction) || state.status === "requirements",
+    blocked:
+      Boolean(actions.pendingAction) ||
+      state.status === "requirements" ||
+      state.status === "authentication",
     itemCount: items.length,
     onMove: (delta) =>
       setSelectedIndex((current) =>
