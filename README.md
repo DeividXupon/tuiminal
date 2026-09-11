@@ -157,7 +157,7 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
 - Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos.
 - Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre o histórico detalhado.
-- `[Space]` aplica ou remove stage do arquivo; `[A]` faz o mesmo para todos.
+- `[Space]` aplica ou remove stage somente do arquivo selecionado, inclusive nomes com `*`, `?`, colchetes ou `:`; `[A]` faz o mesmo para todos.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox.
 
