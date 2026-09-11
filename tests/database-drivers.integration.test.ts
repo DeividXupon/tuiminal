@@ -78,6 +78,7 @@ async function seedDatabase(fixture: DriverFixture) {
     `CREATE TABLE orders (` +
       `id ${identity}, user_id INTEGER NOT NULL, total DECIMAL(12,2) NOT NULL, ` +
       `CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`,
+    `CREATE TABLE exact_amounts (id INTEGER PRIMARY KEY, amount DECIMAL(38,18) NOT NULL)`,
     `INSERT INTO teams (name) VALUES ('Platform'), ('Risk')`,
     `INSERT INTO users (team_id, name, email, status) VALUES ` +
       `(1, 'Alice', 'alice@example.test', 'active'), ` +
@@ -286,6 +287,39 @@ suite("database driver integration", () => {
         true,
       )
       expect(committed.rows[0]).toEqual({ name: "Alice Updated" })
+    }
+  })
+
+  test("writes exact decimal edits without losing precision on native drivers", async () => {
+    for (const fixture of fixtures) {
+      const table = { ...fixture.usersTable, name: "exact_amounts" }
+      const columns = await api.loadDatabaseTableColumns(fixture.connectionId, table)
+      const amountColumn = columns.find((column) => column.field === "amount")
+      if (!amountColumn) throw new Error("Missing decimal fixture column")
+      const expected = "9007199254740993.010000000000000001"
+      await api.applyTableMutations(fixture.connectionId, [
+        {
+          table,
+          columns,
+          mutation: {
+            kind: "insert",
+            values: {
+              id: 1,
+              amount: api.coerceDatabaseCellValue(
+                amountColumn,
+                "9.007199254740993010000000000000001e15",
+              ),
+            },
+          },
+        },
+      ])
+      const castType = fixture.driver === "mysql" ? "CHAR" : "TEXT"
+      const result = await api.executeDatabaseQuery(
+        fixture.connectionId,
+        `SELECT CAST(amount AS ${castType}) AS amount FROM exact_amounts WHERE id = 1`,
+        true,
+      )
+      expect(result.rows).toEqual([{ amount: expected }])
     }
   })
 

@@ -41,6 +41,10 @@ function createFixtureDatabase(filename: string, userCount: number) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       enabled INTEGER NOT NULL DEFAULT 1
     );
+    CREATE TABLE exact_decimal_bindings (
+      id INTEGER PRIMARY KEY,
+      amount TEXT NOT NULL
+    );
     CREATE TABLE posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -959,11 +963,61 @@ describe("staged table mutations", () => {
     expect(coerceDatabaseCellValue(column("INTEGER"), "42")).toBe(42)
     expect(coerceDatabaseCellValue(column("BIGINT"), "9007199254740993")).toBe(9007199254740993n)
     expect(coerceDatabaseCellValue(column("BOOLEAN"), "false")).toBe(false)
-    expect(coerceDatabaseCellValue(column("DECIMAL(10,2)"), "12.50")).toBe(12.5)
+    expect(coerceDatabaseCellValue(column("DECIMAL(10,2)"), "12.50")).toBe("12.50")
     expect(coerceDatabaseCellValue(column("JSON"), '{"active":true}')).toEqual({ active: true })
     expect(coerceDatabaseCellValue(column("TEXT"), "001")).toBe("001")
     expect(() => coerceDatabaseCellValue(column("INTEGER"), "4.2")).toThrow("inteiro")
     expect(() => coerceDatabaseCellValue(column("JSON"), "{")).toThrow("JSON")
+  })
+
+  test("preserves exact decimal text through preview, native transaction binding, and history", async () => {
+    const table = { schema: "main", name: "exact_decimal_bindings", type: "table" as const }
+    // TEXT is intentional: SQLite NUMERIC affinity itself rounds decimal values.
+    // This fixture isolates the application's actual binding path from that storage rule.
+    const columns = (await loadDatabaseTableColumns("write-one", table)).map((column) =>
+      column.field === "amount" ? { ...column, type: "DECIMAL(38,18)" } : column,
+    )
+    const amountColumn = columns.find((column) => column.field === "amount")
+    if (!amountColumn) throw new Error("Missing decimal fixture column")
+    const initial = "123456789012345678.123456789012345678"
+    const changed = "9007199254740993.010000000000000001"
+    const mutation = {
+      kind: "insert" as const,
+      values: { id: 1, amount: coerceDatabaseCellValue(amountColumn, initial) },
+    }
+    const preview = previewTableMutation("write-one", table, columns, mutation)
+    await applyTableMutations("write-one", [{ table, columns, mutation }])
+    const inserted = await executeDatabaseQuery(
+      "write-one",
+      "SELECT amount FROM exact_decimal_bindings",
+      true,
+    )
+    expect(inserted.rows).toEqual([{ amount: initial }])
+    expect(preview.parameters).toEqual([1, initial])
+
+    await applyTableMutations("write-one", [
+      {
+        table,
+        columns,
+        mutation: {
+          kind: "update",
+          rowKey: { id: 1 },
+          values: {
+            amount: coerceDatabaseCellValue(amountColumn, "9.007199254740993010000000000000001e15"),
+          },
+        },
+      },
+    ])
+    const updated = await executeDatabaseQuery(
+      "write-one",
+      "SELECT amount, typeof(amount) AS storage FROM exact_decimal_bindings",
+      true,
+    )
+    expect(updated.rows).toEqual([{ amount: changed, storage: "text" }])
+    const history = listDatabaseQueryHistory("write-one").find((entry) =>
+      entry.sql.startsWith('UPDATE "exact_decimal_bindings"'),
+    )
+    expect(history?.parameterPreview?.[0]?.value).toBe(JSON.stringify(changed))
   })
 
   test("commits an approved batch atomically and rolls every command back on failure", async () => {
