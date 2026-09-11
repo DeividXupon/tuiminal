@@ -1,57 +1,18 @@
-import type { DatabaseColumn, DatabaseTable } from "./types"
-
-const SQL_IDENTIFIER = String.raw`(?:\`(?:\`\`|[^\`])+\`|"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)`
-const SINGLE_TABLE_FROM = new RegExp(
-  String.raw`\bFROM\s+(${SQL_IDENTIFIER})(?:\s*\.\s*(${SQL_IDENTIFIER}))?`,
-  "i",
-)
-
-function sqlWithoutValuesOrComments(sql: string) {
-  return sql
-    .replace(/\$\$[\s\S]*?\$\$/g, " ")
-    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$/g, " ")
-    .replace(/'(?:''|\\.|[^'])*'/g, "''")
-    .replace(/--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g, " ")
-}
-
-function unquoteSqlIdentifier(identifier: string) {
-  if (identifier.startsWith("`") && identifier.endsWith("`")) {
-    return identifier.slice(1, -1).replaceAll("``", "`")
-  }
-  if (identifier.startsWith('"') && identifier.endsWith('"')) {
-    return identifier.slice(1, -1).replaceAll('""', '"')
-  }
-  return identifier
-}
+import type { DatabaseColumn, DatabaseDriver, DatabaseTable } from "./types"
+import { directQueryRelation } from "./query-projection"
 
 export function databaseEditableQueryTable(
   sql: string,
   tables: DatabaseTable[],
+  driver?: DatabaseDriver,
 ): DatabaseTable | null {
-  const normalized = sqlWithoutValuesOrComments(sql)
-  if (!/^\s*SELECT\b/i.test(normalized)) return null
-  if (/\b(WITH|JOIN|UNION|INTERSECT|EXCEPT)\b/i.test(normalized)) return null
-  if ([...normalized.matchAll(/\bFROM\b/gi)].length !== 1) return null
-
-  const relation = normalized.match(SINGLE_TABLE_FROM)
+  const relation = directQueryRelation(sql, driver)
   if (!relation) return null
-  const first = unquoteSqlIdentifier(relation[1] ?? "")
-  const second = relation[2] ? unquoteSqlIdentifier(relation[2]) : ""
-  const schema = second ? first : null
-  const tableName = second || first
-  if (!tableName) return null
-
-  const relationEnd = (relation.index ?? 0) + relation[0].length
-  const relationTail = normalized.slice(relationEnd)
-  const beforeClause =
-    relationTail.split(/\b(?:WHERE|GROUP|HAVING|ORDER|LIMIT|OFFSET|FETCH|FOR|WINDOW)\b/i, 1)[0] ??
-    ""
-  if (beforeClause.includes(",") || beforeClause.includes("(")) return null
-
   const matches = tables.filter(
     (table) =>
-      table.name.toLocaleLowerCase() === tableName.toLocaleLowerCase() &&
-      (!schema || table.schema.toLocaleLowerCase() === schema.toLocaleLowerCase()),
+      table.name.toLocaleLowerCase() === relation.name.toLocaleLowerCase() &&
+      (!relation.schema ||
+        table.schema.toLocaleLowerCase() === relation.schema.toLocaleLowerCase()),
   )
   return matches.length === 1 ? (matches[0] ?? null) : null
 }
