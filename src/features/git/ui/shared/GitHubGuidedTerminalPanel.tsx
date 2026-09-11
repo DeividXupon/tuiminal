@@ -156,7 +156,7 @@ export function GitHubGuidedTerminalPanel({
             setTerminalClosed(true)
             if (result.stopped) return
             setStatus("failed")
-            setMessage("O mini terminal foi encerrado. Pressione [Enter] para abri-lo novamente.")
+            setMessage("")
           })
         },
       })
