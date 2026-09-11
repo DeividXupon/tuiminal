@@ -174,7 +174,7 @@ test("authentication panel teaches login in its terminal and detects completion"
   const frame = tui.captureCharFrame()
   expect(frame).toContain("AUTENTICAÇÃO GITHUB NECESSÁRIA")
   expect(frame).toContain("gh auth login --hostname github.example.test")
-  expect(frame).toContain("-web")
+  expect(frame).toMatch(/--\s*web/)
   expect(frame).toContain("O Tuiminal não lê nem guarda seu token")
   expect(frame).toContain("LOGIN DO GITHUB")
 

@@ -67,7 +67,7 @@ export function GitHubGuidanceGuide({
       visible={visible}
       style={{
         ...panelBorder(),
-        width: sideBySide ? "43%" : "100%",
+        width: sideBySide ? "50%" : "100%",
         height: stacked ? "50%" : "auto",
         flexGrow: sideBySide || stacked ? 0 : 1,
         minHeight: 9,
