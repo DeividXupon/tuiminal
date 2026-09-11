@@ -9,6 +9,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -43,10 +44,19 @@ function ensureSafeParent(path: string) {
   const parent = dirname(resolve(path))
   const root = parse(parent).root
   let current = root
-  for (const part of parent.slice(root.length).split(/[\\/]/).filter(Boolean)) {
+  const parts = parent.slice(root.length).split(/[\\/]/).filter(Boolean)
+  for (const [index, part] of parts.entries()) {
     current = resolve(current, part)
     if (!existsSync(current)) mkdirSync(current, { mode: 0o700 })
     const info = lstatSync(current)
+    if (info.isSymbolicLink() && index === 0) {
+      // macOS exposes system-owned root aliases such as /var -> /private/var
+      // and /tmp -> /private/tmp. Canonicalize only that trusted root-level
+      // component; application-controlled symlinks deeper in the path remain
+      // forbidden.
+      current = realpathSync(current)
+      if (lstatSync(current).isDirectory()) continue
+    }
     if (info.isSymbolicLink() || !info.isDirectory()) {
       throw new AtomicFileConflictError(
         "O destino não pode atravessar symlinks ou arquivos de configuração.",
