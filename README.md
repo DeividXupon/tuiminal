@@ -348,6 +348,8 @@ Redirects que mudam o host, a porta ou o protocolo removem headers de autentica�
 
 Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada painel usa um PTY real e pode executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
 
+Comandos personalizados aceitam expressões completas do shell, incluindo `&&`, `||`, `;`, pipes, variáveis e laços. Por exemplo, `npm install && npm run dev` executa a segunda etapa se a primeira terminar com sucesso.
+
 ### O que você pode fazer
 
 - Criar seções independentes e manter até 12 terminais na execução.
