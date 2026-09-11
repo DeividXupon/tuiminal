@@ -12,6 +12,8 @@ import { resolveHttpTemplate } from "../model/variables"
 import { validateHttpRequestAutomation } from "../model/automation"
 import { isValidHttpMethod } from "../model/request-validation"
 import { httpSensitiveHeaderNames } from "../model/secrets"
+import { resolveHttpPathParameters } from "../model/path-parameters"
+import { httpUrlWithProtocol } from "../model/url-input"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 
@@ -31,7 +33,7 @@ export function normalizeHttpUrl(source: string) {
     throw new HttpRequestValidationError("Informe uma URL para enviar a requisição.", "url")
   }
 
-  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`
+  const withProtocol = httpUrlWithProtocol(value)
   let url: URL
   try {
     url = new URL(withProtocol)
@@ -65,19 +67,6 @@ export function normalizeHttpProxyUrl(source: string) {
 
 function enabledValues(entries: HttpKeyValue[]) {
   return entries.filter((entry) => entry.enabled && entry.name.trim())
-}
-
-function applyPathParameters(
-  source: string,
-  entries: HttpKeyValue[],
-  variables?: HttpVariableContext,
-) {
-  let result = resolveHttpTemplate(source, variables)
-  for (const entry of enabledValues(entries)) {
-    const encoded = encodeURIComponent(resolveHttpTemplate(entry.value, variables))
-    result = result.replaceAll(`:${entry.name}`, encoded).replaceAll(`{${entry.name}}`, encoded)
-  }
-  return result
 }
 
 function validateHeader(name: string, value: string) {
@@ -289,7 +278,7 @@ export function prepareHttpRequest(
     throw new HttpRequestValidationError("O método HTTP contém caracteres inválidos.")
   }
 
-  const url = normalizeHttpUrl(applyPathParameters(request.url, request.path, variables))
+  const url = normalizeHttpUrl(resolveHttpPathParameters(request.url, request.path, variables))
   for (const entry of enabledValues(request.query)) {
     url.searchParams.append(entry.name, resolveHttpTemplate(entry.value, variables))
   }

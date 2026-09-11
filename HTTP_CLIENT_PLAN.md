@@ -712,6 +712,9 @@ afirmar foco, conteúdo preservado e camada fechada por `[Esc]`.
   resolvida sem revelar segredos;
 - query e path params em tabelas de key/value com enable/disable, duplicatas, ordem e
   sincronização previsível com a URL, reunidos visualmente na tab `Params`;
+- path params substituem segmentos completos `:name` ou tokens `{name}` apenas no
+  pathname, sem alterar authority, query ou fragment; a primeira linha ativa vence
+  duplicatas e o valor resolvido é codificado uma vez, sem novas substituições;
 - headers em tabela com autocomplete de nomes/valores, duplicatas e indicação dos
   headers adicionados automaticamente ou herdados, incluindo badge de origem;
 - auth: No Auth, Bearer, Basic e API Key na primeira versão estruturada; Digest,
