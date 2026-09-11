@@ -105,6 +105,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Listening-port actions may open the browser, copy the URL, or prefill the HTTP tab. Session restoration recovers projects, view/profile choices, and completed history, never orphaned live processes.
 - Processes started by Runner are stopped when Tuiminal exits. During development or testing, never kill unrelated user processes; stop only exact PIDs or sessions started by the current test.
 - Runner stop first sends `SIGTERM` to the process group it created and escalates to `SIGKILL` after a one-second grace period if the group does not exit. Clear the escalation timer on exit; this bounded fallback is what turns the UI from `stopping` into a completed state for commands such as `bun run dev` that ignore graceful termination.
+- Runner HTTP/port health checks share one total deadline across probes and retry delays. Process cancellation must abort an in-flight probe and cannot report late success. Release HTTP response bodies, sockets, timers, and abort listeners when each attempt finishes; a streaming endpoint must not keep a completed health check alive.
 
 ## HTTP client
 
