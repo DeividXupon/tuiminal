@@ -4,6 +4,7 @@ query TuiminalPullRequestDetails($owner: String!, $name: String!, $number: Int!)
     viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
     pullRequest(number: $number) {
       body baseRefOid headRefOid mergeable mergeStateStatus state isDraft mergedAt
+      reactionGroups { content viewerHasReacted users { totalCount } }
       mergeQueue { id }
       mergeQueueEntry { position state enqueuedAt }
       autoMergeRequest { mergeMethod enabledAt enabledBy { login } }
@@ -27,7 +28,7 @@ query TuiminalPullRequestDetails($owner: String!, $name: String!, $number: Int!)
       }
       comments(first: 50) {
         totalCount pageInfo { hasNextPage endCursor }
-        nodes { id body createdAt url author { login } }
+        nodes { id body createdAt url author { login } reactionGroups { content viewerHasReacted users { totalCount } } }
       }
       timelineItems(first: 50) {
         totalCount pageInfo { hasNextPage endCursor }

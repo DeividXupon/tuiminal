@@ -152,12 +152,12 @@ export const GIT_CLI_GUIDANCE_MESSAGES = [
     "✓ 준비 완료. Git을 다시 불러오는 중…",
   ],
   [
-    "O mini terminal foi encerrado. Saia e volte a esta tela para abri-lo novamente.",
-    "The mini terminal was closed. Leave and return to this screen to open it again.",
-    "El mini terminal se cerró. Sal y vuelve a esta pantalla para abrirlo de nuevo.",
-    "ミニターミナルが終了しました。もう一度開くにはこの画面を開き直してください。",
-    "迷你终端已关闭。请离开并返回此屏幕以重新打开。",
-    "미니 터미널이 종료되었습니다. 다시 열려면 이 화면을 나갔다가 돌아오세요.",
+    "O mini terminal foi encerrado. Pressione [Enter] para abri-lo novamente.",
+    "The mini terminal was closed. Press [Enter] to open it again.",
+    "El mini terminal se cerró. Pulsa [Enter] para abrirlo de nuevo.",
+    "ミニターミナルが終了しました。[Enter] でもう一度開きます。",
+    "迷你终端已关闭。按 [Enter] 重新打开。",
+    "미니 터미널이 종료되었습니다. [Enter]를 눌러 다시 여세요.",
   ],
   [
     "Não foi possível abrir o mini terminal.",
@@ -224,6 +224,14 @@ export const GIT_CLI_GUIDANCE_MESSAGES = [
     "[Enter] 터미널 사용",
   ],
   [
+    "[Enter] Reabrir terminal",
+    "[Enter] Reopen terminal",
+    "[Enter] Reabrir terminal",
+    "[Enter] ターミナルを再度開く",
+    "[Enter] 重新打开终端",
+    "[Enter] 터미널 다시 열기",
+  ],
+  [
     "Comando automático indisponível. Guia oficial",
     "Automatic command unavailable. Official guide",
     "Comando automático no disponible. Guía oficial",
@@ -238,6 +246,14 @@ export const GIT_CLI_GUIDANCE_MESSAGES = [
     "ここにコマンドを入力または貼り付け・[Esc] でターミナルのフォーカスを解除",
     "在此输入或粘贴命令 · [Esc] 释放终端焦点",
     "여기에 명령을 입력하거나 붙여 넣으세요 · [Esc]로 터미널 포커스 해제",
+  ],
+  [
+    "Mini terminal encerrado · [Enter] reabre · [Esc] libera o foco",
+    "Mini terminal closed · [Enter] reopens · [Esc] releases focus",
+    "Mini terminal cerrado · [Enter] reabre · [Esc] libera el foco",
+    "ミニターミナル終了・[Enter] で再起動・[Esc] でフォーカス解除",
+    "迷你终端已关闭 · [Enter] 重新打开 · [Esc] 释放焦点",
+    "미니 터미널 종료 · [Enter] 다시 열기 · [Esc] 포커스 해제",
   ],
   [
     "Host do GitHub",

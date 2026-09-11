@@ -1,6 +1,7 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "../../shared/i18n"
+import { sortedIssueComments } from "./model/issue/activity"
 import {
   adjacentIssuePreviewTab,
   moveIssueIndex,
@@ -50,6 +51,7 @@ export function IssuesWorkspace({
     activity: 0,
   })
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [selectedCommentIndex, setSelectedCommentIndex] = useState(0)
   const [notice, setNotice] = useState("")
   const [sectionCounts, setSectionCounts] = useState<Record<string, number | null>>({})
   const dashboardFlow = useIssueDashboard(
@@ -76,6 +78,7 @@ export function IssuesWorkspace({
     state: details,
     loadMore: loadMoreDetails,
     loadingMore: loadingMoreDetails,
+    reload: reloadDetails,
   } = useIssueDetails(active && presentation.showDashboard, selected)
   const profileTarget = issueDashboardProfileTarget(dashboard)
   const configuration = useIssueConfiguration({
@@ -92,9 +95,17 @@ export function IssuesWorkspace({
     auth: issueDashboardAuth(dashboard),
     profileRoot: profileTarget?.root ?? null,
     onNotice: setNotice,
-    onRefresh: () => void refresh(),
+    onRefresh: () => {
+      void refresh()
+      void reloadDetails()
+    },
     onLocalCheckout,
   })
+  const comments =
+    details.status === "ready"
+      ? sortedIssueComments(details.details.comments, details.details.identity)
+      : []
+  const selectedComment = comments[selectedCommentIndex] ?? null
   const responsiveLayout = resolveIssueLayout(
     terminal.width,
     terminal.height,
@@ -123,6 +134,7 @@ export function IssuesWorkspace({
     const nextIdentity = item ? issueIdentityKey(item.identity) : null
     if (nextIdentity !== selectedIdentity) {
       setDescriptionExpanded(false)
+      setSelectedCommentIndex(0)
       setPreviewOffsets({ overview: 0, activity: 0 })
     }
     setSelectedIdentity(nextIdentity)
@@ -137,6 +149,7 @@ export function IssuesWorkspace({
     if (selectedIdentity && identityIndex < 0) {
       setNotice(translateUi("A issue selecionada saiu desta seção após a atualização."))
       setDescriptionExpanded(false)
+      setSelectedCommentIndex(0)
       setPreviewOffsets({ overview: 0, activity: 0 })
     }
     const nextIndex = Math.min(resolvedSelectedIndex, presentation.items.length - 1)
@@ -238,6 +251,16 @@ export function IssuesWorkspace({
     hasSelection: Boolean(selected),
     canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
     canLoadPreview: details.status === "ready" && details.details.commentPage.hasNextPage,
+    previewTab,
+    commentCount: comments.length,
+    onCommentMove: (delta) =>
+      setSelectedCommentIndex((current) => moveIssueIndex(current, comments.length, delta)),
+    onCommentReact: () => {
+      if (selectedComment) issueActions.openCommentAction("reaction", selectedComment)
+    },
+    onCommentReply: () => {
+      if (selectedComment) issueActions.openCommentAction("reply", selectedComment)
+    },
     onWorkspaceAction: handleAction,
   })
 
@@ -261,6 +284,7 @@ export function IssuesWorkspace({
         details={details}
         previewScrollOffset={previewOffsets[previewTab]}
         descriptionExpanded={descriptionExpanded}
+        selectedCommentIndex={selectedCommentIndex}
         loadingMoreDetails={loadingMoreDetails}
         previewPosition={configuration.previewPosition}
         previewVisible={previewVisible}
@@ -280,6 +304,12 @@ export function IssuesWorkspace({
         onCopyUrl={() => handleAction({ type: "copy-url" })}
         onCopyNumber={() => handleAction({ type: "copy-number" })}
         onOpenActions={issueActions.openMenu}
+        onSelectComment={(index) => {
+          setSelectedCommentIndex(index)
+          setFocus("preview")
+        }}
+        onReactComment={(comment) => issueActions.openCommentAction("reaction", comment)}
+        onReplyComment={(comment) => issueActions.openCommentAction("reply", comment)}
         onLoadMoreDetails={() => void loadMoreDetails()}
         onSelectSection={selectSection}
         onEditQuery={configuration.openQuery}

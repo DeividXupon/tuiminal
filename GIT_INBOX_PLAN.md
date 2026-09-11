@@ -24,6 +24,8 @@ altera o funcionamento offline de `[1] Diffs`. A interface detalhada está em
   fixo visível e copiável, shell PTY focado por `[Enter]`/mouse, validação e recarga
   automática. O Tuiminal nunca executa o comando. A falta de login usa o mesmo
   passo a passo; autenticação e tokens continuam pertencendo somente ao `gh`.
+  Respostas de protocolo do terminal são encaminhadas e `[Enter]` reabre o shell
+  quando ele tiver encerrado.
 
 ## Segurança e persistência
 

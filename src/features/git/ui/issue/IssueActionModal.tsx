@@ -3,16 +3,21 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { COLORS } from "../../../../core/settings/theme"
-import { translateUi } from "../../../../shared/i18n"
+import { translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { IssueActionKind } from "../../model/issue/actions"
-import type { IssueSummary } from "../../model/issue/types"
+import { GITHUB_REACTION_CHOICES, type GitHubReactionContent } from "../../model/reactions"
+import type { IssueComment, IssueSummary } from "../../model/issue/types"
+import { useBlurModalFocusOnUnmount } from "../useBlurModalFocusOnUnmount"
+import { IssueActionOptions } from "./IssueActionOptions"
 
 const LABELS: Record<IssueActionKind, string> = {
   assign: "Adicionar responsáveis",
   unassign: "Remover responsáveis",
   comment: "Comentar na issue",
+  reaction: "Reagir na issue",
+  reply: "Responder comentário",
   labels: "Editar labels da issue",
   checkout: "Criar e abrir branch da issue",
   close: "Fechar issue",
@@ -20,13 +25,14 @@ const LABELS: Record<IssueActionKind, string> = {
 }
 
 function needsInput(kind: IssueActionKind) {
-  return ["assign", "unassign", "comment", "labels", "checkout"].includes(kind)
+  return ["assign", "unassign", "comment", "reply", "labels", "checkout"].includes(kind)
 }
 
 function placeholder(kind: IssueActionKind) {
   if (kind === "assign" || kind === "unassign") return "usuario, outro-usuario"
   if (kind === "labels") return "bug, frontend, prioridade-alta"
   if (kind === "checkout") return "/caminho/do/clone"
+  if (kind === "reply") return "Escreva a resposta que será enviada…"
   return "Escreva o comentário que será enviado…"
 }
 
@@ -63,8 +69,14 @@ function labelPayload(value: string, currentLabels: readonly string[]) {
   }
 }
 
-function actionPayload(kind: IssueActionKind, value: string, currentLabels: readonly string[]) {
-  if (kind === "comment") return { body: value }
+function actionPayload(
+  kind: IssueActionKind,
+  value: string,
+  currentLabels: readonly string[],
+  reaction: GitHubReactionContent,
+) {
+  if (kind === "comment" || kind === "reply") return { body: value }
+  if (kind === "reaction") return { reaction }
   if (kind === "assign" || kind === "unassign") return { logins: parseLogins(value) }
   if (kind === "labels") return labelPayload(value, currentLabels)
   if (kind === "checkout") return { clonePath: value }
@@ -76,6 +88,8 @@ export function IssueActionModal({
   item,
   currentAssignees,
   currentLabels,
+  targetComment,
+  reactionGroups,
   initialValue,
   checkoutPaths,
   busy,
@@ -88,6 +102,8 @@ export function IssueActionModal({
   item: IssueSummary
   currentAssignees: readonly string[]
   currentLabels: readonly string[]
+  targetComment: IssueComment | null
+  reactionGroups: IssueComment["reactionGroups"]
   initialValue: string
   checkoutPaths: string[]
   busy: boolean
@@ -102,11 +118,16 @@ export function IssueActionModal({
   const inputRef = useRef<InputRenderable | null>(null)
   const valueRef = useRef(initialValue)
   const [value, setValue] = useState(initialValue)
+  const [reaction, setReaction] = useState<GitHubReactionContent>(
+    GITHUB_REACTION_CHOICES[0].content,
+  )
   const input = needsInput(kind)
+  useBlurModalFocusOnUnmount(dialogRef)
 
   useEffect(() => {
     valueRef.current = initialValue
     setValue(initialValue)
+    setReaction(GITHUB_REACTION_CHOICES[0].content)
     renderer.currentFocusedRenderable?.blur()
     const timeout = setTimeout(() => (input ? inputRef.current : dialogRef.current)?.focus(), 0)
     return () => clearTimeout(timeout)
@@ -115,27 +136,33 @@ export function IssueActionModal({
   const submit = () => {
     const trimmed = valueRef.current.trim()
     if (input && kind !== "labels" && !trimmed) return
-    onSubmit(actionPayload(kind, trimmed, currentLabels))
+    onSubmit(actionPayload(kind, trimmed, currentLabels, reaction))
   }
 
   useKeyboard((key) => {
-    if (key.name === "escape") {
+    const keyName = key.name.toLowerCase()
+    if (keyName === "escape") {
       key.preventDefault()
       key.stopPropagation()
-      if (renderer.currentFocusedRenderable?.id === "git-issue-action-input") {
+      if (input && renderer.currentFocusedRenderable?.id === "git-issue-action-input") {
         inputRef.current?.blur()
         dialogRef.current?.focus()
       } else onClose()
       return
     }
-    if (key.ctrl && key.name === "s" && !busy) {
+    if (key.ctrl && keyName === "s" && !busy) {
       key.preventDefault()
       key.stopPropagation()
       submit()
       return
     }
-    if (kind === "checkout" && /^\d$/.test(key.name)) {
-      const path = checkoutPaths[Number(key.name) - 1]
+    if (kind === "reaction" && /^[1-5]$/.test(keyName)) {
+      const selected = GITHUB_REACTION_CHOICES[Number(keyName) - 1]
+      if (selected) setReaction(selected.content)
+      return
+    }
+    if (kind === "checkout" && /^\d$/.test(keyName)) {
+      const path = checkoutPaths[Number(keyName) - 1]
       if (path) {
         valueRef.current = path
         setValue(path)
@@ -178,7 +205,7 @@ export function IssueActionModal({
           focusable
           style={{
             width,
-            height: kind === "checkout" ? 18 : 16,
+            height: kind === "checkout" || kind === "reaction" ? 18 : 16,
             border: true,
             borderStyle: "rounded",
             borderColor: COLORS.git,
@@ -198,7 +225,7 @@ export function IssueActionModal({
             }}
           >
             <text
-              content={`◆ ${translateUi(LABELS[kind]).toUpperCase()}`}
+              content={`◆ ${translateUi(targetComment && kind === "reaction" ? "Reagir no comentário" : LABELS[kind]).toUpperCase()}`}
               style={{ fg: COLORS.git }}
             />
             <InlineButton
@@ -215,13 +242,19 @@ export function IssueActionModal({
             content={`${item.title} · ${translateUi(item.state === "open" ? "ABERTA" : "FECHADA")}`}
             style={{ fg: COLORS.muted }}
           />
+          {targetComment ? (
+            <text
+              content={`↳ @${targetComment.author.login}: ${truncateDisplay(targetComment.body.replace(/\s+/g, " "), width - 8)}`}
+              style={{ fg: COLORS.git }}
+            />
+          ) : null}
           {input ? (
             <input
               ref={inputRef}
               id="git-issue-action-input"
               value={value}
               placeholder={translateUi(placeholder(kind))}
-              maxLength={kind === "comment" ? 65_000 : 2_048}
+              maxLength={kind === "comment" || kind === "reply" ? 65_000 : 2_048}
               onMouseDown={() => inputRef.current?.focus()}
               onInput={(next) => {
                 valueRef.current = next
@@ -239,40 +272,20 @@ export function IssueActionModal({
               }}
             />
           ) : null}
-          {kind === "unassign" && currentAssignees.length ? (
-            <box style={{ marginTop: 1, flexDirection: "row" }}>
-              {currentAssignees.map((login) => (
-                <InlineButton
-                  key={login}
-                  label={`[@${login}]`}
-                  accent={COLORS.git}
-                  onPress={() => {
-                    valueRef.current = login
-                    setValue(login)
-                    onValueChange(login)
-                  }}
-                />
-              ))}
-            </box>
-          ) : null}
-          {kind === "checkout" && checkoutPaths.length ? (
-            <box style={{ marginTop: 1 }}>
-              <text content={translateUi("CLONES SALVOS")} style={{ fg: COLORS.git }} />
-              {checkoutPaths.slice(0, 3).map((path, index) => (
-                <InlineButton
-                  key={path}
-                  label={`[${index + 1}] ${path}`}
-                  accent={COLORS.git}
-                  active={value === path}
-                  onPress={() => {
-                    valueRef.current = path
-                    setValue(path)
-                    onValueChange(path)
-                  }}
-                />
-              ))}
-            </box>
-          ) : null}
+          <IssueActionOptions
+            kind={kind}
+            value={value}
+            reaction={reaction}
+            reactionGroups={reactionGroups ?? []}
+            currentAssignees={currentAssignees}
+            checkoutPaths={checkoutPaths}
+            onValue={(next) => {
+              valueRef.current = next
+              setValue(next)
+              onValueChange(next)
+            }}
+            onReaction={setReaction}
+          />
           <text
             content={error || translateUi("Nada será executado até a confirmação abaixo.")}
             style={{ marginTop: 1, fg: error ? COLORS.danger : COLORS.warning }}

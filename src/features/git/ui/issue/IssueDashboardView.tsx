@@ -5,7 +5,7 @@ import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { IssuePreviewConfig } from "../../model/issue/config"
 import type { IssueFocus, IssueLayoutMode } from "../../model/issue/navigation"
-import type { IssuePreviewTab } from "../../model/issue/types"
+import type { IssueComment, IssuePreviewTab } from "../../model/issue/types"
 import { IssueDashboardStatePanel } from "./IssueDashboardStatePanel"
 import { IssueList } from "./IssueList"
 import { IssuePreviewPane } from "./IssuePreviewPane"
@@ -25,6 +25,7 @@ type IssuePanelsProps = {
   details: IssueDetailsState
   previewScrollOffset: number
   descriptionExpanded: boolean
+  selectedCommentIndex: number
   loadingMoreDetails: boolean
   onSelectRow: (index: number) => void
   onPreviewTab: (tab: IssuePreviewTab) => void
@@ -34,6 +35,9 @@ type IssuePanelsProps = {
   onCopyNumber: () => void
   onOpenActions: () => void
   onLoadMoreDetails: () => void
+  onSelectComment: (index: number) => void
+  onReactComment: (comment: IssueComment) => void
+  onReplyComment: (comment: IssueComment) => void
   loadingMore: boolean
 }
 
@@ -93,6 +97,7 @@ function IssuePanels(props: IssuePanelsProps) {
             width={props.previewWidth}
             scrollOffset={props.previewScrollOffset}
             descriptionExpanded={props.descriptionExpanded}
+            selectedCommentIndex={props.selectedCommentIndex}
             loadingMore={props.loadingMoreDetails}
             onTabChange={props.onPreviewTab}
             onToggleDescription={props.onToggleDescription}
@@ -101,6 +106,9 @@ function IssuePanels(props: IssuePanelsProps) {
             onCopyNumber={props.onCopyNumber}
             onOpenActions={props.onOpenActions}
             onLoadMore={props.onLoadMoreDetails}
+            onSelectComment={props.onSelectComment}
+            onReactComment={props.onReactComment}
+            onReplyComment={props.onReplyComment}
           />
         </box>
       ) : null}
@@ -121,6 +129,7 @@ export function IssueDashboardView({
   details,
   previewScrollOffset,
   descriptionExpanded,
+  selectedCommentIndex,
   loadingMoreDetails,
   previewPosition,
   previewVisible,
@@ -135,6 +144,9 @@ export function IssueDashboardView({
   onCopyNumber,
   onOpenActions,
   onLoadMoreDetails,
+  onSelectComment,
+  onReactComment,
+  onReplyComment,
   onSelectSection,
   onEditQuery,
   onRetry,
@@ -232,6 +244,7 @@ export function IssueDashboardView({
           details={details}
           previewScrollOffset={previewScrollOffset}
           descriptionExpanded={descriptionExpanded}
+          selectedCommentIndex={selectedCommentIndex}
           loadingMoreDetails={loadingMoreDetails}
           loadingMore={loadingMore}
           onSelectRow={onSelectRow}
@@ -242,6 +255,9 @@ export function IssueDashboardView({
           onCopyNumber={onCopyNumber}
           onOpenActions={onOpenActions}
           onLoadMoreDetails={onLoadMoreDetails}
+          onSelectComment={onSelectComment}
+          onReactComment={onReactComment}
+          onReplyComment={onReplyComment}
         />
       ) : (
         <IssueDashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />

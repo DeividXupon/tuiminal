@@ -67,6 +67,20 @@ if (args[0] === "--version") {
   if (args[0] === "api" && args.at(-1) === "user") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
+    const request = JSON.parse(stdin)
+    if (request.query.includes("TuiminalReactionTarget")) {
+      const reacted = existsSync(process.env.FAKE_STATE)
+      console.log(JSON.stringify({ data: { node: {
+        __typename: "Issue", id: "${item.identity.nodeId}", url: "${item.identity.url}",
+        reactionGroups: reacted ? [{ content: "THUMBS_UP", viewerHasReacted: true, users: { totalCount: 1 } }] : []
+      } } }))
+      process.exit(0)
+    }
+    if (request.query.includes("TuiminalAddReaction")) {
+      writeFileSync(process.env.FAKE_STATE, "reaction")
+      console.log(JSON.stringify({ data: { addReaction: { subject: { id: "${item.identity.nodeId}" } } } }))
+      process.exit(0)
+    }
     const commented = existsSync(process.env.FAKE_STATE)
     const nodes = commented ? [{ id: "new-comment", body: "integrated", createdAt: "2026-09-07T12:00:00Z", updatedAt: "2026-09-07T12:00:00Z", url: "${item.identity.url}#issuecomment-new", author: { login: "deivid" }, reactionGroups: [] }] : []
     console.log(JSON.stringify({ data: { repository: {
@@ -253,6 +267,37 @@ describe("Issue mutation transport", () => {
     expect(commands()).toHaveLength(0)
   })
 
+  test("adds reactions through GraphQL and replies without interpolating a shell", async () => {
+    writeFileSync(logPath, "")
+    const commentUrl = `${item.identity.url}#issuecomment-77`
+    await executeIssueMutation(
+      prepared("reaction", {
+        subjectId: item.identity.nodeId,
+        subjectKind: "item",
+        reaction: "HOORAY",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    await executeIssueMutation(
+      prepared("reply", {
+        commentId: "IC_selected",
+        commentUrl,
+        commentAuthor: "rui",
+        body: "$(touch never)",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    const [reaction, reply] = commands()
+    expect(JSON.parse(reaction?.stdin ?? "{}").variables).toEqual({
+      subjectId: item.identity.nodeId,
+      content: "HOORAY",
+    })
+    expect(reply).toMatchObject({
+      args: ["issue", "comment", "318", "--repo", "equipe/api", "--body-file", "-"],
+      stdin: `↳ ${commentUrl}\n\n@rui $(touch never)`,
+    })
+  })
+
   test("classifies timeout as uncertain and never retries", async () => {
     writeFileSync(logPath, "")
     const result = await executeIssueMutation(prepared("comment", { body: "once" }), {
@@ -301,6 +346,37 @@ describe("Issue mutation transport", () => {
       commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue comment"),
     ).toHaveLength(1)
     expect(commands().filter((command) => command.args[1] === "graphql")).toHaveLength(2)
+  })
+
+  test("validates and re-reads an issue reaction without replaying the write", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "issue-reaction-state")
+    rmSync(statePath, { force: true })
+    const preparedState = prepareIssueAction({
+      actionId: "integrated-reaction",
+      kind: "reaction",
+      target: item.identity,
+      expectedUpdatedAt: item.updatedAt,
+      expectedState: item.state,
+      auth,
+      payload: {
+        subjectId: item.identity.nodeId,
+        subjectKind: "item",
+        reaction: "THUMBS_UP",
+      },
+    })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_COORDINATOR: "1", FAKE_STATE: statePath },
+    }).execute(preparedState)
+    expect(result).toMatchObject({ status: "confirmed", message: "reaction-reconciled" })
+    const graphql = commands().filter((command) => command.args[1] === "graphql")
+    expect(graphql.filter((command) => command.stdin.includes("TuiminalAddReaction"))).toHaveLength(
+      1,
+    )
+    expect(
+      graphql.filter((command) => command.stdin.includes("TuiminalReactionTarget")),
+    ).toHaveLength(2)
   })
 
   test("keeps an accepted but unobserved write uncertain without replay", async () => {

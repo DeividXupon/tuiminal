@@ -7,7 +7,11 @@ import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { nextPullRequestDetailConnection } from "../../model/pr/detail-pagination"
 import { adjacentPreviewTab, PULL_REQUEST_PREVIEW_TABS } from "../../model/pr/navigation"
-import type { PullRequestPreviewTab, PullRequestSummary } from "../../model/pr/types"
+import type {
+  PullRequestComment,
+  PullRequestPreviewTab,
+  PullRequestSummary,
+} from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { PreviewTabContent } from "./PreviewTabContent"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
@@ -39,6 +43,8 @@ function DetailsState({
   workflows,
   workflowError,
   onOpenWorkflow,
+  onReactComment,
+  onReplyComment,
 }: {
   state: PullRequestDetailsState
   tab: PullRequestPreviewTab
@@ -51,6 +57,8 @@ function DetailsState({
   workflows: PullRequestWorkflowRun[]
   workflowError: string
   onOpenWorkflow: (runId: number) => void
+  onReactComment: (comment: PullRequestComment) => void
+  onReplyComment: (comment: PullRequestComment) => void
 }) {
   if (state.status === "loading") {
     return <text content={translateUi("CARREGANDO DETALHES…")} style={{ fg: COLORS.muted }} />
@@ -77,6 +85,8 @@ function DetailsState({
       workflows={workflows}
       workflowError={workflowError}
       onOpenWorkflow={onOpenWorkflow}
+      onReactComment={onReactComment}
+      onReplyComment={onReplyComment}
     />
   )
 }
@@ -106,6 +116,8 @@ export function PreviewPane({
   workflows,
   workflowError,
   onOpenWorkflow,
+  onReactComment,
+  onReplyComment,
 }: {
   item: PullRequestSummary | null
   details: PullRequestDetailsState
@@ -131,6 +143,8 @@ export function PreviewPane({
   workflows: PullRequestWorkflowRun[]
   workflowError: string
   onOpenWorkflow: (runId: number) => void
+  onReactComment: (comment: PullRequestComment) => void
+  onReplyComment: (comment: PullRequestComment) => void
 }) {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   useEffect(() => {
@@ -253,6 +267,8 @@ export function PreviewPane({
           workflows={workflows}
           workflowError={workflowError}
           onOpenWorkflow={onOpenWorkflow}
+          onReactComment={onReactComment}
+          onReplyComment={onReplyComment}
         />
         {canLoadMore ? (
           <InlineButton

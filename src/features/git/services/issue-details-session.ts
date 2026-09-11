@@ -50,6 +50,11 @@ export class IssueDetailsSession {
       this.remember(key, cached)
       return { details: cached, fromCache: true }
     }
+    return this.refresh(item)
+  }
+
+  async refresh(item: IssueSummary) {
+    const key = this.key(item)
     this.activeController?.abort()
     const controller = new AbortController()
     this.activeController = controller

@@ -1,4 +1,5 @@
 import { boundedPullRequestDescription, sanitizeGitHubText } from "../../model/pr/content"
+import { normalizeGitHubReactionGroups } from "../../model/reactions"
 import type {
   PullRequestActor,
   PullRequestCheck,
@@ -156,6 +157,7 @@ function normalizeComments(value: unknown): PullRequestComment[] {
         body: stringValue(comment.body),
         createdAt: stringValue(comment.createdAt),
         url: stringValue(comment.url),
+        reactionGroups: normalizeGitHubReactionGroups(comment.reactionGroups),
       },
     ]
   })
@@ -309,6 +311,7 @@ export function normalizePullRequestDetails(
     commits,
     files,
     comments,
+    reactionGroups: normalizeGitHubReactionGroups(pullRequest.reactionGroups),
     timeline,
     checks,
     pages: {

@@ -165,27 +165,31 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[1] Diffs`
 
-- Agrupa arquivos modificados em uma árvore real de diretórios.
+- Agrupa arquivos modificados em uma árvore real de diretórios e compacta cadeias sem ramificações, como `usr/lib/app/`, em um único nó navegável.
 - Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
 - Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos.
 - Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre o histórico detalhado.
-- `[Space]` aplica ou remove stage somente do arquivo selecionado, inclusive nomes com `*`, `?`, colchetes ou `:`; `[A]` faz o mesmo para todos.
+- `[Space]` aplica ou remove stage somente do arquivo selecionado, inclusive nomes com `*`, `?`, colchetes ou `:`. `[A]` adiciona em cadeia os arquivos da pasta selecionada ou alterna todos quando um arquivo está selecionado; a cor de stage muda imediatamente e é reconciliada com o Git em seguida.
+- `[D]` descarta o arquivo ou toda a pasta selecionada depois de uma confirmação explícita; alterações rastreadas são restauradas e arquivos novos são removidos.
+- Um terminal Git compacto sob o diff registra os comandos disparados pelas ações. `[T]` leva o foco a ele para executar comandos manuais; o prefixo `git` é fixo e não há composição de comando por shell.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox.
 
 ### `[2] PR`
 
-- Começa com as seções **My PRs** e **Review requested**.
+- Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
+- Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
 - O diff remoto abre dentro do Tuiminal e mantém a fila preservada ao voltar.
 - Busca e seções usam qualifiers do GitHub com autocomplete para `repo:`, `author:`, `review-requested:` e outros filtros.
 - Comentários, review, merge e demais escritas usam preparação, reautenticação, releitura do estado remoto e confirmação antes da execução.
 
 ### `[3] Issues`
 
-- Começa com a seção **My Issues** e permite criar outras filas por query.
+- Começa com **My Issues**, **All**, **Open** e **Closed**; os três últimos mostram todas as issues não arquivadas, somente as abertas ou somente as fechadas dentro do escopo atual.
 - Combina uma lista densa de duas linhas com visão geral e atividade da issue.
+- Na Atividade, `[J/K]` seleciona comentários, `[E]` reage com 👍 ❤️ 🎉 😄 ou 👀 e `[Enter]` responde; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage à própria issue.
 - Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
 - A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
 
@@ -195,7 +199,7 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
-PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
+PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
 
 ### Atalhos essenciais do Git
 
@@ -204,12 +208,14 @@ PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de u
 | Abrir Diffs, PR, Issues ou Inbox | `[1]`, `[2]`, `[3]`, `[4]` |
 | Alternar Diffs / Comparar | `[C]` |
 | Navegar na lista | `[J/K]` ou `[↑/↓]` |
-| Alternar foco entre lista e preview | `[H/L]` ou `[←/→]` |
+| Alternar foco entre árvore, preview e terminal Git | `[Tab]`; `[H/L]` ou `[←/→]` entre árvore e preview |
 | Mudar seção | `[A←]` / `[F→]` |
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
-| Stage do arquivo / todos | `[Space]` / `[A]` |
+| Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
+| Descartar arquivo/pasta com confirmação | `[D]` |
+| Focar terminal Git | `[T]` |
 | Abrir histórico / grafo local | `[O]` / `[G]` |
 | Mudar visualização do diff | `[V]` |
 | Alterar projeto/branch de Diffs | `[Ctrl+P]` |

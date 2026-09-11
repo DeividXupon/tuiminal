@@ -2,7 +2,7 @@ import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
-import { act } from "react"
+import { act, useState } from "react"
 import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
 import type {
   GitHubCliGuidedTerminalProcess,
@@ -193,4 +193,112 @@ test("authentication panel teaches login in its terminal and detects completion"
   authenticated = true
   await settle(() => retries === 1)
   expect(tui.captureCharFrame()).toContain("LOGIN CONFIRMADO")
+})
+
+test("guided terminal forwards emulator responses required by interactive prompts", async () => {
+  const received: string[] = []
+  let emitOutput: ((data: Uint8Array) => void) | undefined
+  tui = await testRender(
+    <GitHubAuthenticationPanel
+      active
+      host="github.example.test"
+      onRetry={() => undefined}
+      startTerminal={(options) => {
+        emitOutput = options.onData
+        return {
+          pid: 43,
+          write: (data) =>
+            received.push(typeof data === "string" ? data : new TextDecoder().decode(data)),
+          resize: () => undefined,
+          stop: () => undefined,
+        }
+      }}
+      verifyAuthentication={async () => false}
+      pollIntervalMs={60_000}
+    />,
+    { width: 120, height: 26 },
+  )
+  await tui.renderOnce()
+
+  await act(async () => {
+    emitOutput?.(new TextEncoder().encode("\u001b[6n"))
+    await Bun.sleep(5)
+  })
+
+  const escapeSequence = String.fromCharCode(27)
+  expect(
+    received.some((value) => value.startsWith(`${escapeSequence}[`) && /\d+;\d+R$/.test(value)),
+  ).toBe(true)
+})
+
+test("stale shell exits cannot detach replacements and a closed shell reopens", async () => {
+  const sessions: Array<{
+    options: TerminalOptions
+    received: string[]
+    stops: number
+  }> = []
+  let setActive: (active: boolean) => void = () => undefined
+
+  function Harness() {
+    const [active, updateActive] = useState(true)
+    setActive = updateActive
+    return (
+      <GitHubAuthenticationPanel
+        active={active}
+        host="github.example.test"
+        onRetry={() => undefined}
+        startTerminal={(options) => {
+          const session = { options, received: [] as string[], stops: 0 }
+          sessions.push(session)
+          return {
+            pid: 44 + sessions.length,
+            write: (data) =>
+              session.received.push(
+                typeof data === "string" ? data : new TextDecoder().decode(data),
+              ),
+            resize: () => undefined,
+            stop: () => {
+              session.stops += 1
+            },
+          }
+        }}
+        verifyAuthentication={async () => false}
+        pollIntervalMs={60_000}
+      />
+    )
+  }
+
+  tui = await testRender(<Harness />, { width: 120, height: 26 })
+  await tui.renderOnce()
+  expect(sessions).toHaveLength(1)
+
+  await act(async () => setActive(false))
+  await tui.renderOnce()
+  await act(async () => setActive(true))
+  await tui.renderOnce()
+  expect(sessions).toHaveLength(2)
+
+  await act(async () => {
+    sessions[0]?.options.onExit({ code: null, signal: "SIGTERM", stopped: true })
+    await Bun.sleep(1)
+    tui?.mockInput.pressKey("RETURN")
+    await Bun.sleep(1)
+    await tui?.mockInput.typeText("y")
+    tui?.mockInput.pressKey("RETURN")
+  })
+  expect(sessions[1]?.received.join("")).toContain("y")
+
+  await act(async () => {
+    sessions[1]?.options.onExit({ code: 0, signal: null, stopped: false })
+    await Bun.sleep(1)
+  })
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("Reabrir terminal")
+
+  await act(async () => {
+    tui?.mockInput.pressKey("RETURN")
+    await Bun.sleep(1)
+  })
+  await tui.renderOnce()
+  expect(sessions).toHaveLength(3)
 })

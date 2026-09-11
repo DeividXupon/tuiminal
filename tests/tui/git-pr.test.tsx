@@ -1,10 +1,10 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { RGBA, type BoxRenderable } from "@opentui/core"
+import { type BoxRenderable, RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
@@ -12,8 +12,8 @@ import { App } from "../../src/app/App"
 import {
   COLORS,
   getUiSettings,
-  PALETTES,
   type LayoutMode,
+  PALETTES,
   type PaletteId,
   updateUiSettings,
 } from "../../src/core/settings/theme"
@@ -292,7 +292,35 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     await key("tab")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
+    expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-command-input")
+    expect(typeof tui.renderer.root.findDescendantById("git-command-input")?.onKeyDown).toBe(
+      "function",
+    )
+    expect(tui.captureCharFrame()).toContain("TERMINAL GIT")
+    await act(async () => tui?.mockInput.typeText("status --short"))
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).toContain("git status --short")
+    act(() => tui?.mockInput.pressEnter())
+    await waitForText("❯ git status --short")
+    await act(async () => Bun.sleep(100))
+    await tui.renderOnce()
+    await key("tab")
+    await act(async () => Bun.sleep(10))
+    await tui.renderOnce()
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
+
+    await key("d")
+    expect(tui.renderer.root.findDescendantById("git-discard-changes-modal")).toBeDefined()
+    expect(tui.captureCharFrame()).toContain("DESCARTAR ALTERAÇÕES DO GIT?")
+    await key("d")
+    for (let attempt = 0; attempt < 50 && existsSync(join(repository, "notes.txt")); attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+    }
+    expect(existsSync(join(repository, "notes.txt"))).toBe(false)
+    await act(async () => Bun.sleep(100))
+    await tui.renderOnce()
+    expect(tui.renderer.root.findDescendantById("git-discard-changes-modal")).toBeUndefined()
 
     const stableDiff = tui.renderer.root.findDescendantById("git-base-diff")
     act(() => tui?.mockInput.pressArrow("down"))
@@ -693,6 +721,40 @@ test("action input owns number keys and Escape unwinds one focus layer at a time
   await key("ESCAPE")
   expect(tui.captureCharFrame()).not.toContain("NADA SERÁ EXECUTADO")
   expect(tui.captureCharFrame()).toContain("PULL REQUESTS · DEMO")
+})
+
+test("PR activity comments expose reaction and reply flows to the keyboard", async () => {
+  process.env.TUIMINAL_GIT_PR_DEMO = "1"
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
+  tui = await testRender(<PullRequestsWorkspace active />, { width: 120, height: 30 })
+  await tui.renderOnce()
+
+  await key("l")
+  await key("v")
+  await key("v")
+  expect(tui.captureCharFrame()).toContain("[E] Nova reação")
+  expect(tui.captureCharFrame()).toContain("[Enter] Responder")
+  expect(tui.captureCharFrame()).toContain("↳ @ana")
+  expect(tui.captureCharFrame()).toContain("Resposta fictícia agrupada sob o comentário.")
+
+  await key("e")
+  await act(async () => Bun.sleep(10))
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("REAGIR NO COMENTÁRIO")
+  expect(tui.captureCharFrame()).toContain("👍")
+  expect(tui.captureCharFrame()).toContain("👀")
+  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-action-modal")
+  await key("ESCAPE")
+  expect(tui.captureCharFrame()).not.toContain("REAGIR NO COMENTÁRIO")
+  expect(tui.renderer.currentFocusedRenderable?.id).toBeUndefined()
+
+  await key("j")
+  expect(tui.captureCharFrame()).toContain("[E] Reagir")
+  await key("RETURN")
+  expect(tui.captureCharFrame()).toContain("RESPONDER COMENTÁRIO")
+  await act(async () => Bun.sleep(10))
+  await tui.renderOnce()
+  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-action-input")
 })
 
 test("action menu and remote diff are navigable without leaving PR", async () => {

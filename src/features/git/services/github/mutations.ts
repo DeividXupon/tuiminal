@@ -1,5 +1,7 @@
 import type { PreparedPullRequestAction } from "../../model/pr/actions"
+import { githubDiscussionReplyBody } from "../../model/reactions"
 import { withValidatedCheckoutClone } from "../pr-checkout"
+import { validateDiscussionMutation } from "./discussion-mutations"
 import { type GhTransportOptions, GitHubTransportError, runGhCommand } from "./transport"
 
 export type PullRequestMutationResult =
@@ -27,10 +29,30 @@ function targetArgs(action: PreparedPullRequestAction) {
 
 function mutationRequest(action: PreparedPullRequestAction) {
   const target = targetArgs(action)
-  if (action.kind === "comment") {
+  if (action.kind === "comment" || action.kind === "reply") {
     return {
       args: ["pr", "comment", ...target, "--body-file", "-"],
-      stdin: stringPayload(action, "body"),
+      stdin:
+        action.kind === "reply"
+          ? githubDiscussionReplyBody({
+              author: stringPayload(action, "commentAuthor"),
+              url: stringPayload(action, "commentUrl"),
+              body: stringPayload(action, "body"),
+            })
+          : stringPayload(action, "body"),
+    }
+  }
+  if (action.kind === "reaction") {
+    return {
+      args: ["api", "graphql", "--hostname", action.target.host, "--input", "-"],
+      stdin: JSON.stringify({
+        query:
+          "mutation TuiminalAddReaction($subjectId: ID!, $content: ReactionContent!) { addReaction(input: { subjectId: $subjectId, content: $content }) { reaction { content user { login } } subject { id } } }",
+        variables: {
+          subjectId: stringPayload(action, "subjectId"),
+          content: stringPayload(action, "reaction"),
+        },
+      }),
     }
   }
   if (action.kind === "approve") {
@@ -102,9 +124,8 @@ function mutationRequest(action: PreparedPullRequestAction) {
 }
 
 function validateMutationPayload(action: PreparedPullRequestAction) {
-  if (action.kind === "comment" && !stringPayload(action, "body").trim()) {
-    return "empty-body"
-  }
+  const discussionError = validateDiscussionMutation(action)
+  if (discussionError) return discussionError
   if (["assign", "unassign"].includes(action.kind) && !stringPayload(action, "login").trim()) {
     return "empty-login"
   }

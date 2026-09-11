@@ -1,3 +1,5 @@
+import type { GitHubReactionGroup } from "../reactions"
+
 export type IssueState = "open" | "closed"
 
 export type IssueIdentity = {
@@ -78,6 +80,7 @@ export type IssueComment = {
   updatedAt: string
   url: string
   reactionCount: number
+  reactionGroups?: GitHubReactionGroup[]
 }
 
 export type IssuePermissions = {
@@ -98,6 +101,7 @@ export type IssueDetails = {
   comments: IssueComment[]
   commentPage: IssuePageInfo
   reactionCount: number
+  reactionGroups?: GitHubReactionGroup[]
   createdAt: string
   updatedAt: string
   closedAt: string

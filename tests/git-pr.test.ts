@@ -122,6 +122,7 @@ describe("Git Diffs/PR workspace", () => {
     expect(pullRequestActionKindForShortcut({ name: "a", shift: true })).toBe("unassign")
     expect(pullRequestActionKindForShortcut({ name: "a", ctrl: true })).toBe("approve-workflow")
     expect(pullRequestActionKindForShortcut({ name: "f" })).toBeNull()
+    expect(pullRequestActionKindForShortcut({ name: "e", shift: true })).toBe("reaction")
   })
 
   test("maps list, preview and section navigation without UI state", () => {

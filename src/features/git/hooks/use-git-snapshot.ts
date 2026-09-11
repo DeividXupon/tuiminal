@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react"
 import type { ViewMode } from "../model/view"
 import { gitSnapshotSignature } from "../rendering/presentation"
-import { loadGitDiff, loadGitSnapshot, type GitSnapshot } from "../services/git"
+import { type GitSnapshot, loadGitDiff, loadGitSnapshot } from "../services/git"
 
 type SnapshotSetters = {
   setSelectedPath: Dispatch<SetStateAction<string | null>>
@@ -129,6 +129,13 @@ export function useGitSnapshot({
     [setCommitDiff, setDiff, setSelectedCommitIndex, setSelectedPath, targetDirectory],
   )
 
+  const updateFiles = useCallback(
+    (update: (files: GitSnapshot["files"]) => GitSnapshot["files"]) => {
+      setSnapshot((current) => (current ? { ...current, files: update(current.files) } : current))
+    },
+    [],
+  )
+
   useEffect(() => {
     if (targetRef.current === targetDirectory) return
     targetRef.current = targetDirectory
@@ -157,5 +164,5 @@ export function useGitSnapshot({
     return () => clearInterval(interval)
   }, [active, refresh, snapshot])
 
-  return { snapshot, loading, error, setError, refreshSequence, refresh }
+  return { snapshot, loading, error, setError, refreshSequence, refresh, updateFiles }
 }

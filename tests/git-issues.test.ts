@@ -114,6 +114,7 @@ describe("Git Issues workspace model", () => {
     expect(issueActionKindForShortcut({ name: "x" })).toBe("close")
     expect(issueActionKindForShortcut({ name: "x", shift: true })).toBe("reopen")
     expect(issueActionKindForShortcut({ name: "l" })).toBeNull()
+    expect(issueActionKindForShortcut({ name: "e", shift: true })).toBe("reaction")
   })
 })
 
@@ -243,6 +244,29 @@ describe("Prepared Issue actions", () => {
               reactionCount: 0,
             },
           ],
+        },
+        viewerLogin: "deivid",
+      }),
+    ).toBe(true)
+    expect(
+      issueMutationWasReconciled({
+        action: prepareIssueAction({
+          actionId: "reaction",
+          kind: "reaction",
+          target: item.identity,
+          expectedUpdatedAt: item.updatedAt,
+          expectedState: item.state,
+          auth,
+          payload: {
+            subjectId: item.identity.nodeId,
+            subjectKind: "item",
+            reaction: "THUMBS_UP",
+          },
+        }).action,
+        before,
+        after: {
+          ...before,
+          reactionGroups: [{ content: "THUMBS_UP", count: 1, viewerHasReacted: true }],
         },
         viewerLogin: "deivid",
       }),

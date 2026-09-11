@@ -8,6 +8,7 @@ import { pullRequestIdentityKey } from "../model/pr/query"
 import { loadGhAuthContext } from "./github/auth"
 import { loadPullRequestDetails } from "./github/details"
 import { executePullRequestMutation } from "./github/mutations"
+import { executeGitHubReactionWrite } from "./github/reaction-state"
 import type { GhTransportOptions } from "./github/transport"
 
 export class PullRequestActionCoordinator {
@@ -52,6 +53,9 @@ export class PullRequestActionCoordinator {
       currentHeadSha: currentDetails.headSha,
     })
     if (executing.status !== "executing") return executing
+    if (action.kind === "reaction") {
+      return executePullRequestReaction(action, executing, this.transport)
+    }
     const result = await executePullRequestMutation(action, this.transport)
     if (result.status === "confirmed") {
       if (action.kind === "checkout" || action.kind === "approve-workflow") {
@@ -92,4 +96,32 @@ export class PullRequestActionCoordinator {
     }
     return transitionPullRequestAction(executing, { type: "reject", reason: result.reason })
   }
+}
+
+async function executePullRequestReaction(
+  action: PreparedPullRequestAction,
+  executing: PullRequestActionState,
+  transport: GhTransportOptions,
+): Promise<PullRequestActionState> {
+  const subjectId = typeof action.payload.subjectId === "string" ? action.payload.subjectId : ""
+  const onItem = action.payload.subjectKind === "item"
+  const result = await executeGitHubReactionWrite({
+    host: action.target.host,
+    subjectId,
+    expectedType: onItem ? "PullRequest" : "IssueComment",
+    expectedUrl:
+      onItem || typeof action.payload.commentUrl !== "string"
+        ? action.target.url
+        : action.payload.commentUrl,
+    content: action.payload.reaction,
+    write: () => executePullRequestMutation(action, transport),
+    options: transport,
+  })
+  if (result.status === "confirmed") {
+    return transitionPullRequestAction(executing, { type: "confirm", message: result.message })
+  }
+  return transitionPullRequestAction(executing, {
+    type: result.status === "uncertain" ? "uncertain" : "reject",
+    reason: result.reason,
+  })
 }

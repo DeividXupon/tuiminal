@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { translateUi } from "../../../../shared/i18n"
 import { MountWhen } from "../../../../shared/ui/MountWhen"
+import { discussionActionTargetPayload } from "../../model/discussion-actions"
 import {
   type PullRequestActionKind,
   preparePullRequestAction,
@@ -9,6 +10,7 @@ import {
 import { pullRequestIdentityKey } from "../../model/pr/query"
 import type {
   PullRequestAuthContext,
+  PullRequestComment,
   PullRequestDetails,
   PullRequestSummary,
 } from "../../model/pr/types"
@@ -21,6 +23,7 @@ import { PullRequestActionModal } from "./PullRequestActionModal"
 
 const ACTIONS: ReadonlyArray<Pick<PullRequestActionMenuItem, "kind" | "label" | "shortcut">> = [
   { kind: "comment", label: "Comentar", shortcut: "[C]" },
+  { kind: "reaction", label: "Reagir", shortcut: "[Shift+E]" },
   { kind: "approve", label: "Aprovar com comentário", shortcut: "[V]" },
   { kind: "assign", label: "Adicionar responsável", shortcut: "[A]" },
   { kind: "unassign", label: "Remover responsável", shortcut: "[Shift+A]" },
@@ -128,6 +131,7 @@ export function usePullRequestActions({
   )
   const [menuOpen, setMenuOpen] = useState(false)
   const [kind, setKind] = useState<PullRequestActionKind | null>(null)
+  const [targetComment, setTargetComment] = useState<PullRequestComment | null>(null)
   const [value, setValue] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -153,10 +157,16 @@ export function usePullRequestActions({
     }))
   }, [auth, configuration.paths.length, details, eligibleWorkflows.length, item])
 
-  const draftKey = (action: PullRequestActionKind) =>
-    item ? `${pullRequestIdentityKey(item.identity)}:${action}` : action
-  const defaultValue = (action: PullRequestActionKind) => {
-    const draft = drafts.current.get(draftKey(action))
+  const draftKey = (
+    action: PullRequestActionKind,
+    comment: PullRequestComment | null = targetComment,
+  ) =>
+    item ? `${pullRequestIdentityKey(item.identity)}:${action}:${comment?.id ?? "item"}` : action
+  const defaultValue = (
+    action: PullRequestActionKind,
+    comment: PullRequestComment | null = targetComment,
+  ) => {
+    const draft = drafts.current.get(draftKey(action, comment))
     if (draft !== undefined) return draft
     if (action === "approve") return configuration.approveComment
     if (action === "checkout") return configuration.paths[0] ?? profileRoot ?? ""
@@ -170,8 +180,16 @@ export function usePullRequestActions({
       return
     }
     setMenuOpen(false)
+    setTargetComment(null)
     setKind(action)
-    setValue(defaultValue(action))
+    setValue(defaultValue(action, null))
+    setError("")
+  }
+  const openCommentAction = (action: "reaction" | "reply", comment: PullRequestComment) => {
+    setMenuOpen(false)
+    setTargetComment(comment)
+    setKind(action)
+    setValue(drafts.current.get(draftKey(action, comment)) ?? "")
     setError("")
   }
 
@@ -185,9 +203,10 @@ export function usePullRequestActions({
     setBusy(true)
     setError("")
     try {
+      const targetPayload = discussionActionTargetPayload(kind, item.identity, targetComment)
       const result = await executeSelectedAction({
         kind,
-        payload,
+        payload: { ...payload, ...targetPayload },
         item,
         auth,
         coordinator,
@@ -196,6 +215,7 @@ export function usePullRequestActions({
         notifyCheckout(kind, onLocalCheckout)
         drafts.current.delete(draftKey(kind))
         setKind(null)
+        setTargetComment(null)
         onNotice(
           process.env.TUIMINAL_GIT_PR_DEMO === "1"
             ? translateUi("DEMO · ação confirmada sem alterar o GitHub.")
@@ -238,14 +258,19 @@ export function usePullRequestActions({
           mergeQueueConfigured={details?.mergeQueueConfigured ?? false}
           mergeQueuePosition={details?.mergeQueueEntry?.position ?? null}
           autoMergeEnabled={Boolean(details?.autoMergeRequest)}
+          targetComment={targetComment}
+          reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
           busy={busy}
           error={error}
           onValueChange={updateValue}
-          onClose={() => setKind(null)}
+          onClose={() => {
+            setKind(null)
+            setTargetComment(null)
+          }}
           onSubmit={(payload) => void submit(payload)}
         />
       ) : null}
     </>
   ) : null
-  return { modalOpen, modals, openMenu: () => setMenuOpen(true), openAction }
+  return { modalOpen, modals, openMenu: () => setMenuOpen(true), openAction, openCommentAction }
 }

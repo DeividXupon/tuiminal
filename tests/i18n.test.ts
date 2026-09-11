@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../src/shared/i18n/database-privacy-catalog"
+import { GIT_DIFFS_MESSAGES } from "../src/shared/i18n/git-diffs-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../src/shared/i18n/http-workspace-settings-catalog"
 import {
   displayWidth,
@@ -37,6 +38,17 @@ describe("internationalization", () => {
     (language) => {
       for (const [message] of DATABASE_PRIVACY_MESSAGES)
         expect(translateUi(message, language)).not.toBe(message)
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git Diffs command message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of GIT_DIFFS_MESSAGES) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing Git Diffs translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
     },
   )
   test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
@@ -265,6 +277,10 @@ describe("internationalization", () => {
       "saved for this project",
     )
     expect(translateUi("right", "ja")).toBe("右")
+    expect(translateUi("Responder comentário", "en")).toBe("Reply to comment")
+    expect(translateUi("[E] Reagir", "ko")).toBe("[E] 반응")
+    expect(translateUi("[E] Nova reação", "en")).toBe("[E] New reaction")
+    expect(translateUi("ESCOLHA UMA REAÇÃO", "zh-CN")).toBe("选择回应")
   })
 
   test("translates GitHub Issues layout, actions and safety reasons", () => {

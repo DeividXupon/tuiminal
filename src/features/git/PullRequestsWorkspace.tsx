@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "../../shared/i18n"
 import { nextPullRequestDetailConnection } from "./model/pr/detail-pagination"
 import type { PullRequestDiffTarget } from "./model/pr/diff"
+import { sortedPullRequestComments } from "./model/pr/activity"
 import {
   adjacentPreviewTab,
   movePullRequestIndex,
@@ -96,6 +97,7 @@ export function PullRequestsWorkspace({
     state: details,
     loadMore: loadMoreDetails,
     loadingMore: loadingMoreDetails,
+    reload: reloadDetails,
   } = usePullRequestDetails(active && presentation.showDashboard, selected)
   const profileTarget = dashboardProfileTarget(dashboard)
   const { runs: workflows, error: workflowError } = usePullRequestWorkflows(
@@ -109,7 +111,10 @@ export function PullRequestsWorkspace({
     profileRoot: profileTarget?.root ?? null,
     workflows,
     onNotice: setNotice,
-    onRefresh: () => void refresh(),
+    onRefresh: () => {
+      void refresh()
+      void reloadDetails()
+    },
     onLocalCheckout,
   })
   const configuration = usePullRequestConfiguration({
@@ -128,8 +133,12 @@ export function PullRequestsWorkspace({
   const layout = previewVisible ? responsiveLayout : "single"
   const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen
   const previewItemIndex = previewItemIndices[previewTab]
+  const activityComments =
+    details.status === "ready"
+      ? sortedPullRequestComments(details.details.comments, details.details.identity)
+      : []
+  const selectedActivityComment = activityComments[previewItemIndex] ?? null
   usePullRequestNotifications(notice, dashboard, details, workflowError)
-
   const selectSection = useCallback(
     (index: number) => {
       setSectionIndex(index)
@@ -142,17 +151,14 @@ export function PullRequestsWorkspace({
     },
     [presentation.sections],
   )
-
   const copy = (value: string, success: string) => {
     const copied = renderer.copyToClipboardOSC52(value)
     setNotice(copied ? success : translateUi("O terminal não aceitou a cópia OSC52."))
   }
-
   const togglePreview = () => {
     setFocus("list")
     setPreviewVisible((current) => !current)
   }
-
   const handleReadAction = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     if (!action || !selected) return false
     if (action.type === "scroll-preview") {
@@ -175,7 +181,6 @@ export function PullRequestsWorkspace({
     } else return false
     return true
   }
-
   const selectRow = (index: number) => {
     setSelectedIndex(index)
     const item = presentation.items[index]
@@ -187,7 +192,6 @@ export function PullRequestsWorkspace({
     }
     setSelectedIdentity(nextIdentity)
   }
-
   useEffect(() => {
     if (!presentation.items.length) {
       setSelectedIndex(0)
@@ -205,7 +209,6 @@ export function PullRequestsWorkspace({
     setSelectedIndex(nextIndex)
     setSelectedIdentity(next ? pullRequestIdentityKey(next.identity) : null)
   }, [identityIndex, presentation.items, resolvedSelectedIndex, selectedIdentity])
-
   useEffect(() => {
     if (dashboard.status !== "ready" || queryOverride) return
     setSectionCounts((current) => ({
@@ -213,10 +216,8 @@ export function PullRequestsWorkspace({
       [dashboard.section.id]: dashboard.totalCount ?? dashboard.loadedCount,
     }))
   }, [dashboard, queryOverride])
-
   const hasNextPage = remoteDashboardHasNextPage(dashboard)
   useAutoPage(resolvedSelectedIndex, presentation.items.length, hasNextPage, loadingMore, loadMore)
-
   const handleNavigation = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     if (!action) return
     if (action.type === "move-section") {
@@ -236,7 +237,6 @@ export function PullRequestsWorkspace({
       setPreviewTab((current) => adjacentPreviewTab(current, action.delta))
     }
   }
-
   const handleWorkspaceCommand = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     if (!action) return false
     switch (action.type) {
@@ -276,7 +276,6 @@ export function PullRequestsWorkspace({
         return false
     }
   }
-
   usePullRequestWorkspaceKeyboard({
     active,
     blocked:
@@ -305,13 +304,20 @@ export function PullRequestsWorkspace({
       }))
     },
     onCopySha: (sha) => copy(sha, translateUi("SHA copiado.")),
+    onCommentReact: () => {
+      if (selectedActivityComment) {
+        pullRequestActions.openCommentAction("reaction", selectedActivityComment)
+      }
+    },
+    onCommentReply: () => {
+      if (selectedActivityComment)
+        pullRequestActions.openCommentAction("reply", selectedActivityComment)
+    },
   })
-
   const listWidth =
     layout === "side-by-side" ? Math.max(48, Math.floor(terminal.width * 0.56)) : terminal.width
   const previewWidth =
     layout === "side-by-side" ? Math.max(36, terminal.width - listWidth - 3) : terminal.width
-
   if (diffTarget && selected && details.status === "ready") {
     return (
       <PrDiffView
@@ -323,7 +329,6 @@ export function PullRequestsWorkspace({
       />
     )
   }
-
   return (
     <>
       <PullRequestDashboardView
@@ -355,6 +360,8 @@ export function PullRequestsWorkspace({
         onOpenWorkflow={(runId) => {
           if (selected) openWorkflowWithNotice(selected.identity, runId, setNotice)
         }}
+        onReactComment={(comment) => pullRequestActions.openCommentAction("reaction", comment)}
+        onReplyComment={(comment) => pullRequestActions.openCommentAction("reply", comment)}
         onSelectRow={(index) => {
           selectRow(index)
           setFocus("list")

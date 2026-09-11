@@ -9,6 +9,8 @@ export const gitKeyboardScope = {
     "git-issue-action-modal",
     "git-issue-action-input",
     "git-inbox-action-modal",
+    "git-discard-changes-modal",
+    "git-command-input",
     "git-configuration-modal",
     "git-local-target-picker",
     "git-local-target-list",

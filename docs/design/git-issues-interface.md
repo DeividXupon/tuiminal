@@ -22,8 +22,10 @@ ajustado às regras de foco, segurança e responsividade do Tuiminal.
 As seções ficam horizontais; não existe sidebar permanente de repositórios. A
 query permanece visível. Duas linhas mantêm densidade sem esconder autoria,
 responsáveis e labels.
-Um perfil novo começa somente com `My Issues`; o preset permanece em inglês em
-todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
+Um perfil novo começa com `My Issues`, `All`, `Open` e `Closed`. Os três filtros
+de estado cobrem todas as issues não arquivadas, as abertas e as fechadas dentro
+do escopo atual. Os presets permanecem em inglês em todos os idiomas, sem impedir
+que o usuário crie e nomeie outros seletores.
 
 ## Composições responsivas
 
@@ -39,8 +41,12 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 - Lista: `[J/K]`, setas, `[G/Home]` e `[Shift+G/End]`.
 - Seções: `[A←]`/`[F→]`; `[/]` edita a query ativa. Criação, edição, ordem e
   repositórios ficam no modal Git aberto por `[,]` nas configurações do Git.
-- Prévia: `[Z←]`/`[V→]` alterna abas; `[J/K]` rola; `[Ctrl+D/U]` pagina; `[E]`
-  expande/recolhe a descrição.
+- Prévia: `[Z←]`/`[V→]` alterna abas; na Visão geral `[J/K]` rola e `[E]`
+  expande/recolhe a descrição. Na Atividade, `[J/K]` seleciona comentários,
+  `[E]` reage e `[Enter]` responde ao selecionado.
+- `[Shift+E]` reage à issue. O seletor de reação usa `[1]`–`[5]` para
+  👍 ❤️ 🎉 😄 👀, mostra contagens e identifica a reação já adicionada. Se o
+  comentário já possui alguma reação, o controle contextual diz `[E] Nova reação`.
 - `[?]` mostra disponibilidade e motivo de todas as ações.
 - Inputs detêm letras, números e atalhos globais. `[Esc]` primeiro desfoca, depois
   fecha o modal e nunca atravessa duas camadas no mesmo evento.
@@ -57,6 +63,11 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 - `[H/L]` é foco; seções usam `[A←]`/`[F→]`.
 - Labels usa `[Shift+L]`, sem conflitar com `[L]` para abrir a prévia.
 - Escritas exigem `[Ctrl+S]` e revalidação; não há comandos arbitrários ou lote.
+- Reações relêem e validam o node/URL exato antes e depois de uma única mutação.
+  Respostas são comentários planos com link validado e menção ao autor, porque a
+  API de Issue Comments não oferece respostas encadeadas. A Atividade interpreta
+  esse vínculo, oculta o marcador técnico e mostra cada resposta recuada logo sob
+  o comentário-pai; uma escrita concluída recarrega os detalhes selecionados.
 - Checkout não clona e opera somente em clone local elegível, sob a mesma guarda
   canônica e fail-closed de PR; erro de inspeção ou mudança após confirmação
   impede o despacho.
@@ -70,4 +81,5 @@ todos os idiomas, sem impedir que o usuário crie e nomeie outros seletores.
 - `gh` ausente, antigo ou sem login substitui o conteúdo por explicação e um mini
   terminal responsivo. `[C]` copia o comando e `[Enter]`/mouse foca o shell; o
   usuário cola e executa. O Tuiminal nunca injeta o comando, apenas valida versão
-  ou autenticação e recarrega Issues ao final.
+  ou autenticação e recarrega Issues ao final. O PTY recebe também respostas de
+  protocolo do emulador e `[Enter]` reabre um shell encerrado.

@@ -8,6 +8,7 @@ import type {
   IssueState,
 } from "../../model/issue/types"
 import { sanitizeGitHubText } from "../../model/pr/content"
+import { githubReactionCount, normalizeGitHubReactionGroups } from "../../model/reactions"
 import { type GhTransportOptions, runGhJson } from "./transport"
 
 const ISSUE_DETAILS_QUERY = `
@@ -26,14 +27,14 @@ query TuiminalIssueDetails(
       author { login }
       assignees(first: 100) { totalCount nodes { login } }
       labels(first: 100) { totalCount nodes { name color } }
-      reactionGroups { users { totalCount } }
+      reactionGroups { content viewerHasReacted users { totalCount } }
       comments(last: $commentCount, before: $before) {
         totalCount
         pageInfo { hasPreviousPage startCursor }
         nodes {
           id body createdAt updatedAt url
           author { login }
-          reactionGroups { users { totalCount } }
+          reactionGroups { content viewerHasReacted users { totalCount } }
         }
       }
     }
@@ -52,10 +53,6 @@ type RawIssueDetails = {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? sanitizeGitHubText(value) : ""
-}
-
-function numberValue(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function actor(value: unknown): IssueActor {
@@ -87,14 +84,6 @@ function connectionIsComplete(value: unknown, loadedCount: number) {
   return typeof totalCount !== "number" || loadedCount >= totalCount
 }
 
-function reactionCount(value: unknown) {
-  if (!Array.isArray(value)) return 0
-  return value.reduce((total, group) => {
-    if (!group || typeof group !== "object") return total
-    return total + numberValue((group as { users?: { totalCount?: unknown } }).users?.totalCount)
-  }, 0)
-}
-
 function commentNodes(value: unknown): IssueComment[] {
   const nodes = value && typeof value === "object" ? (value as { nodes?: unknown }).nodes : null
   if (!Array.isArray(nodes)) return []
@@ -111,7 +100,8 @@ function commentNodes(value: unknown): IssueComment[] {
         createdAt: stringValue(raw.createdAt),
         updatedAt: stringValue(raw.updatedAt),
         url: stringValue(raw.url),
-        reactionCount: reactionCount(raw.reactionGroups),
+        reactionCount: githubReactionCount(raw.reactionGroups),
+        reactionGroups: normalizeGitHubReactionGroups(raw.reactionGroups),
       },
     ]
   })
@@ -161,7 +151,8 @@ export function normalizeIssueDetails(
       endCursor: stringValue(commentsConnection?.pageInfo?.startCursor) || null,
       partial: Boolean(raw.errors?.length),
     },
-    reactionCount: reactionCount(issue.reactionGroups),
+    reactionCount: githubReactionCount(issue.reactionGroups),
+    reactionGroups: normalizeGitHubReactionGroups(issue.reactionGroups),
     createdAt: stringValue(issue.createdAt),
     updatedAt: stringValue(issue.updatedAt),
     closedAt: stringValue(issue.closedAt),

@@ -19,7 +19,8 @@ fixtures e um `gh` falso; nenhuma issue, credencial ou configuração pessoal re
   comando detectado e oferece `[C]` para copiá-lo e `[Enter]`/mouse para focar um
   shell PTY. O usuário cola e executa o comando; o Tuiminal apenas valida a versão.
   A falta de login usa o mesmo tutorial e terminal para o comando de autenticação
-  preso ao host, com detecção e recarga automáticas.
+  preso ao host, com detecção e recarga automáticas. Respostas de protocolo do
+  emulador chegam ao PTY e `[Enter]` reabre um shell encerrado.
 
 Referências públicas usadas:
 
@@ -43,6 +44,10 @@ O layout completo está em
 - Duas linhas por issue: estado, `owner/repo #número`, título, atualização,
   comentários, reações, autor, responsáveis e labels.
 - Prévia `[Visão geral]`/`[Atividade]`, Markdown inerte e comentários paginados.
+- Na Atividade, `[J/K]` seleciona comentários, `[E]` reage e `[Enter]` responde;
+  `[Shift+E]` reage à própria issue. O seletor oferece 👍 ❤️ 🎉 😄 👀 por `[1]`–`[5]`.
+  Comentários com reação mostram `[E] Nova reação`, e respostas vinculadas aparecem
+  agrupadas e recuadas logo abaixo do comentário-pai.
 - Composição lado a lado, empilhada ou painel único conforme o terminal.
 - `[P]` mostra/oculta; `[Shift+P]` alterna posição automática, direita e abaixo.
 - Todos os controles de teclado relevantes possuem alvo de mouse.
@@ -69,9 +74,11 @@ acidentais. Resultados são deduplicados por host e node ID.
 Cada seção persiste título, query, colunas, ordem e limite. Na tela Git, `[,]`
 expõe a opção GitHub: seu gerenciador único cria, edita, duplica, move e exclui
 seletores de PR/Issues e salva o mesmo filtro de repositórios para os dois.
-Perfis novos trazem somente o seletor `My Issues`, com `is:open author:@me`. O
-conjunto legado de quatro seletores é migrado apenas quando permanece exatamente
-igual ao padrão antigo; qualquer personalização é preservada.
+Perfis novos trazem `My Issues`, com `is:open author:@me`, e os seletores `All`,
+`Open` e `Closed`, que cobrem respectivamente todos os itens não arquivados,
+somente os abertos e somente os fechados dentro do escopo atual. Os conjuntos
+padrão anteriores são migrados apenas quando permanecem exatamente intactos;
+qualquer personalização é preservada.
 
 ## Ações e segurança
 
@@ -80,6 +87,8 @@ igual ao padrão antigo; qualquer personalização é preservada.
 | Abrir | `[O]` | `gh issue view … --web` |
 | Copiar número/URL | `[Y]` / `[Shift+Y]` | OSC52 |
 | Comentar | `[C]` | `gh issue comment … --body-file -` |
+| Responder comentário | Atividade → `[Enter]` | novo comentário por stdin com URL validada do original e `@autor` |
+| Reagir | `[Shift+E]` na issue / `[E]` no comentário | GraphQL `addReaction`, cinco opções `[1]`–`[5]` |
 | Atribuir/desatribuir | menu `[?]` → `[A]` / `[Shift+A]` | `gh issue edit` |
 | Editar labels | `[Shift+L]` | deltas `--add-label/--remove-label` |
 | Branch e checkout | `[Shift+C]` | `gh issue develop … --checkout` |
@@ -107,14 +116,15 @@ automático, stash, reset, clean ou repetição automática.
 - LRU: 64 seções e 32 detalhes; detalhes carregam 50 comentários por página.
 - O encerramento cancela leituras e limpa recursos de PR e Issues.
 - `tests/git-issues.test.ts`, `tests/git-issue-config.test.ts` e
-  `tests/git-issue-actions.test.ts` cobrem modelo, configuração e transporte.
+  `tests/git-issue-actions.test.ts` cobrem modelo, configuração e transporte;
+  `tests/git-reactions.test.ts` cobre as opções, contagens e vínculo da resposta.
 - `tests/tui/git-issues.test.tsx` cobre lazy mount, estado, responsividade,
   teclado, mouse, foco/Escape, idiomas, paletas e layouts.
 - `tests/tutorial.test.ts` e `tests/i18n.test.ts` cobrem tour e traduções.
 
-Gate completo em 2026-09-07: typecheck, format check, lint, arquitetura e
-manutenibilidade aprovados; **370 testes unitários e 65 testes TUI passaram**. As
-6 integrações pesadas de drivers de banco permanecem no gate opt-in já documentado.
+Gate completo atualizado em 2026-09-11: typecheck, format check, lint, arquitetura
+e manutenibilidade aprovados; **729 testes unitários e 116 testes TUI passaram**.
+Os 11 casos de integração opt-in permanecem ignorados no gate padrão.
 
 Qualquer alteração de consultas, ações, atalhos, confirmação, persistência ou
 limites deve atualizar este documento, o design e os testes correspondentes.
@@ -129,6 +139,18 @@ inline para não cobrir issues já utilizáveis.
 Em 2026-09-09, o padrão inicial foi reduzido ao seletor inglês `My Issues`. A
 migração reconhece somente o conjunto legado intacto, sem sobrescrever seletores
 editados pelo usuário.
+
+Em 2026-09-11, o padrão inicial ganhou `All`, `Open` e `Closed`. A migração
+também reconhece o padrão inglês anterior intacto, mas continua preservando
+qualquer conjunto editado pelo usuário.
+
+Também em 2026-09-11, issues e comentários ganharam as cinco reações rápidas
+👍 ❤️ 🎉 😄 👀. A Atividade seleciona comentários por `[J/K]`, reage por `[E]` e
+responde por `[Enter]`; `[Shift+E]` reage à issue. Cada reação valida e relê o node
+exato antes e depois de uma única mutação. A resposta é um comentário plano com
+URL validada do original e menção ao autor, pois Issue Comments não são threads;
+na leitura, esse vínculo é interpretado para ocultar o marcador e reconstruir a
+conversa abaixo do comentário-pai. Escritas concluídas recarregam os detalhes.
 
 Em 2026-09-10, o checkout passou a usar a guarda fail-closed compartilhada com
 PR, com cobertura de clone limpo/sujo, linked worktree, metadata inválida,

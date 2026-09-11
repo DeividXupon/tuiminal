@@ -6,21 +6,36 @@ import type { PullRequestDetails, PullRequestPreviewTab } from "../../model/pr/t
 type PreviewCollectionAction =
   | { type: "move"; delta: -1 | 1; count: number }
   | { type: "copy"; value: string }
+  | { type: "comment-action"; kind: "reaction" | "reply" }
 
-function previewCollectionAction({
-  keyName,
-  focus,
-  tab,
-  details,
-  selectedIndex,
-}: {
-  keyName: string
-  focus: PullRequestFocus
-  tab: PullRequestPreviewTab
-  details: PullRequestDetails | null
-  selectedIndex: number
-}): PreviewCollectionAction | null {
-  if (focus !== "preview" || !details || (tab !== "commits" && tab !== "files")) return null
+function activityCollectionAction(
+  keyName: string,
+  count: number,
+  shift?: boolean,
+): PreviewCollectionAction | null {
+  if (!count) return null
+  if (["j", "down", "k", "up"].includes(keyName)) {
+    return {
+      type: "move",
+      delta: keyName === "j" || keyName === "down" ? 1 : -1,
+      count,
+    }
+  }
+  if (shift) return null
+  if (keyName === "e") return { type: "comment-action", kind: "reaction" }
+  if (keyName === "enter" || keyName === "return") {
+    return { type: "comment-action", kind: "reply" }
+  }
+  return null
+}
+
+function detailCollectionAction(
+  keyName: string,
+  tab: PullRequestPreviewTab,
+  details: PullRequestDetails,
+  selectedIndex: number,
+): PreviewCollectionAction | null {
+  if (tab !== "commits" && tab !== "files") return null
   if (["j", "down", "k", "up"].includes(keyName)) {
     return {
       type: "move",
@@ -28,11 +43,30 @@ function previewCollectionAction({
       count: details[tab].length,
     }
   }
-  if (tab === "commits" && keyName === "y") {
-    const commit = details.commits[selectedIndex]
-    return commit ? { type: "copy", value: commit.sha } : null
+  const commit = tab === "commits" && keyName === "y" ? details.commits[selectedIndex] : null
+  return commit ? { type: "copy", value: commit.sha } : null
+}
+
+function previewCollectionAction({
+  keyName,
+  focus,
+  tab,
+  details,
+  selectedIndex,
+  shift,
+}: {
+  keyName: string
+  focus: PullRequestFocus
+  tab: PullRequestPreviewTab
+  details: PullRequestDetails | null
+  selectedIndex: number
+  shift?: boolean
+}): PreviewCollectionAction | null {
+  if (focus !== "preview" || !details) return null
+  if (tab === "activity") {
+    return activityCollectionAction(keyName, details.comments.length, shift)
   }
-  return null
+  return detailCollectionAction(keyName, tab, details, selectedIndex)
 }
 
 export function usePullRequestWorkspaceKeyboard({
@@ -48,6 +82,8 @@ export function usePullRequestWorkspaceKeyboard({
   onWorkspaceAction,
   onPreviewMove,
   onCopySha,
+  onCommentReact,
+  onCommentReply,
 }: {
   active: boolean
   blocked: boolean
@@ -61,6 +97,8 @@ export function usePullRequestWorkspaceKeyboard({
   onWorkspaceAction: (action: PullRequestWorkspaceAction) => void
   onPreviewMove: (delta: -1 | 1, count: number) => void
   onCopySha: (sha: string) => void
+  onCommentReact: () => void
+  onCommentReply: () => void
 }) {
   useKeyboard((key) => {
     if (!active || blocked) return
@@ -70,11 +108,15 @@ export function usePullRequestWorkspaceKeyboard({
       tab: previewTab,
       details,
       selectedIndex: previewItemIndex,
+      shift: key.shift,
     })
     if (collectionAction) {
       key.preventDefault()
       if (collectionAction.type === "copy") onCopySha(collectionAction.value)
-      else onPreviewMove(collectionAction.delta, collectionAction.count)
+      else if (collectionAction.type === "move") {
+        onPreviewMove(collectionAction.delta, collectionAction.count)
+      } else if (collectionAction.kind === "reaction") onCommentReact()
+      else onCommentReply()
       return
     }
     const action = pullRequestWorkspaceAction({

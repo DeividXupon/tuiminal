@@ -5,7 +5,7 @@ import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { PullRequestPreviewConfig } from "../../model/pr/config"
 import type { PullRequestFocus, PullRequestLayoutMode } from "../../model/pr/navigation"
-import type { PullRequestPreviewTab } from "../../model/pr/types"
+import type { PullRequestComment, PullRequestPreviewTab } from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { DashboardStatePanel } from "./DashboardStatePanel"
 import { PreviewPane } from "./PreviewPane"
@@ -45,6 +45,8 @@ type DashboardPanelsProps = {
   workflowError: string
   loadingMore: boolean
   onOpenWorkflow: (runId: number) => void
+  onReactComment: (comment: PullRequestComment) => void
+  onReplyComment: (comment: PullRequestComment) => void
 }
 
 function DashboardPanels({
@@ -77,6 +79,8 @@ function DashboardPanels({
   workflowError,
   loadingMore,
   onOpenWorkflow,
+  onReactComment,
+  onReplyComment,
 }: DashboardPanelsProps) {
   const showList = layout !== "single" || focus === "list"
   const showPreview = layout !== "single" || focus === "preview"
@@ -150,6 +154,8 @@ function DashboardPanels({
             workflows={workflows}
             workflowError={workflowError}
             onOpenWorkflow={onOpenWorkflow}
+            onReactComment={onReactComment}
+            onReplyComment={onReplyComment}
           />
         </box>
       ) : null}
@@ -186,6 +192,8 @@ export function PullRequestDashboardView({
   workflows,
   workflowError,
   onOpenWorkflow,
+  onReactComment,
+  onReplyComment,
   onSelectSection,
   onEditQuery,
   notice,
@@ -309,6 +317,8 @@ export function PullRequestDashboardView({
           workflowError={workflowError}
           loadingMore={loadingMore}
           onOpenWorkflow={onOpenWorkflow}
+          onReactComment={onReactComment}
+          onReplyComment={onReplyComment}
         />
       ) : (
         <DashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />

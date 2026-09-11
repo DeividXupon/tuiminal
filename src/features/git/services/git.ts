@@ -1,8 +1,11 @@
-import type { GitFile, GitCommit, GitSnapshot } from "../model/types"
+import type { GitCommit, GitFile, GitSnapshot } from "../model/types"
+
 export type * from "../model/types"
-import { parseGitHubRemote, type GitHubRepositoryReference } from "../model/repository"
+
 import { basename, resolve } from "node:path"
-import { runGitCommand, type GitCommandResult } from "./git-command"
+import { type GitHubRepositoryReference, parseGitHubRemote } from "../model/repository"
+import { type GitCommandResult, runGitCommand } from "./git-command"
+import type { GitCommandObserver } from "./git-file-actions"
 
 export {
   GIT_COMMAND_MAX_OUTPUT_BYTES,
@@ -10,6 +13,11 @@ export {
   GitCommandBudgetError,
   runGitCommand,
 } from "./git-command"
+export {
+  discardGitFiles,
+  type GitCommandObserver,
+  stageGitFiles,
+} from "./git-file-actions"
 
 export const GIT_LAUNCH_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
 const projectContextCache = new Map<string, Promise<GitProjectContext>>()
@@ -118,6 +126,11 @@ function parseCommits(output: string): GitCommit[] {
 function commandError(result: GitCommandResult, fallback: string) {
   const message = result.stderr.trim() || result.stdout.trim() || fallback
   return new Error(result.truncated ? `${message}\n[saída truncada pelo limite]` : message)
+}
+
+async function runObservedGitCommand(root: string, args: string[], observer?: GitCommandObserver) {
+  observer?.(args)
+  return runGitCommand(root, args, { mutating: true })
 }
 
 /** Remove Git's record terminator without erasing a meaningful patch marker. */
@@ -279,33 +292,33 @@ export async function loadCommitDiff(root: string, commitHash: string) {
   return trimGitPatchTerminator(result.stdout) || "Este commit não possui diff textual."
 }
 
-export async function toggleGitFile(root: string, file: GitFile) {
+export async function toggleGitFile(root: string, file: GitFile, observer?: GitCommandObserver) {
   if (file.unstaged) {
-    const addResult = await runGitCommand(root, ["--literal-pathspecs", "add", "--", file.path])
+    const addResult = await runObservedGitCommand(
+      root,
+      ["--literal-pathspecs", "add", "--", file.path],
+      observer,
+    )
     if (addResult.exitCode !== 0) {
       throw commandError(addResult, `Não foi possível adicionar ${file.path}.`)
     }
     return "Alterações adicionadas ao stage."
   }
 
-  const restoreResult = await runGitCommand(root, [
-    "--literal-pathspecs",
-    "restore",
-    "--staged",
-    "--",
-    file.path,
-  ])
+  const restoreResult = await runObservedGitCommand(
+    root,
+    ["--literal-pathspecs", "restore", "--staged", "--", file.path],
+    observer,
+  )
   if (restoreResult.exitCode === 0) {
     return "Alterações removidas do stage."
   }
 
-  const fallbackResult = await runGitCommand(root, [
-    "--literal-pathspecs",
-    "rm",
-    "--cached",
-    "--",
-    file.path,
-  ])
+  const fallbackResult = await runObservedGitCommand(
+    root,
+    ["--literal-pathspecs", "rm", "--cached", "--", file.path],
+    observer,
+  )
   if (fallbackResult.exitCode !== 0) {
     throw commandError(restoreResult, `Não foi possível remover ${file.path} do stage.`)
   }
@@ -313,16 +326,24 @@ export async function toggleGitFile(root: string, file: GitFile) {
   return "Alterações removidas do stage."
 }
 
-export async function toggleAllGitFiles(root: string, files: GitFile[]) {
+export async function toggleAllGitFiles(
+  root: string,
+  files: GitFile[],
+  observer?: GitCommandObserver,
+) {
   if (files.some((file) => file.unstaged)) {
-    const addResult = await runGitCommand(root, ["add", "--all"])
+    const addResult = await runObservedGitCommand(root, ["add", "--all"], observer)
     if (addResult.exitCode !== 0) {
       throw commandError(addResult, "Não foi possível adicionar as alterações.")
     }
     return "Todas as alterações foram adicionadas ao stage."
   }
 
-  const restoreResult = await runGitCommand(root, ["restore", "--staged", "--", "."])
+  const restoreResult = await runObservedGitCommand(
+    root,
+    ["restore", "--staged", "--", "."],
+    observer,
+  )
   if (restoreResult.exitCode !== 0) {
     throw commandError(restoreResult, "Não foi possível limpar o stage.")
   }

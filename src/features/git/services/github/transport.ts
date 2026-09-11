@@ -79,7 +79,16 @@ function classifyCommandFailure(error: {
     return new GitHubTransportError("output-limit", "GitHub CLI response exceeded the safe limit")
   }
   const normalized = message.toLowerCase()
-  if (normalized.includes("authentication") || normalized.includes("not logged")) {
+  if (
+    normalized.includes("authentication") ||
+    normalized.includes("not logged") ||
+    normalized.includes("not authenticated") ||
+    normalized.includes("bad credentials") ||
+    normalized.includes("http 401") ||
+    normalized.includes("gh auth login") ||
+    normalized.includes("invalid token") ||
+    normalized.includes("token is invalid")
+  ) {
     return new GitHubTransportError("not-authenticated", message)
   }
   if (normalized.includes("rate limit")) return new GitHubTransportError("rate-limited", message)

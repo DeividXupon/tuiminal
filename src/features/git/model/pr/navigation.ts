@@ -265,6 +265,7 @@ export function pullRequestActionKindForShortcut(key: {
 }): PullRequestActionKind | null {
   const name = key.name.toLowerCase()
   if (name === "c") return key.shift ? "checkout" : "comment"
+  if (name === "e" && key.shift) return "reaction"
   if (name === "v") return "approve"
   if (name === "a" && key.ctrl) return "approve-workflow"
   if (name === "a") return key.shift ? "unassign" : "assign"

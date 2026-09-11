@@ -1,23 +1,25 @@
 import stringWidth from "string-width"
-import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
-import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
+import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
+import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
+import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
+import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
-import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
-import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
 import { HTTP_IMPORT_MESSAGES, HTTP_IMPORT_PATTERNS } from "./http-import-catalog"
+import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
 import { HTTP_OVERLAY_MESSAGES } from "./http-overlays"
 import { HTTP_PATTERNS } from "./http-patterns"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
+import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
 import { HTTP_RESPONSE_MESSAGES, HTTP_RESPONSE_PATTERNS } from "./http-response-catalog"
 import { HTTP_RUNNER_MESSAGES, HTTP_RUNNER_PATTERNS } from "./http-runner-catalog"
@@ -97,6 +99,8 @@ const MESSAGES: readonly Message[] = [
   ...RUNNER_TRUST_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,
   ...GIT_CLI_GUIDANCE_MESSAGES,
+  ...GIT_DISCUSSION_MESSAGES,
+  ...GIT_DIFFS_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [

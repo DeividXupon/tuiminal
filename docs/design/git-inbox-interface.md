@@ -58,4 +58,5 @@ conteúdo já carregado.
 Se `gh` estiver ausente, antigo ou sem login, Inbox usa a mesma explicação e mini
 terminal guiado de PR/Issues. `[C]` copia o comando e `[Enter]`/mouse foca o shell;
 o usuário cola e executa. Versão ou login válidos recarregam a tela automaticamente,
-sem o Tuiminal ler tokens nem iniciar os comandos exibidos.
+sem o Tuiminal ler tokens nem iniciar os comandos exibidos. O PTY recebe respostas
+de protocolo do emulador e `[Enter]` reabre um shell encerrado.

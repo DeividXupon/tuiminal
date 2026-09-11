@@ -32,14 +32,14 @@ foi usado e nenhum arquivo de configuração pessoal foi criado pelos testes.
 
 Criar um dashboard de Pull Requests **dentro da ferramenta Git**:
 
-- `[1] [C] Diffs`: arquivos, stage/unstage, commits, grafo e diffs do projeto local escolhido; `[C]` alterna para comparação entre branches.
+- `[1] [C] Diffs`: árvore compactada, stage/unstage otimista, descarte confirmado, terminal Git, commits, grafo e diffs do projeto local escolhido; `[C]` alterna para comparação entre branches.
 - `[2] PR`: seções configuráveis, PRs de vários repositórios, detalhes, diff e ações.
 - `[Alt+2]` continua abrindo Git; `tuiminal git [diretório]` continua válido.
 - Ao abrir Git pela primeira vez, selecionar Diffs; ao alternar outras ferramentas
   durante a mesma sessão, conservar a última subaba e o estado de ambas.
 - PRs não dependem de haver um checkout local, exceto a ação de checkout.
 - Diffs funciona sem internet, GitHub CLI ou conta GitHub.
-- Preview e stage/unstage de um arquivo usam caminhos literais, sem expandir
+- Preview, stage/unstage e descarte de arquivo/pasta usam caminhos literais, sem expandir
   wildcards ou magic de pathspec. `tests/git-file-paths.test.ts` cobre nomes
   especiais, preservação de arquivos vizinhos e unstage antes do primeiro commit.
 
@@ -124,7 +124,7 @@ de leitura não equivale a concluir este plano.
 | --- | --- | --- | --- |
 | R01 | Diffs/PR dentro de Git | `[1]`/`[2]`, mouse, preservação de estado e modo isolado funcionando. | 1 |
 | R02 | Listar vários repositórios | Uma seção agrega PRs de ao menos três repos, com identidade sem colisões. | 3 |
-| R03 | Seções personalizadas | Criar, editar, duplicar, ordenar e excluir; novos perfis usam apenas `My PRs` e `Review requested`. | 3 |
+| R03 | Seções personalizadas | Criar, editar, duplicar, ordenar e excluir; novos perfis usam `My PRs`, `Review requested`, `All`, `Open` e `Closed`. | 3 |
 | R04 | Filtrar repo, autor, branch e label | Busca temporária, validação, salvamento explícito e escopo visível. | 3 |
 | R05 | Todos os campos da lista | Estado, repo, título, autor, responsáveis, base, comentários, revisão, CI, labels e linhas. | 3–4 |
 | R06 | Prévia detalhada | Identidade estável, carregamento parcial e cinco abas navegáveis. | 4 |
@@ -134,7 +134,7 @@ de leitura não equivale a concluir este plano.
 | R10 | Visualizar diff | Diff de PR/arquivo/commit, modos úteis e sinalização de conteúdo indisponível. | 5 |
 | R11 | Checkout local | Seleção de clone, pré-validação, confirmação e proteção do trabalho local. | 7 |
 | R12 | Adicionar/remover responsáveis | Lista editável, confirmação, permissão e atualização de todas as seções afetadas. | 6 |
-| R13 | Comentar | Editor, envio explícito, preservação do draft e tratamento de resultado incerto. | 6 |
+| R13 | Conversar e reagir | Comentário/resposta com editor, cinco reações, envio explícito, draft preservado e resultado incerto. | 6 |
 | R14 | Aprovar com comentário configurável | Template editável, commit identificado e nenhuma aprovação automática. | 6 |
 | R15 | Autorizar workflows | Execuções elegíveis de forks identificadas e aprovação explícita por execução. | 8 |
 | R16 | Acompanhar CI/notificar | Watch explícito, estado correto, aviso de conclusão e encerramento limpo. | 8 |
@@ -153,6 +153,9 @@ de leitura não equivale a concluir este plano.
 | --- | --- |
 | My PRs | `is:open author:@me` |
 | Review requested | `is:open review-requested:@me` |
+| All | `archived:false` |
+| Open | `is:open` |
+| Closed | `is:closed` |
 | Exemplo de seção de equipe | `is:open author:ana base:main label:bug` |
 
 Os exemplos seguem a busca do GitHub; o adaptador deve validar os qualificadores
@@ -220,6 +223,9 @@ caso testes de integração revelem uma dependência mais nova.
 - Manter senha e demais entradas somente no fluxo PTY: não capturar, persistir ou
   copiar credenciais para logs do Tuiminal. Autenticação GitHub continua sendo a
   etapa explícita `gh auth login`, separada da instalação.
+- Encaminhar ao PTY tanto a entrada do usuário quanto respostas de protocolo do
+  emulador. Saídas atrasadas pertencem à geração que criou o shell e nunca podem
+  desconectar seu sucessor; `[Enter]` reabre um shell encerrado.
 - Reusar autenticação do GitHub CLI; consultar a identidade efetiva do viewer.
 - Não chamar `gh auth token` para copiar segredo para o app e não registrar tokens.
 - Sem login, compartilhar o mesmo passo guiado com explicação, `[C]` para copiar
@@ -245,7 +251,7 @@ de tokens. [Autenticação oficial](https://cli.github.com/manual/gh_auth_login)
 | Identidade/estado | `PullRequest`: id, number, url, repository, title, state, isDraft | Não juntar repos/hosts por número. |
 | Autor/responsáveis/labels | author, assignees, labels | Lista pode truncar com `+N`; prévia oferece paginação completa. |
 | Branches/alterações | baseRefName, headRefName, baseRefOid, headRefOid, additions, deletions, changedFiles | Guardar os SHAs correspondentes ao snapshot/diff. |
-| Comentários | comments + reviewThreads, carregados conforme necessário | Coluna compacta usa comentários gerais + threads; ajuda explica essa semântica. Atividade mostra comentários individuais. |
+| Comentários | comments + reviewThreads, carregados conforme necessário | Coluna compacta usa comentários gerais + threads; ajuda explica essa semântica. Atividade mostra comentários individuais e seus `reactionGroups`. |
 | Revisão | reviewDecision, reviews/latestReviews, reviewRequests | Não determinar elegibilidade apenas pela última string `APPROVED`. |
 | Code owners | `reviewRequests.nodes.asCodeOwner` + requestedReviewer | Diferenciar usuário/equipe e ausência de dados de ausência de pendência. |
 | Commits | conexão commits e dados de cada commit | Paginação; SHA completo usado para cópia e diff. |
@@ -299,6 +305,8 @@ desfaz uma mutação aceita pelo servidor.
 | Copiar número/URL/SHA | Clipboard do renderer/OSC52 | Texto completo, toast; sucesso somente se envio suportado, fallback selecionável. |
 | Adicionar/remover responsáveis | `gh pr edit --add-assignee/--remove-assignee` | Mostrar delta de pessoas; não substituir todos implicitamente. |
 | Comentar | `gh pr comment --body-file -` ou REST de issue comments | Corpo por stdin, preview e confirmação; não usar shell interpolation. |
+| Responder comentário | `gh pr comment --body-file -` | Como comentários de PR são planos, enviar novo comentário com URL validada do original e menção ao autor. |
+| Reagir | GraphQL `addReaction` no PR ou `IssueComment` | Oferecer somente 👍 ❤️ 🎉 😄 👀; validar tipo, node ID e URL exatos, executar uma vez e reconciliar `viewerHasReacted`. |
 | Aprovar | REST create review com evento APPROVE e `commit_id`, via `gh api` | Vincular ao commit revisado e revalidar head; impedir autoaprovação quando não permitida. |
 | Tornar pronto | `gh pr ready` | Apenas draft elegível; não disparar CI local. |
 | Fechar/reabrir | `gh pr close` / `gh pr reopen` | Mostrar estado/alvo; não usar exclusão de branch como efeito colateral. |
@@ -520,14 +528,23 @@ profiles:
       - id: review
         title: Review requested
         filters: is:open review-requested:@me
+      - id: all
+        title: All
+        filters: archived:false
+      - id: open
+        title: Open
+        filters: is:open
+      - id: closed
+        title: Closed
+        filters: is:closed
 repoPaths:
   github.com/equipe/api: [/caminho/canonico/projeto]
 ```
 
 Planejar validação de nomes, IDs duplicados, proporções, limites, hosts, repos,
 colunas e caminhos. Caminhos são normalizados; `~` só é expandido no campo de
-caminho escolhido pelo usuário, nunca como shell. Seletores adicionais são
-criados explicitamente pela UI; novos perfis não recebem outros presets.
+caminho escolhido pelo usuário, nunca como shell. Outros seletores além dos cinco
+presets padrão são criados explicitamente pela UI.
 
 Persistir configuração de seções, mapas e preferências. Sessão contém apenas
 identificadores, seção/preview/offset e interesse de watch para eventual retomada.
@@ -692,6 +709,8 @@ Saída: funcionalidade completa somente quando todos os requisitos têm evidênc
   atualização de head, descoberta tardia e deduplicação de notificações.
 - Tentativas de injeção em args, Markdown, OSC52, URL, título, path e branch.
 - Escritas não disparadas por leitura; nenhuma repetição automática após timeout.
+- Reações ao PR/comentário com alvo trocado ou URL de outro item; respostas sempre
+  vinculadas ao comentário selecionado e enviadas por stdin.
 - Checkout com repo errado, sujo, linked worktree, múltiplos clones, operação em
   andamento, timeout, status/index/gitdir inválido, mudança após confirmação e
   duas operações concorrentes no mesmo clone.
@@ -748,7 +767,7 @@ Relatório final separa testes locais, remotos opt-in, visuais e o que não foi 
 | R10 | Concluído | Diff de PR/arquivo/commit, SHAs imutáveis, unificado/split/intraline e casos especiais em `model/pr/diff.ts`, `PrDiffView.tsx` e `tests/git-pr-runtime.test.ts`. |
 | R11 | Concluído | Escolha/mapeamento de clone, remote correto, linked worktree, inspeção fail-closed, revalidação antes/depois do despacho e lock pelo clone canônico em `services/pr-checkout.ts` e `tests/git-pr-runtime.test.ts`; Issues compartilha a mesma guarda. |
 | R12 | Concluído | Adição/remoção de responsáveis, picker e reconciliação em `AssigneePicker.tsx`, `services/github/mutations.ts` e `tests/git-pr-actions.test.ts`. |
-| R13 | Concluído | Comentário por stdin, draft em memória, execução única e resultado incerto em `usePullRequestActions.tsx`, `services/pr-actions.ts` e testes de ações. |
+| R13 | Concluído | Comentário/resposta por stdin, cinco reações GraphQL, seleção contextual na Atividade, draft em memória, validação do alvo, execução única e resultado incerto em `usePullRequestActions.tsx`, `services/pr-actions.ts`, `reaction-state.ts` e testes de ações/TUI. |
 | R14 | Concluído | Aprovação vinculada ao commit, comentário configurável opcional e sem autoenvio em `mutations.ts` e `tests/git-pr-actions.test.ts`. |
 | R15 | Concluído | Runs elegíveis de fork separados de deployment protection e aprovação individual em `services/github/workflows.ts` e testes de runtime. |
 | R16 | Concluído | Scheduler com teto/backoff, identidade por SHA/tentativa, aviso único e modo discreto em `pr-watch.ts`, `pr-notifications.ts` e testes de runtime. |
@@ -759,11 +778,10 @@ Relatório final separa testes locais, remotos opt-in, visuais e o que não foi 
 | R21 | Concluído | Número/URL/SHA copiados contextualmente e URL explícita aberta sem shell em `read-actions.ts`, teclado da PR e testes de transporte/runtime. |
 | R22 | Concluído | `tests/tui/git-pr.test.tsx`: teclado, mouse e 44 combinações de tamanho/idioma/paleta/layout; tutorial com seis alvos em `tests/tutorial.test.ts`. |
 
-Validação final local: 238 testes unitários aprovados, 6 integrações de drivers de
-banco ignoradas por serem opt-in, 28 testes TUI aprovados, 0 violações de
-arquitetura e 0 regressões de manutenibilidade. A suíte remota de escrita não foi
-executada porque este trabalho deliberadamente não recebeu autorização para agir
-em PRs reais.
+Validação local atualizada em 2026-09-11: 729 testes unitários aprovados, 11 casos
+opt-in ignorados, 116 testes TUI aprovados, 0 violações de arquitetura e 0
+regressões de manutenibilidade. A suíte remota de escrita não foi executada porque
+este trabalho deliberadamente não recebeu autorização para agir em PRs reais.
 
 ## 13. Riscos e decisões pendentes
 
@@ -810,6 +828,16 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
 
 ## Registro do planejamento
 
+Em 2026-09-11, PRs e comentários passaram a aceitar cinco reações rápidas
+(👍 ❤️ 🎉 😄 👀). A aba Atividade ganhou seleção de comentário por `[J/K]`, reação
+por `[E]` e resposta por `[Enter]`; `[Shift+E]` reage ao PR. Como os comentários
+de PR não têm thread de resposta nativa, a resposta cria um comentário plano com
+link validado para o original e menção ao autor. Na leitura, esse vínculo agrupa a
+resposta sob o comentário-pai e não exibe o marcador técnico; comentários com
+reação mostram `[E] Nova reação`, e escritas concluídas recarregam os detalhes.
+Reações relêem o node exato antes e depois da única mutação GraphQL e só confirmam
+quando `viewerHasReacted` aparece.
+
 - 2026-09-04: primeira especificação, com R01–R22, fases 0–9 e anexo visual.
 - 2026-09-04: Fase 0 concluída; shell Base/PR, transporte fake e configuração da Fase 2 iniciados.
 - 2026-09-04: fases 1–9 concluídas no worktree `codex/git-pr-workspace`; R01–R22
@@ -837,6 +865,9 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
 - 2026-09-09: perfis novos passaram a criar somente `My PRs` e
   `Review requested`; o carregamento migra apenas o conjunto legado exato e
   preserva qualquer seletor personalizado.
+- 2026-09-11: perfis novos também passaram a incluir `All`, `Open` e `Closed`;
+  configurações com qualquer um dos padrões anteriores intactos recebem os novos
+  seletores, enquanto configurações personalizadas continuam inalteradas.
 - 2026-09-08: o resultado de `Git · Comparar` ganhou árvore de arquivos agrupada
   em pastas e passou a renderizar somente o arquivo selecionado. Com as três
   escolhas aplicadas, os cartões ficam em uma linha nas telas largas e empilhados
@@ -852,6 +883,14 @@ capacidades e versão mínima em runtime, em vez de presumir que todo `gh` é ig
   painel focado; `[N/P]` foi removido do histórico local. A troca de arquivo mantém
   o diff anterior montado durante a leitura seguinte e não anima o cabeçalho do
   repositório, evitando flicker e saltos de layout.
+- 2026-09-11: Diffs ganhou um terminal Git compacto abaixo da prévia. `[Tab]`
+  percorre árvore, diff e terminal, enquanto `[T]` o foca diretamente; o prefixo
+  `git` é fixo, comandos de ações aparecem no histórico limitado e argumentos
+  manuais são enviados diretamente ao executável Git, sem composição via shell.
+  Stage/unstage atualiza a árvore de forma otimista. `[A]` em uma pasta opera em
+  todos os descendentes, e `[D]` pede confirmação antes de restaurar arquivos
+  rastreados ou remover novos. Cadeias de pastas sem ramificação são apresentadas
+  como um único nó navegável, sem consumir uma linha/tecla por segmento.
 - 2026-09-08: carregamentos de painel completo em Diffs, comparação, PR, Issues,
   Inbox, detalhes e diff remoto passaram a usar a superfície plasma ASCII
   compartilhada, com texto de estado sobreposto e dissolução rápida; paginação e

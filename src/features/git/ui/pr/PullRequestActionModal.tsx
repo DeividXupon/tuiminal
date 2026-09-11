@@ -3,18 +3,26 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { COLORS } from "../../../../core/settings/theme"
-import { translateUi } from "../../../../shared/i18n"
+import { translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import type { PullRequestActionKind } from "../../model/pr/actions"
-import type { PullRequestMergeMethod, PullRequestSummary } from "../../model/pr/types"
+import { GITHUB_REACTION_CHOICES, type GitHubReactionContent } from "../../model/reactions"
+import type {
+  PullRequestComment,
+  PullRequestMergeMethod,
+  PullRequestSummary,
+} from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
-import { AssigneePicker } from "./AssigneePicker"
+import { useBlurModalFocusOnUnmount } from "../useBlurModalFocusOnUnmount"
+import { PullRequestActionOptions } from "./PullRequestActionOptions"
 
 const LABELS: Record<PullRequestActionKind, string> = {
   assign: "Adicionar responsável",
   unassign: "Remover responsável",
   comment: "Comentar",
+  reaction: "Reagir no Pull Request",
+  reply: "Responder comentário",
   approve: "Aprovar Pull Request",
   ready: "Marcar como pronto para revisão",
   close: "Fechar Pull Request",
@@ -26,16 +34,17 @@ const LABELS: Record<PullRequestActionKind, string> = {
 }
 
 function needsInput(kind: PullRequestActionKind) {
-  return ["assign", "unassign", "comment", "approve", "checkout"].includes(kind)
+  return ["assign", "unassign", "comment", "reply", "approve", "checkout"].includes(kind)
 }
 
 function requiresInputValue(kind: PullRequestActionKind) {
-  return ["assign", "unassign", "comment", "checkout"].includes(kind)
+  return ["assign", "unassign", "comment", "reply", "checkout"].includes(kind)
 }
 
 function placeholder(kind: PullRequestActionKind) {
   if (kind === "assign" || kind === "unassign") return "usuario"
   if (kind === "checkout") return "/caminho/do/clone"
+  if (kind === "reply") return "Escreva a resposta que será enviada…"
   return "Escreva o comentário que será enviado…"
 }
 
@@ -45,31 +54,15 @@ function actionPayload(
   method: string,
   workflow: PullRequestWorkflowRun | undefined,
   mergeQueueConfigured: boolean,
+  reaction: GitHubReactionContent,
 ) {
-  if (kind === "comment" || kind === "approve") return { body: value }
+  if (kind === "comment" || kind === "reply" || kind === "approve") return { body: value }
+  if (kind === "reaction") return { reaction }
   if (kind === "assign" || kind === "unassign") return { login: value.replace(/^@/, "") }
   if (kind === "checkout") return { clonePath: value }
   if (kind === "merge") return { method, mergeQueue: mergeQueueConfigured }
   if (kind === "approve-workflow") return { runId: workflow?.id ?? 0 }
   return {}
-}
-
-function mergeIntentText({
-  queueConfigured,
-  queuePosition,
-  autoMergeEnabled,
-}: {
-  queueConfigured: boolean
-  queuePosition: number | null
-  autoMergeEnabled: boolean
-}) {
-  if (queuePosition !== null) return "PR já está na fila de merge."
-  if (autoMergeEnabled)
-    return "Auto-merge já está ativo; confirme somente para atualizar a intenção."
-  if (queueConfigured) {
-    return "A confirmação colocará o PR na fila ou ativará auto-merge até os checks terminarem."
-  }
-  return "A confirmação tentará concluir o merge agora, respeitando as proteções do GitHub."
 }
 
 type ActionModalKeyboardAction =
@@ -78,6 +71,36 @@ type ActionModalKeyboardAction =
   | { type: "method"; method: string }
   | { type: "workflow"; delta: -1 | 1 }
   | { type: "clone"; index: number }
+  | { type: "reaction"; index: number }
+
+function applyActionModalKeyboardAction(
+  action: ActionModalKeyboardAction,
+  context: {
+    busy: boolean
+    checkoutPaths: readonly string[]
+    onEscape: () => void
+    onSubmit: () => void
+    onMethod: (method: PullRequestMergeMethod) => void
+    onWorkflow: (delta: -1 | 1) => void
+    onClone: (path: string) => void
+    onReaction: (reaction: GitHubReactionContent) => void
+  },
+) {
+  if (action.type === "escape") return context.onEscape()
+  if (action.type === "submit") return context.busy ? undefined : context.onSubmit()
+  if (action.type === "method" && action.method) {
+    return context.onMethod(action.method as PullRequestMergeMethod)
+  }
+  if (action.type === "workflow") return context.onWorkflow(action.delta)
+  if (action.type === "clone") {
+    const path = context.checkoutPaths[action.index]
+    return path ? context.onClone(path) : undefined
+  }
+  if (action.type === "reaction") {
+    const reaction = GITHUB_REACTION_CHOICES[action.index]
+    return reaction ? context.onReaction(reaction.content) : undefined
+  }
+}
 
 function actionModalKeyboardAction(
   key: { name: string; ctrl?: boolean },
@@ -85,26 +108,31 @@ function actionModalKeyboardAction(
   mergeMethods: readonly PullRequestMergeMethod[],
   checkoutPaths: readonly string[],
 ): ActionModalKeyboardAction | null {
-  if (key.name === "escape") return { type: "escape" }
-  if (key.ctrl && key.name === "s") return { type: "submit" }
-  if (kind === "merge" && ["1", "2", "3"].includes(key.name)) {
+  const keyName = key.name.toLowerCase()
+  if (keyName === "escape") return { type: "escape" }
+  if (key.ctrl && keyName === "s") return { type: "submit" }
+  if (kind === "merge" && ["1", "2", "3"].includes(keyName)) {
     return {
       type: "method",
-      method: mergeMethods[Number(key.name) - 1] ?? "",
+      method: mergeMethods[Number(keyName) - 1] ?? "",
     }
   }
-  if (kind === "checkout" && /^\d$/.test(key.name)) {
-    const index = Number(key.name) - 1
+  if (kind === "checkout" && /^\d$/.test(keyName)) {
+    const index = Number(keyName) - 1
     if (checkoutPaths[index]) return { type: "clone", index }
   }
+  if (kind === "reaction" && /^[1-5]$/.test(keyName)) {
+    return { type: "reaction", index: Number(keyName) - 1 }
+  }
   if (kind !== "approve-workflow") return null
-  if (key.name === "j" || key.name === "down") return { type: "workflow", delta: 1 }
-  if (key.name === "k" || key.name === "up") return { type: "workflow", delta: -1 }
+  if (keyName === "j" || keyName === "down") return { type: "workflow", delta: 1 }
+  if (keyName === "k" || keyName === "up") return { type: "workflow", delta: -1 }
   return null
 }
 
 function actionModalHeight(kind: PullRequestActionKind, checkoutPathCount: number) {
   if (kind === "approve-workflow") return 18
+  if (kind === "reaction") return 18
   if (kind === "checkout") return 15 + Math.min(3, checkoutPathCount)
   if (kind === "assign" || kind === "unassign") return 19
   return 15
@@ -121,6 +149,8 @@ export function PullRequestActionModal({
   mergeQueueConfigured,
   mergeQueuePosition,
   autoMergeEnabled,
+  targetComment,
+  reactionGroups,
   busy,
   error,
   onValueChange,
@@ -137,6 +167,8 @@ export function PullRequestActionModal({
   mergeQueueConfigured: boolean
   mergeQueuePosition: number | null
   autoMergeEnabled: boolean
+  targetComment: PullRequestComment | null
+  reactionGroups: PullRequestComment["reactionGroups"]
   busy: boolean
   error: string
   onValueChange: (value: string) => void
@@ -151,12 +183,16 @@ export function PullRequestActionModal({
   const [value, setValue] = useState(initialValue)
   const [method, setMethod] = useState<PullRequestMergeMethod | "">(mergeMethods[0] ?? "")
   const [workflowIndex, setWorkflowIndex] = useState(0)
+  const [reaction, setReaction] = useState<GitHubReactionContent>(
+    GITHUB_REACTION_CHOICES[0].content,
+  )
   const input = needsInput(kind)
-
+  useBlurModalFocusOnUnmount(dialogRef)
   useEffect(() => {
     if (!open) return
     valueRef.current = initialValue
     setValue(initialValue)
+    setReaction(GITHUB_REACTION_CHOICES[0].content)
     if (kind === "merge") setMethod(mergeMethods[0] ?? "")
     renderer.currentFocusedRenderable?.blur()
     setTimeout(() => (input ? inputRef.current : dialogRef.current)?.focus(), 0)
@@ -165,38 +201,44 @@ export function PullRequestActionModal({
   const submit = () => {
     const trimmed = valueRef.current.trim()
     if (requiresInputValue(kind) && !trimmed) return
-    onSubmit(actionPayload(kind, trimmed, method, workflows[workflowIndex], mergeQueueConfigured))
+    onSubmit(
+      actionPayload(
+        kind,
+        trimmed,
+        method,
+        workflows[workflowIndex],
+        mergeQueueConfigured,
+        reaction,
+      ),
+    )
   }
 
   useKeyboard((key) => {
     if (!open) return
     const action = actionModalKeyboardAction(key, kind, mergeMethods, checkoutPaths)
     if (!action) return
-    if (action.type === "escape") {
-      key.preventDefault()
-      key.stopPropagation()
-      if (renderer.currentFocusedRenderable?.id === "git-pr-action-input") {
-        inputRef.current?.blur()
-        dialogRef.current?.focus()
-      } else onClose()
-    } else if (action.type === "submit" && !busy) {
-      key.preventDefault()
-      key.stopPropagation()
-      submit()
-    } else if (action.type === "method" && action.method) {
-      setMethod(action.method as PullRequestMergeMethod)
-    } else if (action.type === "workflow") {
-      setWorkflowIndex((current) =>
-        Math.max(0, Math.min(workflows.length - 1, current + action.delta)),
-      )
-    } else if (action.type === "clone") {
-      const path = checkoutPaths[action.index]
-      if (path) {
+    key.preventDefault()
+    key.stopPropagation()
+    applyActionModalKeyboardAction(action, {
+      busy,
+      checkoutPaths,
+      onEscape: () => {
+        if (input && renderer.currentFocusedRenderable?.id === "git-pr-action-input") {
+          inputRef.current?.blur()
+          dialogRef.current?.focus()
+        } else onClose()
+      },
+      onSubmit: submit,
+      onMethod: setMethod,
+      onWorkflow: (delta) =>
+        setWorkflowIndex((current) => Math.max(0, Math.min(workflows.length - 1, current + delta))),
+      onClone: (path) => {
         valueRef.current = path
         setValue(path)
         onValueChange(path)
-      }
-    }
+      },
+      onReaction: setReaction,
+    })
   })
 
   if (!open) return null
@@ -250,7 +292,7 @@ export function PullRequestActionModal({
             }}
           >
             <text
-              content={`◆ ${translateUi(LABELS[kind]).toUpperCase()}`}
+              content={`◆ ${translateUi(targetComment && kind === "reaction" ? "Reagir no comentário" : LABELS[kind]).toUpperCase()}`}
               style={{ fg: COLORS.git }}
             />
             <InlineButton
@@ -267,13 +309,21 @@ export function PullRequestActionModal({
             content={`${item.title} · commit ${item.headSha.slice(0, 10)}`}
             style={{ fg: COLORS.muted }}
           />
+          {targetComment ? (
+            <text
+              content={`↳ @${targetComment.author.login}: ${truncateDisplay(targetComment.body.replace(/\s+/g, " "), width - 8)}`}
+              style={{ fg: COLORS.git }}
+            />
+          ) : null}
           {input ? (
             <input
               ref={inputRef}
               id="git-pr-action-input"
               value={value}
               placeholder={translateUi(placeholder(kind))}
-              maxLength={kind === "comment" || kind === "approve" ? 65_000 : 1_024}
+              maxLength={
+                kind === "comment" || kind === "reply" || kind === "approve" ? 65_000 : 1_024
+              }
               onMouseDown={() => inputRef.current?.focus()}
               onInput={(next) => {
                 valueRef.current = next
@@ -291,77 +341,29 @@ export function PullRequestActionModal({
               }}
             />
           ) : null}
-          <AssigneePicker
+          <PullRequestActionOptions
             kind={kind}
-            assignees={item.assignees}
+            item={item}
             value={value}
-            onSelect={(login) => {
-              valueRef.current = login
-              setValue(login)
-              onValueChange(login)
+            reaction={reaction}
+            reactionGroups={reactionGroups ?? []}
+            checkoutPaths={checkoutPaths}
+            method={method}
+            mergeMethods={mergeMethods}
+            mergeQueueConfigured={mergeQueueConfigured}
+            mergeQueuePosition={mergeQueuePosition}
+            autoMergeEnabled={autoMergeEnabled}
+            workflows={workflows}
+            workflowIndex={workflowIndex}
+            onValue={(next) => {
+              valueRef.current = next
+              setValue(next)
+              onValueChange(next)
             }}
+            onReaction={setReaction}
+            onMethod={setMethod}
+            onWorkflow={setWorkflowIndex}
           />
-          {kind === "checkout" && checkoutPaths.length ? (
-            <box style={{ marginTop: 1 }}>
-              <text content={translateUi("CLONES SALVOS")} style={{ fg: COLORS.git }} />
-              {checkoutPaths.slice(0, 3).map((path, index) => (
-                <InlineButton
-                  key={path}
-                  label={`[${index + 1}] ${path}`}
-                  accent={COLORS.git}
-                  active={value === path}
-                  onPress={() => {
-                    valueRef.current = path
-                    setValue(path)
-                    onValueChange(path)
-                  }}
-                />
-              ))}
-            </box>
-          ) : null}
-          {kind === "merge" ? (
-            <box style={{ marginTop: 1 }}>
-              <box style={{ flexDirection: "row" }}>
-                {mergeMethods.map((candidate, index) => (
-                  <InlineButton
-                    key={candidate}
-                    label={`[${index + 1}] ${candidate}`}
-                    accent={COLORS.git}
-                    active={candidate === method}
-                    onPress={() => setMethod(candidate)}
-                  />
-                ))}
-              </box>
-              <text
-                content={translateUi(
-                  mergeIntentText({
-                    queueConfigured: mergeQueueConfigured,
-                    queuePosition: mergeQueuePosition,
-                    autoMergeEnabled,
-                  }),
-                )}
-                style={{ fg: COLORS.warning }}
-              />
-            </box>
-          ) : null}
-          {kind === "approve-workflow" ? (
-            <box style={{ marginTop: 1 }}>
-              {workflows.map((run, index) => (
-                <Button key={run.id} height={2} onPress={() => setWorkflowIndex(index)}>
-                  <box>
-                    <text
-                      content={`${index === workflowIndex ? "▶" : " "} ${run.name} · #${run.id} · tentativa ${run.attempt}`}
-                      style={{ fg: index === workflowIndex ? COLORS.text : COLORS.muted }}
-                    />
-                    <text
-                      content={`  ${run.headRepository} · @${run.actor.login}`}
-                      style={{ fg: COLORS.warning }}
-                    />
-                  </box>
-                </Button>
-              ))}
-            </box>
-          ) : null}
           <text
             content={error || translateUi("Nada será executado até a confirmação abaixo.")}
             style={{ marginTop: 1, fg: error ? COLORS.danger : COLORS.warning }}

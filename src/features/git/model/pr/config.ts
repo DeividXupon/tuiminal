@@ -53,13 +53,22 @@ export type PullRequestConfig = {
 export const DEFAULT_PULL_REQUEST_SECTIONS: readonly PullRequestSection[] = [
   { id: "mine", title: "My PRs", query: "is:open author:@me" },
   { id: "review", title: "Review requested", query: "is:open review-requested:@me" },
+  { id: "all", title: "All", query: "archived:false" },
+  { id: "open", title: "Open", query: "is:open" },
+  { id: "closed", title: "Closed", query: "is:closed" },
 ]
 
-const LEGACY_DEFAULT_PULL_REQUEST_SECTIONS: readonly PullRequestSection[] = [
-  { id: "mine", title: "Meus PRs", query: "is:open author:@me" },
-  { id: "review", title: "Aguardando minha revisão", query: "is:open review-requested:@me" },
-  { id: "assigned", title: "Atribuídos a mim", query: "is:open assignee:@me" },
-  { id: "failing", title: "CI falhando", query: "is:open status:failure" },
+const PREVIOUS_DEFAULT_PULL_REQUEST_SECTION_SETS: readonly (readonly PullRequestSection[])[] = [
+  [
+    { id: "mine", title: "My PRs", query: "is:open author:@me" },
+    { id: "review", title: "Review requested", query: "is:open review-requested:@me" },
+  ],
+  [
+    { id: "mine", title: "Meus PRs", query: "is:open author:@me" },
+    { id: "review", title: "Aguardando minha revisão", query: "is:open review-requested:@me" },
+    { id: "assigned", title: "Atribuídos a mim", query: "is:open assignee:@me" },
+    { id: "failing", title: "CI falhando", query: "is:open status:failure" },
+  ],
 ]
 
 export const DEFAULT_PULL_REQUEST_CONFIG: PullRequestConfig = {
@@ -122,20 +131,22 @@ function sectionsValue(value: unknown): PullRequestSection[] {
     identifiers.add(id)
     return [{ id, title, query, ...parsedSectionOptions(section) }]
   })
-  const isLegacyDefault =
-    sections.length === LEGACY_DEFAULT_PULL_REQUEST_SECTIONS.length &&
-    sections.every((section, index) => {
-      const legacy = LEGACY_DEFAULT_PULL_REQUEST_SECTIONS[index]
-      return (
-        legacy?.id === section.id &&
-        legacy.title === section.title &&
-        legacy.query === section.query &&
-        section.columns === undefined &&
-        section.sort === undefined &&
-        section.limit === undefined
-      )
-    })
-  return isLegacyDefault
+  const isPreviousDefault = PREVIOUS_DEFAULT_PULL_REQUEST_SECTION_SETS.some(
+    (defaults) =>
+      sections.length === defaults.length &&
+      sections.every((section, index) => {
+        const previous = defaults[index]
+        return (
+          previous?.id === section.id &&
+          previous.title === section.title &&
+          previous.query === section.query &&
+          section.columns === undefined &&
+          section.sort === undefined &&
+          section.limit === undefined
+        )
+      }),
+  )
+  return isPreviousDefault
     ? DEFAULT_PULL_REQUEST_SECTIONS.map((section) => ({ ...section }))
     : sections
 }

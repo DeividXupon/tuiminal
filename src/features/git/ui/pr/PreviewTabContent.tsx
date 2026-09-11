@@ -3,9 +3,15 @@ import { COLORS } from "../../../../core/settings/theme"
 import { formatUiDateTime, translateUi, truncateDisplay } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { pullRequestMarkdownLines } from "../../model/pr/content"
-import type { PullRequestDetails, PullRequestPreviewTab } from "../../model/pr/types"
+import { githubReactionSummary } from "../../model/reactions"
+import type {
+  PullRequestComment,
+  PullRequestDetails,
+  PullRequestPreviewTab,
+} from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { PullRequestMarkdown } from "../../rendering/pr-markdown"
+import { PullRequestActivityContent } from "./PullRequestActivityContent"
 
 function partialFooter(loaded: number, totalCount: number | null, hasNextPage: boolean) {
   if (!hasNextPage) return null
@@ -34,6 +40,10 @@ function OverviewContent({
           onPress={onToggle}
         />
       ) : null}
+      <text
+        content={`${translateUi("Reações")}: ${githubReactionSummary(details.reactionGroups) || "0"}`}
+        style={{ fg: COLORS.text, marginTop: 1 }}
+      />
       <text
         content={translateUi("REVISÕES SOLICITADAS")}
         style={{ fg: COLORS.git, marginTop: 1 }}
@@ -147,56 +157,6 @@ function ChecksContent({
   )
 }
 
-function ActivityContent({ details }: { details: PullRequestDetails }) {
-  const fallbackActivity = [
-    ...details.comments.map((comment) => ({
-      id: comment.id,
-      at: comment.createdAt,
-      text: `@${comment.author.login}: ${comment.body.replace(/\s+/g, " ")}`,
-    })),
-    ...details.reviews.map((review) => ({
-      id: review.id,
-      at: review.submittedAt,
-      text: `@${review.author.login} · ${translateUi(review.state)}${review.body ? `: ${review.body.replace(/\s+/g, " ")}` : ""}`,
-    })),
-  ]
-  const timelineActivity = details.timeline.map((event) => ({
-    id: event.id,
-    at: event.createdAt,
-    text: `@${event.actor.login} · ${translateUi(event.kind)}${event.body ? `: ${event.body.replace(/\s+/g, " ")}` : ""}`,
-  }))
-  const activity = [
-    ...new Map(
-      [...timelineActivity, ...fallbackActivity].map((entry) => [entry.id, entry]),
-    ).values(),
-  ].sort((left, right) => right.at.localeCompare(left.at))
-  return (
-    <box style={{ width: "100%" }}>
-      {activity.map((entry) => (
-        <box key={entry.id} style={{ width: "100%", marginBottom: 1 }}>
-          <text
-            content={formatUiDateTime(entry.at, { dateStyle: "short", timeStyle: "short" })}
-            style={{ fg: COLORS.muted }}
-          />
-          <text content={entry.text} style={{ fg: COLORS.text }} />
-        </box>
-      ))}
-      {details.pages.timeline.hasNextPage ? (
-        <text
-          content={
-            partialFooter(
-              details.timeline.length,
-              details.pages.timeline.totalCount,
-              details.pages.timeline.hasNextPage,
-            ) ?? ""
-          }
-          style={{ fg: COLORS.warning }}
-        />
-      ) : null}
-    </box>
-  )
-}
-
 function CommitsContent({
   details,
   width,
@@ -298,6 +258,8 @@ export function PreviewTabContent({
   workflows,
   workflowError,
   onOpenWorkflow,
+  onReactComment,
+  onReplyComment,
 }: {
   tab: PullRequestPreviewTab
   details: PullRequestDetails
@@ -310,6 +272,8 @@ export function PreviewTabContent({
   workflows: PullRequestWorkflowRun[]
   workflowError: string
   onOpenWorkflow: (runId: number) => void
+  onReactComment: (comment: PullRequestComment) => void
+  onReplyComment: (comment: PullRequestComment) => void
 }) {
   if (tab === "overview") {
     return (
@@ -330,7 +294,17 @@ export function PreviewTabContent({
       />
     )
   }
-  if (tab === "activity") return <ActivityContent details={details} />
+  if (tab === "activity") {
+    return (
+      <PullRequestActivityContent
+        details={details}
+        selectedIndex={selectedItemIndex}
+        onSelect={onSelectItem}
+        onReact={onReactComment}
+        onReply={onReplyComment}
+      />
+    )
+  }
   if (tab === "commits") {
     return (
       <CommitsContent

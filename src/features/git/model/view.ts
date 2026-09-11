@@ -3,6 +3,7 @@ import type { GitFile } from "./types"
 export type ViewMode = "diff" | "graph" | "log" | "commit"
 export type DiffLayout = "unified" | "split" | "inline"
 export type NarrowGitPane = "files" | "preview"
+export type GitFocusPane = NarrowGitPane | "terminal"
 export type DiffLineKind = "added" | "removed" | "context" | "hunk" | "file" | "section" | "meta"
 
 export type ParsedDiffLine = {

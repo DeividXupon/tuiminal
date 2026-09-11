@@ -39,6 +39,20 @@ if (process.env.FAKE_COORDINATOR === "1") {
   if (args[0] === "api" && args.at(-1) === "user") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
+    const request = JSON.parse(stdin)
+    if (request.query.includes("TuiminalReactionTarget")) {
+      const reacted = existsSync(process.env.FAKE_STATE)
+      console.log(JSON.stringify({ data: { node: {
+        __typename: "PullRequest", id: "${item.identity.nodeId}", url: "${item.identity.url}",
+        reactionGroups: reacted ? [{ content: "HEART", viewerHasReacted: true, users: { totalCount: 1 } }] : []
+      } } }))
+      process.exit(0)
+    }
+    if (request.query.includes("TuiminalAddReaction")) {
+      writeFileSync(process.env.FAKE_STATE, "reaction")
+      console.log(JSON.stringify({ data: { addReaction: { subject: { id: "${item.identity.nodeId}" } } } }))
+      process.exit(0)
+    }
     const commented = existsSync(process.env.FAKE_STATE)
     if (commented && process.env.FAKE_INVALID_RECONCILIATION === "1") {
       console.log("not-json")
@@ -134,6 +148,21 @@ describe("pull request action eligibility and reconciliation", () => {
     ).toBe(true)
     expect(
       pullRequestMutationWasReconciled({
+        action: prepared("reaction", {
+          subjectId: item.identity.nodeId,
+          subjectKind: "item",
+          reaction: "HEART",
+        }),
+        before,
+        after: {
+          ...before,
+          reactionGroups: [{ content: "HEART", count: 2, viewerHasReacted: true }],
+        },
+        viewerLogin: auth.viewerLogin,
+      }),
+    ).toBe(true)
+    expect(
+      pullRequestMutationWasReconciled({
         action: prepared("merge", { mergeQueue: true }),
         before,
         after: {
@@ -190,6 +219,36 @@ describe("pull request mutation transport", () => {
     expect(commands().filter((command) => command.args[1] === "graphql")).toHaveLength(2)
   })
 
+  test("validates a reaction target, writes once and re-reads that reactable", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "coordinator-reaction-state")
+    rmSync(statePath, { force: true })
+    const preparedState = preparePullRequestAction({
+      actionId: "integrated-reaction",
+      kind: "reaction",
+      target: item.identity,
+      expectedHeadSha: item.headSha,
+      auth,
+      payload: {
+        subjectId: item.identity.nodeId,
+        subjectKind: "item",
+        reaction: "HEART",
+      },
+    })
+    const result = await new PullRequestActionCoordinator({
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_COORDINATOR: "1", FAKE_STATE: statePath },
+    }).execute(preparedState)
+    expect(result).toMatchObject({ status: "confirmed", message: "reaction-reconciled" })
+    const graphql = commands().filter((command) => command.args[1] === "graphql")
+    expect(graphql.filter((command) => command.stdin.includes("TuiminalAddReaction"))).toHaveLength(
+      1,
+    )
+    expect(
+      graphql.filter((command) => command.stdin.includes("TuiminalReactionTarget")),
+    ).toHaveLength(2)
+  })
+
   test("uses explicit targets and stdin for user-authored content", async () => {
     writeFileSync(logPath, "")
     expect(
@@ -214,6 +273,39 @@ describe("pull request mutation transport", () => {
       event: "APPROVE",
       commit_id: item.headSha,
       body: "Aprovado",
+    })
+  })
+
+  test("adds reactions through GraphQL and replies with a safe link to the selected comment", async () => {
+    writeFileSync(logPath, "")
+    const commentUrl = `${item.identity.url}#issuecomment-55`
+    await executePullRequestMutation(
+      prepared("reaction", {
+        subjectId: "IC_selected",
+        subjectKind: "comment",
+        commentUrl,
+        reaction: "EYES",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    await executePullRequestMutation(
+      prepared("reply", {
+        commentId: "IC_selected",
+        commentUrl,
+        commentAuthor: "ana",
+        body: "Vou ajustar.",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    const [reaction, reply] = commands()
+    expect(reaction?.args).toEqual(["api", "graphql", "--hostname", "github.com", "--input", "-"])
+    expect(JSON.parse(reaction?.stdin ?? "{}").variables).toEqual({
+      subjectId: "IC_selected",
+      content: "EYES",
+    })
+    expect(reply).toMatchObject({
+      args: ["pr", "comment", "142", "--repo", "equipe/api", "--body-file", "-"],
+      stdin: `↳ ${commentUrl}\n\n@ana Vou ajustar.`,
     })
   })
 

@@ -1,13 +1,19 @@
 import { useMemo, useRef, useState } from "react"
 import { translateUi } from "../../../../shared/i18n"
 import { MountWhen } from "../../../../shared/ui/MountWhen"
+import { discussionActionTargetPayload } from "../../model/discussion-actions"
 import {
   type IssueActionKind,
   issueActionAvailability,
   prepareIssueAction,
 } from "../../model/issue/actions"
 import { issueIdentityKey } from "../../model/issue/query"
-import type { IssueAuthContext, IssueDetails, IssueSummary } from "../../model/issue/types"
+import type {
+  IssueAuthContext,
+  IssueComment,
+  IssueDetails,
+  IssueSummary,
+} from "../../model/issue/types"
 import { IssueActionCoordinator } from "../../services/issue-actions"
 import { inspectCheckoutClone } from "../../services/pr-checkout"
 import { addIssueClonePath, loadIssueConfig } from "../../storage/issue/config"
@@ -16,6 +22,7 @@ import { IssueActionModal } from "./IssueActionModal"
 
 const ACTIONS: ReadonlyArray<Pick<IssueActionMenuItem, "kind" | "label" | "shortcut">> = [
   { kind: "comment", label: "Comentar", shortcut: "[C]" },
+  { kind: "reaction", label: "Reagir", shortcut: "[Shift+E]" },
   { kind: "assign", label: "Adicionar responsáveis", shortcut: "[A]" },
   { kind: "unassign", label: "Remover responsáveis", shortcut: "[Shift+A]" },
   { kind: "labels", label: "Editar labels", shortcut: "[Shift+L]" },
@@ -110,6 +117,7 @@ export function useIssueActions({
   const [coordinator] = useState(() => new IssueActionCoordinator(executable ? { executable } : {}))
   const [menuOpen, setMenuOpen] = useState(false)
   const [kind, setKind] = useState<IssueActionKind | null>(null)
+  const [targetComment, setTargetComment] = useState<IssueComment | null>(null)
   const [value, setValue] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -129,10 +137,10 @@ export function useIssueActions({
     }))
   }, [auth, clonePaths.length, details, item])
 
-  const draftKey = (action: IssueActionKind) =>
-    item ? `${issueIdentityKey(item.identity)}:${action}` : action
-  const defaultValue = (action: IssueActionKind) => {
-    const draft = drafts.current.get(draftKey(action))
+  const draftKey = (action: IssueActionKind, comment: IssueComment | null = targetComment) =>
+    item ? `${issueIdentityKey(item.identity)}:${action}:${comment?.id ?? "item"}` : action
+  const defaultValue = (action: IssueActionKind, comment: IssueComment | null = targetComment) => {
+    const draft = drafts.current.get(draftKey(action, comment))
     if (draft !== undefined) return draft
     if (action === "checkout") return clonePaths[0] ?? profileRoot ?? ""
     if (action === "unassign") {
@@ -150,8 +158,16 @@ export function useIssueActions({
       return
     }
     setMenuOpen(false)
+    setTargetComment(null)
     setKind(action)
-    setValue(defaultValue(action))
+    setValue(defaultValue(action, null))
+    setError("")
+  }
+  const openCommentAction = (action: "reaction" | "reply", comment: IssueComment) => {
+    setMenuOpen(false)
+    setTargetComment(comment)
+    setKind(action)
+    setValue(drafts.current.get(draftKey(action, comment)) ?? "")
     setError("")
   }
   const updateValue = (next: string) => {
@@ -163,11 +179,19 @@ export function useIssueActions({
     setBusy(true)
     setError("")
     try {
-      const result = await executeSelectedAction({ kind, payload, item, auth, coordinator })
+      const targetPayload = discussionActionTargetPayload(kind, item.identity, targetComment)
+      const result = await executeSelectedAction({
+        kind,
+        payload: { ...payload, ...targetPayload },
+        item,
+        auth,
+        coordinator,
+      })
       if (result.status === "confirmed") {
         if (kind === "checkout") onLocalCheckout()
         drafts.current.delete(draftKey(kind))
         setKind(null)
+        setTargetComment(null)
         onNotice(
           process.env.TUIMINAL_GIT_ISSUES_DEMO === "1"
             ? translateUi("DEMO · ação confirmada sem alterar o GitHub.")
@@ -204,12 +228,17 @@ export function useIssueActions({
           item={item}
           currentAssignees={details?.assignees.map((actor) => actor.login) ?? []}
           currentLabels={details?.labels.map((label) => label.name) ?? []}
+          targetComment={targetComment}
+          reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
           initialValue={value}
           checkoutPaths={[...new Set([...clonePaths, ...(profileRoot ? [profileRoot] : [])])]}
           busy={busy}
           error={error}
           onValueChange={updateValue}
-          onClose={() => setKind(null)}
+          onClose={() => {
+            setKind(null)
+            setTargetComment(null)
+          }}
           onSubmit={(payload) => void submit(payload)}
         />
       ) : null}
@@ -221,5 +250,6 @@ export function useIssueActions({
     modals,
     openMenu: () => setMenuOpen(true),
     openAction,
+    openCommentAction,
   }
 }

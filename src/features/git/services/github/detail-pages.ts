@@ -22,7 +22,7 @@ const CONNECTION_FIELDS: Record<PullRequestDetailConnection, string> = {
   }`,
   comments: `comments(first: 50, after: $after) {
     totalCount pageInfo { hasNextPage endCursor }
-    nodes { id body createdAt url author { login } }
+    nodes { id body createdAt url author { login } reactionGroups { content viewerHasReacted users { totalCount } } }
   }`,
   timeline: `timelineItems(first: 50, after: $after) {
     totalCount pageInfo { hasNextPage endCursor }

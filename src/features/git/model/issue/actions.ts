@@ -1,9 +1,12 @@
 import type { IssueAuthContext, IssueDetails, IssueIdentity, IssueSummary } from "./types"
+import { discussionMutationWasReconciled } from "../discussion-actions"
 
 export type IssueActionKind =
   | "assign"
   | "unassign"
   | "comment"
+  | "reaction"
+  | "reply"
   | "labels"
   | "checkout"
   | "close"
@@ -34,6 +37,7 @@ export function issueActionKindForShortcut(key: { name: string; shift?: boolean 
   const name = key.name.toLowerCase()
   if (name === "a") return key.shift ? "unassign" : "assign"
   if (name === "c") return key.shift ? "checkout" : "comment"
+  if (name === "e" && key.shift) return "reaction"
   if (name === "l" && key.shift) return "labels"
   if (name === "x") return key.shift ? "reopen" : "close"
   return null
@@ -142,6 +146,8 @@ export function issueMutationWasReconciled({
   after: IssueDetails
   viewerLogin: string
 }) {
+  const discussionResult = discussionMutationWasReconciled({ action, after, viewerLogin })
+  if (discussionResult !== null) return discussionResult
   if (action.kind === "close") return after.state === "closed"
   if (action.kind === "reopen") return after.state === "open"
   if (action.kind === "assign" || action.kind === "unassign") {
@@ -158,12 +164,6 @@ export function issueMutationWasReconciled({
     const actual = after.labels.map((label) => label.name.toLowerCase()).sort()
     return (
       expected.length === actual.length && expected.every((label, index) => label === actual[index])
-    )
-  }
-  if (action.kind === "comment") {
-    const body = typeof action.payload.body === "string" ? action.payload.body.trim() : ""
-    return after.comments.some(
-      (comment) => comment.author.login === viewerLogin && comment.body.trim() === body,
     )
   }
   if (action.kind === "checkout") return before.identity.nodeId === after.identity.nodeId

@@ -45,6 +45,11 @@ export class PullRequestDetailsSession {
       this.cache.set(key, cached)
       return { details: cached, fromCache: true }
     }
+    return this.refresh(item)
+  }
+
+  async refresh(item: PullRequestSummary) {
+    const key = this.key(item)
     this.activeController?.abort()
     const controller = new AbortController()
     this.activeController = controller

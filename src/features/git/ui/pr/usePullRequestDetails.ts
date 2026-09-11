@@ -82,5 +82,21 @@ export function usePullRequestDetails(active: boolean, item: PullRequestSummary 
     }
   }
 
-  return { state, loadMore, loadingMore }
+  const reload = async () => {
+    if (!item || !active || demo) return
+    const generation = generationRef.current
+    try {
+      const result = await session.refresh(item)
+      if (generation !== generationRef.current) return
+      setState(
+        result.details
+          ? { status: "ready", details: result.details, fromCache: false }
+          : { status: "not-found" },
+      )
+    } catch (error) {
+      if (generation === generationRef.current) setState(detailError(error))
+    }
+  }
+
+  return { state, loadMore, loadingMore, reload }
 }

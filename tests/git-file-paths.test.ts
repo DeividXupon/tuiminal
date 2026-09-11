@@ -1,9 +1,15 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { loadGitDiff, loadGitSnapshot, toggleGitFile } from "../src/features/git/services/git"
+import {
+  discardGitFiles,
+  loadGitDiff,
+  loadGitSnapshot,
+  stageGitFiles,
+  toggleGitFile,
+} from "../src/features/git/services/git"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-file-paths-"))
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))
@@ -106,4 +112,41 @@ describe.each(paths)("Git single-file operations for %s", (selected, neighbor) =
       expect(readFileSync(join(root, neighbor), "utf8")).toBe("neighbor change\n")
     })
   }
+
+  test("discards only the selected tracked file", async () => {
+    const root = repository(selected, neighbor, true)
+    write(root, selected, "selected change\n")
+    write(root, neighbor, "neighbor change\n")
+    await discardGitFiles(root, [await selectedFile(root, selected)])
+    expect(readFileSync(join(root, selected), "utf8")).toBe("selected base\n")
+    expect(readFileSync(join(root, neighbor), "utf8")).toBe("neighbor change\n")
+  })
+
+  test("removes only the selected untracked file", async () => {
+    const root = repository(selected, neighbor, false)
+    await discardGitFiles(root, [await selectedFile(root, selected)])
+    expect(existsSync(join(root, selected))).toBe(false)
+    expect(readFileSync(join(root, neighbor), "utf8")).toBe("neighbor base\n")
+  })
+})
+
+test("folder actions cascade only through files inside the selected folder", async () => {
+  const root = repository("src/a.txt", "src/nested/b.txt", true)
+  write(root, "src/a.txt", "a changed\n")
+  write(root, "src/nested/b.txt", "b changed\n")
+  write(root, "outside.txt", "outside new\n")
+  const snapshot = await loadGitSnapshot(root)
+  const folderFiles = snapshot.files.filter((file) => file.path.startsWith("src/"))
+  const commands: string[][] = []
+  await stageGitFiles(root, folderFiles, (args) => commands.push([...args]))
+  expect(stagedPaths(root)).toEqual(["src/a.txt", "src/nested/b.txt"])
+  expect(commands.flat().join(" ")).toContain("src/a.txt")
+
+  await discardGitFiles(
+    root,
+    (await loadGitSnapshot(root)).files.filter((file) => file.path.startsWith("src/")),
+  )
+  expect(readFileSync(join(root, "src/a.txt"), "utf8")).toBe("selected base\n")
+  expect(readFileSync(join(root, "src/nested/b.txt"), "utf8")).toBe("neighbor base\n")
+  expect(readFileSync(join(root, "outside.txt"), "utf8")).toBe("outside new\n")
 })

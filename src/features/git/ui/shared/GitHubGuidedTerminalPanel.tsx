@@ -7,12 +7,12 @@ import {
   type GitHubCliGuidedTerminalProcess,
   startGitHubCliGuidedTerminal,
 } from "../../services/github/installer"
+import { GitHubGuidanceGuide, GitHubGuidanceTerminal } from "./GitHubGuidanceViews"
 import {
-  githubGuidanceCopy,
   type GitHubGuidanceMode,
   type GitHubGuidanceStatus,
+  githubGuidanceCopy,
 } from "./github-guidance-copy"
-import { GitHubGuidanceGuide, GitHubGuidanceTerminal } from "./GitHubGuidanceViews"
 
 export type GitHubGuidedTerminalStarter = typeof startGitHubCliGuidedTerminal
 
@@ -27,6 +27,57 @@ async function checkReadiness(verifyReady: () => Promise<boolean>): Promise<Read
       message: error instanceof Error ? error.message : "Não foi possível verificar o gh.",
     }
   }
+}
+
+function useGuidedTerminalKeyboard({
+  active,
+  terminalClosed,
+  commandAvailable,
+  copyCommand,
+  focusTerminal,
+  hideTerminal,
+  reopenTerminal,
+  verify,
+}: {
+  active: boolean
+  terminalClosed: boolean
+  commandAvailable: boolean
+  copyCommand: () => void
+  focusTerminal: () => void
+  hideTerminal: () => void
+  reopenTerminal: () => void
+  verify: () => void
+}) {
+  const renderer = useRenderer()
+  useKeyboard((key) => {
+    if (!active) return
+    const terminalFocused = renderer.currentFocusedRenderable?.id === "git-gh-guidance-terminal"
+    if (terminalFocused) {
+      if (key.name === "escape") {
+        key.preventDefault()
+        key.stopPropagation()
+        hideTerminal()
+      } else if (terminalClosed && (key.name === "return" || key.name === "enter")) {
+        key.preventDefault()
+        key.stopPropagation()
+        reopenTerminal()
+      }
+      return
+    }
+    if (key.name === "c" && commandAvailable) {
+      key.preventDefault()
+      key.stopPropagation()
+      copyCommand()
+    } else if (key.name === "return" || key.name === "enter") {
+      key.preventDefault()
+      key.stopPropagation()
+      focusTerminal()
+    } else if (key.name === "r") {
+      key.preventDefault()
+      key.stopPropagation()
+      verify()
+    }
+  })
 }
 
 export function GitHubGuidedTerminalPanel({
@@ -56,12 +107,17 @@ export function GitHubGuidedTerminalPanel({
   const terminal = useTerminalDimensions()
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
   const processRef = useRef<GitHubCliGuidedTerminalProcess | null>(null)
+  const terminalGenerationRef = useRef(0)
+  const requestedTerminalRevisionRef = useRef(0)
   const mountedRef = useRef(true)
   const checkingRef = useRef(false)
   const reloadingRef = useRef(false)
   const [status, setStatus] = useState<GitHubGuidanceStatus>("idle")
   const [message, setMessage] = useState("")
   const [terminalVisible, setTerminalVisible] = useState(false)
+  const [terminalClosed, setTerminalClosed] = useState(false)
+  const [terminalRevision, setTerminalRevision] = useState(0)
+  requestedTerminalRevisionRef.current = terminalRevision
   const copy = githubGuidanceCopy(mode, mode === "install")
   const sideBySide = terminal.width >= 96 && terminal.height >= 18
   const stacked = !sideBySide && terminal.height >= 30
@@ -71,36 +127,51 @@ export function GitHubGuidedTerminalPanel({
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      processRef.current?.stop()
-      processRef.current = null
+      terminalGenerationRef.current += 1
     }
   }, [])
 
   useEffect(() => {
-    if (!active || processRef.current) return
+    if (!active) return
+    const generation = terminalGenerationRef.current + 1
+    const requestedRevision = terminalRevision
+    terminalGenerationRef.current = generation
+    let ownedProcess: GitHubCliGuidedTerminalProcess | null = null
+    setTerminalClosed(false)
     try {
-      processRef.current = startTerminal({
+      ownedProcess = startTerminal({
         columns: Math.max(20, terminalRef.current?.width ?? 80),
         rows: Math.max(5, terminalRef.current?.height ?? 16),
         onData: (data) => terminalRef.current?.write(data),
         onExit: (result) => {
-          processRef.current = null
-          if (!mountedRef.current || result.stopped) return
-          setStatus("failed")
-          setMessage(
-            "O mini terminal foi encerrado. Saia e volte a esta tela para abri-lo novamente.",
-          )
+          queueMicrotask(() => {
+            if (
+              terminalGenerationRef.current !== generation ||
+              requestedTerminalRevisionRef.current !== requestedRevision ||
+              processRef.current !== ownedProcess
+            )
+              return
+            processRef.current = null
+            if (!mountedRef.current) return
+            setTerminalClosed(true)
+            if (result.stopped) return
+            setStatus("failed")
+            setMessage("O mini terminal foi encerrado. Pressione [Enter] para abri-lo novamente.")
+          })
         },
       })
+      processRef.current = ownedProcess
     } catch (error) {
+      setTerminalClosed(true)
       setStatus("failed")
       setMessage(error instanceof Error ? error.message : "Não foi possível abrir o mini terminal.")
     }
     return () => {
-      processRef.current?.stop()
-      processRef.current = null
+      if (terminalGenerationRef.current === generation) terminalGenerationRef.current += 1
+      if (processRef.current === ownedProcess) processRef.current = null
+      ownedProcess?.stop()
     }
-  }, [active, startTerminal])
+  }, [active, startTerminal, terminalRevision])
 
   const verifyAndReload = useCallback(
     async (showFailure: boolean) => {
@@ -134,10 +205,19 @@ export function GitHubGuidedTerminalPanel({
     return () => clearInterval(timer)
   }, [active, pollIntervalMs, verifyAndReload])
 
+  const reopenTerminal = useCallback(() => {
+    if (processRef.current) return
+    setMessage("")
+    setStatus("idle")
+    setTerminalClosed(false)
+    setTerminalRevision((current) => current + 1)
+  }, [])
+
   const focusTerminal = useCallback(() => {
     setTerminalVisible(true)
+    if (terminalClosed) reopenTerminal()
     queueMicrotask(() => terminalRef.current?.focus())
-  }, [])
+  }, [reopenTerminal, terminalClosed])
 
   const copyCommand = useCallback(() => {
     if (!commandAvailable) return
@@ -149,31 +229,20 @@ export function GitHubGuidedTerminalPanel({
     )
   }, [command, commandAvailable, renderer])
 
-  useKeyboard((key) => {
-    if (!active) return
-    const terminalFocused = renderer.currentFocusedRenderable?.id === "git-gh-guidance-terminal"
-    if (terminalFocused) {
-      if (key.name === "escape") {
-        key.preventDefault()
-        key.stopPropagation()
-        terminalRef.current?.blur()
-        if (singlePanel) setTerminalVisible(false)
-      }
-      return
-    }
-    if (key.name === "c" && commandAvailable) {
-      key.preventDefault()
-      key.stopPropagation()
-      copyCommand()
-    } else if (key.name === "return" || key.name === "enter") {
-      key.preventDefault()
-      key.stopPropagation()
-      focusTerminal()
-    } else if (key.name === "r") {
-      key.preventDefault()
-      key.stopPropagation()
-      void verifyAndReload(true)
-    }
+  const hideTerminal = useCallback(() => {
+    terminalRef.current?.blur()
+    if (singlePanel) setTerminalVisible(false)
+  }, [singlePanel])
+
+  useGuidedTerminalKeyboard({
+    active,
+    terminalClosed,
+    commandAvailable,
+    copyCommand,
+    focusTerminal,
+    hideTerminal,
+    reopenTerminal,
+    verify: () => void verifyAndReload(true),
   })
 
   return (
@@ -198,6 +267,7 @@ export function GitHubGuidedTerminalPanel({
         guideUrl={guideUrl}
         status={status}
         message={message}
+        terminalClosed={terminalClosed}
         onCopy={copyCommand}
         onOpenTerminal={focusTerminal}
         onVerify={() => void verifyAndReload(true)}
@@ -205,6 +275,7 @@ export function GitHubGuidedTerminalPanel({
       <GitHubGuidanceTerminal
         copy={copy}
         status={status}
+        terminalClosed={terminalClosed}
         visible={!singlePanel || terminalVisible}
         terminalRef={terminalRef}
         processRef={processRef}

@@ -87,7 +87,7 @@ test("narrow Issues view switches between list and activity preview", async () =
   await key("l")
   expect(tui.captureCharFrame()).toContain("DESCRIÇÃO")
   await key("v")
-  expect(tui.captureCharFrame()).toContain("Consegui reproduzir")
+  expect(tui.captureCharFrame()).toContain("Vou preparar a correção")
   await key("h")
   expect(tui.captureCharFrame()).toContain("Cache expira")
 })
@@ -134,6 +134,39 @@ test("Issue action input owns tab numbers and Escape unwinds one layer at a time
   await key("ESCAPE")
   expect(tui.captureCharFrame()).not.toContain("NADA SERÁ EXECUTADO")
   expect(tui.captureCharFrame()).toContain("ISSUES · DEMO")
+})
+
+test("Issue comments are keyboard-selectable, reactable and replyable", async () => {
+  process.env.TUIMINAL_GIT_ISSUES_DEMO = "1"
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
+  tui = await testRender(<IssuesWorkspace active />, { width: 120, height: 30 })
+  await tui.renderOnce()
+
+  await key("l")
+  await key("v")
+  expect(tui.captureCharFrame()).toContain("[E] Nova reação")
+  expect(tui.captureCharFrame()).toContain("[Enter] Responder")
+  expect(tui.captureCharFrame()).toContain("↳ @bia")
+  expect(tui.captureCharFrame()).toContain("A resposta agora aparece dentro da conversa.")
+
+  await key("e")
+  await act(async () => Bun.sleep(10))
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("REAGIR NO COMENTÁRIO")
+  expect(tui.captureCharFrame()).toContain("👍")
+  expect(tui.captureCharFrame()).toContain("👀")
+  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-issue-action-modal")
+  await key("ESCAPE")
+  expect(tui.captureCharFrame()).not.toContain("REAGIR NO COMENTÁRIO")
+  expect(tui.renderer.currentFocusedRenderable?.id).toBeUndefined()
+
+  await key("j")
+  expect(tui.captureCharFrame()).toContain("[E] Reagir")
+  await key("RETURN")
+  expect(tui.captureCharFrame()).toContain("RESPONDER COMENTÁRIO")
+  await act(async () => Bun.sleep(10))
+  await tui.renderOnce()
+  expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-issue-action-input")
 })
 
 test("Issues dashboard survives supported sizes, languages, palettes and layouts", async () => {

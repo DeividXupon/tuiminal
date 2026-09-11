@@ -41,7 +41,7 @@ function FileTreeRowContent({
 }) {
   if (option.kind === "folder") {
     const arrow = option.name.trimStart().slice(0, 1)
-    const name = `${displayPath(option.path.split("/").at(-1) ?? option.path)}/`
+    const name = option.name.trimStart().replace(/^[▸▾] /, "")
     return (
       <text>
         <span fg={COLORS.border}>{"  ".repeat(option.depth)}</span>

@@ -40,6 +40,7 @@ export function GitHubGuidanceGuide({
   guideUrl,
   status,
   message,
+  terminalClosed,
   onCopy,
   onOpenTerminal,
   onVerify,
@@ -56,6 +57,7 @@ export function GitHubGuidanceGuide({
   guideUrl: string
   status: GitHubGuidanceStatus
   message: string
+  terminalClosed: boolean
   onCopy: () => void
   onOpenTerminal: () => void
   onVerify: () => void
@@ -128,7 +130,7 @@ export function GitHubGuidanceGuide({
         />
         <InlineButton
           id="git-gh-guidance-open"
-          label="[Enter] Usar terminal"
+          label={terminalClosed ? "[Enter] Reabrir terminal" : "[Enter] Usar terminal"}
           accent={COLORS.git}
           onPress={onOpenTerminal}
         />
@@ -159,12 +161,14 @@ export function GitHubGuidanceGuide({
 export function GitHubGuidanceTerminal({
   copy,
   status,
+  terminalClosed,
   visible,
   terminalRef,
   processRef,
 }: {
   copy: GitHubGuidanceCopy
   status: GitHubGuidanceStatus
+  terminalClosed: boolean
   visible: boolean
   terminalRef: RefObject<EmbeddedTerminalRenderable | null>
   processRef: RefObject<GitHubCliGuidedTerminalProcess | null>
@@ -196,15 +200,17 @@ export function GitHubGuidanceTerminal({
         id="git-gh-guidance-terminal"
         maxScrollback={2_000}
         selectable
-        onData={(data, source) => {
-          if (source === "input") processRef.current?.write(data)
-        }}
+        onData={(data) => processRef.current?.write(data)}
         onTerminalResize={(columns, rows) => processRef.current?.resize(columns, rows)}
         onMouseDown={() => terminalRef.current?.focus()}
         style={{ flexGrow: 1, minHeight: 5, width: "100%" }}
       />
       <ShortcutText
-        content={translateUi("Digite ou cole o comando aqui · [Esc] libera o foco do terminal")}
+        content={translateUi(
+          terminalClosed
+            ? "Mini terminal encerrado · [Enter] reabre · [Esc] libera o foco"
+            : "Digite ou cole o comando aqui · [Esc] libera o foco do terminal",
+        )}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>

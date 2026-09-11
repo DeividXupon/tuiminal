@@ -1,3 +1,5 @@
+import type { GitHubReactionGroup } from "../reactions"
+
 export type PullRequestState = "open" | "draft" | "merged" | "closed"
 export type PullRequestReviewState =
   | "approved"
@@ -127,6 +129,7 @@ export type PullRequestComment = {
   body: string
   createdAt: string
   url: string
+  reactionGroups?: GitHubReactionGroup[]
 }
 
 export type PullRequestCheck = {
@@ -188,6 +191,7 @@ export type PullRequestDetails = {
   commits: PullRequestCommit[]
   files: PullRequestFile[]
   comments: PullRequestComment[]
+  reactionGroups?: GitHubReactionGroup[]
   timeline: PullRequestTimelineEvent[]
   checks: PullRequestCheck[]
   pages: {

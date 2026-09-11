@@ -70,10 +70,11 @@ function selectedAction(key: IssueKey, focus: IssueFocus): IssueWorkspaceAction 
   if (key.name === "y") return { type: "copy-number" }
   if (key.name === "c" && key.shift) return { type: "prepare-action", kind: "checkout" }
   if (key.name === "c") return { type: "prepare-action", kind: "comment" }
+  if (key.name === "e" && key.shift) return { type: "prepare-action", kind: "reaction" }
   if (key.name === "a") return { type: "prepare-action", kind: key.shift ? "unassign" : "assign" }
   if (key.name === "l" && key.shift) return { type: "prepare-action", kind: "labels" }
   if (key.name === "x") return { type: "prepare-action", kind: key.shift ? "reopen" : "close" }
-  if (focus === "preview" && key.name === "e") return { type: "toggle-description" }
+  if (focus === "preview" && key.name === "e" && !key.shift) return { type: "toggle-description" }
   return null
 }
 

@@ -1,21 +1,20 @@
-import type { NarrowGitPane } from "./view"
+import type { GitFocusPane, NarrowGitPane } from "./view"
 
 export function compactGitActionFooter(previewWidth: number) {
-  return previewWidth < 58
+  return previewWidth < 82
 }
 
 export function gitActionLabel(compact: boolean, label: string) {
   return compact ? (label.match(/^\[[^\]]+\]/)?.[0] ?? label) : label
 }
 
-export function gitPaneFocusTarget(
-  keyName: string,
-  fileTreeFocused: boolean,
-  previewFocused: boolean,
-): NarrowGitPane | null {
-  if (keyName === "tab") return fileTreeFocused ? "preview" : "files"
-  if (fileTreeFocused && (keyName === "l" || keyName === "right")) return "preview"
-  if (previewFocused && (keyName === "h" || keyName === "left")) return "files"
+export function gitPaneFocusTarget(keyName: string, current: GitFocusPane): GitFocusPane | null {
+  if (keyName === "tab") {
+    if (current === "files") return "preview"
+    return current === "preview" ? "terminal" : "files"
+  }
+  if (current === "files" && (keyName === "l" || keyName === "right")) return "preview"
+  if (current !== "files" && (keyName === "h" || keyName === "left")) return "files"
   return null
 }
 
@@ -36,12 +35,12 @@ export function gitHistoryNavigationDelta(keyName: string) {
 export function gitBaseShortcutHint(width: number, historyView: boolean) {
   if (historyView) {
     return width < 86
-      ? "[Tab/H/L] Painel  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff"
-      : "[Tab/H/L/←/→] Árvore/histórico  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar"
+      ? "[Tab/H/L] Painel  [T] Terminal  [J/K/↑/↓] Navegar  [D] Diff"
+      : "[Tab/H/L/←/→] Árvore/histórico/terminal  [T] Terminal  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar"
   }
   return width < 86
-    ? "[Tab/H/L] Painel  [V] Visual  [O] Log  [G] Árvore"
-    : "[Tab/H/L/←/→] Árvore/diff  [V] Visualização  [O] Log  [G] Árvore Git  [R] Atualizar"
+    ? "[Tab/H/L] Painel  [T] Terminal  [V] Visual  [O] Log"
+    : "[Tab/H/L/←/→] Árvore/diff/terminal  [T] Terminal  [V] Visualização  [O] Log  [R] Atualizar"
 }
 
 export function gitFileTreeIsActive(active: boolean, narrow: boolean, pane: NarrowGitPane) {

@@ -4,11 +4,14 @@ import type {
   PullRequestIdentity,
   PullRequestSummary,
 } from "./types"
+import { discussionMutationWasReconciled } from "../discussion-actions"
 
 export type PullRequestActionKind =
   | "assign"
   | "unassign"
   | "comment"
+  | "reaction"
+  | "reply"
   | "approve"
   | "ready"
   | "close"
@@ -213,15 +216,11 @@ export function pullRequestMutationWasReconciled({
   after: PullRequestDetails
   viewerLogin: string
 }) {
+  const discussionResult = discussionMutationWasReconciled({ action, after, viewerLogin })
+  if (discussionResult !== null) return discussionResult
   const login = typeof action.payload.login === "string" ? action.payload.login.trim() : ""
   if (action.kind === "assign") return after.assignees.some((actor) => actor.login === login)
   if (action.kind === "unassign") return !after.assignees.some((actor) => actor.login === login)
-  if (action.kind === "comment") {
-    const body = typeof action.payload.body === "string" ? action.payload.body.trim() : ""
-    return after.comments.some(
-      (comment) => comment.author.login === viewerLogin && comment.body.trim() === body,
-    )
-  }
   if (action.kind === "approve") return matchesReview(after, action, viewerLogin)
   if (action.kind === "ready") return !after.isDraft && after.remoteState === "open"
   if (action.kind === "close") return after.remoteState === "closed"

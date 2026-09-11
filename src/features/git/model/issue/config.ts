@@ -48,13 +48,19 @@ export type IssueConfig = {
 
 export const DEFAULT_ISSUE_SECTIONS: readonly IssueSection[] = [
   { id: "mine", title: "My Issues", query: "is:open author:@me" },
+  { id: "all", title: "All", query: "archived:false" },
+  { id: "open", title: "Open", query: "is:open" },
+  { id: "closed", title: "Closed", query: "is:closed" },
 ]
 
-const LEGACY_DEFAULT_ISSUE_SECTIONS: readonly IssueSection[] = [
-  { id: "created", title: "Criadas por mim", query: "is:open author:@me" },
-  { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
-  { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
-  { id: "mentioned", title: "Mencionaram-me", query: "is:open mentions:@me" },
+const PREVIOUS_DEFAULT_ISSUE_SECTION_SETS: readonly (readonly IssueSection[])[] = [
+  [{ id: "mine", title: "My Issues", query: "is:open author:@me" }],
+  [
+    { id: "created", title: "Criadas por mim", query: "is:open author:@me" },
+    { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
+    { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
+    { id: "mentioned", title: "Mencionaram-me", query: "is:open mentions:@me" },
+  ],
 ]
 
 export const DEFAULT_ISSUE_CONFIG: IssueConfig = {
@@ -115,20 +121,22 @@ function sectionsValue(value: unknown): IssueSection[] {
     identifiers.add(id)
     return [{ id, title, query, ...parsedSectionOptions(section) }]
   })
-  const isLegacyDefault =
-    sections.length === LEGACY_DEFAULT_ISSUE_SECTIONS.length &&
-    sections.every((section, index) => {
-      const legacy = LEGACY_DEFAULT_ISSUE_SECTIONS[index]
-      return (
-        legacy?.id === section.id &&
-        legacy.title === section.title &&
-        legacy.query === section.query &&
-        section.columns === undefined &&
-        section.sort === undefined &&
-        section.limit === undefined
-      )
-    })
-  return isLegacyDefault ? DEFAULT_ISSUE_SECTIONS.map((section) => ({ ...section })) : sections
+  const isPreviousDefault = PREVIOUS_DEFAULT_ISSUE_SECTION_SETS.some(
+    (defaults) =>
+      sections.length === defaults.length &&
+      sections.every((section, index) => {
+        const previous = defaults[index]
+        return (
+          previous?.id === section.id &&
+          previous.title === section.title &&
+          previous.query === section.query &&
+          section.columns === undefined &&
+          section.sort === undefined &&
+          section.limit === undefined
+        )
+      }),
+  )
+  return isPreviousDefault ? DEFAULT_ISSUE_SECTIONS.map((section) => ({ ...section })) : sections
 }
 
 function profileValue(value: unknown, defaultHost: string): IssueProfile | null {

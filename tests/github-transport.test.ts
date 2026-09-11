@@ -53,6 +53,9 @@ if (args[0] === "--version") {
 } else if (args[0] === "auth-error") {
   console.error("not logged into any GitHub hosts")
   process.exit(1)
+} else if (args[0] === "auth-401") {
+  console.error("gh: Bad credentials (HTTP 401)")
+  process.exit(1)
 } else if (args[0] === "echo-stdin") {
   process.stdout.write(await Bun.stdin.text())
 } else if (args[0] === "api" && args.at(-1) === "user") {
@@ -193,6 +196,9 @@ describe("GitHub CLI transport", () => {
       kind: "invalid-json",
     })
     expect(runGhCommand({ args: ["auth-error"] }, { executable: fakeGh })).rejects.toMatchObject({
+      kind: "not-authenticated",
+    })
+    expect(runGhCommand({ args: ["auth-401"] }, { executable: fakeGh })).rejects.toMatchObject({
       kind: "not-authenticated",
     })
     expect(

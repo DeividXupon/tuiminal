@@ -26,6 +26,30 @@ type PathTreeNode = {
   files: string[]
 }
 
+type DirectoryChain<Node> = {
+  label: string
+  node: Node
+  path: string
+}
+
+function compactDirectoryChain<Node extends { directories: Map<string, Node>; files: unknown[] }>(
+  firstName: string,
+  firstNode: Node,
+  parentPath: string,
+): DirectoryChain<Node> {
+  const names = [firstName]
+  let node = firstNode
+  let path = parentPath ? `${parentPath}/${firstName}` : firstName
+  while (!node.files.length && node.directories.size === 1) {
+    const next = node.directories.entries().next().value as [string, Node] | undefined
+    if (!next) break
+    names.push(next[0])
+    path = `${path}/${next[0]}`
+    node = next[1]
+  }
+  return { label: names.join("/"), node, path }
+}
+
 export function createPathTreeOptions(
   paths: string[],
   collapsedFolders: Set<string>,
@@ -52,11 +76,11 @@ export function createPathTreeOptions(
     const directories = [...node.directories.entries()].sort(([left], [right]) =>
       left.localeCompare(right),
     )
-    for (const [name, child] of directories) {
-      const path = parentPath ? `${parentPath}/${name}` : name
+    for (const [name, firstChild] of directories) {
+      const { label, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
       const collapsed = collapsedFolders.has(path)
       options.push({
-        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(name)}/`,
+        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(label)}/`,
         description: "",
         value: folderOptionValue(path),
         kind: "folder",
@@ -109,11 +133,11 @@ export function createFileTreeOptions(
     const directories = [...node.directories.entries()].sort(([left], [right]) =>
       left.localeCompare(right),
     )
-    for (const [name, child] of directories) {
-      const path = parentPath ? `${parentPath}/${name}` : name
+    for (const [name, firstChild] of directories) {
+      const { label, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
       const collapsed = collapsedFolders.has(path)
       options.push({
-        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(name)}/`,
+        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(label)}/`,
         description: "",
         value: folderOptionValue(path),
         kind: "folder",

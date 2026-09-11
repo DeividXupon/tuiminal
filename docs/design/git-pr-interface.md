@@ -151,7 +151,7 @@ ocultar o texto da query fora do foco, mantendo `[/] Busca` e o estado de filtro
 | --- | --- |
 | Visão geral | Título completo, URL, descrição recolhida/expandida, autor, responsáveis, branches, labels, resumo de alterações, revisões e code owners solicitados. |
 | Checks | Nome, provedor, execução/tentativa, estado, duração e URL; acompanhar, parar acompanhamento e revisar autorizações elegíveis. |
-| Atividade | Comentários, revisões, solicitações e eventos ordenados; paginação explícita e formulário de comentário. |
+| Atividade | Comentários, revisões, solicitações e eventos ordenados; paginação explícita, seleção de comentário e ações de reação/resposta. |
 | Commits | SHA curto, mensagem, autor e data; selecionar commit, copiar SHA completo e consultar seu diff. |
 | Arquivos | Caminho, adições/remoções e tipo de mudança; selecionar arquivo e entrar no diff. |
 
@@ -187,6 +187,11 @@ internos do Git após separar suas dependências locais.
 ```
 
 - Mesmo padrão para comentário, responsáveis, merge, fechar/reabrir e pronto.
+- Reagir mostra cinco botões numerados (👍 ❤️ 🎉 😄 👀) com contagem e marca da
+  reação do usuário; um comentário com reação usa o rótulo `[E] Nova reação`.
+  Responder mostra o comentário-alvo e cria um comentário plano com link para o
+  original e menção ao autor. A leitura oculta esse marcador, agrupa a resposta
+  sob o comentário-pai e recarrega os detalhes após uma escrita concluída.
 - Campo de comentário de aprovação recebe texto configurável, mas nunca envia só
   por abrir o modal ou carregar um template.
 - Merge mostra método, head SHA, bloqueios, CI, fila e efeito remoto; não oferece
@@ -205,8 +210,10 @@ repositórios. O formulário oferece nome, filtros, ordenação, limite e coluna
 além de salvar, renomear, duplicar, reordenar e excluir configuração.
 Excluir uma seção nunca fecha PRs nem remove repositórios locais/remotos.
 Somente salvar promove a query temporária da busca a uma configuração persistente.
-Perfis novos começam somente com `My PRs` e `Review requested`; os títulos dos
-presets permanecem em inglês em todos os idiomas da interface.
+Perfis novos começam com `My PRs`, `Review requested`, `All`, `Open` e `Closed`.
+Os três filtros de estado cobrem todos os PRs não arquivados, os abertos e os
+fechados dentro do escopo atual. Os títulos dos presets permanecem em inglês em
+todos os idiomas da interface.
 
 ## 5. Contrato responsivo
 
@@ -241,7 +248,8 @@ mostram um passo a passo ao lado de um mini terminal. `[C]` copia o comando fixo
 `[Enter]` foca o terminal e `[R]` verifica novamente; o mouse alcança os mesmos
 controles. Nenhuma tecla executa o comando sugerido: o usuário precisa colá-lo ou
 digitá-lo no shell. O Tuiminal apenas detecta a versão ou o login concluído e
-recarrega a área remota.
+recarrega a área remota. Entrada do usuário e respostas de protocolo do emulador
+chegam ao PTY; `[Enter]` reabre um shell encerrado sem reutilizar callbacks antigos.
 
 | Contexto | Tecla | Ação |
 | --- | --- | --- |
@@ -266,6 +274,9 @@ recarrega a área remota.
 | PR | `[Shift+C]` | Preparar checkout local. |
 | Menu `[?]` | `[a]` / `[Shift+A]` | Adicionar / remover responsáveis sem conflitar com a navegação de seções. |
 | PR | `[c]` / `[v]` | Comentar / aprovar com comentário editável. |
+| PR | `[Shift+E]` | Reagir ao PR com uma das cinco opções `[1]`–`[5]`. |
+| Atividade | `[j/↓]` / `[k/↑]` | Selecionar comentário anterior / seguinte. |
+| Comentário selecionado | `[e]` / `[Enter]` | Reagir / responder ao comentário. |
 | PR | `[w]` | Alternar acompanhamento de CI. |
 | Checks | `[Ctrl+A]` | Revisar workflows elegíveis para autorização. |
 | PR | `[u]` / `[Shift+W]` | Atualizar com base / tornar pronto para revisão. |
@@ -297,7 +308,7 @@ nem executa a instalação. `[Esc]` libera o foco do terminal e a detecção per
 recarrega a tela quando encontra uma versão compatível. A falta de login mostra o
 mesmo passo a passo para `gh auth login --hostname <host> --web`, sem ler ou
 persistir token nem entrada do PTY. Ao desmontar, encerra somente o shell criado
-por esse painel.
+por esse painel; a saída atrasada desse processo não pode desconectar um shell novo.
 
 ## 7. Estados que precisam de tela própria
 
@@ -338,9 +349,9 @@ de chrome. Os frames são inspecionados como texto renderizado, por isso a valid
 é determinística e não depende de pixels ou de uma fonte específica.
 
 Diferenças intencionais confirmadas: Diffs/PR/Issues/Inbox pertencem ao Git do Tuiminal; H/L move
-o foco e `<`/`>` troca seções; há Commits e Arquivos além das três abas principais;
+o foco e `[A←]`/`[F→]` troca seções; há Commits e Arquivos além das três abas principais;
 o Tuiminal fornece gerenciador visual de seções, modo de painel único e não expõe
-bypass administrativo, exclusão automática de branch ou comandos arbitrários.
+bypass administrativo nem exclusão automática de branch.
 
 `[1] [C] Git · Diffs` usa exclusivamente um repositório disponível na máquina. O cabeçalho
 mostra `projeto / branch` e `[Ctrl+P] Alterar projeto/branch`; o mesmo controle é
@@ -360,10 +371,17 @@ permanece contida no painel.
 `[C]` ou `[Esc]` retorna aos Diffs. Todos os cartões, arquivos, pastas e seletores
 aceitam mouse.
 
-Em Diffs, os mesmos atalhos movem o foco entre a árvore local e o diff, enquanto
-`[O]` abre o Log e `[V]` identifica a visualização ativa. A árvore não acrescenta
-marcadores geométricos aos arquivos: usa apenas os dois caracteres nativos do Git,
-com cores semânticas por coluna, e diferencia pastas por cor.
+Em Diffs, `[Tab]` percorre árvore local, diff e terminal Git compacto; `[H/L]` e
+`[←/→]` ligam árvore/diff, e `[T]` abre o terceiro foco diretamente. O terminal
+fica abaixo da prévia, mantém `git` como prefixo não editável, registra os comandos
+produzidos pelas ações e envia argumentos manuais ao executável Git sem montar uma
+linha de shell. `[O]` abre o Log e `[V]` identifica a visualização ativa. A árvore
+não acrescenta marcadores geométricos aos arquivos: usa apenas os dois caracteres
+nativos do Git, com cores semânticas por coluna, diferencia pastas por cor e une
+cadeias sem ramificação em um único nó navegável. Stage/unstage muda o snapshot
+visual imediatamente; `[A]` numa pasta afeta apenas seus descendentes. `[D]` abre
+uma confirmação com o alvo exato antes de restaurar arquivos rastreados e remover
+arquivos novos, também em cadeia quando uma pasta está selecionada.
 
 Em layout com moldura, somente o painel realmente focado recebe a borda de acento.
 A árvore de arquivos, o Log e a Árvore Git aceitam `[J/K]` e `[↑/↓]` quando seu
