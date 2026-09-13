@@ -150,17 +150,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       durationMs,
     }
     setNotifications((current) => appendNotification(current, notification))
-    if (durationMs !== null && durationMs > 0) {
-      const timer = setTimeout(() => {
-        timers.current.delete(id)
-        setNotifications((current) => current.filter((item) => item.id !== id))
-      }, durationMs)
-      timers.current.set(id, timer)
-    }
     return id
   }, [])
 
-  useEffect(() => clear, [clear])
+  useEffect(() => {
+    const retained = new Set(notifications.map((notification) => notification.id))
+    for (const [id, timer] of timers.current) {
+      if (retained.has(id)) continue
+      clearTimeout(timer)
+      timers.current.delete(id)
+    }
+    // Only committed cards own timers, even when many events arrive in one batch.
+    for (const { id, durationMs, createdAt } of notifications) {
+      if (durationMs === null || durationMs <= 0 || timers.current.has(id)) continue
+      const remaining = Math.max(0, createdAt + durationMs - Date.now())
+      timers.current.set(
+        id,
+        setTimeout(() => dismiss(id), remaining),
+      )
+    }
+  }, [dismiss, notifications])
+
+  useEffect(
+    () => () => {
+      for (const timer of timers.current.values()) clearTimeout(timer)
+      timers.current.clear()
+    },
+    [],
+  )
 
   const api = useMemo(() => ({ notify, dismiss, clear }), [clear, dismiss, notify])
   return (

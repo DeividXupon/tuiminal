@@ -52,7 +52,7 @@ const configRoot = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".conf
 export const UI_SETTINGS_PATH = join(configRoot, "tuiminal", "settings.json")
 
 function isPalette(value: unknown): value is PaletteId {
-  return typeof value === "string" && value in PALETTES
+  return typeof value === "string" && Object.hasOwn(PALETTES, value)
 }
 
 function isLayout(value: unknown): value is LayoutMode {

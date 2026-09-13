@@ -43,6 +43,14 @@ export function createPlasmaFrame(
   const time = frame * 0.105
   const horizontalScale = Math.max(8, width * 0.22)
   const verticalScale = Math.max(4, height * 0.46)
+  const orbitOffsetX = Math.sin(time * 0.37) * 0.9
+  const orbitOffsetY = Math.cos(time * 0.29) * 0.65
+  const diagonalPhase = Math.sin(time * 0.61)
+  // Column waves repeat on every row; compute them once per frame.
+  const columns = Array.from({ length: width }, (_, column) => {
+    const x = (column - width / 2) / horizontalScale
+    return { column, x, orbitX: x + orbitOffsetX, wave: Math.sin(x * 1.55 + time * 1.31) * 0.29 }
+  })
   const runs: PlasmaRun[] = []
 
   const append = (text: string, tone: number) => {
@@ -53,17 +61,16 @@ export function createPlasmaFrame(
 
   for (let row = 0; row < height; row += 1) {
     const y = (row - height / 2) / verticalScale
-    for (let column = 0; column < width; column += 1) {
-      const x = (column - width / 2) / horizontalScale
-      const orbitX = x + Math.sin(time * 0.37) * 0.9
-      const orbitY = y + Math.cos(time * 0.29) * 0.65
+    const orbitY = y + orbitOffsetY
+    const verticalWave = Math.sin(y * 2.05 - time * 0.87) * 0.24
+    for (const { column, x, orbitX, wave } of columns) {
       const radius = Math.hypot(orbitX, orbitY)
       const diagonal = x * 0.78 - y * 1.12
       const field =
-        Math.sin(x * 1.55 + time * 1.31) * 0.29 +
-        Math.sin(y * 2.05 - time * 0.87) * 0.24 +
+        wave +
+        verticalWave +
         Math.sin(radius * 2.72 - time * 1.43) * 0.31 +
-        Math.sin(diagonal + Math.sin(time * 0.61)) * 0.16
+        Math.sin(diagonal + diagonalPhase) * 0.16
       const energy = clamp((field + 1) / 2)
       const survives = cellNoise(column, row) <= visiblePresence * (0.68 + energy * 0.32)
       const characterIndex = survives
