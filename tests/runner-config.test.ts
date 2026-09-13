@@ -7,6 +7,7 @@ import {
   listSavedRunnerCommands,
   loadRunnerHistory,
   loadRunnerSession,
+  loadRunnerStartupState,
   normalizeRunnerManualCommand,
   parseMprocsConfig,
   parseProcfile,
@@ -254,6 +255,10 @@ procs:
       settingsPath,
     )
     expect(loadRunnerHistory(settingsPath)[0]?.id).toBe("run-1")
+    expect(loadRunnerStartupState(root, settingsPath)).toMatchObject({
+      session: { activeProject: root, viewMode: "multi" },
+      history: [{ id: "run-1" }],
+    })
 
     removeSavedRunnerCommand(root, saved.id, settingsPath)
     expect(listSavedRunnerCommands(root, settingsPath)).toEqual([])

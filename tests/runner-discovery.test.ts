@@ -33,6 +33,7 @@ describe("runner project detection", () => {
       "tasks:\n  verify:\n    cmds:\n      - echo ok\n",
     )
     writeFileSync(join(projectRoot, "compose.yml"), "services: {}\n")
+    writeFileSync(join(projectRoot, ".env.local"), "PORT=3000\n")
   })
 
   afterAll(() => {
@@ -73,6 +74,9 @@ describe("runner project detection", () => {
 
     expect(context?.root).toBe(projectRoot)
     expect(context?.commands.some((command) => command.id === "package:dev")).toBe(true)
+    expect(context?.environmentProfiles).toContainEqual(
+      expect.objectContaining({ id: "file:.env.local", label: ".env.local" }),
+    )
     expect(resolveRunnerSessionScope(nested)).toBe(projectRoot)
   })
 

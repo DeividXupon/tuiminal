@@ -4,7 +4,7 @@ import { Button } from "@tuiparts/react/button"
 import type { RunnerExecution } from "../model/execution"
 import type { RunnerListeningPort } from "../model/types"
 import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../core/settings/theme"
-import { filterRunnerLogs, runnerLogPresentation } from "../rendering/log-document"
+import { buildRunnerLogDocument, filterRunnerLogs } from "../rendering/log-document"
 import {
   fitLine,
   portAddress,
@@ -168,22 +168,15 @@ export function MultiProcessPanel({
                       backgroundColor: COLORS.canvas,
                     }}
                   >
-                    {paneLogs.map((log) => {
-                      const presentation = runnerLogPresentation(log, COLORS)
-                      return (
-                        <text
-                          key={log.id}
-                          content={fitLine(
-                            `${showTimestamps ? `${new Date(log.at).toLocaleTimeString("pt-BR", { hour12: false })} ` : ""}${presentation.prefix} ${log.text}`,
-                            paneLogWidth,
-                          )}
-                          style={{
-                            fg: presentation.color,
-                            bg: COLORS.canvas,
-                          }}
-                        />
-                      )
-                    })}
+                    <text
+                      content={buildRunnerLogDocument(paneLogs, {
+                        width: paneLogWidth,
+                        showTimestamps,
+                        palette: COLORS,
+                      })}
+                      wrapMode="none"
+                      style={{ height: paneLogs.length, flexShrink: 0, bg: COLORS.canvas }}
+                    />
                   </box>
                 </box>
               </Button>

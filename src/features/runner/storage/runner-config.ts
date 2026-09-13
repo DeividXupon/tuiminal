@@ -298,6 +298,14 @@ export function loadRunnerSession(scopeRoot: string, path = RUNNER_SETTINGS_PATH
   return readSettingsFile(path).sessions[resolve(scopeRoot)] ?? emptyRunnerSession()
 }
 
+export function loadRunnerStartupState(scopeRoot: string, path = RUNNER_SETTINGS_PATH) {
+  const settings = readSettingsFile(path)
+  return {
+    session: settings.sessions[resolve(scopeRoot)] ?? emptyRunnerSession(),
+    history: settings.history,
+  }
+}
+
 export function saveRunnerSession(
   scopeRoot: string,
   session: RunnerSessionState,
@@ -423,9 +431,12 @@ export function loadRunnerProjectConfiguration(root: string) {
   return { commands, profiles }
 }
 
-export function discoverRunnerEnvironmentProfiles(root: string) {
+export function discoverRunnerEnvironmentProfiles(
+  root: string,
+  configuredProfiles?: RunnerEnvironmentProfile[],
+) {
   const projectRoot = resolve(root)
-  const configured = loadRunnerProjectConfiguration(projectRoot).profiles
+  const configured = configuredProfiles ?? loadRunnerProjectConfiguration(projectRoot).profiles
   let files: string[] = []
   try {
     files = readdirSync(projectRoot)
@@ -540,23 +551,4 @@ export function runnerPortUrl(host: string, port: number) {
         ? `[${host}]`
         : host
   return `http://${normalizedHost}:${port}`
-}
-
-export function runnerConfigExample() {
-  return `version: 1
-profiles:
-  desenvolvimento:
-    envFile: .env.development
-commands:
-  api:
-    command: bun run dev
-    profile: desenvolvimento
-    interactive: true
-    restart: on-failure
-    restartDelayMs: 1000
-    health:
-      type: http
-      url: http://127.0.0.1:3000/health
-      timeoutMs: 30000
-`
 }

@@ -8,17 +8,14 @@ export async function discoverGoCommands(root: string) {
   if (!(await fileExists(resolve(root, "go.mod")))) return []
   return [
     createCommand("go", "run", "go run", "Executar o módulo Go", "go", ["run", "."]),
-    createCommand("go", "test", "go test", "Executar todos os testes Go", "go", [
-      "test",
-      "../services/...",
-    ]),
+    createCommand("go", "test", "go test", "Executar todos os testes Go", "go", ["test", "./..."]),
     createCommand("go", "vet", "go vet", "Analisar problemas comuns no código Go", "go", [
       "vet",
-      "../services/...",
+      "./...",
     ]),
     createCommand("go", "build", "go build", "Compilar todos os pacotes Go", "go", [
       "build",
-      "../services/...",
+      "./...",
     ]),
   ]
 }
@@ -90,7 +87,7 @@ export async function discoverRubyCommands(root: string) {
 export async function discoverJavaCommands(root: string) {
   const pom = await readText(resolve(root, "pom.xml"))
   if (pom) {
-    const program = (await fileExists(resolve(root, "mvnw"))) ? "../services/mvnw" : "mvn"
+    const program = (await fileExists(resolve(root, "mvnw"))) ? "./mvnw" : "mvn"
     const commands = [
       createCommand("java", "maven:test", "maven test", "Executar os testes Maven", program, [
         "test",
@@ -124,7 +121,7 @@ export async function discoverJavaCommands(root: string) {
     : resolve(root, "build.gradle")
   const gradle = await readText(gradlePath)
   if (!gradle) return []
-  const program = (await fileExists(resolve(root, "gradlew"))) ? "../services/gradlew" : "gradle"
+  const program = (await fileExists(resolve(root, "gradlew"))) ? "./gradlew" : "gradle"
   const commands = [
     createCommand("java", "gradle:test", "gradle test", "Executar os testes Gradle", program, [
       "test",
@@ -174,10 +171,15 @@ export async function discoverDotnetCommands(root: string) {
 }
 
 export function parseJsonWithComments(source: string) {
+  // Match quoted strings first so comment markers and comma/bracket text stay literal.
   const withoutComments = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "")
-    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/"(?:\\[\s\S]|[^"\\])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\//g, (token) =>
+      token.startsWith('"') ? token : " ",
+    )
+    .replace(
+      /"(?:\\[\s\S]|[^"\\])*"|,(\s*[}\]])/g,
+      (token, closing: string | undefined) => closing ?? token,
+    )
   return JSON.parse(withoutComments) as { tasks?: Record<string, unknown> }
 }
 

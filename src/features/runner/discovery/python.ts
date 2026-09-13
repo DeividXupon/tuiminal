@@ -21,14 +21,16 @@ export function pythonCommand(
   id: string,
   label: string,
   description: string,
-  executable: string,
   args: string[] = [],
 ) {
-  return createCommand("python", id, label, description, environment.program, [
-    ...environment.prefix,
-    executable,
-    ...args,
-  ])
+  return createCommand(
+    "python",
+    id,
+    label,
+    description,
+    environment.program,
+    environment.prefix.length ? [...environment.prefix, "python", ...args] : args,
+  )
 }
 
 export function pythonToolCommand(
@@ -101,23 +103,17 @@ export async function discoverPythonCommands(root: string) {
         "django:runserver",
         "django runserver",
         "Iniciar o servidor de desenvolvimento do Django",
-        "python",
         ["manage.py", "runserver"],
       ),
-      pythonCommand(
-        environment,
-        "django:test",
-        "django test",
-        "Executar os testes Django",
-        "python",
-        ["manage.py", "test"],
-      ),
+      pythonCommand(environment, "django:test", "django test", "Executar os testes Django", [
+        "manage.py",
+        "test",
+      ]),
       pythonCommand(
         environment,
         "django:check",
         "django check",
         "Verificar a configuração e problemas comuns do Django",
-        "python",
         ["manage.py", "check"],
       ),
       pythonCommand(
@@ -125,7 +121,6 @@ export async function discoverPythonCommands(root: string) {
         "django:migrations",
         "django showmigrations",
         "Mostrar as migrations e seus estados",
-        "python",
         ["manage.py", "showmigrations"],
       ),
     )
@@ -138,14 +133,10 @@ export async function discoverPythonCommands(root: string) {
     Boolean(pyproject?.includes("pytest"))
   if (hasTests) {
     commands.push(
-      pythonCommand(
-        environment,
+      pythonCommand(environment, "pytest", "pytest", "Executar a suíte de testes Python", [
+        "-m",
         "pytest",
-        "pytest",
-        "Executar a suíte de testes Python",
-        "python",
-        ["-m", "pytest"],
-      ),
+      ]),
     )
   }
   if (pyproject?.includes("[tool.ruff")) {
@@ -158,7 +149,7 @@ export async function discoverPythonCommands(root: string) {
   }
   if (pyproject?.includes("[tool.mypy")) {
     commands.push(
-      pythonCommand(environment, "mypy", "mypy", "Verificar os tipos do projeto Python", "python", [
+      pythonCommand(environment, "mypy", "mypy", "Verificar os tipos do projeto Python", [
         "-m",
         "mypy",
         ".",

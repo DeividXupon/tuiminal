@@ -10,7 +10,7 @@ import type {
 } from "../model/types"
 import { bunRuntime } from "./pty-runtime"
 import { activeProcesses } from "./process-registry"
-import { RUNNER_LOG_ENTRY_MAX_CHARS } from "../rendering/log-document"
+import { RUNNER_LOG_ENTRY_MAX_CHARS } from "../model/log-buffer"
 import {
   forceKillOwnedProcessTree,
   OWNED_PROCESS_STOP_DEADLINE_MS,
@@ -74,6 +74,13 @@ export function pipeLines(
   source.on("end", () => flush(true))
 }
 
+function emitPtyOutput(text: string, onLine: RunnerProcessCallbacks["onLine"]) {
+  const output = stripVTControlCharacters(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  for (const line of output.split("\n")) {
+    if (line) onLine(line, "stdout")
+  }
+}
+
 export function startRunnerProcess(
   root: string,
   command: RunnerCommand,
@@ -102,6 +109,7 @@ export function startRunnerProcess(
     let resolveStop: (() => void) | null = null
     let rejectStop: ((error: Error) => void) | null = null
     let handle: RunnerProcessHandle
+    const decoder = new TextDecoder()
     const subprocess = bunRuntime.spawn([command.program, ...command.args], {
       cwd: workingDirectory,
       env: environment,
@@ -110,12 +118,7 @@ export function startRunnerProcess(
         rows: 30,
         name: "xterm-256color",
         data(_terminal, data) {
-          const output = stripVTControlCharacters(new TextDecoder().decode(data))
-            .replace(/\r\n/g, "\n")
-            .replace(/\r/g, "\n")
-          for (const line of output.split("\n")) {
-            if (line) callbacks.onLine(line, "stdout")
-          }
+          if (!exited) emitPtyOutput(decoder.decode(data, { stream: true }), callbacks.onLine)
         },
       },
     })
@@ -192,6 +195,7 @@ export function startRunnerProcess(
       if (stopDeadlineTimer) clearTimeout(stopDeadlineTimer)
       activeProcesses.delete(handle)
       closeTerminal()
+      emitPtyOutput(decoder.decode(), callbacks.onLine)
       callbacks.onExit({
         code: Number.isFinite(code) ? code : subprocess.exitCode,
         signal: subprocess.signalCode as NodeJS.Signals | null,

@@ -44,33 +44,36 @@ export async function discoverRunnerProjects(
     .map((path) => path.trim())
     .filter(Boolean)
   const roots = configuredRoots?.length ? configuredRoots : [homedir()]
-  const queue = [...new Set([currentRoot, ...roots])].map((path) => ({
-    path: resolve(path),
+  const visited = new Set([currentRoot, ...roots].map((path) => resolve(path)))
+  const queue = [...visited].map((path) => ({
+    path,
     depth: 0,
   }))
   const projects = new Map<string, RunnerProject>()
   let cursor = 0
 
-  const scan = async () => {
-    while (cursor < queue.length && projects.size < 300) {
-      const item = queue[cursor]
-      cursor += 1
-      if (!item) continue
-      let entries: Dirent<string>[]
-      try {
-        entries = await readdir(item.path, { withFileTypes: true })
-      } catch {
-        continue
-      }
-
-      if (isDiscoveredGitProject(item.path, entries)) {
-        if (!projects.has(item.path)) {
-          projects.set(item.path, {
-            path: item.path,
-            name: basename(item.path),
-            displayPath: displayProjectPath(item.path),
-          })
+  // Refill each bounded batch: workers must not exit while earlier reads discover children.
+  while (cursor < queue.length && projects.size < 300) {
+    const batch = queue.slice(cursor, cursor + 16)
+    cursor += batch.length
+    const results = await Promise.all(
+      batch.map(async (item) => {
+        try {
+          return { ...item, entries: await readdir(item.path, { withFileTypes: true }) }
+        } catch {
+          return { ...item, entries: [] }
         }
+      }),
+    )
+    for (const item of results) {
+      if (projects.size >= 300) break
+      const entries = item.entries
+      if (isDiscoveredGitProject(item.path, entries)) {
+        projects.set(item.path, {
+          path: item.path,
+          name: basename(item.path),
+          displayPath: displayProjectPath(item.path),
+        })
         continue
       }
       if (item.depth >= 7) continue
@@ -79,18 +82,18 @@ export async function discoverRunnerProjects(
         if (!entry.isDirectory() || shouldSkipProjectDirectory(entry.name)) {
           continue
         }
-        queue.push({
-          path: resolve(item.path, entry.name),
-          depth: item.depth + 1,
-        })
+        const path = resolve(item.path, entry.name)
+        if (visited.has(path)) continue
+        visited.add(path)
+        queue.push({ path, depth: item.depth + 1 })
       }
     }
   }
 
-  await Promise.all(Array.from({ length: 16 }, () => scan()))
+  const selectedRoot = resolve(currentRoot)
   return [...projects.values()].sort((left, right) => {
-    if (left.path === resolve(currentRoot)) return -1
-    if (right.path === resolve(currentRoot)) return 1
+    if (left.path === selectedRoot) return -1
+    if (right.path === selectedRoot) return 1
     const byName = left.name.localeCompare(right.name)
     return byName || left.path.localeCompare(right.path)
   })
@@ -98,23 +101,21 @@ export async function discoverRunnerProjects(
 
 export async function listRunnerDirectories(directory: string): Promise<RunnerDirectoryEntry[]> {
   const entries = await readdir(directory, { withFileTypes: true })
-  const directories = await Promise.all(
-    entries
-      .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          entry.name !== ".git" &&
-          !IGNORED_PROJECT_DIRECTORIES.has(entry.name),
-      )
-      .map(async (entry) => {
-        const path = resolve(directory, entry.name)
-        return {
-          path,
-          name: entry.name,
-          git: isGitWorktreeRoot(path),
-        }
-      }),
-  )
+  const directories = entries
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name !== ".git" &&
+        !IGNORED_PROJECT_DIRECTORIES.has(entry.name),
+    )
+    .map((entry) => {
+      const path = resolve(directory, entry.name)
+      return {
+        path,
+        name: entry.name,
+        git: isGitWorktreeRoot(path),
+      }
+    })
   return directories.sort((left, right) => {
     if (left.git !== right.git) return left.git ? -1 : 1
     return left.name.localeCompare(right.name)

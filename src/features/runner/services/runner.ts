@@ -1,5 +1,9 @@
 import { dirname, resolve } from "node:path"
-import { loadRunnerProjectConfiguration } from "../storage/runner-config"
+import {
+  discoverRunnerEnvironmentProfiles,
+  loadRunnerProjectConfiguration,
+  type RunnerEnvironmentProfile,
+} from "../storage/runner-config"
 
 import type { RunnerCommand } from "../model/types"
 import { isGitWorktreeRoot, RUNNER_WORKING_DIRECTORY } from "./context"
@@ -20,8 +24,11 @@ import {
 } from "../discovery/recipes"
 import { configuredRunnerCommand } from "./shell-command"
 
-export async function discoverRunnerCommands(root = RUNNER_WORKING_DIRECTORY) {
-  const configured = loadRunnerProjectConfiguration(root).commands.map(configuredRunnerCommand)
+async function discoverRunnerCommandsWithConfiguration(
+  root: string,
+  configuredCommands: ReturnType<typeof loadRunnerProjectConfiguration>["commands"],
+) {
+  const configured = configuredCommands.map(configuredRunnerCommand)
   const discovered = await Promise.all([
     discoverPackageCommands(root),
     discoverPhpCommands(root),
@@ -46,27 +53,51 @@ export async function discoverRunnerCommands(root = RUNNER_WORKING_DIRECTORY) {
   return [...unique.values()]
 }
 
+export async function discoverRunnerCommands(root = RUNNER_WORKING_DIRECTORY) {
+  return discoverRunnerCommandsWithConfiguration(
+    root,
+    loadRunnerProjectConfiguration(root).commands,
+  )
+}
+
 export type RunnerProjectContext = {
   root: string
   commands: RunnerCommand[]
+  environmentProfiles: RunnerEnvironmentProfile[]
+}
+
+async function runnerProjectDiscovery(root: string) {
+  const configuration = loadRunnerProjectConfiguration(root)
+  const commands = await discoverRunnerCommandsWithConfiguration(root, configuration.commands)
+  return { root, commands, configuredProfiles: configuration.profiles }
+}
+
+function completeRunnerProjectContext(
+  discovery: Awaited<ReturnType<typeof runnerProjectDiscovery>>,
+): RunnerProjectContext {
+  return {
+    root: discovery.root,
+    commands: discovery.commands,
+    environmentProfiles: discoverRunnerEnvironmentProfiles(
+      discovery.root,
+      discovery.configuredProfiles,
+    ),
+  }
 }
 
 export async function resolveRunnerProjectContext(
   directory = RUNNER_WORKING_DIRECTORY,
 ): Promise<RunnerProjectContext | null> {
   const requestedRoot = resolve(directory)
-  const requestedCommands = await discoverRunnerCommands(requestedRoot)
-  if (requestedCommands.length || isGitWorktreeRoot(requestedRoot)) {
-    return { root: requestedRoot, commands: requestedCommands }
+  const requested = await runnerProjectDiscovery(requestedRoot)
+  if (requested.commands.length || isGitWorktreeRoot(requestedRoot)) {
+    return completeRunnerProjectContext(requested)
   }
 
   let candidate = dirname(requestedRoot)
   while (candidate !== dirname(candidate)) {
     if (isGitWorktreeRoot(candidate)) {
-      return {
-        root: candidate,
-        commands: await discoverRunnerCommands(candidate),
-      }
+      return completeRunnerProjectContext(await runnerProjectDiscovery(candidate))
     }
     candidate = dirname(candidate)
   }
