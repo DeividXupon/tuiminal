@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../src/shared/i18n/database-privacy-catalog"
+import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../src/shared/i18n/git-compare-tutorial-catalog"
 import { GIT_DIFFS_MESSAGES } from "../src/shared/i18n/git-diffs-catalog"
+import { GIT_PR_MESSAGES } from "../src/shared/i18n/git-pr-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../src/shared/i18n/http-workspace-settings-catalog"
 import {
   displayWidth,
@@ -16,6 +18,37 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test.each([
+    ["pt-BR", "Não foi possível gravar o download completo."],
+    ["en", "Could not write the complete download."],
+    ["es", "No se pudo escribir la descarga completa."],
+    ["ja", "ダウンロード全体を書き込めませんでした。"],
+    ["zh-CN", "无法写入完整下载内容。"],
+    ["ko", "전체 다운로드를 기록할 수 없습니다."],
+  ] as const)("translates an incomplete HTTP download write into %s", (language, expected) => {
+    expect(translateUi("Não foi possível gravar o download completo.", language)).toBe(expected)
+  })
+  test.each([
+    ["pt-BR", "Feche as aspas na query do GitHub."],
+    ["en", "Close the quoted text in the GitHub query."],
+    ["es", "Cierra las comillas en la consulta de GitHub."],
+    ["ja", "GitHub クエリの引用符を閉じてください。"],
+    ["zh-CN", "请闭合 GitHub 查询中的引号。"],
+    ["ko", "GitHub 쿼리의 따옴표를 닫으세요."],
+  ] as const)("translates incomplete GitHub query feedback into %s", (language, expected) => {
+    expect(translateUi("Feche as aspas na query do GitHub.", language)).toBe(expected)
+  })
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates incomplete GitHub CLI input into %s",
+    (language) => {
+      const message = "O GitHub CLI encerrou antes de receber toda a entrada."
+      const catalog = GIT_PR_MESSAGES.find(([key]) => key === message)
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      const expected = catalog?.[index]
+      if (!expected) throw new Error(`Missing GitHub input translation for ${language}`)
+      expect(translateUi(message, language)).toBe(expected)
+    },
+  )
   test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
     "translates the HTTP body policy and preparation failure into %s",
     (language) => {
@@ -47,6 +80,17 @@ describe("internationalization", () => {
       for (const catalog of GIT_DIFFS_MESSAGES) {
         const expected = catalog[index]
         if (!expected) throw new Error(`Missing Git Diffs translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git Compare tutorial message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of GIT_COMPARE_TUTORIAL_MESSAGES) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing Git Compare tutorial translation for ${language}`)
         expect(translateUi(catalog[0], language)).toBe(expected)
       }
     },
@@ -301,6 +345,38 @@ describe("internationalization", () => {
     expect(displayWidth("数据")).toBe(4)
     expect(truncateDisplay("数据表", 5)).toBe("数据…")
     expect(displayWidth(padDisplayEnd("数据", 6))).toBe(6)
+  })
+
+  test("truncates long text without materializing the unused grapheme suffix", () => {
+    const value = "👩🏽‍💻e\u0301界".repeat(2_000)
+    const original = Intl.Segmenter.prototype.segment
+    const passes: Array<{ visited: number }> = []
+    const spy = spyOn(Intl.Segmenter.prototype, "segment").mockImplementation(function (
+      this: Intl.Segmenter,
+      input: string,
+    ) {
+      const segments = original.call(this, input)
+      if (input !== value) return segments
+      const pass = { visited: 0 }
+      passes.push(pass)
+      return {
+        containing: segments.containing.bind(segments),
+        *[Symbol.iterator]() {
+          for (const part of segments) {
+            pass.visited += 1
+            yield part
+          }
+          return undefined
+        },
+      }
+    })
+    try {
+      expect(truncateDisplay(value, 10)).toBe("👩🏽‍💻e\u0301界👩🏽‍💻e\u0301…")
+      expect(passes.length).toBeGreaterThanOrEqual(2)
+      expect(passes.at(-1)?.visited ?? Infinity).toBeLessThanOrEqual(10)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test("formats dates with the configured UI locale", () => {

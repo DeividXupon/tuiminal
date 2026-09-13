@@ -562,46 +562,6 @@ const MESSAGES: readonly Message[] = [
   ],
   ["ÁREA DE TRABALHO", "WORKSPACE", "ÁREA DE TRABAJO", "ワークスペース", "工作区", "작업 공간"],
   [
-    "NAVEGAÇÃO GLOBAL",
-    "GLOBAL NAVIGATION",
-    "NAVEGACIÓN GLOBAL",
-    "全体ナビゲーション",
-    "全局导航",
-    "전역 탐색",
-  ],
-  [
-    "NAVEGAÇÃO GLOBAL · AÇÃO",
-    "GLOBAL NAVIGATION · ACTION",
-    "NAVEGACIÓN GLOBAL · ACCIÓN",
-    "全体ナビゲーション・アクション",
-    "全局导航 · 操作",
-    "전역 탐색 · 작업",
-  ],
-  [
-    "Conecte seu primeiro banco",
-    "Connect your first database",
-    "Conecta tu primera base de datos",
-    "最初のデータベースに接続",
-    "连接第一个数据库",
-    "첫 데이터베이스 연결",
-  ],
-  [
-    "Este bloco aparece quando ainda não há uma conexão. Ele mantém a tela limpa e mostra os bancos compatíveis.",
-    "This panel appears when there is no connection yet. It keeps the screen clean and shows supported databases.",
-    "Este panel aparece cuando aún no hay una conexión. Mantiene la pantalla limpia y muestra las bases compatibles.",
-    "接続がないときに表示されるパネルです。画面を整理し、対応データベースを示します。",
-    "尚无连接时会显示此面板。它保持界面简洁并显示支持的数据库。",
-    "연결이 없을 때 표시되는 패널입니다. 화면을 간결하게 유지하고 지원 데이터베이스를 보여줍니다.",
-  ],
-  [
-    "O tour completo aparece depois que uma conexão for adicionada.",
-    "The full tour appears after a connection is added.",
-    "El tour completo aparece después de agregar una conexión.",
-    "接続を追加すると完全なツアーが表示されます。",
-    "添加连接后会显示完整教程。",
-    "연결을 추가하면 전체 튜토리얼이 표시됩니다.",
-  ],
-  [
     "Adicionar conexão",
     "Add connection",
     "Agregar conexión",
@@ -1081,23 +1041,6 @@ const MESSAGES: readonly Message[] = [
     "可用快捷键显示在每个操作旁边。",
     "사용 가능한 단축키는 각 작업 옆에 표시됩니다.",
   ],
-  ["Barra de ferramentas", "Toolbar", "Barra de herramientas", "ツールバー", "工具栏", "도구 모음"],
-  [
-    "Use as abas para alternar entre Banco, Git, Runner, HTTP e Terminal livre.",
-    "Use tabs to switch between Database, Git, Runner, HTTP, and Free Terminal.",
-    "Usa las pestañas para cambiar entre Base de datos, Git, Runner, HTTP y Terminal libre.",
-    "タブでデータベース、Git、Runner、HTTP、フリーターミナルを切り替えます。",
-    "使用标签页在数据库、Git、Runner、HTTP 和自由终端之间切换。",
-    "탭으로 데이터베이스, Git, Runner, HTTP 및 자유 터미널을 전환합니다.",
-  ],
-  [
-    "Atalhos: [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-    "Shortcuts: [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-    "Atajos: [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-    "ショートカット: [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-    "快捷键：[Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-    "단축키: [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5]",
-  ],
   ["Configurações", "Settings", "Configuración", "設定", "设置", "설정"],
   [
     "Volte aqui para trocar cores, densidade do layout ou iniciar este tutorial novamente.",
@@ -1320,22 +1263,6 @@ const MESSAGES: readonly Message[] = [
     "데이터베이스를 추가하여 스키마, 테이블, 열, 인덱스 및 레코드를 탐색하세요.",
   ],
   ["◇ leitura somente", "◇ read-only", "◇ solo lectura", "◇ 読み取り専用", "◇ 只读", "◇ 읽기 전용"],
-  [
-    "+ Adicionar conexão",
-    "+ Add connection",
-    "+ Agregar conexión",
-    "+ 接続を追加",
-    "+ 添加连接",
-    "+ 연결 추가",
-  ],
-  [
-    "+ Nova conexão",
-    "+ New connection",
-    "+ Nueva conexión",
-    "+ 新しい接続",
-    "+ 新建连接",
-    "+ 새 연결",
-  ],
   [
     "As senhas podem ser guardadas no gerenciador seguro do sistema.",
     "Passwords can be stored in the system credential manager.",
@@ -3582,8 +3509,6 @@ const MESSAGES: readonly Message[] = [
   ["[D] Scan", "[D] Scan", "[D] Detectar", "[D] 検出", "[D] 扫描", "[D] 스캔"],
   ["[/] Comando", "[/] Command", "[/] Comando", "[/] コマンド", "[/] 命令", "[/] 명령"],
   ["[/] Cmd", "[/] Cmd", "[/] Cmd", "[/] Cmd", "[/] Cmd", "[/] Cmd"],
-  ["[‹] Exec.", "[‹] Run", "[‹] Ejec.", "[‹] 実行", "[‹] 执行", "[‹] 실행"],
-  ["[›] Exec.", "[›] Run", "[›] Ejec.", "[›] 実行", "[›] 执行", "[›] 실행"],
   [
     "Não foi possível detectar os comandos.",
     "Could not detect commands.",
@@ -4442,38 +4367,6 @@ const MESSAGES: readonly Message[] = [
   ["[O] Log", "[O] Log", "[O] Log", "[O] ログ", "[O] 日志", "[O] 로그"],
   ["[␠] Stage", "[␠] Stage", "[␠] Stage", "[␠] ステージ", "[␠] 暂存", "[␠] 스테이지"],
   [
-    "[Tab/H/L] Painel  [V] Visual  [O] Log  [G] Árvore",
-    "[Tab/H/L] Pane  [V] View  [O] Log  [G] Graph",
-    "[Tab/H/L] Panel  [V] Vista  [O] Log  [G] Árbol",
-    "[Tab/H/L] ペイン  [V] 表示  [O] ログ  [G] グラフ",
-    "[Tab/H/L] 面板  [V] 视图  [O] 日志  [G] 图",
-    "[Tab/H/L] 패널  [V] 보기  [O] 로그  [G] 그래프",
-  ],
-  [
-    "[Tab/H/L/←/→] Árvore/diff  [V] Visualização  [O] Log  [G] Árvore Git  [R] Atualizar",
-    "[Tab/H/L/←/→] Tree/diff  [V] View  [O] Log  [G] Git graph  [R] Refresh",
-    "[Tab/H/L/←/→] Árbol/diff  [V] Vista  [O] Log  [G] Árbol Git  [R] Actualizar",
-    "[Tab/H/L/←/→] ツリー/Diff  [V] 表示  [O] ログ  [G] Git グラフ  [R] 更新",
-    "[Tab/H/L/←/→] 树/差异  [V] 视图  [O] 日志  [G] Git 图  [R] 刷新",
-    "[Tab/H/L/←/→] 트리/Diff  [V] 보기  [O] 로그  [G] Git 그래프  [R] 새로고침",
-  ],
-  [
-    "[Tab/H/L] Painel  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff",
-    "[Tab/H/L] Pane  [J/K/↑/↓] Navigate  [↵] Open  [D] Diff",
-    "[Tab/H/L] Panel  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff",
-    "[Tab/H/L] ペイン  [J/K/↑/↓] 移動  [↵] 開く  [D] Diff",
-    "[Tab/H/L] 面板  [J/K/↑/↓] 导航  [↵] 打开  [D] 差异",
-    "[Tab/H/L] 패널  [J/K/↑/↓] 탐색  [↵] 열기  [D] Diff",
-  ],
-  [
-    "[Tab/H/L/←/→] Árvore/histórico  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar",
-    "[Tab/H/L/←/→] Tree/history  [J/K/↑/↓] Navigate  [↵] Open  [D] Diff  [R] Refresh",
-    "[Tab/H/L/←/→] Árbol/historial  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Actualizar",
-    "[Tab/H/L/←/→] ツリー/履歴  [J/K/↑/↓] 移動  [↵] 開く  [D] Diff  [R] 更新",
-    "[Tab/H/L/←/→] 树/历史  [J/K/↑/↓] 导航  [↵] 打开  [D] 差异  [R] 刷新",
-    "[Tab/H/L/←/→] 트리/기록  [J/K/↑/↓] 탐색  [↵] 열기  [D] Diff  [R] 새로고침",
-  ],
-  [
     "MONTANDO PREVIEW",
     "BUILDING PREVIEW",
     "GENERANDO VISTA PREVIA",
@@ -5168,7 +5061,7 @@ const MESSAGES: readonly Message[] = [
   ["▦ Seção 2×2", "▦ 2×2 section", "▦ Sección 2×2", "▦ 2×2 セクション", "▦ 2×2 分区", "▦ 2×2 섹션"],
 ] as const
 
-const LANGUAGE_COLUMN: Record<Exclude<LanguageId, "pt-BR">, number> = {
+const LANGUAGE_COLUMN: Record<Exclude<LanguageId, "pt-BR">, 1 | 2 | 3 | 4 | 5> = {
   en: 1,
   es: 2,
   ja: 3,
@@ -5176,12 +5069,12 @@ const LANGUAGE_COLUMN: Record<Exclude<LanguageId, "pt-BR">, number> = {
   ko: 5,
 }
 
-const CATALOGS = Object.fromEntries(
-  (Object.keys(LANGUAGE_COLUMN) as Array<Exclude<LanguageId, "pt-BR">>).map((language) => [
-    language,
-    new Map(MESSAGES.map((message) => [message[0], message[LANGUAGE_COLUMN[language]]])),
-  ]),
-) as Record<Exclude<LanguageId, "pt-BR">, Map<string, string>>
+const CATALOG = new Map<string, Message>()
+let maxMessageLength = 0
+for (const message of MESSAGES) {
+  CATALOG.set(message[0], message)
+  maxMessageLength = Math.max(maxMessageLength, message[0].length)
+}
 
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
@@ -6040,56 +5933,108 @@ const PATTERNS: readonly Pattern[] = [
   ],
 ] as const
 
-function patternColumn(language: Exclude<LanguageId, "pt-BR">) {
-  return LANGUAGE_COLUMN[language]
+type TranslationColumn = (typeof LANGUAGE_COLUMN)[Exclude<LanguageId, "pt-BR">]
+type TranslationPrefix = { body: string; prefix: string; warning: boolean }
+type PendingTranslationPrefix = { source: string; prefix: string; warning: boolean }
+
+const ERROR_PREFIXES = {
+  en: ["Error: ", "ERROR: "],
+  es: ["Error: ", "ERROR: "],
+  ja: ["エラー: ", "エラー: "],
+  "zh-CN": ["错误: ", "错误: "],
+  ko: ["오류: ", "오류: "],
+} as const
+
+function exactTranslation(core: string, column: TranslationColumn) {
+  return core.length <= maxMessageLength ? CATALOG.get(core)?.[column] : undefined
+}
+
+function translatePattern(core: string, column: TranslationColumn) {
+  for (const pattern of PATTERNS) {
+    if (pattern[0].test(core)) return core.replace(pattern[0], pattern[column])
+  }
+  return core
+}
+
+function resolveUiText(
+  core: string,
+  language: Exclude<LanguageId, "pt-BR">,
+  singleLine: boolean,
+): string | TranslationPrefix {
+  const column = LANGUAGE_COLUMN[language]
+  const exact = exactTranslation(core, column)
+  if (exact) return exact
+  if (!singleLine) return translatePattern(core, column)
+
+  const error = core.match(/^(Erro|ERRO): /)
+  if (error) {
+    return {
+      body: core.slice(error[0].length),
+      prefix: ERROR_PREFIXES[language][error[1] === "ERRO" ? 1 : 0],
+      warning: false,
+    }
+  }
+  const marked = core.match(/^([◆◇●○✓×◐■▶⚠]) /)
+  if (marked) {
+    const body = core.slice(marked[0].length)
+    const translated = exactTranslation(body, column)
+    if (translated) return `${marked[0]}${translated}`
+    if (marked[1] === "⚠") return { body, prefix: marked[0], warning: true }
+  }
+  return translatePattern(core, column)
+}
+
+function applyUiPrefixes(
+  value: string,
+  source: string,
+  prefixes: PendingTranslationPrefix[],
+  column: TranslationColumn,
+) {
+  let changed = value !== source
+  const parts: string[] = []
+  for (const frame of prefixes.reverse()) {
+    if (frame.warning && !changed) {
+      const fallback = translatePattern(frame.source, column)
+      if (fallback !== frame.source) {
+        value = fallback
+        parts.length = 0
+        changed = true
+        continue
+      }
+    }
+    parts.push(frame.prefix)
+    if (!frame.warning) changed = true
+  }
+  return changed ? `${parts.reverse().join("")}${value}` : undefined
 }
 
 export function translateUi(source: string, language: LanguageId = activeLanguage): string {
   if (language === "pt-BR" || !source) return source
-
-  const leading = source.match(/^\s*/)?.[0] ?? ""
-  const trailing = source.match(/\s*$/)?.[0] ?? ""
-  const core = source.slice(leading.length, source.length - trailing.length)
+  const withoutLeading = source.trimStart()
+  let core = withoutLeading.trimEnd()
   if (!core) return source
+  const leading = source.slice(0, source.length - withoutLeading.length)
+  const trailing = withoutLeading.slice(core.length)
+  const singleLine = !/[\n\r\u2028\u2029]/.test(core)
+  let prefixes: PendingTranslationPrefix[] | undefined
 
-  const exact = CATALOGS[language].get(core)
-  if (exact) return `${leading}${exact}${trailing}`
-
-  const error = core.match(/^(Erro|ERRO): (.+)$/)
-  if (error?.[2]) {
-    const prefixes: Record<Exclude<LanguageId, "pt-BR">, string> = {
-      en: "Error",
-      es: "Error",
-      ja: "エラー",
-      "zh-CN": "错误",
-      ko: "오류",
+  while (true) {
+    const resolved = resolveUiText(core, language, singleLine)
+    if (typeof resolved === "string") {
+      const translated = prefixes
+        ? applyUiPrefixes(resolved, core, prefixes, LANGUAGE_COLUMN[language])
+        : resolved
+      return translated === undefined ? source : `${leading}${translated}${trailing}`
     }
-    const prefix =
-      error[1] === "ERRO" ? prefixes[language].toLocaleUpperCase(language) : prefixes[language]
-    return `${leading}${prefix}: ${translateUi(error[2], language)}${trailing}`
+    const body = resolved.body.trimStart()
+    prefixes ??= []
+    prefixes.push({
+      source: core,
+      prefix: `${resolved.prefix}${resolved.body.slice(0, resolved.body.length - body.length)}`,
+      warning: resolved.warning,
+    })
+    core = body
   }
-
-  const marked = core.match(/^([◆◇●○✓×◐■▶⚠]) (.+)$/)
-  if (marked) {
-    const markedText = marked[2] ?? ""
-    const translated = CATALOGS[language].get(markedText)
-    if (translated) return `${leading}${marked[1]} ${translated}${trailing}`
-    if (marked[1] === "⚠") {
-      const translatedWarning = translateUi(markedText, language)
-      if (translatedWarning !== markedText) {
-        return `${leading}${marked[1]} ${translatedWarning}${trailing}`
-      }
-    }
-  }
-
-  const column = patternColumn(language)
-  for (const pattern of PATTERNS) {
-    if (pattern[0].test(core)) {
-      const translated = core.replace(pattern[0], pattern[column] as string)
-      return `${leading}${translated}${trailing}`
-    }
-  }
-  return source
 }
 
 export function displayWidth(value: string) {
@@ -6107,12 +6052,11 @@ export function truncateDisplay(value: string, maxWidth: number, suffix = "…")
     segmenter = new Intl.Segmenter(activeLanguage, { granularity: "grapheme" })
     graphemeSegmenters.set(activeLanguage, segmenter)
   }
-  const segments = segmenter
-    ? Array.from(segmenter.segment(value), (part) => part.segment)
-    : Array.from(value)
+  const segments = segmenter ? segmenter.segment(value) : value
   let result = ""
   let width = 0
-  for (const segment of segments) {
+  for (const part of segments) {
+    const segment = typeof part === "string" ? part : part.segment
     const segmentWidth = displayWidth(segment)
     if (width + segmentWidth > available) break
     result += segment
