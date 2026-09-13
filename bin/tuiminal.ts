@@ -4,13 +4,18 @@ import { statSync } from "node:fs"
 import { resolve } from "node:path"
 import packageMetadata from "../package.json" with { type: "json" }
 import { DEFAULT_TOOL, TOOL_COMMANDS, type ToolId as ToolCommand } from "../src/app/tool-catalog"
-import { initializeUiSettings } from "../src/core/settings/theme"
-import { translateUi } from "../src/shared/i18n/index"
-
-initializeUiSettings()
-
 const VERSION = packageMetadata.version
 const args = process.argv.slice(2)
+const helpRequested = args.includes("--help") || args.includes("-h")
+
+if (!helpRequested && (args.includes("--version") || args.includes("-v"))) {
+  console.log(VERSION)
+  process.exit(0)
+}
+
+const { initializeUiSettings } = await import("../src/core/settings/theme")
+const { translateUi } = await import("../src/shared/i18n/index")
+initializeUiSettings()
 
 function printHelp() {
   const directory = translateUi("diretório")
@@ -45,23 +50,21 @@ HTTP run:
   --allow-insecure-tls                 ${translateUi("Autorizar TLS sem verificação neste comando")}`)
 }
 
-if (args.includes("--help") || args.includes("-h")) {
+if (helpRequested) {
   printHelp()
   process.exit(0)
 }
 
-if (args.includes("--version") || args.includes("-v")) {
-  console.log(VERSION)
-  process.exit(0)
-}
-
-const commandTool =
-  args[0] && args[0] in TOOL_COMMANDS ? TOOL_COMMANDS[args[0] as keyof typeof TOOL_COMMANDS] : null
-if (commandTool === "http" && args[1] === "run") {
+const requestedCommand = args[0]
+const selectedTool: ToolCommand | null =
+  requestedCommand && Object.hasOwn(TOOL_COMMANDS, requestedCommand)
+    ? TOOL_COMMANDS[requestedCommand as keyof typeof TOOL_COMMANDS]
+    : null
+if (selectedTool === "http" && args[1] === "run") {
   const { runHttpHeadless } = await import("../src/features/http/cli/run")
   process.exit(await runHttpHeadless(args.slice(2)))
 }
-if (commandTool === "http" && args[1] === "import") {
+if (selectedTool === "http" && args[1] === "import") {
   const { importHttpCollectionCli } = await import("../src/features/http/cli/import")
   process.exit(await importHttpCollectionCli(args.slice(2)))
 }
@@ -73,11 +76,6 @@ if (unknownOption) {
   process.exit(1)
 }
 
-const requestedCommand = args[0]
-const selectedTool: ToolCommand | null =
-  requestedCommand && requestedCommand in TOOL_COMMANDS
-    ? TOOL_COMMANDS[requestedCommand as keyof typeof TOOL_COMMANDS]
-    : null
 const directoryArguments = selectedTool ? args.slice(1) : args
 
 if (directoryArguments.length > 1) {
