@@ -1,5 +1,6 @@
-import { RenderableEvents, type BoxRenderable, type ScrollBoxRenderable } from "@opentui/core"
+import { type BoxRenderable, RenderableEvents, type ScrollBoxRenderable } from "@opentui/core"
 import { useCallback, useRef } from "react"
+import { scrollGitDiffHorizontally } from "../rendering/diff-scroll"
 
 function replaceFocusListener<T extends BoxRenderable | ScrollBoxRenderable>(
   ref: { current: T | null },
@@ -25,9 +26,19 @@ export function useGitPreviewFocus(onFocus: () => void) {
   )
   const focusDiff = useCallback(() => diffScrollRef.current?.focus(), [])
   const focusHistory = useCallback(() => historyPanelRef.current?.focus(), [])
-  const scrollDiff = useCallback(
-    (offset: number) => diffScrollRef.current?.scrollTo({ x: 0, y: offset }),
-    [],
-  )
-  return { setDiffScrollRef, setHistoryPanelRef, focusDiff, focusHistory, scrollDiff }
+  const scrollDiff = useCallback((offset: number) => {
+    const scrollbox = diffScrollRef.current
+    if (scrollbox) scrollbox.scrollTo({ x: scrollbox.scrollLeft, y: offset })
+  }, [])
+  const scrollDiffHorizontally = useCallback((delta: number) => {
+    scrollGitDiffHorizontally(diffScrollRef.current, delta)
+  }, [])
+  return {
+    setDiffScrollRef,
+    setHistoryPanelRef,
+    focusDiff,
+    focusHistory,
+    scrollDiff,
+    scrollDiffHorizontally,
+  }
 }

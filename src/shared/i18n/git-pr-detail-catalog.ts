@@ -232,12 +232,12 @@ export const GIT_PR_DETAIL_MESSAGES = [
     "[V] 통합 / 나란히 / 줄 내부",
   ],
   [
-    "[J/K] Navegar/rolar  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Copiar caminho  [Esc] Voltar",
-    "[J/K] Navigate/scroll  [[]/[]] Hunk  [H/L] Focus  [V] Mode  [Y] Copy path  [Esc] Back",
-    "[J/K] Navegar/desplazar  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Copiar ruta  [Esc] Volver",
-    "[J/K] 移動/スクロール  [[]/[]] Hunk  [H/L] フォーカス  [V] モード  [Y] パスをコピー  [Esc] 戻る",
-    "[J/K] 导航/滚动  [[]/[]] Hunk  [H/L] 焦点  [V] 模式  [Y] 复制路径  [Esc] 返回",
-    "[J/K] 탐색/스크롤  [[]/[]] Hunk  [H/L] 포커스  [V] 모드  [Y] 경로 복사  [Esc] 돌아가기",
+    "[J/K] Vertical  [Shift+H/L/←/→] Lateral  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Caminho  [Esc] Voltar",
+    "[J/K] Vertical  [Shift+H/L/←/→] Sideways  [[]/[]] Hunk  [H/L] Focus  [V] Mode  [Y] Path  [Esc] Back",
+    "[J/K] Vertical  [Shift+H/L/←/→] Lateral  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Ruta  [Esc] Volver",
+    "[J/K] 縦  [Shift+H/L/←/→] 横  [[]/[]] Hunk  [H/L] フォーカス  [V] モード  [Y] パス  [Esc] 戻る",
+    "[J/K] 纵向  [Shift+H/L/←/→] 横向  [[]/[]] Hunk  [H/L] 焦点  [V] 模式  [Y] 路径  [Esc] 返回",
+    "[J/K] 세로  [Shift+H/L/←/→] 가로  [[]/[]] Hunk  [H/L] 포커스  [V] 모드  [Y] 경로  [Esc] 돌아가기",
   ],
   [
     "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [D] Diff  [?] Ações",

@@ -1,4 +1,27 @@
-import type { GitFocusPane, NarrowGitPane } from "./view"
+import type { GitFocusPane, NarrowGitPane, ViewMode } from "./view"
+
+export function gitPreviewChromeHeight(terminalExpanded: boolean) {
+  return terminalExpanded ? 0 : 1
+}
+
+export function gitPreviewContentStyle(terminalExpanded: boolean) {
+  return terminalExpanded
+    ? ({ height: 0, flexGrow: 0, flexShrink: 0, overflow: "hidden" } as const)
+    : ({ flexGrow: 1, flexShrink: 1 } as const)
+}
+
+export function showGitDiffToolbar(terminalExpanded: boolean, view: ViewMode) {
+  return !terminalExpanded && view !== "log" && view !== "graph"
+}
+
+export function showGitActionStatus(
+  terminalExpanded: boolean,
+  busy: boolean,
+  error: string | null,
+  message: string | null,
+) {
+  return !terminalExpanded && Boolean(busy || error || message)
+}
 
 export function compactGitActionFooter(previewWidth: number) {
   return previewWidth < 82
@@ -18,6 +41,13 @@ export function gitPaneFocusTarget(keyName: string, current: GitFocusPane): GitF
   return null
 }
 
+export function gitDiffHorizontalScrollDelta(keyName: string, shift: boolean) {
+  if (!shift) return 0
+  if (keyName === "h" || keyName === "left") return -8
+  if (keyName === "l" || keyName === "right") return 8
+  return 0
+}
+
 export function isGitHistoryFocused(focusedId: string) {
   return (
     focusedId === "git-base-history" ||
@@ -32,19 +62,62 @@ export function gitHistoryNavigationDelta(keyName: string) {
   return 0
 }
 
-export function gitBaseShortcutHint(width: number, historyView: boolean) {
+export function gitBaseShortcutHint(width: number, historyView: boolean, partialStage = false) {
+  if (partialStage) {
+    return width < 86
+      ? "[S] Hunk/linha  [Tab/H/L] Painel  [J/K] Navegar  [Espaço] Mover  [Enter/Esc] Aplicar"
+      : "[S] Alternar hunk/linha  [Tab/H/L/←/→] Painéis  [J/K/↑/↓] Navegar  [Espaço] Mover  [Enter/Esc] Aplicar stage"
+  }
   if (historyView) {
     return width < 86
       ? "[Tab/H/L] Painel  [T] Terminal  [J/K/↑/↓] Navegar  [D] Diff"
       : "[Tab/H/L/←/→] Árvore/histórico/terminal  [T] Terminal  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar"
   }
   return width < 86
-    ? "[Tab/H/L] Painel  [T] Terminal  [V] Visual  [O] Log"
-    : "[Tab/H/L/←/→] Árvore/diff/terminal  [T] Terminal  [V] Visualização  [O] Log  [R] Atualizar"
+    ? "[Tab/H/L] Painel  [Shift+H/L] Lateral  [T] Terminal  [V] Visual"
+    : "[Tab/H/L/←/→] Árvore/diff/terminal  [Shift+H/L/←/→] Lateral  [T] Terminal  [V] Visualização  [O] Log"
 }
 
 export function gitFileTreeIsActive(active: boolean, narrow: boolean, pane: NarrowGitPane) {
   return active && (!narrow || pane === "files")
+}
+
+export function gitFileTreeIsActiveOutsidePartialStage(
+  active: boolean,
+  partialStage: boolean,
+  narrow: boolean,
+  pane: NarrowGitPane,
+) {
+  return gitFileTreeIsActive(active, narrow, pane) && !partialStage
+}
+
+export function gitPartialStageHeaderMeta({
+  active,
+  cursor,
+  targetCount,
+  selectedCount,
+  selectedLabel,
+  fallback,
+}: {
+  active: boolean
+  cursor: number
+  targetCount: number
+  selectedCount: number
+  selectedLabel: string
+  fallback: string
+}) {
+  return active
+    ? `${cursor + 1}/${Math.max(1, targetCount)}  ${selectedCount} ${selectedLabel}`
+    : fallback
+}
+
+export function gitPartialStagePreviewLoading(
+  active: boolean,
+  view: ViewMode,
+  diffLoading: boolean,
+  commitLoading: boolean,
+) {
+  return !active && view !== "graph" && view !== "log" && (diffLoading || commitLoading)
 }
 
 export function gitMiniGraphLayout({

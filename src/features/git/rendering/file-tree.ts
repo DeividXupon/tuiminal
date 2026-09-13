@@ -27,7 +27,7 @@ type PathTreeNode = {
 }
 
 type DirectoryChain<Node> = {
-  label: string
+  names: string[]
   node: Node
   path: string
 }
@@ -47,7 +47,7 @@ function compactDirectoryChain<Node extends { directories: Map<string, Node>; fi
     path = `${path}/${next[0]}`
     node = next[1]
   }
-  return { label: names.join("/"), node, path }
+  return { names, node, path }
 }
 
 export function createPathTreeOptions(
@@ -77,15 +77,16 @@ export function createPathTreeOptions(
       left.localeCompare(right),
     )
     for (const [name, firstChild] of directories) {
-      const { label, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
+      const { names, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
       const collapsed = collapsedFolders.has(path)
       options.push({
-        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(label)}/`,
+        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(names[0] ?? name)}/`,
         description: "",
         value: folderOptionValue(path),
         kind: "folder",
         path,
         depth,
+        folderChain: names.map(displayPath),
       })
       if (!collapsed) appendNode(child, path, depth + 1)
     }
@@ -134,15 +135,16 @@ export function createFileTreeOptions(
       left.localeCompare(right),
     )
     for (const [name, firstChild] of directories) {
-      const { label, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
+      const { names, node: child, path } = compactDirectoryChain(name, firstChild, parentPath)
       const collapsed = collapsedFolders.has(path)
       options.push({
-        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(label)}/`,
+        name: `${indent}${collapsed ? "▸" : "▾"} ${displayPath(names[0] ?? name)}/`,
         description: "",
         value: folderOptionValue(path),
         kind: "folder",
         path,
         depth,
+        folderChain: names.map(displayPath),
       })
       if (!collapsed) appendNode(child, path, depth + 1)
     }

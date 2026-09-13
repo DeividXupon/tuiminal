@@ -1,10 +1,4 @@
-import type { GitCommit, GitSnapshot } from "../services/git"
-import { fillLine } from "./diff"
-
-export function commitTitle(commit: GitCommit, selected: boolean, width: number) {
-  const marker = selected ? "◆" : commit.parents.length > 1 ? "◉" : "●"
-  return fillLine(`${marker} ${commit.hash}  ${commit.subject}`, width)
-}
+import type { GitSnapshot } from "../services/git"
 
 export function gitSnapshotSignature(snapshot: GitSnapshot) {
   const files = snapshot.files

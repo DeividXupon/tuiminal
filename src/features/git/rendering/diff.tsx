@@ -1,5 +1,4 @@
 import { pathToFiletype, type RGBA, type TextChunk } from "@opentui/core"
-import { COLORS } from "../../../core/settings/theme"
 import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18n/index"
 import {
   type CharacterRange,
@@ -9,7 +8,6 @@ import {
   type ParsedDiffLine,
   resolveDiffDocumentPath,
 } from "../model/view"
-import { DIFF_CHANGED_HIGHLIGHT, DIFF_REMOVED_HIGHLIGHT, DIFF_SYNTAX_STYLE } from "./constants"
 
 export function fitLine(line: string, width: number) {
   const clean = translateUi(line).replace(/\t/g, "  ").replace(/\r/g, "")
@@ -44,7 +42,11 @@ export function parseUnifiedDiff(diff: string): ParsedDiffLine[] {
       continue
     }
 
-    if (rawLine.startsWith("index ") || rawLine.startsWith("--- ") || rawLine.startsWith("+++ ")) {
+    const insideHunk = oldLine !== null && newLine !== null
+    if (
+      !insideHunk &&
+      (rawLine.startsWith("index ") || rawLine.startsWith("--- ") || rawLine.startsWith("+++ "))
+    ) {
       continue
     }
 
@@ -61,25 +63,25 @@ export function parseUnifiedDiff(diff: string): ParsedDiffLine[] {
       continue
     }
 
-    if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
+    if (newLine !== null && rawLine.startsWith("+")) {
       result.push({
         kind: "added",
         content: rawLine.slice(1),
         oldLine: null,
         newLine,
       })
-      if (newLine !== null) newLine += 1
+      newLine += 1
       continue
     }
 
-    if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
+    if (oldLine !== null && rawLine.startsWith("-")) {
       result.push({
         kind: "removed",
         content: rawLine.slice(1),
         oldLine,
         newLine: null,
       })
-      if (oldLine !== null) oldLine += 1
+      oldLine += 1
       continue
     }
 
@@ -256,10 +258,10 @@ export function parseInlineRows(lines: string[]): InlineDiffRow[] {
       })
       oldLine += 1
       newLine += 1
-    } else if (insideHunk && line.startsWith("-") && !line.startsWith("--- ")) {
+    } else if (insideHunk && line.startsWith("-")) {
       removed.push({ content: line.slice(1), lineNumber: oldLine })
       oldLine += 1
-    } else if (insideHunk && line.startsWith("+") && !line.startsWith("+++ ")) {
+    } else if (insideHunk && line.startsWith("+")) {
       added.push({ content: line.slice(1), lineNumber: newLine })
       newLine += 1
     }
@@ -307,43 +309,54 @@ export function highlightChangedChunks(
   return result
 }
 
-export function InlineDiffLine({ row, filetype }: { row: InlineDiffRow; filetype: string }) {
-  const isRemoved = row.kind === "removed"
-  const isChanged = row.kind !== "context"
-  const lineBackground =
-    row.kind === "removed" ? COLORS.diffRemovedBg : isChanged ? COLORS.diffModifiedBg : COLORS.panel
-  const accent =
-    row.kind === "removed" ? COLORS.danger : row.kind === "context" ? COLORS.muted : COLORS.success
-  const marker =
-    row.kind === "modified" ? "~" : row.kind === "added" ? "+" : row.kind === "removed" ? "−" : " "
+function createDiffDocument(lines: string[], section: string, selectedPath?: string): DiffDocument {
+  const source = lines.join("\n")
+  const path = resolveDiffDocumentPath(lines[0] ?? "", selectedPath)
+  let unifiedLineCount = 0
+  let splitLineCount = 0
+  let removedLines = 0
+  let addedLines = 0
+  let insideHunk = false
+  const flushChangedLines = () => {
+    splitLineCount += Math.max(removedLines, addedLines)
+    removedLines = 0
+    addedLines = 0
+  }
 
-  return (
-    <box style={{ flexDirection: "row", width: "100%", height: 1, flexShrink: 0 }}>
-      <text
-        content={`${String(row.lineNumber).padStart(4)} ${marker} `}
-        style={{ fg: accent, bg: lineBackground }}
-      />
-      <code
-        content={row.content}
-        filetype={filetype}
-        syntaxStyle={DIFF_SYNTAX_STYLE}
-        bg={lineBackground}
-        wrapMode="none"
-        truncate
-        {...(isChanged
-          ? {
-              onChunks: (chunks: TextChunk[]) =>
-                highlightChangedChunks(
-                  chunks,
-                  row.changedRanges,
-                  isRemoved ? DIFF_REMOVED_HIGHLIGHT : DIFF_CHANGED_HIGHLIGHT,
-                ),
-            }
-          : {})}
-        style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, height: 1 }}
-      />
-    </box>
-  )
+  for (const line of lines) {
+    if (insideHunk && /^[- +]/.test(line)) unifiedLineCount += 1
+    if (line.startsWith("@@")) {
+      flushChangedLines()
+      insideHunk = true
+    } else if (insideHunk && line.startsWith(" ")) {
+      flushChangedLines()
+      splitLineCount += 1
+    } else if (insideHunk && line.startsWith("-")) {
+      removedLines += 1
+    } else if (insideHunk && line.startsWith("+")) {
+      addedLines += 1
+    }
+  }
+  flushChangedLines()
+
+  let pendingInlineLines: string[] | undefined = lines
+  let inlineRows: InlineDiffRow[] | undefined
+  return {
+    key: `${section}:${path}`,
+    source,
+    path,
+    filetype: pathToFiletype(path) ?? "text",
+    section,
+    unifiedLineCount,
+    splitLineCount,
+    get inlineRows() {
+      if (!inlineRows) {
+        inlineRows = parseInlineRows(pendingInlineLines ?? [])
+        pendingInlineLines = undefined
+      }
+      return inlineRows
+    },
+  }
 }
 
 export function parseDiffDocuments(input: string, selectedPath?: string): DiffDocument[] {
@@ -353,46 +366,7 @@ export function parseDiffDocuments(input: string, selectedPath?: string): DiffDo
 
   const flush = () => {
     if (!lines.length) return
-    const source = lines.join("\n")
-    const path = resolveDiffDocumentPath(lines[0] ?? "", selectedPath)
-    const unifiedLineCount = lines.filter(
-      (line) => /^[- +]/.test(line) && !line.startsWith("--- ") && !line.startsWith("+++ "),
-    ).length
-    let splitLineCount = 0
-    let removedLines = 0
-    let addedLines = 0
-    let insideHunk = false
-    const flushChangedLines = () => {
-      splitLineCount += Math.max(removedLines, addedLines)
-      removedLines = 0
-      addedLines = 0
-    }
-
-    for (const line of lines) {
-      if (line.startsWith("@@")) {
-        flushChangedLines()
-        insideHunk = true
-      } else if (insideHunk && line.startsWith(" ")) {
-        flushChangedLines()
-        splitLineCount += 1
-      } else if (insideHunk && line.startsWith("-") && !line.startsWith("--- ")) {
-        removedLines += 1
-      } else if (insideHunk && line.startsWith("+") && !line.startsWith("+++ ")) {
-        addedLines += 1
-      }
-    }
-    flushChangedLines()
-
-    documents.push({
-      key: `${section}:${path}`,
-      source,
-      path,
-      filetype: pathToFiletype(path) ?? "text",
-      section,
-      unifiedLineCount,
-      splitLineCount,
-      inlineRows: parseInlineRows(lines),
-    })
+    documents.push(createDiffDocument(lines, section, selectedPath))
     lines = []
   }
 

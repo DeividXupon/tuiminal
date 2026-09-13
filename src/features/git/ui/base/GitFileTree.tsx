@@ -13,12 +13,52 @@ export function isGitFileTreeFocused(focusedId: string, treeId: string) {
   return focusedId.startsWith(`${treeId}-row-`)
 }
 
-export function gitFileTreeWindowStart(selectedIndex: number, optionCount: number, height: number) {
-  const visibleRows = Math.max(1, height)
-  return Math.max(
-    0,
-    Math.min(selectedIndex - Math.floor(visibleRows / 2), Math.max(0, optionCount - visibleRows)),
-  )
+export function gitFileTreeOptionHeight(option: FileTreeOption) {
+  return option.kind === "folder" ? Math.max(1, option.folderChain?.length ?? 1) : 1
+}
+
+export function gitFileTreeVisibleWindow(
+  options: FileTreeOption[],
+  selectedIndex: number,
+  height: number,
+) {
+  if (!options.length) return { start: 0, end: 0 }
+  const availableRows = Math.max(1, height)
+  const boundedSelection = Math.max(0, Math.min(options.length - 1, selectedIndex))
+  const selectedOption = options[boundedSelection]
+  if (!selectedOption) return { start: 0, end: 0 }
+  const selectedHeight = gitFileTreeOptionHeight(selectedOption)
+  const rowsBeforeSelection = Math.max(0, Math.floor((availableRows - selectedHeight) / 2))
+  let start = boundedSelection
+  let rowsBefore = 0
+  while (start > 0) {
+    const previous = options[start - 1]
+    if (!previous) break
+    const previousHeight = gitFileTreeOptionHeight(previous)
+    if (rowsBefore + previousHeight > rowsBeforeSelection) break
+    start -= 1
+    rowsBefore += previousHeight
+  }
+
+  let end = boundedSelection + 1
+  let usedRows = rowsBefore + selectedHeight
+  while (end < options.length && usedRows < availableRows) {
+    const next = options[end]
+    if (!next) break
+    const nextHeight = gitFileTreeOptionHeight(next)
+    if (usedRows + nextHeight > availableRows) break
+    usedRows += nextHeight
+    end += 1
+  }
+  while (start > 0) {
+    const previous = options[start - 1]
+    if (!previous) break
+    const previousHeight = gitFileTreeOptionHeight(previous)
+    if (usedRows + previousHeight > availableRows) break
+    start -= 1
+    usedRows += previousHeight
+  }
+  return { start, end }
 }
 
 export function gitStatusColor(status: string, stagedColumn: boolean) {
@@ -41,15 +81,30 @@ function FileTreeRowContent({
 }) {
   if (option.kind === "folder") {
     const arrow = option.name.trimStart().slice(0, 1)
-    const name = option.name.trimStart().replace(/^[▸▾] /, "")
+    const names = option.folderChain ?? [option.name.trimStart().replace(/^[▸▾] /, "")]
+    const lines = names.map((name, index) => ({
+      key: names.slice(0, index + 1).join("/"),
+      name,
+    }))
     return (
-      <text>
-        <span fg={COLORS.border}>{"  ".repeat(option.depth)}</span>
-        <span fg={COLORS.database}>{arrow} </span>
-        <span fg={COLORS.graphAccent}>
-          {fitLine(name, Math.max(1, width - option.depth * 2 - 2))}
-        </span>
-      </text>
+      <box
+        style={{
+          width: "100%",
+          height: names.length,
+          flexShrink: 0,
+          flexDirection: "column",
+        }}
+      >
+        {lines.map((line, index) => (
+          <text key={line.key}>
+            <span fg={COLORS.border}>{"  ".repeat(option.depth)}</span>
+            <span fg={COLORS.database}>{index === 0 ? `${arrow} ` : "  "}</span>
+            <span fg={COLORS.graphAccent}>
+              {fitLine(`${line.name}/`, Math.max(1, width - option.depth * 2 - 2))}
+            </span>
+          </text>
+        ))}
+      </box>
     )
   }
 
@@ -82,6 +137,7 @@ export function GitFileTree({
   height,
   onMove,
   onActivate,
+  onToggleStage,
 }: {
   active: boolean
   id: string
@@ -91,10 +147,11 @@ export function GitFileTree({
   height: number
   onMove: (index: number, option: FileTreeOption) => void
   onActivate: (index: number, option: FileTreeOption) => void
+  onToggleStage: (option: FileTreeOption) => void
 }) {
   const renderer = useRenderer()
-  const windowStart = gitFileTreeWindowStart(selectedIndex, options.length, height)
-  const visibleOptions = options.slice(windowStart, windowStart + Math.max(1, height))
+  const visibleWindow = gitFileTreeVisibleWindow(options, selectedIndex, height)
+  const visibleOptions = options.slice(visibleWindow.start, visibleWindow.end)
 
   const move = (delta: number) => {
     const nextIndex = Math.max(0, Math.min(options.length - 1, selectedIndex + delta))
@@ -107,6 +164,14 @@ export function GitFileTree({
   useKeyboard((key) => {
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (!active || !isGitFileTreeFocused(focusedId, id)) return
+    if (key.name === "return" || key.name === "enter" || key.name === "linefeed") {
+      const option = options[selectedIndex]
+      if (!option) return
+      key.preventDefault()
+      key.stopPropagation()
+      onActivate(selectedIndex, option)
+      return
+    }
     const delta =
       key.name === "down" || key.name === "j" ? 1 : key.name === "up" || key.name === "k" ? -1 : 0
     if (!delta) return
@@ -128,17 +193,22 @@ export function GitFileTree({
       }}
     >
       {visibleOptions.map((option, visibleIndex) => {
-        const index = windowStart + visibleIndex
+        const index = visibleWindow.start + visibleIndex
         const selected = index === selectedIndex
+        const optionHeight = gitFileTreeOptionHeight(option)
         return (
           <Button
             key={option.value}
             id={gitFileTreeRowId(id, index)}
             width="100%"
-            height={1}
+            height={optionHeight}
             flexShrink={0}
-            onPress={() => {
+            onPress={(details) => {
               onMove(index, option)
+              if (details.source === "keyboard" && details.key === "space") {
+                onToggleStage(option)
+                return
+              }
               onActivate(index, option)
             }}
           >
@@ -146,7 +216,7 @@ export function GitFileTree({
               <box
                 style={{
                   width: "100%",
-                  height: 1,
+                  height: optionHeight,
                   flexShrink: 0,
                   backgroundColor: selected || state.focused ? COLORS.panelRaised : COLORS.panel,
                 }}

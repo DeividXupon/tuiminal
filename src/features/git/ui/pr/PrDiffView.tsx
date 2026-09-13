@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, focusedPanelBorder, LAYOUT, panelBorder } from "../../../../core/settings/theme"
@@ -8,97 +8,24 @@ import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import {
-  adjacentPullRequestHunkOffset,
+  nextPullRequestDiffMode,
   type PullRequestDiffFocus,
   type PullRequestDiffMode,
   type PullRequestDiffTarget,
   pullRequestDiffHunkOffsets,
-  pullRequestDiffKeyboardAction,
 } from "../../model/pr/diff"
 import type { PullRequestDetails, PullRequestSummary } from "../../model/pr/types"
 import type { DiffDocument } from "../../model/view"
-import { DIFF_SYNTAX_STYLE } from "../../rendering/constants"
-import { documentLineCount, InlineDiffLine, parseDiffDocuments } from "../../rendering/diff"
+import { parseDiffDocuments } from "../../rendering/diff"
+import { GitDiffDocument } from "../shared/GitDiffDocument"
+import { GitDiffViewport } from "../shared/GitDiffViewport"
+import { usePrDiffControls } from "./usePrDiffControls"
 import { type PullRequestDiffState, usePullRequestDiff } from "./usePullRequestDiff"
-
-function nextMode(mode: PullRequestDiffMode): PullRequestDiffMode {
-  return mode === "unified" ? "split" : mode === "split" ? "inline" : "unified"
-}
 
 function targetLabel(target: PullRequestDiffTarget) {
   if (target.kind === "commit") return `commit ${target.sha.slice(0, 10)}`
   if (target.kind === "file") return target.path
   return "Pull Request"
-}
-
-function applyDiffMove({
-  focus,
-  delta,
-  documentCount,
-  setFileIndex,
-  setOffset,
-}: {
-  focus: PullRequestDiffFocus
-  delta: -1 | 1
-  documentCount: number
-  setFileIndex: React.Dispatch<React.SetStateAction<number>>
-  setOffset: React.Dispatch<React.SetStateAction<number>>
-}) {
-  if (focus === "files") {
-    setFileIndex((current) => Math.max(0, Math.min(documentCount - 1, current + delta)))
-    setOffset(0)
-    return
-  }
-  setOffset((current) => Math.max(0, current + delta))
-}
-
-function useDiffControls({
-  focus,
-  documentCount,
-  selectedPath,
-  setFocus,
-  setFileIndex,
-  setMode,
-  setOffset,
-  hunkOffsets,
-  offset,
-  onClose,
-  onCopy,
-}: {
-  focus: PullRequestDiffFocus
-  documentCount: number
-  selectedPath: string | null
-  setFocus: (focus: PullRequestDiffFocus) => void
-  setFileIndex: React.Dispatch<React.SetStateAction<number>>
-  setMode: React.Dispatch<React.SetStateAction<PullRequestDiffMode>>
-  setOffset: React.Dispatch<React.SetStateAction<number>>
-  hunkOffsets: number[]
-  offset: number
-  onClose: () => void
-  onCopy: (value: string, message: string) => void
-}) {
-  useKeyboard((key) => {
-    const action = pullRequestDiffKeyboardAction(key.name)
-    if (!action) return
-    key.preventDefault()
-    if (action.type === "close") {
-      key.stopPropagation()
-      onClose()
-    } else if (action.type === "toggle-focus") {
-      setFocus(focus === "files" ? "document" : "files")
-    } else if (action.type === "focus") setFocus(action.target)
-    else if (action.type === "cycle-mode") {
-      setMode((current) => nextMode(current))
-      setOffset(0)
-    } else if (action.type === "copy-path" && selectedPath) {
-      onCopy(selectedPath, translateUi("Caminho do arquivo copiado."))
-    } else if (action.type === "move-hunk") {
-      setFocus("document")
-      setOffset(adjacentPullRequestHunkOffset(offset, hunkOffsets, action.delta))
-    } else if (action.type === "move") {
-      applyDiffMove({ focus, delta: action.delta, documentCount, setFileIndex, setOffset })
-    }
-  })
 }
 
 function FilePanel({
@@ -139,59 +66,18 @@ function FilePanel({
   )
 }
 
-function DiffDocumentContent({
-  document,
-  mode,
-}: {
-  document: DiffDocument
-  mode: PullRequestDiffMode
-}) {
-  if (!document.unifiedLineCount) {
-    return (
-      <text
-        content={translateUi("Arquivo binário, renomeado ou sem patch textual disponível.")}
-        style={{ fg: COLORS.warning }}
-      />
-    )
-  }
-  if (mode === "inline") {
-    return document.inlineRows.map((row) => (
-      <InlineDiffLine key={row.key} row={row} filetype={document.filetype} />
-    ))
-  }
-  return (
-    <diff
-      diff={document.source}
-      filetype={document.filetype}
-      syntaxStyle={DIFF_SYNTAX_STYLE}
-      view={mode === "split" ? "split" : "unified"}
-      syncScroll={mode === "split"}
-      wrapMode="none"
-      showLineNumbers
-      lineNumberFg={COLORS.muted}
-      lineNumberBg={COLORS.diffGutterBg}
-      addedBg={COLORS.diffAddedBg}
-      removedBg={COLORS.diffRemovedBg}
-      contextBg={COLORS.panel}
-      addedSignColor={COLORS.success}
-      removedSignColor={COLORS.danger}
-      addedLineNumberBg={COLORS.diffAddedBg}
-      removedLineNumberBg={COLORS.diffRemovedBg}
-      style={{ width: "100%", height: documentLineCount(document, mode), flexShrink: 0 }}
-    />
-  )
-}
-
 function DiffDocumentPane({
   document,
   mode,
   focused,
   scrollRef,
+  onFocus,
 }: {
   document: DiffDocument | undefined
   mode: PullRequestDiffMode
   focused: boolean
   scrollRef: React.RefObject<ScrollBoxRenderable | null>
+  onFocus: () => void
 }) {
   return (
     <box
@@ -202,19 +88,15 @@ function DiffDocumentPane({
       }}
     >
       {document ? (
-        <scrollbox
-          ref={scrollRef}
-          scrollY
-          scrollX
-          viewportCulling
-          style={{ flexGrow: 1, width: "100%" }}
+        <GitDiffViewport
+          id="git-pr-diff"
+          scrollRef={scrollRef}
+          focused={focused}
+          onFocus={onFocus}
+          resetKey={`${mode}:${document.key}`}
         >
-          <text
-            content={`◆ ${document.path} · ${document.filetype.toUpperCase()}`}
-            style={{ fg: COLORS.git, bg: COLORS.panelRaised }}
-          />
-          <DiffDocumentContent document={document} mode={mode} />
-        </scrollbox>
+          <GitDiffDocument document={document} layout={mode} />
+        </GitDiffViewport>
       ) : (
         <text
           content={translateUi("Nenhum patch disponível para este alvo.")}
@@ -235,6 +117,7 @@ function DiffBody({
   mode,
   scrollRef,
   onSelect,
+  onFocus,
 }: {
   state: PullRequestDiffState
   documents: DiffDocument[]
@@ -245,6 +128,7 @@ function DiffBody({
   mode: PullRequestDiffMode
   scrollRef: React.RefObject<ScrollBoxRenderable | null>
   onSelect: (index: number) => void
+  onFocus: () => void
 }) {
   if (state.status === "loading") {
     return <text content={translateUi("CARREGANDO DIFF…")} style={{ fg: COLORS.git }} />
@@ -271,6 +155,7 @@ function DiffBody({
           mode={mode}
           focused={focus === "document"}
           scrollRef={scrollRef}
+          onFocus={onFocus}
         />
       ) : null}
     </box>
@@ -311,8 +196,11 @@ export function PrDiffView({
     [mode, selectedDocument],
   )
 
-  useEffect(() => scrollRef.current?.scrollTo({ x: 0, y: offset }), [offset])
-  useDiffControls({
+  useEffect(() => {
+    const scrollbox = scrollRef.current
+    if (scrollbox) scrollbox.scrollTo({ x: scrollbox.scrollLeft, y: offset })
+  }, [offset])
+  usePrDiffControls({
     focus,
     documentCount: documents.length,
     selectedPath: documents[selectedIndex]?.path ?? null,
@@ -324,6 +212,7 @@ export function PrDiffView({
     offset,
     onClose,
     onCopy,
+    scrollRef,
   })
 
   const selectFile = (index: number) => {
@@ -355,7 +244,7 @@ export function PrDiffView({
           label={translateUi("[V] Unificado / Lado a lado / Intraline")}
           accent={COLORS.git}
           onPress={() => {
-            setMode((current) => nextMode(current))
+            setMode((current) => nextPullRequestDiffMode(current))
             setOffset(0)
           }}
         />
@@ -372,6 +261,7 @@ export function PrDiffView({
           mode={mode}
           scrollRef={scrollRef}
           onSelect={selectFile}
+          onFocus={() => setFocus("document")}
         />
         <PlasmaLoadingOverlay
           active={state.status === "loading"}
@@ -387,7 +277,7 @@ export function PrDiffView({
       ) : null}
       <ShortcutText
         content={translateUi(
-          "[J/K] Navegar/rolar  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Copiar caminho  [Esc] Voltar",
+          "[J/K] Vertical  [Shift+H/L/←/→] Lateral  [[]/[]] Hunk  [H/L] Foco  [V] Modo  [Y] Caminho  [Esc] Voltar",
         )}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />

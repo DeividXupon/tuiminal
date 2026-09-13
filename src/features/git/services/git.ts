@@ -1,9 +1,10 @@
-import type { GitCommit, GitFile, GitSnapshot } from "../model/types"
+import type { GitFile, GitSnapshot } from "../model/types"
 
 export type * from "../model/types"
 
 import { basename, resolve } from "node:path"
 import { type GitHubRepositoryReference, parseGitHubRemote } from "../model/repository"
+import { loadGitCommitHistory } from "./git-commit-history"
 import { type GitCommandResult, runGitCommand } from "./git-command"
 import type { GitCommandObserver } from "./git-file-actions"
 
@@ -17,9 +18,12 @@ export {
   discardGitFiles,
   type GitCommandObserver,
   stageGitFiles,
+  unstageGitFiles,
 } from "./git-file-actions"
+export { loadGitCommitHistory } from "./git-commit-history"
 
 export const GIT_LAUNCH_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
+const GIT_PROJECT_CONTEXT_CACHE_LIMIT = 64
 const projectContextCache = new Map<string, Promise<GitProjectContext>>()
 
 export type GitProjectContext = {
@@ -48,9 +52,18 @@ async function inspectGitProjectContext(directory: string): Promise<GitProjectCo
 export function resolveGitProjectContext(directory = GIT_LAUNCH_DIRECTORY) {
   const requested = resolve(directory)
   const cached = projectContextCache.get(requested)
-  if (cached) return cached
+  if (cached) {
+    projectContextCache.delete(requested)
+    projectContextCache.set(requested, cached)
+    return cached
+  }
   const pending = inspectGitProjectContext(requested)
   projectContextCache.set(requested, pending)
+  while (projectContextCache.size > GIT_PROJECT_CONTEXT_CACHE_LIMIT) {
+    const oldest = projectContextCache.keys().next().value
+    if (typeof oldest !== "string") break
+    projectContextCache.delete(oldest)
+  }
   return pending
 }
 
@@ -84,43 +97,19 @@ function parseStatus(output: string): GitFile[] {
     })
 }
 
-function parseCommits(output: string): GitCommit[] {
-  return output
-    .split("\x1e")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const [metadata = "", ...statLines] = entry.split("\n")
-      const [
-        fullHash = "",
-        hash = "",
-        date = "",
-        author = "",
-        decorations = "",
-        parentList = "",
-        ...subject
-      ] = metadata.split("\x1f")
-      let additions = 0
-      let deletions = 0
-
-      for (const line of statLines) {
-        const [added, deleted] = line.split("\t")
-        if (/^\d+$/.test(added ?? "")) additions += Number(added)
-        if (/^\d+$/.test(deleted ?? "")) deletions += Number(deleted)
-      }
-
-      return {
-        fullHash,
-        hash,
-        date,
-        author,
-        decorations,
-        parents: parentList ? parentList.split(" ") : [],
-        subject: subject.join("\x1f"),
-        additions,
-        deletions,
-      }
-    })
+function emptyGitSnapshot(context: GitProjectContext): GitSnapshot {
+  return {
+    isRepository: false,
+    launchDirectory: context.launchDirectory,
+    root: null,
+    repositoryName: basename(context.launchDirectory),
+    branch: "—",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    files: [],
+    commits: [],
+  }
 }
 
 function commandError(result: GitCommandResult, fallback: string) {
@@ -140,48 +129,28 @@ export function trimGitPatchTerminator(output: string) {
   return output
 }
 
-export async function loadGitSnapshot(directory = GIT_LAUNCH_DIRECTORY): Promise<GitSnapshot> {
-  const context = await resolveGitProjectContext(directory)
-  if (!context.isRepository) {
-    return {
-      isRepository: false,
-      launchDirectory: context.launchDirectory,
-      root: null,
-      repositoryName: basename(context.launchDirectory),
-      branch: "—",
-      upstream: null,
-      ahead: 0,
-      behind: 0,
-      files: [],
-      commits: [],
-    }
-  }
-  const root = context.root
-  const [branchResult, statusResult, upstreamResult, logResult] = await Promise.all([
-    runGitCommand(root, ["symbolic-ref", "--short", "-q", "HEAD"]),
-    runGitCommand(root, [
-      "status",
-      "--porcelain=v1",
-      "-z",
-      "--untracked-files=all",
-      "--no-renames",
-    ]),
-    runGitCommand(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
-    runGitCommand(root, [
-      "log",
-      "--all",
-      "--topo-order",
-      "-32",
-      "--date=short",
-      "--decorate=short",
-      "--numstat",
-      "--pretty=format:%x1e%H%x1f%h%x1f%ad%x1f%an%x1f%D%x1f%P%x1f%s",
-    ]),
+export async function loadGitFiles(root: string): Promise<GitFile[]> {
+  const statusResult = await runGitCommand(root, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--no-renames",
   ])
-
   if (statusResult.exitCode !== 0) {
     throw commandError(statusResult, "Não foi possível ler o status do Git.")
   }
+  return parseStatus(statusResult.stdout)
+}
+
+async function loadGitWorkingTreeFromContext(context: GitProjectContext): Promise<GitSnapshot> {
+  if (!context.isRepository) return emptyGitSnapshot(context)
+  const root = context.root
+  const [branchResult, files, upstreamResult] = await Promise.all([
+    runGitCommand(root, ["symbolic-ref", "--short", "-q", "HEAD"]),
+    loadGitFiles(root),
+    runGitCommand(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+  ])
 
   let branch = branchResult.stdout.trim()
   if (!branch) {
@@ -216,9 +185,33 @@ export async function loadGitSnapshot(directory = GIT_LAUNCH_DIRECTORY): Promise
     upstream,
     ahead,
     behind,
-    files: parseStatus(statusResult.stdout),
-    commits: logResult.exitCode === 0 ? parseCommits(logResult.stdout) : [],
+    files,
+    commits: [],
   }
+}
+
+export async function loadGitWorkingTreeSnapshot(
+  directory = GIT_LAUNCH_DIRECTORY,
+): Promise<GitSnapshot> {
+  return loadGitWorkingTreeFromContext(await resolveGitProjectContext(directory))
+}
+
+/** A cheap history cache key; worktree changes do not alter refs. */
+export async function loadGitRefSignature(root: string): Promise<string> {
+  const result = await runGitCommand(root, ["show-ref", "--head", "--dereference"])
+  if (result.exitCode === 0) return result.stdout
+  if (result.exitCode === 1) return ""
+  throw commandError(result, "Não foi possível ler as referências do Git.")
+}
+
+export async function loadGitSnapshot(directory = GIT_LAUNCH_DIRECTORY): Promise<GitSnapshot> {
+  const context = await resolveGitProjectContext(directory)
+  if (!context.isRepository) return emptyGitSnapshot(context)
+  const [workingTree, commits] = await Promise.all([
+    loadGitWorkingTreeFromContext(context),
+    loadGitCommitHistory(context.root),
+  ])
+  return { ...workingTree, commits }
 }
 
 export async function loadGitDiff(root: string, file: GitFile) {

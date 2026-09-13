@@ -43,6 +43,7 @@ export const GitDiffsHeader = memo(function GitDiffsHeader({
         backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,
+        flexShrink: 0,
         flexDirection: "row",
         justifyContent: "space-between",
       }}

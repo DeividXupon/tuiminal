@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, panelBorder } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
 import { PlasmaLoadingOverlay } from "../../../../shared/ui/PlasmaLoadingOverlay"
+import { handleGitDiffHorizontalKey } from "../../rendering/diff-scroll"
 import type { GitBranchComparison } from "../../model/branch-comparison"
 import type { DiffLayout } from "../../model/view"
 import { documentLineCount, fitLine, parseDiffDocuments } from "../../rendering/diff"
@@ -98,6 +99,38 @@ function paneForDiffFocus(focusDiff: boolean): "files" | "diff" {
   return focusDiff ? "diff" : "files"
 }
 
+function applyComparisonNavigationAction({
+  action,
+  fileTreeFocused,
+  fileList,
+  scrollbox,
+  setFocusedPane,
+  setOffset,
+  maxOffset,
+}: {
+  action: NavigationAction
+  fileTreeFocused: boolean
+  fileList: SelectRenderable | null
+  scrollbox: ScrollBoxRenderable | null
+  setFocusedPane: (pane: "files" | "diff") => void
+  setOffset: React.Dispatch<React.SetStateAction<number>>
+  maxOffset: number
+}) {
+  if (action === "toggle-pane" || action === "focus-tree" || action === "focus-diff") {
+    const focusDiff = action === "focus-diff" || (action === "toggle-pane" && fileTreeFocused)
+    setFocusedPane(paneForDiffFocus(focusDiff))
+    setTimeout(() => {
+      if (focusDiff) scrollbox?.focus()
+      else fileList?.focus()
+    }, 0)
+  } else if (action === "file-next") fileList?.moveDown(1)
+  else if (action === "file-previous") fileList?.moveUp(1)
+  else {
+    const delta = action === "scroll-down" ? 3 : -3
+    setOffset((current) => Math.max(0, Math.min(maxOffset, current + delta)))
+  }
+}
+
 function ComparisonBody({
   comparison,
   loading,
@@ -189,7 +222,10 @@ export function GitComparisonResult({
     void selection.selectedDocument?.path
     setOffset(0)
   }, [baseName, comparedName, layout, selection.selectedDocument?.path])
-  useEffect(() => scrollRef.current?.scrollTo({ x: 0, y: offset }), [offset])
+  useEffect(() => {
+    const scrollbox = scrollRef.current
+    if (scrollbox) scrollbox.scrollTo({ x: scrollbox.scrollLeft, y: offset })
+  }, [offset])
   useEffect(() => {
     if (active && selection.documents.length) setFocusedPane("files")
   }, [active, selection.documents])
@@ -197,23 +233,25 @@ export function GitComparisonResult({
   useKeyboard((key) => {
     if (!active || key.ctrl || key.meta || key.super) return
     const fileTreeFocused = renderer.currentFocusedRenderable?.id === "git-compare-file-list"
+    if (
+      handleGitDiffHorizontalKey(key, !fileTreeFocused && focusedPane === "diff", scrollRef.current)
+    )
+      return
     const action = navigationAction(key.name, fileTreeFocused)
     if (!action) return
     key.preventDefault()
     if (action === "toggle-pane" || action === "focus-tree" || action === "focus-diff") {
       key.stopPropagation()
-      const focusDiff = action === "focus-diff" || (action === "toggle-pane" && fileTreeFocused)
-      setFocusedPane(paneForDiffFocus(focusDiff))
-      setTimeout(() => {
-        if (focusDiff) scrollRef.current?.focus()
-        else fileListRef.current?.focus()
-      }, 0)
-    } else if (action === "file-next") fileListRef.current?.moveDown(1)
-    else if (action === "file-previous") fileListRef.current?.moveUp(1)
-    else {
-      const delta = action === "scroll-down" ? 3 : -3
-      setOffset((current) => Math.max(0, Math.min(maxOffset, current + delta)))
     }
+    applyComparisonNavigationAction({
+      action,
+      fileTreeFocused,
+      fileList: fileListRef.current,
+      scrollbox: scrollRef.current,
+      setFocusedPane,
+      setOffset,
+      maxOffset,
+    })
   })
 
   return (

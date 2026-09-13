@@ -65,6 +65,7 @@ function AppContent() {
     useState<DatabaseQueryRerunRequest | null>(null)
   const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [tutorialTargetId, setTutorialTargetId] = useState<string | null>(null)
   const [configurationSection, setConfigurationSection] = useState<ConfigurationSection>("palette")
   const [settingsNotice, setSettingsNotice] = useState("")
   useNotificationFromValue(settingsNotice, { source: "Configurações" })
@@ -123,14 +124,12 @@ function AppContent() {
     },
     [gitConfiguration.openModal],
   )
-
   const queryHistoryCanRerun = useCallback(
     (entry: DatabaseQueryHistoryEntry) => {
       return (ONLY_TAB === null || ONLY_TAB === "database") && databaseQueryHistoryCanRerun(entry)
     },
     [ONLY_TAB],
   )
-
   const rerunHistoryQuery = useCallback(
     (entry: DatabaseQueryHistoryEntry) => {
       if (!queryHistoryCanRerun(entry)) return
@@ -147,13 +146,16 @@ function AppContent() {
     },
     [ONLY_TAB, queryHistoryCanRerun],
   )
-
   const startTutorial = useCallback(() => {
     setSettingsOpen(false)
     setSettingsNotice("")
+    setTutorialTargetId(null)
     setTutorialOpen(true)
   }, [])
-
+  const closeTutorial = useCallback(() => {
+    setTutorialOpen(false)
+    setTutorialTargetId(null)
+  }, [])
   const cycleConfigurationSection = useCallback(
     (direction: -1 | 1) => {
       const currentSection = normalizeConfigurationSectionForContext(
@@ -254,6 +256,63 @@ function AppContent() {
   })
 
   const exitModal = applicationExitLayer(exit, terminal)
+  const overlays = (
+    <>
+      <MountWhen when={settingsOpen}>
+        <ConfigurationModal
+          open
+          settings={settings}
+          section={configurationSection}
+          notice={settingsNotice}
+          onClose={() => setSettingsOpen(false)}
+          onSectionChange={selectConfigurationSection}
+          onPaletteChange={(palette) => applySettings({ palette })}
+          onColorModeChange={(colorMode) => applySettings({ colorMode })}
+          onLayoutChange={(layout) => applySettings({ layout })}
+          onLanguageChange={(language) => applySettings({ language })}
+          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
+          onReset={restoreDefaultSettings}
+          onOpenQueryHistory={openQueryHistory}
+          onStartTutorial={startTutorial}
+          queryHistoryCount={queryHistoryEntries.length}
+          tutorialLabel={TAB_LABELS[tutorialScreen]}
+          context={configurationContext}
+          onOpenGitConfiguration={openGitConfiguration}
+        />
+      </MountWhen>
+      <MountWhen when={sensitiveTermsOpen}>
+        <SensitiveTermsModal
+          open
+          terms={settings.sensitiveTerms}
+          onClose={() => setSensitiveTermsOpen(false)}
+          onSave={(terms) => {
+            applySettings({ sensitiveTerms: terms })
+            setSensitiveTermsOpen(false)
+          }}
+        />
+      </MountWhen>
+      <MountWhen when={queryHistoryOpen}>
+        <DatabaseQueryHistoryModal
+          open
+          entries={queryHistoryEntries}
+          onEntriesChanged={setQueryHistoryEntries}
+          canRerun={queryHistoryCanRerun}
+          onClose={() => setQueryHistoryOpen(false)}
+          onRerun={rerunHistoryQuery}
+        />
+      </MountWhen>
+      <MountWhen when={tutorialOpen}>
+        <TutorialOverlay
+          open
+          steps={tutorialSteps}
+          onClose={closeTutorial}
+          onStepChange={setTutorialTargetId}
+        />
+      </MountWhen>
+      {gitConfiguration.modal}
+      {exitModal}
+    </>
+  )
   if (ONLY_TAB) {
     return (
       <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
@@ -305,6 +364,7 @@ function AppContent() {
             <GitViewer
               active={!interactionBlocked}
               tutorialMode={tutorialOpen}
+              tutorialTargetId={tutorialTargetId}
               configurationRevision={gitConfiguration.revision}
               localConfigurationRevision={gitConfiguration.localRevision}
               onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
@@ -320,54 +380,7 @@ function AppContent() {
           )}
           {ONLY_TAB === "terminal" && <FreeTerminal active={!interactionBlocked} />}
         </box>
-        <MountWhen when={settingsOpen}>
-          <ConfigurationModal
-            open
-            settings={settings}
-            section={configurationSection}
-            notice={settingsNotice}
-            onClose={() => setSettingsOpen(false)}
-            onSectionChange={selectConfigurationSection}
-            onPaletteChange={(palette) => applySettings({ palette })}
-            onColorModeChange={(colorMode) => applySettings({ colorMode })}
-            onLayoutChange={(layout) => applySettings({ layout })}
-            onLanguageChange={(language) => applySettings({ language })}
-            onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-            onReset={restoreDefaultSettings}
-            onOpenQueryHistory={openQueryHistory}
-            onStartTutorial={startTutorial}
-            queryHistoryCount={queryHistoryEntries.length}
-            tutorialLabel={TAB_LABELS[ONLY_TAB]}
-            context={configurationContext}
-            onOpenGitConfiguration={openGitConfiguration}
-          />
-        </MountWhen>
-        <MountWhen when={sensitiveTermsOpen}>
-          <SensitiveTermsModal
-            open
-            terms={settings.sensitiveTerms}
-            onClose={() => setSensitiveTermsOpen(false)}
-            onSave={(terms) => {
-              applySettings({ sensitiveTerms: terms })
-              setSensitiveTermsOpen(false)
-            }}
-          />
-        </MountWhen>
-        <MountWhen when={queryHistoryOpen}>
-          <DatabaseQueryHistoryModal
-            open
-            entries={queryHistoryEntries}
-            onEntriesChanged={setQueryHistoryEntries}
-            canRerun={queryHistoryCanRerun}
-            onClose={() => setQueryHistoryOpen(false)}
-            onRerun={rerunHistoryQuery}
-          />
-        </MountWhen>
-        <MountWhen when={tutorialOpen}>
-          <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
-        </MountWhen>
-        {gitConfiguration.modal}
-        {exitModal}
+        {overlays}
       </box>
     )
   }
@@ -469,6 +482,7 @@ function AppContent() {
             <GitViewer
               active={activeTab === "git" && !interactionBlocked}
               tutorialMode={tutorialOpen}
+              tutorialTargetId={tutorialTargetId}
               configurationRevision={gitConfiguration.revision}
               localConfigurationRevision={gitConfiguration.localRevision}
               onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
@@ -514,54 +528,7 @@ function AppContent() {
           </box>
         ) : null}
       </Tabs.Panel>
-      <MountWhen when={settingsOpen}>
-        <ConfigurationModal
-          open
-          settings={settings}
-          section={configurationSection}
-          notice={settingsNotice}
-          onClose={() => setSettingsOpen(false)}
-          onSectionChange={selectConfigurationSection}
-          onPaletteChange={(palette) => applySettings({ palette })}
-          onColorModeChange={(colorMode) => applySettings({ colorMode })}
-          onLayoutChange={(layout) => applySettings({ layout })}
-          onLanguageChange={(language) => applySettings({ language })}
-          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-          onReset={restoreDefaultSettings}
-          onOpenQueryHistory={openQueryHistory}
-          onStartTutorial={startTutorial}
-          queryHistoryCount={queryHistoryEntries.length}
-          tutorialLabel={TAB_LABELS[activeTab]}
-          context={configurationContext}
-          onOpenGitConfiguration={openGitConfiguration}
-        />
-      </MountWhen>
-      <MountWhen when={sensitiveTermsOpen}>
-        <SensitiveTermsModal
-          open
-          terms={settings.sensitiveTerms}
-          onClose={() => setSensitiveTermsOpen(false)}
-          onSave={(terms) => {
-            applySettings({ sensitiveTerms: terms })
-            setSensitiveTermsOpen(false)
-          }}
-        />
-      </MountWhen>
-      <MountWhen when={queryHistoryOpen}>
-        <DatabaseQueryHistoryModal
-          open
-          entries={queryHistoryEntries}
-          onEntriesChanged={setQueryHistoryEntries}
-          canRerun={queryHistoryCanRerun}
-          onClose={() => setQueryHistoryOpen(false)}
-          onRerun={rerunHistoryQuery}
-        />
-      </MountWhen>
-      <MountWhen when={tutorialOpen}>
-        <TutorialOverlay open steps={tutorialSteps} onClose={() => setTutorialOpen(false)} />
-      </MountWhen>
-      {gitConfiguration.modal}
-      {exitModal}
+      {overlays}
     </Tabs.Root>
   )
 }

@@ -5,8 +5,8 @@ import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "../../../../shared/ui/selectMouse"
 import type { DiffDocument, DiffLayout, FileTreeOption } from "../../model/view"
-import { DIFF_SYNTAX_STYLE } from "../../rendering/constants"
-import { documentLineCount, InlineDiffLine } from "../../rendering/diff"
+import { GitDiffDocument } from "../shared/GitDiffDocument"
+import { GitDiffViewport } from "../shared/GitDiffViewport"
 
 export type ComparisonDocumentSelection = {
   documents: DiffDocument[]
@@ -124,48 +124,6 @@ function ComparisonFileTree({
   )
 }
 
-function ComparisonDocument({ document, layout }: { document: DiffDocument; layout: DiffLayout }) {
-  const height = Math.max(2, documentLineCount(document, layout) + 1)
-  return (
-    <box key={`${document.key}:${layout}`} style={{ width: "100%", height, flexShrink: 0 }}>
-      <text
-        content={`◆ ${document.path}  ·  ${document.filetype.toUpperCase()}`}
-        style={{ fg: COLORS.git, bg: COLORS.panelRaised }}
-      />
-      {document.unifiedLineCount && layout === "inline" ? (
-        document.inlineRows.map((row) => (
-          <InlineDiffLine key={row.key} row={row} filetype={document.filetype} />
-        ))
-      ) : document.unifiedLineCount ? (
-        <diff
-          diff={document.source}
-          filetype={document.filetype}
-          syntaxStyle={DIFF_SYNTAX_STYLE}
-          view={layout === "split" ? "split" : "unified"}
-          syncScroll={layout === "split"}
-          wrapMode="none"
-          showLineNumbers
-          lineNumberFg={COLORS.muted}
-          lineNumberBg={COLORS.diffGutterBg}
-          addedBg={COLORS.diffAddedBg}
-          removedBg={COLORS.diffRemovedBg}
-          contextBg={COLORS.panel}
-          addedSignColor={COLORS.success}
-          removedSignColor={COLORS.danger}
-          addedLineNumberBg={COLORS.diffAddedBg}
-          removedLineNumberBg={COLORS.diffRemovedBg}
-          style={{ width: "100%", height: height - 1, flexShrink: 0 }}
-        />
-      ) : (
-        <text
-          content={translateUi("Alteração binária ou sem linhas textuais.")}
-          style={{ fg: COLORS.muted }}
-        />
-      )}
-    </box>
-  )
-}
-
 export function GitComparisonContent({
   selection,
   layout,
@@ -198,34 +156,26 @@ export function GitComparisonContent({
         focused={focusedPane === "files"}
         onFocus={() => onFocusPane("files")}
       />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the native diff pane needs mouse focus for keyboard scrolling. */}
-      <scrollbox
-        ref={scrollRef}
-        id="git-compare-diff"
-        focusable
-        scrollY
-        scrollX
-        viewportCulling={layout !== "inline"}
-        onMouseDown={() => {
-          onFocusPane("diff")
-          scrollRef.current?.focus()
-        }}
+      <box
+        id="git-compare-diff-panel"
         style={{
           ...focusedPanelBorder(focusedPane === "diff", COLORS.git),
           flexGrow: 1,
           minHeight: 3,
+          minWidth: 0,
           width: "100%",
-          height: "100%",
-        }}
-        verticalScrollbarOptions={{
-          trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
-        }}
-        horizontalScrollbarOptions={{
-          trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
         }}
       >
-        <ComparisonDocument document={selection.selectedDocument} layout={layout} />
-      </scrollbox>
+        <GitDiffViewport
+          id="git-compare-diff"
+          scrollRef={scrollRef}
+          focused={focusedPane === "diff"}
+          onFocus={() => onFocusPane("diff")}
+          resetKey={`${layout}:${selection.selectedDocument.key}`}
+        >
+          <GitDiffDocument document={selection.selectedDocument} layout={layout} />
+        </GitDiffViewport>
+      </box>
     </box>
   )
 }

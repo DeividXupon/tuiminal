@@ -49,6 +49,7 @@ export type FileTreeOption = {
   kind: "folder" | "file"
   path: string
   depth: number
+  folderChain?: string[]
   indexStatus?: string
   worktreeStatus?: string
 }

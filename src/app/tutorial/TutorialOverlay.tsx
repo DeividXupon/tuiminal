@@ -8,6 +8,7 @@ import { HTTP_TUTORIAL_STEPS } from "../../features/http"
 import { displayWidth, translateUi } from "../../shared/i18n/index"
 import { InlineButton } from "../../shared/ui/InlineButton"
 import { ShortcutText } from "../../shared/ui/ShortcutText"
+import { TutorialTargetOutline } from "./TutorialTargetOutline"
 
 export type TutorialStep = {
   targetId: string
@@ -17,6 +18,7 @@ export type TutorialStep = {
   hint?: string
   kind: "block" | "control" | "action"
   accent?: string
+  stateful?: boolean
 }
 type TargetRect = { x: number; y: number; width: number; height: number }
 type CardGeometry = { x: number; y: number; width: number; height: number }
@@ -30,6 +32,7 @@ type TutorialOverlayProps = {
   open: boolean
   steps: TutorialStep[]
   onClose: () => void
+  onStepChange?: (targetId: string | null) => void
 }
 
 const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
@@ -364,7 +367,7 @@ export function getTutorialSteps(screen: string): TutorialStep[] {
   return GENERIC_TUTORIAL_STEPS
 }
 
-export function TutorialOverlay({ open, steps, onClose }: TutorialOverlayProps) {
+export function TutorialOverlay({ open, steps, onClose, onStepChange }: TutorialOverlayProps) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const [availableSteps, setAvailableSteps] = useState<TutorialStep[]>([])
@@ -384,6 +387,7 @@ export function TutorialOverlay({ open, steps, onClose }: TutorialOverlayProps) 
 
     const inspectTargets = () => {
       const available = steps.filter((step) => {
+        if (step.stateful) return true
         const target = renderer.root.findDescendantById(step.targetId)
         return Boolean(
           target &&
@@ -396,7 +400,10 @@ export function TutorialOverlay({ open, steps, onClose }: TutorialOverlayProps) 
             target.screenY + target.height > 0,
         )
       })
-      setAvailableSteps((current) => (sameSteps(current, available) ? current : available))
+      setAvailableSteps((current) => {
+        if (current.length === steps.length && sameSteps(current, steps)) return current
+        return sameSteps(current, available) ? current : available
+      })
     }
 
     inspectTargets()
@@ -409,6 +416,10 @@ export function TutorialOverlay({ open, steps, onClose }: TutorialOverlayProps) 
   }, [availableSteps.length])
 
   const step = availableSteps[stepIndex] ?? null
+
+  useEffect(() => {
+    onStepChange?.(step?.targetId ?? null)
+  }, [onStepChange, step?.targetId])
 
   useEffect(() => {
     if (!open || !step) {
@@ -690,21 +701,10 @@ export function TutorialOverlay({ open, steps, onClose }: TutorialOverlayProps) 
             height={targetBottom - targetRect.y}
             zIndex={981}
           />
-          <box
-            style={{
-              position: "absolute",
-              left: Math.max(0, targetRect.x - 1),
-              top: Math.max(0, targetRect.y - 1),
-              width: Math.min(terminal.width - Math.max(0, targetRect.x - 1), targetRect.width + 2),
-              height: Math.min(
-                terminal.height - Math.max(0, targetRect.y - 1),
-                targetRect.height + 2,
-              ),
-              border: true,
-              borderStyle: "rounded",
-              borderColor: accent,
-              zIndex: 982,
-            }}
+          <TutorialTargetOutline
+            target={targetRect}
+            terminal={{ width: terminal.width, height: terminal.height }}
+            accent={accent}
           />
         </>
       ) : (

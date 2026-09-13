@@ -194,8 +194,8 @@ export function GitCompareWorkspace({
         content={translateUi(
           selectionsComplete
             ? compactShortcuts
-              ? "[Tab/H/L] Painel  [J/K] Navegar  [V] Visualização  [C/Esc] Diffs"
-              : "[Tab/H/L/←/→] Árvore/diff  [J/K] Navegar/rolar  [B] Base  [T] Comparada  [V] Visualização  [R] Atualizar  [C/Esc] Diffs"
+              ? "[Tab/H/L] Painel  [Shift+H/L] Lateral  [J/K] Vertical  [C/Esc] Diffs"
+              : "[Tab/H/L/←/→] Árvore/diff  [Shift+H/L/←/→] Lateral  [J/K] Vertical  [B] Base  [T] Comparada  [V] Visual  [C/Esc] Diffs"
             : "[Ctrl+P] Projeto  [B] Base  [T] Comparada  [C/Esc] Diffs",
         )}
         style={{

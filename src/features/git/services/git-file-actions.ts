@@ -38,6 +38,28 @@ export async function stageGitFiles(
   return "Alterações selecionadas adicionadas ao stage."
 }
 
+export async function unstageGitFiles(
+  root: string,
+  files: readonly GitFile[],
+  observer?: GitCommandObserver,
+) {
+  const pending = files.filter((file) => file.staged)
+  if (!pending.length) return "Os arquivos selecionados já estão fora do stage."
+  const head = await runGitCommand(root, ["rev-parse", "--verify", "HEAD"])
+  for (const chunk of fileChunks(pending)) {
+    const paths = chunk.map((file) => file.path)
+    const args =
+      head.exitCode === 0
+        ? ["--literal-pathspecs", "restore", "--staged", "--", ...paths]
+        : ["--literal-pathspecs", "rm", "--cached", "-f", "--", ...paths]
+    const result = await runObservedGitCommand(root, args, observer)
+    if (result.exitCode !== 0) {
+      throw commandError(result, "Não foi possível remover os arquivos selecionados do stage.")
+    }
+  }
+  return "Alterações selecionadas removidas do stage."
+}
+
 export async function discardGitFiles(
   root: string,
   files: readonly GitFile[],

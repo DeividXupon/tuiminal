@@ -11,10 +11,14 @@ export type GitCommit = {
   fullHash: string
   hash: string
   date: string
+  relativeDate: string
   author: string
+  authorEmail: string
   decorations: string
   parents: string[]
   subject: string
+  body: string
+  filesChanged: number
   additions: number
   deletions: number
 }

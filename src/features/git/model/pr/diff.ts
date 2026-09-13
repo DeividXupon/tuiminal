@@ -29,6 +29,10 @@ export type PullRequestDiffKeyboardAction =
 
 export const MAX_PULL_REQUEST_DIFF_BYTES = 2 * 1024 * 1024
 
+export function nextPullRequestDiffMode(mode: PullRequestDiffMode): PullRequestDiffMode {
+  return mode === "unified" ? "split" : mode === "split" ? "inline" : "unified"
+}
+
 export function boundedPullRequestDiff(value: string, limit = MAX_PULL_REQUEST_DIFF_BYTES) {
   const sanitized = sanitizeGitHubText(value.replace(/\r\n?/g, "\n"))
   const bytes = new TextEncoder().encode(sanitized)
@@ -41,12 +45,6 @@ export function boundedPullRequestDiff(value: string, limit = MAX_PULL_REQUEST_D
     byteLength: bytes.length,
     truncated: true,
   }
-}
-
-export function pullRequestDiffTargetKey(target: PullRequestDiffTarget) {
-  if (target.kind === "file") return `file:${target.path}`
-  if (target.kind === "commit") return `commit:${target.sha}`
-  return "pr"
 }
 
 export function pullRequestDiffHunkOffsets(source: string, mode: PullRequestDiffMode) {

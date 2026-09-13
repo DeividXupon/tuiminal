@@ -3,37 +3,46 @@ import { translateUi } from "../../../shared/i18n"
 import {
   displayGitCommand,
   type GitCommandConsoleLine,
+  gitConsoleOutputLines,
   parseGitCommandInput,
 } from "../model/git-command-console"
 import { sanitizeGitHubText } from "../model/pr/content"
 import { runGitCommand } from "../services/git"
 import type { GitCommandResult } from "../services/git-command"
+import { useGitCommandAutocomplete } from "./use-git-command-autocomplete"
 
-const MAX_CONSOLE_LINES = 40
-const MAX_VISIBLE_OUTPUT = 1_000
+const MAX_CONSOLE_LINES = 2_000
+const MAX_VISIBLE_OUTPUT = 256 * 1_024
 
-function resultLine(result: GitCommandResult) {
-  const output = sanitizeGitHubText([result.stderr, result.stdout].filter(Boolean).join("\n"))
-  const compact = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(-3)
-    .join(" · ")
-  const text =
-    compact ||
-    (result.exitCode === 0
-      ? translateUi("Concluído.")
-      : `${translateUi("O comando Git encerrou com código")} ${result.exitCode}.`)
-  return `${text.slice(0, MAX_VISIBLE_OUTPUT)}${result.truncated ? ` · ${translateUi("saída truncada")}` : ""}`
+function commandResultLines(result: GitCommandResult) {
+  const lines: Omit<GitCommandConsoleLine, "id">[] = []
+  const appendOutput = (value: string, tone: GitCommandConsoleLine["tone"]) => {
+    const sanitized = sanitizeGitHubText(value).slice(0, MAX_VISIBLE_OUTPUT)
+    lines.push(...gitConsoleOutputLines(sanitized).map((text) => ({ text, tone })))
+  }
+  appendOutput(result.stdout, "output")
+  appendOutput(result.stderr, result.exitCode === 0 ? "muted" : "error")
+  if (!lines.length) {
+    lines.push({
+      text:
+        result.exitCode === 0
+          ? translateUi("Concluído.")
+          : `${translateUi("O comando Git encerrou com código")} ${result.exitCode}.`,
+      tone: result.exitCode === 0 ? "success" : "error",
+    })
+  }
+  if (result.truncated) lines.push({ text: `[${translateUi("saída truncada")}]`, tone: "muted" })
+  return lines
 }
 
 export function useGitCommandConsole({
   root,
+  paths,
   refresh,
   onError,
 }: {
   root: string | null | undefined
+  paths: readonly string[]
   refresh: (showLoading?: boolean) => Promise<void>
   onError: (message: string | null) => void
 }) {
@@ -42,6 +51,9 @@ export function useGitCommandConsole({
   const [running, setRunning] = useState(false)
   const runningRef = useRef(false)
   const nextLineIdRef = useRef(0)
+  const autocomplete = useGitCommandAutocomplete({ root, input: value, paths, onInput: setValue })
+  const clearAutocomplete = autocomplete.clear
+  const reloadAutocomplete = autocomplete.reload
 
   useEffect(() => {
     void root
@@ -52,20 +64,25 @@ export function useGitCommandConsole({
     setRunning(false)
   }, [root])
 
-  const append = useCallback((line: Omit<GitCommandConsoleLine, "id">) => {
-    const identifiedLine = { ...line, id: nextLineIdRef.current++ }
-    setLines((current) => [...current, identifiedLine].slice(-MAX_CONSOLE_LINES))
+  const append = useCallback((nextLines: Omit<GitCommandConsoleLine, "id">[]) => {
+    const identifiedLines = nextLines.map((line) => ({ ...line, id: nextLineIdRef.current++ }))
+    setLines((current) => [...current, ...identifiedLines].slice(-MAX_CONSOLE_LINES))
   }, [])
   const recordCommand = useCallback(
-    (args: readonly string[]) => append({ text: `❯ ${displayGitCommand(args)}`, tone: "command" }),
+    (args: readonly string[]) =>
+      append([{ text: `❯ ${displayGitCommand(args)}`, tone: "command" }]),
     [append],
   )
   const recordResult = useCallback(
-    (text: string, success = true) =>
-      append({
-        text: sanitizeGitHubText(text.replace(/\r?\n/g, " · ")).slice(0, MAX_VISIBLE_OUTPUT),
-        tone: success ? "success" : "error",
-      }),
+    (text: string, success = true) => {
+      const sanitized = sanitizeGitHubText(text).slice(0, MAX_VISIBLE_OUTPUT)
+      append(
+        gitConsoleOutputLines(sanitized).map((line) => ({
+          text: line,
+          tone: success ? "success" : "error",
+        })),
+      )
+    },
     [append],
   )
   const submit = useCallback(async () => {
@@ -80,7 +97,7 @@ export function useGitCommandConsole({
       )
       return
     }
-    setValue("")
+    clearAutocomplete()
     runningRef.current = true
     setRunning(true)
     onError(null)
@@ -90,7 +107,7 @@ export function useGitCommandConsole({
         maxOutputBytes: 256 * 1_024,
         mutating: true,
       })
-      recordResult(resultLine(result), result.exitCode === 0)
+      append(commandResultLines(result))
       if (result.exitCode !== 0) {
         onError(`${translateUi("O comando Git encerrou com código")} ${result.exitCode}.`)
       }
@@ -102,10 +119,30 @@ export function useGitCommandConsole({
       onError(message)
     } finally {
       await refresh(false)
+      void reloadAutocomplete()
       runningRef.current = false
       setRunning(false)
     }
-  }, [onError, recordCommand, recordResult, refresh, root, value])
+  }, [
+    append,
+    clearAutocomplete,
+    onError,
+    recordCommand,
+    recordResult,
+    refresh,
+    reloadAutocomplete,
+    root,
+    value,
+  ])
 
-  return { value, setValue, lines, running, recordCommand, recordResult, submit }
+  return {
+    value,
+    setValue: autocomplete.updateInput,
+    lines,
+    running,
+    recordCommand,
+    recordResult,
+    submit,
+    autocomplete,
+  }
 }

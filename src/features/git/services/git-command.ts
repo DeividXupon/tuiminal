@@ -22,7 +22,12 @@ export class GitCommandBudgetError extends Error {
 export async function runGitCommand(
   cwd: string,
   args: string[],
-  options: { maxOutputBytes?: number; timeoutMs?: number; mutating?: boolean } = {},
+  options: {
+    maxOutputBytes?: number
+    timeoutMs?: number
+    mutating?: boolean
+    stdin?: string | Buffer
+  } = {},
 ): Promise<GitCommandResult> {
   return new Promise((resolveCommand, rejectCommand) => {
     const mutating = options.mutating ?? MUTATING_GIT_COMMANDS.has(args[0] ?? "")
@@ -36,7 +41,7 @@ export async function runGitCommand(
         GIT_TERMINAL_PROMPT: "0",
       },
       detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     })
     let stdout = ""
     let stderr = ""
@@ -83,6 +88,10 @@ export async function runGitCommand(
 
     child.stdout.setEncoding("utf8")
     child.stderr.setEncoding("utf8")
+    child.stdin?.on("error", () => {
+      // A command may reject or close stdin before the complete payload is written.
+    })
+    child.stdin?.end(options.stdin)
     child.stdout.on("data", (chunk: string) => append("stdout", chunk))
     child.stderr.on("data", (chunk: string) => append("stderr", chunk))
     child.once("error", (error) => {

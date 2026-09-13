@@ -46,17 +46,19 @@ function MountedGitWorkspace({
 export function GitViewer({
   active,
   tutorialMode = false,
+  tutorialTargetId = null,
   configurationRevision = 0,
   localConfigurationRevision = 0,
   onOpenLocalConfiguration,
 }: {
   active: boolean
   tutorialMode?: boolean
+  tutorialTargetId?: string | null
   configurationRevision?: number
   localConfigurationRevision?: number
   onOpenLocalConfiguration?: (() => void) | undefined
 }) {
-  if (tutorialMode) return <GitTutorialDemo />
+  if (tutorialMode) return <GitTutorialDemo activeTargetId={tutorialTargetId} />
   return (
     <GitInteractiveWorkspace
       active={active}

@@ -9,6 +9,7 @@ import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
 import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
+import { GIT_PARTIAL_STAGE_MESSAGES } from "./git-partial-stage-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
@@ -101,6 +102,7 @@ const MESSAGES: readonly Message[] = [
   ...GIT_CLI_GUIDANCE_MESSAGES,
   ...GIT_DISCUSSION_MESSAGES,
   ...GIT_DIFFS_MESSAGES,
+  ...GIT_PARTIAL_STAGE_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [

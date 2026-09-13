@@ -3,7 +3,7 @@ import type { GitFile } from "./types"
 export type GitCommandConsoleLine = {
   id: number
   text: string
-  tone: "command" | "success" | "error" | "muted"
+  tone: "command" | "output" | "success" | "error" | "muted"
 }
 
 type GitCommandParserState = {
@@ -64,6 +64,12 @@ function displayArgument(argument: string) {
 
 export function displayGitCommand(args: readonly string[]) {
   return ["git", ...args.map(displayArgument)].join(" ")
+}
+
+export function gitConsoleOutputLines(value: string) {
+  const normalized = value.replace(/\r\n?/g, "\n")
+  const withoutTerminalNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized
+  return withoutTerminalNewline ? withoutTerminalNewline.split("\n") : []
 }
 
 export function filesInsideGitFolder(files: readonly GitFile[], folder: string) {
