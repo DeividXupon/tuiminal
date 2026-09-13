@@ -25,9 +25,10 @@ export function useHttpHistory({
   documents: HttpDocumentState[]
   projectRequests: HttpProjectRequestItem[]
 }) {
+  const persistMetadata = config.history.persistMetadata
   useEffect(() => {
     let disposed = false
-    void loadHttpHistory(HTTP_WORKING_DIRECTORY, config)
+    void loadHttpHistory(HTTP_WORKING_DIRECTORY, persistMetadata)
       .then((entries) => {
         if (!disposed && entries.length) dispatch({ type: "hydrate-history", entries })
       })
@@ -37,7 +38,7 @@ export function useHttpHistory({
     return () => {
       disposed = true
     }
-  }, [config, dispatch, setNotice])
+  }, [dispatch, persistMetadata, setNotice])
 
   const persist = useCallback(
     (entry: HttpHistoryEntry) => {

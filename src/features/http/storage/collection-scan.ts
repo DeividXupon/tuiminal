@@ -22,6 +22,7 @@ export const HTTP_PROJECT_MAX_DIRECTORIES = 1_000
 export const HTTP_PROJECT_MAX_SOURCE_BYTES = 20_000_000
 export const HTTP_PROJECT_MAX_WATCHERS = 512
 const HTTP_PROJECT_MAX_ERRORS = 100
+const HTTP_ENVIRONMENT_FILES = new Set(["http-client.env.json", "http-client.private.env.json"])
 
 export type HttpCollectionFile = ParsedHttpFile & { absolutePath: string }
 export type HttpProjectCollection = {
@@ -143,6 +144,16 @@ export async function scanHttpProject(root: string): Promise<HttpProjectCollecti
   return result
 }
 
+export function httpProjectChangeRequiresRefresh(fileName: string | null | undefined) {
+  if (fileName === null || fileName === undefined) return true
+  const parts = fileName.split(/[\\/]/).filter(Boolean)
+  if (!parts.length || parts.some((part) => IGNORED_DIRECTORIES.has(part))) return false
+  const leaf = parts.at(-1)?.toLowerCase() ?? ""
+  if ([".http", ".rest"].includes(extname(leaf))) return true
+  if (HTTP_ENVIRONMENT_FILES.has(leaf)) return true
+  return parts.slice(-3).join("/").toLowerCase() === ".tuiminal/http/config.json"
+}
+
 async function projectDirectories(root: string) {
   const directories = [resolve(root)]
   for (
@@ -171,14 +182,18 @@ async function projectDirectories(root: string) {
 export async function watchHttpProject(root: string, onChange: () => void) {
   let closed = false
   let recursiveMode = false
+  let refreshRequested = false
   let timer: ReturnType<typeof setTimeout> | null = null
   const watchers = new Map<string, FSWatcher>()
-  const schedule = () => {
+  const schedule = (refresh: boolean) => {
+    refreshRequested ||= refresh
     if (closed || timer) return
     timer = setTimeout(() => {
       timer = null
       if (closed) return
-      onChange()
+      const refreshProject = refreshRequested
+      refreshRequested = false
+      if (refreshProject) onChange()
       if (!recursiveMode) void reconcile()
     }, 80)
   }
@@ -192,7 +207,13 @@ export async function watchHttpProject(root: string, onChange: () => void) {
     for (const directory of directories) {
       if (closed || watchers.has(directory)) continue
       try {
-        const watcher = watchFs(directory, schedule)
+        const watcher = watchFs(directory, (event, fileName) => {
+          const refresh = httpProjectChangeRequiresRefresh(
+            fileName === null ? null : String(fileName),
+          )
+          if (refresh) schedule(true)
+          else if (event === "rename") schedule(false)
+        })
         if (closed) watcher.close()
         else watchers.set(directory, watcher)
       } catch {
@@ -203,9 +224,9 @@ export async function watchHttpProject(root: string, onChange: () => void) {
 
   try {
     const recursive = watchFs(resolve(root), { recursive: true }, (_event, fileName) => {
-      const parts = String(fileName ?? "").split(/[\\/]/)
-      if (parts.some((part) => IGNORED_DIRECTORIES.has(part))) return
-      schedule()
+      if (httpProjectChangeRequiresRefresh(fileName === null ? null : String(fileName))) {
+        schedule(true)
+      }
     })
     recursiveMode = true
     watchers.set(resolve(root), recursive)

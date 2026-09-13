@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import {
   mkdirSync,
   mkdtempSync,
   existsSync,
   readFileSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -15,8 +16,22 @@ import { loadHttpHistory, persistHttpHistoryEntry } from "../src/features/http/s
 import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../src/features/http/storage/config"
 
 describe("recoverable storage boundaries", () => {
+  const temporaryDirectories: string[] = []
+
+  function temporaryDirectory(prefix: string) {
+    const root = mkdtempSync(join(tmpdir(), prefix))
+    temporaryDirectories.push(root)
+    return root
+  }
+
+  afterEach(() => {
+    for (const root of temporaryDirectories.splice(0).reverse()) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   test("detects stale writes, keeps a backup, and rejects symlinked ancestors", () => {
-    const root = mkdtempSync(join(tmpdir(), "tuiminal-atomic-"))
+    const root = temporaryDirectory("tuiminal-atomic-")
     const path = join(root, "config", "settings.json")
     const firstHash = atomicWriteFileSync(path, '{"value":1}\n', {
       expectedHash: null,
@@ -38,8 +53,8 @@ describe("recoverable storage boundaries", () => {
     expect(readFileSync(`${path}.bak`, "utf8")).toBe('{"value":2}\n')
     expect(statSync(path).mode & 0o777).toBe(0o600)
 
-    const outside = mkdtempSync(join(tmpdir(), "tuiminal-atomic-outside-"))
-    const project = mkdtempSync(join(tmpdir(), "tuiminal-atomic-project-"))
+    const outside = temporaryDirectory("tuiminal-atomic-outside-")
+    const project = temporaryDirectory("tuiminal-atomic-project-")
     symlinkSync(outside, join(project, "config"))
     expect(() => atomicWriteFileSync(join(project, "config", "escaped.json"), "{}\n")).toThrow(
       /symlink/i,
@@ -48,7 +63,7 @@ describe("recoverable storage boundaries", () => {
   })
 
   test("preserves corrupted HTTP history instead of replacing it with an empty file", async () => {
-    const root = mkdtempSync(join(tmpdir(), "tuiminal-history-corrupt-"))
+    const root = temporaryDirectory("tuiminal-history-corrupt-")
     const directory = join(root, ".tuiminal", "http")
     const path = join(directory, "history.json")
     mkdirSync(directory, { recursive: true })
@@ -78,7 +93,7 @@ describe("recoverable storage boundaries", () => {
   })
 
   test("requires explicit recovery for corrupted UI and Database settings", () => {
-    const configRoot = mkdtempSync(join(tmpdir(), "tuiminal-recovery-"))
+    const configRoot = temporaryDirectory("tuiminal-recovery-")
     const directory = join(configRoot, "tuiminal")
     mkdirSync(directory, { recursive: true })
     writeFileSync(join(directory, "settings.json"), "{broken-settings\n")

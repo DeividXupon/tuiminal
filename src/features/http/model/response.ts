@@ -63,16 +63,22 @@ export function findHttpTextMatches(source: string, query: string) {
   const haystack = source.toLocaleLowerCase()
   const matches: HttpTextMatch[] = []
   let offset = 0
+  let line = 1
+  let lineStart = 0
+  let nextLineBreak = source.indexOf("\n")
   while (offset <= haystack.length - needle.length) {
     const start = haystack.indexOf(needle, offset)
     if (start < 0) break
-    const before = source.slice(0, start)
-    const lineStart = before.lastIndexOf("\n")
+    while (nextLineBreak >= 0 && nextLineBreak < start) {
+      line += 1
+      lineStart = nextLineBreak + 1
+      nextLineBreak = source.indexOf("\n", lineStart)
+    }
     matches.push({
       start,
       end: start + query.length,
-      line: before.split("\n").length,
-      column: start - lineStart,
+      line,
+      column: start - lineStart + 1,
     })
     offset = start + Math.max(1, needle.length)
   }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { chmod, link, lstat, open, unlink } from "node:fs/promises"
+import { type FileHandle, link, lstat, open, unlink } from "node:fs/promises"
 import { basename, dirname, resolve } from "node:path"
 import type { HttpPreparedRequest } from "../model/types"
 import type { HttpCookieJar } from "./cookies"
@@ -55,6 +55,80 @@ async function availableHandle(root: string, stem: string, extension: string) {
   throw new Error("Não foi possível escolher um nome livre para o download.")
 }
 
+async function writeChunk(handle: FileHandle, chunk: Uint8Array, signal: AbortSignal) {
+  let offset = 0
+  while (offset < chunk.length) {
+    signal.throwIfAborted()
+    const { bytesWritten } = await handle.write(chunk, offset, chunk.length - offset)
+    if (bytesWritten <= 0) throw new Error("Não foi possível gravar o download completo.")
+    offset += bytesWritten
+  }
+}
+
+async function writeBody(
+  reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
+  handle: FileHandle,
+  signal: AbortSignal,
+) {
+  let bytes = 0
+  while (reader) {
+    signal.throwIfAborted()
+    const chunk = await reader.read()
+    signal.throwIfAborted()
+    if (chunk.done) break
+    if (bytes + chunk.value.length > HTTP_DOWNLOAD_MAX_BYTES) {
+      throw new Error("O download excede o limite de 256 MB.")
+    }
+    await writeChunk(handle, chunk.value, signal)
+    bytes += chunk.value.length
+  }
+  return bytes
+}
+
+async function saveDownloadedResponse(
+  response: Response,
+  root: string,
+  requestName: string,
+  signal: AbortSignal,
+  now: Date,
+) {
+  const reader = response.body?.getReader()
+  let file: Awaited<ReturnType<typeof availableHandle>> | undefined
+  try {
+    signal.throwIfAborted()
+    if (!response.ok) {
+      throw new Error(`O download foi recusado pelo servidor com status HTTP ${response.status}.`)
+    }
+    const declaredBytes = Number(response.headers.get("content-length"))
+    if (Number.isFinite(declaredBytes) && declaredBytes > HTTP_DOWNLOAD_MAX_BYTES) {
+      throw new Error("O download excede o limite de 256 MB.")
+    }
+    const stem = `${safeStem(requestName)}-completo-${now.toISOString().replace(/[:.]/g, "-")}`
+    const extension = responseExtension(response.headers.get("content-type") ?? "")
+    file = await availableHandle(root, stem, extension)
+    const bytes = await writeBody(reader, file.handle, signal)
+    await file.handle.sync()
+    await file.handle.close()
+    signal.throwIfAborted()
+    // Linking publishes the complete file without overwriting a concurrent export.
+    // The link inherits the temporary file's 0600 mode; no path-based chmod is needed.
+    await link(file.temporary, file.path)
+    await unlink(file.temporary)
+    return { path: file.path, bytes }
+  } catch (error) {
+    if (file) {
+      await file.handle.close().catch(() => undefined)
+      await unlink(file.temporary).catch(() => undefined)
+    }
+    throw error
+  } finally {
+    if (reader) {
+      await reader.cancel().catch(() => undefined)
+      reader.releaseLock()
+    }
+  }
+}
+
 export async function downloadCompleteHttpResponse({
   root,
   requestName,
@@ -89,41 +163,6 @@ export async function downloadCompleteHttpResponse({
     undefined,
     authorizeRedirect,
   )
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined)
-    throw new Error(`O download foi recusado pelo servidor com status HTTP ${response.status}.`)
-  }
-  const declaredBytes = Number(response.headers.get("content-length"))
-  if (Number.isFinite(declaredBytes) && declaredBytes > HTTP_DOWNLOAD_MAX_BYTES) {
-    await response.body?.cancel().catch(() => undefined)
-    throw new Error("O download excede o limite de 256 MB.")
-  }
-  const stem = `${safeStem(requestName)}-completo-${now.toISOString().replace(/[:.]/g, "-")}`
-  const extension = responseExtension(response.headers.get("content-type") ?? "")
-  const { path, temporary, handle } = await availableHandle(root, stem, extension)
-  let bytes = 0
-  try {
-    const reader = response.body?.getReader()
-    while (reader) {
-      if (combinedSignal.aborted) throw combinedSignal.reason
-      const chunk = await reader.read()
-      if (chunk.done) break
-      if (bytes + chunk.value.length > HTTP_DOWNLOAD_MAX_BYTES) {
-        await reader.cancel("O download excedeu o limite de 256 MB.")
-        throw new Error("O download excede o limite de 256 MB.")
-      }
-      await handle.write(chunk.value)
-      bytes += chunk.value.length
-    }
-    await handle.sync()
-    await handle.close()
-    await link(temporary, path)
-    await chmod(path, 0o600)
-    await unlink(temporary)
-    return { path, bytes, status: response.status, url: response.url || request.url }
-  } catch (error) {
-    await handle.close().catch(() => undefined)
-    await unlink(temporary).catch(() => undefined)
-    throw error
-  }
+  const saved = await saveDownloadedResponse(response, root, requestName, combinedSignal, now)
+  return { ...saved, status: response.status, url: response.url || request.url }
 }

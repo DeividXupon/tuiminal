@@ -1,5 +1,5 @@
 import { readFile, realpath, stat } from "node:fs/promises"
-import { basename, extname, relative } from "node:path"
+import { relative } from "node:path"
 import {
   hashHttpSource,
   parseHttpFile,
@@ -14,7 +14,6 @@ import { isOpaqueHttpRequest } from "../model/request-capabilities"
 import { httpProxyHasCredentials } from "../model/secrets"
 import {
   atomicWriteProjectFile,
-  moveSafeProjectFile,
   projectFileHash,
   removeSafeProjectFile,
   resolveSafeProjectFile,
@@ -25,6 +24,7 @@ export {
   HTTP_PROJECT_MAX_FILES,
   HTTP_PROJECT_MAX_SOURCE_BYTES,
   HTTP_PROJECT_MAX_WATCHERS,
+  httpProjectChangeRequiresRefresh,
   scanHttpProject,
   watchHttpProject,
   type HttpCollectionFile,
@@ -170,19 +170,6 @@ export async function duplicateHttpRequest(root: string, request: HttpRequestDef
     source: { kind: "scratch" },
     name: `${request.name} copy`,
   })
-}
-
-export async function moveHttpCollectionFile(root: string, from: string, to: string) {
-  return moveSafeProjectFile(root, from, to)
-}
-
-export async function deleteHttpCollectionFile(root: string, path: string) {
-  const target = await projectPath(root, path)
-  const info = await stat(target)
-  if (!info.isFile() || ![".http", ".rest"].includes(extname(basename(target)).toLowerCase())) {
-    throw new HttpCollectionConflictError("Somente arquivos .http ou .rest podem ser excluídos.")
-  }
-  await removeSafeProjectFile(root, path)
 }
 
 async function currentRequestBlock(root: string, request: HttpRequestDefinition) {

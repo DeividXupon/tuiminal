@@ -17,26 +17,27 @@ export async function readLimitedResponseBody(
   let capturedBytes = 0
   let truncated = false
 
-  while (capturedBytes < limit) {
-    const next = await reader.read()
-    if (next.done) break
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      if (!next.value.length) continue
 
-    const remaining = limit - capturedBytes
-    const chunk = next.value.length > remaining ? next.value.subarray(0, remaining) : next.value
-    chunks.push(chunk)
-    capturedBytes += chunk.length
-
-    if (chunk.length !== next.value.length) {
-      truncated = true
-      break
+      const remaining = limit - capturedBytes
+      if (remaining > 0) {
+        const chunk = next.value.length > remaining ? next.value.subarray(0, remaining) : next.value
+        chunks.push(chunk)
+        capturedBytes += chunk.length
+      }
+      if (next.value.length > remaining) {
+        truncated = true
+        break
+      }
     }
+    if (truncated) await reader.cancel()
+  } finally {
+    reader.releaseLock()
   }
-
-  if (!truncated && capturedBytes === limit) {
-    const next = await reader.read()
-    truncated = !next.done
-  }
-  if (truncated) await reader.cancel()
 
   const body = new Uint8Array(capturedBytes)
   let offset = 0

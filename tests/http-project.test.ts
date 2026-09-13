@@ -29,6 +29,7 @@ import {
   deleteHttpRequest,
   duplicateHttpRequest,
   HttpExternalChangeError,
+  httpProjectChangeRequiresRefresh,
   moveHttpRequest,
   saveHttpRequest,
   scanHttpProject,
@@ -365,20 +366,25 @@ describe(".http project model", () => {
     })
     try {
       await mkdir(resolve(root, "new/api"), { recursive: true })
+      await Bun.sleep(160)
+      await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/users\n")
       for (let attempt = 0; attempt < 30 && changes === 0; attempt += 1) {
         await Bun.sleep(20)
       }
       expect(changes).toBeGreaterThan(0)
-      await Bun.sleep(120)
-      const beforeNestedWrite = changes
-      await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/users\n")
-      for (let attempt = 0; attempt < 30 && changes === beforeNestedWrite; attempt += 1) {
-        await Bun.sleep(20)
-      }
-      expect(changes).toBeGreaterThan(beforeNestedWrite)
     } finally {
       stop()
     }
+  })
+
+  test("refreshes discovery only for files that affect the HTTP workspace", () => {
+    expect(httpProjectChangeRequiresRefresh("src/app.ts")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("node_modules/pkg/request.http")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("api/users.http")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh("nested/http-client.env.json")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh(".tuiminal/http/config.json")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh("config.json")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh(null)).toBe(true)
   })
 
   test("saves scratch atomically, duplicates it, and rejects external changes", async () => {

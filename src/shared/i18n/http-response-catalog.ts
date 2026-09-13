@@ -274,6 +274,14 @@ export const HTTP_RESPONSE_MESSAGES = [
     "다운로드가 256MB 제한을 초과합니다.",
   ],
   [
+    "Não foi possível gravar o download completo.",
+    "Could not write the complete download.",
+    "No se pudo escribir la descarga completa.",
+    "ダウンロード全体を書き込めませんでした。",
+    "无法写入完整下载内容。",
+    "전체 다운로드를 기록할 수 없습니다.",
+  ],
+  [
     "Não foi possível escolher um nome livre para o download.",
     "Could not choose an available name for the download.",
     "No se pudo elegir un nombre disponible para la descarga.",

@@ -120,28 +120,6 @@ export async function removeSafeProjectFile(
   await unlink(resolved.path)
 }
 
-export async function moveSafeProjectFile(root: string, from: string, to: string) {
-  const source = await resolveSafeProjectFile(root, from)
-  const target = await resolveSafeProjectFile(root, to, {
-    createParents: true,
-    allowMissing: true,
-  })
-  try {
-    await lstat(target.path)
-    throw new ProjectFileSafetyError("O arquivo de destino já existe.")
-  } catch (error) {
-    if (!missing(error)) throw error
-  }
-  await link(source.path, target.path)
-  try {
-    await unlink(source.path)
-  } catch (error) {
-    await unlink(target.path).catch(() => undefined)
-    throw error
-  }
-  return target.relativePath
-}
-
 export async function atomicWriteProjectFile(
   root: string,
   relativePath: string,

@@ -100,6 +100,24 @@ function scopedCookieCollection() {
 }
 
 describe("HTTP headless collection runner", () => {
+  test("an exact request ID selects only that request when display names are equal", async () => {
+    const items = collection().map((item) => ({
+      ...item,
+      request: { ...item.request, name: "Same name", headers: [], chain: { extract: [] } },
+    }))
+    const selected = items[1]
+    if (!selected) throw new Error("Missing second request fixture")
+    const result = await runHttpCollectionCase({
+      name: "exact-id",
+      items,
+      selector: selected.request.id,
+      variables: new Map(),
+      root,
+    })
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.requestId).toBe(selected.request.id)
+    expect(result.items[0]?.response?.status).toBe(401)
+  })
   test("runs dependencies, keeps extracted secrets in memory and evaluates assertions", async () => {
     const items = collection()
     const result = await runHttpCollectionCase({

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
 import { HttpCookieJarStore } from "../services/cookies"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
@@ -13,6 +13,13 @@ import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 type HttpClipboard = {
   copyToClipboardOSC52: (content: string) => boolean
   getSelection?: () => { getSelectedText: () => string } | null
+}
+
+type HttpDownload = { documentId: string; controller: AbortController }
+
+function downloadFailureNotice(signal: AbortSignal, error: unknown) {
+  if (signal.aborted) return "DOWNLOAD CANCELADO"
+  return error instanceof Error ? error.message : String(error)
 }
 
 function copiedResponseNotice(selected: boolean, label: string) {
@@ -47,10 +54,24 @@ export function useHttpResponse({
 }) {
   const cookieJars = useRef(new HttpCookieJarStore())
   const [, setCookieRevision] = useState(0)
-  const [download, setDownload] = useState<{
-    documentId: string
-    controller: AbortController
-  } | null>(null)
+  const [download, setDownload] = useState<HttpDownload | null>(null)
+  const downloadOwner = useRef({ mounted: true, documents, operation: null as HttpDownload | null })
+  downloadOwner.current.documents = documents
+  useEffect(() => {
+    const owner = downloadOwner.current
+    owner.mounted = true
+    return () => {
+      owner.mounted = false
+      owner.operation?.controller.abort()
+      owner.operation = null
+    }
+  }, [])
+  useEffect(() => {
+    const operation = downloadOwner.current.operation
+    if (operation && !documents.some((document) => document.request.id === operation.documentId)) {
+      operation.controller.abort()
+    }
+  }, [documents])
   const cookieJarForRequest = useCallback(
     (request: HttpRequestDefinition) => cookieJars.current.forRequest(request, environmentName),
     [environmentName],
@@ -110,11 +131,14 @@ export function useHttpResponse({
 
   const downloadComplete = useCallback(
     async (documentId: string) => {
-      if (download) return
-      const document = documents.find((candidate) => candidate.request.id === documentId)
+      const owner = downloadOwner.current
+      if (!owner.mounted || owner.operation) return
+      const document = owner.documents.find((candidate) => candidate.request.id === documentId)
       if (document?.execution.status !== "success" || !document.execution.response.truncated) return
       const controller = new AbortController()
-      setDownload({ documentId, controller })
+      const operation = { documentId, controller }
+      owner.operation = operation
+      setDownload(operation)
       setNotice("BAIXANDO RESPOSTA COMPLETA…")
       try {
         const configured = applyHttpWorkspaceConfig(document.request, workspaceConfig)
@@ -136,24 +160,22 @@ export function useHttpResponse({
           authorizeRedirect: (approval, signal) =>
             authorizeRedirect(Object.freeze({ ...approval, environmentName }), signal),
         })
+        if (owner.operation !== operation) return
+        controller.signal.throwIfAborted()
         setNotice(`DOWNLOAD COMPLETO · ${result.bytes} BYTES · ${result.path}`)
       } catch (error) {
-        setNotice(
-          controller.signal.aborted
-            ? "DOWNLOAD CANCELADO"
-            : error instanceof Error
-              ? error.message
-              : String(error),
-        )
+        if (owner.operation !== operation) return
+        setNotice(downloadFailureNotice(controller.signal, error))
       } finally {
-        setDownload((current) => (current?.controller === controller ? null : current))
+        if (owner.operation === operation) {
+          owner.operation = null
+          setDownload(null)
+        }
       }
     },
     [
       cookieJarForRequest,
       authorizeRedirect,
-      documents,
-      download,
       environmentName,
       isInsecureTlsApproved,
       setNotice,
@@ -162,7 +184,7 @@ export function useHttpResponse({
     ],
   )
 
-  const cancelDownload = useCallback(() => download?.controller.abort(), [download])
+  const cancelDownload = useCallback(() => downloadOwner.current.operation?.controller.abort(), [])
 
   const openResponse = useCallback(
     async (documentId: string) => {

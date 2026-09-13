@@ -150,10 +150,6 @@ export async function loadHttpWorkspaceConfigSnapshot(
   }
 }
 
-export async function loadHttpWorkspaceConfig(root: string) {
-  return (await loadHttpWorkspaceConfigSnapshot(root)).config
-}
-
 export async function saveHttpWorkspaceConfig(
   root: string,
   config: HttpWorkspaceConfig,

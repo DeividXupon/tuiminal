@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { requestFromHttpFile } from "../model/http-file"
 import type { HttpProjectRequestItem, HttpRequestDefinition } from "../model/types"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
@@ -33,35 +33,67 @@ export function useHttpProject(requestPath?: string | null, root = HTTP_WORKING_
   const [workspaceConfig, setWorkspaceConfig] = useState(DEFAULT_HTTP_WORKSPACE_CONFIG)
   const [workspaceConfigSourceHash, setWorkspaceConfigSourceHash] = useState<string | null>(null)
   const [workspaceConfigError, setWorkspaceConfigError] = useState("")
+  const refreshStateRef = useRef<{
+    root: string
+    disposed: boolean
+    queued: boolean
+    pending: Promise<void> | null
+  }>({ root, disposed: false, queued: false, pending: null })
+  if (refreshStateRef.current.root !== root) {
+    refreshStateRef.current = { root, disposed: false, queued: false, pending: null }
+  }
 
-  const refresh = useCallback(async () => {
-    const [nextProject, nextConfig] = await Promise.all([
-      scanHttpProject(root),
-      loadHttpWorkspaceConfigSnapshot(root),
-    ])
-    const nextEnvironmentCatalog = await loadHttpEnvironmentCatalog(
-      root,
-      nextProject.files.map((file) => file.path),
+  const refresh = useCallback(() => {
+    const state = refreshStateRef.current
+    state.queued = true
+    if (state.pending) return state.pending
+
+    const run = async () => {
+      while (state.queued && !state.disposed) {
+        state.queued = false
+        const [nextProject, nextConfig] = await Promise.all([
+          scanHttpProject(root),
+          loadHttpWorkspaceConfigSnapshot(root),
+        ])
+        const nextEnvironmentCatalog = await loadHttpEnvironmentCatalog(
+          root,
+          nextProject.files.map((file) => file.path),
+        )
+        if (state.disposed || refreshStateRef.current !== state) return
+        setProject(nextProject)
+        setEnvironmentCatalog(nextEnvironmentCatalog)
+        setWorkspaceConfig(nextConfig.config)
+        setWorkspaceConfigSourceHash(nextConfig.sourceHash)
+        setWorkspaceConfigError(nextConfig.error)
+      }
+    }
+    const pending = run()
+    state.pending = pending
+    void pending.then(
+      () => {
+        if (state.pending === pending) state.pending = null
+      },
+      () => {
+        if (state.pending === pending) state.pending = null
+      },
     )
-    setProject(nextProject)
-    setEnvironmentCatalog(nextEnvironmentCatalog)
-    setWorkspaceConfig(nextConfig.config)
-    setWorkspaceConfigSourceHash(nextConfig.sourceHash)
-    setWorkspaceConfigError(nextConfig.error)
+    return pending
   }, [root])
 
   useEffect(() => {
-    let disposed = false
+    const state = refreshStateRef.current
+    state.disposed = false
     let stopWatching: (() => void) | undefined
     void refresh()
     void watchHttpProject(root, () => {
-      if (!disposed) void refresh()
+      if (!state.disposed) void refresh()
     }).then((stop) => {
-      if (disposed) stop()
+      if (state.disposed) stop()
       else stopWatching = stop
     })
     return () => {
-      disposed = true
+      state.disposed = true
+      state.queued = false
       stopWatching?.()
     }
   }, [refresh, root])

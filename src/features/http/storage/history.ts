@@ -329,8 +329,9 @@ function restoredEntry(entry: PersistedEntry): HttpHistoryEntry | null {
   }
 }
 
-export async function loadHttpHistory(root: string, config: HttpWorkspaceConfig) {
-  if (!config.history.persistMetadata) return []
+export async function loadHttpHistory(root: string, config: HttpWorkspaceConfig | boolean) {
+  const persistMetadata = typeof config === "boolean" ? config : config.history.persistMetadata
+  if (!persistMetadata) return []
   const persisted = await readPersistedHistory(root)
   return budgetHttpHistory(
     persisted.entries
