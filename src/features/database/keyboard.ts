@@ -1,12 +1,7 @@
 import type { KeyboardScope } from "../../core/keyboard/scope"
 
 export const databaseKeyboardScope = {
-  ids: [
-    "table-search",
-    "database-write-value",
-    "database-cell-editor-value",
-    "database-connection-list",
-  ],
+  ids: ["table-search", "database-cell-editor-value", "database-connection-list"],
   prefixes: [
     "db-connection-",
     "database-query-",

@@ -1,9 +1,10 @@
-import type { BoxRenderable } from "@opentui/core"
+import { StyledText, type BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   serializeDatabaseBatchRows,
+  previewDatabaseBatchExport,
   type DatabaseBatchExportFormat,
   type DatabaseBatchSelectedRow,
 } from "../model/batch"
@@ -39,9 +40,13 @@ export function DatabaseBatchExportModal({
   const [format, setFormat] = useState<DatabaseBatchExportFormat>("csv")
   const [notice, setNotice] = useState("")
   useNotificationFromValue(notice, { source: "Banco · Exportação" })
-  const content = useMemo(
-    () => serializeDatabaseBatchRows(rows, columns, format),
-    [columns, format, rows],
+  const width = Math.max(1, Math.min(96, terminal.width - 2))
+  const height = Math.max(1, Math.min(23, terminal.height - 2))
+  const previewWidth = Math.max(10, width - 6)
+  const previewLineLimit = Math.max(2, height - 10)
+  const lines = useMemo(
+    () => previewDatabaseBatchExport(rows, columns, format, previewLineLimit),
+    [columns, format, rows, previewLineLimit],
   )
 
   useEffect(() => {
@@ -122,21 +127,16 @@ export function DatabaseBatchExportModal({
   })
 
   if (!open) return null
-  const width = Math.max(1, Math.min(96, terminal.width - 2))
-  const height = Math.max(1, Math.min(23, terminal.height - 2))
-  const previewWidth = Math.max(10, width - 6)
   const lineOccurrences = new Map<string, number>()
   let firstLine = true
-  const previewLines = content
-    .split("\n")
-    .slice(0, Math.max(2, height - 10))
-    .map((line) => {
-      const occurrence = lineOccurrences.get(line) ?? 0
-      lineOccurrences.set(line, occurrence + 1)
-      const previewLine = { key: `${line}\u0000${occurrence}`, line, header: firstLine }
-      firstLine = false
-      return previewLine
-    })
+  const previewLines = lines.map((source) => {
+    const line = truncateDisplay(source, previewWidth)
+    const occurrence = lineOccurrences.get(line) ?? 0
+    lineOccurrences.set(line, occurrence + 1)
+    const previewLine = { key: `${line}\u0000${occurrence}`, line, header: firstLine }
+    firstLine = false
+    return previewLine
+  })
 
   return (
     <>
@@ -218,7 +218,7 @@ export function DatabaseBatchExportModal({
             {previewLines.map((previewLine) => (
               <text
                 key={previewLine.key}
-                content={truncateDisplay(previewLine.line, previewWidth)}
+                content={new StyledText([{ __isChunk: true, text: previewLine.line }])}
                 style={{
                   height: 1,
                   flexShrink: 0,

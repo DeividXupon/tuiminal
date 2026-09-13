@@ -221,6 +221,7 @@ export function DatabaseChangesModal({
                 }}
                 key={item.id}
                 id={`database-changes-item-${index}`}
+                disabled={busy}
                 onPress={() => {
                   setSelectedIndex(index)
                   onToggle(item.id)

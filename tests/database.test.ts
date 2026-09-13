@@ -187,8 +187,10 @@ const {
   updateTableRow,
   DatabaseQueryCancelledError,
   DatabaseMutationCommitUncertainError,
+  DATABASE_SCHEMA_CACHE_LIMIT,
   DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS,
   nativeClients,
+  schemaCache,
 } = await import("../src/features/database/services/database")
 const { DEFAULT_SENSITIVE_TERMS, setActiveSensitiveTerms } = await import(
   "../src/shared/security/sensitive-data"
@@ -439,13 +441,32 @@ describe("SQLite catalog and data browsing", () => {
     ).toEqual(["tenant_id", "code"])
   })
 
+  test("shares concurrent schema reads and keeps the schema cache bounded", async () => {
+    const cacheKey = "write-one:main:users"
+    schemaCache.delete(cacheKey)
+    const schemas = await Promise.all(
+      Array.from({ length: 12 }, () => loadDatabaseTableColumns("write-one", usersTable)),
+    )
+    expect(schemas.every((schema) => schema === schemas[0])).toBe(true)
+
+    for (let index = 0; index <= DATABASE_SCHEMA_CACHE_LIMIT; index += 1) {
+      schemaCache.set(`benchmark:${index}:table`, [])
+    }
+    schemaCache.delete(cacheKey)
+    await loadDatabaseTableColumns("write-one", usersTable)
+    expect(schemaCache.size).toBeLessThanOrEqual(DATABASE_SCHEMA_CACHE_LIMIT)
+    for (const key of schemaCache.keys()) {
+      if (key.startsWith("benchmark:")) schemaCache.delete(key)
+    }
+  })
+
   test("paginates deterministically and clamps unsafe bounds", async () => {
     const first = await loadTablePage("write-one", usersTable, -100, 0)
     expect(first.rows).toHaveLength(1)
     expect(first.rows[0]?.id).toBe(1)
     expect(first.hasMore).toBe(true)
 
-    const middle = await loadTablePage("write-one", usersTable, 50, 500)
+    const middle = await loadTablePage("write-one", usersTable, 50, 50)
     expect(middle.rows).toHaveLength(50)
     expect(middle.rows[0]?.id).toBe(51)
     expect(middle.rows.at(-1)?.id).toBe(100)
@@ -455,6 +476,18 @@ describe("SQLite catalog and data browsing", () => {
     expect(last.rows).toHaveLength(20)
     expect(last.rows[0]?.id).toBe(601)
     expect(last.hasMore).toBe(false)
+  })
+
+  test("tall table pages return every requested row without pagination gaps", async () => {
+    const ids: unknown[] = []
+    for (let offset = 0; offset < 620; offset += 87) {
+      const page = await loadTablePage("write-one", usersTable, offset, 87)
+      expect(page.rows).toHaveLength(Math.min(87, 620 - offset))
+      expect(page.hasMore).toBe(offset + 87 < 620)
+      expect(page.rowKeys).toHaveLength(page.rows.length)
+      ids.push(...page.rows.map((row) => row.id))
+    }
+    expect(ids).toEqual(Array.from({ length: 620 }, (_, index) => index + 1))
   })
 
   test("records table rendering without recording internal catalog queries", async () => {

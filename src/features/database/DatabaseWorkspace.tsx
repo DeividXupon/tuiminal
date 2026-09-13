@@ -168,6 +168,7 @@ export function DatabaseViewer({
   const [deleteSequenceArmed, setDeleteSequenceArmed] = useState(false)
   const [writeNotice, setWriteNotice] = useState("")
   const [writeBusy, setWriteBusy] = useState(false)
+  const writeInFlightRef = useRef(false)
   const [batchRowsByTable, setBatchRowsByTable] = useState<
     Record<string, DatabaseBatchSelectedRow[]>
   >({})
@@ -1146,8 +1147,9 @@ export function DatabaseViewer({
   )
 
   const executeApprovedChanges = useCallback(async () => {
+    if (writeInFlightRef.current) return
     const approved = activeConnectionChanges.filter((change) => change.approved)
-    if (!approved.length || writeBusy) {
+    if (!approved.length) {
       setChangesModalNotice("Aprove ao menos um comando antes de executar.")
       return
     }
@@ -1158,6 +1160,7 @@ export function DatabaseViewer({
     }
     const connectionId = approved[0]?.connectionId
     if (!connectionId) return
+    writeInFlightRef.current = true
     setWriteBusy(true)
     setChangesModalNotice(`Executando ${approved.length} comando(s)…`)
     try {
@@ -1196,9 +1199,10 @@ export function DatabaseViewer({
           : "⚠ Transação revertida · nenhuma alteração foi aplicada",
       )
     } finally {
+      writeInFlightRef.current = false
       setWriteBusy(false)
     }
-  }, [activeConnectionChanges, writeBusy])
+  }, [activeConnectionChanges])
 
   const toggleSensitiveData = useCallback(() => {
     if (!selectedTable || view !== "data") return
@@ -1803,7 +1807,6 @@ export function DatabaseViewer({
         <>
           <box
             id="tutorial-db-catalog"
-            key={LAYOUT.compact ? "database-sidebar-compact" : "database-sidebar-framed"}
             style={{
               width: sidebarWidth,
               ...focusedPanelBorder(activePane === "catalog", COLORS.database),
@@ -1919,7 +1922,6 @@ export function DatabaseViewer({
 
           <box
             id="tutorial-db-grid"
-            key={LAYOUT.compact ? "database-table-compact" : "database-table-framed"}
             style={{
               position: "relative",
               flexGrow: 1,
@@ -2928,6 +2930,7 @@ export function DatabaseViewer({
           notice={changesModalNotice}
           onClose={() => setChangesModalOpen(false)}
           onToggle={(changeId) => {
+            if (writeInFlightRef.current) return
             setStagedChanges((current) =>
               current.map((change) =>
                 change.id === changeId ? { ...change, approved: !change.approved } : change,
@@ -2936,6 +2939,7 @@ export function DatabaseViewer({
             setChangesModalNotice("")
           }}
           onToggleAll={() => {
+            if (writeInFlightRef.current) return
             setStagedChanges((current) => {
               const connectionChanges = current.filter(
                 (change) => change.connectionId === activeConnectionId,

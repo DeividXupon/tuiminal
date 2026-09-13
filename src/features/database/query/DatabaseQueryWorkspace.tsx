@@ -68,6 +68,11 @@ import {
 } from "../rendering/constants"
 import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
+  queryCellForeground,
+  queryCompletionPresentation,
+  queryRowColors,
+} from "../rendering/query-presentation"
+import {
   fitCell,
   queryPlaceholder,
   shorten,
@@ -473,6 +478,7 @@ export function DatabaseQueryWorkspace({
   )
 
   const focusQueryEditor = useCallback(() => {
+    setWorkspaceMode((current) => (current === "result" ? "split" : current))
     setEditorMode(true)
     editorRef.current?.focus()
   }, [])
@@ -722,7 +728,7 @@ export function DatabaseQueryWorkspace({
       sql?: string
       forceWriteConfirmation?: boolean
     } = {}) => {
-      if (busy) return
+      if (queryAbortRef.current) return
       const editorSql = editorRef.current?.plainText ?? ""
       const statement = sqlOverride
         ? null
@@ -802,7 +808,6 @@ export function DatabaseQueryWorkspace({
       }
     },
     [
-      busy,
       connection.driver,
       connectionId,
       onDatabaseChanged,
@@ -1752,172 +1757,154 @@ export function DatabaseQueryWorkspace({
           style={{ flexShrink: 0, fg: canWrite ? COLORS.warning : COLORS.success }}
         />
       </box>
-      {editorVisible ? (
-        <box
-          style={{
-            height: editorHeight,
-            flexShrink: 0,
-            border: ["bottom"],
-            borderColor: COLORS.border,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
+      <box
+        visible={editorVisible}
+        style={{
+          height: editorVisible ? editorHeight : 0,
+          flexShrink: 0,
+          overflow: "hidden",
+          border: ["bottom"],
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.canvas,
+          paddingLeft: 1,
+          paddingRight: 1,
+        }}
+      >
+        <line-number
+          id={queryElementId("line-numbers")}
+          fg={COLORS.muted}
+          bg={COLORS.panel}
+          minWidth={3}
+          paddingRight={1}
+          showLineNumbers
+          width="100%"
+          height="100%"
+          onMouseDown={focusQueryEditor}
         >
-          <line-number
-            id={queryElementId("line-numbers")}
-            fg={COLORS.muted}
-            bg={COLORS.panel}
-            minWidth={3}
-            paddingRight={1}
-            showLineNumbers
+          <textarea
+            ref={setEditorRef}
+            id={queryElementId("editor")}
+            initialValue=""
+            placeholder={queryPlaceholder(connection)}
+            keyBindings={[{ name: "a", ctrl: true, action: "submit" }]}
+            onMouseDown={focusQueryEditor}
+            onCursorChange={() => refreshAutocomplete(false)}
+            onContentChange={() => {
+              if (editorRef.current) {
+                setEditorText(editorRef.current.plainText)
+                applySqlSyntaxHighlights(editorRef.current, SQL_SYNTAX_STYLE, connection.driver)
+              }
+              refreshAutocomplete(false)
+              if (writeConfirmation) setWriteConfirmation(null)
+            }}
+            onSubmit={() => void runQuery()}
+            syntaxStyle={SQL_SYNTAX_STYLE}
             width="100%"
             height="100%"
-            onMouseDown={focusQueryEditor}
+            style={{
+              backgroundColor: COLORS.canvas,
+              focusedBackgroundColor: COLORS.canvas,
+              textColor: COLORS.text,
+              focusedTextColor: COLORS.text,
+              placeholderColor: COLORS.muted,
+              cursorColor: COLORS.database,
+              selectionBg: RGBA.fromHex(COLORS.diffModifiedBg),
+              wrapMode: "none",
+            }}
+          />
+        </line-number>
+        {autocomplete && visibleAutocompleteItems.length ? (
+          <box
+            style={{
+              position: "absolute",
+              top: autocompleteTop,
+              left: autocompleteLeft,
+              width: autocompleteWidth,
+              height: autocompleteHeight,
+              zIndex: 40,
+              flexDirection: "column",
+              border: ["left", "right"],
+              borderColor: COLORS.database,
+              backgroundColor: COLORS.panelRaised,
+            }}
+            onMouseScroll={(event) => {
+              if (!event.scroll) return
+              const direction =
+                event.scroll.direction === "up" || event.scroll.direction === "left" ? -1 : 1
+              const nextIndex = Math.max(
+                0,
+                Math.min(autocomplete.items.length - 1, autocomplete.selectedIndex + direction),
+              )
+              updateAutocomplete({ ...autocomplete, selectedIndex: nextIndex })
+              event.preventDefault()
+              event.stopPropagation()
+            }}
           >
-            <textarea
-              ref={setEditorRef}
-              id={queryElementId("editor")}
-              initialValue=""
-              placeholder={queryPlaceholder(connection)}
-              keyBindings={[{ name: "a", ctrl: true, action: "submit" }]}
-              onMouseDown={focusQueryEditor}
-              onCursorChange={() => refreshAutocomplete(false)}
-              onContentChange={() => {
-                if (editorRef.current) {
-                  setEditorText(editorRef.current.plainText)
-                  applySqlSyntaxHighlights(editorRef.current, SQL_SYNTAX_STYLE, connection.driver)
-                }
-                refreshAutocomplete(false)
-                if (writeConfirmation) setWriteConfirmation(null)
-              }}
-              onSubmit={() => void runQuery()}
-              syntaxStyle={SQL_SYNTAX_STYLE}
-              width="100%"
-              height="100%"
-              style={{
-                backgroundColor: COLORS.canvas,
-                focusedBackgroundColor: COLORS.canvas,
-                textColor: COLORS.text,
-                focusedTextColor: COLORS.text,
-                placeholderColor: COLORS.muted,
-                cursorColor: COLORS.database,
-                selectionBg: RGBA.fromHex(COLORS.diffModifiedBg),
-                wrapMode: "none",
-              }}
-            />
-          </line-number>
-          {autocomplete && visibleAutocompleteItems.length ? (
             <box
               style={{
-                position: "absolute",
-                top: autocompleteTop,
-                left: autocompleteLeft,
-                width: autocompleteWidth,
-                height: autocompleteHeight,
-                zIndex: 40,
-                flexDirection: "column",
-                border: ["left", "right"],
-                borderColor: COLORS.database,
-                backgroundColor: COLORS.panelRaised,
-              }}
-              onMouseScroll={(event) => {
-                if (!event.scroll) return
-                const direction =
-                  event.scroll.direction === "up" || event.scroll.direction === "left" ? -1 : 1
-                const nextIndex = Math.max(
-                  0,
-                  Math.min(autocomplete.items.length - 1, autocomplete.selectedIndex + direction),
-                )
-                updateAutocomplete({ ...autocomplete, selectedIndex: nextIndex })
-                event.preventDefault()
-                event.stopPropagation()
+                height: 1,
+                flexShrink: 0,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                backgroundColor: COLORS.diffHunkBg,
+                paddingLeft: 1,
+                paddingRight: 1,
               }}
             >
-              <box
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  backgroundColor: COLORS.diffHunkBg,
-                  paddingLeft: 1,
-                  paddingRight: 1,
-                }}
-              >
-                <text
-                  content={`◆ ${translateUi("AUTOCOMPLETE")}`}
-                  style={{ fg: COLORS.database }}
+              <text content={`◆ ${translateUi("AUTOCOMPLETE")}`} style={{ fg: COLORS.database }} />
+              {autocompleteWidth >= 42 ? (
+                <ShortcutText
+                  content={`${autocomplete.selectedIndex + 1}/${autocomplete.items.length} · [↑↓] [Tab/Enter]`}
+                  style={{ fg: COLORS.muted }}
                 />
-                {autocompleteWidth >= 42 ? (
-                  <ShortcutText
-                    content={`${autocomplete.selectedIndex + 1}/${autocomplete.items.length} · [↑↓] [Tab/Enter]`}
-                    style={{ fg: COLORS.muted }}
-                  />
-                ) : null}
-              </box>
-              {visibleAutocompleteItems.map((item, visibleIndex) => {
-                const index = autocompleteWindowStart + visibleIndex
-                const selected = index === autocomplete.selectedIndex
-                const accent =
-                  item.kind === "keyword"
-                    ? "#c792ea"
-                    : item.kind === "function"
-                      ? "#82aaff"
-                      : item.kind === "table"
-                        ? COLORS.database
-                        : "#80cbc4"
-                const icon =
-                  item.kind === "keyword"
-                    ? "K"
-                    : item.kind === "function"
-                      ? "ƒ"
-                      : item.kind === "table"
-                        ? "▦"
-                        : "◇"
-                return (
-                  <Button
-                    key={item.id}
-                    height={1}
-                    width="100%"
-                    flexShrink={0}
-                    onPress={() => acceptAutocomplete(index)}
-                  >
-                    {(state) => (
-                      <box
-                        style={{
-                          height: 1,
-                          flexShrink: 0,
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          backgroundColor:
-                            selected || state.focused ? COLORS.diffModifiedBg : COLORS.panelRaised,
-                          paddingLeft: 1,
-                          paddingRight: 1,
-                        }}
-                      >
-                        <text
-                          content={`${selected ? "›" : " "} ${icon} ${shorten(item.label, Math.max(8, Math.floor(autocompleteWidth * 0.48)))}`}
-                          style={{ fg: selected ? COLORS.text : accent }}
-                        />
-                        {autocompleteWidth >= 42 ? (
-                          <text
-                            content={shorten(
-                              item.detail,
-                              Math.max(8, Math.floor(autocompleteWidth * 0.38)),
-                            )}
-                            style={{ fg: COLORS.muted }}
-                          />
-                        ) : null}
-                      </box>
-                    )}
-                  </Button>
-                )
-              })}
+              ) : null}
             </box>
-          ) : null}
-        </box>
-      ) : null}
+            {visibleAutocompleteItems.map((item, visibleIndex) => {
+              const index = autocompleteWindowStart + visibleIndex
+              const selected = index === autocomplete.selectedIndex
+              const { accent, icon } = queryCompletionPresentation(item.kind)
+              return (
+                <Button
+                  key={item.id}
+                  height={1}
+                  width="100%"
+                  flexShrink={0}
+                  onPress={() => acceptAutocomplete(index)}
+                >
+                  {(state) => (
+                    <box
+                      style={{
+                        height: 1,
+                        flexShrink: 0,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        backgroundColor:
+                          selected || state.focused ? COLORS.diffModifiedBg : COLORS.panelRaised,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                      }}
+                    >
+                      <text
+                        content={`${selected ? "›" : " "} ${icon} ${shorten(item.label, Math.max(8, Math.floor(autocompleteWidth * 0.48)))}`}
+                        style={{ fg: selected ? COLORS.text : accent }}
+                      />
+                      {autocompleteWidth >= 42 ? (
+                        <text
+                          content={shorten(
+                            item.detail,
+                            Math.max(8, Math.floor(autocompleteWidth * 0.38)),
+                          )}
+                          style={{ fg: COLORS.muted }}
+                        />
+                      ) : null}
+                    </box>
+                  )}
+                </Button>
+              )
+            })}
+          </box>
+        ) : null}
+      </box>
       <box
         style={{
           height: 2,
@@ -2266,24 +2253,10 @@ export function DatabaseQueryWorkspace({
                   >
                     {queryGridRows.map((gridRow, rowIndex) => {
                       const mutationKind = gridRow.change?.mutation.kind
-                      const rowBackground =
-                        mutationKind === "insert"
-                          ? COLORS.databaseInsertedBg
-                          : mutationKind === "delete"
-                            ? COLORS.databaseDeletedBg
-                            : mutationKind === "update"
-                              ? COLORS.databaseEditedBg
-                              : rowIndex % 2 === 0
-                                ? COLORS.panel
-                                : COLORS.panelRaised
-                      const rowAccent =
-                        mutationKind === "insert"
-                          ? COLORS.runner
-                          : mutationKind === "delete"
-                            ? COLORS.danger
-                            : mutationKind === "update"
-                              ? COLORS.warning
-                              : COLORS.text
+                      const { background: rowBackground, accent: rowAccent } = queryRowColors(
+                        mutationKind,
+                        rowIndex,
+                      )
                       return (
                         <box
                           key={gridRow.id}
@@ -2353,13 +2326,13 @@ export function DatabaseQueryWorkspace({
                                   <text
                                     content={fitCell(gridRow.data[column], queryCellWidth)}
                                     style={{
-                                      fg: selectedCell
-                                        ? selectionColors.foreground
-                                        : changedCell || mutationKind
-                                          ? rowAccent
-                                          : state.focused
-                                            ? COLORS.text
-                                            : COLORS.muted,
+                                      fg: queryCellForeground(
+                                        selectedCell,
+                                        Boolean(changedCell || mutationKind),
+                                        state.focused,
+                                        rowAccent,
+                                        selectionColors.foreground,
+                                      ),
                                       bg: selectedCell ? selectionColors.background : rowBackground,
                                     }}
                                   />

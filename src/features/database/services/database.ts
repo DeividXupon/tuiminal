@@ -340,12 +340,39 @@ export const nativeClients = new Map<string, Promise<RuntimeSqlClient>>()
 export const mcpClients = new Map<string, Promise<Client>>()
 export const sessionPasswords = new Map<string, string>()
 export const schemaCache = new Map<string, DatabaseColumn[]>()
+const schemaLoads = new Map<string, Promise<DatabaseColumn[]>>()
+export const DATABASE_SCHEMA_CACHE_LIMIT = 256
 export const QUERY_RESULT_LIMIT = 500
 export const QUERY_RESULT_FETCH_LIMIT = QUERY_RESULT_LIMIT + 1
 export const QUERY_RESULT_CELL_LIMIT_BYTES = 256_000
 export const QUERY_TEXT_LIMIT = 100_000
 export const DATABASE_QUERY_HISTORY_READ_LIMIT = 100
 export const DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS = 184
+
+function rememberSchema(cacheKey: string, columns: DatabaseColumn[]) {
+  schemaCache.delete(cacheKey)
+  schemaCache.set(cacheKey, columns)
+  while (schemaCache.size > DATABASE_SCHEMA_CACHE_LIMIT) {
+    const oldest = schemaCache.keys().next().value
+    if (oldest === undefined) break
+    schemaCache.delete(oldest)
+  }
+}
+
+function invalidateSchemaCache(connectionId?: string) {
+  if (connectionId === undefined) {
+    schemaCache.clear()
+    schemaLoads.clear()
+    return
+  }
+  const prefix = `${connectionId}:`
+  for (const key of schemaCache.keys()) {
+    if (key.startsWith(prefix)) schemaCache.delete(key)
+  }
+  for (const key of schemaLoads.keys()) {
+    if (key.startsWith(prefix)) schemaLoads.delete(key)
+  }
+}
 
 export const DATABASE_DRIVER_OPTIONS: ReadonlyArray<{
   id: DatabaseDriver
@@ -622,6 +649,7 @@ export function discoveredMcpProfile(): DatabaseConnectionProfile | null {
 }
 
 export function discoveredEnvironmentProfile(): DatabaseConnectionProfile | null {
+  sessionPasswords.delete("environment-database-url")
   const connectionUrl =
     process.env.DATABASE_URL?.trim() ||
     process.env.MYSQL_URL?.trim() ||
@@ -637,8 +665,7 @@ export function discoveredEnvironmentProfile(): DatabaseConnectionProfile | null
         : url.protocol.startsWith("sqlite") || url.protocol.startsWith("file")
           ? "sqlite"
           : "postgres"
-    if (url.password) sessionPasswords.set("environment-database-url", url.password)
-    return definedProperties({
+    const profile = definedProperties({
       id: "environment-database-url",
       name: "DATABASE_URL",
       driver,
@@ -652,6 +679,8 @@ export function discoveredEnvironmentProfile(): DatabaseConnectionProfile | null
       ssl: url.searchParams.has("ssl") || url.searchParams.has("sslmode"),
       writeEnabled: false,
     })
+    sessionPasswords.set("environment-database-url", decodeURIComponent(url.password))
+    return profile
   } catch {
     return null
   }
@@ -758,10 +787,9 @@ export function removeDatabaseSavedQuery(connectionId: string, queryId: string) 
 export function listDatabaseQueryHistory(connectionId?: string) {
   const settings = readSettings()
   retainHistoryContent(settings.queryHistory)
+  const scopeKey = connectionId ? savedQueryScopeKey(connectionId) : null
   const entries = connectionId
-    ? settings.queryHistory.filter(
-        (entry) => entry.connectionScope === savedQueryScopeKey(connectionId),
-      )
+    ? settings.queryHistory.filter((entry) => entry.connectionScope === scopeKey)
     : settings.queryHistory
   return entries.map(restoreHistoryContent)
 }
@@ -816,13 +844,14 @@ export function appendDatabaseQueryHistoryBatch(
   const usableEntries = entries.filter((entry) => entry.sql.trim())
   if (!profile || !usableEntries.length) return
   const settings = readSettings()
+  const connectionScope = savedQueryScopeKey(connectionId)
   const prepared = usableEntries.map((entry) => {
     const { sessionParameterPreview, ...persistedEntry } = entry
     return {
       saved: {
         id: `history-${randomUUID()}`,
         connectionId,
-        connectionScope: savedQueryScopeKey(connectionId),
+        connectionScope,
         connectionName: profile.name,
         driver: profile.driver,
         ...persistedEntry,
@@ -948,21 +977,36 @@ export function profileFromDraft(
   return definedProperties({ ...normalizedDraft(draft), id, source: "saved" as const })
 }
 
+async function closeFailedDatabaseClient(close: () => Promise<void>) {
+  try {
+    await close()
+  } catch {
+    // Cleanup must not replace the original connect, discovery or query failure.
+  }
+}
+
 export async function testDatabaseConnection(draft: DatabaseConnectionDraft, password: string) {
   const profile = profileFromDraft(draft, `test-${randomUUID()}`)
   if (password) sessionPasswords.set(profile.id, password)
+  let close: (() => Promise<void>) | undefined
+  let verified = false
   try {
     if (profile.driver === "mcp-mysql") {
       const client = await createMcpClient(profile)
+      close = () => client.close()
       await readMcpQuery(client, "SELECT 1 AS connection_ok")
-      await client.close()
     } else {
       const client = await createNativeClient(profile)
+      close = () => client.close({ timeout: 1 })
       await nativeQuery(client, "SELECT 1 AS connection_ok", profile.driver)
-      await client.close({ timeout: 1 })
     }
+    verified = true
   } finally {
     sessionPasswords.delete(profile.id)
+    if (close) {
+      if (verified) await close()
+      else await closeFailedDatabaseClient(close)
+    }
   }
 }
 
@@ -1268,13 +1312,17 @@ export async function createMcpClient(profile: DatabaseConnectionProfile) {
     throw new Error(`MCP não encontrado em ${command ?? "caminho não informado"}.`)
   }
   const client = new Client({ name: "tuiminal-database-viewer", version: "0.3.0" })
-  await client.connect(new StdioClientTransport({ command }))
-  const { tools } = await client.listTools()
-  if (!tools.some((tool) => tool.name === "mysql_query")) {
-    await client.close()
-    throw new Error("O MCP conectado não oferece a ferramenta mysql_query.")
+  try {
+    await client.connect(new StdioClientTransport({ command }))
+    const { tools } = await client.listTools()
+    if (!tools.some((tool) => tool.name === "mysql_query")) {
+      throw new Error("O MCP conectado não oferece a ferramenta mysql_query.")
+    }
+    return client
+  } catch (error) {
+    await closeFailedDatabaseClient(() => client.close())
+    throw error
   }
-  return client
 }
 
 export async function createNativeClient(profile: DatabaseConnectionProfile) {
@@ -1464,9 +1512,7 @@ export async function executeDatabaseQuery(
     const { rawResult, rows } = await editorQueryRows(profile, plan, options.signal)
 
     if (plan.mutating) {
-      for (const key of schemaCache.keys()) {
-        if (key.startsWith(`${connectionId}:`)) schemaCache.delete(key)
-      }
+      invalidateSchemaCache(connectionId)
     }
 
     const visibleRows = visibleQueryRows(rows, revealSensitive)
@@ -1532,14 +1578,6 @@ export function previewDatabaseQuery(connectionId: string, sql: string): Databas
 
 export function databaseConnectionCanWrite(profile: DatabaseConnectionProfile) {
   return profile.source === "saved" && profile.writeEnabled && profile.driver !== "mcp-mysql"
-}
-
-export async function writeQuery(connectionId: string, sql: string, parameters: unknown[]) {
-  const profile = connectionProfile(connectionId)
-  if (!databaseConnectionCanWrite(profile)) {
-    throw new Error("A escrita não está habilitada para esta conexão.")
-  }
-  return (await getNativeClient(profile)).unsafe(sql, parameters)
 }
 
 export function parameterMarker(profile: DatabaseConnectionProfile, index: number) {
@@ -1748,11 +1786,22 @@ export async function loadSchema(connectionId: string, table: DatabaseTable) {
   const profile = connectionProfile(connectionId)
   const cacheKey = `${connectionId}:${table.schema}:${table.name}`
   const cached = schemaCache.get(cacheKey)
-  if (cached) return cached
+  if (cached) {
+    rememberSchema(cacheKey, cached)
+    return cached
+  }
+  const activeLoad = schemaLoads.get(cacheKey)
+  if (activeLoad) return activeLoad
 
-  const columns = await inspectTableSchema(profile, table, (sql) => readQuery(connectionId, sql))
-  schemaCache.set(cacheKey, columns)
-  return columns
+  const pending = inspectTableSchema(profile, table, (sql) => readQuery(connectionId, sql))
+  schemaLoads.set(cacheKey, pending)
+  try {
+    const columns = await pending
+    if (schemaLoads.get(cacheKey) === pending) rememberSchema(cacheKey, columns)
+    return columns
+  } finally {
+    if (schemaLoads.get(cacheKey) === pending) schemaLoads.delete(cacheKey)
+  }
 }
 
 export function loadDatabaseTableColumns(connectionId: string, table: DatabaseTable) {
@@ -1816,7 +1865,7 @@ export function buildTablePageQuery(
     .map((column) => selectExpression(profile, column, revealSensitive))
     .join(", ")
   const safeOffset = Math.max(0, Math.floor(offset))
-  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)))
+  const safeLimit = Math.max(1, Math.floor(limit))
   const primaryColumns = columns.filter((column) => column.key === "PRI")
   const keyAliases = primaryColumns.map((_column, index) => `__tuiminal_pk_${index}`)
   const keySelectList = primaryColumns.length
@@ -1942,7 +1991,7 @@ export async function loadTablePage(
 ): Promise<TablePage> {
   const profile = connectionProfile(connectionId)
   const columns = await loadSchema(connectionId, table)
-  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)))
+  const safeLimit = Math.max(1, Math.floor(limit))
   const primaryColumns = columns.filter((column) => column.key === "PRI")
   const { keyAliases, sql } = buildTablePageQuery(
     profile,
@@ -2548,9 +2597,7 @@ export async function closeConnection(connectionId: string) {
       // The process is already shutting down.
     }
   }
-  for (const key of schemaCache.keys()) {
-    if (key.startsWith(`${connectionId}:`)) schemaCache.delete(key)
-  }
+  invalidateSchemaCache(connectionId)
 }
 
 export async function closeDatabaseConnection() {
@@ -2564,6 +2611,6 @@ export async function closeDatabaseConnection() {
     ...[...connectionIds].map(closeConnection),
     ...sqliteProcesses.map((subprocess) => subprocess.exited),
   ])
-  schemaCache.clear()
+  invalidateSchemaCache()
   clearHistoryContent()
 }

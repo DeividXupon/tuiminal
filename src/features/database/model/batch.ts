@@ -145,3 +145,15 @@ export function serializeDatabaseBatchRows(
   ]
   return `${lines.join("\n")}\n`
 }
+
+export function previewDatabaseBatchExport(
+  rows: DatabaseBatchSelectedRow[],
+  columns: string[],
+  format: DatabaseBatchExportFormat,
+  lineLimit: number,
+) {
+  const limit = Math.max(0, Math.floor(lineLimit))
+  // Every serialized row occupies at least one line, so rows beyond this prefix
+  // cannot appear in the preview (including JSON's opening line and commas).
+  return serializeDatabaseBatchRows(rows.slice(0, limit), columns, format).split("\n", limit)
+}

@@ -113,13 +113,6 @@
         26
       ]
     },
-    "src/features/database/ui/DatabaseWriteModal.tsx": {
-      "maxLines": 391,
-      "complexity": [
-        46,
-        25
-      ]
-    },
     "src/features/database/ui/RowInspector.tsx": {
       "maxLines": 164,
       "complexity": [

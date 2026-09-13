@@ -4,6 +4,7 @@ import {
   databaseBatchRowIdentity,
   databaseBatchUpdateMutations,
   type DatabaseBatchSelectedRow,
+  jsonValue,
 } from "./batch"
 import type { SqlCompletionContext } from "./sql-autocomplete"
 
@@ -62,7 +63,12 @@ export function changeTableKey(connectionId: string, table: DatabaseTable) {
 }
 
 export function rowKeyFingerprint(rowKey: Record<string, unknown>) {
-  return JSON.stringify(Object.entries(rowKey).sort(([left], [right]) => left.localeCompare(right)))
+  return JSON.stringify(
+    Object.entries(rowKey)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([field, value]) => [field, typeof value, value]),
+    jsonValue,
+  )
 }
 
 export function valuesMatch(left: unknown, right: unknown) {
@@ -83,6 +89,55 @@ export function batchRow(gridRow: DatabaseGridRow): DatabaseBatchSelectedRow {
     id: databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
     data: gridRow.data,
     rowKey: gridRow.rowKey,
+  }
+}
+
+function batchChangeIndex(
+  current: StagedDatabaseChange[],
+  connectionId: string,
+  table: DatabaseTable,
+) {
+  const changes: Array<StagedDatabaseChange | null> = [...current]
+  const indices = new Map<string, { positions: number[]; head: number }>()
+  const scope = changeTableKey(connectionId, table)
+  for (const [index, change] of current.entries()) {
+    if (
+      change.mutation.kind === "insert" ||
+      changeTableKey(change.connectionId, change.table) !== scope
+    )
+      continue
+    const fingerprint = rowKeyFingerprint(change.mutation.rowKey)
+    const bucket = indices.get(fingerprint) ?? { positions: [], head: 0 }
+    bucket.positions.push(index)
+    indices.set(fingerprint, bucket)
+  }
+  const position = (fingerprint: string) => {
+    const bucket = indices.get(fingerprint)
+    return bucket?.positions[bucket.head]
+  }
+  return {
+    get(fingerprint: string) {
+      const index = position(fingerprint)
+      return index === undefined ? null : (changes[index] ?? null)
+    },
+    set(fingerprint: string, change: StagedDatabaseChange) {
+      const index = position(fingerprint)
+      if (index !== undefined) changes[index] = change
+      else {
+        indices.set(fingerprint, { positions: [changes.length], head: 0 })
+        changes.push(change)
+      }
+    },
+    remove(fingerprint: string) {
+      const index = position(fingerprint)
+      const bucket = indices.get(fingerprint)
+      if (index === undefined || !bucket) return
+      changes[index] = null
+      bucket.head += 1
+    },
+    result() {
+      return changes.filter((change): change is StagedDatabaseChange => change !== null)
+    },
   }
 }
 
@@ -107,18 +162,12 @@ export function stageBatchUpdates({
   value: unknown
   nextId: () => string
 }) {
-  const changes = [...current]
+  const changes = batchChangeIndex(current, connectionId, table)
   let stagedCount = 0
   for (const { row, mutation } of databaseBatchUpdateMutations(rows, column.field, value)) {
     if (mutation.kind !== "update") continue
     const fingerprint = rowKeyFingerprint(mutation.rowKey)
-    const existingIndex = changes.findIndex(
-      (change) =>
-        changeTableKey(change.connectionId, change.table) === changeTableKey(connectionId, table) &&
-        change.mutation.kind !== "insert" &&
-        rowKeyFingerprint(change.mutation.rowKey) === fingerprint,
-    )
-    const existing = existingIndex >= 0 ? changes[existingIndex] : null
+    const existing = changes.get(fingerprint)
     if (existing?.mutation.kind === "delete") continue
     const originalRow = existing?.originalRow ?? row.data
     const nextValues = {
@@ -127,7 +176,7 @@ export function stageBatchUpdates({
     }
     if (valuesMatch(originalRow[column.field], value)) delete nextValues[column.field]
     if (!Object.keys(nextValues).length) {
-      if (existingIndex >= 0) changes.splice(existingIndex, 1)
+      changes.remove(fingerprint)
       continue
     }
     const nextChange: StagedDatabaseChange = {
@@ -140,11 +189,10 @@ export function stageBatchUpdates({
       originalRow,
       approved: false,
     }
-    if (existingIndex < 0) changes.push(nextChange)
-    else changes[existingIndex] = nextChange
+    changes.set(fingerprint, nextChange)
     stagedCount += 1
   }
-  return { changes, stagedCount }
+  return { changes: changes.result(), stagedCount }
 }
 
 export function stageBatchDeletes({
@@ -164,18 +212,12 @@ export function stageBatchDeletes({
   columns: DatabaseColumn[]
   nextId: () => string
 }) {
-  const changes = [...current]
+  const changes = batchChangeIndex(current, connectionId, table)
   let stagedCount = 0
   for (const { row, mutation } of databaseBatchDeleteMutations(rows)) {
     if (mutation.kind !== "delete") continue
     const fingerprint = rowKeyFingerprint(mutation.rowKey)
-    const existingIndex = changes.findIndex(
-      (change) =>
-        changeTableKey(change.connectionId, change.table) === changeTableKey(connectionId, table) &&
-        change.mutation.kind !== "insert" &&
-        rowKeyFingerprint(change.mutation.rowKey) === fingerprint,
-    )
-    const existing = existingIndex >= 0 ? changes[existingIndex] : null
+    const existing = changes.get(fingerprint)
     const nextChange: StagedDatabaseChange = {
       id: existing?.id ?? nextId(),
       connectionId,
@@ -186,9 +228,8 @@ export function stageBatchDeletes({
       originalRow: existing?.originalRow ?? row.data,
       approved: false,
     }
-    if (existingIndex < 0) changes.push(nextChange)
-    else changes[existingIndex] = nextChange
+    changes.set(fingerprint, nextChange)
     stagedCount += 1
   }
-  return { changes, stagedCount }
+  return { changes: changes.result(), stagedCount }
 }
