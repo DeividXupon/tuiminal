@@ -3,6 +3,14 @@ import { GIT_CHECKOUT_MESSAGES } from "./git-checkout-catalog"
 
 export const GIT_PR_ACTION_MESSAGES = [
   [
+    "O GitHub CLI encerrou antes de receber toda a entrada.",
+    "GitHub CLI exited before receiving all input.",
+    "GitHub CLI terminó antes de recibir toda la entrada.",
+    "GitHub CLI が入力をすべて受け取る前に終了しました。",
+    "GitHub CLI 在接收全部输入之前退出了。",
+    "GitHub CLI가 모든 입력을 받기 전에 종료되었습니다.",
+  ],
+  [
     "◆ AÇÕES DO PULL REQUEST",
     "◆ PULL REQUEST ACTIONS",
     "◆ ACCIONES DEL PULL REQUEST",

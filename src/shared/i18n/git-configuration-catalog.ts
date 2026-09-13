@@ -1,5 +1,13 @@
 export const GIT_CONFIGURATION_MESSAGES = [
   [
+    "Feche as aspas na query do GitHub.",
+    "Close the quoted text in the GitHub query.",
+    "Cierra las comillas en la consulta de GitHub.",
+    "GitHub クエリの引用符を閉じてください。",
+    "请闭合 GitHub 查询中的引号。",
+    "GitHub 쿼리의 따옴표를 닫으세요.",
+  ],
+  [
     "CONFIGURAÇÕES DO GIT",
     "GIT SETTINGS",
     "CONFIGURACIÓN DE GIT",
@@ -336,5 +344,13 @@ export const GIT_CONFIGURATION_MESSAGES = [
     "[Ctrl+P] 変更",
     "[Ctrl+P] 更改",
     "[Ctrl+P] 변경",
+  ],
+  [
+    "Escolha qualquer repositório Git local",
+    "Choose any local Git repository",
+    "Elige cualquier repositorio Git local",
+    "任意のローカル Git リポジトリを選択",
+    "选择任意本地 Git 仓库",
+    "로컬 Git 저장소 선택",
   ],
 ] as const

@@ -21,7 +21,7 @@ export function registerIssueResourceDisposer(dispose: () => void | Promise<void
 export async function disposeIssueResources() {
   const disposers = [...issueResourceDisposers]
   issueResourceDisposers.clear()
-  await Promise.allSettled(disposers.map((dispose) => dispose()))
+  await Promise.allSettled(disposers.map(async (dispose) => dispose()))
 }
 
 export type IssueSessionResult =

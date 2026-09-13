@@ -67,8 +67,11 @@ function failureMessage(error: unknown) {
     : translateUi("Não foi possível salvar a configuração.")
 }
 
-async function loadInitialGitConfiguration(): Promise<GitConfigurationReadyState> {
+async function loadInitialGitConfiguration(
+  signal: AbortSignal,
+): Promise<GitConfigurationReadyState> {
   const context = await resolveGitProjectContext()
+  signal.throwIfAborted()
   const pullRequests = loadPullRequestConfig()
   const issues = loadIssueConfig()
   const local = loadGitDiffsConfig()
@@ -78,6 +81,7 @@ async function loadInitialGitConfiguration(): Promise<GitConfigurationReadyState
   const fallbackLocalRoot = context.isRepository ? context.root : context.launchDirectory
   const configuredLocalRoot = gitDiffsTargetForScope(local.config, context.root, fallbackLocalRoot)
   let localTarget = await loadLocalGitTarget(configuredLocalRoot)
+  signal.throwIfAborted()
   let localProjectError = local.error ?? ""
   if (!localTarget.isRepository && configuredLocalRoot !== fallbackLocalRoot) {
     localTarget = await loadLocalGitTarget(fallbackLocalRoot)
@@ -122,9 +126,10 @@ async function loadInitialGitConfiguration(): Promise<GitConfigurationReadyState
   }
 }
 
-async function loadRepositoryCatalog(state: GitConfigurationReadyState) {
-  const transport = transportFromEnvironment()
+async function loadRepositoryCatalog(state: GitConfigurationReadyState, signal: AbortSignal) {
+  const transport = { ...transportFromEnvironment(), signal }
   const capabilities = await detectGhCapabilities(transport)
+  signal.throwIfAborted()
   if (!capabilities.supported) {
     throw new Error(
       capabilities.reason === "missing"
@@ -188,41 +193,41 @@ export function useGitConfiguration(
 ) {
   const [state, setState] = useState<GitConfigurationState>({ status: "loading" })
   const [notice, setNotice] = useState("")
-  const generationRef = useRef(0)
+  const readerRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
-    const generation = generationRef.current + 1
-    generationRef.current = generation
+    readerRef.current?.abort()
+    const reader = new AbortController()
+    readerRef.current = reader
+    const publish = (update: (current: GitConfigurationState) => GitConfigurationState) => {
+      if (reader.signal.aborted) return
+      setState((current) => (reader.signal.aborted ? current : update(current)))
+    }
     setState({ status: "loading" })
     setNotice("")
     try {
-      const initial = await loadInitialGitConfiguration()
-      if (generation !== generationRef.current) return
+      const initial = await loadInitialGitConfiguration(reader.signal)
+      if (reader.signal.aborted) return
       setState(initial)
-      const [catalog, localProjects] = await Promise.allSettled([
-        loadRepositoryCatalog(initial),
-        discoverLocalGitProjects(initial.localTarget.root),
+      await Promise.all([
+        loadRepositoryCatalog(initial, reader.signal).then(
+          (catalog) => publish((current) => mergeRepositoryCatalog(current, catalog)),
+          (error) => publish((current) => repositoryLoadFailure(current, error)),
+        ),
+        discoverLocalGitProjects(initial.localTarget.root).then(
+          (projects) => publish((current) => mergeLocalProjects(current, projects)),
+          (error) => publish((current) => localProjectLoadFailure(current, error)),
+        ),
       ])
-      if (generation !== generationRef.current) return
-      setState((current) => {
-        const withCatalog =
-          catalog.status === "fulfilled"
-            ? mergeRepositoryCatalog(current, catalog.value)
-            : repositoryLoadFailure(current, catalog.reason)
-        return localProjects.status === "fulfilled"
-          ? mergeLocalProjects(withCatalog, localProjects.value)
-          : localProjectLoadFailure(withCatalog, localProjects.reason)
-      })
     } catch (error) {
-      if (generation !== generationRef.current) return
-      setState((current) => repositoryLoadFailure(current, error))
+      publish((current) => repositoryLoadFailure(current, error))
     }
   }, [])
 
   useEffect(() => {
     if (open) void load()
     return () => {
-      generationRef.current += 1
+      readerRef.current?.abort()
     }
   }, [load, open])
 

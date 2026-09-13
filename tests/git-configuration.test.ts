@@ -174,16 +174,13 @@ describe("local Diffs target", () => {
 
   test("groups compared paths in a collapsible file tree", () => {
     const expanded = createPathTreeOptions(["README.md", "src/api/client.ts"], new Set())
-    expect(expanded.map((option) => option.name)).toEqual([
-      "▾ src/api/",
-      "  client.ts",
-      "README.md",
-    ])
+    expect(expanded.map((option) => option.name)).toEqual(["▾ src/", "  client.ts", "README.md"])
+    expect(expanded[0]?.folderChain).toEqual(["src", "api"])
     expect(
       createPathTreeOptions(["README.md", "src/api/client.ts"], new Set(["src/api"])).map(
         (option) => option.name,
       ),
-    ).toEqual(["▸ src/api/", "README.md"])
+    ).toEqual(["▸ src/", "README.md"])
   })
 
   test("maps comparison and picker shortcuts without stealing search input keys", () => {

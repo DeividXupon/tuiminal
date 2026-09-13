@@ -10,7 +10,7 @@ import type {
 } from "../model/pr/types"
 import { loadPullRequestDetailPage } from "./github/detail-pages"
 import { loadPullRequestDetails } from "./github/details"
-import type { GhTransportOptions } from "./github/transport"
+import { type GhTransportOptions, GitHubTransportError } from "./github/transport"
 import { registerPullRequestSessionDisposer } from "./pr-session"
 
 const DETAILS_CACHE_LIMIT = 32
@@ -25,10 +25,11 @@ export class PullRequestDetailsSession {
   }
 
   private key(item: PullRequestSummary) {
-    return `${pullRequestIdentityKey(item.identity)}:${item.headSha}`
+    return `${pullRequestIdentityKey(item.identity)}:${item.headSha}:${item.updatedAt}`
   }
 
   private remember(key: string, details: PullRequestDetails) {
+    this.cache.delete(key)
     this.cache.set(key, details)
     while (this.cache.size > DETAILS_CACHE_LIMIT) {
       const oldest = this.cache.keys().next().value
@@ -38,6 +39,7 @@ export class PullRequestDetailsSession {
   }
 
   async load(item: PullRequestSummary) {
+    this.cancel()
     const key = this.key(item)
     const cached = this.cache.get(key)
     if (cached) {
@@ -53,14 +55,17 @@ export class PullRequestDetailsSession {
     this.activeController?.abort()
     const controller = new AbortController()
     this.activeController = controller
-    const details = await loadPullRequestDetails({
-      identity: item.identity,
-      options: { ...this.transport, signal: controller.signal },
-    })
-    if (details) {
-      this.remember(key, details)
+    try {
+      const details = await loadPullRequestDetails({
+        identity: item.identity,
+        options: { ...this.transport, signal: controller.signal },
+      })
+      this.assertCurrent(controller)
+      if (details) this.remember(key, details)
+      return { details, fromCache: false }
+    } finally {
+      if (this.activeController === controller) this.activeController = null
     }
-    return { details, fromCache: false }
   }
 
   async loadMore(
@@ -75,21 +80,33 @@ export class PullRequestDetailsSession {
     this.activeController?.abort()
     const controller = new AbortController()
     this.activeController = controller
-    const page = await loadPullRequestDetailPage({
-      identity: item.identity,
-      connection,
-      after,
-      options: { ...this.transport, signal: controller.signal },
-    })
-    if (!page) return current
-    const merged = mergePullRequestDetailPage(current, page, connection)
-    this.remember(this.key(item), merged)
-    return merged
+    try {
+      const page = await loadPullRequestDetailPage({
+        identity: item.identity,
+        connection,
+        after,
+        options: { ...this.transport, signal: controller.signal },
+      })
+      this.assertCurrent(controller)
+      if (!page) return current
+      const merged = mergePullRequestDetailPage(current, page, connection)
+      this.remember(this.key(item), merged)
+      return merged
+    } finally {
+      if (this.activeController === controller) this.activeController = null
+    }
+  }
+
+  private assertCurrent(controller: AbortController) {
+    if (this.activeController !== controller || controller.signal.aborted) {
+      throw new GitHubTransportError("cancelled", "GitHub request cancelled")
+    }
   }
 
   cancel() {
-    this.activeController?.abort()
+    const controller = this.activeController
     this.activeController = null
+    controller?.abort()
   }
 
   dispose() {

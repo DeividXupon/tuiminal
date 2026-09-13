@@ -113,25 +113,6 @@ export function updatePullRequestProfile({
   return savePullRequestConfig(loaded.config, path)
 }
 
-export function removePullRequestProfileRepository({
-  root,
-  repository,
-  path = PULL_REQUEST_CONFIG_PATH,
-}: {
-  root: string
-  repository: string
-  path?: string
-}) {
-  return updatePullRequestProfile({
-    root,
-    path,
-    update: (profile) => ({
-      ...profile,
-      repositories: profile.repositories.filter((candidate) => candidate !== repository),
-    }),
-  })
-}
-
 export function addPullRequestClonePath({
   host,
   repository,

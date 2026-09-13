@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { translateUi } from "../../../../shared/i18n"
 
 export type GitHubTransportErrorKind =
   | "not-found"
@@ -8,6 +9,7 @@ export type GitHubTransportErrorKind =
   | "timeout"
   | "cancelled"
   | "output-limit"
+  | "input-failed"
   | "invalid-json"
   | "command-failed"
 
@@ -107,7 +109,16 @@ export function runGhCommand(
       new GitHubTransportError("command-failed", "Invalid null byte in gh argument"),
     )
   }
+  if (options.signal?.aborted) {
+    return Promise.reject(new GitHubTransportError("cancelled", "GitHub request cancelled"))
+  }
   return new Promise((resolve, reject) => {
+    let closed = false
+    let inputFailed = false
+    let finish: (() => void) | undefined
+    const settle = () => {
+      if (closed) finish?.()
+    }
     const child = execFile(
       options.executable ?? "gh",
       [...request.args],
@@ -116,19 +127,35 @@ export function runGhCommand(
         env: safeEnvironment(options),
         encoding: "utf8",
         timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        killSignal: "SIGKILL",
         maxBuffer: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
         signal: options.signal,
         windowsHide: true,
       },
       (error, stdout, stderr) => {
-        if (error) {
-          const detail = stderr.trim() || stdout.trim() || error.message
-          reject(classifyCommandFailure(Object.assign(error, { message: detail })))
-          return
+        finish = () => {
+          if (error) {
+            const detail = stderr.trim() || stdout.trim() || error.message
+            reject(classifyCommandFailure(Object.assign(error, { message: detail })))
+          } else if (inputFailed) {
+            reject(
+              new GitHubTransportError(
+                "input-failed",
+                translateUi("O GitHub CLI encerrou antes de receber toda a entrada."),
+              ),
+            )
+          } else resolve({ stdout, stderr, exitCode: 0 })
         }
-        resolve({ stdout, stderr, exitCode: 0 })
+        settle()
       },
     )
+    child.once("close", () => {
+      closed = true
+      settle()
+    })
+    child.stdin?.on("error", () => {
+      inputFailed = true
+    })
     if (request.stdin === undefined) child.stdin?.end()
     else child.stdin?.end(request.stdin, "utf8")
   })

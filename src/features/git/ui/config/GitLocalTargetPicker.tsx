@@ -1,6 +1,5 @@
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import { translateUi } from "../../../../shared/i18n"
@@ -36,6 +35,8 @@ export function GitLocalTargetPicker({
   const inputRef = useRef<InputRenderable | null>(null)
   const listRef = useRef<SelectRenderable | null>(null)
   const [query, setQuery] = useState("")
+  const activeRef = useRef(true)
+  const selectingRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -66,30 +67,44 @@ export function GitLocalTargetPicker({
   }, [kind, normalizedQuery, projects, target.branch, target.branches, target.root])
 
   useEffect(() => {
+    activeRef.current = true
     renderer.currentFocusedRenderable?.blur()
     const timeout = setTimeout(() => {
       if (listRef.current) listRef.current.focus()
       else dialogRef.current?.focus()
     }, 0)
-    return () => clearTimeout(timeout)
+    return () => {
+      activeRef.current = false
+      clearTimeout(timeout)
+    }
   }, [renderer])
 
+  const close = () => {
+    if (!activeRef.current) return
+    activeRef.current = false
+    onClose()
+  }
+
   const select = async (value: string) => {
-    if (busy) return
+    if (!activeRef.current || selectingRef.current) return
+    selectingRef.current = true
     setBusy(true)
     setError("")
     try {
       const saved = kind === "project" ? await onSelectProject(value) : await onSelectBranch(value)
-      if (saved) onClose()
+      if (!activeRef.current) return
+      if (saved) close()
       else setError(translateUi("Não foi possível aplicar a seleção."))
     } catch (selectionError) {
+      if (!activeRef.current) return
       setError(
         selectionError instanceof Error
           ? selectionError.message
           : translateUi("Não foi possível aplicar a seleção."),
       )
     } finally {
-      setBusy(false)
+      selectingRef.current = false
+      if (activeRef.current) setBusy(false)
     }
   }
 
@@ -102,7 +117,7 @@ export function GitLocalTargetPicker({
         inputRef.current?.blur()
         if (listRef.current) listRef.current.focus()
         else dialogRef.current?.focus()
-      } else onClose()
+      } else close()
       return
     }
     if (key.name === "/" && focusedId !== "git-local-target-search") {
@@ -116,8 +131,7 @@ export function GitLocalTargetPicker({
   const title = kind === "project" ? "◆ ESCOLHER PROJETO LOCAL" : "◆ ESCOLHER BRANCH LOCAL"
   return (
     <>
-      <Button
-        onPress={onClose}
+      <box
         position="absolute"
         top={0}
         left={0}
@@ -127,7 +141,14 @@ export function GitLocalTargetPicker({
         backgroundColor="#030509"
         opacity={0.94}
       />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: native modal backdrop; Escape is handled above. */}
       <box
+        onMouseDown={(event) => {
+          if (event.button !== 0 || event.target !== event.currentTarget) return
+          event.preventDefault()
+          event.stopPropagation()
+          close()
+        }}
         position="absolute"
         top={0}
         left={0}
@@ -164,9 +185,10 @@ export function GitLocalTargetPicker({
           >
             <text content={translateUi(title)} style={{ fg: COLORS.git }} />
             <InlineButton
+              id="git-local-target-close"
               label={translateUi("[Esc] Voltar")}
               accent={COLORS.git}
-              onPress={onClose}
+              onPress={close}
             />
           </box>
           <input

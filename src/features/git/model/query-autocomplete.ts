@@ -41,11 +41,14 @@ function activeToken(query: string) {
   return query.match(/(?:^|\s)([^\s]*)$/)?.[1] ?? ""
 }
 
-function repositorySuggestions(repositories: readonly string[]) {
-  return repositories.map((repository) => ({
-    value: `repo:${repository}`,
-    description: "repositório deste perfil",
-  }))
+function* queryCandidates(kind: GitHubQueryKind, repositories: readonly string[], token: string) {
+  if (!token || "repo:".startsWith(token) || token.startsWith("repo:")) {
+    for (const repository of repositories) {
+      yield { value: `repo:${repository}`, description: "repositório deste perfil" }
+    }
+  }
+  yield* kind === "pr" ? PR_SUGGESTIONS : ISSUE_SUGGESTIONS
+  yield* COMMON_SUGGESTIONS
 }
 
 export function githubQuerySuggestions({
@@ -59,17 +62,18 @@ export function githubQuerySuggestions({
   repositories?: readonly string[]
   limit?: number
 }) {
+  const maximum = Math.max(0, Math.trunc(limit)) || 0
+  if (!maximum) return []
   const token = activeToken(query).toLowerCase()
   const existing = new Set(query.toLowerCase().split(/\s+/).filter(Boolean))
-  const candidates = [
-    ...repositorySuggestions(repositories),
-    ...(kind === "pr" ? PR_SUGGESTIONS : ISSUE_SUGGESTIONS),
-    ...COMMON_SUGGESTIONS,
-  ]
-  return candidates
-    .filter((suggestion) => !existing.has(suggestion.value.toLowerCase()))
-    .filter((suggestion) => !token || suggestion.value.toLowerCase().startsWith(token))
-    .slice(0, Math.max(0, limit))
+  const result: GitHubQuerySuggestion[] = []
+  for (const suggestion of queryCandidates(kind, repositories, token)) {
+    const value = suggestion.value.toLowerCase()
+    if (existing.has(value) || (token && !value.startsWith(token))) continue
+    result.push(suggestion)
+    if (result.length >= maximum) break
+  }
+  return result
 }
 
 export function applyGitHubQuerySuggestion(query: string, suggestion: string) {

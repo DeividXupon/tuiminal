@@ -8,16 +8,17 @@ import { loadNotificationsPage } from "./github/notifications"
 import type { GhTransportOptions } from "./github/transport"
 import { resolveGitProjectContext } from "./git"
 
-const inboxDisposers = new Set<() => void>()
+const inboxDisposers = new Set<() => void | Promise<void>>()
 
-export function registerInboxDisposer(dispose: () => void) {
+export function registerInboxDisposer(dispose: () => void | Promise<void>) {
   inboxDisposers.add(dispose)
   return () => inboxDisposers.delete(dispose)
 }
 
-export function disposeInboxResources() {
-  for (const dispose of [...inboxDisposers]) dispose()
+export async function disposeInboxResources() {
+  const disposers = [...inboxDisposers]
   inboxDisposers.clear()
+  await Promise.allSettled(disposers.map(async (dispose) => dispose()))
 }
 
 export type InboxSessionResult =

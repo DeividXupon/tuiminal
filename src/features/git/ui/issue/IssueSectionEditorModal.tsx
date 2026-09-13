@@ -7,9 +7,9 @@ import { translateUi } from "../../../../shared/i18n"
 import { InlineButton } from "../../../../shared/ui/InlineButton"
 import { ShortcutText } from "../../../../shared/ui/ShortcutText"
 import { ISSUE_COLUMNS } from "../../model/issue/config"
-import { normalizeIssueQuery } from "../../model/issue/query"
 import { parseIssueSectionOptions } from "../../model/issue/sections"
 import type { IssueColumn, IssueSort } from "../../model/issue/types"
+import { readGitHubSearchQuery } from "../../model/search-query"
 import { GitHubQuerySuggestions } from "../query/GitHubQuerySuggestions"
 import { useGitHubQueryAutocomplete } from "../query/useGitHubQueryAutocomplete"
 
@@ -72,13 +72,19 @@ export function IssueSectionEditorModal({
 
   const validate = useCallback(() => {
     const title = valuesRef.current.title.trim()
-    const query = normalizeIssueQuery(valuesRef.current.query)
     if (hasTitle && !title) return translateUi("Informe o nome da seção.")
-    if (!query) return translateUi("Informe uma query do GitHub.")
-    if (!hasTitle) {
-      return { title, query, columns: [...ISSUE_COLUMNS], sort: "updated-desc" as const, limit: 20 }
-    }
     try {
+      const { normalized: query } = readGitHubSearchQuery(valuesRef.current.query)
+      if (!query) return translateUi("Informe uma query do GitHub.")
+      if (!hasTitle) {
+        return {
+          title,
+          query,
+          columns: [...ISSUE_COLUMNS],
+          sort: "updated-desc" as const,
+          limit: 20,
+        }
+      }
       return { title, query, ...parseIssueSectionOptions(valuesRef.current) }
     } catch (reason) {
       return translateUi(reason instanceof Error ? reason.message : "Opções da seção inválidas")

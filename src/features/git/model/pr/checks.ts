@@ -15,15 +15,19 @@ export type PullRequestCheckSummary = {
 export function summarizePullRequestChecks(
   checks: readonly PullRequestCheck[],
 ): PullRequestCheckSummary {
-  const count = (state: PullRequestCheck["state"]) =>
-    checks.filter((check) => check.state === state).length
   const summary = {
-    success: count("success"),
-    failure: count("failure"),
-    pending: count("pending"),
-    cancelled: count("cancelled"),
-    skipped: count("skipped"),
-    unknown: count("unknown"),
+    success: 0,
+    failure: 0,
+    pending: 0,
+    cancelled: 0,
+    skipped: 0,
+    unknown: 0,
+  }
+  const signatures: string[] = []
+  for (const check of checks) {
+    const state = check.state
+    if (state !== "none") summary[state] += 1
+    signatures.push(`${check.id}:${check.attempt ?? 1}:${state}`)
   }
   const terminal = checks.length > 0 && summary.pending === 0 && summary.unknown === 0
   const state = !checks.length
@@ -37,10 +41,7 @@ export function summarizePullRequestChecks(
     ...summary,
     state,
     terminal,
-    signature: checks
-      .map((check) => `${check.id}:${check.attempt ?? 1}:${check.state}`)
-      .sort()
-      .join("|"),
+    signature: signatures.sort().join("|"),
   }
 }
 

@@ -1,17 +1,27 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
-import { formatUiDateTime, translateUi, truncateDisplay } from "../../../../shared/i18n"
+import {
+  formatUiDateTime,
+  getLanguage,
+  type LanguageId,
+  translateUi,
+  truncateDisplay,
+} from "../../../../shared/i18n"
 import type { InboxNotification } from "../../model/inbox/types"
 
-function updated(value: string) {
-  return formatUiDateTime(value, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+function updated(value: string, language: LanguageId) {
+  return formatUiDateTime(
+    value,
+    {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+    language,
+  )
 }
 
 function InboxRow({
@@ -32,7 +42,14 @@ function InboxRow({
   onSelect: (index: number) => void
 }) {
   const marker = item.unread ? "●" : "○"
-  const suffix = `${item.subjectType} · ${updated(item.updatedAt)}${saved ? " · ★" : ""}`
+  const language = getLanguage()
+  const lines = useMemo(() => {
+    const suffix = `${item.subjectType} · ${updated(item.updatedAt, language)}${saved ? " · ★" : ""}`
+    return {
+      repository: truncateDisplay(item.repository, Math.max(12, width - 7)),
+      subject: truncateDisplay(`${item.title} · ${suffix}`, Math.max(8, width - 2)),
+    }
+  }, [item, width, saved, language])
   return (
     <box
       id={`git-inbox-row-${index}`}
@@ -44,7 +61,7 @@ function InboxRow({
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`${selected ? "▶" : " "} ${marker} ${truncateDisplay(item.repository, Math.max(12, width - 7))}`}
+          content={`${selected ? "▶" : " "} ${marker} ${lines.repository}`}
           style={{
             fg: selected && focused ? COLORS.git : item.unread ? COLORS.text : COLORS.muted,
           }}
@@ -52,7 +69,7 @@ function InboxRow({
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`  ${truncateDisplay(`${item.title} · ${suffix}`, Math.max(8, width - 2))}`}
+          content={`  ${lines.subject}`}
           style={{ fg: selected ? COLORS.text : COLORS.muted }}
         />
       </Button>

@@ -7,7 +7,10 @@ import { pullRequestIdentityKey } from "../model/pr/query"
 import type { PullRequestCheck, PullRequestSummary } from "../model/pr/types"
 import { registerPullRequestSessionDisposer } from "./pr-session"
 
-type WatchReader = (item: PullRequestSummary) => Promise<readonly PullRequestCheck[]>
+type WatchReader = (
+  item: PullRequestSummary,
+  signal: AbortSignal,
+) => Promise<readonly PullRequestCheck[]>
 type WatchNotification = (item: PullRequestSummary, summary: PullRequestCheckSummary) => void
 
 type WatchEntry = {
@@ -16,6 +19,7 @@ type WatchEntry = {
   failures: number
   timer: ReturnType<typeof setTimeout> | null
   stopped: boolean
+  controller: AbortController
 }
 
 export class PullRequestWatchScheduler {
@@ -44,7 +48,14 @@ export class PullRequestWatchScheduler {
     const key = this.key(item)
     if (this.entries.has(key)) return true
     if (this.entries.size >= (this.options.maxWatches ?? 10)) return false
-    const entry: WatchEntry = { item, previous: null, failures: 0, timer: null, stopped: false }
+    const entry: WatchEntry = {
+      item,
+      previous: null,
+      failures: 0,
+      timer: null,
+      stopped: false,
+      controller: new AbortController(),
+    }
     this.entries.set(key, entry)
     void this.poll(key, entry)
     return true
@@ -55,6 +66,7 @@ export class PullRequestWatchScheduler {
     const entry = this.entries.get(key)
     if (!entry) return false
     entry.stopped = true
+    entry.controller.abort()
     if (entry.timer) (this.options.clearTimer ?? clearTimeout)(entry.timer)
     this.entries.delete(key)
     return true
@@ -76,17 +88,16 @@ export class PullRequestWatchScheduler {
   }
 
   private async poll(key: string, entry: WatchEntry) {
+    if (this.entries.get(key) !== entry) return
     try {
-      const summary = summarizePullRequestChecks(await this.read(entry.item))
-      if (pullRequestCheckTransitionShouldNotify(entry.previous, summary)) {
-        this.notify(entry.item, summary)
-      }
+      const checks = await this.read(entry.item, entry.controller.signal)
+      if (this.entries.get(key) !== entry) return
+      const summary = summarizePullRequestChecks(checks)
+      const shouldNotify = pullRequestCheckTransitionShouldNotify(entry.previous, summary)
       entry.previous = summary
       entry.failures = 0
-      if (summary.terminal) {
-        this.unwatch(entry.item)
-        return
-      }
+      if (summary.terminal) this.unwatch(entry.item)
+      if (shouldNotify) this.notify(entry.item, summary)
     } catch {
       entry.failures += 1
     }
@@ -96,6 +107,7 @@ export class PullRequestWatchScheduler {
   dispose() {
     for (const entry of this.entries.values()) {
       entry.stopped = true
+      entry.controller.abort()
       if (entry.timer) (this.options.clearTimer ?? clearTimeout)(entry.timer)
     }
     this.entries.clear()

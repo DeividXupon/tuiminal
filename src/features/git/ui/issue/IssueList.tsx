@@ -1,10 +1,12 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
 import {
   displayWidth,
   formatUiDateTime,
+  getLanguage,
+  type LanguageId,
   translateUi,
   truncateDisplay,
 } from "../../../../shared/i18n"
@@ -17,17 +19,22 @@ function hasColumn(columns: readonly IssueColumn[], column: IssueColumn) {
   return columns.includes(column)
 }
 
-function updatedLabel(value: string) {
-  return formatUiDateTime(value, { month: "2-digit", day: "2-digit" })
+function updatedLabel(value: string, language: LanguageId) {
+  return formatUiDateTime(value, { month: "2-digit", day: "2-digit" }, language)
 }
 
-function primaryLine(item: IssueSummary, width: number, columns: readonly IssueColumn[]) {
+function primaryLine(
+  item: IssueSummary,
+  width: number,
+  columns: readonly IssueColumn[],
+  language: LanguageId,
+) {
   const repository = `${item.identity.owner}/${item.identity.repository}`
   const state = hasColumn(columns, "state") ? `${STATE_MARK[item.state]} ` : ""
   const repo = hasColumn(columns, "repository") ? `${repository} ` : ""
   const fixed = `${state}${repo}#${item.identity.number}  `
   const status = [
-    hasColumn(columns, "updated") ? updatedLabel(item.updatedAt) : "",
+    hasColumn(columns, "updated") ? updatedLabel(item.updatedAt, language) : "",
     hasColumn(columns, "comments") ? `● ${item.commentCount}` : "",
     hasColumn(columns, "reactions") ? `♥ ${item.reactionCount}` : "",
   ]
@@ -38,13 +45,18 @@ function primaryLine(item: IssueSummary, width: number, columns: readonly IssueC
   return truncateDisplay(`${fixed}${title}${status ? `  ${status}` : ""}`, width)
 }
 
-function secondaryLine(item: IssueSummary, width: number, columns: readonly IssueColumn[]) {
+function secondaryLine(
+  item: IssueSummary,
+  width: number,
+  columns: readonly IssueColumn[],
+  language: LanguageId,
+) {
   const assignees = item.assignees.length
     ? item.assignees.map((actor) => `@${actor.login}`).join(",")
-    : translateUi("sem responsáveis")
+    : translateUi("sem responsáveis", language)
   const labels = item.labels.length
     ? item.labels.map((label) => label.name).join(",")
-    : translateUi("sem labels")
+    : translateUi("sem labels", language)
   return truncateDisplay(
     [
       hasColumn(columns, "author") ? `@${item.author.login}` : "",
@@ -74,6 +86,14 @@ function IssueRow({
   columns: readonly IssueColumn[]
   onSelect: (index: number) => void
 }) {
+  const language = getLanguage()
+  const lines = useMemo(
+    () => ({
+      primary: primaryLine(item, width - 2, columns, language),
+      secondary: secondaryLine(item, width - 2, columns, language),
+    }),
+    [item, width, columns, language],
+  )
   return (
     <box
       id={`git-issue-row-${index}`}
@@ -86,13 +106,13 @@ function IssueRow({
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`${selected ? "▶" : " "} ${primaryLine(item, width - 2, columns)}`}
+          content={`${selected ? "▶" : " "} ${lines.primary}`}
           style={{ fg: selected && focused ? COLORS.git : COLORS.text }}
         />
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`  ${secondaryLine(item, width - 2, columns)}`}
+          content={`  ${lines.secondary}`}
           style={{ fg: selected ? COLORS.muted : COLORS.border }}
         />
       </Button>

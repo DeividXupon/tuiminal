@@ -1,4 +1,7 @@
+import { hasGitHubSearchQualifier, readGitHubSearchQuery } from "../search-query"
 import type { PullRequestIdentity } from "./types"
+
+export { normalizeGitHubSearchQuery as normalizePullRequestQuery } from "../search-query"
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const ACCOUNT_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
@@ -14,48 +17,9 @@ export type PullRequestAccountScope = {
   repositories?: readonly string[]
 }
 
-function queryHasQualifier(query: string, qualifier: string) {
-  const escaped = qualifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  return new RegExp(`(?:^|\\s)${escaped}(?=\\s|$)`, "i").test(query)
-}
-
-function queryHasExplicitRepositoryScope(query: string) {
-  return /(?:^|\s)(?:repo|user|org):\S+/i.test(query)
-}
-
-function queryIsScopedToViewer(query: string) {
-  return /(?:^|\s)(?:author|assignee|review-requested|reviewed-by|involves|mentions|commenter):@me(?=\s|$)/i.test(
-    query,
-  )
-}
-
 function validateAccountLogin(login: string) {
   if (!ACCOUNT_LOGIN_PATTERN.test(login)) throw new Error(`Invalid GitHub account: ${login}`)
   return login
-}
-
-export function normalizePullRequestQuery(value: string) {
-  let normalized = ""
-  let quote: '"' | "'" | null = null
-  let pendingSpace = false
-  for (const character of value.trim()) {
-    if (!quote && (character === '"' || character === "'")) {
-      if (pendingSpace && normalized) normalized += " "
-      pendingSpace = false
-      quote = character
-      normalized += character
-    } else if (quote && character === quote) {
-      quote = null
-      normalized += character
-    } else if (!quote && /\s/.test(character)) {
-      pendingSpace = true
-    } else {
-      if (pendingSpace && normalized) normalized += " "
-      pendingSpace = false
-      normalized += character
-    }
-  }
-  return normalized
 }
 
 export function validateRepositoryName(repository: string) {
@@ -93,16 +57,16 @@ export function buildEffectivePullRequestQueries({
   repositories: readonly string[]
   accountScope?: PullRequestAccountScope
 }): EffectivePullRequestQuery[] {
-  const normalized = normalizePullRequestQuery(query)
-  if (queryHasQualifier(normalized, "is:issue")) {
+  const { normalized, qualifiers } = readGitHubSearchQuery(query)
+  if (hasGitHubSearchQualifier(qualifiers, "is", "issue")) {
     throw new Error("Pull request queries cannot include is:issue")
   }
-  if (repositories.length && /(?:^|\s)repo:\S+/i.test(normalized)) {
+  if (repositories.length && hasGitHubSearchQualifier(qualifiers, "repo")) {
     throw new Error("Use the structured repository scope instead of repo: in the query")
   }
   const base = [
-    queryHasQualifier(normalized, "is:pr") ? normalized : `is:pr ${normalized}`,
-    queryHasQualifier(normalized, "archived:false") ? "" : "archived:false",
+    hasGitHubSearchQualifier(qualifiers, "is", "pr") ? normalized : `is:pr ${normalized}`,
+    hasGitHubSearchQualifier(qualifiers, "archived", "false") ? "" : "archived:false",
   ]
     .filter(Boolean)
     .join(" ")
@@ -115,8 +79,16 @@ export function buildEffectivePullRequestQueries({
   }
   if (
     !accountScope ||
-    queryHasExplicitRepositoryScope(normalized) ||
-    queryIsScopedToViewer(normalized)
+    ["repo", "user", "org"].some((name) => hasGitHubSearchQualifier(qualifiers, name)) ||
+    [
+      "author",
+      "assignee",
+      "review-requested",
+      "reviewed-by",
+      "involves",
+      "mentions",
+      "commenter",
+    ].some((name) => hasGitHubSearchQualifier(qualifiers, name, "@me"))
   ) {
     return [{ repository: null, query: base }]
   }

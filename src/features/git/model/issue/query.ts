@@ -1,4 +1,7 @@
+import { hasGitHubSearchQualifier, readGitHubSearchQuery } from "../search-query"
 import type { IssueIdentity } from "./types"
+
+export { normalizeGitHubSearchQuery as normalizeIssueQuery } from "../search-query"
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const ACCOUNT_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
@@ -14,46 +17,9 @@ export type IssueAccountScope = {
   repositories?: readonly string[]
 }
 
-function queryHasQualifier(query: string, qualifier: string) {
-  const escaped = qualifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  return new RegExp(`(?:^|\\s)${escaped}(?=\\s|$)`, "i").test(query)
-}
-
-function queryHasExplicitRepositoryScope(query: string) {
-  return /(?:^|\s)(?:repo|user|org):\S+/i.test(query)
-}
-
-function queryIsScopedToViewer(query: string) {
-  return /(?:^|\s)(?:author|assignee|involves|mentions|commenter):@me(?=\s|$)/i.test(query)
-}
-
 function validateAccountLogin(login: string) {
   if (!ACCOUNT_LOGIN_PATTERN.test(login)) throw new Error(`Invalid GitHub account: ${login}`)
   return login
-}
-
-export function normalizeIssueQuery(value: string) {
-  let normalized = ""
-  let quote: '"' | "'" | null = null
-  let pendingSpace = false
-  for (const character of value.trim()) {
-    if (!quote && (character === '"' || character === "'")) {
-      if (pendingSpace && normalized) normalized += " "
-      pendingSpace = false
-      quote = character
-      normalized += character
-    } else if (quote && character === quote) {
-      quote = null
-      normalized += character
-    } else if (!quote && /\s/.test(character)) {
-      pendingSpace = true
-    } else {
-      if (pendingSpace && normalized) normalized += " "
-      pendingSpace = false
-      normalized += character
-    }
-  }
-  return normalized
 }
 
 export function validateIssueRepositoryName(repository: string) {
@@ -86,16 +52,16 @@ export function buildEffectiveIssueQueries({
   repositories: readonly string[]
   accountScope?: IssueAccountScope
 }): EffectiveIssueQuery[] {
-  const normalized = normalizeIssueQuery(query)
-  if (queryHasQualifier(normalized, "is:pr")) {
+  const { normalized, qualifiers } = readGitHubSearchQuery(query)
+  if (hasGitHubSearchQualifier(qualifiers, "is", "pr")) {
     throw new Error("Issue queries cannot include is:pr")
   }
-  if (repositories.length && /(?:^|\s)repo:\S+/i.test(normalized)) {
+  if (repositories.length && hasGitHubSearchQualifier(qualifiers, "repo")) {
     throw new Error("Use the structured repository scope instead of repo: in the query")
   }
   const base = [
-    queryHasQualifier(normalized, "is:issue") ? normalized : `is:issue ${normalized}`,
-    queryHasQualifier(normalized, "archived:false") ? "" : "archived:false",
+    hasGitHubSearchQualifier(qualifiers, "is", "issue") ? normalized : `is:issue ${normalized}`,
+    hasGitHubSearchQualifier(qualifiers, "archived", "false") ? "" : "archived:false",
   ]
     .filter(Boolean)
     .join(" ")
@@ -110,8 +76,10 @@ export function buildEffectiveIssueQueries({
   }
   if (
     !accountScope ||
-    queryHasExplicitRepositoryScope(normalized) ||
-    queryIsScopedToViewer(normalized)
+    ["repo", "user", "org"].some((name) => hasGitHubSearchQualifier(qualifiers, name)) ||
+    ["author", "assignee", "involves", "mentions", "commenter"].some((name) =>
+      hasGitHubSearchQualifier(qualifiers, name, "@me"),
+    )
   ) {
     return [{ repository: null, query: base }]
   }

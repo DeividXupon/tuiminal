@@ -1,4 +1,4 @@
-import type { PullRequestActor, PullRequestIdentity } from "./types"
+import type { PullRequestActor } from "./types"
 
 export type PullRequestWorkflowRun = {
   id: number
@@ -13,9 +13,4 @@ export type PullRequestWorkflowRun = {
   attempt: number
   eligibleForApproval: boolean
   deploymentProtection: boolean
-}
-
-export type PullRequestWorkflowApprovalTarget = {
-  identity: PullRequestIdentity
-  run: PullRequestWorkflowRun
 }

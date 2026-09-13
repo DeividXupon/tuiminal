@@ -1,8 +1,14 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { COLORS } from "../../../../core/settings/theme"
-import { displayWidth, translateUi, truncateDisplay } from "../../../../shared/i18n"
+import {
+  displayWidth,
+  getLanguage,
+  type LanguageId,
+  translateUi,
+  truncateDisplay,
+} from "../../../../shared/i18n"
 import { PULL_REQUEST_COLUMNS } from "../../model/pr/config"
 import type { PullRequestColumn, PullRequestSummary } from "../../model/pr/types"
 
@@ -59,19 +65,22 @@ function pullRequestSecondaryLine(
   item: PullRequestSummary,
   width: number,
   columns: readonly PullRequestColumn[],
+  language: LanguageId,
 ) {
   const assignees = item.assignees.length
     ? item.assignees.map((actor) => `@${actor.login}`).join(",")
-    : translateUi("sem responsáveis")
+    : translateUi("sem responsáveis", language)
   const labels = item.labels.length
     ? item.labels.map((label) => label.name).join(",")
-    : translateUi("sem labels")
+    : translateUi("sem labels", language)
   return truncateDisplay(
     [
       hasColumn(columns, "author") ? `@${item.author.login}` : "",
       hasColumn(columns, "assignees") ? `→ ${assignees}` : "",
-      hasColumn(columns, "base") ? `${translateUi("base")}:${item.baseBranch}` : "",
-      hasColumn(columns, "comments") ? `${item.commentCount} ${translateUi("comentários")}` : "",
+      hasColumn(columns, "base") ? `${translateUi("base", language)}:${item.baseBranch}` : "",
+      hasColumn(columns, "comments")
+        ? `${item.commentCount} ${translateUi("comentários", language)}`
+        : "",
       hasColumn(columns, "labels") ? labels : "",
     ]
       .filter(Boolean)
@@ -97,6 +106,14 @@ function PullRequestRow({
   onSelect: (index: number) => void
   columns: readonly PullRequestColumn[]
 }) {
+  const language = getLanguage()
+  const lines = useMemo(
+    () => ({
+      primary: pullRequestPrimaryLine(item, width - 2, columns),
+      secondary: pullRequestSecondaryLine(item, width - 2, columns, language),
+    }),
+    [item, width, columns, language],
+  )
   return (
     <box
       id={`git-pr-row-${index}`}
@@ -110,13 +127,13 @@ function PullRequestRow({
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`${selected ? "▶" : " "} ${pullRequestPrimaryLine(item, width - 2, columns)}`}
+          content={`${selected ? "▶" : " "} ${lines.primary}`}
           style={{ fg: selected && focused ? COLORS.git : COLORS.text }}
         />
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`  ${pullRequestSecondaryLine(item, width - 2, columns)}`}
+          content={`  ${lines.secondary}`}
           style={{ fg: selected ? COLORS.muted : COLORS.border }}
         />
       </Button>

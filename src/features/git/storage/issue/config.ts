@@ -106,25 +106,6 @@ export function addIssueProfileRepository({
   })
 }
 
-export function removeIssueProfileRepository({
-  root,
-  repository,
-  path = ISSUE_CONFIG_PATH,
-}: {
-  root: string
-  repository: string
-  path?: string
-}) {
-  return updateIssueProfile({
-    root,
-    path,
-    update: (profile) => ({
-      ...profile,
-      repositories: profile.repositories.filter((candidate) => candidate !== repository),
-    }),
-  })
-}
-
 export function addIssueClonePath({
   host,
   repository,

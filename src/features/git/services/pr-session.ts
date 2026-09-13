@@ -15,6 +15,7 @@ import { cachedSectionPageDepth } from "./page-depth"
 import { resolveGitProjectContext } from "./git"
 
 const pullRequestSessionDisposers = new Set<() => void | Promise<void>>()
+const PULL_REQUEST_SECTION_CACHE_LIMIT = 64
 
 export function registerPullRequestSessionDisposer(dispose: () => void | Promise<void>) {
   pullRequestSessionDisposers.add(dispose)
@@ -24,7 +25,7 @@ export function registerPullRequestSessionDisposer(dispose: () => void | Promise
 export async function disposePullRequestResources() {
   const disposers = [...pullRequestSessionDisposers]
   pullRequestSessionDisposers.clear()
-  await Promise.allSettled(disposers.map((dispose) => dispose()))
+  await Promise.allSettled(disposers.map(async (dispose) => dispose()))
 }
 
 export type PullRequestSessionResult =
@@ -152,6 +153,16 @@ export class PullRequestSession {
     this.unregisterDisposer = registerPullRequestSessionDisposer(() => this.dispose())
   }
 
+  private remember(key: string, entry: PullRequestCacheEntry) {
+    this.cache.delete(key)
+    this.cache.set(key, entry)
+    while (this.cache.size > PULL_REQUEST_SECTION_CACHE_LIMIT) {
+      const oldest = this.cache.keys().next().value
+      if (typeof oldest !== "string") break
+      this.cache.delete(oldest)
+    }
+  }
+
   async loadSection(
     root: string,
     sectionId?: string,
@@ -213,7 +224,10 @@ export class PullRequestSession {
       section: effectiveSection,
     })
     const cached = this.cache.get(key)
-    if (!force && cached && cached.expiresAt > Date.now()) return publicCacheEntry(cached, true)
+    if (!force && cached && cached.expiresAt > Date.now()) {
+      this.remember(key, cached)
+      return publicCacheEntry(cached, true)
+    }
     const queries = buildEffectivePullRequestQueries({
       query: effectiveSection.query,
       repositories: profile.repositories,
@@ -254,7 +268,7 @@ export class PullRequestSession {
       dataErrors: pages.some((page) => page.partial),
       pageDepth: 1,
     }
-    this.cache.set(key, entry)
+    this.remember(key, entry)
     return publicCacheEntry(entry, false)
   }
 
@@ -323,7 +337,7 @@ export class PullRequestSession {
       dataErrors,
       pageDepth: current.pageDepth + 1,
     }
-    this.cache.set(key, next)
+    this.remember(key, next)
     return publicCacheEntry(next, false)
   }
 

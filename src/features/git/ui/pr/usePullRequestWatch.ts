@@ -13,10 +13,10 @@ export function usePullRequestWatch(onNotice: (message: string) => void) {
   const [scheduler] = useState(
     () =>
       new PullRequestWatchScheduler(
-        async (item) => {
+        async (item, signal) => {
           const details = await loadPullRequestDetails({
             identity: item.identity,
-            options: executable ? { executable } : {},
+            options: { ...(executable ? { executable } : {}), signal },
           })
           if (!details) throw new Error("Pull Request not found")
           return details.checks

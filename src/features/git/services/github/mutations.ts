@@ -167,7 +167,10 @@ export async function executePullRequestMutation(
   } catch (error) {
     if (
       error instanceof GitHubTransportError &&
-      (error.kind === "timeout" || error.kind === "cancelled" || error.kind === "output-limit")
+      (error.kind === "timeout" ||
+        error.kind === "cancelled" ||
+        error.kind === "output-limit" ||
+        error.kind === "input-failed")
     ) {
       return { status: "uncertain", reason: error.kind }
     }

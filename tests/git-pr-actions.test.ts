@@ -33,6 +33,10 @@ beforeAll(() => {
     `#!/usr/bin/env bun
 import { appendFileSync, existsSync, writeFileSync } from "node:fs"
 const args = process.argv.slice(2)
+if (process.env.FAKE_IGNORE_INPUT === "1") {
+  appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args }) + "\\n")
+  process.exit(0)
+}
 const stdin = await Bun.stdin.text()
 appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args, stdin, cwd: process.cwd() }) + "\\n")
 if (process.env.FAKE_COORDINATOR === "1") {
@@ -374,6 +378,19 @@ describe("pull request mutation transport", () => {
       env: { FAKE_LOG: logPath },
     })
     expect(result).toEqual({ status: "uncertain", reason: "output-limit" })
+    expect(commands()).toHaveLength(1)
+  })
+
+  test("keeps incomplete input uncertain without retrying the dispatched write", async () => {
+    writeFileSync(logPath, "")
+    const result = await executePullRequestMutation(
+      prepared("comment", { body: "x".repeat(512 * 1024) }),
+      {
+        executable,
+        env: { FAKE_LOG: logPath, FAKE_IGNORE_INPUT: "1" },
+      },
+    )
+    expect(result).toEqual({ status: "uncertain", reason: "input-failed" })
     expect(commands()).toHaveLength(1)
   })
 

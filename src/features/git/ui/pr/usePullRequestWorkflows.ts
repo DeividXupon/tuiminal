@@ -1,33 +1,44 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { PullRequestSummary } from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { loadPullRequestWorkflowRuns } from "../../services/github/workflows"
 
 export function usePullRequestWorkflows(active: boolean, item: PullRequestSummary | null) {
-  const [runs, setRuns] = useState<PullRequestWorkflowRun[]>([])
-  const [error, setError] = useState("")
+  const demo = process.env.TUIMINAL_GIT_PR_DEMO === "1"
+  const scope = useMemo(() => ({ active, item, demo }), [active, item, demo])
+  const [result, setResult] = useState<{
+    scope: typeof scope
+    runs: PullRequestWorkflowRun[]
+    error: string
+  } | null>(null)
   useEffect(() => {
     const controller = new AbortController()
-    if (!active || !item || process.env.TUIMINAL_GIT_PR_DEMO === "1") {
-      setRuns([])
-      setError("")
+    if (!scope.active || !scope.item || scope.demo) {
+      setResult(null)
       return () => controller.abort()
     }
     const executable = process.env.TUIMINAL_GH_EXECUTABLE?.trim()
     void loadPullRequestWorkflowRuns({
-      identity: item.identity,
-      headSha: item.headSha,
+      identity: scope.item.identity,
+      headSha: scope.item.headSha,
       options: { signal: controller.signal, ...(executable ? { executable } : {}) },
     })
       .then((next) => {
-        setRuns(next)
-        setError("")
+        if (controller.signal.aborted) return
+        setResult({ scope, runs: next, error: "" })
       })
       .catch((reason) => {
         if (controller.signal.aborted) return
-        setError(reason instanceof Error ? reason.message : "Workflow query failed")
+        setResult({
+          scope,
+          runs: [],
+          error: reason instanceof Error ? reason.message : "Workflow query failed",
+        })
       })
     return () => controller.abort()
-  }, [active, item])
-  return { runs, error }
+  }, [scope])
+  // Hide the previous result during render, before passive effect cleanup runs.
+  return result?.scope === scope
+    ? { runs: result.runs, error: result.error }
+    : { runs: [], error: "" }
 }
