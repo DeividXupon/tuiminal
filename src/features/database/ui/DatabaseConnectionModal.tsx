@@ -23,8 +23,8 @@ import { padDisplayEnd, translateUi, truncateDisplay } from "../../../shared/i18
 import { COLORS } from "../../../core/settings/theme"
 import { InlineButton } from "../../../shared/ui/InlineButton"
 import { useNotificationFromValue } from "../../../shared/notifications/index"
-import type { PasswordInputRenderable } from "./PasswordInput"
-import "./PasswordInput"
+import type { PasswordInputRenderable } from "../../../shared/ui/PasswordInput"
+import "../../../shared/ui/PasswordInput"
 
 type DatabaseConnectionModalProps = {
   open: boolean

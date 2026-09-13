@@ -6,7 +6,7 @@ import {
   type RenderContext,
 } from "@opentui/core"
 import { extend } from "@opentui/react"
-import { COLORS } from "../../../core/settings/theme"
+import { COLORS } from "../../core/settings/theme"
 
 type PasswordInputOptions = InputRenderableOptions & {
   onInput?: (value: string) => void
@@ -25,7 +25,9 @@ export class PasswordInputRenderable extends InputRenderable {
     const maskLength = Math.min([...this.plainText].length, this.width)
     if (maskLength === 0) return
     buffer.drawText(
-      "*".repeat(maskLength),
+      // A wide glyph occupies more cells than its character count. Clear the whole
+      // input row so no plaintext suffix from the native input remains visible.
+      "*".repeat(maskLength).padEnd(this.width, " "),
       this.screenX,
       this.screenY,
       parseColor(COLORS.text),

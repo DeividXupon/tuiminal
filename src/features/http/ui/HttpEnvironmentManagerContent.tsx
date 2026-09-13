@@ -1,51 +1,12 @@
-import {
-  InputRenderable,
-  parseColor,
-  type InputRenderableOptions,
-  type OptimizedBuffer,
-  type RenderContext,
-} from "@opentui/core"
+import type { InputRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { extend } from "@opentui/react"
 import { useEffect, useRef } from "react"
 import { COLORS } from "../../../core/settings/theme"
 import { translateUi } from "../../../shared/i18n/index"
 import { InlineButton } from "../../../shared/ui/InlineButton"
+import type { PasswordInputRenderable } from "../../../shared/ui/PasswordInput"
+import "../../../shared/ui/PasswordInput"
 import type { HttpEnvironment } from "../storage/environments"
-
-type HttpSecretInputOptions = InputRenderableOptions & {
-  onInput?: (value: string) => void
-  onChange?: (value: string) => void
-  onSubmit?: (value: string) => void
-}
-
-class HttpSecretInputRenderable extends InputRenderable {
-  constructor(ctx: RenderContext, options: HttpSecretInputOptions) {
-    const { onInput: _onInput, onChange: _onChange, onSubmit: _onSubmit, ...inputOptions } = options
-    super(ctx, inputOptions)
-  }
-
-  protected override renderSelf(buffer: OptimizedBuffer) {
-    super.renderSelf(buffer)
-    const length = Math.min([...this.plainText].length, this.width)
-    if (!length) return
-    buffer.drawText(
-      "*".repeat(length),
-      this.screenX,
-      this.screenY,
-      parseColor(COLORS.text),
-      parseColor(COLORS.panelRaised),
-    )
-  }
-}
-
-extend({ "http-secret-input": HttpSecretInputRenderable })
-
-declare module "@opentui/react" {
-  interface OpenTUIComponents {
-    "http-secret-input": typeof HttpSecretInputRenderable
-  }
-}
 
 function fieldStyle(secret = false) {
   return {
@@ -168,7 +129,7 @@ export function HttpPrivateEnvironmentForm({
 }) {
   const environmentRef = useRef<InputRenderable | null>(null)
   const variableRef = useRef<InputRenderable | null>(null)
-  const secretRef = useRef<HttpSecretInputRenderable | null>(null)
+  const secretRef = useRef<PasswordInputRenderable | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => environmentRef.current?.focus(), 0)
@@ -213,7 +174,7 @@ export function HttpPrivateEnvironmentForm({
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <text content={translateUi("VALOR PRIVADO")} style={{ width: 14, fg: COLORS.muted }} />
-        <http-secret-input
+        <password-input
           ref={secretRef}
           id="http-environment-create-secret"
           value={secret}
