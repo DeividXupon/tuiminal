@@ -1,5 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test"
 import * as processes from "node:child_process"
+import { createHash } from "node:crypto"
 import { once } from "node:events"
 import { runGhCommand } from "../src/features/git/services/github/transport"
 
@@ -99,4 +100,67 @@ test("a successful exit cannot confirm a request whose input was not delivered",
   ).catch((error: unknown) => error)
   expect(await result).toMatchObject({ kind: "input-failed" })
   expect(String(await result)).not.toContain("private-input")
+})
+
+test("a successful exit after reading only a prefix still rejects incomplete input", async () => {
+  const result = await runGhCommand(
+    {
+      args: ["-e", 'process.stdin.once("data", () => process.exit(0)); process.stdin.resume()'],
+      stdin: "private-input".repeat(512 * 1024),
+    },
+    { executable: process.execPath },
+  ).catch((error: unknown) => error)
+  expect(result).toMatchObject({ kind: "input-failed" })
+  expect(String(result)).not.toContain("private-input")
+})
+
+test.each([
+  ["omitted", undefined],
+  ["empty", ""],
+  ["Unicode", "ação 🎉 漢字\n"],
+] as const)("GitHub %s input reaches EOF without changing its content", async (_label, stdin) => {
+  const result = await runGhCommand(
+    {
+      args: ["-e", "process.stdout.write(await Bun.stdin.text())"],
+      ...(stdin === undefined ? {} : { stdin }),
+    },
+    { executable: process.execPath },
+  )
+  expect(result).toEqual({ stdout: stdin ?? "", stderr: "", exitCode: 0 })
+})
+
+test("large Unicode input reaches a delayed reader completely before EOF", async () => {
+  const stdin = "ação 🎉 漢字\n".repeat(256 * 1024)
+  const result = await runGhCommand(
+    {
+      args: [
+        "-e",
+        'import { createHash } from "node:crypto"; await Bun.sleep(20); const input = await Bun.stdin.text(); console.log(createHash("sha256").update(input).digest("hex"))',
+      ],
+      stdin,
+    },
+    { executable: process.execPath },
+  )
+  expect(result).toEqual({
+    stdout: `${createHash("sha256").update(stdin).digest("hex")}\n`,
+    stderr: "",
+    exitCode: 0,
+  })
+})
+
+test("cancelling a blocked input preserves cancellation and closes its exact helper", async () => {
+  track()
+  const controller = new AbortController()
+  const result = runGhCommand(
+    { args: ["-e", stubborn], stdin: "private-input".repeat(512 * 1024) },
+    { executable: process.execPath, signal: controller.signal, timeoutMs: 5000 },
+  ).catch((error: unknown) => error)
+  const child = children[0]
+  if (!child?.stdout) throw new Error("No owned gh fixture")
+  await once(child.stdout, "data")
+  controller.abort()
+  const finished = await Promise.race([result, Bun.sleep(1500).then(() => "still-running")])
+  expect(finished).toMatchObject({ kind: "cancelled" })
+  expect(child.exitCode !== null || child.signalCode !== null).toBe(true)
+  expect(String(finished)).not.toContain("private-input")
 })

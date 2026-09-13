@@ -115,6 +115,7 @@ export function runGhCommand(
   return new Promise((resolve, reject) => {
     let closed = false
     let inputFailed = false
+    let inputComplete = !request.stdin?.length
     let finish: (() => void) | undefined
     const settle = () => {
       if (closed) finish?.()
@@ -137,7 +138,7 @@ export function runGhCommand(
           if (error) {
             const detail = stderr.trim() || stdout.trim() || error.message
             reject(classifyCommandFailure(Object.assign(error, { message: detail })))
-          } else if (inputFailed) {
+          } else if (inputFailed || !inputComplete) {
             reject(
               new GitHubTransportError(
                 "input-failed",
@@ -156,8 +157,15 @@ export function runGhCommand(
     child.stdin?.on("error", () => {
       inputFailed = true
     })
-    if (request.stdin === undefined) child.stdin?.end()
-    else child.stdin?.end(request.stdin, "utf8")
+    // Bun 1.3.14 can finish end(payload) without surfacing a broken pipe.
+    // Write separately and require its callback before accepting a successful exit.
+    if (request.stdin !== undefined) {
+      child.stdin?.write(request.stdin, "utf8", (error) => {
+        if (error) inputFailed = true
+        else inputComplete = true
+      })
+    }
+    child.stdin?.end()
   })
 }
 

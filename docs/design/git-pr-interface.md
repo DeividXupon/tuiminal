@@ -565,7 +565,9 @@ Modelos, serviços e estado de [Issues](./git-issues-interface.md) e
 
 O gate é `bun run check`. As regressões de configuração, runtime, ações e
 transporte estão em `tests/git-pr-config.test.ts`, `tests/git-pr-runtime.test.ts`,
-`tests/git-pr-actions.test.ts` e `tests/github-transport.test.ts`. Discussões,
+`tests/git-pr-actions.test.ts` e `tests/github-transport.test.ts`.
+`tests/github-process-lifecycle.test.ts` cobre entrada completa/parcial, EOF,
+Unicode e cancelamento com o pipe cheio no Bun fixado em `.bun-version`. Discussões,
 descarte de recursos e watches têm suítes próprias; `tests/tui/` cobre a interface
 real, incluindo terminal guiado, foco, renderização e tutoriais simulados.
 Leituras/escritas remotas usam fixtures ou `gh` falso, nunca a conta do usuário.
