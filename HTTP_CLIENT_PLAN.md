@@ -4,28 +4,24 @@
 > alvo; o quadro de andamento distingue o que já possui evidência no worktree do
 > que ainda depende de implementação ou validação.
 >
-> Pesquisa e auditoria atualizadas em 5 de setembro de 2026.
+> Pesquisa de referência realizada em 5 de setembro de 2026. As propostas devem
+> ser lidas junto do estado da execução abaixo, não como pendências automáticas.
 >
-> Decisão de implementação: o HTTP será reconstruído do zero. Código, modelos,
-> estado, componentes e testes específicos da implementação HTTP anterior não são
-> base de migração. Somente contratos externos e infraestrutura compartilhada do
-> Tuiminal podem ser reutilizados.
+> A reconstrução substituiu a implementação HTTP anterior. O comportamento atual
+> e suas invariantes são documentados no [README](./README.md) e no
+> [AGENTS.md](./AGENTS.md); a organização modular está em
+> [docs/architecture.md](./docs/architecture.md).
 >
-> Para retomar o trabalho sem o contexto da sessão anterior, comece pelo
-> [handoff da reconstrução HTTP](./docs/handoffs/http-client-rebuild.md). Ele
-> registra o mapa do código entregue, as invariantes e a ordem das pendências.
+> A matriz de compatibilidade de arquivos permanece em
+> [tests/fixtures/http/README.md](./tests/fixtures/http/README.md).
 
-### Revisão de prontidão — 9 de setembro de 2026
+### Prontidão para lançamento
 
-A conclusão histórica das fases funcionais não é aprovação para lançamento.
-A auditoria em `ALPHA_READINESS_PLAN.md` encontrou falhas de privacidade e
-isolamento ainda em correção. O histórico passou a transportar contexto privado
-volátil de ponta a ponta (A04), com regressões de encodings, auth, cookies,
-extrações, troca de escopo, sucesso/erro e envio pela TUI. Redirects entre origens
-(A05) também têm implementação e regressões no checkpoint, ainda sem aceite do
-candidato/binário. Política de domínio de cookies (A06), filesystem e limites
-globais permanecem pendentes. A seção 9 do plano de alfa consolida a retomada;
-não deduzir segurança dessas superfícies pelo passe do histórico.
+A conclusão das fases funcionais não é aprovação para lançamento. O
+[checklist de alfa](./ALPHA_READINESS_PLAN.md) separa as correções locais de
+privacidade, redirects, cookies, filesystem e limites dos aceites ainda necessários
+nos pacotes e sistemas-alvo. Consulte esse checklist antes de qualificar um
+candidato; não deduza segurança apenas pelo passe de uma suíte local.
 
 ## Resumo executivo
 
@@ -176,9 +172,12 @@ comparação, “não identificado” significa que a capacidade não apareceu n
 documentação nem no caminho de execução inspecionado; não significa que jamais
 tenha existido em outra revisão.
 
-## Auditoria do HTTP atual do Tuiminal
+## Diagnóstico anterior à reconstrução
 
-### Capacidades atuais que precisam ser reimplementadas
+Esta seção registra o ponto de partida da pesquisa, não defeitos presumidos da
+implementação atual. Consulte o estado da execução antes de abrir novas tarefas.
+
+### Capacidades da implementação anterior
 
 - métodos GET, POST, PUT, PATCH, DELETE, HEAD e OPTIONS;
 - normalização de URL sem protocolo para `http://` e rejeição de protocolos não

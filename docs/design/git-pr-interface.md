@@ -1,7 +1,8 @@
-# Git / PR — referência do gh-dash e interface proposta
+# Git Diffs e PR — especificação mantida
 
-Status: **implementada e validada**, referência consultada em 2026-09-04.
-Este documento acompanha o [plano de implementação](../../GIT_PR_PLAN.md).
+Status: interface implementada, com regressões locais; referência visual
+consultada em 2026-09-04. Este documento concentra a especificação e os contratos
+duráveis do workspace, sem manter um plano concluído em paralelo.
 O shell Diffs/PR, dashboard responsivo, cinco abas, diff remoto, ações, CI,
 configuração e tutorial estão implementados. As diferenças deliberadas em relação
 ao gh-dash continuam documentadas aqui para evitar uma cópia acrítica de atalhos.
@@ -111,6 +112,13 @@ A área sem linhas corresponde a uma lista curta, não a um rodapé ou bloco com
 altura reservada. Com mais PRs, as linhas ocupam toda a altura útil até o rodapé.
 Busca, título e tabs não devem reservar várias linhas vazias.
 
+Os diffs locais, de comparação e de PR compartilham o viewport de código. No
+painel focado, `[Shift+H/L]` ou `[Shift+←/→]` rolam lateralmente; os controles
+clicáveis ficam em uma linha reservada no canto inferior direito. Gutters e
+fundos não se deslocam. Em duas colunas, ambos os painéis permanecem visíveis e
+seus códigos rolam juntos. A posição é preservada na navegação vertical e volta
+à esquerda ao sair do diff ou trocar o arquivo/modo de visualização.
+
 ### 4.2. Terminal médio — prévia embaixo
 
 ```text
@@ -166,6 +174,12 @@ Modo focado dentro de PR: pequena lista de arquivos e documento de diff. Oferece
 unificado, lado a lado quando couber, e intraline reaproveitando componentes
 internos do Git após separar suas dependências locais.
 
+A comparação por caractere é calculada sob demanda e reutilizada por documento,
+sem trabalho intralinha antecipado nas outras visualizações. O parser diferencia
+cabeçalhos de arquivo do conteúdo dentro do hunk; linhas começando com `++` ou
+`--` não somem nem reduzem indevidamente a altura do viewport. A mesma regra se
+aplica aos alvos do stage parcial local, sem expor stage no diff remoto.
+
 - Cabeçalho com repositório, número e SHAs base/head efetivamente exibidos.
 - Navegação de arquivo e hunk; números de linha e contexto.
 - Arquivo renomeado, binário, removido, gerado ou truncado tem representação própria.
@@ -210,10 +224,24 @@ repositórios. O formulário oferece nome, filtros, ordenação, limite e coluna
 além de salvar, renomear, duplicar, reordenar e excluir configuração.
 Excluir uma seção nunca fecha PRs nem remove repositórios locais/remotos.
 Somente salvar promove a query temporária da busca a uma configuração persistente.
+Projetos locais e repositórios remotos são publicados independentemente no
+gerenciador, com estado de erro/carregamento próprio. Fechar ou recarregar cancela
+a consulta remota anterior; resultados atrasados não alteram a tela atual.
+Nos seletores locais, ativações repetidas enquanto a seleção está pendente não
+despacham novas operações. Fechar por `[Esc]`, botão ou clique fora retira a
+instância: seu resultado não pode fechar um seletor aberto depois. Cliques nos
+controles internos continuam funcionando. Fechar a UI não cancela nem desfaz
+uma operação Git já iniciada.
 Perfis novos começam com `My PRs`, `Review requested`, `All`, `Open` e `Closed`.
 Os três filtros de estado cobrem todos os PRs não arquivados, os abertos e os
 fechados dentro do escopo atual. Os títulos dos presets permanecem em inglês em
 todos os idiomas da interface.
+
+A query preserva espaços e escapes dentro de aspas; referências literais a
+qualificadores não alteram seu escopo. Se faltarem aspas de fechamento, a busca
+exibe uma orientação traduzida e não envia a consulta incompleta. O rascunho
+continua disponível para edição no mesmo modal, sem perder o foco. A validação
+vale tanto para `[Enter]` quanto para `[Ctrl+S]`.
 
 ## 5. Contrato responsivo
 
@@ -310,6 +338,27 @@ mesmo passo a passo para `gh auth login --hostname <host> --web`, sem ler ou
 persistir token nem entrada do PTY. Ao desmontar, encerra somente o shell criado
 por esse painel; a saída atrasada desse processo não pode desconectar um shell novo.
 
+As chamadas automáticas fora desse PTY têm ciclo de vida separado: cancelamento
+prévio não cria processo, e timeout/cancelamento aguardam o fechamento do auxiliar
+exato. Falha no pipe de entrada não derruba a TUI; uma saída aparentemente bem-sucedida
+com entrada incompleta deixa a escrita incerta, sem repetição. O acompanhamento
+de CI cancela sua leitura ao parar/desmontar e ignora respostas e timers de uma
+instância anterior, mesmo que a mesma identidade/SHA já esteja sendo acompanhada
+novamente. Falha da notificação não reinicia um watch concluído.
+
+A paginação dos detalhes libera seu indicador ao trocar de PR. Repetições no
+mesmo lote de eventos disparam uma consulta; uma atualização explícita substitui
+a página pendente e o debounce inicial. Respostas, falhas e callbacks de outra
+seleção não podem substituir o detalhe atual. O cache considera também a data
+de atualização, para reler comentários sem exigir um novo commit, e ignora
+respostas de consultas já canceladas ou encerradas.
+
+As execuções da aba Checks têm a mesma regra de propriedade: troca de seleção ou
+head oculta imediatamente runs/erros anteriores, e uma resposta atrasada não pode
+oferecer autorizações pertencentes a outro PR. O texto das linhas da lista é
+reutilizado durante a navegação; idioma, largura, colunas ou novos dados invalidam
+essa formatação, sem congelar cores ou callbacks de mouse.
+
 ## 7. Estados que precisam de tela própria
 
 | Estado | Representação e saída |
@@ -374,20 +423,87 @@ aceitam mouse.
 Em Diffs, `[Tab]` percorre árvore local, diff e terminal Git compacto; `[H/L]` e
 `[←/→]` ligam árvore/diff, e `[T]` abre o terceiro foco diretamente. O terminal
 fica abaixo da prévia, mantém `git` como prefixo não editável, registra os comandos
-produzidos pelas ações e envia argumentos manuais ao executável Git sem montar uma
-linha de shell. `[O]` abre o Log e `[V]` identifica a visualização ativa. A árvore
-não acrescenta marcadores geométricos aos arquivos: usa apenas os dois caracteres
-nativos do Git, com cores semânticas por coluna, diferencia pastas por cor e une
-cadeias sem ramificação em um único nó navegável. Stage/unstage muda o snapshot
-visual imediatamente; `[A]` numa pasta afeta apenas seus descendentes. `[D]` abre
+produzidos pelas ações, preserva stdout/stderr linha por linha em até 2.000 entradas
+e envia argumentos manuais ao executável Git sem montar uma linha de shell.
+O campo sugere comandos, opções, branches locais/remotas já conhecidas, tags,
+remotes e arquivos alterados. `[Ctrl+N/P]` navega, `[Ctrl+Y]` aplica e `[Esc]`
+fecha o popup antes de devolver o foco ao diff; a leitura das refs é local e não
+faz `fetch`. `[↑/↓]` e o mouse rolam a saída. `[O]` abre o Log e `[V]` identifica a
+visualização ativa. A árvore não acrescenta marcadores geométricos aos arquivos: usa apenas os
+dois caracteres nativos do Git, com cores semânticas por coluna e diferencia pastas
+por cor.
+O atalho de configuração `[Ctrl+P]` respeita o dono atual do teclado: no terminal,
+continua sendo a sugestão anterior, e não atravessa modais nem o stage parcial.
+Eventos já consumidos, repetições e combinações com modificadores extras não
+abrem a configuração local.
+Cadeias sem ramificação exibem uma pasta por linha, todas no mesmo recuo, mas são
+um único bloco de foco e navegação. Stage/unstage muda o snapshot visual
+imediatamente e reconcilia apenas `git status`, sem aguardar o histórico; `[A]`
+numa pasta adiciona apenas seus descendentes. `[Space]` alterna stage para o arquivo
+selecionado ou para todos os descendentes da pasta como um único grupo. `[D]` abre
 uma confirmação com o alvo exato antes de restaurar arquivos rastreados e remover
 arquivos novos, também em cadeia quando uma pasta está selecionada.
+
+`[Enter]` em um arquivo da árvore abre e foca seu diff. Com um diff textual rastreado
+em foco, `[S]` entra no stage parcial e fixa a visualização unificada. Dois painéis
+lado a lado mostram o estado desejado fora/dentro do stage, inclusive hunks que já
+estavam no index e podem ser retirados. `[S]` alterna entre hunk e linha sem apagar
+transferências pendentes nem retirar o syntax highlight do código. `[H/L]`/`[←/→]`
+troca o painel, `[J/K]`/`[↑/↓]` navega e
+`[Space]` transfere ou devolve o alvo. O foco fica contido nesses dois painéis:
+direções nos limites permanecem no painel mais próximo, `[Tab]` alterna somente entre
+eles e o atalho do terminal não escapa. O terminal Git fica oculto e seu espaço é
+entregue ao código. A rolagem acompanha o renderable selecionado, não o índice, para
+que hunks de alturas diferentes e o último alvo permaneçam acima das ações.
+`[Enter]` e `[Esc]` aplicam o estado e saem.
+Uma linha azul na lateral esquerda percorre todo o hunk ativo. A aplicação relê os patches staged e unstaged do caminho
+literal e rejeita uma seleção obsoleta antes de alterar o index com `git apply --cached`;
+mudanças novas, removidas, binárias ou sem hunks não oferecem esse modo.
+
+O primeiro módulo do tutorial de Git é uma réplica inteiramente simulada de `[1] Git · Diffs`.
+Ele apresenta a função de cada região visível — aba local, repositório/branch,
+arquivos, mini árvore de commits, diff, ações contextuais, terminal e atalhos — e
+inclui etapas próprias para stage de arquivo/pasta com `[Space]`, navegação e foco,
+troca do projeto/branch com `[Ctrl+P]`, layouts com `[V]`, árvore Git aberta por `[G]`,
+Log detalhado por `[O]`, stage parcial por `[S]` e descarte seguro com `[D]`. Uma etapa que explica uma mudança
+visual também aplica essa mudança ao demo: `[Ctrl+P]` abre o modal unificado na aba
+Diffs com as linhas de projeto e branch, `[G]` substitui o diff pelo grafo completo,
+`[O]` mostra o Log enriquecido em blocos expandidos, `[V]` apresenta o código em duas colunas e `[S]` mostra os painéis “FORA DO STAGE” e
+“NO STAGE”, ocultando o terminal como no produto. O alvo destacado passa do botão para
+o resultado visível enquanto a etapa está ativa. PR, Issues, Inbox, varredura de
+projetos, Git real e acesso remoto continuam fora desta fase.
+
+O segundo módulo entra no modo `[C] Git · Comparar` da mesma aba `[1]`. Ele mostra
+os três seletores, abre a configuração local compartilhada, apresenta separadamente
+os pickers simulados de base e branch comparada com refs locais e remotas já
+conhecidas, e explica a direção `base...comparada`. Com as refs aplicadas, o demo
+renderiza o cabeçalho `base → comparada`, estatísticas, árvore agrupada de arquivos,
+o diff do arquivo selecionado, a troca para duas colunas por `[V]`, a navegação por
+`[Tab/H/L/←/→]` e o retorno a Diffs por `[C]` ou `[Esc]`. Os alvos que só existem
+nesses estados são declarados como stateful para permanecerem na sequência antes
+da troca visual. Nenhuma etapa lista refs reais, executa Git, faz checkout, busca na
+rede ou inclui alterações do working tree.
 
 Em layout com moldura, somente o painel realmente focado recebe a borda de acento.
 A árvore de arquivos, o Log e a Árvore Git aceitam `[J/K]` e `[↑/↓]` quando seu
 painel possui o foco; o histórico local não usa `[N/P]`. Durante a troca de arquivo,
 o diff já visível permanece montado até o próximo estar pronto e o cabeçalho
 `projeto / branch` não recebe os frames dessa carga, evitando flicker e reflow.
+O cabeçalho também não participa da compressão vertical do layout: sua linha
+continua reservada quando um diff maior chega durante a repetição das setas.
+As regressões conferem o texto efetivamente pintado, além da posição/altura,
+em compact e framed; somente verificar que o componente continua montado não
+detecta o conteúdo da prévia encobrindo essa linha.
+O primeiro snapshot utilizável não espera pelo grafo. O histórico chega em segundo
+plano e polls posteriores só repetem `git log --all --numstat` quando a assinatura
+das refs muda.
+
+O Log usa o mesmo grafo de topologia colorido da árvore, prolongando suas lanes por
+todo o bloco no estilo do `git log`. O cabeçalho mostra hash e referências de
+branch/tag; as linhas seguintes mostram pais de merge, autor com e-mail, data
+relativa, quantidade de arquivos, estatísticas `+/-`, assunto e corpo limitado da
+mensagem. A janela considera a altura real de cada bloco para nunca esconder a
+seleção sob o rodapé, e o texto vindo do commit é sanitizado antes da renderização.
 
 Desde 2026-09-08, a última linha solicita a próxima página com loader no
 scrollbox, `[R]` e o intervalo configurado renovam todas as seções e a mesma
@@ -399,6 +515,8 @@ Carregamentos que substituem um painel inteiro usam a superfície plasma ASCII
 compartilhada com a mensagem de estado em primeiro plano e saída por dissolução
 curta. Esse tratamento não se aplica ao loader incremental da lista nem ao
 refresh automático, pois o conteúdo anterior continua utilizável nesses casos.
+Caches de contexto local e seções remotas são LRU limitados a 64 entradas; caches
+de detalhes de PR e Issue são limitados a 32 e pertencem à sessão que os descarta.
 
 Qualquer alteração posterior de atalhos, densidade, posição ou confirmação deve
 atualizar este documento e seus testes, sem alegar que é comportamento do gh-dash.
@@ -409,3 +527,49 @@ operação em andamento e qualquer alteração ocorrida durante a confirmação
 bloqueiam o despacho. O clone é inspecionado novamente depois da única chamada ao
 `gh`; pós-condição ilegível e limite de saída depois do despacho são estados
 incertos, nunca um convite a repetir automaticamente.
+
+## Contratos de dados, persistência e ações
+
+Diffs continua offline e é independente do contexto remoto. Ler PRs não exige
+checkout; somente a ação explícita de checkout pode mudar o clone selecionado.
+Modelos, serviços e estado de [Issues](./git-issues-interface.md) e
+[Inbox](./git-inbox-interface.md) permanecem separados.
+
+- O perfil de PR usa `$XDG_CONFIG_HOME/tuiminal/git-pr.yaml`, com fallback para
+  `~/.config/tuiminal/git-pr.yaml`, escrita atômica e modo `0600`. Preferências,
+  seletores e caminhos locais persistem; corpos remotos, drafts e caches não.
+  Configuração inválida deve produzir erro sem substituir o arquivo por defaults.
+- Sem perfil explícito, um `origin` GitHub reconhecido seleciona esse repositório;
+  fora dele, a busca usa o escopo autenticado da conta. Uma lista de repositórios
+  explicitamente vazia também significa conta, nunca uma busca GitHub global.
+- Uma ação prepara a identidade exata (host, conta, repositório, node ID, número,
+  head SHA e geração de autenticação), reautentica, relê elegibilidade, confirma,
+  executa uma vez e reconcilia. Timeout, cancelamento, stdin incompleto ou limite
+  de saída após despacho não provam falha: o resultado fica incerto, sem retry.
+- Chamadas automatizadas passam argumentos e stdin ao `gh`, sem interpolação em
+  shell, leitura de tokens ou troca global de conta. O PTY guiado do usuário tem
+  ciclo de vida separado desse transporte.
+- Merge usa `--match-head-commit`, sem `--admin` nem `--delete-branch`, e respeita
+  os métodos permitidos. Fila/auto-merge não equivalem a merge concluído; a
+  confirmação final depende do estado remoto. Update branch usa
+  `expected_head_sha`; a revisão de aprovação fixa `commit_id`.
+- Checkout nunca faz clone, stash, reset ou clean automático, nem executa código
+  do PR. Além da guarda canônica descrita acima, exige remote compatível e árvore
+  limpa, incluindo staged, unstaged e untracked.
+- Aprovar uma execução de workflow só é oferecido para um run elegível da seleção
+  atual. Proteção de deployment encaminha ao navegador, sem alegar aprovação.
+  Watches pertencem à identidade e tentativa observadas; parar um watch cancela
+  sua leitura e invalida callbacks atrasados, inclusive notificações e timers.
+
+## Verificação mantida
+
+O gate é `bun run check`. As regressões de configuração, runtime, ações e
+transporte estão em `tests/git-pr-config.test.ts`, `tests/git-pr-runtime.test.ts`,
+`tests/git-pr-actions.test.ts` e `tests/github-transport.test.ts`. Discussões,
+descarte de recursos e watches têm suítes próprias; `tests/tui/` cobre a interface
+real, incluindo terminal guiado, foco, renderização e tutoriais simulados.
+Leituras/escritas remotas usam fixtures ou `gh` falso, nunca a conta do usuário.
+
+Para investigar custo de listagem/renderização, o cenário reproduzível permanece
+em `bun scripts/benchmark-git-pr.ts`. Meça novamente no checkout em análise; números
+de uma execução antiga não são garantia de latência para a versão atual.

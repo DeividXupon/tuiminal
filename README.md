@@ -9,7 +9,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 [![npm](https://img.shields.io/npm/v/tuiminal?label=npm&color=4B75FF)](https://www.npmjs.com/package/tuiminal)
 [![status](https://img.shields.io/badge/status-pre--alpha-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-5FA04E)](#instalação)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#instalação)
 
 [Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribuir](#desenvolvimento)
 
@@ -62,6 +62,10 @@ tuiminal terminal ./meu-projeto
 
 Os aliases `database`/`db`, `run` e `term`/`tty` também são aceitos. No modo isolado, ferramentas ocultas não são inicializadas.
 
+Somente esses comandos e aliases são tratados como ferramentas; outros nomes são caminhos de diretório.
+
+`tuiminal --version` mostra a versão sem carregar configurações ou a interface. `tuiminal --help` mostra a ajuda no idioma configurado.
+
 ### Navegação global
 
 | Ação | Atalho |
@@ -75,6 +79,8 @@ Os aliases `database`/`db`, `run` e `term`/`tty` também são aceitos. No modo i
 | Sair | `[Q]`, `[Esc]` ou `[Ctrl+C]` |
 
 No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combinações, ative **Use Option as Meta key** ou a opção equivalente. Os números sem modificador continuam livres para ações locais das ferramentas.
+
+As ferramentas compartilham notificações flutuantes: no máximo três ficam retidas, sem tirar o foco do teclado. Mensagens temporárias expiram automaticamente; erros permanecem até você fechá-los. Eventos substituídos ou removidos também liberam seus timers, inclusive em rajadas de notificações.
 
 ## Cinco ferramentas, um único fluxo
 
@@ -103,8 +109,9 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 - **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
 - **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
+- **Editar grandes seleções:** preparação em lote com busca indexada das alterações existentes, preservando snapshots e chaves `BigInt` exatas antes da revisão.
 - **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
-- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado.
+- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado. Trocar o layout ou maximizar o resultado preserva o editor e seu rascunho.
 - **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
 - **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
 
@@ -116,17 +123,25 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
 
+Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração. A paginação acompanha a altura do terminal sem pular registros quando cabem mais de 50 linhas.
+
 Resultados SQL só permitem edição quando selecionam diretamente colunas ou `*` de uma única tabela. Expressões, colunas renomeadas, agrupamentos e `DISTINCT` permanecem somente leitura; editar ou excluir também exige todas as colunas da chave primária no resultado.
 
 No MySQL, campos não qualificados entre aspas duplas ficam somente leitura, pois podem ser textos literais; prefira identificadores entre crases. Colunas entre aspas duplas continuam editáveis no PostgreSQL e SQLite.
 
 Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
 
+O campo de senha mantém a máscara também durante edição e redimensionamento com caracteres largos, como ideogramas e emojis.
+
+Testes de conexão liberam o cliente temporário também quando falham. Nas URLs de ambiente, a senha codificada é decodificada uma única vez e uma URL sem senha não herda a anterior.
+
 A edição de resultados SQL exige colunas diretas, sem renomeações ou duplicações, de uma única tabela identificável; expressões, agregações e consultas ambíguas ficam somente leitura. Alterar/excluir registros exige a chave primária completa no resultado.
 
 Leituras nativas usam transações `READ ONLY` em PostgreSQL, proteção de transação e sessão em MySQL/MariaDB e um arquivo aberto em modo readonly no editor SQLite, inclusive quando o perfil permite escrita. Rotinas não reconhecidas, PRAGMAs de alteração e comandos com efeitos exigem escrita habilitada e confirmação. Use também credenciais com privilégios mínimos no servidor: o modo do aplicativo não é um sandbox para rotinas do banco. No MCP opcional, a restrição de escrita precisa ser aplicada pelo servidor MCP e pelas credenciais dele.
 
 O histórico SQL salva apenas metadados das novas execuções. SQL completo, parâmetros e mensagens de erro detalhadas ficam na sessão, em um cache limitado a 200 entradas e 2 MB. Após encerrar o app ou atingir esse limite, ficam os metadados sem reexecução. Nas configurações do Banco, `[D]` abre a limpeza do conteúdo antigo e `[Y]` confirma: preserva metadados e favoritos, mas não pode ser desfeito e não remove backups. **Favoritos salvos explicitamente continuam gravando o SQL completo em disco**; evite salvar segredos neles.
+
+A prévia de exportação processa só as primeiras linhas visíveis e mantém os valores no idioma original. Copiar ou salvar continua incluindo toda a seleção em CSV, TSV ou JSON.
 
 ### Atalhos essenciais do Banco
 
@@ -165,21 +180,26 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[1] Diffs`
 
-- Agrupa arquivos modificados em uma árvore real de diretórios e compacta cadeias sem ramificações, como `usr/lib/app/`, em um único nó navegável.
+- Agrupa arquivos modificados em uma árvore real. Cadeias sem ramificações mostram cada pasta em sua própria linha, sem recuo artificial entre elas, mas `[J/K]` trata toda a cadeia como um único bloco navegável.
 - Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
-- Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos.
-- Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre o histórico detalhado.
-- `[Space]` aplica ou remove stage somente do arquivo selecionado, inclusive nomes com `*`, `?`, colchetes ou `:`. `[A]` adiciona em cadeia os arquivos da pasta selecionada ou alterna todos quando um arquivo está selecionado; a cor de stage muda imediatamente e é reconciliada com o Git em seguida.
+- Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos. A comparação por caractere só é calculada ao usar a visualização intralinha e é reutilizada enquanto o documento não muda.
+- Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre um histórico no formato do `git log`, com o grafo colorido atravessando todo o bloco do commit. Cada bloco mostra hash, branches/tags, pais de merge, autor e e-mail, data relativa, quantidade de arquivos, estatísticas `+/-`, assunto e corpo da mensagem.
+- `[Space]` aplica ou remove stage do arquivo selecionado ou de todos os descendentes da pasta selecionada, inclusive nomes com `*`, `?`, colchetes ou `:`. `[A]` adiciona em cadeia os arquivos da pasta selecionada ou alterna todos quando um arquivo está selecionado; a cor muda imediatamente, novas ações de stage podem ser feitas em sequência e a confirmação consulta somente o status. O preview permanece montado e é reconciliado silenciosamente, sem loader nem reiniciar a rolagem; o grafo é atualizado em segundo plano apenas quando as refs mudam.
+- `[Enter]` em um arquivo da árvore abre e foca seu diff. Com um arquivo rastreado e textual em foco, `[S]` abre o stage parcial e força a visualização unificada. “FORA DO STAGE” e “NO STAGE” ficam lado a lado e incluem também os hunks já adicionados ao index, permitindo retirá-los. `[S]` alterna hunk/linha sem perder transferências pendentes nem o syntax highlight, `[H/L/←/→]` atravessa os painéis, `[J/K]` navega e `[Space]` transfere o item; a rolagem mantém o alvo inteiro acima das ações mesmo quando os hunks têm alturas diferentes. Enquanto esse modo está aberto, o terminal Git fica oculto para ceder espaço ao código, `[Tab]` alterna apenas entre os dois painéis e os atalhos não levam à árvore ou ao terminal; `[Enter]` e `[Esc]` aplicam o estado exibido e saem. O hunk ativo recebe uma linha azul em toda a lateral esquerda, e uma alteração do arquivo durante a seleção faz a operação ser recusada com segurança.
+- No diff focado, `[Shift+H/L]` ou `[Shift+←/→]` rolam lateralmente até o último caractere, com controles clicáveis no canto inferior direito. Números, sinais e fundos das alterações permanecem fixos; em duas colunas, o código antigo e o novo rolam juntos sem esconder nenhum painel. A navegação vertical preserva a posição horizontal; sair do diff volta à esquerda.
+- O cabeçalho de projeto/branch mantém seu espaço ao percorrer a árvore com as setas, sem ser encoberto quando um diff maior termina de carregar.
 - `[D]` descarta o arquivo ou toda a pasta selecionada depois de uma confirmação explícita; alterações rastreadas são restauradas e arquivos novos são removidos.
-- Um terminal Git compacto sob o diff registra os comandos disparados pelas ações. `[T]` leva o foco a ele para executar comandos manuais; o prefixo `git` é fixo e não há composição de comando por shell.
+- Um terminal Git sob o diff mantém sete linhas visíveis e até 2.000 linhas de histórico, preservando a saída real dos comandos em vez de resumi-la. `[T]` leva o foco a ele para executar comandos manuais, `[↑/↓]` e o mouse rolam a saída, e `[F10]` maximiza/restaura o terminal dentro do painel de preview; o prefixo `git` é fixo e não há composição de comando por shell. Enquanto você digita, o autocomplete sugere comandos, opções, branches locais/remotas já conhecidas, tags, remotes e arquivos alterados; use `[Ctrl+N/P]` para navegar, `[Ctrl+Y]` para aplicar e `[Esc]` para fechar as sugestões.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
-- `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox.
+- `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox. No terminal, a tecla pertence ao autocomplete; em modais ou no stage parcial, ela não abre a configuração por cima do contexto atual.
+- O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Git · Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
 
 ### `[2] PR`
 
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
+- Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
 - O diff remoto abre dentro do Tuiminal e mantém a fila preservada ao voltar.
 - Busca e seções usam qualifiers do GitHub com autocomplete para `repo:`, `author:`, `review-requested:` e outros filtros.
@@ -201,6 +221,35 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
 
+As chamadas automáticas ao `gh` têm limite de tempo e aguardam o encerramento do
+processo ao cancelar. Se uma escrita em PR/Issue ficar sem confirmação — por
+timeout, cancelamento, limite de saída ou entrada incompleta — ela não é reenviada
+automaticamente. Confira o estado remoto antes de tentar novamente.
+
+Nos detalhes de PRs e Issues, trocar de item libera a paginação imediatamente;
+respostas antigas não substituem uma atualização mais recente. Carregar mais
+repetidamente no mesmo lote de eventos inicia uma única consulta. Alterações em
+comentários de um PR invalidam seus detalhes em cache mesmo sem um commit novo.
+Na aba Checks, execuções e erros de outro PR desaparecem assim que a seleção
+muda; respostas atrasadas não reaparecem no PR atual. PR, Issues e Inbox reutilizam o
+texto das linhas ao navegar, preservando atualizações de idioma, cores e dados.
+
+Nas configurações Git, projetos locais e repositórios remotos aparecem assim que
+cada busca termina, sem esperar a outra. Fechar ou recarregar o modal cancela a
+consulta remota anterior. O autocomplete de queries processa só os candidatos
+necessários para preencher as sugestões visíveis.
+
+Nos seletores de projeto e branch local, pressionar `[Enter]` repetidamente não
+repete uma seleção em andamento. Fechar o seletor por `[Esc]`, pelo botão ou fora
+do modal impede que sua resposta atrasada feche outro seletor aberto depois.
+Fechar não cancela nem desfaz um comando Git que já foi iniciado.
+
+Na busca de PRs e Issues, texto entre aspas permanece literal: mencionar `repo:`
+ou `author:@me` dentro de uma frase não remove o filtro da conta. Valores como
+`label:"help wanted"` preservam os espaços, e aspas abertas precisam ser fechadas
+antes de enviar a consulta. Aplicar ou salvar uma busca incompleta mostra o aviso
+no próprio modal, mantendo o texto e o foco para você corrigir.
+
 ### Atalhos essenciais do Git
 
 | Ação | Atalho |
@@ -209,11 +258,13 @@ PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de u
 | Alternar Diffs / Comparar | `[C]` |
 | Navegar na lista | `[J/K]` ou `[↑/↓]` |
 | Alternar foco entre árvore, preview e terminal Git | `[Tab]`; `[H/L]` ou `[←/→]` entre árvore e preview |
+| Rolar lateralmente no diff focado | `[Shift+H/L]` ou `[Shift+←/→]` |
 | Mudar seção | `[A←]` / `[F→]` |
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
+| Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
 | Descartar arquivo/pasta com confirmação | `[D]` |
 | Focar terminal Git | `[T]` |
 | Abrir histórico / grafo local | `[O]` / `[G]` |
@@ -243,6 +294,12 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 - **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
 - **Trocar de projeto:** `[N]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
 - **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
+
+Os logs são atualizados em lotes e retêm até 1.200 entradas, com limites de tamanho por entrada e por processo. Limpar o log também descarta a saída pendente de exibição; ao encerrar, as últimas linhas são preservadas na tela.
+
+Single e Multi preservam o idioma original da saída dos programas; somente mensagens do Tuiminal são traduzidas. A detecção de portas aguarda cada sondagem terminar antes de iniciar a seguinte e cancela apenas seu próprio auxiliar ao sair do contexto.
+
+A busca de projetos evita repetir pastas sobrepostas e faz até 16 leituras simultâneas, respeitando o limite de 300 projetos e sete níveis. Os comandos detectados usam os caminhos do projeto selecionado, e arquivos Deno JSONC preservam o texto das tarefas mesmo quando contêm marcadores de comentário.
 
 Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
 
@@ -308,11 +365,11 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 - **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
 - **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
-- **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit.
-- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema.
+- **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit. Selecionar um request funciona também quando há nomes iguais. Reabrir o executor ou mudar seu alvo cancela a execução anterior; resultados atrasados não substituem a nova execução.
+- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema. O campo de valor privado mantém a máscara durante edição e redimensionamento, inclusive com ideogramas e emojis.
 - **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. O jar valida domínios pela Public Suffix List, impõe limites e fica isolado por ambiente e diretório da coleção; `[C]` pode desativar tanto leitura quanto escrita de cookies por request. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 - **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
-- **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas.
+- **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas. Acionamentos repetidos não duplicam o download; fechar o documento que o iniciou cancela a operação. O arquivo só é publicado depois da gravação completa, sem substituir um destino existente.
 
 ### Atalhos essenciais do HTTP
 
@@ -368,7 +425,7 @@ A continuação não repete o envio anterior nem as dependências da coleção. 
 e cancelamento descartam confirmações pendentes; autorizações atrasadas não enviam
 requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sessão.
 
-Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
+Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. A captura libera o leitor ao terminar ou falhar e só marca truncamento quando encontra bytes além do limite. A busca acompanha linhas e colunas sem reprocessar todo o texto anterior a cada ocorrência. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
 O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
 
@@ -397,6 +454,7 @@ Comandos personalizados aceitam expressões completas do shell, incluindo `&&`, 
 - Dividir o painel ativo para o lado ou criar uma linha inferior.
 - Alternar entre a seção inteira e um terminal maximizado.
 - Ao reiniciar, fechar um painel ou sair do Tuiminal, aguardar a saída observada dos processos próprios; após um período de graça, o encerramento escala para a árvore criada, sem procurar ou matar processos por nome/porta.
+- Redimensionar a tela preserva a saída e não executa novamente comandos encerrados. Pedidos repetidos de reinício criam apenas a sessão mais recente; fechar o painel cancela um reinício ainda aguardando o processo anterior.
 - Preservar cores, cursor, prompts interativos e aplicações TUI em tela cheia.
 - Trocar de tab sem encerrar as sessões.
 - Focar, dividir, reiniciar e fechar painéis pelo teclado ou mouse.
@@ -432,6 +490,10 @@ O campo `CMD` é opcional: vazio abre o shell padrão; preenchido executa o coma
 - **Notificações:** informações, sucessos, avisos e erros aparecem sem roubar o foco.
 
 As preferências ficam em `~/.config/tuiminal/settings.json`.
+
+Se o arquivo contiver um nome de paleta inválido, a interface usa Prime e preserva as demais preferências válidas.
+
+A tradução de mensagens com prefixos repetidos de erro ou aviso não corta o texto nem depende da profundidade da pilha de chamadas.
 
 ## Desenvolvimento
 
@@ -471,18 +533,20 @@ Antes de contribuir, leia:
 
 O código atual é um monólito modular: `src/app` compõe a aplicação, `src/core` contém infraestrutura, `src/shared` oferece peças reutilizáveis e `src/features` separa cada ferramenta.
 
-O [plano de prontidão para alfa](./ALPHA_READINESS_PLAN.md) preserva a auditoria,
-as correções e as evidências. A seção 10 registra o hardening local concluído e os
-aceites externos que ainda bloqueiam uma alfa; isso não representa uma nova versão
-publicada no npm.
+O [checklist de prontidão para alfa](./ALPHA_READINESS_PLAN.md) resume o hardening
+local e os aceites que ainda bloqueiam uma alfa. Ele não representa aprovação de
+release nem uma nova versão publicada no npm.
 
-O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o mesmo SDK público de plugins. Os documentos abaixo registram direção e evidências atuais; são planos evolutivos, não promessas de API congelada:
+O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o mesmo SDK público de plugins. Os planos evolutivos abaixo registram a direção, não promessas de API congelada:
 
 - [Plano do sistema de plugins](./PLUGIN_SYSTEM_PLAN.md)
 - [Plano do cliente HTTP](./HTTP_CLIENT_PLAN.md)
-- [Git Diffs e Pull Requests](./GIT_PR_PLAN.md)
-- [Git Issues](./GIT_ISSUES_PLAN.md)
-- [Git Inbox](./GIT_INBOX_PLAN.md)
+
+As especificações mantidas da interface Git e de seus contratos estão em:
+
+- [Git Diffs e Pull Requests](./docs/design/git-pr-interface.md)
+- [Git Issues](./docs/design/git-issues-interface.md)
+- [Git Inbox](./docs/design/git-inbox-interface.md)
 
 ## Licença
 

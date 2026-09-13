@@ -27,6 +27,15 @@ de estado cobrem todas as issues não arquivadas, as abertas e as fechadas dentr
 do escopo atual. Os presets permanecem em inglês em todos os idiomas, sem impedir
 que o usuário crie e nomeie outros seletores.
 
+A busca compartilha com PRs a leitura de frases entre aspas: texto literal não
+é tratado como filtro de conta/repositório. Aspas abertas geram uma orientação
+traduzida antes do envio; o texto permanece editável e focado no mesmo modal,
+tanto ao aplicar com `[Enter]` quanto ao salvar com `[Ctrl+S]`.
+
+A lista reutiliza a formatação das linhas enquanto seus dados, largura, colunas
+e idioma não mudarem. Mover a seleção ou trocar a paleta não refaz a conversão de
+datas e o truncamento de todas as linhas; cores e cliques continuam atualizados.
+
 ## Composições responsivas
 
 - Larga (`≥118 × 22`): lista à esquerda e prévia à direita.
@@ -83,3 +92,34 @@ que o usuário crie e nomeie outros seletores.
   usuário cola e executa. O Tuiminal nunca injeta o comando, apenas valida versão
   ou autenticação e recarrega Issues ao final. O PTY recebe também respostas de
   protocolo do emulador e `[Enter]` reabre um shell encerrado.
+- A paginação dos detalhes libera o indicador ao trocar de issue e não duplica
+  consultas em acionamentos do mesmo lote. Atualizar explicitamente substitui
+  páginas e debounce anteriores; respostas e callbacks de uma seleção antiga
+  não podem substituir a atual nem retornar ao cache após cancelamento.
+
+## Persistência, escopo e segurança das ações
+
+- O perfil usa `$XDG_CONFIG_HOME/tuiminal/git-issues.yaml`, com fallback para
+  `~/.config/tuiminal/git-issues.yaml`, escrita atômica, modo `0600` e chave por
+  raiz canônica do projeto. Não substitua configuração inválida silenciosamente.
+- Sem perfil explícito, a seleção de repositório/conta segue a mesma regra de
+  [PRs](./git-pr-interface.md). Toda busca exige `is:issue` e `archived:false`;
+  `is:pr` é rejeitado. Uma lista salva vazia significa escopo da conta.
+- Escritas incluem comentário, atribuição/remoção de responsáveis, deltas de
+  labels, `gh issue develop --checkout`, fechar e reabrir. Prepare host, node ID,
+  repositório, número, estado, `updatedAt` e geração de autenticação; reautentique,
+  releia, execute uma vez e reconcilie o alvo. Depois do despacho, um resultado
+  incerto não autoriza repetir a mutação.
+- Labels e responsáveis usam os detalhes completos, nunca apenas o resumo da
+  busca. Argumentos e stdin são explícitos; checkout mantém a guarda compartilhada
+  de clone/remote/árvore limpa e nunca cria um clone automaticamente.
+- Caches de seções são LRU limitados a 64 entradas e detalhes a 32, pertencentes
+  à sessão. Cancelamento ou descarte impedem uma resposta tardia de repovoá-los.
+
+## Verificação mantida
+
+`bun run check` inclui `tests/git-issues.test.ts`, `tests/git-issue-config.test.ts`,
+`tests/git-issue-actions.test.ts`, `tests/git-reactions.test.ts` e a cobertura real
+em `tests/tui/git-issues.test.tsx`. Leituras e mutações usam fixtures/`gh` falso;
+não executam ações na conta do usuário. O tutorial de Git cobre somente Diffs e
+Compare, não este workspace remoto.

@@ -32,6 +32,9 @@ gh-dash e ajustado às regras de foco, segurança e responsividade do Tuiminal.
   não exibe uma legenda permanente para um comportamento que não pode ser desligado.
 - Notificações não lidas usam `●`; lidas usam `○`; salvas recebem `★`. O sentido
   não depende apenas de cor.
+- Cada linha reutiliza sua formatação enquanto notificação, largura, idioma e
+  estado salvo permanecem iguais. Navegar, animar o loader e trocar a paleta não
+  recalculam datas e truncamento; os estilos e controles continuam atualizados.
 
 ## Ações e camadas
 
@@ -60,3 +63,24 @@ terminal guiado de PR/Issues. `[C]` copia o comando e `[Enter]`/mouse foca o she
 o usuário cola e executa. Versão ou login válidos recarregam a tela automaticamente,
 sem o Tuiminal ler tokens nem iniciar os comandos exibidos. O PTY recebe respostas
 de protocolo do emulador e `[Enter]` reabre um shell encerrado.
+
+## Transporte e persistência
+
+- A leitura usa REST `notifications?all=true` no host autenticado do perfil de
+  PR. Inbox não reutiliza os filtros de busca de PR/Issues como escopo de threads.
+- `[M]` usa `PATCH notifications/threads/{id}`; `[D]` usa `DELETE` nesse recurso;
+  `[U]` usa `DELETE notifications/threads/{id}/subscription`. Fixe host e ID da
+  thread na confirmação. Execute a ação uma vez: timeout/cancelamento após o
+  despacho é resultado incerto, não motivo para repetição automática.
+- Somente IDs salvos persistem em `$XDG_CONFIG_HOME/tuiminal/git-inbox.json`, com
+  fallback para `~/.config/tuiminal/git-inbox.json`, escrita atômica e modo `0600`.
+  Corpos, caches, tokens e conteúdo de notificações não vão para esse arquivo.
+- Cada sessão mantém seu próprio cancelamento e recursos. Descartar uma sessão
+  não pode remover registros ou publicar respostas de uma sessão substituta.
+
+## Verificação mantida
+
+`bun run check` inclui `tests/git-inbox.test.ts`, `tests/tui/git-inbox.test.tsx`,
+`tests/tui/git-inbox-formatting.test.tsx` e `tests/git-resource-disposal.test.ts`.
+As chamadas remotas usam `gh` falso e estado temporário. Inbox não faz parte do
+tutorial simulado de Git, que cobre Diffs e Compare.
