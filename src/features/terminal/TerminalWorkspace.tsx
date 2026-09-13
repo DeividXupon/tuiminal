@@ -1,7 +1,7 @@
 import { ShortcutText } from "../../shared/ui/ShortcutText"
 import { basename } from "node:path"
-import { EmbeddedTerminalRenderable, type InputRenderable } from "@opentui/core"
-import { extend, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import type { EmbeddedTerminalRenderable, InputRenderable } from "@opentui/core"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { notifyTerminalExit, useTerminalNotifications } from "./hooks/use-terminal-notifications"
 import {
@@ -14,40 +14,21 @@ import {
   type FreeTerminalProcessHandle,
 } from "./services/terminal"
 import { stopTerminalBeforeRestart } from "./services/terminal-lifecycle"
-import { translateUi } from "../../shared/i18n/index"
+import { getLanguage, translateUi } from "../../shared/i18n/index"
 import { COLORS, LAYOUT } from "../../core/settings/theme"
 import { InlineButton } from "../../shared/ui/InlineButton"
+import { compactTerminalText, terminalFooterLayout } from "./rendering/presentation"
 import {
-  compactTerminalText,
-  terminalFooterLayout,
-  terminalStatusColor,
-  terminalStatusMarker,
-} from "./rendering/presentation"
+  FreeTerminalPane,
+  type FreeTerminalPaneLayout,
+  type FreeTerminalPaneSession,
+} from "./ui/FreeTerminalPane"
 
-extend({ "embedded-terminal": EmbeddedTerminalRenderable })
-
-declare module "@opentui/react" {
-  interface OpenTUIComponents {
-    "embedded-terminal": typeof EmbeddedTerminalRenderable
-  }
-}
-
-type FreeTerminalSessionStatus = "starting" | "running" | "exited" | "failed"
 type FreeTerminalViewMode = "section" | "single"
 type TerminalRow = 0 | 1
 type TerminalColumn = 0 | 1
 
-type FreeTerminalSession = FreeTerminalCommand & {
-  id: string
-  sectionId: string
-  row: TerminalRow
-  column: TerminalColumn
-  title: string
-  status: FreeTerminalSessionStatus
-  pid: number | null
-  exitCode: number | null
-  startedAt: number
-}
+type FreeTerminalSession = FreeTerminalPaneSession
 
 type TerminalPlacement = {
   sectionId: string
@@ -55,33 +36,8 @@ type TerminalPlacement = {
   column: TerminalColumn
 }
 
-type TerminalPaneLayout = {
-  top: 0 | "50%"
-  left: 0 | "50%"
-  width: "50%" | "100%"
-  height: "50%" | "100%"
-  borderTop: boolean
-  borderLeft: boolean
-}
-
-type TerminalPaneProps = {
-  session: FreeTerminalSession
-  ordinal: number
-  active: boolean
-  visible: boolean
-  layout: TerminalPaneLayout
-  onActivate: (id: string) => void
-  onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
-  onGone: (id: string, terminal: EmbeddedTerminalRenderable) => void
-  onInput: (id: string, data: Uint8Array) => void
-  onResize: (id: string, columns: number, rows: number) => void
-  onRestart: (id: string) => void
-  onClose: (id: string) => void
-}
-
 const MAX_SESSIONS = 12
 const MAX_TERMINALS_PER_SECTION = 4
-const MAX_SCROLLBACK_LINES = 5_000
 
 function comparePanePosition(first: FreeTerminalSession, second: FreeTerminalSession) {
   return first.row - second.row || first.column - second.column
@@ -111,91 +67,6 @@ function normalizeSectionLayout(sessions: FreeTerminalSession[], sectionId: stri
   })
 }
 
-function TerminalPane({
-  session,
-  ordinal,
-  active,
-  visible,
-  layout,
-  onActivate,
-  onReady,
-  onGone,
-  onInput,
-  onResize,
-  onRestart,
-  onClose,
-}: TerminalPaneProps) {
-  const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
-  const borders: Array<"top" | "left"> = []
-  if (visible && layout.borderTop) borders.push("top")
-  if (visible && layout.borderLeft) borders.push("left")
-  if (visible && active && LAYOUT.compact && !borders.includes("left")) borders.push("left")
-
-  useEffect(() => {
-    const terminal = terminalRef.current
-    if (!terminal) return
-    onReady(session.id, terminal)
-    return () => onGone(session.id, terminal)
-  }, [onGone, onReady, session.id])
-
-  return (
-    <box
-      visible={visible}
-      style={{
-        position: "absolute",
-        top: visible ? layout.top : 0,
-        left: visible ? layout.left : 0,
-        width: visible ? layout.width : 1,
-        height: visible ? layout.height : 1,
-        minWidth: visible ? 18 : 1,
-        minHeight: visible ? 4 : 1,
-        border: borders,
-        borderStyle: "single",
-        borderColor: active && LAYOUT.compact ? COLORS.terminal : COLORS.border,
-        backgroundColor: COLORS.panel,
-        overflow: "hidden",
-      }}
-    >
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingLeft: 1,
-          backgroundColor: active ? COLORS.panelRaised : COLORS.panel,
-        }}
-      >
-        <text
-          content={`${terminalStatusMarker(session.status)} ${ordinal}:${session.shortLabel} ${compactTerminalText(session.title, 16)}${session.pid ? ` · ${session.pid}` : ""}`}
-          style={{ fg: active ? terminalStatusColor(session) : COLORS.muted }}
-        />
-        <box style={{ flexDirection: "row" }}>
-          <InlineButton label="↻" accent={session.accent} onPress={() => onRestart(session.id)} />
-          <InlineButton label="×" accent={COLORS.danger} onPress={() => onClose(session.id)} />
-        </box>
-      </box>
-      <embedded-terminal
-        ref={terminalRef}
-        id={`free-terminal-${session.id}`}
-        maxScrollback={MAX_SCROLLBACK_LINES}
-        selectable
-        onData={(data) => onInput(session.id, data)}
-        onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
-        onMouseDown={() => onActivate(session.id)}
-        style={{
-          width: "100%",
-          height: "auto",
-          minHeight: 1,
-          flexGrow: 1,
-          flexShrink: 1,
-        }}
-      />
-    </box>
-  )
-}
-
 export function FreeTerminal({ active }: { active: boolean }) {
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
@@ -210,6 +81,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
   const sectionSequence = useRef(0)
   const activeRef = useRef(active)
   const activeSessionRef = useRef<string | null>(null)
+  const sessionsRef = useRef<FreeTerminalSession[]>([])
   const leaderRef = useRef(false)
   const [sessions, setSessions] = useState<FreeTerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -251,7 +123,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
     return currentSectionSessions.map((session) => session.id)
   }, [activeSessionId, currentSectionSessions, viewMode])
   const paneLayouts = useMemo(() => {
-    const layouts = new Map<string, TerminalPaneLayout>()
+    const layouts = new Map<string, FreeTerminalPaneLayout>()
     if (viewMode === "single" && activeSessionId) {
       layouts.set(activeSessionId, {
         top: 0,
@@ -280,7 +152,6 @@ export function FreeTerminal({ active }: { active: boolean }) {
     }
     return layouts
   }, [activeSessionId, bottomRowSessions, currentSectionSessions, topRowSessions, viewMode])
-  const activeIndex = sessions.findIndex((session) => session.id === activeSessionId)
   const runningCount = sessions.filter((session) => session.status === "running").length
   const activeRowCount = activeSession
     ? currentSectionSessions.filter((session) => session.row === activeSession.row).length
@@ -299,9 +170,20 @@ export function FreeTerminal({ active }: { active: boolean }) {
   const pageCount = Math.max(1, sectionIds.length)
   const compact = dimensions.width < 106
   const footerLayout = terminalFooterLayout(dimensions.width - 2)
+  const paneAppearanceKey = [
+    getLanguage(),
+    LAYOUT.compact,
+    COLORS.border,
+    COLORS.danger,
+    COLORS.muted,
+    COLORS.panel,
+    COLORS.panelRaised,
+    COLORS.terminal,
+  ].join("\u0000")
 
   activeRef.current = active
   activeSessionRef.current = activeSessionId
+  sessionsRef.current = sessions
 
   const updateSession = useCallback((id: string, update: Partial<FreeTerminalSession>) => {
     setSessions((current) =>
@@ -316,13 +198,13 @@ export function FreeTerminal({ active }: { active: boolean }) {
 
   const activateSession = useCallback(
     (id: string) => {
-      const session = sessions.find((candidate) => candidate.id === id)
+      const session = sessionsRef.current.find((candidate) => candidate.id === id)
       if (!session) return
       setActiveSessionId(id)
       setActiveSectionId(session.sectionId)
       focusTerminal(id)
     },
-    [focusTerminal, sessions],
+    [focusTerminal],
   )
 
   const startSession = useCallback(
@@ -332,13 +214,21 @@ export function FreeTerminal({ active }: { active: boolean }) {
       if (!command || !embeddedTerminal) return
 
       const previous = processHandles.current.get(id)
-      generations.current.set(id, (generations.current.get(id) ?? 0) + Number(Boolean(previous)))
+      const generation = (generations.current.get(id) ?? 0) + 1
+      generations.current.set(id, generation)
+      const isCurrent = () =>
+        generations.current.get(id) === generation &&
+        terminalRefs.current.get(id) === embeddedTerminal
       const stopped = await stopTerminalBeforeRestart({
         handle: previous,
-        write: (data) => embeddedTerminal.write(data),
-        onError: setNotice,
+        write: (data) => {
+          if (isCurrent()) embeddedTerminal.write(data)
+        },
+        onError: (message) => {
+          if (isCurrent()) setNotice(message)
+        },
       })
-      if (!stopped) return
+      if (!stopped || !isCurrent()) return
       processHandles.current.delete(id)
 
       if (clear) embeddedTerminal.write("\u001bc")
@@ -352,8 +242,6 @@ export function FreeTerminal({ active }: { active: boolean }) {
         startedAt: Date.now(),
       })
 
-      const generation = (generations.current.get(id) ?? 0) + 1
-      generations.current.set(id, generation)
       const size = terminalSizes.current.get(id)
       let handle: FreeTerminalProcessHandle | null = null
 
@@ -367,10 +255,10 @@ export function FreeTerminal({ active }: { active: boolean }) {
             terminalRefs.current.get(id)?.write(data)
           },
           onExit(result) {
-            if (generations.current.get(id) !== generation) return
             if (processHandles.current.get(id) === handle) {
               processHandles.current.delete(id)
             }
+            if (generations.current.get(id) !== generation) return
             const failed = result.code !== 0 && !result.stopped
             terminalRefs.current
               .get(id)
@@ -408,7 +296,7 @@ export function FreeTerminal({ active }: { active: boolean }) {
         columns: Math.max(20, terminal.width),
         rows: Math.max(5, terminal.height),
       })
-      if (!processHandles.current.has(id)) void startSession(id)
+      if (!generations.current.has(id)) void startSession(id)
       if (activeSessionRef.current === id) focusTerminal(id)
     },
     [focusTerminal, startSession],
@@ -431,11 +319,12 @@ export function FreeTerminal({ active }: { active: boolean }) {
 
   const launchCommand = useCallback(
     (command: FreeTerminalCommand, placement: TerminalPlacement) => {
-      if (sessions.length >= MAX_SESSIONS) {
+      const currentSessions = sessionsRef.current
+      if (currentSessions.length >= MAX_SESSIONS) {
         setNotice(`Limite de ${MAX_SESSIONS} terminais nesta execução.`)
         return
       }
-      const sectionSize = sessions.filter(
+      const sectionSize = currentSessions.filter(
         (session) => session.sectionId === placement.sectionId,
       ).length
       if (sectionSize >= MAX_TERMINALS_PER_SECTION) {
@@ -458,14 +347,16 @@ export function FreeTerminal({ active }: { active: boolean }) {
         startedAt: Date.now(),
       }
       sessionCommands.current.set(id, command)
-      setSessions((current) => [...current, session])
+      const nextSessions = [...currentSessions, session]
+      sessionsRef.current = nextSessions
+      setSessions(nextSessions)
       setActiveSessionId(id)
       setActiveSectionId(placement.sectionId)
       setViewMode("section")
       setNotice(`Abrindo ${command.displayCommand}…`)
       focusTerminal(id)
     },
-    [focusTerminal, sessions],
+    [focusTerminal],
   )
 
   const pendingCommand = useCallback(() => {
@@ -525,11 +416,12 @@ export function FreeTerminal({ active }: { active: boolean }) {
 
   const closeSession = useCallback(
     (id: string) => {
-      const index = sessions.findIndex((session) => session.id === id)
-      const removed = sessions[index]
+      const currentSessions = sessionsRef.current
+      const index = currentSessions.findIndex((session) => session.id === id)
+      const removed = currentSessions[index]
       if (!removed) return
 
-      generations.current.set(id, (generations.current.get(id) ?? 0) + 1)
+      generations.current.delete(id)
       const handle = processHandles.current.get(id)
       if (handle) {
         void handle
@@ -545,18 +437,19 @@ export function FreeTerminal({ active }: { active: boolean }) {
       terminalSizes.current.delete(id)
 
       const remaining = normalizeSectionLayout(
-        sessions.filter((session) => session.id !== id),
+        currentSessions.filter((session) => session.id !== id),
         removed.sectionId,
       )
       const currentActive = remaining.find((session) => session.id === activeSessionRef.current)
       const next = currentActive ?? remaining[Math.min(index, remaining.length - 1)] ?? null
+      sessionsRef.current = remaining
       setSessions(remaining)
       setActiveSessionId(next?.id ?? null)
       setActiveSectionId(next?.sectionId ?? null)
       setNotice(next ? `Terminal fechado · foco em ${next.title}.` : "Nenhum terminal ativo.")
       if (next) focusTerminal(next.id)
     },
-    [focusTerminal, sessions],
+    [focusTerminal],
   )
 
   const restartSession = useCallback(
@@ -570,13 +463,17 @@ export function FreeTerminal({ active }: { active: boolean }) {
 
   const moveSession = useCallback(
     (delta: number) => {
-      if (!sessions.length) return
+      const currentSessions = sessionsRef.current
+      if (!currentSessions.length) return
+      const activeIndex = currentSessions.findIndex(
+        (session) => session.id === activeSessionRef.current,
+      )
       const current = Math.max(0, activeIndex)
-      const nextIndex = (current + delta + sessions.length) % sessions.length
-      const next = sessions[nextIndex]
+      const nextIndex = (current + delta + currentSessions.length) % currentSessions.length
+      const next = currentSessions[nextIndex]
       if (next) activateSession(next.id)
     },
-    [activateSession, activeIndex, sessions],
+    [activateSession],
   )
 
   const changeSection = useCallback(
@@ -881,12 +778,13 @@ export function FreeTerminal({ active }: { active: boolean }) {
         ) : null}
 
         {sessions.map((session, index) => (
-          <TerminalPane
+          <FreeTerminalPane
             key={session.id}
             session={session}
             ordinal={index + 1}
             active={session.id === activeSessionId}
             visible={visibleSessionIds.includes(session.id)}
+            appearanceKey={paneAppearanceKey}
             layout={
               paneLayouts.get(session.id) ?? {
                 top: 0,
