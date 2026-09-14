@@ -24,8 +24,9 @@ if (!output.startsWith("{")) {
   process.exit(1)
 }
 const report = JSON.parse(output) as CruiseReport
-const sources = [...new Bun.Glob("src/**/*.{ts,tsx}").scanSync()].sort()
-const analyzed = new Set(report.modules.map((module) => module.source))
+const normalizeReportPath = (path: string) => path.replaceAll("\\", "/")
+const sources = [...new Bun.Glob("src/**/*.{ts,tsx}").scanSync()].map(normalizeReportPath).sort()
+const analyzed = new Set(report.modules.map((module) => normalizeReportPath(module.source)))
 const missing = sources.filter((source) => !analyzed.has(source))
 if (missing.length) {
   console.error("Architecture analysis skipped source files:", missing.join(", "))
