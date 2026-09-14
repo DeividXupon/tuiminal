@@ -47,6 +47,8 @@ type GhCommandRequest = {
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const STDIN_CHUNK_BYTES = 8 * 1024
+const STDIN_CHUNK_INTERVAL_MS = 1
 
 function safeEnvironment(options: GhTransportOptions) {
   return {
@@ -115,7 +117,9 @@ export function runGhCommand(
   return new Promise((resolve, reject) => {
     let closed = false
     let inputFailed = false
-    let inputComplete = !request.stdin?.length
+    const input = request.stdin === undefined ? undefined : Buffer.from(request.stdin, "utf8")
+    let inputOffset = 0
+    let inputComplete = !input?.length
     let finish: (() => void) | undefined
     const settle = () => {
       if (closed) finish?.()
@@ -157,15 +161,27 @@ export function runGhCommand(
     child.stdin?.on("error", () => {
       inputFailed = true
     })
-    // Bun 1.3.14 can finish end(payload) without surfacing a broken pipe.
-    // Write separately and require its callback before accepting a successful exit.
-    if (request.stdin !== undefined) {
-      child.stdin?.write(request.stdin, "utf8", (error) => {
-        if (error) inputFailed = true
-        else inputComplete = true
+    // Bun 1.3.14 can acknowledge one large write while it is still buffered. Keep
+    // only a bounded chunk in flight so an early child close remains observable.
+    const writeNextInputChunk = () => {
+      if (!input?.length || closed || inputFailed) return
+      const end = Math.min(inputOffset + STDIN_CHUNK_BYTES, input.length)
+      child.stdin?.write(input.subarray(inputOffset, end), (error) => {
+        if (error) {
+          inputFailed = true
+          return
+        }
+        inputOffset = end
+        if (inputOffset === input.length) {
+          inputComplete = true
+          child.stdin?.end()
+          return
+        }
+        setTimeout(writeNextInputChunk, STDIN_CHUNK_INTERVAL_MS)
       })
     }
-    child.stdin?.end()
+    if (input?.length) writeNextInputChunk()
+    else child.stdin?.end()
   })
 }
 
