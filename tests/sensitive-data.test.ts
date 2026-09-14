@@ -8,7 +8,7 @@ import {
   parseSensitiveTerms,
   sensitiveDataIsMasked,
   setActiveSensitiveTerms,
-} from "../src/shared/security/sensitive-data"
+} from "../packages/core/src/security/sensitive-data"
 
 afterEach(() => setActiveSensitiveTerms([...DEFAULT_SENSITIVE_TERMS]))
 

@@ -5,7 +5,7 @@ import {
   runnerLogIsAtBottom,
   runnerProjectCloseResult,
   runnerProjectPickerShortcut,
-} from "../src/features/runner/model/navigation"
+} from "../packages/feature-runner/src/model/navigation"
 
 describe("Runner spatial keyboard navigation", () => {
   test("opens the project picker with the global N convention", () => {

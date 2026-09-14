@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isReadOnlySql as isReadOnlyEditorQuery } from "../src/features/database/model/sql-read-policy"
+import { isReadOnlySql as isReadOnlyEditorQuery } from "../packages/feature-database/src/model/sql-read-policy"
 
 describe("SQL read-only classification", () => {
   test.each([

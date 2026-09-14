@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import * as db from "../../src/features/database/services/database"
-import type { DatabaseQueryHistoryEntry } from "../../src/features/database/model/types"
+import * as db from "../../packages/feature-database/src/services/database"
+import type { DatabaseQueryHistoryEntry } from "../../packages/feature-database/src/model/types"
 
 const profile = {
   id: "fixture",

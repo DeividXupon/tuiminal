@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { sqlTokens } from "../src/features/database/model/sql-tokens"
+import { sqlTokens } from "../packages/feature-database/src/model/sql-tokens"
 
 describe("conservative SQL tokenization", () => {
   test("keeps quoted text opaque and records exact source spans", () => {

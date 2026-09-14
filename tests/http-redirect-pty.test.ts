@@ -41,7 +41,7 @@ for (const layout of ["compact", "framed"]) {
       })
       let output = ""
       const child = Bun.spawn(
-        [process.execPath, resolve(import.meta.dir, "../bin/tuiminal.ts"), "http", root],
+        [process.execPath, resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"), "http", root],
         {
           cwd: root,
           env: {

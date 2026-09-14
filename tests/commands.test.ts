@@ -4,13 +4,13 @@ import {
   createShellTerminalCommand,
   startFreeTerminalProcess,
   stopAllFreeTerminalProcesses,
-} from "../src/features/terminal/services/terminal"
+} from "../packages/feature-terminal/src/services/terminal"
 import { tmpdir } from "node:os"
 import { spawn } from "node:child_process"
 import {
   createShellRunnerCommand,
   startRunnerProcess,
-} from "../src/features/runner/services/runner"
+} from "../packages/feature-runner/src/services/runner"
 
 describe("terminal and runner commands", () => {
   test("creates the login shell terminal command", () => {

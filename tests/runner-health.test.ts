@@ -4,7 +4,7 @@ import {
   isRunnerPortOpen,
   sleep,
   waitForRunnerHealthCheck,
-} from "../src/features/runner/services/health"
+} from "../packages/feature-runner/src/services/health"
 
 const servers: Bun.Server<undefined>[] = []
 const pendingResponses: Array<(response: Response) => void> = []

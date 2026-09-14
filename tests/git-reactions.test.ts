@@ -8,7 +8,7 @@ import {
   isGitHubDiscussionCommentUrl,
   normalizeGitHubReactionGroups,
   threadGitHubDiscussionComments,
-} from "../src/features/git/model/reactions"
+} from "../packages/feature-git/src/model/reactions"
 
 describe("GitHub discussions", () => {
   test("offers the five selected GitHub reactions in a stable keyboard order", () => {

@@ -1,12 +1,12 @@
 import { expect, spyOn, test } from "bun:test"
 import { tmpdir } from "node:os"
-import { createShellRunnerCommand } from "../src/features/runner/services/shell-command"
-import { startRunnerProcess } from "../src/features/runner/services/process"
+import { createShellRunnerCommand } from "../packages/feature-runner/src/services/shell-command"
+import { startRunnerProcess } from "../packages/feature-runner/src/services/process"
 import {
   bunRuntime,
   type BunRuntimeLike,
   type BunSubprocessLike,
-} from "../src/features/runner/services/pty-runtime"
+} from "../packages/feature-runner/src/services/pty-runtime"
 
 test("Runner PTY decodes split UTF-8 without delaying newline-free prompts", async () => {
   if (!bunRuntime) throw new Error("This test requires the configured Bun runtime")

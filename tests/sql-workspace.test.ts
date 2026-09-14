@@ -4,7 +4,7 @@ import {
   resizeSqlEditorRatio,
   sqlSplitEditorHeight,
   toggleSqlWorkspaceMode,
-} from "../src/features/database/model/sql-workspace"
+} from "../packages/feature-database/src/model/sql-workspace"
 
 describe("SQL workspace layout", () => {
   test("resizes only through stable ratio steps", () => {

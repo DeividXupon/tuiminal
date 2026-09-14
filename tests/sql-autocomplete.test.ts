@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import type { DatabaseColumn, DatabaseTable } from "../src/features/database/model/types"
+import type { DatabaseColumn, DatabaseTable } from "../packages/feature-database/src/model/types"
 
 import {
   getSqlCompletionContext,
   sqlAutocompleteTableKey,
-} from "../src/features/database/model/sql-autocomplete"
+} from "../packages/feature-database/src/model/sql-autocomplete"
 
 const users: DatabaseTable = { schema: "public", name: "users", type: "table" }
 const orders: DatabaseTable = { schema: "public", name: "order", type: "table" }

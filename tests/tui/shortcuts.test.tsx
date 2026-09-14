@@ -4,16 +4,16 @@ import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { ShortcutText } from "../../src/shared/ui/ShortcutText"
-import { InlineButton } from "../../src/shared/ui/InlineButton"
+import { ShortcutText } from "../../packages/core/src/ui/ShortcutText"
+import { InlineButton } from "../../packages/core/src/ui/InlineButton"
 import {
   COLORS,
   getUiSettings,
   PALETTES,
   updateUiSettings,
   type PaletteId,
-} from "../../src/core/settings/theme"
-import { App } from "../../src/app/App"
+} from "../../packages/core/src/settings/theme"
+import { App } from "../../apps/cli/src/App"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

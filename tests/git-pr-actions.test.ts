@@ -6,11 +6,11 @@ import {
   preparePullRequestAction,
   pullRequestActionAvailability,
   pullRequestMutationWasReconciled,
-} from "../src/features/git/model/pr/actions"
-import { demoPullRequestDetails } from "../src/features/git/model/pr/detail-fixtures"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import { executePullRequestMutation } from "../src/features/git/services/github/mutations"
-import { PullRequestActionCoordinator } from "../src/features/git/services/pr-actions"
+} from "../packages/feature-git/src/model/pr/actions"
+import { demoPullRequestDetails } from "../packages/feature-git/src/model/pr/detail-fixtures"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import { executePullRequestMutation } from "../packages/feature-git/src/services/github/mutations"
+import { PullRequestActionCoordinator } from "../packages/feature-git/src/services/pr-actions"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-pr-actions-"))
 const executable = join(directory, "gh")

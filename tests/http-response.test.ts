@@ -5,13 +5,13 @@ import {
   findHttpTextMatches,
   foldHttpJson,
   withHttpLineNumbers,
-} from "../src/features/http/model/response"
+} from "../packages/feature-http/src/model/response"
 import {
   httpResponseOpenCommand,
   isSafeHttpResponseOpenType,
-} from "../src/features/http/services/open-response"
-import { COLORS } from "../src/core/settings/theme"
-import { buildHttpJsonDocument } from "../src/features/http/ui/http-json-document"
+} from "../packages/feature-http/src/services/open-response"
+import { COLORS } from "../packages/core/src/settings/theme"
+import { buildHttpJsonDocument } from "../packages/feature-http/src/ui/http-json-document"
 
 describe("HTTP response inspection", () => {
   test("renders formatted JSON tokens with semantic colors and a selected block", () => {

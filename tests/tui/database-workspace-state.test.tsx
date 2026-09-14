@@ -8,15 +8,15 @@ import { TextareaRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { DatabaseViewer } from "../../src/features/database/DatabaseWorkspace"
-import * as service from "../../src/features/database/services/database"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { DatabaseViewer } from "../../packages/feature-database/src/DatabaseWorkspace"
+import * as service from "../../packages/feature-database/src/services/database"
 import {
   addDatabaseConnection,
   getDefaultDatabaseConnectionId,
   removeDatabaseConnection,
   setDefaultDatabaseConnection,
-} from "../../src/features/database/services/database"
+} from "../../packages/feature-database/src/services/database"
 
 let tui: TestRendererSetup | undefined
 let fixtureRoot = ""

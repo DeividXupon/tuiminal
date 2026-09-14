@@ -7,16 +7,16 @@ import {
   type RunnerLogEntry,
   runnerLogPresentation,
   serializeRunnerLogs,
-} from "../src/features/runner/rendering/log-document"
+} from "../packages/feature-runner/src/rendering/log-document"
 import {
   RunnerLogBuffer,
   RUNNER_LOG_BUFFER_LIMIT,
   RUNNER_LOG_BUFFER_MAX_CHARS,
   RUNNER_LOG_ENTRY_MAX_CHARS,
   RUNNER_LOG_FLUSH_INTERVAL_MS,
-} from "../src/features/runner/model/log-buffer"
-import { pipeLines } from "../src/features/runner/services/process"
-import { getLanguage, setLanguage } from "../src/shared/i18n"
+} from "../packages/feature-runner/src/model/log-buffer"
+import { pipeLines } from "../packages/feature-runner/src/services/process"
+import { getLanguage, setLanguage } from "../packages/core/src/i18n"
 
 const palette = {
   canvas: "#000000",

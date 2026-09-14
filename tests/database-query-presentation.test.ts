@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test"
-import { COLORS, getUiSettings, updateUiSettings } from "../src/core/settings/theme"
+import { COLORS, getUiSettings, updateUiSettings } from "../packages/core/src/settings/theme"
 import {
   queryCellForeground,
   queryCompletionPresentation,
   queryRowColors,
-} from "../src/features/database/rendering/query-presentation"
+} from "../packages/feature-database/src/rendering/query-presentation"
 
 const settings = getUiSettings()
 afterEach(() => updateUiSettings(settings))

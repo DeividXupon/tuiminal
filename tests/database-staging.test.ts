@@ -4,8 +4,8 @@ import {
   stageBatchDeletes,
   rowKeyFingerprint,
   type StagedDatabaseChange,
-} from "../src/features/database/model/workspace"
-import type { DatabaseColumn } from "../src/features/database/model/types"
+} from "../packages/feature-database/src/model/workspace"
+import type { DatabaseColumn } from "../packages/feature-database/src/model/types"
 
 const table = { schema: "main", name: "items", type: "table" as const }
 const field: DatabaseColumn = {

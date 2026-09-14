@@ -13,15 +13,15 @@ import {
   getUiSettings,
   type LayoutMode,
   updateUiSettings,
-} from "../../src/core/settings/theme"
-import { HttpClient } from "../../src/features/http/HttpWorkspace"
-import { HTTP_TUTORIAL_STEPS } from "../../src/features/http"
-import { App } from "../../src/app/App"
-import { UnsavedChangesExitModal } from "../../src/app/ui/UnsavedChangesExitModal"
-import { HttpExternalConflictModal } from "../../src/features/http/ui/HttpExternalConflictModal"
-import { resolveHttpWorkspaceLayout } from "../../src/features/http/model/layout"
-import { HTTP_RENDERER_LISTENER_BUDGET } from "../../src/features/http/model/renderer-listener-budget"
-import { displayWidth, type LanguageId } from "../../src/shared/i18n"
+} from "../../packages/core/src/settings/theme"
+import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { HTTP_TUTORIAL_STEPS } from "../../packages/feature-http/src"
+import { App } from "../../apps/cli/src/App"
+import { UnsavedChangesExitModal } from "../../apps/cli/src/ui/UnsavedChangesExitModal"
+import { HttpExternalConflictModal } from "../../packages/feature-http/src/ui/HttpExternalConflictModal"
+import { resolveHttpWorkspaceLayout } from "../../packages/feature-http/src/model/layout"
+import { HTTP_RENDERER_LISTENER_BUDGET } from "../../packages/feature-http/src/model/renderer-listener-budget"
+import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

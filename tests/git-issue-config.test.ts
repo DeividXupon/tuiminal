@@ -7,7 +7,7 @@ import {
   DEFAULT_ISSUE_SECTIONS,
   issueProfileForRoot,
   parseIssueConfig,
-} from "../src/features/git/model/issue/config"
+} from "../packages/feature-git/src/model/issue/config"
 import {
   addIssueClonePath,
   addIssueProfileRepository,
@@ -15,7 +15,7 @@ import {
   resolveIssueProfileRoot,
   saveIssueConfig,
   updateIssueProfile,
-} from "../src/features/git/storage/issue/config"
+} from "../packages/feature-git/src/storage/issue/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-issue-config-"))
 const configPath = join(temporaryDirectory, "nested", "git-issues.yaml")

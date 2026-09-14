@@ -2,21 +2,21 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { formatHttpRunReport } from "../src/features/http/cli/report"
-import { exportPreparedRequestAsCurl } from "../src/features/http/exporting/curl"
+import { formatHttpRunReport } from "../packages/feature-http/src/cli/report"
+import { exportPreparedRequestAsCurl } from "../packages/feature-http/src/exporting/curl"
 import {
   parseHttpFile,
   requestFromHttpFile,
   serializeHttpRequestBlock,
-} from "../src/features/http/model/http-file"
-import { httpRequestSecretValues } from "../src/features/http/model/secrets"
-import { createHttpVariableContext } from "../src/features/http/model/variables"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { runHttpCollectionCase } from "../src/features/http/services/collection-runner"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
-import { createHttpPreparedRequestPreview } from "../src/features/http/services/request-preview"
-import { saveHttpRequest } from "../src/features/http/storage/collections"
-import { inspectHttpExternalConflict } from "../src/features/http/storage/conflicts"
+} from "../packages/feature-http/src/model/http-file"
+import { httpRequestSecretValues } from "../packages/feature-http/src/model/secrets"
+import { createHttpVariableContext } from "../packages/feature-http/src/model/variables"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { runHttpCollectionCase } from "../packages/feature-http/src/services/collection-runner"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
+import { createHttpPreparedRequestPreview } from "../packages/feature-http/src/services/request-preview"
+import { saveHttpRequest } from "../packages/feature-http/src/storage/collections"
+import { inspectHttpExternalConflict } from "../packages/feature-http/src/storage/conflicts"
 
 const roots: string[] = []
 

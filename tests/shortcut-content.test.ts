@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { RGBA, StyledText } from "@opentui/core"
-import { BRAND_COLOR } from "../src/shared/ui/brand"
-import { shortcutContent } from "../src/shared/ui/shortcut-content"
+import { BRAND_COLOR } from "../packages/core/src/ui/brand"
+import { shortcutContent } from "../packages/core/src/ui/shortcut-content"
 
 describe("shortcut accent", () => {
   test("colors only bracketed keys, preserving labels and spacing", () => {

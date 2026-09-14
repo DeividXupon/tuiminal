@@ -28,7 +28,7 @@ async function runCliWith({
       ...(forbidUiImports
         ? ["--preload", resolve("tests/fixtures/cli-version-import-guard.ts")]
         : []),
-      resolve("bin/tuiminal.ts"),
+      resolve("apps/cli/bin/tuiminal.ts"),
       ...args,
     ]
     const subprocess = Bun.spawn(command, {

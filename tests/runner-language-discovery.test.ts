@@ -7,8 +7,8 @@ import {
   discoverGoCommands,
   discoverJavaCommands,
   parseJsonWithComments,
-} from "../src/features/runner/discovery/languages"
-import { discoverPythonCommands } from "../src/features/runner/discovery/python"
+} from "../packages/feature-runner/src/discovery/languages"
+import { discoverPythonCommands } from "../packages/feature-runner/src/discovery/python"
 
 const roots: string[] = []
 

@@ -4,8 +4,8 @@ import { InputRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { HttpPrivateEnvironmentForm } from "../../src/features/http/ui/HttpEnvironmentManagerContent"
-import { translateUi } from "../../src/shared/i18n/index"
+import { HttpPrivateEnvironmentForm } from "../../packages/feature-http/src/ui/HttpEnvironmentManagerContent"
+import { translateUi } from "../../packages/core/src/i18n/index"
 
 let tui: TestRendererSetup | undefined
 const noop = () => {}

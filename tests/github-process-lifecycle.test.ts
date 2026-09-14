@@ -2,7 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import * as processes from "node:child_process"
 import { createHash } from "node:crypto"
 import { once } from "node:events"
-import { runGhCommand } from "../src/features/git/services/github/transport"
+import { runGhCommand } from "../packages/feature-git/src/services/github/transport"
 
 const originalExecFile = processes.execFile
 const children: processes.ChildProcess[] = []

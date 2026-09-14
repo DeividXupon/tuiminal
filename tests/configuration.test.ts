@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test"
 import {
   configurationSectionsForContext,
   normalizeConfigurationSectionForContext,
-} from "../src/app/ui/ConfigurationModal"
-import { configurationSettingPatch, PALETTE_ROWS } from "../src/app/model/configuration-options"
-import { getUiSettings } from "../src/core/settings/theme"
+} from "../apps/cli/src/ui/ConfigurationModal"
+import {
+  configurationSettingPatch,
+  PALETTE_ROWS,
+} from "../apps/cli/src/model/configuration-options"
+import { getUiSettings } from "../packages/core/src/settings/theme"
 
 describe("contextual settings", () => {
   test("shows Database settings first only in the Database context", () => {

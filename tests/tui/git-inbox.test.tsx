@@ -3,12 +3,12 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { updateUiSettings } from "../../src/core/settings/theme"
-import { GitViewer } from "../../src/features/git"
-import { DEMO_INBOX_NOTIFICATIONS } from "../../src/features/git/model/inbox/fixtures"
-import { InboxList } from "../../src/features/git/ui/inbox/InboxList"
-import { IssueSectionEditorModal } from "../../src/features/git/ui/issue/IssueSectionEditorModal"
-import { SectionEditorModal } from "../../src/features/git/ui/pr/SectionEditorModal"
+import { updateUiSettings } from "../../packages/core/src/settings/theme"
+import { GitViewer } from "../../packages/feature-git/src"
+import { DEMO_INBOX_NOTIFICATIONS } from "../../packages/feature-git/src/model/inbox/fixtures"
+import { InboxList } from "../../packages/feature-git/src/ui/inbox/InboxList"
+import { IssueSectionEditorModal } from "../../packages/feature-git/src/ui/issue/IssueSectionEditorModal"
+import { SectionEditorModal } from "../../packages/feature-git/src/ui/pr/SectionEditorModal"
 
 let tui: TestRendererSetup | undefined
 const initialDemo = process.env.TUIMINAL_GIT_INBOX_DEMO

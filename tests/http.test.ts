@@ -4,35 +4,38 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { executePreparedHttpRequest } from "../packages/feature-http/src/services/fetch-transport"
 import {
   HttpRequestValidationError,
   HTTP_REQUEST_LIMITS,
   normalizeHttpProxyUrl,
   normalizeHttpUrl,
   prepareHttpRequest,
-} from "../src/features/http/services/request-builder"
+} from "../packages/feature-http/src/services/request-builder"
 import {
   classifyResponseBody,
   readLimitedResponseBody,
   responseBodyText,
   sanitizeTerminalText,
-} from "../src/features/http/services/response-reader"
-import { fetchWithHttpRedirects, HttpRedirectError } from "../src/features/http/services/redirects"
+} from "../packages/feature-http/src/services/response-reader"
+import {
+  fetchWithHttpRedirects,
+  HttpRedirectError,
+} from "../packages/feature-http/src/services/redirects"
 import {
   HTTP_COOKIE_LIMITS,
   HttpCookieJar,
   HttpCookieJarStore,
-} from "../src/features/http/services/cookies"
-import { downloadCompleteHttpResponse } from "../src/features/http/services/download"
-import { createHttpVariableContext } from "../src/features/http/model/variables"
-import { createHttpPreparedRequestPreview } from "../src/features/http/services/request-preview"
-import { applyHttpWorkspaceConfig } from "../src/features/http/storage/config"
+} from "../packages/feature-http/src/services/cookies"
+import { downloadCompleteHttpResponse } from "../packages/feature-http/src/services/download"
+import { createHttpVariableContext } from "../packages/feature-http/src/model/variables"
+import { createHttpPreparedRequestPreview } from "../packages/feature-http/src/services/request-preview"
+import { applyHttpWorkspaceConfig } from "../packages/feature-http/src/storage/config"
 import {
   httpInsecureTlsApproval,
   HttpInsecureTlsApprovalError,
-} from "../src/features/http/model/tls-policy"
+} from "../packages/feature-http/src/model/tls-policy"
 
 describe("HTTP request preparation", () => {
   test("normalizes hostnames and only accepts HTTP protocols", () => {

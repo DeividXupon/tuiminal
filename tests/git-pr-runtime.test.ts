@@ -14,29 +14,32 @@ import { join } from "node:path"
 import {
   pullRequestCheckTransitionShouldNotify,
   summarizePullRequestChecks,
-} from "../src/features/git/model/pr/checks"
-import { pullRequestMarkdownLines, sanitizeGitHubText } from "../src/features/git/model/pr/content"
+} from "../packages/feature-git/src/model/pr/checks"
+import {
+  pullRequestMarkdownLines,
+  sanitizeGitHubText,
+} from "../packages/feature-git/src/model/pr/content"
 import {
   adjacentPullRequestHunkOffset,
   boundedPullRequestDiff,
   pullRequestDiffHunkOffsets,
   pullRequestDiffKeyboardAction,
-} from "../src/features/git/model/pr/diff"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import type { PullRequestCheck } from "../src/features/git/model/pr/types"
-import { resolveDiffDocumentPath } from "../src/features/git/model/view"
-import { parseDiffDocuments } from "../src/features/git/rendering/diff"
-import { loadPullRequestDiff } from "../src/features/git/services/github/diff"
-import { openWorkflowRunInBrowser } from "../src/features/git/services/github/read-actions"
-import { loadPullRequestWorkflowRuns } from "../src/features/git/services/github/workflows"
+} from "../packages/feature-git/src/model/pr/diff"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import type { PullRequestCheck } from "../packages/feature-git/src/model/pr/types"
+import { resolveDiffDocumentPath } from "../packages/feature-git/src/model/view"
+import { parseDiffDocuments } from "../packages/feature-git/src/rendering/diff"
+import { loadPullRequestDiff } from "../packages/feature-git/src/services/github/diff"
+import { openWorkflowRunInBrowser } from "../packages/feature-git/src/services/github/read-actions"
+import { loadPullRequestWorkflowRuns } from "../packages/feature-git/src/services/github/workflows"
 import {
   type CheckoutGitProbeResult,
   inspectCheckoutClone,
   parseGitHubRemote,
   withValidatedCheckoutClone,
-} from "../src/features/git/services/pr-checkout"
-import { PullRequestWatchScheduler } from "../src/features/git/services/pr-watch"
-import { pullRequestNotificationCommand } from "../src/features/git/services/pr-notifications"
+} from "../packages/feature-git/src/services/pr-checkout"
+import { PullRequestWatchScheduler } from "../packages/feature-git/src/services/pr-watch"
+import { pullRequestNotificationCommand } from "../packages/feature-git/src/services/pr-notifications"
 
 const roots: string[] = []
 const item = (() => {

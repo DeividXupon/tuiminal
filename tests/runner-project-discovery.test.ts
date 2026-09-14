@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { delimiter, join, resolve } from "node:path"
-import { discoverRunnerProjects } from "../src/features/runner/discovery/projects"
+import { discoverRunnerProjects } from "../packages/feature-runner/src/discovery/projects"
 
 const readDirectory = fs.readdir
 const previousRoots = process.env.TUIMINAL_PROJECT_ROOTS

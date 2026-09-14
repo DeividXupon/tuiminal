@@ -5,7 +5,7 @@ import {
   defaultNotificationDuration,
   inferNotificationKind,
   type AppNotification,
-} from "../src/shared/notifications/model"
+} from "../packages/core/src/notifications/model"
 
 function notification(
   id: string,

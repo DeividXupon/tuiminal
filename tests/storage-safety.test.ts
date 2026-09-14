@@ -11,9 +11,15 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { atomicWriteFileSync, AtomicFileConflictError } from "../src/shared/storage/atomic-file"
-import { loadHttpHistory, persistHttpHistoryEntry } from "../src/features/http/storage/history"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../src/features/http/storage/config"
+import {
+  atomicWriteFileSync,
+  AtomicFileConflictError,
+} from "../packages/core/src/storage/atomic-file"
+import {
+  loadHttpHistory,
+  persistHttpHistoryEntry,
+} from "../packages/feature-http/src/storage/history"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../packages/feature-http/src/storage/config"
 
 describe("recoverable storage boundaries", () => {
   const temporaryDirectories: string[] = []
@@ -98,9 +104,11 @@ describe("recoverable storage boundaries", () => {
     mkdirSync(directory, { recursive: true })
     writeFileSync(join(directory, "settings.json"), "{broken-settings\n")
     writeFileSync(join(directory, "databases.json"), "{broken-databases\n")
-    const themeUrl = new URL("../src/core/settings/theme.ts", import.meta.url).href
-    const databaseUrl = new URL("../src/features/database/services/database.ts", import.meta.url)
-      .href
+    const themeUrl = new URL("../packages/core/src/settings/theme.ts", import.meta.url).href
+    const databaseUrl = new URL(
+      "../packages/feature-database/src/services/database.ts",
+      import.meta.url,
+    ).href
     const script = `
       const fs = await import("node:fs");
       const theme = await import(${JSON.stringify(themeUrl)});

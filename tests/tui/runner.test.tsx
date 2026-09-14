@@ -6,11 +6,11 @@ import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { Runner } from "../../src/features/runner/RunnerWorkspace"
-import { RunnerSaveCommandModal } from "../../src/features/runner/ui/RunnerSaveCommandModal"
-import { App } from "../../src/app/App"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { BRAND_COLOR } from "../../src/shared/ui/brand"
+import { Runner } from "../../packages/feature-runner/src/RunnerWorkspace"
+import { RunnerSaveCommandModal } from "../../packages/feature-runner/src/ui/RunnerSaveCommandModal"
+import { App } from "../../apps/cli/src/App"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

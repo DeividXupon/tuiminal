@@ -2,29 +2,29 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { exportPreparedRequestAsCurl } from "../src/features/http/exporting/curl"
-import { importCurl, tokenizeCurl } from "../src/features/http/importing/curl"
+import { exportPreparedRequestAsCurl } from "../packages/feature-http/src/exporting/curl"
+import { importCurl, tokenizeCurl } from "../packages/feature-http/src/importing/curl"
 import {
   parseHttpFile,
   replaceHttpRequestBlock,
   requestFromHttpFile,
   serializeHttpRequestBlock,
-} from "../src/features/http/model/http-file"
+} from "../packages/feature-http/src/model/http-file"
 import {
   createHttpVariableContext,
   httpVariableSuggestions,
   redactHttpTemplate,
   resolveHttpTemplate,
-} from "../src/features/http/model/variables"
-import { httpRequestSecretValues } from "../src/features/http/model/secrets"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
-import { createScratchRequest } from "../src/features/http/model/workspace"
+} from "../packages/feature-http/src/model/variables"
+import { httpRequestSecretValues } from "../packages/feature-http/src/model/secrets"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
 import {
   applyHttpWorkspaceConfig,
   loadHttpWorkspaceConfigSnapshot,
   parseHttpWorkspaceConfig,
   saveHttpWorkspaceConfig,
-} from "../src/features/http/storage/config"
+} from "../packages/feature-http/src/storage/config"
 import {
   deleteHttpRequest,
   duplicateHttpRequest,
@@ -35,11 +35,11 @@ import {
   scanHttpProject,
   HTTP_PROJECT_MAX_FILES,
   watchHttpProject,
-} from "../src/features/http/storage/collections"
+} from "../packages/feature-http/src/storage/collections"
 import {
   inspectHttpExternalConflict,
   resolveHttpExternalConflict,
-} from "../src/features/http/storage/conflicts"
+} from "../packages/feature-http/src/storage/conflicts"
 import {
   createPrivateHttpEnvironment,
   environmentVariableContext,
@@ -50,8 +50,8 @@ import {
   type HttpCredentialStore,
   loadHttpEnvironmentCatalog,
   loadHttpEnvironments,
-} from "../src/features/http/storage/environments"
-import { saveCapturedHttpResponse } from "../src/features/http/storage/responses"
+} from "../packages/feature-http/src/storage/environments"
+import { saveCapturedHttpResponse } from "../packages/feature-http/src/storage/responses"
 
 const temporaryDirectories: string[] = []
 const httpFixtureRoot = resolve(import.meta.dir, "fixtures/http")

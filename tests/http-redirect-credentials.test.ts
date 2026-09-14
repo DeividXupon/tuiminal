@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import {
   createHttpVariableContext,
   httpTemplateReferencesSecret,
-} from "../src/features/http/model/variables"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
-import { fetchWithHttpRedirects } from "../src/features/http/services/redirects"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
+} from "../packages/feature-http/src/model/variables"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { executePreparedHttpRequest } from "../packages/feature-http/src/services/fetch-transport"
+import { fetchWithHttpRedirects } from "../packages/feature-http/src/services/redirects"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
 
 function credentialRequest(url: string) {
   const request = createScratchRequest("redirect-credentials", url)

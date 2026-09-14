@@ -2,9 +2,9 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import * as files from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { downloadCompleteHttpResponse } from "../src/features/http/services/download"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { downloadCompleteHttpResponse } from "../packages/feature-http/src/services/download"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
 
 const cleanups: Array<() => void> = []
 const roots: string[] = []

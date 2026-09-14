@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { paletteFor, type UiSettings } from "../src/core/settings/theme"
+import { paletteFor, type UiSettings } from "../packages/core/src/settings/theme"
 
 test.each(["constructor", "__proto__", "toString", "hasOwnProperty", "not-a-palette"])(
   "rejects the invalid palette %s on load and update without losing other settings",
@@ -11,7 +11,7 @@ test.each(["constructor", "__proto__", "toString", "hasOwnProperty", "not-a-pale
     const settingsPath = join(configRoot, "tuiminal", "settings.json")
     mkdirSync(join(configRoot, "tuiminal"))
     try {
-      const themeUrl = new URL("../src/core/settings/theme.ts", import.meta.url).href
+      const themeUrl = new URL("../packages/core/src/settings/theme.ts", import.meta.url).href
       const script = `
         import { readFileSync, writeFileSync } from "node:fs";
         const theme = await import(${JSON.stringify(themeUrl)});

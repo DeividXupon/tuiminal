@@ -3,31 +3,155 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "tuiminal",
-      "dependencies": {
+      "name": "tuiminal-workspace",
+      "devDependencies": {
+        "@biomejs/biome": "^2.5.11",
         "@modelcontextprotocol/sdk": "1.30.0",
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
         "@tuiparts/core": "^0.0.6",
         "@tuiparts/react": "^0.0.6",
+        "@types/bun": "^1.4.0",
+        "@types/node": "^26.4.0",
+        "@types/react": "^19.2.18",
+        "@xupon/tuiminal-core": "workspace:*",
+        "@xupon/tuiminal-feature-database": "workspace:*",
+        "@xupon/tuiminal-feature-git": "workspace:*",
+        "@xupon/tuiminal-feature-http": "workspace:*",
+        "@xupon/tuiminal-feature-runner": "workspace:*",
+        "@xupon/tuiminal-feature-terminal": "workspace:*",
+        "dependency-cruiser": "18.2.0",
         "react": "^19.2.8",
         "string-width": "^7.2.0",
+        "tldts": "7.4.12",
+        "typescript": "6.0.3",
+        "typescript-native": "npm:typescript@7.0.2",
+        "yaml": "^2.9.0",
+      },
+    },
+    "apps/cli": {
+      "name": "@xupon/tuiminal-cli",
+      "version": "0.2.0-pre-alpha.0",
+      "bin": {
+        "tuiminal": "./bin/tuiminal.ts",
+      },
+      "dependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@tuiparts/react": "^0.0.6",
+        "@xupon/tuiminal-core": "workspace:*",
+        "@xupon/tuiminal-feature-database": "workspace:*",
+        "@xupon/tuiminal-feature-git": "workspace:*",
+        "@xupon/tuiminal-feature-http": "workspace:*",
+        "@xupon/tuiminal-feature-runner": "workspace:*",
+        "@xupon/tuiminal-feature-terminal": "workspace:*",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/core": {
+      "name": "@xupon/tuiminal-core",
+      "version": "0.2.0-pre-alpha.0",
+      "dependencies": {
+        "@tuiparts/core": "^0.0.6",
+        "@tuiparts/react": "^0.0.6",
+        "string-width": "^7.2.0",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/feature-database": {
+      "name": "@xupon/tuiminal-feature-database",
+      "version": "0.2.0-pre-alpha.0",
+      "dependencies": {
+        "@modelcontextprotocol/sdk": "1.30.0",
+        "@tuiparts/core": "^0.0.6",
+        "@tuiparts/react": "^0.0.6",
+        "string-width": "^7.2.0",
+      },
+      "devDependencies": {
+        "@xupon/tuiminal-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@xupon/tuiminal-core": "0.2.0-pre-alpha.0",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/feature-git": {
+      "name": "@xupon/tuiminal-feature-git",
+      "version": "0.2.0-pre-alpha.0",
+      "dependencies": {
+        "@tuiparts/react": "^0.0.6",
+        "yaml": "^2.9.0",
+      },
+      "devDependencies": {
+        "@xupon/tuiminal-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@xupon/tuiminal-core": "0.2.0-pre-alpha.0",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/feature-http": {
+      "name": "@xupon/tuiminal-feature-http",
+      "version": "0.2.0-pre-alpha.0",
+      "dependencies": {
+        "@tuiparts/core": "^0.0.6",
         "tldts": "7.4.12",
         "yaml": "^2.9.0",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.5.11",
-        "@types/bun": "^1.4.0",
-        "@types/node": "^26.4.0",
-        "@types/react": "^19.2.18",
-        "dependency-cruiser": "18.2.0",
-        "typescript": "6.0.3",
-        "typescript-native": "npm:typescript@7.0.2",
+        "@xupon/tuiminal-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@xupon/tuiminal-core": "0.2.0-pre-alpha.0",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/feature-runner": {
+      "name": "@xupon/tuiminal-feature-runner",
+      "version": "0.2.0-pre-alpha.0",
+      "dependencies": {
+        "@tuiparts/react": "^0.0.6",
+        "yaml": "^2.9.0",
+      },
+      "devDependencies": {
+        "@xupon/tuiminal-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@xupon/tuiminal-core": "0.2.0-pre-alpha.0",
+        "react": "^19.2.8",
+      },
+    },
+    "packages/feature-terminal": {
+      "name": "@xupon/tuiminal-feature-terminal",
+      "version": "0.2.0-pre-alpha.0",
+      "devDependencies": {
+        "@xupon/tuiminal-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@opentui/core": "^0.5.9",
+        "@opentui/react": "^0.5.9",
+        "@xupon/tuiminal-core": "0.2.0-pre-alpha.0",
+        "react": "^19.2.8",
       },
     },
   },
   "overrides": {
+    "@opentui/core": "0.5.9",
+    "@opentui/react": "0.5.9",
     "qs": "6.16.0",
+    "react": "19.2.8",
   },
   "packages": {
     "@biomejs/biome": ["@biomejs/biome@2.5.11", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.11", "@biomejs/cli-darwin-x64": "2.5.11", "@biomejs/cli-linux-arm64": "2.5.11", "@biomejs/cli-linux-arm64-musl": "2.5.11", "@biomejs/cli-linux-x64": "2.5.11", "@biomejs/cli-linux-x64-musl": "2.5.11", "@biomejs/cli-win32-arm64": "2.5.11", "@biomejs/cli-win32-x64": "2.5.11" }, "bin": { "biome": "bin/biome" } }, "sha512-Tj0dnkLPdW0ASjHfj2D/ZkkvPU2wrFmnE1jWTD2xzV1ycapV1DutbYXk4NDnR3rYTi1ZCbNFD4G2gRMEY65WaA=="],
@@ -121,6 +245,20 @@
     "@typescript/typescript-win32-arm64": ["@typescript/typescript-win32-arm64@7.0.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ=="],
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
+
+    "@xupon/tuiminal-cli": ["@xupon/tuiminal-cli@workspace:apps/cli"],
+
+    "@xupon/tuiminal-core": ["@xupon/tuiminal-core@workspace:packages/core"],
+
+    "@xupon/tuiminal-feature-database": ["@xupon/tuiminal-feature-database@workspace:packages/feature-database"],
+
+    "@xupon/tuiminal-feature-git": ["@xupon/tuiminal-feature-git@workspace:packages/feature-git"],
+
+    "@xupon/tuiminal-feature-http": ["@xupon/tuiminal-feature-http@workspace:packages/feature-http"],
+
+    "@xupon/tuiminal-feature-runner": ["@xupon/tuiminal-feature-runner@workspace:packages/feature-runner"],
+
+    "@xupon/tuiminal-feature-terminal": ["@xupon/tuiminal-feature-terminal@workspace:packages/feature-terminal"],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 

@@ -5,7 +5,7 @@ import {
   createPlasmaFrame,
   plasmaExitPresence,
   plasmaStyledText,
-} from "../src/shared/ui/plasma-loader"
+} from "../packages/core/src/ui/plasma-loader"
 
 describe("plasma loading surface", () => {
   test.each([

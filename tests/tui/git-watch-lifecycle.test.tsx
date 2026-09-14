@@ -3,10 +3,10 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { demoPullRequestDetails } from "../../src/features/git/model/pr/detail-fixtures"
-import { DEMO_PULL_REQUESTS } from "../../src/features/git/model/pr/fixtures"
-import * as details from "../../src/features/git/services/github/details"
-import { usePullRequestWatch } from "../../src/features/git/ui/pr/usePullRequestWatch"
+import { demoPullRequestDetails } from "../../packages/feature-git/src/model/pr/detail-fixtures"
+import { DEMO_PULL_REQUESTS } from "../../packages/feature-git/src/model/pr/fixtures"
+import * as details from "../../packages/feature-git/src/services/github/details"
+import { usePullRequestWatch } from "../../packages/feature-git/src/ui/pr/usePullRequestWatch"
 
 let tui: TestRendererSetup | undefined
 let reader: ReturnType<typeof spyOn<typeof details, "loadPullRequestDetails">> | undefined

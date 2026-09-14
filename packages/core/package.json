@@ -1,0 +1,57 @@
+{
+  "name": "@xupon/tuiminal-core",
+  "version": "0.2.0-pre-alpha.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeividXupon/tuiminal.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "engines": {
+    "bun": "1.3.14"
+  },
+  "exports": {
+    "./data/defined-properties": "./src/data/defined-properties.ts",
+    "./i18n/index": "./src/i18n/index.ts",
+    "./i18n/localized-jsx/jsx-dev-runtime": "./src/i18n/localized-jsx/jsx-dev-runtime.ts",
+    "./i18n/localized-jsx/jsx-runtime": "./src/i18n/localized-jsx/jsx-runtime.ts",
+    "./keyboard/scope": "./src/keyboard/scope.ts",
+    "./lifecycle/shutdown": "./src/lifecycle/shutdown.ts",
+    "./notifications/index": "./src/notifications/index.ts",
+    "./process/owned-process": "./src/process/owned-process.ts",
+    "./security/sensitive-data": "./src/security/sensitive-data.ts",
+    "./settings/theme": "./src/settings/theme.ts",
+    "./storage/atomic-file": "./src/storage/atomic-file.ts",
+    "./storage/project-files": "./src/storage/project-files.ts",
+    "./ui/DirectionalButton": "./src/ui/DirectionalButton.tsx",
+    "./ui/InlineButton": "./src/ui/InlineButton.tsx",
+    "./ui/MountWhen": "./src/ui/MountWhen.tsx",
+    "./ui/PasswordInput": "./src/ui/PasswordInput.ts",
+    "./ui/PlasmaLoadingOverlay": "./src/ui/PlasmaLoadingOverlay.tsx",
+    "./ui/ShortcutText": "./src/ui/ShortcutText.tsx",
+    "./ui/brand": "./src/ui/brand.ts",
+    "./ui/directional-shortcut": "./src/ui/directional-shortcut.ts",
+    "./ui/selectMouse": "./src/ui/selectMouse.ts",
+    "./ui/syntax-style": "./src/ui/syntax-style.ts"
+  },
+  "peerDependencies": {
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "react": "^19.2.8"
+  },
+  "dependencies": {
+    "@tuiparts/core": "^0.0.6",
+    "@tuiparts/react": "^0.0.6",
+    "string-width": "^7.2.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": true
+}

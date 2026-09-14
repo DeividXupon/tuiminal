@@ -5,9 +5,9 @@ import { testRender } from "@opentui/react/test-utils"
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { act } from "react"
-import { HttpClient } from "../../src/features/http/HttpWorkspace"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../../src/features/http/storage/config"
+import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../../packages/feature-http/src/storage/config"
 
 let tui: TestRendererSetup | undefined
 let server: ReturnType<typeof Bun.serve> | undefined

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   httpBodyKindCycleDirection,
   nextHttpBodyKind,
-} from "../src/features/http/model/body-kind-navigation"
+} from "../packages/feature-http/src/model/body-kind-navigation"
 
 describe("HTTP body kind navigation", () => {
   test("cycles all body kinds with the nested Z/V convention", () => {

@@ -3,9 +3,9 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { DatabaseBatchExportModal } from "../../src/features/database/ui/DatabaseBatchExportModal"
-import { serializeDatabaseBatchRows } from "../../src/features/database/model/batch"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { DatabaseBatchExportModal } from "../../packages/feature-database/src/ui/DatabaseBatchExportModal"
+import { serializeDatabaseBatchRows } from "../../packages/feature-database/src/model/batch"
 
 let tui: TestRendererSetup | undefined
 const settings = getUiSettings()

@@ -4,7 +4,7 @@ import {
   STARTUP_ANIMATION_TIMING,
   STARTUP_BLOCK_DROP_ORDER,
   STARTUP_WORDMARK,
-} from "../src/app/model/startup-animation"
+} from "../apps/cli/src/model/startup-animation"
 
 describe("startup animation", () => {
   test("drops the four logo blocks one after another", () => {

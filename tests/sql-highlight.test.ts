@@ -4,7 +4,7 @@ import {
   sqlEditorGutterWidth,
   sqlEditorLineCount,
   type SqlHighlightGroup,
-} from "../src/features/database/rendering/sql-highlight"
+} from "../packages/feature-database/src/rendering/sql-highlight"
 
 function highlightedTokens(sql: string, dialect: "mysql" | "postgres" | "sqlite") {
   const lines = sql.split("\n")

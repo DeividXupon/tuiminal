@@ -4,9 +4,9 @@ import type { InputRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { IssueSectionEditorModal } from "../../src/features/git/ui/issue/IssueSectionEditorModal"
-import { SectionEditorModal } from "../../src/features/git/ui/pr/SectionEditorModal"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { IssueSectionEditorModal } from "../../packages/feature-git/src/ui/issue/IssueSectionEditorModal"
+import { SectionEditorModal } from "../../packages/feature-git/src/ui/pr/SectionEditorModal"
 
 let tui: TestRendererSetup | undefined
 const settings = getUiSettings()

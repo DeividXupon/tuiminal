@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 
 test("indexes translation sources once and switches languages without rebuilding the index", () => {
-  const moduleUrl = new URL("../src/shared/i18n/index.ts", import.meta.url).href
+  const moduleUrl = new URL("../packages/core/src/i18n/index.ts", import.meta.url).href
   const script = `
     const NativeMap = globalThis.Map;
     const maps = [];

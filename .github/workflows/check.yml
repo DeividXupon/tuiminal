@@ -27,6 +27,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun audit --json
       - run: bun run check
+      - run: bun run test:packages
       - run: git diff --check
 
   windows:
@@ -45,6 +46,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run format:check
       - run: bun run lint
+      - run: bun run check:workspaces
       - run: bun run check:architecture
       - run: bun run check:maintainability
       - run: bun run check:licenses

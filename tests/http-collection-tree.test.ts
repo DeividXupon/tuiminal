@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test"
 import {
   buildHttpCollectionTree,
   httpCollectionNodeId,
-} from "../src/features/http/model/collection-tree"
-import { createScratchRequest, nextHttpMethod } from "../src/features/http/model/workspace"
-import type { HttpProjectRequestItem } from "../src/features/http/model/types"
+} from "../packages/feature-http/src/model/collection-tree"
+import { createScratchRequest, nextHttpMethod } from "../packages/feature-http/src/model/workspace"
+import type { HttpProjectRequestItem } from "../packages/feature-http/src/model/types"
 
 function item(filePath: string, id: string, name: string, method = "GET"): HttpProjectRequestItem {
   return {

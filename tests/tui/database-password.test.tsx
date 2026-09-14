@@ -3,7 +3,7 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { PasswordInputRenderable } from "../../src/shared/ui/PasswordInput"
+import { PasswordInputRenderable } from "../../packages/core/src/ui/PasswordInput"
 
 let tui: TestRendererSetup | undefined
 afterEach(() => {

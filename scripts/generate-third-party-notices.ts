@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto"
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { dirname, join, resolve } from "node:path"
 
 type PackageManifest = {
@@ -24,7 +31,8 @@ type InstalledPackage = {
 }
 
 const projectRoot = resolve(import.meta.dir, "..")
-const packagePath = join(projectRoot, "package.json")
+const applicationRoot = join(projectRoot, "apps", "cli")
+const packagePath = join(applicationRoot, "package.json")
 const noticePath = join(projectRoot, "THIRD_PARTY_NOTICES.md")
 const bunLicensePath = join(projectRoot, "docs", "licenses", "BUN-1.3.14.md")
 
@@ -69,7 +77,7 @@ function installedRuntimePackages() {
   const packages = new Map<string, InstalledPackage>()
   const queue = [...Object.keys(rootManifest.dependencies ?? {})].map((name) => ({
     name,
-    from: projectRoot,
+    from: applicationRoot,
     required: true,
   }))
   while (queue.length) {
@@ -81,7 +89,7 @@ function installedRuntimePackages() {
       continue
     }
     const manifest = readManifest(manifestPath)
-    const root = dirname(manifestPath)
+    const root = dirname(realpathSync(manifestPath))
     const name = manifest.name ?? next.name
     const version = manifest.version ?? "unknown"
     const key = `${name}@${version}`
@@ -100,7 +108,10 @@ function installedRuntimePackages() {
     }
   }
   return [...packages.values()]
-    .filter((item) => !item.name.startsWith("@opentui/core-"))
+    .filter(
+      (item) =>
+        !item.name.startsWith("@opentui/core-") && !item.name.startsWith("@xupon/tuiminal-"),
+    )
     .sort((left, right) =>
       `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`),
     )

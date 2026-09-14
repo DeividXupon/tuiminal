@@ -91,16 +91,18 @@ writeFileSync(
 )
 writeFileSync(join(PROJECT_ROOT, "src", "cache.ts"), "export const ttl = 30_000\n")
 
-const { updateUiSettings } = await import("../src/core/settings/theme")
+const { updateUiSettings } = await import("../packages/core/src/settings/theme")
 const { DatabaseTutorialDemo } = await import(
-  "../src/features/database/tutorial/DatabaseTutorialDemo"
+  "../packages/feature-database/src/tutorial/DatabaseTutorialDemo"
 )
-const { GitViewer } = await import("../src/features/git")
-const { Runner } = await import("../src/features/runner")
-const { HttpTutorialDemo } = await import("../src/features/http/tutorial/HttpTutorialDemo")
-const { FreeTerminal } = await import("../src/features/terminal")
-const { stopAllRunnerProcesses } = await import("../src/features/runner/services/process")
-const { stopAllFreeTerminalProcesses } = await import("../src/features/terminal/services/terminal")
+const { GitViewer } = await import("../packages/feature-git/src")
+const { Runner } = await import("../packages/feature-runner/src")
+const { HttpTutorialDemo } = await import("../packages/feature-http/src/tutorial/HttpTutorialDemo")
+const { FreeTerminal } = await import("../packages/feature-terminal/src")
+const { stopAllRunnerProcesses } = await import("../packages/feature-runner/src/services/process")
+const { stopAllFreeTerminalProcesses } = await import(
+  "../packages/feature-terminal/src/services/terminal"
+)
 
 updateUiSettings({
   colorMode: "dark",

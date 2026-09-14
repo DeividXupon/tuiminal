@@ -3,8 +3,8 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { App } from "../../src/app/App"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
+import { App } from "../../apps/cli/src/App"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

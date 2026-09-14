@@ -1,30 +1,29 @@
-# Matriz de compatibilidade `.http`
+# `.http` compatibility matrix
 
-Estas fixtures registram a fronteira de compatibilidade do parser do Tuiminal com
-o formato do JetBrains HTTP Client. Elas são dados locais e determinísticos: nenhum
-host listado aqui deve ser acessado pelos testes.
+These fixtures record Tuiminal's parser compatibility boundary with the JetBrains
+HTTP Client format. They are deterministic local data: tests must never access any
+host listed in them.
 
-| Fixture | Expectativa |
+| Fixture | Expected behavior |
 | --- | --- |
-| `jetbrains-compatible.http` | nomes, comentários, variáveis, GET curto, URL multilinha, timeout, cookie jar, proxy e método customizado editáveis |
-| `jetbrains-bodies.http` | JSON, form URL encoded, body por arquivo e multipart editáveis |
-| `jetbrains-opaque-directives.http` | diretivas ainda não implementadas e timeout inválido permanecem opacos |
-| `jetbrains-opaque-scripts.http` | pre-request scripts, response handlers e redirects de saída permanecem opacos |
-| `jetbrains-opaque-protocols.rest` | versão HTTP explícita e protocolos da Fase 5 permanecem opacos |
-| `import/postman-v2.1.json` | herança, secrets, URL estruturada, scripts, bodies e perdas do Postman v2.1 |
-| `import/openapi-3.0.json` | refs locais, overrides, servers, segurança e JSON do OpenAPI 3.0 |
-| `import/openapi-3.1.yaml` | path item por ref, forms, multipart, refs externas e webhooks do OpenAPI 3.1 |
+| `jetbrains-compatible.http` | Editable names, comments, variables, short GET, multiline URLs, timeout, cookie jar, proxy, and custom methods |
+| `jetbrains-bodies.http` | Editable JSON, URL-encoded forms, file bodies, and multipart |
+| `jetbrains-opaque-directives.http` | Unimplemented directives and invalid timeout values remain opaque |
+| `jetbrains-opaque-scripts.http` | Pre-request scripts, response handlers, and output redirects remain opaque |
+| `jetbrains-opaque-protocols.rest` | Explicit HTTP versions and Phase 5 protocols remain opaque |
+| `import/postman-v2.1.json` | Postman v2.1 inheritance, secrets, structured URLs, scripts, bodies, and conversion losses |
+| `import/openapi-3.0.json` | OpenAPI 3.0 local refs, overrides, servers, security, and JSON |
+| `import/openapi-3.1.yaml` | OpenAPI 3.1 referenced path items, forms, multipart, external refs, and webhooks |
 
-Referências de sintaxe:
+Syntax references:
 
 - https://www.jetbrains.com/help/idea/exploring-http-syntax.html
 - https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html
 - https://www.jetbrains.com/help/idea/http-client-variables.html
 
-Ao ampliar suporte, mova o caso correspondente da expectativa opaca para a
-compatível somente depois que parse, execução e serialização lossless estiverem
-cobertos. Nunca reduza a matriz para fazer um parser parcial parecer compatível.
+When expanding support, move a case from opaque to compatible only after parsing,
+execution, and lossless serialization are covered. Never reduce the matrix to make
+a partial parser appear compatible.
 
-As fixtures em `import/` também nunca fazem rede. Elas combinam recursos suportados
-e perdas conhecidas para que a prévia explique o que será convertido antes de
-qualquer escrita no projeto.
+The `import/` fixtures never access the network either. They combine supported
+features and known losses so the preview explains conversion before any project write.

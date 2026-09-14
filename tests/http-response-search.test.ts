@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { findHttpTextMatches } from "../src/features/http/model/response"
+import { findHttpTextMatches } from "../packages/feature-http/src/model/response"
 
 describe("HTTP response search", () => {
   test("keeps absolute offsets and one-based positions through empty and CRLF lines", () => {

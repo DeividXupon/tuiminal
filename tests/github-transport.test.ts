@@ -2,38 +2,38 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DEFAULT_PULL_REQUEST_CONFIG } from "../src/features/git/model/pr/config"
-import { mergePullRequestDetailPage } from "../src/features/git/model/pr/detail-pagination"
+import { DEFAULT_PULL_REQUEST_CONFIG } from "../packages/feature-git/src/model/pr/config"
+import { mergePullRequestDetailPage } from "../packages/feature-git/src/model/pr/detail-pagination"
 import {
   detectGhCapabilities,
   ghVersionIsSupported,
   GitHubAuthenticationRequiredError,
   loadGhAuthContext,
   parseGhVersion,
-} from "../src/features/git/services/github/auth"
-import { loadGitHubAccountScope } from "../src/features/git/services/github/account-scope"
-import { loadPullRequestDetailPage } from "../src/features/git/services/github/detail-pages"
-import { PULL_REQUEST_DETAILS_QUERY } from "../src/features/git/services/github/detail-query"
+} from "../packages/feature-git/src/services/github/auth"
+import { loadGitHubAccountScope } from "../packages/feature-git/src/services/github/account-scope"
+import { loadPullRequestDetailPage } from "../packages/feature-git/src/services/github/detail-pages"
+import { PULL_REQUEST_DETAILS_QUERY } from "../packages/feature-git/src/services/github/detail-query"
 import {
   loadPullRequestDetails,
   normalizePullRequestDetails,
-} from "../src/features/git/services/github/details"
+} from "../packages/feature-git/src/services/github/details"
 import {
   assertAllowedGitHubHost,
   isValidGitHubHost,
-} from "../src/features/git/services/github/host"
-import { openPullRequestInBrowser } from "../src/features/git/services/github/read-actions"
+} from "../packages/feature-git/src/services/github/host"
+import { openPullRequestInBrowser } from "../packages/feature-git/src/services/github/read-actions"
 import {
   normalizePullRequestSearchPage,
   searchPullRequestsPage,
-} from "../src/features/git/services/github/search"
+} from "../packages/feature-git/src/services/github/search"
 import {
   GitHubTransportError,
   runGhCommand,
   runGhJson,
-} from "../src/features/git/services/github/transport"
-import { PullRequestSession } from "../src/features/git/services/pr-session"
-import { savePullRequestConfig } from "../src/features/git/storage/pr/config"
+} from "../packages/feature-git/src/services/github/transport"
+import { PullRequestSession } from "../packages/feature-git/src/services/pr-session"
+import { savePullRequestConfig } from "../packages/feature-git/src/storage/pr/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-gh-fake-"))
 const fakeGh = join(temporaryDirectory, "gh")

@@ -3,13 +3,13 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import YAML from "yaml"
-import { importOpenApiDocument } from "../src/features/http/importing/openapi"
-import { importPostmanCollection } from "../src/features/http/importing/postman"
+import { importOpenApiDocument } from "../packages/feature-http/src/importing/openapi"
+import { importPostmanCollection } from "../packages/feature-http/src/importing/postman"
 import {
   applyHttpCollectionImport,
   previewHttpCollectionImport,
-} from "../src/features/http/services/collection-import"
-import { writeImportedHttpCollection } from "../src/features/http/storage/imports"
+} from "../packages/feature-http/src/services/collection-import"
+import { writeImportedHttpCollection } from "../packages/feature-http/src/storage/imports"
 
 const roots: string[] = []
 const importFixtures = resolve(import.meta.dir, "fixtures/http/import")
@@ -328,7 +328,7 @@ describe("HTTP collection importers", () => {
     const child = Bun.spawn(
       [
         "bun",
-        resolve(import.meta.dir, "../bin/tuiminal.ts"),
+        resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
         "http",
         "import",
         "postman",

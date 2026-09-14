@@ -6,7 +6,7 @@ import {
   discoverRunnerCommands,
   resolveRunnerProjectContext,
   resolveRunnerSessionScope,
-} from "../src/features/runner/services/runner"
+} from "../packages/feature-runner/src/services/runner"
 
 describe("runner project detection", () => {
   let projectRoot = ""

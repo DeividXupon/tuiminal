@@ -7,14 +7,14 @@ import {
   DEFAULT_PULL_REQUEST_SECTIONS,
   parsePullRequestConfig,
   pullRequestProfileForRoot,
-} from "../src/features/git/model/pr/config"
+} from "../packages/feature-git/src/model/pr/config"
 import {
   addPullRequestProfileRepository,
   loadPullRequestConfig,
   resolvePullRequestProfileRoot,
   savePullRequestConfig,
   updatePullRequestProfile,
-} from "../src/features/git/storage/pr/config"
+} from "../packages/feature-git/src/storage/pr/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-pr-config-"))
 const configPath = join(temporaryDirectory, "nested", "git-pr.yaml")

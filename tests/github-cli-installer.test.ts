@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { resolveGitHubCliInstallPlan } from "../src/features/git/services/github/installer"
+import { resolveGitHubCliInstallPlan } from "../packages/feature-git/src/services/github/installer"
 
 describe("GitHub CLI guided installer", () => {
   test("uses the official WinGet package for install and upgrade", () => {

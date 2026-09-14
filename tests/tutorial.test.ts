@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { estimateTutorialTextHeight, getTutorialSteps } from "../src/app/tutorial/TutorialOverlay"
-import { translateUi } from "../src/shared/i18n/index"
+import {
+  estimateTutorialTextHeight,
+  getTutorialSteps,
+} from "../apps/cli/src/tutorial/TutorialOverlay"
+import { translateUi } from "../packages/core/src/i18n/index"
 
 const DATABASE_TUTORIAL_SOURCE = await Bun.file(
-  new URL("../src/features/database/tutorial/DatabaseTutorialDemo.tsx", import.meta.url),
+  new URL("../packages/feature-database/src/tutorial/DatabaseTutorialDemo.tsx", import.meta.url),
 ).text()
 const GIT_TUTORIAL_SOURCE = (
   await Promise.all(
@@ -17,12 +20,12 @@ const GIT_TUTORIAL_SOURCE = (
       "GitTutorialProjectModal.tsx",
       "GitTutorialStateViews.tsx",
     ].map((filename) =>
-      Bun.file(new URL(`../src/features/git/tutorial/${filename}`, import.meta.url)).text(),
+      Bun.file(new URL(`../packages/feature-git/src/tutorial/${filename}`, import.meta.url)).text(),
     ),
   )
 ).join("\n")
 const HTTP_TUTORIAL_SOURCE = await Bun.file(
-  new URL("../src/features/http/tutorial/HttpTutorialDemo.tsx", import.meta.url),
+  new URL("../packages/feature-http/src/tutorial/HttpTutorialDemo.tsx", import.meta.url),
 ).text()
 
 describe("contextual tutorial", () => {

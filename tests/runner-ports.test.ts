@@ -1,7 +1,10 @@
 import { afterEach, expect, spyOn, test } from "bun:test"
 import * as processes from "node:child_process"
 import { once } from "node:events"
-import { captureProcessOutput, parseListeningPorts } from "../src/features/runner/services/ports"
+import {
+  captureProcessOutput,
+  parseListeningPorts,
+} from "../packages/feature-runner/src/services/ports"
 
 const originalSpawn = processes.spawn
 const children: processes.ChildProcess[] = []

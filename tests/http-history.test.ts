@@ -8,14 +8,17 @@ import {
   groupHttpHistoryByRequest,
   HTTP_SESSION_BODY_BUDGET,
   redactHttpHistoryUrl,
-} from "../src/features/http/model/history"
-import type { HttpResponseSnapshot } from "../src/features/http/model/types"
+} from "../packages/feature-http/src/model/history"
+import type { HttpResponseSnapshot } from "../packages/feature-http/src/model/types"
 import {
   createHttpWorkspaceState,
   createScratchRequest,
-} from "../src/features/http/model/workspace"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../src/features/http/storage/config"
-import { loadHttpHistory, persistHttpHistoryEntry } from "../src/features/http/storage/history"
+} from "../packages/feature-http/src/model/workspace"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../packages/feature-http/src/storage/config"
+import {
+  loadHttpHistory,
+  persistHttpHistoryEntry,
+} from "../packages/feature-http/src/storage/history"
 
 const directories: string[] = []
 

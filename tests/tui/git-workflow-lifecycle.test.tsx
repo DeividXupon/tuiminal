@@ -3,11 +3,11 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { DEMO_PULL_REQUESTS } from "../../src/features/git/model/pr/fixtures"
-import type { PullRequestSummary } from "../../src/features/git/model/pr/types"
-import type { PullRequestWorkflowRun } from "../../src/features/git/model/pr/workflows"
-import * as workflows from "../../src/features/git/services/github/workflows"
-import { usePullRequestWorkflows } from "../../src/features/git/ui/pr/usePullRequestWorkflows"
+import { DEMO_PULL_REQUESTS } from "../../packages/feature-git/src/model/pr/fixtures"
+import type { PullRequestSummary } from "../../packages/feature-git/src/model/pr/types"
+import type { PullRequestWorkflowRun } from "../../packages/feature-git/src/model/pr/workflows"
+import * as workflows from "../../packages/feature-git/src/services/github/workflows"
+import { usePullRequestWorkflows } from "../../packages/feature-git/src/ui/pr/usePullRequestWorkflows"
 
 let tui: TestRendererSetup | undefined
 const originalDemo = process.env.TUIMINAL_GIT_PR_DEMO

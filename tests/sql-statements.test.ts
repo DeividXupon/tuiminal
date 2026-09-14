@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   sqlStatementAtOffset,
   sqlStatementRanges,
-} from "../src/features/database/model/sql-statements"
+} from "../packages/feature-database/src/model/sql-statements"
 
 describe("SQL statement selection", () => {
   test("selects the statement containing the cursor", () => {

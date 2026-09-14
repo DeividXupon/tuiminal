@@ -4,52 +4,52 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { parsePatch } from "diff"
-import { COLORS } from "../src/core/settings/theme"
+import { COLORS } from "../packages/core/src/settings/theme"
 import {
   compactGitActionFooter,
   gitActionLabel,
   gitDiffHorizontalScrollDelta,
   gitPaneFocusTarget,
-} from "../src/features/git/model/base-navigation"
+} from "../packages/feature-git/src/model/base-navigation"
 import {
   applyGitCommandCompletion,
   type GitCommandCompletionData,
   gitCommandCompletions,
-} from "../src/features/git/model/git-command-autocomplete"
+} from "../packages/feature-git/src/model/git-command-autocomplete"
 import {
   displayGitCommand,
   gitConsoleOutputLines,
   optimisticGitDiscard,
   optimisticGitStage,
   parseGitCommandInput,
-} from "../src/features/git/model/git-command-console"
+} from "../packages/feature-git/src/model/git-command-console"
 import {
   gitCommitBodyLines,
   gitCommitLogRowHeight,
   gitCommitLogWindow,
-} from "../src/features/git/model/git-commit-log"
+} from "../packages/feature-git/src/model/git-commit-log"
 import {
   buildGitPartialStagePatch,
   gitPartialStageTargets,
   parseGitPartialStagePatch,
-} from "../src/features/git/model/git-partial-stage"
-import type { GitCommit } from "../src/features/git/model/types"
+} from "../packages/feature-git/src/model/git-partial-stage"
+import type { GitCommit } from "../packages/feature-git/src/model/types"
 import {
   createFileTreeOptions,
   createPathTreeOptions,
-} from "../src/features/git/rendering/file-tree"
+} from "../packages/feature-git/src/rendering/file-tree"
 import {
   GitCommandBudgetError,
   runGitCommand,
   trimGitPatchTerminator,
-} from "../src/features/git/services/git"
-import { loadGitCommandCompletionData } from "../src/features/git/services/git-command-autocomplete"
-import { gitCommandConsoleHeight } from "../src/features/git/ui/base/GitCommandConsole"
+} from "../packages/feature-git/src/services/git"
+import { loadGitCommandCompletionData } from "../packages/feature-git/src/services/git-command-autocomplete"
+import { gitCommandConsoleHeight } from "../packages/feature-git/src/ui/base/GitCommandConsole"
 import {
   gitFileTreeOptionHeight,
   gitFileTreeVisibleWindow,
   gitStatusColor,
-} from "../src/features/git/ui/base/GitFileTree"
+} from "../packages/feature-git/src/ui/base/GitFileTree"
 
 describe("Git patch rendering", () => {
   test("preserves a final empty added line while removing Git's record terminator", () => {

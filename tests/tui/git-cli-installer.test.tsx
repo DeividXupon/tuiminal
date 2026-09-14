@@ -3,16 +3,16 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import type {
   GitHubCliGuidedTerminalProcess,
   GitHubCliInstallPlan,
   startGitHubCliGuidedTerminal,
-} from "../../src/features/git/services/github/installer"
+} from "../../packages/feature-git/src/services/github/installer"
 import {
   GitHubAuthenticationPanel,
   GitHubCliRequirementPanel,
-} from "../../src/features/git/ui/shared/GitHubCliRequirementPanel"
+} from "../../packages/feature-git/src/ui/shared/GitHubCliRequirementPanel"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

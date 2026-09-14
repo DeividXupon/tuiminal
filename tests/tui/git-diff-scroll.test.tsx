@@ -5,13 +5,18 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { useKeyboard } from "@opentui/react"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useEffect, useRef, useState } from "react"
-import { COLORS, getUiSettings, panelBorder, updateUiSettings } from "../../src/core/settings/theme"
-import type { DiffLayout } from "../../src/features/git/model/view"
-import { parseDiffDocuments } from "../../src/features/git/rendering/diff"
-import { handleGitDiffHorizontalKey } from "../../src/features/git/rendering/diff-scroll"
-import { GitDiffDocument } from "../../src/features/git/ui/shared/GitDiffDocument"
-import { GitDiffViewport } from "../../src/features/git/ui/shared/GitDiffViewport"
-import { InlineButton } from "../../src/shared/ui/InlineButton"
+import {
+  COLORS,
+  getUiSettings,
+  panelBorder,
+  updateUiSettings,
+} from "../../packages/core/src/settings/theme"
+import type { DiffLayout } from "../../packages/feature-git/src/model/view"
+import { parseDiffDocuments } from "../../packages/feature-git/src/rendering/diff"
+import { handleGitDiffHorizontalKey } from "../../packages/feature-git/src/rendering/diff-scroll"
+import { GitDiffDocument } from "../../packages/feature-git/src/ui/shared/GitDiffDocument"
+import { GitDiffViewport } from "../../packages/feature-git/src/ui/shared/GitDiffViewport"
+import { InlineButton } from "../../packages/core/src/ui/InlineButton"
 
 const settings = getUiSettings()
 let tui: TestRendererSetup | undefined

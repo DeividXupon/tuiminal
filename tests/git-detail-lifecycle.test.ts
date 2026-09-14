@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
-import { demoIssueDetails, DEMO_ISSUES } from "../src/features/git/model/issue/fixtures"
-import { demoPullRequestDetails } from "../src/features/git/model/pr/detail-fixtures"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import * as prReader from "../src/features/git/services/github/details"
-import * as prPages from "../src/features/git/services/github/detail-pages"
-import * as issueReader from "../src/features/git/services/github/issue-details"
-import { IssueDetailsSession } from "../src/features/git/services/issue-details-session"
-import { PullRequestDetailsSession } from "../src/features/git/services/pr-details-session"
+import { demoIssueDetails, DEMO_ISSUES } from "../packages/feature-git/src/model/issue/fixtures"
+import { demoPullRequestDetails } from "../packages/feature-git/src/model/pr/detail-fixtures"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import * as prReader from "../packages/feature-git/src/services/github/details"
+import * as prPages from "../packages/feature-git/src/services/github/detail-pages"
+import * as issueReader from "../packages/feature-git/src/services/github/issue-details"
+import { IssueDetailsSession } from "../packages/feature-git/src/services/issue-details-session"
+import { PullRequestDetailsSession } from "../packages/feature-git/src/services/pr-details-session"
 
 type Read = {
   signal: AbortSignal | undefined

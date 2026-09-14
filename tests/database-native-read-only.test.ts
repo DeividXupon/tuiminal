@@ -5,7 +5,7 @@ import {
   readOnlyClientIsInvalid,
   type RuntimeSqlClient,
   type RuntimeSqlExecutor,
-} from "../src/features/database/services/read-only-query"
+} from "../packages/feature-database/src/services/read-only-query"
 
 function deferred<T>() {
   let resolve!: (value: T) => void
