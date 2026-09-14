@@ -886,6 +886,8 @@ test("Diffs transfers hunks and lines between side-by-side partial stage panes",
     await key("v")
     await key("s")
     await waitForText("STAGE PARCIAL · UNIFICADO")
+    // The heading renders before the asynchronous Git reads populate either pane.
+    await waitForRenderable("git-partial-stage-available-unstaged-hunk:0")
 
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-partial-stage-available")
     expect(tui.renderer.root.findDescendantById("git-command-console")).toBeUndefined()
@@ -948,6 +950,7 @@ test("Diffs transfers hunks and lines between side-by-side partial stage panes",
 
     await key("s")
     await waitForText("STAGE PARCIAL · UNIFICADO")
+    await waitForRenderable("git-partial-stage-available-unstaged-hunk:0")
     expect(tui.captureCharFrame()).toContain("2 selecionado(s)")
     await key("l")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-partial-stage-selected")
@@ -966,6 +969,7 @@ test("Diffs transfers hunks and lines between side-by-side partial stage panes",
 
     await key("s")
     await waitForText("STAGE PARCIAL · UNIFICADO")
+    await waitForRenderable("git-partial-stage-available-unstaged-hunk:0")
     await key("s")
     expect(tui.captureCharFrame()).toContain("[S] Modo: linha")
     expect(tui.captureCharFrame()).toContain("2 selecionado(s)")
@@ -974,6 +978,7 @@ test("Diffs transfers hunks and lines between side-by-side partial stage panes",
 
     await key("s")
     await waitForText("STAGE PARCIAL · UNIFICADO")
+    await waitForRenderable("git-partial-stage-available-unstaged-hunk:0")
     await key("h")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-partial-stage-available")
     await key("l")
