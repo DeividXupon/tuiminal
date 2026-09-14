@@ -47,7 +47,7 @@ type GhCommandRequest = {
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
-const STDIN_CHUNK_BYTES = 8 * 1024
+const STDIN_CHUNK_BYTES = (process.platform === "win32" ? 64 : 8) * 1024
 const STDIN_CHUNK_INTERVAL_MS = 1
 
 function safeEnvironment(options: GhTransportOptions) {
