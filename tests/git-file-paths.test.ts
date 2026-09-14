@@ -14,18 +14,18 @@ import {
   stageGitFiles,
   toggleGitFile,
   unstageGitFiles,
-} from "../src/features/git/services/git"
+} from "../packages/feature-git/src/services/git"
 import {
   applyGitPartialStage,
   applyGitPartialStageChanges,
   loadGitPartialStageState,
   loadGitPartialStageSource,
-} from "../src/features/git/services/git-partial-stage"
+} from "../packages/feature-git/src/services/git-partial-stage"
 import {
   buildGitPartialStagePatch,
   gitPartialStageChangeLineIds,
   gitPartialStageTargets,
-} from "../src/features/git/model/git-partial-stage"
+} from "../packages/feature-git/src/model/git-partial-stage"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-file-paths-"))
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))

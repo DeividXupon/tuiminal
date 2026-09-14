@@ -3,17 +3,17 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { Runner } from "../../src/features/runner/RunnerWorkspace"
-import * as service from "../../src/features/runner/services/runner"
-import * as rendering from "../../src/features/runner/rendering/log-document"
-import * as storage from "../../src/features/runner/storage/runner-config"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { Runner } from "../../packages/feature-runner/src/RunnerWorkspace"
+import * as service from "../../packages/feature-runner/src/services/runner"
+import * as rendering from "../../packages/feature-runner/src/rendering/log-document"
+import * as storage from "../../packages/feature-runner/src/storage/runner-config"
 import {
   RUNNER_LOG_BUFFER_LIMIT,
   RUNNER_LOG_BUFFER_MAX_CHARS,
   RUNNER_LOG_ENTRY_MAX_CHARS,
   RUNNER_LOG_FLUSH_INTERVAL_MS,
-} from "../../src/features/runner/model/log-buffer"
+} from "../../packages/feature-runner/src/model/log-buffer"
 
 let tui: TestRendererSetup | undefined
 let callbacks: service.RunnerProcessCallbacks | undefined

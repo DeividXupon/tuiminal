@@ -4,8 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { parseHttpFile, requestFromHttpFile } from "../src/features/http/model/http-file"
-import { environmentVariableContext } from "../src/features/http/storage/environments"
+import { parseHttpFile, requestFromHttpFile } from "../packages/feature-http/src/model/http-file"
+import { environmentVariableContext } from "../packages/feature-http/src/storage/environments"
 import {
   loadHttpRunnerDataset,
   loadHttpProjectRunnerDataset,
@@ -13,8 +13,8 @@ import {
   redactHttpRunUrl,
   runHttpCollectionCase,
   runHttpDataset,
-} from "../src/features/http/services/collection-runner"
-import { formatHttpRunReport, httpRunExitCode } from "../src/features/http/cli/report"
+} from "../packages/feature-http/src/services/collection-runner"
+import { formatHttpRunReport, httpRunExitCode } from "../packages/feature-http/src/cli/report"
 
 let server: Server
 let baseUrl = ""
@@ -248,7 +248,7 @@ describe("HTTP headless collection runner", () => {
     const process = Bun.spawn(
       [
         "bun",
-        resolve(import.meta.dir, "../bin/tuiminal.ts"),
+        resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
         "http",
         "run",
         "api.http#ping",
@@ -277,7 +277,7 @@ describe("HTTP headless collection runner", () => {
       const process = Bun.spawn(
         [
           "bun",
-          resolve(import.meta.dir, "../bin/tuiminal.ts"),
+          resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
           "http",
           "run",
           "insecure.http#insecure",

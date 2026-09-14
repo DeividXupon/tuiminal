@@ -2,28 +2,31 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ownsKeyboardFocus } from "../src/core/keyboard/scope"
-import { gitKeyboardScope } from "../src/features/git/keyboard"
+import { ownsKeyboardFocus } from "../packages/core/src/keyboard/scope"
+import { gitKeyboardScope } from "../packages/feature-git/src/keyboard"
 import {
   inboxItemsForSection,
   mergeInboxNotifications,
   notificationBrowserUrl,
-} from "../src/features/git/model/inbox/notifications"
-import { DEMO_INBOX_NOTIFICATIONS } from "../src/features/git/model/inbox/fixtures"
+} from "../packages/feature-git/src/model/inbox/notifications"
+import { DEMO_INBOX_NOTIFICATIONS } from "../packages/feature-git/src/model/inbox/fixtures"
 import {
   applyGitHubQuerySuggestion,
   githubQuerySuggestions,
-} from "../src/features/git/model/query-autocomplete"
-import { shouldLoadNextPage } from "../src/features/git/model/remote-pagination"
-import { gitWorkspaceTabForKey } from "../src/features/git/model/workspace"
+} from "../packages/feature-git/src/model/query-autocomplete"
+import { shouldLoadNextPage } from "../packages/feature-git/src/model/remote-pagination"
+import { gitWorkspaceTabForKey } from "../packages/feature-git/src/model/workspace"
 import {
   loadNotificationsPage,
   markNotificationDone,
   markNotificationRead,
   openNotificationInBrowser,
   unsubscribeNotification,
-} from "../src/features/git/services/github/notifications"
-import { loadInboxSavedIds, saveInboxSavedIds } from "../src/features/git/storage/inbox/state"
+} from "../packages/feature-git/src/services/github/notifications"
+import {
+  loadInboxSavedIds,
+  saveInboxSavedIds,
+} from "../packages/feature-git/src/storage/inbox/state"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-inbox-"))
 const fakeGh = join(directory, "gh")

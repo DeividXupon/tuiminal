@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import { summarizePullRequestChecks } from "../src/features/git/model/pr/checks"
-import type { PullRequestCheck } from "../src/features/git/model/pr/types"
-import { PullRequestWatchScheduler } from "../src/features/git/services/pr-watch"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import { summarizePullRequestChecks } from "../packages/feature-git/src/model/pr/checks"
+import type { PullRequestCheck } from "../packages/feature-git/src/model/pr/types"
+import { PullRequestWatchScheduler } from "../packages/feature-git/src/services/pr-watch"
 
 const item = DEMO_PULL_REQUESTS[0]
 if (!item) throw new Error("Missing PR fixture")

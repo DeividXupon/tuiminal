@@ -1,19 +1,25 @@
 import { describe, expect, test } from "bun:test"
-import type { HttpResponseSnapshot, HttpWorkspaceOverlay } from "../src/features/http/model/types"
-import { resolveHttpKeyboardCommand } from "../src/features/http/model/keyboard"
-import { httpJsonTreeForDocument, updateHttpJsonTree } from "../src/features/http/model/json-tree"
-import { nextHttpPane } from "../src/features/http/model/pane-navigation"
-import { createHttpSuccessHistoryEntry } from "../src/features/http/model/history"
+import type {
+  HttpResponseSnapshot,
+  HttpWorkspaceOverlay,
+} from "../packages/feature-http/src/model/types"
+import { resolveHttpKeyboardCommand } from "../packages/feature-http/src/model/keyboard"
+import {
+  httpJsonTreeForDocument,
+  updateHttpJsonTree,
+} from "../packages/feature-http/src/model/json-tree"
+import { nextHttpPane } from "../packages/feature-http/src/model/pane-navigation"
+import { createHttpSuccessHistoryEntry } from "../packages/feature-http/src/model/history"
 import {
   cycleHttpRequestRedirects,
   cycleHttpRequestTimeout,
   nextHttpTimeout,
-} from "../src/features/http/model/request-options"
+} from "../packages/feature-http/src/model/request-options"
 import {
   COMMON_HTTP_HEADER_NAMES,
   completeHttpKeyValueName,
   httpHeaderSensitivity,
-} from "../src/features/http/model/key-value"
+} from "../packages/feature-http/src/model/key-value"
 import {
   createHttpWorkspaceState,
   createScratchRequest,
@@ -22,8 +28,8 @@ import {
   httpDocumentNeedsDiscardConfirmation,
   httpWorkspaceReducer,
   nextHttpMethod,
-} from "../src/features/http/model/workspace"
-import { httpResponseContent } from "../src/features/http/ui/http-response-content"
+} from "../packages/feature-http/src/model/workspace"
+import { httpResponseContent } from "../packages/feature-http/src/ui/http-response-content"
 
 function response(executionId: string, requestId: string, requestRevision: number) {
   return {

@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
-import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
-import { HttpRedirectApprovalQueue } from "../src/features/http/services/redirect-approvals"
-import { runHttpCollectionCase } from "../src/features/http/services/collection-runner"
-import type { HttpRedirectApproval } from "../src/features/http/model/redirect-policy"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
+import { executePreparedHttpRequest } from "../packages/feature-http/src/services/fetch-transport"
+import { HttpRedirectApprovalQueue } from "../packages/feature-http/src/services/redirect-approvals"
+import { runHttpCollectionCase } from "../packages/feature-http/src/services/collection-runner"
+import type { HttpRedirectApproval } from "../packages/feature-http/src/model/redirect-policy"
 
 const servers: ReturnType<typeof Bun.serve>[] = []
 afterEach(async () => {

@@ -9,10 +9,10 @@ import {
   type LayoutMode,
   type PaletteId,
   updateUiSettings,
-} from "../../src/core/settings/theme"
-import { GitViewer } from "../../src/features/git"
-import { IssuesWorkspace } from "../../src/features/git/IssuesWorkspace"
-import type { LanguageId } from "../../src/shared/i18n"
+} from "../../packages/core/src/settings/theme"
+import { GitViewer } from "../../packages/feature-git/src"
+import { IssuesWorkspace } from "../../packages/feature-git/src/IssuesWorkspace"
+import type { LanguageId } from "../../packages/core/src/i18n"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

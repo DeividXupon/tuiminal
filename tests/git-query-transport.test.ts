@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DEFAULT_ISSUE_CONFIG } from "../src/features/git/model/issue/config"
-import { DEFAULT_PULL_REQUEST_CONFIG } from "../src/features/git/model/pr/config"
-import { IssueSession } from "../src/features/git/services/issue-session"
-import { PullRequestSession } from "../src/features/git/services/pr-session"
+import { DEFAULT_ISSUE_CONFIG } from "../packages/feature-git/src/model/issue/config"
+import { DEFAULT_PULL_REQUEST_CONFIG } from "../packages/feature-git/src/model/pr/config"
+import { IssueSession } from "../packages/feature-git/src/services/issue-session"
+import { PullRequestSession } from "../packages/feature-git/src/services/pr-session"
 
 const fixtures: { root: string; session: IssueSession | PullRequestSession }[] = []
 

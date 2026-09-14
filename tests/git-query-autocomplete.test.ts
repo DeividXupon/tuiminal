@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { githubQuerySuggestions } from "../src/features/git/model/query-autocomplete"
+import { githubQuerySuggestions } from "../packages/feature-git/src/model/query-autocomplete"
 
 function countedRepositories(count: number) {
   let reads = 0

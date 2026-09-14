@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import {
   INITIAL_LOG_PREFERENCES,
   logPreferencesReducer,
-} from "../src/features/runner/model/log-preferences"
+} from "../packages/feature-runner/src/model/log-preferences"
 
 test("log preferences transition independently without mutating previous state", () => {
   let state = logPreferencesReducer(INITIAL_LOG_PREFERENCES, { type: "filter", value: "error" })

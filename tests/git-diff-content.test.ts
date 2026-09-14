@@ -4,12 +4,12 @@ import {
   gitPartialStageChangeLineIds,
   gitPartialStageTargets,
   parseGitPartialStagePatch,
-} from "../src/features/git/model/git-partial-stage"
+} from "../packages/feature-git/src/model/git-partial-stage"
 import {
   documentLineCount,
   parseDiffDocuments,
   parseUnifiedDiff,
-} from "../src/features/git/rendering/diff"
+} from "../packages/feature-git/src/rendering/diff"
 
 const patch = [
   "diff --git a/example.txt b/example.txt",

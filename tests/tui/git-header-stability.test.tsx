@@ -7,8 +7,8 @@ import { join } from "node:path"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { GitBaseWorkspace } from "../../src/features/git/GitWorkspace"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { GitBaseWorkspace } from "../../packages/feature-git/src/GitWorkspace"
 
 const settings = getUiSettings()
 let tui: TestRendererSetup | undefined

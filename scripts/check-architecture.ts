@@ -2,7 +2,8 @@ const check = Bun.spawnSync(
   [
     process.execPath,
     "node_modules/dependency-cruiser/bin/dependency-cruise.mjs",
-    "src",
+    "apps",
+    "packages",
     "--config",
     ".dependency-cruiser.cjs",
     "--output-type",
@@ -25,7 +26,14 @@ if (!output.startsWith("{")) {
 }
 const report = JSON.parse(output) as CruiseReport
 const normalizeReportPath = (path: string) => path.replaceAll("\\", "/")
-const sources = [...new Bun.Glob("src/**/*.{ts,tsx}").scanSync()].map(normalizeReportPath).sort()
+const sources = [
+  ...new Bun.Glob("apps/cli/**/*.ts").scanSync(),
+  ...new Bun.Glob("apps/cli/**/*.tsx").scanSync(),
+  ...new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scanSync(),
+]
+  .map(normalizeReportPath)
+  .sort()
+if (!sources.length) throw new Error("Architecture analysis found no source files")
 const analyzed = new Set(report.modules.map((module) => normalizeReportPath(module.source)))
 const missing = sources.filter((source) => !analyzed.has(source))
 if (missing.length) {

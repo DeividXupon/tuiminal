@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { coerceDatabaseCellValue } from "../src/features/database/model/cell-value"
-import type { DatabaseColumn } from "../src/features/database/model/types"
+import { coerceDatabaseCellValue } from "../packages/feature-database/src/model/cell-value"
+import type { DatabaseColumn } from "../packages/feature-database/src/model/types"
 
 function column(type: string): DatabaseColumn {
   return { field: "amount", type, nullable: false, key: "", defaultValue: null }

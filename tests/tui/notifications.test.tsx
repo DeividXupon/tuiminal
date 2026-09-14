@@ -10,12 +10,12 @@ import {
   NotificationProvider,
   useNotifications,
   type NotificationInput,
-} from "../../src/shared/notifications/index"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { App } from "../../src/app/App"
-import { HttpClient } from "../../src/features/http"
-import { DatabaseConnectionModal } from "../../src/features/database/ui/DatabaseConnectionModal"
-import { useRunnerNotifications } from "../../src/features/runner/hooks/use-runner-notifications"
+} from "../../packages/core/src/notifications/index"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { App } from "../../apps/cli/src/App"
+import { HttpClient } from "../../packages/feature-http/src"
+import { DatabaseConnectionModal } from "../../packages/feature-database/src/ui/DatabaseConnectionModal"
+import { useRunnerNotifications } from "../../packages/feature-runner/src/hooks/use-runner-notifications"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

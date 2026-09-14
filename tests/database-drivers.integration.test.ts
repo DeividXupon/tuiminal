@@ -3,8 +3,11 @@ import { randomUUID } from "node:crypto"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { DatabaseConnectionDraft, DatabaseTable } from "../src/features/database/model/types"
-import { nativeReadOnlyQuery } from "../src/features/database/services/read-only-query"
+import type {
+  DatabaseConnectionDraft,
+  DatabaseTable,
+} from "../packages/feature-database/src/model/types"
+import { nativeReadOnlyQuery } from "../packages/feature-database/src/services/read-only-query"
 
 const enabled = process.env.TUIMINAL_DATABASE_INTEGRATION === "1"
 const suite = describe.skipIf(!enabled)
@@ -13,7 +16,7 @@ const mysqlContainer = `tuiminal-db-mysql-${suffix}`
 const mariadbContainer = `tuiminal-db-mariadb-${suffix}`
 const postgresContainer = `tuiminal-db-postgres-${suffix}`
 
-type DatabaseApi = typeof import("../src/features/database/services/database")
+type DatabaseApi = typeof import("../packages/feature-database/src/services/database")
 type DriverFixture = {
   connectionId: string
   driver: "mysql" | "postgres"
@@ -147,7 +150,7 @@ suite("database driver integration", () => {
       docker("port", mariadbContainer, "3306/tcp").then(mappedPort),
       docker("port", postgresContainer, "5432/tcp").then(mappedPort),
     ])
-    api = await import("../src/features/database/services/database")
+    api = await import("../packages/feature-database/src/services/database")
     const drafts: DatabaseConnectionDraft[] = [
       {
         name: "Integration MySQL",

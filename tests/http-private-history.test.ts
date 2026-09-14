@@ -5,22 +5,25 @@ import { resolve } from "node:path"
 import {
   createHttpErrorHistoryEntry,
   createHttpSuccessHistoryEntry,
-} from "../src/features/http/model/history"
+} from "../packages/feature-http/src/model/history"
 import {
   combineHttpPrivacy,
   createHttpPrivacyContext,
   requestHttpPrivacy,
-} from "../src/features/http/model/secrets"
-import { runHttpCollectionCase } from "../src/features/http/services/collection-runner"
-import { formatHttpRunReport } from "../src/features/http/cli/report"
+} from "../packages/feature-http/src/model/secrets"
+import { runHttpCollectionCase } from "../packages/feature-http/src/services/collection-runner"
+import { formatHttpRunReport } from "../packages/feature-http/src/cli/report"
 import {
   createHttpWorkspaceState,
   createScratchRequest,
-} from "../src/features/http/model/workspace"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
-import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../src/features/http/storage/config"
-import { loadHttpHistory, persistHttpHistoryEntry } from "../src/features/http/storage/history"
+} from "../packages/feature-http/src/model/workspace"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
+import { executePreparedHttpRequest } from "../packages/feature-http/src/services/fetch-transport"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../packages/feature-http/src/storage/config"
+import {
+  loadHttpHistory,
+  persistHttpHistoryEntry,
+} from "../packages/feature-http/src/storage/history"
 
 const secret = "ALPHA_FAKE_HTTP_PRIVATE_VALUE_42"
 const roots: string[] = []

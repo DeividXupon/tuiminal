@@ -19,13 +19,13 @@ import {
   saveRunnerCommand,
   saveRunnerHistoryEntry,
   saveRunnerSession,
-} from "../src/features/runner/storage/runner-config"
+} from "../packages/feature-runner/src/storage/runner-config"
 import {
   approveRunnerAutostart,
   createRunnerAutostartReview,
   isRunnerAutostartTrusted,
-} from "../src/features/runner/storage/autostart-trust"
-import { createShellRunnerCommand } from "../src/features/runner/services/shell-command"
+} from "../packages/feature-runner/src/storage/autostart-trust"
+import { createShellRunnerCommand } from "../packages/feature-runner/src/services/shell-command"
 
 describe("runner configuration", () => {
   test("parses Tuiminal commands, profiles and policies", () => {

@@ -1,86 +1,84 @@
-# Interface Git Inbox
+# Git Inbox interface
 
-Especificação do workspace `[4] Inbox`, inspirado na caixa de notificações do
-gh-dash e ajustado às regras de foco, segurança e responsividade do Tuiminal.
+Specification for the `[4] Inbox` workspace, inspired by gh-dash notifications
+and adapted to Tuiminal's focus, safety, and responsive layout rules.
 
-## Anatomia
+## Anatomy
 
 ```text
-┌ [1] [C] Diffs  [2] PR  [3] Issues  [4] Inbox ──────────────────────────┐
-│ INBOX DO GITHUB                                                       │
-│ Caixa 12  Revisão 3  Atribuídas 2  Menções 4  Salvas 1                 │
-├──────────────────────────────────┬───────────────────────────────────────┤
-│ ▶ ● owner/api                    │ Corrigir invalidação do cache        │
-│   Corrigir invalidação · PR 09:10│ owner/api · PullRequest              │
-│   ○ owner/web                    │ [O] Abrir [M] Lida [B] Salvar        │
-│   Ajustar foco · Issue ontem     │ [D] Concluir [U] Parar de acompanhar │
-│   ◷ Carregando mais notificações…│                                       │
-└──────────────────────────────────┴───────────────────────────────────────┘
- [J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar
+┌ [1] [C] Diffs  [2] PR  [3] Issues  [4] Inbox ───────────────────────────┐
+│ GITHUB INBOX                                                            │
+│ Inbox 12  Review 3  Assigned 2  Mentioned 4  Saved 1                    │
+├─────────────────────────────────────┬───────────────────────────────────┤
+│ ▶ ● owner/api                       │ Fix cache invalidation            │
+│   Fix cache invalidation · PR 09:10 │ owner/api · PullRequest           │
+│   ○ owner/web                       │ [O] Open [M] Read [B] Save        │
+│   Adjust focus · Issue yesterday    │ [D] Done [U] Unsubscribe          │
+│   ◷ Loading more notifications…     │                                   │
+└─────────────────────────────────────┴───────────────────────────────────┘
+ [J/K] Navigate  [H/L] Focus  [A←] [F→] Section  [R] Refresh
 ```
 
-## Comportamento
+## Behavior
 
-- Larga (`≥92 × 20`): lista e prévia lado a lado; abaixo disso, painel único com
-  `[L/→/Enter]` para a prévia e `[H/←]` para a lista.
-- `[A←]`/`[F→]` circula pelas seções; cada controle também aceita mouse.
-- Ao selecionar o último item carregado, a próxima página começa uma única vez.
-  O loader é filho do scrollbox e desaparece quando a página é incorporada.
-- O refresh periódico relê da primeira até a última página já alcançada. Durante
-  a chamada, a seleção e os dados visíveis permanecem estáveis.
-- O cabeçalho só mostra o estado de atualização enquanto uma chamada está ativa;
-  não exibe uma legenda permanente para um comportamento que não pode ser desligado.
-- Notificações não lidas usam `●`; lidas usam `○`; salvas recebem `★`. O sentido
-  não depende apenas de cor.
-- Cada linha reutiliza sua formatação enquanto notificação, largura, idioma e
-  estado salvo permanecem iguais. Navegar, animar o loader e trocar a paleta não
-  recalculam datas e truncamento; os estilos e controles continuam atualizados.
+- Wide (`≥92 × 20`): list and preview side by side. Smaller terminals use one pane,
+  with `[L/→/Enter]` for preview and `[H/←]` for the list.
+- `[A←]`/`[F→]` cycles sections; both controls also accept mouse input.
+- Selecting the last loaded item starts the next page once. The loader belongs to
+  the scrollbox and disappears when the page is merged.
+- Periodic refresh rereads from the first page through the deepest page reached.
+  Selection and visible data remain stable during the request.
+- The header shows refresh state only while a request is active, without permanent
+  explanatory copy for automatic behavior that cannot be disabled.
+- Unread items use `●`, read items `○`, and saved items `★`; meaning is not color-only.
+- Rows reuse formatting while notification, width, language, and saved state remain
+  unchanged. Navigation, loader animation, and palette changes do not recompute
+  dates/truncation; styling and controls remain current.
 
-## Ações e camadas
+## Actions and layers
 
-- `[O]` abre PR/Issue com o comando específico do `gh`; outros assuntos usam
-  `gh browse` preso ao repositório.
-- `[M]` marca a thread como lida e mantém a linha.
-- `[B]` alterna persistência local; não muda a inscrição no GitHub.
-- `[D]` e `[U]` abrem uma confirmação com alvo e consequência. `[Ctrl+S]`
-  confirma e `[Esc]` fecha somente esse modal.
-- A aba não é montada antes do primeiro acesso e é descartada com os demais
-  recursos Git no encerramento.
+- `[O]` opens PR/Issue subjects with the corresponding `gh` command; other subjects
+  use repository-pinned `gh browse`.
+- `[M]` marks a thread read and keeps its row.
+- `[B]` toggles local saving without changing the GitHub subscription.
+- `[D]` and `[U]` open a confirmation stating target and consequence. `[Ctrl+S]`
+  confirms; `[Esc]` closes only that modal.
+- The tab mounts only on first access and is disposed with other Git resources
+  during shutdown.
 
-## Estados e limites
+## States and limits
 
-Carregando, vazio, requisito do `gh`, erro de configuração/API, paginação e
-refresh são estados distintos. O tamanho de página e o intervalo reutilizam os
-defaults do perfil de PR, evitando uma segunda configuração concorrente para o
-mesmo host. O conteúdo remoto fica em memória; apenas IDs salvos vão para disco.
-O host acompanha a opção GitHub aberta por `[,]` nas configurações da tela Git;
-uma alteração invalida o cache quando o Inbox voltar a ficar ativo.
-O carregamento inicial ocupa o painel com plasma ASCII e mensagem em primeiro
-plano, dissolvendo rapidamente ao revelar a lista; paginação e refresh não cobrem
-conteúdo já carregado.
-Se `gh` estiver ausente, antigo ou sem login, Inbox usa a mesma explicação e mini
-terminal guiado de PR/Issues. `[C]` copia o comando e `[Enter]`/mouse foca o shell;
-o usuário cola e executa. Versão ou login válidos recarregam a tela automaticamente,
-sem o Tuiminal ler tokens nem iniciar os comandos exibidos. O PTY recebe respostas
-de protocolo do emulador e `[Enter]` reabre um shell encerrado.
+Loading, empty, `gh` requirements, configuration/API errors, pagination, and refresh
+are separate states. Page size and interval reuse PR-profile defaults rather than
+introducing competing configuration for the same host. Remote content stays in
+memory; only saved IDs go to disk. The host follows GitHub settings opened through
+`[,]` in the Git screen; a change invalidates cache when Inbox becomes active again.
 
-## Transporte e persistência
+Initial loading uses full-panel ASCII plasma behind a readable message and dissolves
+quickly into the list. Pagination and refresh do not cover loaded content. Missing,
+outdated, or unauthenticated `gh` uses the same guidance and mini terminal as PR/Issues.
+`[C]` copies the command; `[Enter]`/mouse focuses the shell for the user to paste and
+execute. A valid version/login reloads the screen automatically, without Tuiminal
+reading tokens or executing displayed commands. The PTY receives emulator protocol
+responses, and `[Enter]` reopens an exited shell.
 
-- A leitura usa REST `notifications?all=true` no host autenticado do perfil de
-  PR. Inbox não reutiliza os filtros de busca de PR/Issues como escopo de threads.
-- `[M]` usa `PATCH notifications/threads/{id}`; `[D]` usa `DELETE` nesse recurso;
-  `[U]` usa `DELETE notifications/threads/{id}/subscription`. Fixe host e ID da
-  thread na confirmação. Execute a ação uma vez: timeout/cancelamento após o
-  despacho é resultado incerto, não motivo para repetição automática.
-- Somente IDs salvos persistem em `$XDG_CONFIG_HOME/tuiminal/git-inbox.json`, com
-  fallback para `~/.config/tuiminal/git-inbox.json`, escrita atômica e modo `0600`.
-  Corpos, caches, tokens e conteúdo de notificações não vão para esse arquivo.
-- Cada sessão mantém seu próprio cancelamento e recursos. Descartar uma sessão
-  não pode remover registros ou publicar respostas de uma sessão substituta.
+## Transport and persistence
 
-## Verificação mantida
+- Reads use REST `notifications?all=true` on the authenticated PR-profile host.
+  Inbox does not reuse PR/Issue search filters as thread scope.
+- `[M]` uses `PATCH notifications/threads/{id}`; `[D]` uses `DELETE` on that resource;
+  `[U]` uses `DELETE notifications/threads/{id}/subscription`. Pin host and thread
+  ID in confirmation. Execute once: timeout/cancellation after dispatch produces
+  an uncertain result, not permission to retry automatically.
+- Only saved IDs persist in `$XDG_CONFIG_HOME/tuiminal/git-inbox.json`, falling back
+  to `~/.config/tuiminal/git-inbox.json`, using atomic writes and mode `0600`.
+  Bodies, caches, tokens, and notification content never go into this file.
+- Each session owns its cancellation and resources. Disposing one cannot remove
+  registrations or publish responses belonging to a replacement session.
 
-`bun run check` inclui `tests/git-inbox.test.ts`, `tests/tui/git-inbox.test.tsx`,
-`tests/tui/git-inbox-formatting.test.tsx` e `tests/git-resource-disposal.test.ts`.
-As chamadas remotas usam `gh` falso e estado temporário. Inbox não faz parte do
-tutorial simulado de Git, que cobre Diffs e Compare.
+## Maintained verification
+
+`bun run check` includes `tests/git-inbox.test.ts`, `tests/tui/git-inbox.test.tsx`,
+`tests/tui/git-inbox-formatting.test.tsx`, and `tests/git-resource-disposal.test.ts`.
+Remote calls use fake `gh` and temporary state. Inbox is outside the simulated Git
+tutorial, which covers Diffs and Compare.

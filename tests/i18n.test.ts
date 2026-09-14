@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
-import { DATABASE_PRIVACY_MESSAGES } from "../src/shared/i18n/database-privacy-catalog"
-import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../src/shared/i18n/git-compare-tutorial-catalog"
-import { GIT_DIFFS_MESSAGES } from "../src/shared/i18n/git-diffs-catalog"
-import { GIT_PR_MESSAGES } from "../src/shared/i18n/git-pr-catalog"
-import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../src/shared/i18n/http-workspace-settings-catalog"
+import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
+import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
+import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
+import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
+import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
 import {
   displayWidth,
   formatUiDateTime,
@@ -13,7 +13,7 @@ import {
   setLanguage,
   translateUi,
   truncateDisplay,
-} from "../src/shared/i18n/index"
+} from "../packages/core/src/i18n/index"
 
 afterEach(() => setLanguage("pt-BR"))
 

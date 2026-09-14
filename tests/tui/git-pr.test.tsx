@@ -14,8 +14,8 @@ import {
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { App } from "../../src/app/App"
-import { TutorialOverlay } from "../../src/app/tutorial/TutorialOverlay"
+import { App } from "../../apps/cli/src/App"
+import { TutorialOverlay } from "../../apps/cli/src/tutorial/TutorialOverlay"
 import {
   COLORS,
   getUiSettings,
@@ -23,14 +23,14 @@ import {
   PALETTES,
   type PaletteId,
   updateUiSettings,
-} from "../../src/core/settings/theme"
-import { GIT_TUTORIAL_STEPS, GitViewer } from "../../src/features/git"
-import { GitCompareWorkspace } from "../../src/features/git/GitCompareWorkspace"
-import { GitBaseWorkspace } from "../../src/features/git/GitWorkspace"
-import { PullRequestsWorkspace } from "../../src/features/git/PullRequestsWorkspace"
-import { loadLocalGitTarget } from "../../src/features/git/services/local-target"
-import { SectionEditorModal } from "../../src/features/git/ui/pr/SectionEditorModal"
-import type { LanguageId } from "../../src/shared/i18n"
+} from "../../packages/core/src/settings/theme"
+import { GIT_TUTORIAL_STEPS, GitViewer } from "../../packages/feature-git/src"
+import { GitCompareWorkspace } from "../../packages/feature-git/src/GitCompareWorkspace"
+import { GitBaseWorkspace } from "../../packages/feature-git/src/GitWorkspace"
+import { PullRequestsWorkspace } from "../../packages/feature-git/src/PullRequestsWorkspace"
+import { loadLocalGitTarget } from "../../packages/feature-git/src/services/local-target"
+import { SectionEditorModal } from "../../packages/feature-git/src/ui/pr/SectionEditorModal"
+import type { LanguageId } from "../../packages/core/src/i18n"
 
 function diffCodeCells(root: Renderable): CodeRenderable[] {
   return root

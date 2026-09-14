@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import {
   buildEffectiveIssueQueries,
   normalizeIssueQuery,
-} from "../src/features/git/model/issue/query"
+} from "../packages/feature-git/src/model/issue/query"
 import {
   buildEffectivePullRequestQueries,
   normalizePullRequestQuery,
-} from "../src/features/git/model/pr/query"
+} from "../packages/feature-git/src/model/pr/query"
 
 const accountScope = {
   viewerLogin: "viewer",

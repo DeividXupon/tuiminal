@@ -2,15 +2,15 @@ import { afterEach, expect, test } from "bun:test"
 import {
   historyEntryIsRead,
   metadataOnlyHistoryEntry,
-} from "../src/features/database/model/history-privacy"
-import type { DatabaseQueryHistoryEntry } from "../src/features/database/model/types"
+} from "../packages/feature-database/src/model/history-privacy"
+import type { DatabaseQueryHistoryEntry } from "../packages/feature-database/src/model/types"
 import {
   clearHistoryContent,
   HISTORY_SESSION_ENTRY_LIMIT,
   rememberHistoryContent,
   restoreHistoryContent,
   retainHistoryContent,
-} from "../src/features/database/services/history-content"
+} from "../packages/feature-database/src/services/history-content"
 
 const entry = (id: string, sql = "SELECT 'FAKE_SECRET'"): DatabaseQueryHistoryEntry => ({
   id,

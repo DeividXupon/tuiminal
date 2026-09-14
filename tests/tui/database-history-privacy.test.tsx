@@ -4,16 +4,16 @@ import { readFileSync } from "node:fs"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import type { DatabaseQueryHistoryEntry } from "../../src/features/database/model/types"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import type { DatabaseQueryHistoryEntry } from "../../packages/feature-database/src/model/types"
 import {
   DATABASE_SETTINGS_PATH,
   listDatabaseQueryHistory,
   readSettings,
   writeSettings,
   type StoredDatabaseSettings,
-} from "../../src/features/database/services/database"
-import { DatabaseQueryHistoryModal } from "../../src/features/database/ui/DatabaseQueryHistoryModal"
+} from "../../packages/feature-database/src/services/database"
+import { DatabaseQueryHistoryModal } from "../../packages/feature-database/src/ui/DatabaseQueryHistoryModal"
 
 let tui: TestRendererSetup | undefined
 let original: StoredDatabaseSettings | undefined

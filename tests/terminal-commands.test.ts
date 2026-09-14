@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createFreeTerminalCommand } from "../src/features/terminal/services/terminal"
+import { createFreeTerminalCommand } from "../packages/feature-terminal/src/services/terminal"
 
 describe.skipIf(process.platform === "win32")("custom Free Terminal shell semantics", () => {
   test.each([

@@ -3,7 +3,7 @@ import {
   previewDatabaseBatchExport,
   serializeDatabaseBatchRows,
   type DatabaseBatchSelectedRow,
-} from "../src/features/database/model/batch"
+} from "../packages/feature-database/src/model/batch"
 
 const rows: DatabaseBatchSelectedRow[] = Array.from({ length: 30 }, (_, index) => ({
   id: String(index),

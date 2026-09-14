@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "rootDir": "packages",
+    "outDir": "dist/workspace-build"
+  },
+  "include": ["packages/**/*.ts", "packages/**/*.tsx"]
+}

@@ -1,83 +1,101 @@
-# Contribuindo com o Tuiminal
+# Contributing to Tuiminal
 
-## Começar
+## Getting started
 
-Use Bun 1.3.14 (`.bun-version`). Na raiz do repositório:
+Use Bun 1.3.14 (`.bun-version`). From the repository root:
 
 ```sh
 bun install --frozen-lockfile
 bun run dev
 ```
 
-O CLI executa o código-fonte diretamente; não é necessário recompilar nem reinstalar
-o comando global a cada edição. Não altere o link global de outro desenvolvedor.
-Para iniciar um Runner com configuração descartável:
+The CLI runs the source directly; there is no need to rebuild or reinstall the
+global command after each edit. Do not change another developer's global link.
+To launch Runner with disposable configuration:
 
 ```sh
 task_config=$(mktemp -d)
-XDG_CONFIG_HOME="$task_config" bun bin/tuiminal.ts runner tests/fixtures/runner-project
+XDG_CONFIG_HOME="$task_config" bun apps/cli/bin/tuiminal.ts runner tests/fixtures/runner-project
 ```
 
-A pasta temporária desse exemplo pode ser removida após fechar **essa** instância.
-Não encerre processos, bancos ou outras instâncias do usuário durante os testes.
+Remove that temporary directory after closing **that** instance. Do not stop the
+user's processes, databases, or other application instances during tests.
 
-## Onde trabalhar
+## Where to work
 
-Leia [Arquitetura](./docs/architecture.md). Comece pela ferramenta em `src/features`.
-Regras puras ficam em `model`; processos, disco e rede em serviços/drivers/storage;
-componentes e integração com OpenTUI ficam na camada de interface.
+Write maintained documentation in English. Keep `README.md` and its Brazilian
+Portuguese counterpart, `README.pt-BR.md`, synchronized in the same change. Preserve
+commands, configuration keys, identifiers, fixture data, and third-party license
+text when translating; documentation language does not change the application's
+supported UI languages.
 
-Evite criar uma abstração genérica antes de haver usos concretos. Não crie um
-`utils.ts` para misturar assuntos nem um hook com toda a lógica da ferramenta.
-Preserve o runtime JSX localizado: trocar pelo JSX padrão quebra traduções.
+Read the [architecture guide](./docs/architecture.md). Start with the relevant tool
+in `packages/feature-<name>/src`. The CLI lives in `apps/cli`, and shared code lives
+in `packages/core`. `bun install` links workspaces by package name; cross-package
+imports must use their exports and declare dependencies in the owning manifest.
+Pure rules belong in `model`; processes, disk, and network access belong in
+services/drivers/storage; components and OpenTUI integration belong in the UI layer.
 
-## Comandos de qualidade
+Avoid generic abstractions without concrete uses. Do not create a `utils.ts` that
+mixes unrelated concerns or a hook containing all of a tool's logic. Preserve the
+localized JSX runtime: replacing it with standard JSX breaks translations.
 
-| Comando | Finalidade |
+## Quality commands
+
+| Command | Purpose |
 | --- | --- |
-| `bun run format` | Aplicar a formatação padronizada |
-| `bun run typecheck` | Validar com TypeScript nativo 7 e regras estritas |
-| `bun run lint` | Encontrar problemas e avisos de complexidade |
-| `bun run check:architecture` | Bloquear ciclos e imports entre camadas proibidas |
-| `bun run check:maintainability` | Impedir crescimento acima dos limites registrados |
-| `bun run test:unit` | Lógica e integrações locais determinísticas |
-| `bun run test:tui` | Renderizador OpenTUI real com teclado simulado |
-| `bun run check` | Executar todos os gates anteriores, incluindo formato e testes |
-| `bun run test:database:drivers` | Matriz opt-in com Docker, fora do gate normal |
+| `bun run format` | Apply the standard formatting |
+| `bun run typecheck` | Check strict types with native TypeScript 7 |
+| `bun run lint` | Find problems and complexity warnings |
+| `bun run check:workspaces` | Check package versions and declared dependencies |
+| `bun run check:architecture` | Reject cycles and forbidden imports between layers |
+| `bun run check:maintainability` | Prevent growth beyond reviewed budgets |
+| `bun run test:unit` | Run deterministic logic and local integration tests |
+| `bun run test:tui` | Exercise the real OpenTUI renderer with simulated keyboard input |
+| `bun run test:packages` | Compile, pack, and consume modules outside the monorepo |
+| `bun run check` | Run static gates, formatting, and the unit/TUI suites |
+| `bun run test:database:drivers` | Run the opt-in Docker matrix, outside the normal gate |
 
-O Bun é o runtime dos comandos, inclusive do dependency-cruiser. O compilador
-principal continua sendo TypeScript 7 (`typescript-native`, alias npm). A dependência
-`typescript` 6.0.3 fornece somente a API AST compatível com dependency-cruiser 18;
-não substitua `typecheck` por `bunx tsc`, pois o binário resolvido pode ser o outro.
-Essa compatibilidade deve ser revisitada quando o analisador suportar a API nativa.
+Bun runs these commands, including dependency-cruiser. The main compiler remains
+TypeScript 7 (`typescript-native`, an npm alias). The `typescript` 6.0.3 dependency
+provides the AST API required by dependency-cruiser 18. Do not replace `typecheck`
+with `bunx tsc`, which may resolve the other compiler. Revisit this compatibility
+arrangement when the analyzer supports the native API.
 
-## Testes e revisão
+The `hoisted` linker is fixed in `bunfig.toml`. Host overrides keep one copy of
+React 19.2.8 and OpenTUI 0.5.9: Tuiparts 0.0.6 still declares OpenTUI 0.4 peers,
+although Tuiminal uses and tests this newer combination. The tarball test reproduces
+these overrides in a temporary consumer, installs with strict npm peer validation,
+and checks runtime identity, rendering, and types. These modules are internal host
+components, not libraries supporting arbitrary React/OpenTUI versions.
 
-1. Adicione testes da regra pura e regressões da interação alterada.
-2. Use fixtures locais e configuração temporária; nunca credenciais reais.
-3. Para foco/teclado, teste o componente **e** a composição com `App`. Valide uma
-   instância real do CLI quando a sequência puder ser automatizada.
-4. Execute `bun run format`, `bun run check` e `git diff --check`.
-5. Atualize README/AGENTS se comportamento ou atalhos mudaram; registre decisões
-   arquiteturais duráveis em `docs/adr`.
+## Tests and review
 
-O CI está configurado para Linux e macOS. A matriz Docker continua opt-in.
-Cobertura do Bun só considera arquivos carregados: uma porcentagem alta isolada
-não demonstra cobertura de todas as telas. Não substitua os testes de interação
-por testes que apenas procuram texto no código.
+1. Add tests for pure rules and regressions for changed interactions.
+2. Use local fixtures and temporary configuration, never real credentials.
+3. For focus/keyboard changes, test the component **and** its composition with
+   `App`. Exercise a real CLI instance when the sequence can be automated.
+4. Run `bun run format`, `bun run check`, and `git diff --check`.
+5. Update README/AGENTS when behavior or shortcuts change; record durable
+   architectural decisions in `docs/adr`.
 
-## Dívida existente
+CI runs the full suite and package tests on Linux and macOS. Windows x64 runs all
+static checks and the explicit portable suite. The Docker matrix remains opt-in.
+Bun coverage only includes loaded files: a high percentage alone does not establish
+coverage of every screen. Do not replace interaction tests with source-text searches.
 
-`docs/quality-baseline.json` registra exceções para arquivos grandes e funções acima
-de complexidade 20. O verificador compara tamanho e a distribuição de complexidade
-por arquivo; não garante qualidade arquitetural por si só. Funções novas devem ser
-pequenas e testáveis mesmo quando uma redução em outra função cria margem no gate.
+## Existing technical debt
 
-Prefira reduzir as exceções. Alterar o baseline exige justificativa e revisão.
-`bun scripts/check-maintainability.ts --write-baseline` é uma operação **explícita de
-manutenção**, nunca uma etapa automática do check ou do CI.
+`docs/quality-baseline.json` records exceptions for large files and functions above
+complexity 20. The checker compares file sizes and complexity distributions; it does
+not establish architectural quality by itself. New functions should remain small
+and testable even when reducing another function creates room in the gate.
 
-## Licença das contribuições
+Prefer reducing exceptions. Changing the baseline requires justification and review.
+`bun scripts/check-maintainability.ts --write-baseline` is an **explicit maintenance
+operation**, never an automatic step in the check or CI.
 
-Ao enviar uma contribuição ao Tuiminal, você concorda que ela seja licenciada sob
-a [Apache License 2.0](./LICENSE), salvo quando houver um acordo escrito diferente.
+## Contribution license
+
+By contributing to Tuiminal, you agree to license your contribution under the
+[Apache License 2.0](./LICENSE), unless a separate written agreement states otherwise.

@@ -1,87 +1,83 @@
-# Prontidão para alfa
+# Alpha readiness
 
-Este é o checklist operacional de qualificação, não um histórico de sessões.
-O hardening local registrado em 10/9/2026 foi concluído; **a alfa não está
-aprovada**. Alterações e testes locais não comprovam o funcionamento dos pacotes
-nos seis sistemas anunciados, nem autorizam commit, tag ou publicação.
+This is the operational qualification checklist, not a session log. Local hardening
+recorded on 2026-09-10 was completed; **the alpha is not approved**. Local changes
+and tests neither establish that packages work on all six advertised platforms nor
+authorize a commit, tag, or publication.
 
-O procedimento e as exigências de distribuição estão no
-[processo de release](./docs/release-process.md). As invariantes implementadas
-ficam no [AGENTS.md](./AGENTS.md), nas [especificações Git](./docs/design/git-pr-interface.md)
-e no [README](./README.md), evitando repetir aqui planos já concluídos.
+Distribution procedures and requirements are in the [release process](./docs/release-process.md).
+Implemented invariants belong in [AGENTS.md](./AGENTS.md), the
+[Git specifications](./docs/design/git-pr-interface.md), and the [README](./README.md),
+so completed plans are not duplicated here.
 
-## Resumo do hardening local
+## Local hardening summary
 
-Os IDs abaixo preservam a rastreabilidade da auditoria original. “Corrigido
-localmente” não dispensa revalidação no candidato nem constitui certificação.
+The IDs preserve traceability to the original audit. “Fixed locally” does not
+replace candidate revalidation or constitute certification.
 
-| IDs | Entrega local | Limite que permanece relevante |
+| IDs | Local delivery | Remaining limitation |
 | --- | --- | --- |
-| A01–A02 | Proveniência conservadora para SQL editável e proteção nativa de leituras por dialeto. | Repetir nos drivers nativos. Servidores MCP e rotinas do banco dependem de credenciais e permissões realmente restritas. |
-| A03 | Histórico SQL novo persiste metadados; SQL, parâmetros e diagnósticos ficam em cache volátil limitado. | Favoritos salvam SQL por escolha explícita; limpeza legada e backups não são automáticos. |
-| A04–A06 | Contexto privado HTTP, consentimento de redirects, isolamento de credenciais e cookies com PSL, prefixos e limites. | Repetir TLS/proxy/PTY nos pacotes. Histórico antigo não é apagado implicitamente; corpo público opt-in pode conter segredo não reconhecido. |
-| A07–A08 | Autostart exige confiança na raiz/fingerprint; encerramento mantém ownership e aguarda somente os processos criados. | Aceite humano do modal e matriz nativa de árvores de processos, portas e launcher. |
-| A09–A10 | Persistência protegida, detecção de corrupção/escrita stale e limites de aquisição, buffers e renderização. | Validar falta de espaço, interrupção, concorrência multiprocesso e medidas de memória/CPU/latência nos sistemas-alvo. |
-| A11 | Escritas revalidam alvo/schema/snapshot em transação, distinguem resultado incerto e não repetem automaticamente. | Repetir MySQL/MariaDB/PostgreSQL após as mudanças; tabelas MySQL não transacionais continuam bloqueadas. |
-| A12 | Checkout compartilhado de PR/Issue inspeciona clone/remote/index/status, serializa e revalida antes do único despacho. | Escrita remota real exige repositório de teste e autorização próprios. |
-| A13 | Matriz manual read-only, empacotamento de seis alvos e smoke do launcher/helper sem Bun no `PATH`. | Compilação cruzada não prova execução nativa; o aceite dos seis pacotes segue pendente. |
-| A14–A15 | Inventário de licenças reproduzível, auditoria de dependências e controles locais de release. | Repetir no candidato, obter revisão independente e verificar governança/identidade de publicação remotas. |
-| A16 | Transporte `gh` limitado com reconciliação sem replay; abertura externa de resposta restrita a raster validado e download controlado. | Aceite humano de terminais/idiomas/SO, demos e eventuais escritas remotas autorizadas. |
+| A01–A02 | Conservative provenance for editable SQL and native read protection by dialect. | Repeat with native drivers. MCP servers and database routines depend on genuinely restricted credentials and permissions. |
+| A03 | New SQL history persists metadata; SQL, parameters, and diagnostics remain in a bounded volatile cache. | Favorites save SQL by explicit choice; legacy cleanup and backup removal are not automatic. |
+| A04–A06 | Private HTTP context, redirect consent, credential isolation, and cookies with PSL, prefix, and size constraints. | Repeat TLS/proxy/PTY checks in packages. Old history is not implicitly deleted; opt-in public bodies may contain unrecognized secrets. |
+| A07–A08 | Autostart requires root/fingerprint trust; shutdown retains ownership and awaits only created processes. | Human acceptance of the modal and native testing of process trees, ports, and the launcher. |
+| A09–A10 | Protected persistence, corruption/stale-write detection, and limits on acquisition, buffers, and rendering. | Validate disk exhaustion, interruption, multi-process concurrency, and memory/CPU/latency on target systems. |
+| A11 | Writes revalidate target/schema/snapshot in a transaction, distinguish uncertain outcomes, and never retry automatically. | Repeat MySQL/MariaDB/PostgreSQL after these changes; nontransactional MySQL tables remain blocked. |
+| A12 | Shared PR/Issue checkout inspects clone/remote/index/status, serializes operations, and revalidates before a single dispatch. | Real remote writes require a dedicated test repository and authorization. |
+| A13 | Manual read-only matrix, six-target packaging, and launcher/helper smoke tests without Bun in `PATH`. | Cross-compilation does not establish native execution; acceptance of all six packages is pending. |
+| A14–A15 | Reproducible license inventory, dependency audit, and local release controls. | Repeat on the candidate, obtain independent review, and verify remote governance/publishing identity. |
+| A16 | Bounded `gh` transport with reconciliation and no replay; external response opening limited to validated raster images and controlled downloads. | Human acceptance across terminals/languages/OSes, demos, and any explicitly authorized remote writes. |
 
-## Evidência histórica e limites
+## Historical evidence and limitations
 
-Na rodada local de 10/9, `bun run check`, PTY HTTP opt-in compact/framed,
-auditoria de dependências, build cruzado e smoke de distribuição em Linux x64
-passaram. Isso não substitui uma execução no SHA candidato: contagens e resultados
-de dependências envelhecem e devem ser registrados novamente em cada qualificação.
+In the local 2026-09-10 round, `bun run check`, opt-in HTTP PTY tests in compact/framed
+layouts, dependency auditing, cross-builds, and Linux x64 distribution smoke tests
+passed. These results do not replace a run on the candidate SHA: test counts and
+dependency results age and must be recorded again for each qualification.
 
-Naquela rodada, a matriz Docker não pôde ser repetida, os demos não foram gerados
-por ausência do ImageMagick e os outros cinco runtimes nativos não foram
-exercitados. Proteções/permissões GitHub e publicação npm não foram validadas.
-Esses itens continuam sem aceite neste checklist; ausência de ambiente não é passe.
+That round could not repeat the Docker matrix, regenerate demos without ImageMagick,
+or exercise the other five native runtimes. GitHub protections/permissions and npm
+publication were not validated. Those items remain unaccepted in this checklist;
+unavailable infrastructure does not count as a pass.
 
-## Bloqueadores para aprovar a alfa
+## Alpha approval blockers
 
-Todos os resultados precisam corresponder ao **mesmo SHA candidato imutável**:
+Every result must refer to the **same immutable candidate SHA**:
 
-- [ ] Definir o candidato com o mantenedor. Criar commit somente quando solicitado;
-  executar `bun run check`, `git diff --check` e o workflow comum nesse SHA.
-- [ ] Executar `Release candidate matrix` nos seis runners nativos, conferindo
-  pacotes, hashes, launcher e helper SQLite sem Bun no `PATH`.
-- [ ] Repetir `bun run test:database:drivers` e os casos de SQLite, MySQL, MariaDB
-  e PostgreSQL após as mudanças de escrita/readonly.
-- [ ] Validar nos pacotes nativos PTY, encerramento/árvore de processos, helper,
-  TLS/proxy, chaveiro, terminal, mouse, clipboard, Unicode e upgrade/uninstall.
-- [ ] Regenerar `bun run docs:demos` com ImageMagick e revisar os cinco demos.
-- [ ] Repetir auditoria de dependências/licenças e realizar revisão independente
-  do artefato final; o inventário não substitui essa revisão.
-- [ ] Verificar proteção de branches, bypasses, colaboradores e identidade de
-  publicação no GitHub/npm, incluindo Trusted Publishing.
-- [ ] Obter aprovação explícita de versão, SHA, tag, notas e dist-tag.
+- [ ] Agree on the candidate with the maintainer. Create a commit only when requested;
+  run `bun run check`, `git diff --check`, and the normal workflow on that SHA.
+- [ ] Run `Release candidate matrix` on all six native runners, checking packages,
+  hashes, launcher, and SQLite helper without Bun in `PATH`.
+- [ ] Repeat `bun run test:database:drivers` and SQLite, MySQL, MariaDB, and PostgreSQL
+  cases after write/read-only changes.
+- [ ] Validate native packages for PTYs, shutdown/process trees, helper, TLS/proxy,
+  keychain, terminal, mouse, clipboard, Unicode, and upgrade/uninstall.
+- [ ] Regenerate all five demos with `bun run docs:demos` and ImageMagick; review them.
+- [ ] Repeat dependency/license auditing and independently review the final artifact;
+  the inventory does not replace this review.
+- [ ] Verify branch protections, bypasses, collaborators, and GitHub/npm publishing
+  identity, including Trusted Publishing.
+- [ ] Obtain explicit approval of the version, SHA, tag, notes, and dist-tag.
 
-Candidato reprovado ou resultado incerto não publica nem repete uma escrita
-automaticamente. Nenhum item acima autoriza por si só alterações remotas.
+A rejected candidate or uncertain result must not publish or automatically repeat
+a write. None of the items above independently authorizes remote changes.
 
-## Pontos de investigação preservados
+## Retained investigation topics
 
-A revisão de código de 12/9 registrou as hipóteses abaixo, **não falhas reproduzidas
-no gate final**. Verifique a implementação e crie uma reprodução antes de propor
-correção; esta lista não implica que todos os riscos já foram resolvidos.
+The 2026-09-12 code review recorded these hypotheses, **not failures reproduced in
+the final gate**. Inspect the implementation and reproduce a problem before proposing
+a fix; this list does not imply that all risks have already been resolved.
 
-- Git: respostas tardias no console/diff/stage ao trocar de projeto, concorrência
-  de configuração, ciclo de vida do terminal guiado e precedência de consultas
-  booleanas/escopo de conta/identidade.
-- Runner: validação dos dados restaurados.
-- HTTP: salvamentos concorrentes, prévia de importação obsoleta, foco de modais
-  e limites de renderização JSON.
-- Traduções: dados tratados como texto de UI, códigos de erro em português,
-  custo de padrões em avisos desconhecidos profundamente aninhados e entradas
-  antigas sem confirmação de ausência de consumidores.
-- Scripts: atalhos antigos nas demos, isolamento dos smoke tests e espera pela
-  limpeza de processos.
-- Testes: restauração das preferências do Inbox, limpeza após falhas de asserção,
-  conexão ou servidor e esperas fixas sensíveis à carga da máquina.
+- Git: late console/diff/stage responses on project changes, configuration races,
+  guided-terminal lifecycle, and Boolean-query/account-scope/identity precedence.
+- Runner: validation of restored data.
+- HTTP: concurrent saves, stale import previews, modal focus, and JSON rendering limits.
+- Translations: data treated as UI text, Portuguese error codes, pattern cost for
+  deeply nested unknown warnings, and old entries whose lack of consumers is unverified.
+- Scripts: old demo shortcuts, smoke-test isolation, and waiting for process cleanup.
+- Tests: Inbox preference restoration; cleanup after assertion, connection, or server
+  failures; and fixed waits sensitive to machine load.
 
-Ao qualificar o candidato, registre SHA, plataforma, comandos executados, skips,
-resultados e riscos ainda abertos. Não converta uma revisão local ou um gate verde
-em afirmação de ausência de vulnerabilidades.
+For each qualification, record the SHA, platform, executed commands, skips, results,
+and unresolved risks. Do not turn a local review or a green gate into a claim that
+vulnerabilities are absent.

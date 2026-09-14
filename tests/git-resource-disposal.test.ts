@@ -10,7 +10,7 @@ const resources = [
 
 async function isolatedRegistry(module: string, register: string, dispose: string, body: string) {
   const url = pathToFileURL(
-    resolve(import.meta.dir, `../src/features/git/services/${module}.ts`),
+    resolve(import.meta.dir, `../packages/feature-git/src/services/${module}.ts`),
   ).href
   const source = `const { ${register}: register, ${dispose}: dispose } = await import(${JSON.stringify(url)}); ${body}`
   const child = Bun.spawn([process.execPath, "-e", source], { stdout: "pipe", stderr: "pipe" })

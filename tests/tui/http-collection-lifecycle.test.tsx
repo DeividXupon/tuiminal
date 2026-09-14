@@ -3,9 +3,9 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { useHttpCollectionRunner } from "../../src/features/http/hooks/use-http-collection-runner"
-import { createScratchRequest } from "../../src/features/http/model/workspace"
-import * as runner from "../../src/features/http/services/collection-runner"
+import { useHttpCollectionRunner } from "../../packages/feature-http/src/hooks/use-http-collection-runner"
+import { createScratchRequest } from "../../packages/feature-http/src/model/workspace"
+import * as runner from "../../packages/feature-http/src/services/collection-runner"
 
 let tui: TestRendererSetup | undefined
 const cleanups: Array<() => void> = []

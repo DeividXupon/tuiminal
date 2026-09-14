@@ -5,11 +5,11 @@ import { testRender } from "@opentui/react/test-utils"
 import { readFile, unlink, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { act, StrictMode } from "react"
-import { App } from "../../src/app/App"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { HttpRedirectApprovalModal } from "../../src/features/http/ui/HttpRedirectApprovalModal"
-import { useHttpRedirectApprovals } from "../../src/features/http/hooks/use-http-redirect-approvals"
-import { InlineButton } from "../../src/shared/ui/InlineButton"
+import { App } from "../../apps/cli/src/App"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { HttpRedirectApprovalModal } from "../../packages/feature-http/src/ui/HttpRedirectApprovalModal"
+import { useHttpRedirectApprovals } from "../../packages/feature-http/src/hooks/use-http-redirect-approvals"
+import { InlineButton } from "../../packages/core/src/ui/InlineButton"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()

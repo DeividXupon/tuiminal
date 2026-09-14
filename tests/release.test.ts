@@ -6,7 +6,7 @@ import {
   platformPackageJson,
   RELEASE_TARGETS,
 } from "../scripts/release-model"
-import { sqliteQueryProcessCommand } from "../src/features/database/services/sqlite-query-runtime"
+import { sqliteQueryProcessCommand } from "../packages/feature-database/src/services/sqlite-query-runtime"
 
 describe("standalone npm release", () => {
   test("covers supported operating systems and architectures with unique packages", () => {

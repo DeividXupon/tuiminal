@@ -13,8 +13,8 @@ import {
   selectDatabaseBatchRow,
   serializeDatabaseBatchRows,
   toggleDatabaseBatchRow,
-} from "../src/features/database/model/batch"
-import { saveDatabaseBatchExport } from "../src/features/database/storage/batch-export"
+} from "../packages/feature-database/src/model/batch"
+import { saveDatabaseBatchExport } from "../packages/feature-database/src/storage/batch-export"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-batch-test-"))
 

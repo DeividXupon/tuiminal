@@ -5,8 +5,8 @@ import {
   issueActionKindForShortcut,
   issueMutationWasReconciled,
   prepareIssueAction,
-} from "../src/features/git/model/issue/actions"
-import { DEMO_ISSUES, demoIssueDetails } from "../src/features/git/model/issue/fixtures"
+} from "../packages/feature-git/src/model/issue/actions"
+import { DEMO_ISSUES, demoIssueDetails } from "../packages/feature-git/src/model/issue/fixtures"
 import {
   adjacentIssuePreviewTab,
   type IssueFocus,
@@ -14,13 +14,13 @@ import {
   moveIssueIndex,
   nextIssuePreviewPosition,
   resolveIssueLayout,
-} from "../src/features/git/model/issue/navigation"
+} from "../packages/feature-git/src/model/issue/navigation"
 import {
   buildEffectiveIssueQueries,
   issueIdentityKey,
   normalizeIssueQuery,
   validateIssueIdentity,
-} from "../src/features/git/model/issue/query"
+} from "../packages/feature-git/src/model/issue/query"
 import {
   createIssueSectionId,
   duplicateIssueSection,
@@ -29,9 +29,9 @@ import {
   parseIssueSectionOptions,
   removeIssueSection,
   updateIssueSection,
-} from "../src/features/git/model/issue/sections"
-import type { IssueAuthContext } from "../src/features/git/model/issue/types"
-import { gitWorkspaceTabForKey } from "../src/features/git/model/workspace"
+} from "../packages/feature-git/src/model/issue/sections"
+import type { IssueAuthContext } from "../packages/feature-git/src/model/issue/types"
+import { gitWorkspaceTabForKey } from "../packages/feature-git/src/model/workspace"
 
 const item = (() => {
   const candidate = DEMO_ISSUES[0]

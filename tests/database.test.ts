@@ -3,8 +3,8 @@ import { Database } from "bun:sqlite"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { clearHistoryContent } from "../src/features/database/services/history-content"
-import type { RuntimeSqlExecutor } from "../src/features/database/services/read-only-query"
+import { clearHistoryContent } from "../packages/feature-database/src/services/history-content"
+import type { RuntimeSqlExecutor } from "../packages/feature-database/src/services/read-only-query"
 
 const originalConfigRoot = process.env.XDG_CONFIG_HOME
 const configRoot = mkdtempSync(join(tmpdir(), "tuiminal-database-test-"))
@@ -191,9 +191,9 @@ const {
   DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS,
   nativeClients,
   schemaCache,
-} = await import("../src/features/database/services/database")
+} = await import("../packages/feature-database/src/services/database")
 const { DEFAULT_SENSITIVE_TERMS, setActiveSensitiveTerms } = await import(
-  "../src/shared/security/sensitive-data"
+  "../packages/core/src/security/sensitive-data"
 )
 
 afterAll(async () => {

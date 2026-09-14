@@ -3,8 +3,8 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { parseDiffDocuments } from "../../src/features/git/rendering/diff"
-import { GitDiffDocument } from "../../src/features/git/ui/shared/GitDiffDocument"
+import { parseDiffDocuments } from "../../packages/feature-git/src/rendering/diff"
+import { GitDiffDocument } from "../../packages/feature-git/src/ui/shared/GitDiffDocument"
 
 let tui: TestRendererSetup | undefined
 afterEach(() => {

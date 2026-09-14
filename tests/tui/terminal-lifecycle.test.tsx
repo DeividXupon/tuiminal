@@ -3,8 +3,8 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { FreeTerminal } from "../../src/features/terminal/TerminalWorkspace"
-import * as terminalService from "../../src/features/terminal/services/terminal"
+import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import * as terminalService from "../../packages/feature-terminal/src/services/terminal"
 
 let tui: TestRendererSetup | undefined
 type TerminalOptions = Parameters<typeof terminalService.startFreeTerminalProcess>[1]

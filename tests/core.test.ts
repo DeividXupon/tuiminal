@@ -1,14 +1,23 @@
 import { describe, expect, test } from "bun:test"
-import { focusedRenderableId, ownsInterrupt, ownsKeyboardFocus } from "../src/core/keyboard/scope"
-import { gitKeyboardScope } from "../src/features/git/keyboard"
-import { httpKeyboardScope } from "../src/features/http/keyboard"
-import { shutdownResources } from "../src/core/lifecycle/shutdown"
-import { definedProperties } from "../src/shared/data/defined-properties"
-import { runnerKeyboardScope } from "../src/features/runner/keyboard"
-import { databaseKeyboardScope } from "../src/features/database/keyboard"
-import { terminalKeyboardScope } from "../src/features/terminal/keyboard"
-import { isToolId, resolveToolLaunch, TOOL_COMMANDS, TOOL_SHORTCUTS } from "../src/app/tool-catalog"
-import { globalApplicationShortcut } from "../src/app/global-shortcuts"
+import {
+  focusedRenderableId,
+  ownsInterrupt,
+  ownsKeyboardFocus,
+} from "../packages/core/src/keyboard/scope"
+import { gitKeyboardScope } from "../packages/feature-git/src/keyboard"
+import { httpKeyboardScope } from "../packages/feature-http/src/keyboard"
+import { shutdownResources } from "../packages/core/src/lifecycle/shutdown"
+import { definedProperties } from "../packages/core/src/data/defined-properties"
+import { runnerKeyboardScope } from "../packages/feature-runner/src/keyboard"
+import { databaseKeyboardScope } from "../packages/feature-database/src/keyboard"
+import { terminalKeyboardScope } from "../packages/feature-terminal/src/keyboard"
+import {
+  isToolId,
+  resolveToolLaunch,
+  TOOL_COMMANDS,
+  TOOL_SHORTCUTS,
+} from "../apps/cli/src/tool-catalog"
+import { globalApplicationShortcut } from "../apps/cli/src/global-shortcuts"
 
 describe("application boundaries", () => {
   test("focused modal and input scopes retain keyboard ownership", () => {

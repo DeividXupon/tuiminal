@@ -3,8 +3,8 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { GitLocalTargetPicker } from "../../src/features/git/ui/config/GitLocalTargetPicker"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { GitLocalTargetPicker } from "../../packages/feature-git/src/ui/config/GitLocalTargetPicker"
 
 let tui: TestRendererSetup | undefined
 const settings = getUiSettings()

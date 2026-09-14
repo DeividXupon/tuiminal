@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { HttpKeyValue, HttpVariableContext } from "../src/features/http/model/types"
-import { createHttpVariableContext } from "../src/features/http/model/variables"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
+import type { HttpKeyValue, HttpVariableContext } from "../packages/feature-http/src/model/types"
+import { createHttpVariableContext } from "../packages/feature-http/src/model/variables"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
 
 function parameter(name: string, value: string, enabled = true): HttpKeyValue {
   return { id: `${name}-${value}`, name, value, enabled, sensitivity: "normal" }

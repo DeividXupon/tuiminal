@@ -1,0 +1,34 @@
+{
+  "name": "@xupon/tuiminal-cli",
+  "version": "0.2.0-pre-alpha.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeividXupon/tuiminal.git",
+    "directory": "apps/cli"
+  },
+  "type": "module",
+  "engines": {
+    "bun": "1.3.14"
+  },
+  "private": true,
+  "bin": {
+    "tuiminal": "./bin/tuiminal.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.tsx",
+    "start": "bun src/index.tsx"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "@tuiparts/react": "^0.0.6",
+    "react": "^19.2.8",
+    "@xupon/tuiminal-core": "workspace:*",
+    "@xupon/tuiminal-feature-database": "workspace:*",
+    "@xupon/tuiminal-feature-git": "workspace:*",
+    "@xupon/tuiminal-feature-http": "workspace:*",
+    "@xupon/tuiminal-feature-runner": "workspace:*",
+    "@xupon/tuiminal-feature-terminal": "workspace:*"
+  }
+}

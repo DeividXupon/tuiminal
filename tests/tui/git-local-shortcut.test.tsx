@@ -4,7 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { useKeyboard } from "@opentui/react"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { useLocalConfigurationShortcut } from "../../src/features/git/hooks/use-local-configuration-shortcut"
+import { useLocalConfigurationShortcut } from "../../packages/feature-git/src/hooks/use-local-configuration-shortcut"
 
 let tui: TestRendererSetup | undefined
 

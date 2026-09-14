@@ -2,58 +2,58 @@
   "version": 1,
   "newFileMaxLines": 400,
   "files": {
-    "src/app/App.tsx": {
+    "apps/cli/src/App.tsx": {
       "maxLines": 583,
       "complexity": [
         55,
         52
       ]
     },
-    "src/app/tutorial/TutorialOverlay.tsx": {
+    "apps/cli/src/tutorial/TutorialOverlay.tsx": {
       "maxLines": 821,
       "complexity": [
         21
       ]
     },
-    "src/app/ui/ConfigurationModal.tsx": {
+    "apps/cli/src/ui/ConfigurationModal.tsx": {
       "maxLines": 688,
       "complexity": [
         41,
         25
       ]
     },
-    "src/features/database/DatabaseWorkspace.tsx": {
+    "packages/feature-database/src/DatabaseWorkspace.tsx": {
       "maxLines": 3025,
       "complexity": [
         255,
         144
       ]
     },
-    "src/features/database/model/sql-autocomplete.ts": {
+    "packages/feature-database/src/model/sql-autocomplete.ts": {
       "maxLines": 321,
       "complexity": [
         35
       ]
     },
-    "src/features/database/model/sql-lexer.ts": {
+    "packages/feature-database/src/model/sql-lexer.ts": {
       "maxLines": 416,
       "complexity": [
         144
       ]
     },
-    "src/features/database/model/sql-statements.ts": {
+    "packages/feature-database/src/model/sql-statements.ts": {
       "maxLines": 125,
       "complexity": [
         56
       ]
     },
-    "src/features/database/model/workspace.ts": {
+    "packages/feature-database/src/model/workspace.ts": {
       "maxLines": 194,
       "complexity": [
         21
       ]
     },
-    "src/features/database/query/DatabaseQueryWorkspace.tsx": {
+    "packages/feature-database/src/query/DatabaseQueryWorkspace.tsx": {
       "maxLines": 2504,
       "complexity": [
         255,
@@ -63,7 +63,7 @@
         21
       ]
     },
-    "src/features/database/services/database.ts": {
+    "packages/feature-database/src/services/database.ts": {
       "maxLines": 2638,
       "complexity": [
         64,
@@ -72,26 +72,26 @@
         21
       ]
     },
-    "src/features/database/tutorial/DatabaseTutorialDemo.tsx": {
+    "packages/feature-database/src/tutorial/DatabaseTutorialDemo.tsx": {
       "maxLines": 473,
       "complexity": [
         34,
         32
       ]
     },
-    "src/features/database/ui/DatabaseCellEditor.tsx": {
+    "packages/feature-database/src/ui/DatabaseCellEditor.tsx": {
       "maxLines": 267,
       "complexity": [
         23
       ]
     },
-    "src/features/database/ui/DatabaseChangesModal.tsx": {
+    "packages/feature-database/src/ui/DatabaseChangesModal.tsx": {
       "maxLines": 332,
       "complexity": [
         26
       ]
     },
-    "src/features/database/ui/DatabaseConnectionModal.tsx": {
+    "packages/feature-database/src/ui/DatabaseConnectionModal.tsx": {
       "maxLines": 1012,
       "complexity": [
         85,
@@ -99,27 +99,27 @@
         28
       ]
     },
-    "src/features/database/ui/DatabaseQueryFavoritesModal.tsx": {
+    "packages/feature-database/src/ui/DatabaseQueryFavoritesModal.tsx": {
       "maxLines": 419,
       "complexity": [
         26,
         25
       ]
     },
-    "src/features/database/ui/DatabaseQueryHistoryModal.tsx": {
+    "packages/feature-database/src/ui/DatabaseQueryHistoryModal.tsx": {
       "maxLines": 504,
       "complexity": [
         63,
         26
       ]
     },
-    "src/features/database/ui/RowInspector.tsx": {
+    "packages/feature-database/src/ui/RowInspector.tsx": {
       "maxLines": 164,
       "complexity": [
         36
       ]
     },
-    "src/features/git/GitWorkspace.tsx": {
+    "packages/feature-git/src/GitWorkspace.tsx": {
       "maxLines": 1144,
       "complexity": [
         175,
@@ -131,14 +131,14 @@
         25
       ]
     },
-    "src/features/git/rendering/commit-graph.ts": {
+    "packages/feature-git/src/rendering/commit-graph.ts": {
       "maxLines": 318,
       "complexity": [
         27,
         26
       ]
     },
-    "src/features/git/rendering/diff.tsx": {
+    "packages/feature-git/src/rendering/diff.tsx": {
       "maxLines": 419,
       "complexity": [
         40,
@@ -146,14 +146,14 @@
         21
       ]
     },
-    "src/features/http/HttpWorkspace.tsx": {
+    "packages/feature-http/src/HttpWorkspace.tsx": {
       "maxLines": 735,
       "complexity": [
         104,
         44
       ]
     },
-    "src/features/runner/RunnerWorkspace.tsx": {
+    "packages/feature-runner/src/RunnerWorkspace.tsx": {
       "maxLines": 2708,
       "complexity": [
         255,
@@ -163,30 +163,30 @@
         25
       ]
     },
-    "src/features/runner/discovery/projects.ts": {
+    "packages/feature-runner/src/discovery/projects.ts": {
       "maxLines": 119,
       "complexity": [
         27
       ]
     },
-    "src/features/runner/storage/runner-config.ts": {
+    "packages/feature-runner/src/storage/runner-config.ts": {
       "maxLines": 584,
       "complexity": []
     },
-    "src/features/terminal/TerminalWorkspace.tsx": {
+    "packages/feature-terminal/src/TerminalWorkspace.tsx": {
       "maxLines": 941,
       "complexity": [
         29,
         22
       ]
     },
-    "src/shared/i18n/index.ts": {
+    "packages/core/src/i18n/index.ts": {
       "maxLines": 6130,
       "complexity": [
         21
       ]
     },
-    "src/shared/ui/InlineButton.tsx": {
+    "packages/core/src/ui/InlineButton.tsx": {
       "maxLines": 60,
       "complexity": [
         24

@@ -11,7 +11,7 @@ import {
   databaseSidebarWidth,
   nextDatabaseTableSort,
   preserveDatabasePageSelection,
-} from "../src/features/database/model/layout"
+} from "../packages/feature-database/src/model/layout"
 
 describe("database responsive layout", () => {
   test("shrinks the catalog before starving the data pane", () => {

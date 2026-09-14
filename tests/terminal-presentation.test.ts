@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { terminalFooterLayout } from "../src/features/terminal/rendering/presentation"
-import { displayWidth, translateUi } from "../src/shared/i18n"
+import { terminalFooterLayout } from "../packages/feature-terminal/src/rendering/presentation"
+import { displayWidth, translateUi } from "../packages/core/src/i18n"
 
 describe("Free Terminal presentation", () => {
   test("reserves a complete footer hint at common terminal widths", () => {

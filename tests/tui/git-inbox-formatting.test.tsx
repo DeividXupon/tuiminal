@@ -3,9 +3,9 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { DEMO_INBOX_NOTIFICATIONS } from "../../src/features/git/model/inbox/fixtures"
-import { InboxList } from "../../src/features/git/ui/inbox/InboxList"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { DEMO_INBOX_NOTIFICATIONS } from "../../packages/feature-git/src/model/inbox/fixtures"
+import { InboxList } from "../../packages/feature-git/src/ui/inbox/InboxList"
 
 let tui: TestRendererSetup | undefined
 const settings = getUiSettings()

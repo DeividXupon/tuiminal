@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   directionalShortcutDirection,
   directionalShortcutLabel,
-} from "../src/shared/ui/directional-shortcut"
+} from "../packages/core/src/ui/directional-shortcut"
 
 describe("global directional shortcuts", () => {
   test("maps only plain A/F and exposes their semantic arrows", () => {

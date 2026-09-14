@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { httpParameterSectionForKey } from "../src/features/http/model/parameter-navigation"
+import { httpParameterSectionForKey } from "../packages/feature-http/src/model/parameter-navigation"
 
 describe("HTTP parameter subpanel navigation", () => {
   test("uses plain J/K and arrows without stealing modified shortcuts", () => {

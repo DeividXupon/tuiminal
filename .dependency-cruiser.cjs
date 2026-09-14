@@ -1,8 +1,8 @@
 const { readdirSync } = require("node:fs")
 
-const features = readdirSync("src/features", { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
+const features = readdirSync("packages", { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && entry.name.startsWith("feature-"))
+  .map((entry) => entry.name.slice("feature-".length))
 
 module.exports = {
   forbidden: [
@@ -11,34 +11,37 @@ module.exports = {
     {
       name: "foundation-is-independent",
       severity: "error",
-      from: { path: "^src/(core|shared)/" },
-      to: { path: "^src/(app|features)/" },
+      from: { path: "^packages/core/src/" },
+      to: { path: "^(apps/cli/|packages/feature-[^/]+/src/)" },
     },
     {
       name: "features-do-not-import-app",
       severity: "error",
-      from: { path: "^src/features/" },
-      to: { path: "^src/app/" },
+      from: { path: "^packages/feature-" },
+      to: { path: "^apps/cli/" },
     },
     {
       name: "app-uses-feature-api",
       severity: "error",
-      from: { path: "^src/app/" },
-      to: { path: "^src/features/[^/]+/", pathNot: "^src/features/[^/]+/index\\.ts$" },
+      from: { path: "^apps/cli/" },
+      to: {
+        path: "^packages/feature-[^/]+/src/",
+        pathNot: "^packages/(feature-[^/]+/src/index\\.ts|feature-http/src/cli/(run|import)\\.ts)$",
+      },
     },
     {
       name: "models-are-pure",
       severity: "error",
-      from: { path: "^src/features/[^/]+/model/" },
+      from: { path: "^packages/feature-[^/]+/src/model/" },
       to: {
-        path: "(^src/(app|core)/|^src/features/[^/]+/(services|storage|drivers|discovery|rendering|ui|query)/|(^|node_modules/)(react|@opentui|@tuiparts)(/|$)|^(node:|bun:))",
+        path: "(^(apps/cli/|packages/core/src/(settings|lifecycle|process|keyboard)/)|^packages/feature-[^/]+/src/(services|storage|drivers|discovery|rendering|ui|query)/|(^|node_modules/)(react|@opentui|@tuiparts)(/|$)|^(node:|bun:))",
       },
     },
     ...features.map((feature) => ({
       name: `${feature}-is-independent`,
       severity: "error",
-      from: { path: `^src/features/${feature}/` },
-      to: { path: "^src/features/", pathNot: `^src/features/${feature}/` },
+      from: { path: `^packages/feature-${feature}/src/` },
+      to: { path: "^packages/feature-", pathNot: `^packages/feature-${feature}/src/` },
     })),
   ],
   options: {

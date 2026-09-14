@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
-import type { DatabaseColumn, DatabaseTable } from "../src/features/database/model/types"
+import type { DatabaseColumn, DatabaseTable } from "../packages/feature-database/src/model/types"
 
 import {
   databaseEditableQueryTable,
   databaseQueryResultColumns,
   databaseQueryResultMatchesTable,
   databaseQueryResultRowKey,
-} from "../src/features/database/model/query-edit"
+} from "../packages/feature-database/src/model/query-edit"
 
 const tables: [DatabaseTable, DatabaseTable] = [
   { schema: "public", name: "users", type: "table" as const },

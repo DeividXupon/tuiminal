@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { translateUi } from "../src/shared/i18n/index"
+import { translateUi } from "../packages/core/src/i18n/index"
 
 describe("translation prefixes", () => {
   test.each([

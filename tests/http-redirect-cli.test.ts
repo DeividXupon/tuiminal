@@ -12,7 +12,13 @@ afterEach(async () => {
 
 test("CLI help documents all three independent transport authorizations", async () => {
   const child = Bun.spawn(
-    [process.execPath, resolve(import.meta.dir, "../bin/tuiminal.ts"), "http", "run", "--help"],
+    [
+      process.execPath,
+      resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
+      "http",
+      "run",
+      "--help",
+    ],
     {
       stdin: "ignore",
       stdout: "pipe",
@@ -69,7 +75,7 @@ test("the CLI requires an exact redirect destination and sends each approved hop
     const child = Bun.spawn(
       [
         process.execPath,
-        resolve(import.meta.dir, "../bin/tuiminal.ts"),
+        resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
         "http",
         "run",
         "redirect.http",

@@ -7,17 +7,17 @@ import { join } from "node:path"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import type { DatabaseConnectionProfile } from "../../src/features/database/model/types"
-import type { StagedDatabaseChange } from "../../src/features/database/model/workspace"
-import { DatabaseQueryWorkspace } from "../../src/features/database/query/DatabaseQueryWorkspace"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import type { DatabaseConnectionProfile } from "../../packages/feature-database/src/model/types"
+import type { StagedDatabaseChange } from "../../packages/feature-database/src/model/workspace"
+import { DatabaseQueryWorkspace } from "../../packages/feature-database/src/query/DatabaseQueryWorkspace"
 import {
   addDatabaseConnection,
   applyTableMutations,
   getDefaultDatabaseConnectionId,
   removeDatabaseConnection,
   setDefaultDatabaseConnection,
-} from "../../src/features/database/services/database"
+} from "../../packages/feature-database/src/services/database"
 
 let tui: TestRendererSetup | undefined
 let fixtureRoot = ""

@@ -9,7 +9,8 @@ const check = Bun.spawnSync(
   [
     "node_modules/.bin/biome",
     "lint",
-    "src",
+    "apps",
+    "packages",
     "--only=complexity/noExcessiveCognitiveComplexity",
     "--reporter=json",
     "--max-diagnostics=10000",
@@ -26,11 +27,17 @@ const report = JSON.parse(check.stdout.toString()) as {
 }
 if (report.summary.diagnosticsNotPrinted) throw new Error("Incomplete complexity report")
 const current: Baseline = { version: 1, newFileMaxLines: 400, files: {} }
-for (const discoveredFile of [...new Bun.Glob("src/**/*.{ts,tsx}").scanSync()].sort()) {
+for (const discoveredFile of [
+  ...new Bun.Glob("apps/cli/**/*.ts").scanSync(),
+  ...new Bun.Glob("apps/cli/**/*.tsx").scanSync(),
+  ...new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scanSync(),
+].sort()) {
   const file = normalizeProjectPath(discoveredFile)
   const maxLines = (await Bun.file(discoveredFile).text()).trimEnd().split("\n").length
   current.files[file] = { maxLines, complexity: [] }
 }
+if (!Object.keys(current.files).length)
+  throw new Error("Maintainability analysis found no source files")
 for (const diagnostic of report.diagnostics) {
   const score = Number(diagnostic.message.match(/complexity of (\d+)/)?.[1])
   const file = normalizeProjectPath(relative(process.cwd(), resolve(diagnostic.location.path)))

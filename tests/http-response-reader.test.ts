@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { readLimitedResponseBody } from "../src/features/http/services/response-reader"
+import { readLimitedResponseBody } from "../packages/feature-http/src/services/response-reader"
 
 function streamedResponse(chunks: readonly (readonly number[])[], cancel?: () => void) {
   let next = 0

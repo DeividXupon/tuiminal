@@ -6,7 +6,7 @@ import {
   nextHttpRequestMoreView,
   nextHttpResponseMoreView,
   nextHttpResponseView,
-} from "../src/features/http/model/nested-view-navigation"
+} from "../packages/feature-http/src/model/nested-view-navigation"
 
 describe("HTTP horizontal navigation hierarchy", () => {
   test("cycles nested strips with Z/V", () => {

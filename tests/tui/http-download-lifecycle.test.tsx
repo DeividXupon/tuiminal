@@ -3,14 +3,14 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { useHttpResponse } from "../../src/features/http/hooks/use-http-response"
-import type { HttpDocumentState } from "../../src/features/http/model/types"
+import { useHttpResponse } from "../../packages/feature-http/src/hooks/use-http-response"
+import type { HttpDocumentState } from "../../packages/feature-http/src/model/types"
 import {
   createHttpWorkspaceState,
   createScratchRequest,
-} from "../../src/features/http/model/workspace"
-import * as downloads from "../../src/features/http/services/download"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../../src/features/http/storage/config"
+} from "../../packages/feature-http/src/model/workspace"
+import * as downloads from "../../packages/feature-http/src/services/download"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../../packages/feature-http/src/storage/config"
 
 let tui: TestRendererSetup | undefined
 const cleanups: Array<() => void> = []

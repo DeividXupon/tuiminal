@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { join, resolve } from "node:path"
+import { assertWorkspaceVersions } from "./workspace-model"
 import {
   mainPackageJson,
   npmLauncherSource,
@@ -19,6 +20,7 @@ import {
 } from "./release-model"
 
 const root = resolve(import.meta.dir, "..")
+assertWorkspaceVersions()
 const packageMetadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
   version: string
 }
@@ -95,9 +97,13 @@ for (const target of targets) {
   rmSync(packageRoot, { recursive: true, force: true })
   mkdirSync(binRoot, { recursive: true })
   console.log(`Building ${target.id}...`)
-  await compile(join(root, "bin", "tuiminal.ts"), join(binRoot, target.executable), target)
   await compile(
-    join(root, "src", "features", "database", "drivers", "sqlite-query-process.ts"),
+    join(root, "apps", "cli", "bin", "tuiminal.ts"),
+    join(binRoot, target.executable),
+    target,
+  )
+  await compile(
+    join(root, "packages", "feature-database", "src", "drivers", "sqlite-query-process.ts"),
     join(binRoot, target.helperExecutable),
     target,
   )

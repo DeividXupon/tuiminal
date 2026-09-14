@@ -5,7 +5,7 @@ import { plugin } from "bun"
 plugin({
   name: "cli-version-import-guard",
   setup(build) {
-    build.onLoad({ filter: /[/\\]src[/\\](?:core|features|shared)[/\\]/ }, () => {
+    build.onLoad({ filter: /[/\\]packages[/\\](?:core|feature-[^/\\]+)[/\\]src[/\\]/ }, () => {
       throw new Error("Version command loaded an application runtime module")
     })
   },
