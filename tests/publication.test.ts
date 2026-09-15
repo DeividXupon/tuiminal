@@ -3,6 +3,7 @@ import {
   assertArchivePaths,
   assertPublishableCandidate,
   CANDIDATE_JOBS,
+  findPublicationRelease,
   parseReleaseChecksums,
   publicationChannel,
 } from "../scripts/publication-model"
@@ -88,5 +89,70 @@ describe("publication gates", () => {
       "./other-package/bin/tuiminal",
     ])
       expect(() => assertArchivePaths([...paths, bad], "linux-x64")).toThrow()
+  })
+})
+
+describe("release reconciliation", () => {
+  const release = {
+    id: 123,
+    tag_name: "v0.2.0-alpha.0",
+    target_commitish: sha,
+    draft: true,
+    prerelease: true,
+    assets: [],
+  }
+
+  test("finds an existing draft after the tag endpoint returns 404", async () => {
+    const paths: string[] = []
+    const found = await findPublicationRelease(release.tag_name, async (path) => {
+      paths.push(path)
+      return path.startsWith("releases/tags/") ? null : [release]
+    })
+    expect(found).toBe(release)
+    expect(paths).toEqual(["releases/tags/v0.2.0-alpha.0", "releases?per_page=100&page=1"])
+  })
+
+  test("uses the published release without listing unrelated releases", async () => {
+    const published = { ...release, draft: false }
+    let reads = 0
+    expect(
+      await findPublicationRelease(release.tag_name, async () => {
+        reads++
+        return published
+      }),
+    ).toBe(published)
+    expect(reads).toBe(1)
+  })
+
+  test("checks later pages before treating a release as absent", async () => {
+    const fullPage = Array.from({ length: 100 }, (_, index) => ({
+      ...release,
+      id: index,
+      tag_name: `v1.0.${index}`,
+    }))
+    for (const lastPage of [[release], []]) {
+      const paths: string[] = []
+      const found = await findPublicationRelease(release.tag_name, async (path) => {
+        paths.push(path)
+        if (path.startsWith("releases/tags/")) return null
+        return path.endsWith("page=1") ? fullPage : lastPage
+      })
+      expect(found).toBe(lastPage[0] ?? null)
+      expect(paths.at(-1)).toBe("releases?per_page=100&page=2")
+    }
+  })
+
+  test("failed lookups never imply that creating a release is safe", async () => {
+    await expect(
+      findPublicationRelease(release.tag_name, async () => {
+        throw new Error("API unavailable")
+      }),
+    ).rejects.toThrow("API unavailable")
+    await expect(findPublicationRelease(release.tag_name, async () => null)).rejects.toThrow(
+      "Could not list existing releases",
+    )
+    await expect(
+      findPublicationRelease(release.tag_name, async () => ({ ...release, tag_name: "wrong" })),
+    ).rejects.toThrow("Unexpected release tag")
   })
 })

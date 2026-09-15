@@ -3,7 +3,11 @@ import { createReadStream, readdirSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { parseFeatureCatalog } from "../apps/cli/src/features/model"
 import { decodeFeaturePayload } from "../apps/cli/src/features/download"
-import { PUBLICATION_REPOSITORY, publicationChannel } from "./publication-model"
+import {
+  findPublicationRelease,
+  PUBLICATION_REPOSITORY,
+  publicationChannel,
+} from "./publication-model"
 import { RELEASE_TARGETS } from "./release-model"
 import { version } from "../package.json"
 
@@ -90,7 +94,7 @@ for (const entry of plan.packages) {
 }
 
 const assets = readdirSync(directory).sort()
-let release = await github(`releases/tags/${tag}`)
+let release = await findPublicationRelease(tag, github)
 if (!release) {
   await command([
     "gh",
@@ -108,7 +112,7 @@ if (!release) {
     "--notes-file",
     `docs/releases/${version}.md`,
   ])
-  release = await github(`releases/tags/${tag}`)
+  release = await findPublicationRelease(tag, github)
 }
 if (!release || release.target_commitish !== sha || !release.prerelease)
   throw new Error("The existing release does not identify this candidate")
@@ -131,8 +135,9 @@ for (const name of assets) {
     ])
   }
 }
-release = await github(`releases/tags/${tag}`)
-if (release.assets.length !== assets.length) throw new Error("Unexpected assets in the release")
+release = await github(`releases/${release.id}`)
+if (!release || release.assets.length !== assets.length)
+  throw new Error("Unexpected assets in the release")
 for (const name of assets) {
   const asset = release.assets.find((entry: { name: string }) => entry.name === name)
   if (asset?.digest !== `sha256:${await checksum(join(directory, name))}`)
