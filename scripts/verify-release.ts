@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { Database } from "bun:sqlite"
 import { mainPackageJson, RELEASE_TARGETS } from "./release-model"
 import { verifyPackagedUi } from "./release-ui-smoke"
+import { parseNpmPackResult } from "./npm-pack-model"
 
 const root = resolve(import.meta.dir, "..")
 const distRoot = join(root, "dist", "npm")
@@ -80,10 +81,8 @@ async function pack(packageRoot: string, destination: string, dryRun: boolean) {
       env: { npm_config_cache: join(tmpdir(), "tuiminal-release-npm-cache") },
     },
   )
-  const result = JSON.parse(output) as Array<{ filename: string; files: Array<{ path: string }> }>
-  const first = result[0]
-  if (!first) throw new Error(`npm pack returned no artifact for ${packageRoot}`)
-  return first
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
+  return parseNpmPackResult(output, { name: manifest.name, version })
 }
 
 function assertExactPackageFiles(

@@ -16,6 +16,7 @@ import { decodeFeaturePayload } from "../apps/cli/src/features/download"
 import { mainPackageJson, platformPackageJson, RELEASE_TARGETS } from "./release-model"
 import { assertArchivePaths, parseReleaseChecksums, publicationChannel } from "./publication-model"
 import { version } from "../package.json"
+import { parseNpmPackResult } from "./npm-pack-model"
 
 publicationChannel(version)
 const input = resolve(process.argv[2] ?? "candidate-artifacts")
@@ -49,20 +50,14 @@ function checkManifest(directory: string, expected: unknown) {
     throw new Error(`Unexpected manifest: ${directory}`)
 }
 
-async function pack(directory: string) {
-  const result = JSON.parse(
+async function pack(directory: string, name: string) {
+  const entry = parseNpmPackResult(
     await command(
       ["npm", "pack", "--json", "--ignore-scripts", "--pack-destination", output],
       directory,
     ),
-  ) as Array<{ name: string; version: string; filename: string; integrity: string }>
-  if (
-    result.length !== 1 ||
-    result[0]?.version !== version ||
-    !/^[a-zA-Z0-9.-]+\.tgz$/.test(result[0].filename)
+    { name, version },
   )
-    throw new Error("Unexpected npm pack result")
-  const entry = result[0]
   return {
     name: entry.name,
     version,
@@ -124,10 +119,10 @@ try {
         )
           throw new Error(`Launcher differs across native artifacts: ${file}`)
     } else launcher = join(extracted, "tuiminal")
-    packages.push(await pack(platform))
+    packages.push(await pack(platform, target.npmPackage))
   }
   if (!launcher) throw new Error("Missing launcher")
-  packages.push(await pack(launcher))
+  packages.push(await pack(launcher, "tuiminal"))
   writeFileSync(
     join(output, "publication.json"),
     `${JSON.stringify({ version, channel: "alpha", sha: process.env.GITHUB_SHA, packages }, null, 2)}\n`,

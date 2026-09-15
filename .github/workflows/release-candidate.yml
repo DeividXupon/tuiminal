@@ -75,8 +75,10 @@ jobs:
           bun-version-file: .bun-version
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22"
+          node-version: "24"
           package-manager-cache: false
+      - name: Use the publication npm CLI
+        run: npm install --global npm@12.0.2 --ignore-scripts
       - name: Install the exact target dependency graph
         run: bun install --frozen-lockfile --ignore-scripts --os=${{ matrix.package-os }} --cpu=${{ matrix.package-cpu }}
       - name: Audit the dependency graph
