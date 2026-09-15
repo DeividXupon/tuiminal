@@ -3,8 +3,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { GIT_TUTORIAL_STEPS } from "@xupon/tuiminal-feature-git"
-import { HTTP_TUTORIAL_STEPS } from "@xupon/tuiminal-feature-http"
+import { loadedFeature } from "../features/registry"
 import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
@@ -362,8 +361,8 @@ export function estimateTutorialTextHeight(
 
 export function getTutorialSteps(screen: string): TutorialStep[] {
   if (screen === "database") return DATABASE_TUTORIAL_STEPS
-  if (screen === "git") return [...GIT_TUTORIAL_STEPS]
-  if (screen === "http") return [...HTTP_TUTORIAL_STEPS]
+  if (screen === "git") return [...(loadedFeature("git")?.GIT_TUTORIAL_STEPS ?? [])]
+  if (screen === "http") return [...(loadedFeature("http")?.HTTP_TUTORIAL_STEPS ?? [])]
   return GENERIC_TUTORIAL_STEPS
 }
 

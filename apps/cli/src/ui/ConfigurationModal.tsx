@@ -1,3 +1,5 @@
+import { TutorialSetting } from "./TutorialSetting"
+import { FeatureSettings } from "../features/FeatureSettings"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
@@ -43,6 +45,7 @@ type ConfigurationModalProps = {
   onOpenSensitiveTerms: () => void
   onReset: () => void
   onOpenQueryHistory: () => void
+  onOpenFeatures: () => void
   onStartTutorial: () => void
   queryHistoryCount: number
   tutorialLabel: string
@@ -169,6 +172,7 @@ export function ConfigurationModal({
   onReset,
   onOpenQueryHistory,
   onStartTutorial,
+  onOpenFeatures,
   queryHistoryCount,
   tutorialLabel,
   context,
@@ -505,61 +509,23 @@ export function ConfigurationModal({
 
             <box style={{ height: 1, flexShrink: 0 }} />
 
-            <box
-              id="configuration-group-tutorial"
-              style={{ height: compact ? 2 : 3, flexShrink: 0 }}
-            >
-              <box
-                id="configuration-section-tutorial"
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  backgroundColor: section === "tutorial" ? COLORS.panelRaised : COLORS.canvas,
-                }}
-              >
-                <text
-                  content={`${section === "tutorial" ? "◆" : "◇"} ${translateUi("TUTORIAL")}`}
-                  style={{ fg: COLORS.text }}
-                />
-                <ShortcutText content="[Enter] iniciar" style={{ fg: COLORS.muted }} />
-              </box>
-
-              <Button
-                id="configuration-start-tutorial"
-                onPress={() => {
-                  onSectionChange("tutorial")
-                  onStartTutorial()
-                }}
-                height={compact ? 1 : 2}
-                flexShrink={0}
-              >
-                {(state) => (
-                  <box
-                    style={{
-                      height: compact ? 1 : 2,
-                      flexShrink: 0,
-                      paddingLeft: 1,
-                      paddingRight: 1,
-                      backgroundColor:
-                        section === "tutorial" || state.focused ? COLORS.panelRaised : COLORS.panel,
-                    }}
-                  >
-                    <text
-                      content={`▶ Tour guiado · ${translateUi(tutorialLabel)}`}
-                      style={{ fg: section === "tutorial" ? COLORS.focus : COLORS.text }}
-                    />
-                    {compact ? null : (
-                      <text
-                        content="Explica blocos, controles, ações e atalhos em contexto."
-                        style={{ fg: COLORS.muted }}
-                      />
-                    )}
-                  </box>
-                )}
-              </Button>
-            </box>
+            <TutorialSetting
+              visible={context !== "installer"}
+              active={section === "tutorial"}
+              compact={compact}
+              tutorialLabel={tutorialLabel}
+              onStartTutorial={() => {
+                onSectionChange("tutorial")
+                onStartTutorial()
+              }}
+            />
+            <FeatureSettings
+              active={section === "features"}
+              onOpen={() => {
+                onSectionChange("features")
+                onOpenFeatures()
+              }}
+            />
           </scrollbox>
 
           <box

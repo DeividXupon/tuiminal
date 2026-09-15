@@ -20,7 +20,7 @@ Databases, GitHub, processes, APIs, and real terminals in one fast, responsive i
 </div>
 
 > [!WARNING]
-> Tuiminal is in **pre-alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
+> Tuiminal is in **alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
 
 Tuiminal keeps your workflow in one place. Open a project once and switch between its database client, Git interface, processes, HTTP client, and terminals with `[Alt+1–5]`.
 
@@ -35,19 +35,43 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 
 ## Installation
 
-Install the pre-alpha from npm:
+Install the alpha from npm:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 tuiminal
 ```
 
 You **do not need to install Bun** to use the published package. npm downloads the binary for macOS, Linux glibc, or Windows on x64 and ARM64. The small package launcher requires Node.js 22 or later.
 
+A fresh installation opens **Install official features**. Choose Database, Git, Runner,
+HTTP, or Free Terminal with `[↑/↓]` / `[J/K]` or the mouse, then press `[Enter]` to
+install and again to open. Use `[Space]` and `[I]` to install several tools. Reopen
+this screen through `[,]` → **Official features → Manage features** or
+`tuiminal features`. Only installed tools appear in the tabs; Runner is the default
+when available. Downloads are version-matched and verified, and live in Tuiminal's
+own data directory, outside your projects.
+
+Installed tools have a **[D] Uninstall** button. Confirm with `[Y]` or cancel with
+`[Esc]`. Uninstalling closes that tool's sessions and discards unsaved work while
+preserving projects and saved settings. You can install it again from the same screen.
+
+For scripted setup: `tuiminal features install git runner` or `tuiminal features install all`.
+
+Each tool includes a detailed description. Hover over a row or navigate with
+`[↑/↓/J/K]` to see an animated icon for the tool. Database fills a storage cylinder;
+Runner plays, progresses and completes; HTTP sends a request and receives a response
+between a client and server. Git shows a branch, and Free Terminal shows a window
+with a blinking cursor. Icons adapt to smaller terminals.
+During a download, the tool's row fills from left to right with its actual progress.
+
+![Official feature installation](./docs/media/installation.gif)
+
+
 To update or uninstall:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 npm uninstall --global tuiminal
 ```
 
@@ -505,11 +529,18 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+Development uses the same installer with locally generated payloads and a separate
+cache. After editing a feature, restart `bun run dev` and install its new snapshot.
+If you rebuild separately with `bun run build:features`, restart the application
+before installing. No npm publication is needed. See the
+[installation contract](./docs/design/official-feature-installation.md).
+
 Main commands:
 
 | Command | Purpose |
 | --- | --- |
-| `bun run dev` | Run with development reload |
+| `bun run dev` | Build local feature payloads and launch the installation flow |
+| `bun run build:features` | Rebuild the five installable official payloads |
 | `bun run test:unit` | Test rules and local integrations |
 | `bun run test:tui` | Test UI with the real OpenTUI renderer |
 | `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |
@@ -517,7 +548,7 @@ Main commands:
 | `bun run build:packages` | Generate JavaScript, types, and manifests for six internal modules |
 | `bun run test:packages` | Pack and install modules in a temporary consumer |
 | `bun run check:licenses` | Check the reproducible production license inventory |
-| `bun run docs:demos` | Recreate all five README GIFs from the real UI |
+| `bun run docs:demos` | Recreate the installer and five tool GIFs from the real UI |
 | `bun run build:release` | Build platform distribution packages |
 | `bun run test:release` | Check hashes, tarballs, and final installation without Bun in `PATH` |
 
@@ -547,7 +578,7 @@ The six modules emitted by `bun run build:packages` live in `dist/packages` and
 point to their directories in this repository. Their contracts are internal and
 versions follow the CLI. Source manifests remain private; packaging prepares
 artifacts without publishing them. Current npm distribution remains the `tuiminal`
-launcher with a complete platform binary.
+launcher with a minimal platform binary and five separately installed official payloads.
 
 The [alpha readiness checklist](./ALPHA_READINESS_PLAN.md) records local hardening
 and outstanding alpha acceptance. It is not release approval or a newly published
@@ -555,7 +586,7 @@ npm version.
 
 Database, Git, Runner, HTTP, and Free Terminal are official internal Tuiminal
 features. A public SDK, marketplace, and community plugin loader are not planned.
-A future minimal installation may download compatible official components on demand,
+The minimal installation downloads compatible official components on demand,
 managed by Tuiminal without modifying the user's opened project.
 
 The [HTTP client plan](./HTTP_CLIENT_PLAN.md) records that tool's next steps.

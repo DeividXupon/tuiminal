@@ -18,7 +18,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 </div>
 
 > [!WARNING]
-> O Tuiminal está em **pré-alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
+> O Tuiminal está em **alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
 
 O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de alternar entre um cliente de banco, uma interface Git, vários terminais e um cliente HTTP, você abre o projeto uma vez e troca de ferramenta com `[Alt+1–5]`.
 
@@ -31,19 +31,44 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 
 ## Instalação
 
-Instale a pré-alfa pelo npm:
+Instale a alfa pelo npm:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 tuiminal
 ```
 
 Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 22 ou superior é usado pelo pequeno launcher do pacote.
 
+Uma instalação nova abre **Instalar ferramentas oficiais**. Escolha Database, Git,
+Runner, HTTP ou Free Terminal com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
+para instalar e novamente para abrir. Use `[Space]` e `[I]` para instalar várias.
+Reabra a tela em `[,]` → **Ferramentas oficiais → Gerenciar ferramentas** ou com
+`tuiminal features`. Só as ferramentas instaladas aparecem nas abas; Runner é o
+padrão quando disponível. Os downloads têm versão e integridade verificadas e ficam
+na pasta de dados do Tuiminal, fora dos seus projetos.
+
+Ferramentas instaladas têm o botão **[D] Desinstalar**. Confirme com `[Y]` ou cancele
+com `[Esc]`. A desinstalação encerra as sessões da ferramenta e descarta trabalho
+não salvo, preservando projetos e configurações salvas. Você pode instalá-la novamente na mesma tela.
+
+Para automatizar: `tuiminal features install git runner` ou `tuiminal features install all`.
+
+Cada ferramenta tem uma descrição detalhada. Passe o mouse sobre uma linha ou
+navegue com `[↑/↓/J/K]` para ver um ícone animado da ferramenta. Database preenche
+um cilindro com dados; Runner inicia, avança e conclui uma execução; HTTP envia
+uma requisição e recebe a resposta entre cliente e servidor. Git mostra uma
+ramificação e Free Terminal exibe uma janela com cursor piscando. Os ícones se
+adaptam a terminais menores. Durante o download, o fundo da linha se preenche
+da esquerda para a direita conforme o progresso real.
+
+![Instalação de ferramentas oficiais](./docs/media/installation.gif)
+
+
 Para atualizar ou remover:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 npm uninstall --global tuiminal
 ```
 
@@ -508,11 +533,18 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+O desenvolvimento usa o mesmo instalador, com pacotes gerados localmente e cache
+separado. Após editar uma ferramenta, reinicie `bun run dev` e instale o novo pacote.
+Se gerar os pacotes separadamente com `bun run build:features`, reinicie a aplicação
+antes de instalar. Não precisa publicar no npm.
+Veja o [contrato de instalação](./docs/design/official-feature-installation.md).
+
 Comandos principais:
 
 | Comando | Finalidade |
 | --- | --- |
-| `bun run dev` | Executar com reload durante o desenvolvimento |
+| `bun run dev` | Gerar pacotes locais e abrir o fluxo de instalação |
+| `bun run build:features` | Gerar os cinco pacotes oficiais instaláveis |
 | `bun run test:unit` | Testar regras e integrações locais |
 | `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
@@ -520,7 +552,7 @@ Comandos principais:
 | `bun run build:packages` | Gerar JavaScript, tipos e manifests dos seis módulos internos |
 | `bun run test:packages` | Empacotar e instalar os módulos em um projeto temporário |
 | `bun run check:licenses` | Conferir o inventário reproduzível de licenças de produção |
-| `bun run docs:demos` | Recriar os cinco GIFs deste README a partir da UI real |
+| `bun run docs:demos` | Recriar os GIFs do instalador e das cinco ferramentas |
 | `bun run build:release` | Gerar os pacotes de distribuição por plataforma |
 | `bun run test:release` | Validar hashes, tarballs e a instalação final sem Bun no `PATH` |
 
@@ -549,13 +581,14 @@ Os seis módulos gerados por `bun run build:packages` ficam em `dist/packages` e
 apontam para suas respectivas pastas neste mesmo repositório. Seus contratos são
 internos e suas versões acompanham o CLI. Os manifests de fonte permanecem privados;
 o empacotamento prepara os artefatos, sem publicá-los. A distribuição atual pelo npm
-continua sendo o launcher `tuiminal` com o binário completo por plataforma.
+usa o launcher `tuiminal` com um binário mínimo por plataforma e cinco ferramentas
+oficiais instaladas separadamente.
 
 O [checklist de prontidão para alfa](./ALPHA_READINESS_PLAN.md) resume o hardening
 local e os aceites que ainda bloqueiam uma alfa. Ele não representa aprovação de
 release nem uma nova versão publicada no npm.
 
-Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. Uma futura instalação mínima poderá baixar componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
+Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
 
 O [plano do cliente HTTP](./HTTP_CLIENT_PLAN.md) registra os próximos passos dessa ferramenta.
 

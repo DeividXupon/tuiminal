@@ -8,3 +8,7 @@ process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
 // App-level tests exercise the ready workspace unless a startup-animation test
 // explicitly removes this flag before mounting App.
 process.env.TUIMINAL_TEST_SKIP_STARTUP = "1"
+
+const { loadSourceFeature } = await import("../../apps/cli/src/features/source-loader")
+for (const id of ["database", "git", "runner", "http", "terminal"] as const)
+  await loadSourceFeature(id)

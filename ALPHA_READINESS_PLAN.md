@@ -1,9 +1,9 @@
 # Alpha readiness
 
-This is the operational qualification checklist, not a session log. Local hardening
-recorded on 2026-09-10 was completed; **the alpha is not approved**. Local changes
-and tests neither establish that packages work on all six advertised platforms nor
-authorize a commit, tag, or publication.
+This is the operational qualification checklist, not a session log. The maintainer requested preparation and publication of `0.2.0-alpha.0` on
+2026-09-15, using the npm `alpha` channel. Publication remains gated by qualification
+of the exact candidate commit. Local source tests alone do not establish that all
+six advertised native packages work.
 
 Distribution procedures and requirements are in the [release process](./docs/release-process.md).
 Implemented invariants belong in [AGENTS.md](./AGENTS.md), the
@@ -30,6 +30,17 @@ replace candidate revalidation or constitute certification.
 
 ## Historical evidence and limitations
 
+- [x] Fix missed notifications for newly created HTTP directories on Bun 1.3.14.
+  Bounded per-directory watchers replace recursive registration; serialized rename
+  reconciliation discovers files created before attachment. The native regression
+  creates, edits, and removes nested files without a registration sleep.
+- [x] Fix the continuous HTTP response lifecycle. A real loopback reproduction showed
+  that cancelling Bun's response reader alone did not stop incoming bytes. Each
+  request now retires its owned AbortController after capture/failure. Regression
+  coverage verifies exact truncation, socket closure, an unaffected caller signal,
+  and TUI keyboard responsiveness. Fixture producers honor backpressure and socket
+  closure rather than relying on Bun's missing ServerResponse.close event.
+
 In the local 2026-09-10 round, `bun run check`, opt-in HTTP PTY tests in compact/framed
 layouts, dependency auditing, cross-builds, and Linux x64 distribution smoke tests
 passed. These results do not replace a run on the candidate SHA: test counts and
@@ -52,7 +63,8 @@ Every result must refer to the **same immutable candidate SHA**:
   cases after write/read-only changes.
 - [ ] Validate native packages for PTYs, shutdown/process trees, helper, TLS/proxy,
   keychain, terminal, mouse, clipboard, Unicode, and upgrade/uninstall.
-- [ ] Regenerate all five demos with `bun run docs:demos` and ImageMagick; review them.
+- [ ] Regenerate the installation and all five tool demos with `bun run docs:demos`
+  and ImageMagick; review them.
 - [ ] Repeat dependency/license auditing and independently review the final artifact;
   the inventory does not replace this review.
 - [ ] Verify branch protections, bypasses, collaborators, and GitHub/npm publishing

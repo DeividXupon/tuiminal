@@ -180,59 +180,75 @@ async function projectDirectories(root: string) {
 }
 
 export async function watchHttpProject(root: string, onChange: () => void) {
+  const resolvedRoot = resolve(root)
   let closed = false
-  let recursiveMode = false
+  let reconciling = true
+  let pending = false
   let refreshRequested = false
   let timer: ReturnType<typeof setTimeout> | null = null
   const watchers = new Map<string, FSWatcher>()
+
   const schedule = (refresh: boolean) => {
+    if (closed) return
+    pending = true
     refreshRequested ||= refresh
-    if (closed || timer) return
-    timer = setTimeout(() => {
-      timer = null
-      if (closed) return
-      const refreshProject = refreshRequested
-      refreshRequested = false
-      if (refreshProject) onChange()
-      if (!recursiveMode) void reconcile()
-    }, 80)
+    if (timer || reconciling) return
+    timer = setTimeout(() => void flush(), 80)
+  }
+  const attach = (directory: string) => {
+    if (closed || watchers.has(directory)) return
+    try {
+      const watcher = watchFs(directory, (event, fileName) => {
+        const path =
+          fileName === null ? null : relative(resolvedRoot, resolve(directory, String(fileName)))
+        if (httpProjectChangeRequiresRefresh(path)) schedule(true)
+        else if (event === "rename") schedule(false)
+      })
+      watchers.set(directory, watcher)
+    } catch {
+      // A directory can disappear between discovery and watch installation.
+    }
   }
   const reconcile = async () => {
-    const directories = new Set(await projectDirectories(root))
+    const directories = new Set(await projectDirectories(resolvedRoot))
+    if (closed) return false
+    let changed = false
     for (const [directory, watcher] of watchers) {
       if (directories.has(directory)) continue
       watcher.close()
       watchers.delete(directory)
+      changed = true
     }
     for (const directory of directories) {
-      if (closed || watchers.has(directory)) continue
-      try {
-        const watcher = watchFs(directory, (event, fileName) => {
-          const refresh = httpProjectChangeRequiresRefresh(
-            fileName === null ? null : String(fileName),
-          )
-          if (refresh) schedule(true)
-          else if (event === "rename") schedule(false)
-        })
-        if (closed) watcher.close()
-        else watchers.set(directory, watcher)
-      } catch {
-        // A directory can disappear between discovery and watch installation.
-      }
+      if (watchers.has(directory)) continue
+      attach(directory)
+      changed = true
+    }
+    return changed
+  }
+  const flush = async () => {
+    timer = null
+    pending = false
+    reconciling = true
+    try {
+      const structureChanged = await reconcile()
+      const refresh = refreshRequested || structureChanged
+      refreshRequested = false
+      // A new directory can already contain files before its watcher is attached.
+      if (!closed && refresh) onChange()
+    } finally {
+      reconciling = false
+      if (pending) schedule(false)
     }
   }
 
-  try {
-    const recursive = watchFs(resolve(root), { recursive: true }, (_event, fileName) => {
-      if (httpProjectChangeRequiresRefresh(fileName === null ? null : String(fileName))) {
-        schedule(true)
-      }
-    })
-    recursiveMode = true
-    watchers.set(resolve(root), recursive)
-  } catch {
-    await reconcile()
-  }
+  // Bun's recursive watcher can miss descendants created after registration on
+  // macOS. Watch a bounded directory set explicitly and reconcile rename events.
+  // Attach the root before discovery so concurrent directory creation is observed.
+  attach(resolvedRoot)
+  await reconcile()
+  reconciling = false
+  if (pending) schedule(false)
   return () => {
     closed = true
     if (timer) clearTimeout(timer)

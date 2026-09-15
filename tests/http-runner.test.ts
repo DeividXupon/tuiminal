@@ -255,7 +255,12 @@ describe("HTTP headless collection runner", () => {
         "--report",
         "json",
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     )
     const [exitCode, stdout, stderr] = await Promise.all([
       process.exited,
@@ -285,7 +290,12 @@ describe("HTTP headless collection runner", () => {
           "json",
           ...(allow ? ["--allow-insecure-tls"] : []),
         ],
-        { cwd: root, stdout: "pipe", stderr: "pipe" },
+        {
+          cwd: root,
+          env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       )
       const [exitCode, stdout, stderr] = await Promise.all([
         process.exited,

@@ -110,7 +110,12 @@ export async function executePreparedHttpRequest(
   authorizeRedirect?: HttpRedirectAuthorizer,
 ): Promise<HttpResponseSnapshot> {
   const timeoutSignal = AbortSignal.timeout(request.timeoutMs)
-  const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+  const transport = new AbortController()
+  const combinedSignal = AbortSignal.any([
+    transport.signal,
+    timeoutSignal,
+    ...(signal ? [signal] : []),
+  ])
   const startedAt = performance.now()
   let executionPrivacy = request.privacy
 
@@ -181,5 +186,9 @@ export async function executePreparedHttpRequest(
       `Não foi possível concluir a requisição: ${detail}`,
       executionPrivacy,
     )
+  } finally {
+    // On Bun, cancelling the reader alone may leave a continuous fetch receiving
+    // bytes. Retire this request's native transport after capture or failure.
+    transport.abort()
   }
 }

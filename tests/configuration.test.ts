@@ -19,6 +19,7 @@ describe("contextual settings", () => {
       "layout",
       "language",
       "tutorial",
+      "features",
     ])
     expect(configurationSectionsForContext("git")).toEqual([
       "git",
@@ -27,6 +28,7 @@ describe("contextual settings", () => {
       "layout",
       "language",
       "tutorial",
+      "features",
     ])
     expect(configurationSectionsForContext("global")).toEqual([
       "colorMode",
@@ -34,6 +36,7 @@ describe("contextual settings", () => {
       "layout",
       "language",
       "tutorial",
+      "features",
     ])
   })
 

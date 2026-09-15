@@ -1,3 +1,4 @@
+import { FEATURE_MESSAGES } from "./features-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
@@ -96,6 +97,7 @@ type Message = readonly [
 ]
 
 const MESSAGES: readonly Message[] = [
+  ...FEATURE_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,

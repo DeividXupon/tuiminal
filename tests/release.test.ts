@@ -35,7 +35,7 @@ describe("standalone npm release", () => {
     )
   })
 
-  test("uses a Node launcher while platform packages contain both executables", () => {
+  test("uses a Node launcher while platform packages contain the minimal executable", () => {
     const launcher = npmLauncherSource()
     expect(launcher.startsWith("#!/usr/bin/env node\n")).toBe(true)
     expect(launcher).toContain("spawnSync(executable")

@@ -366,12 +366,24 @@ describe(".http project model", () => {
     })
     try {
       await mkdir(resolve(root, "new/api"), { recursive: true })
-      await Bun.sleep(160)
       await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/users\n")
-      for (let attempt = 0; attempt < 30 && changes === 0; attempt += 1) {
-        await Bun.sleep(20)
+      const waitForChange = async () => {
+        const deadline = performance.now() + 3_000
+        while (changes === 0 && performance.now() < deadline) await Bun.sleep(20)
+        expect(changes).toBeGreaterThan(0)
       }
-      expect(changes).toBeGreaterThan(0)
+      await waitForChange()
+      expect((await scanHttpProject(root)).files.map((file) => file.path)).toEqual([
+        "new/api/users.http",
+      ])
+      changes = 0
+      await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/updated\n")
+      await waitForChange()
+      expect((await scanHttpProject(root)).files[0]?.requests[0]?.url).toContain("/updated")
+      changes = 0
+      await rm(resolve(root, "new"), { recursive: true })
+      await waitForChange()
+      expect((await scanHttpProject(root)).files).toEqual([])
     } finally {
       stop()
     }
