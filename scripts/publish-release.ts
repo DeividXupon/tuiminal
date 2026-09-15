@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto"
-import { createReadStream, readdirSync } from "node:fs"
+import { createReadStream, readFileSync, readdirSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { parseFeatureCatalog } from "../apps/cli/src/features/model"
 import { decodeFeaturePayload } from "../apps/cli/src/features/download"
 import {
-  findPublicationRelease,
   PUBLICATION_REPOSITORY,
   publicationChannel,
+  resolvePublicationRelease,
 } from "./publication-model"
 import { RELEASE_TARGETS } from "./release-model"
 import { version } from "../package.json"
@@ -60,15 +60,23 @@ async function registry(name: string, suffix: string) {
   if (!response.ok) throw new Error(`npm lookup failed for ${name}: ${response.status}`)
   return response.json()
 }
-async function github(path: string) {
+async function github(path: string, body?: Record<string, unknown>) {
   const response = await fetch(`https://api.github.com/repos/${PUBLICATION_REPOSITORY}/${path}`, {
+    method: body ? "POST" : "GET",
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${process.env.GH_TOKEN}`,
       Accept: "application/vnd.github+json",
+      "Cache-Control": "no-cache",
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`GitHub lookup failed: ${response.status}`)
+  if (!body && response.status === 404) return null
+  if (!response.ok)
+    throw new Error(
+      `GitHub ${body ? "write" : "lookup"} failed: ${response.status}; reconcile before continuing`,
+    )
   return response.json()
 }
 
@@ -94,27 +102,17 @@ for (const entry of plan.packages) {
 }
 
 const assets = readdirSync(directory).sort()
-let release = await findPublicationRelease(tag, github)
-if (!release) {
-  await command([
-    "gh",
-    "release",
-    "create",
-    tag,
-    "--repo",
-    PUBLICATION_REPOSITORY,
-    "--target",
-    sha,
-    "--title",
-    `Tuiminal ${version}`,
-    "--draft",
-    "--prerelease",
-    "--notes-file",
-    `docs/releases/${version}.md`,
-  ])
-  release = await findPublicationRelease(tag, github)
-}
-if (!release || release.target_commitish !== sha || !release.prerelease)
+let release = await resolvePublicationRelease(tag, github, () =>
+  github("releases", {
+    tag_name: tag,
+    target_commitish: sha,
+    name: `Tuiminal ${version}`,
+    body: readFileSync(`docs/releases/${version}.md`, "utf8"),
+    draft: true,
+    prerelease: true,
+  }),
+)
+if (!release || release.tag_name !== tag || release.target_commitish !== sha || !release.prerelease)
   throw new Error("The existing release does not identify this candidate")
 for (const name of assets) {
   const asset = release.assets.find((entry: { name: string }) => entry.name === name)
