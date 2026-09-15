@@ -1032,6 +1032,7 @@ describe("HTTP TUI", () => {
 
       await settle(() => receivedUrl === "/pasted")
       expect(receivedUrl).toBe("/pasted")
+      await settle(() => tui?.captureCharFrame().includes("200 OK") ?? false)
       expect(tui.captureCharFrame()).toContain("200 OK")
     })
 

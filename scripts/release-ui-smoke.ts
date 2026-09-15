@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { EmbeddedTerminalRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
+import { forceKillOwnedProcessTree } from "../packages/core/src/process/owned-process"
 
 async function verifyToolUi(
   command: string[],
@@ -67,8 +68,13 @@ async function verifyToolUi(
       await waitFor(() => child.exitCode !== null, "shutdown")
       if ((await child.exited) !== 0) throw new Error(`Packaged ${tool} exited unsuccessfully`)
       console.log(`Packaged ${tool} UI opened and closed through native terminal input`)
+    } catch (error) {
+      // Report the original screen before Windows fixture cleanup can fail on a
+      // locked executable. The Node launcher owns a separate native child.
+      console.error(error)
+      throw error
     } finally {
-      if (child.exitCode === null) child.kill("SIGKILL")
+      if (child.exitCode === null) forceKillOwnedProcessTree(child.pid, () => child.kill("SIGKILL"))
       await child.exited
       terminal?.close()
     }

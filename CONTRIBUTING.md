@@ -2,7 +2,7 @@
 
 ## Getting started
 
-Use Bun 1.3.14 (`.bun-version`). From the repository root:
+Use Bun 1.4.2 (`.bun-version`). From the repository root:
 
 ```sh
 bun install --frozen-lockfile

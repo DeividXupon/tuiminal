@@ -34,7 +34,8 @@ const projectRoot = resolve(import.meta.dir, "..")
 const applicationRoot = join(projectRoot, "apps", "cli")
 const packagePath = join(applicationRoot, "package.json")
 const noticePath = join(projectRoot, "THIRD_PARTY_NOTICES.md")
-const bunLicensePath = join(projectRoot, "docs", "licenses", "BUN-1.3.14.md")
+const bunVersion = readFileSync(join(projectRoot, ".bun-version"), "utf8").trim()
+const bunLicensePath = join(projectRoot, "docs", "licenses", `BUN-${bunVersion}.md`)
 
 function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, "utf8")) as PackageManifest
@@ -177,7 +178,7 @@ export function thirdPartyNotices() {
   const lines = [
     "# Third-party notices",
     "",
-    "Generated from the installed production dependency graph. The standalone executables also embed Bun 1.3.14; its upstream notice is reproduced below.",
+    `Generated from the installed production dependency graph. The standalone executables also embed Bun ${bunVersion}; its upstream notice is reproduced below.`,
     "The @opentui/core entry covers its same-version platform-specific native packages selected for each release target.",
     "",
     "| Package | Version | Declared license | Repository |",
@@ -193,7 +194,7 @@ export function thirdPartyNotices() {
           "",
         ]
       : []),
-    "## Bun 1.3.14 runtime notice",
+    `## Bun ${bunVersion} runtime notice`,
     "",
     readFileSync(bunLicensePath, "utf8").trim(),
     "",

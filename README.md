@@ -520,7 +520,7 @@ Preferences live in `~/.config/tuiminal/settings.json`. An invalid palette name 
 
 ## Development
 
-The npm distribution does not require Bun for end users. The development checkout uses **Bun 1.3.14**, recorded in `.bun-version` and `package.json`:
+The npm distribution does not require Bun for end users. The development checkout uses **Bun 1.4.2**, recorded in `.bun-version` and `package.json`:
 
 ```bash
 git clone https://github.com/DeividXupon/tuiminal.git

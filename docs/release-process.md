@@ -9,7 +9,7 @@ that exact SHA, and native validation of all six advertised platform packages.
 1. Agree on the version and npm channel with the maintainer; never move `latest`
    by assumption. Update the root version, `apps/cli`, and every package in `packages`,
    including exact internal peer versions. Workspace checks and builds reject drift.
-2. Install with Bun 1.3.14 and confirm that the lockfile remains unchanged:
+2. Install with Bun 1.4.2 and confirm that the lockfile remains unchanged:
 
    ```sh
    bun install --frozen-lockfile

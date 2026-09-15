@@ -524,7 +524,7 @@ A tradução de mensagens com prefixos repetidos de erro ou aviso não corta o t
 
 ## Desenvolvimento
 
-O pacote npm não exige Bun do usuário final. O checkout de desenvolvimento usa **Bun 1.3.14**, registrado em `.bun-version` e `package.json`:
+O pacote npm não exige Bun do usuário final. O checkout de desenvolvimento usa **Bun 1.4.2**, registrado em `.bun-version` e `package.json`:
 
 ```bash
 git clone https://github.com/DeividXupon/tuiminal.git

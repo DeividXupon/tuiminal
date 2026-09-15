@@ -70,9 +70,13 @@ the automated checks.
 Native UI qualification exposed a runtime blocker on Windows ARM64: Bun 1.3.14
 disables TinyCC/FFI there, so OpenTUI initialization fails even though HTTP/SQLite
 headless smoke checks pass. See the [native job](https://github.com/DeividXupon/tuiminal/actions/runs/34997480889/job/104477352508)
-and [upstream limitation](https://github.com/oven-sh/bun/issues/28055). Do not claim
-this platform works or bypass its UI gate; either qualify a compatible runtime or
-exclude it from this alpha's supported distribution.
+and [upstream limitation](https://github.com/oven-sh/bun/issues/28055). The maintainer
+chose to retain this platform by investigating a runtime upgrade. Bun 1.4.2 includes
+the [upstream FFI correction](https://github.com/oven-sh/bun/pull/33696); the repository
+now pins it while keeping the existing dependency lockfile and host UI versions.
+Local OpenTUI initialization and the GitHub mutation/terminal regressions pass on
+that runtime. Native qualification on all six targets is still required; an upstream
+fix alone does not establish that the packaged Windows ARM64 interface works.
 
 ## Alpha approval blockers
 

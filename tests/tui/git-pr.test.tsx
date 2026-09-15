@@ -621,8 +621,13 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(tui.captureCharFrame()).toContain("git status --short")
     act(() => tui?.mockInput.pressEnter())
     await waitForText("❯ git status --short")
-    await act(async () => Bun.sleep(100))
-    await tui.renderOnce()
+    await waitForText("?? notes.txt")
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      await act(async () => Bun.sleep(10))
+      await tui.renderOnce()
+      if (!tui.captureCharFrame().includes("TERMINAL GIT · EXECUTANDO")) break
+    }
+    expect(tui.captureCharFrame()).not.toContain("TERMINAL GIT · EXECUTANDO")
     await key("tab")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
