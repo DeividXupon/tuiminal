@@ -44,7 +44,10 @@ could produce different hashes for the same release URLs. Each runner:
 5. Installs the main and platform packages in a temporary path containing spaces
    and Unicode, with Bun absent from `PATH`.
 6. Installs all five pinned payloads over loopback, exercises `--version`, `--help`,
-   an HTTP request, and SQLite worker IPC through the minimal executable.
+   an HTTP request, and SQLite worker IPC through the minimal executable. Opens and
+   closes each downloaded tool through native terminal input in an empty disposable
+   project. Source tests also exercise the default and custom Free Terminal shell
+   with real input, output, and child retirement on the native host.
 7. Removes the temporary installation.
 
 `bun run build:release [target]` writes `dist/npm/SHA256SUMS` for candidate

@@ -4,6 +4,7 @@ import { delimiter, dirname, join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { Database } from "bun:sqlite"
 import { mainPackageJson, RELEASE_TARGETS } from "./release-model"
+import { verifyPackagedUi } from "./release-ui-smoke"
 
 const root = resolve(import.meta.dir, "..")
 const distRoot = join(root, "dist", "npm")
@@ -343,6 +344,7 @@ try {
     if (!help.includes(tool)) throw new Error(`Installed help is missing ${tool}`)
   }
   await verifySqliteHelper(helper, installRoot, releaseEnvironment)
+  await verifyPackagedUi(nodeExecutable, launcher, installRoot, releaseEnvironment)
 
   const server = Bun.serve({
     port: 0,

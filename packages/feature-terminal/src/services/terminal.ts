@@ -70,20 +70,25 @@ export const FREE_TERMINAL_WORKING_DIRECTORY = resolve(
 )
 
 export function createShellTerminalCommand(): FreeTerminalCommand {
-  const shell = process.env.SHELL || "/bin/zsh"
+  const shell =
+    process.platform === "win32"
+      ? process.env.COMSPEC?.trim() || "cmd.exe"
+      : process.env.SHELL?.trim() || "/bin/sh"
+  const args = process.platform === "win32" ? ["/d"] : ["-l"]
   return {
     kind: "shell",
     label: "Terminal",
     shortLabel: "TTY",
-    displayCommand: `${shell} -l`,
-    command: [shell, "-l"],
+    displayCommand: [shell, ...args].join(" "),
+    command: [shell, ...args],
     accent: "#64d8ff",
   }
 }
 
 export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
   const command = value.trim()
-  const shell = process.env.SHELL || "/bin/zsh"
+  const shell = createShellTerminalCommand().command[0]!
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command]
   const firstWord = command.split(/\s+/)[0] || "CLI"
   const label = firstWord.split("/").at(-1) || "CLI"
 
@@ -92,7 +97,7 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     label,
     shortLabel: label.slice(0, 3).toUpperCase(),
     displayCommand: command,
-    command: [shell, "-lc", command],
+    command: [shell, ...args],
     accent: "#f7c873",
   }
 }

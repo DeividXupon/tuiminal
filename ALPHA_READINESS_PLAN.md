@@ -48,8 +48,24 @@ dependency results age and must be recorded again for each qualification.
 
 That round could not repeat the Docker matrix, regenerate demos without ImageMagick,
 or exercise the other five native runtimes. GitHub protections/permissions and npm
-publication were not validated. Those items remain unaccepted in this checklist;
-unavailable infrastructure does not count as a pass.
+publication were not validated in that round; unavailable infrastructure does not
+count as a pass.
+
+The 2026-09-15 candidate `d9d31ccb4af00ec84e46afe197fc192217e2e22d`
+passed the [six native packages and database driver matrix](https://github.com/DeividXupon/tuiminal/actions/runs/34994676488)
+and [normal quality gate](https://github.com/DeividXupon/tuiminal/actions/runs/34994676492).
+Downloading those actual artifacts and staging publication locally validated all
+seven npm tarballs and five feature payloads, including hashes, shared launcher
+bytes, versions, and licenses. No alpha version was published by those checks.
+The installer and five tool demos were regenerated and reviewed for this change.
+
+Subsequent package UI qualification found a native-shell assumption in Free Terminal:
+without `SHELL`, Windows also selected `/bin/zsh`. The correction uses the Windows
+command interpreter with AutoRun disabled, retains configured POSIX shells with a
+portable `/bin/sh` fallback, and adds native process coverage. Requalify the final
+SHA after this correction; the earlier green run does not cover it. Human terminal,
+credential-store, TLS/proxy, and independent artifact review remain separate from
+the automated checks.
 
 ## Alpha approval blockers
 
