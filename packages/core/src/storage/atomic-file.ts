@@ -102,11 +102,15 @@ export function atomicWriteFileSync(
     }
     renameSync(temporary, target)
     chmodSync(target, mode)
-    const directoryDescriptor = openSync(parent, "r")
-    try {
-      fsyncSync(directoryDescriptor)
-    } finally {
-      closeSync(directoryDescriptor)
+    // Windows cannot flush a read-only directory handle. The file itself must
+    // still be flushed above before the atomic rename on every platform.
+    if (process.platform !== "win32") {
+      const directoryDescriptor = openSync(parent, "r")
+      try {
+        fsyncSync(directoryDescriptor)
+      } finally {
+        closeSync(directoryDescriptor)
+      }
     }
   } catch (error) {
     try {

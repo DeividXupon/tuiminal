@@ -77,6 +77,12 @@ now pins it while keeping the existing dependency lockfile and host UI versions.
 Local OpenTUI initialization and the GitHub mutation/terminal regressions pass on
 that runtime. Native qualification on all six targets is still required; an upstream
 fix alone does not establish that the packaged Windows ARM64 interface works.
+The first Bun 1.4.2 native run opened Database and Git on Windows ARM64, then exposed
+an existing Runner startup failure on both Windows architectures: atomic session
+storage called `fsync` on a read-only directory handle and threw `EPERM`. File data
+is still flushed before rename on every platform; only the POSIX directory flush
+is platform-specific. Native file/backup/conflict tests and an empty Runner rendering
+check now guard that path. Requalify all five installed tools after this correction.
 
 ## Alpha approval blockers
 

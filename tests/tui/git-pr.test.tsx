@@ -430,6 +430,7 @@ test("Git tutorial renders the two-column diff while explaining [V]", async () =
     height: 34,
   })
   await waitForRenderable("tutorial-git-layout-split-preview")
+  await waitForText("2 colunas")
 
   const frame = tui.captureCharFrame()
   expect(frame).toContain("[V]")
@@ -571,8 +572,7 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     ).toEqual(RGBA.fromHex(COLORS.git).toInts())
 
     await key("l")
-    await act(async () => Bun.sleep(10))
-    await tui.renderOnce()
+    await waitForFocusedId("git-base-diff")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-diff")
     expect(
       (
@@ -585,16 +585,13 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
       ).borderColor.toInts(),
     ).toEqual(RGBA.fromHex(COLORS.border).toInts())
     await key("h")
-    await act(async () => Bun.sleep(10))
-    await tui.renderOnce()
+    await waitForFocusedId("git-file-list-row-")
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
     act(() => tui?.mockInput.pressArrow("right"))
-    await act(async () => Bun.sleep(10))
-    await tui.renderOnce()
+    await waitForFocusedId("git-base-diff")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-base-diff")
     await key("tab")
-    await act(async () => Bun.sleep(10))
-    await tui.renderOnce()
+    await waitForFocusedId("git-command-input")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-command-input")
     expect(typeof tui.renderer.root.findDescendantById("git-command-input")?.onKeyDown).toBe(
       "function",
