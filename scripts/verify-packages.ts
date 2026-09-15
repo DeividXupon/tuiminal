@@ -64,11 +64,13 @@ try {
   const installation = join(temporaryRoot, "consumer")
   mkdirSync(installation)
   const dependencies = Object.fromEntries(
-    ["react", "@opentui/core", "@opentui/react", "@types/bun", "@types/react"].map((name) => [
-      name,
-      JSON.parse(readFileSync(join(workspaceRoot, "node_modules", name, "package.json"), "utf8"))
-        .version as string,
-    ]),
+    ["react", "@opentui/core", "@opentui/react", "@types/bun", "@types/node", "@types/react"].map(
+      (name) => [
+        name,
+        JSON.parse(readFileSync(join(workspaceRoot, "node_modules", name, "package.json"), "utf8"))
+          .version as string,
+      ],
+    ),
   )
   writeFileSync(
     join(installation, "package.json"),

@@ -101,4 +101,6 @@ jobs:
           bun -e 'import { mkdirSync, cpSync } from "node:fs"; import { version } from "./package.json"; mkdirSync("dist/npm", {recursive:true}); cpSync("release-features", `dist/features/${version}`, {recursive:true})'
           tar -xzf candidate/npm-${{ matrix.target }}.tar.gz -C dist/npm
       - name: Install from npm and download the public release features
-        run: bun run test:release ${{ matrix.target }} --registry
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run test:release ${{ matrix.target }} --registry
