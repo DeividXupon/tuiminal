@@ -1045,7 +1045,10 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-send-button")
       await settle(() => tui?.captureCharFrame().includes("TRUNCADO") ?? false)
-      await settle(() => continuousClosed)
+      // Socket retirement is an I/O condition. Repainting a 1.5 MB response on
+      // every poll can delay that event and exhaust the TUI test's deadline.
+      const deadline = performance.now() + 2_000
+      while (!continuousClosed && performance.now() < deadline) await Bun.sleep(10)
       expect(continuousClosed).toBe(true)
       await key("2")
       await settle(
