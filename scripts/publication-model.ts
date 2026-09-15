@@ -7,6 +7,35 @@ export const CANDIDATE_JOBS = [
   ...RELEASE_TARGETS.map((target) => target.id),
 ]
 
+export interface PublicationRelease {
+  id: number
+  tag_name: string
+  target_commitish: string
+  draft: boolean
+  prerelease: boolean
+  assets: Array<{ name: string; digest: string | null }>
+}
+
+export async function findPublicationRelease(
+  tag: string,
+  read: (path: string) => Promise<PublicationRelease | PublicationRelease[] | null>,
+): Promise<PublicationRelease | null> {
+  const published = await read(`releases/tags/${encodeURIComponent(tag)}`)
+  if (published && !Array.isArray(published)) {
+    if (published.tag_name !== tag) throw new Error("Unexpected release tag")
+    return published
+  }
+  // The tag endpoint only finds published releases. Reconcile drafts through
+  // the authenticated listing before deciding whether creation is necessary.
+  for (let page = 1; ; page++) {
+    const releases = await read(`releases?per_page=100&page=${page}`)
+    if (!Array.isArray(releases)) throw new Error("Could not list existing releases")
+    const release = releases.find((entry) => entry.tag_name === tag)
+    if (release) return release
+    if (releases.length < 100) return null
+  }
+}
+
 export function assertPublishableCandidate(
   run: {
     head_sha: string
