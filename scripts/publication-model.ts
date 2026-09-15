@@ -36,6 +36,17 @@ export async function findPublicationRelease(
   }
 }
 
+export async function resolvePublicationRelease(
+  tag: string,
+  read: Parameters<typeof findPublicationRelease>[1],
+  create: () => Promise<PublicationRelease>,
+) {
+  const existing = await findPublicationRelease(tag, read)
+  // The creation response identifies the accepted write even while subsequent
+  // reads still reflect the previous state. An uncertain write is never retried.
+  return existing ?? (await create())
+}
+
 export function assertPublishableCandidate(
   run: {
     head_sha: string

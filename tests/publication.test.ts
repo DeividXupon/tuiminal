@@ -6,6 +6,7 @@ import {
   findPublicationRelease,
   parseReleaseChecksums,
   publicationChannel,
+  resolvePublicationRelease,
 } from "../scripts/publication-model"
 
 const sha = "a".repeat(40)
@@ -154,5 +155,50 @@ describe("release reconciliation", () => {
     await expect(
       findPublicationRelease(release.tag_name, async () => ({ ...release, tag_name: "wrong" })),
     ).rejects.toThrow("Unexpected release tag")
+  })
+
+  test("keeps the accepted creation response without a stale follow-up lookup", async () => {
+    const calls: string[] = []
+    const found = await resolvePublicationRelease(
+      release.tag_name,
+      async (path) => {
+        calls.push(path)
+        return path.startsWith("releases/tags/") ? null : []
+      },
+      async () => {
+        calls.push("create")
+        return release
+      },
+    )
+    expect(found).toBe(release)
+    expect(calls).toEqual([
+      "releases/tags/v0.2.0-alpha.0",
+      "releases?per_page=100&page=1",
+      "create",
+    ])
+  })
+
+  test("never creates over an existing draft or retries an uncertain creation", async () => {
+    let writes = 0
+    const create = async () => {
+      writes++
+      throw new Error("Connection lost after dispatch")
+    }
+    expect(
+      await resolvePublicationRelease(
+        release.tag_name,
+        async (path) => (path.startsWith("releases/tags/") ? null : [release]),
+        create,
+      ),
+    ).toBe(release)
+    expect(writes).toBe(0)
+    await expect(
+      resolvePublicationRelease(
+        release.tag_name,
+        async (path) => (path.startsWith("releases/tags/") ? null : []),
+        create,
+      ),
+    ).rejects.toThrow("Connection lost after dispatch")
+    expect(writes).toBe(1)
   })
 })
