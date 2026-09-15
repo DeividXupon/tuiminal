@@ -112,9 +112,9 @@ export async function verifyPackagedUi(
     COLORTERM: "truecolor",
   }
   for (const [tool, expected] of [
+    ["runner", "No project was found in this folder"],
     ["database", "Save and connect"],
     ["git", "No Git repository found"],
-    ["runner", "No project was found in this folder"],
     ["http", "READY TO SEND"],
     ["terminal", "FREE TERMINALS IN 2"],
   ] as const)

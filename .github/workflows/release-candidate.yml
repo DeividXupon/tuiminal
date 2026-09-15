@@ -97,6 +97,9 @@ jobs:
           bun run check:maintainability
           bun run check:licenses
           bun run test:windows
+      - name: Exercise native Windows Runner rendering
+        if: runner.os == 'Windows'
+        run: bun test --preload ./tests/tui/setup.ts tests/tui/runner-empty.test.tsx
       - name: Exercise real HTTP PTY flows
         if: runner.os != 'Windows'
         env:
