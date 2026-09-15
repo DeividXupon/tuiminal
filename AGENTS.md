@@ -166,6 +166,7 @@ This file records durable project conventions, architectural decisions, and recu
 ## HTTP client
 
 - HTTP project watching reloads collections/configuration/environments only for `.http`, `.rest`, the two supported environment files, and `.tuiminal/http/config.json`; unrelated project edits must not trigger a full scan. Coalesce refresh requests while a scan is active and never apply a result after its workspace/root was disposed. Use bounded per-directory watchers and serialize reconciliation after renames: Bun 1.3.14 recursive watches can miss newly created descendants on macOS. Directory additions/removals trigger discovery so files created before watcher attachment are still found; unrelated file edits do not.
+- Schedule one cancellable refresh after HTTP watcher attachment. `fs.watch` returning does not guarantee that native event delivery is ready, so initial file changes must also be reconciled without relying on a watch event; do not add polling or a registration sleep.
 - `HTTP_CLIENT_PLAN.md` records the mutable future direction for the HTTP workspace.
   It is not a description of current behavior; update it when implementation or
   prototype evidence changes the planned UX, file format, security model, phases,

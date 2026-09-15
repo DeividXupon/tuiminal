@@ -248,7 +248,10 @@ export async function watchHttpProject(root: string, onChange: () => void) {
   attach(resolvedRoot)
   await reconcile()
   reconciling = false
-  if (pending) schedule(false)
+  // fs.watch returning does not establish that its native subscription already
+  // observes changes. Refresh once after attachment to close the startup gap,
+  // including new files in existing directories whose structure has not changed.
+  schedule(true)
   return () => {
     closed = true
     if (timer) clearTimeout(timer)

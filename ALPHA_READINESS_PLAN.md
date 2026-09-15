@@ -67,6 +67,13 @@ SHA after this correction; the earlier green run does not cover it. Human termin
 credential-store, TLS/proxy, and independent artifact review remain separate from
 the automated checks.
 
+Native UI qualification exposed a runtime blocker on Windows ARM64: Bun 1.3.14
+disables TinyCC/FFI there, so OpenTUI initialization fails even though HTTP/SQLite
+headless smoke checks pass. See the [native job](https://github.com/DeividXupon/tuiminal/actions/runs/34997480889/job/104477352508)
+and [upstream limitation](https://github.com/oven-sh/bun/issues/28055). Do not claim
+this platform works or bypass its UI gate; either qualify a compatible runtime or
+exclude it from this alpha's supported distribution.
+
 ## Alpha approval blockers
 
 Every result must refer to the **same immutable candidate SHA**:

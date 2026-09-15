@@ -13,6 +13,8 @@ async function verifyToolUi(
   const capture = await createTestRenderer({ width: 120, height: 35 })
   try {
     let terminal: Bun.Terminal | undefined
+    let transcript = ""
+    const decoder = new TextDecoder()
     const screen = new EmbeddedTerminalRenderable(capture.renderer, {
       id: "packaged-terminal-screen",
       width: 120,
@@ -28,7 +30,14 @@ async function verifyToolUi(
     const child = Bun.spawn(command, {
       cwd: project,
       env,
-      terminal: { cols: 120, rows: 35, data: (_pty, data) => screen.write(data) },
+      terminal: {
+        cols: 120,
+        rows: 35,
+        data(_pty, data) {
+          transcript = (transcript + decoder.decode(data, { stream: true })).slice(-12_000)
+          screen.write(data)
+        },
+      },
     })
     terminal = child.terminal
     const waitFor = async (predicate: () => boolean, label: string) => {
@@ -36,7 +45,9 @@ async function verifyToolUi(
       while (!predicate() && performance.now() < deadline && child.exitCode === null)
         await Bun.sleep(20)
       if (!predicate())
-        throw new Error(`Packaged ${tool} ${label} failed:\n${screen.screen().text}`)
+        throw new Error(
+          `Packaged ${tool} ${label} failed (exit ${child.exitCode}):\n${screen.screen().text}\nTerminal transcript:\n${Bun.stripANSI(transcript)}`,
+        )
     }
     try {
       // ANSI output consists of incremental repaint operations, not whole text
