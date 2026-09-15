@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildWorkspacePackages } from "./build-packages"
 import { workspaceRoot } from "./workspace-model"
+import { parseNpmPackResult } from "./npm-pack-model"
 
 const npm = Bun.which(process.platform === "win32" ? "npm.cmd" : "npm")
 if (!npm) throw new Error("npm is required to verify the published package format")
@@ -38,15 +39,15 @@ try {
   const tarballs: string[] = []
   for (const { directory, manifest } of workspaces) {
     const staged = join(workspaceRoot, "dist", directory)
-    const [packed] = JSON.parse(
+    const packed = parseNpmPackResult(
       await run(
         npm,
         ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot],
         staged,
       ),
-    ) as Array<{ filename: string; files: Array<{ path: string }> }>
+      manifest,
+    )
     if (
-      !packed ||
       !packed.files.some(({ path }) => path === "LICENSE") ||
       !packed.files.some(({ path }) => path === "THIRD_PARTY_NOTICES.md")
     )
