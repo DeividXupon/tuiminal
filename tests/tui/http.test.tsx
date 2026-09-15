@@ -558,6 +558,7 @@ describe("HTTP TUI", () => {
 
       await key("ESCAPE")
       await key("n", true)
+      await settle(() => tui?.captureCharFrame().match(/GET Scratch/g)?.length === 4)
       expect(tui.captureCharFrame().match(/GET Scratch/g)).toHaveLength(4)
       await key("ESCAPE")
       await press("http-request-view-headers")
