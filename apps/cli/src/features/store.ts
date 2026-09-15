@@ -106,23 +106,18 @@ export class FeatureStore {
     await mkdir(temporary, { mode: 0o700 })
     let retired: string | null = null
     try {
-      for (const file of artifact.files) {
-        if (!featureFileNames(artifact.id).includes(file.name))
-          throw new FeatureInstallError("integrity", "Invalid feature filename")
-        const content = files.get(file.name)
-        if (!content || featureDigest(content) !== file.sha256 || content.length !== file.size)
-          throw new FeatureInstallError("integrity", "Refusing to store an unverified feature")
-        signal.throwIfAborted()
-        const handle = await open(join(temporary, file.name), "wx", 0o600)
-        try {
-          await handle.writeFile(content)
-          await handle.sync()
-        } finally {
-          await handle.close()
-        }
-      }
+      await writePreparedFiles(temporary, artifact, files, signal)
       signal.throwIfAborted()
-      if (await this.installed(artifact)) return
+      // Publish first. A competing installer may have completed since the last
+      // read; never move its valid directory out of the way as a repair.
+      try {
+        await rename(temporary, destination)
+        return
+      } catch (error) {
+        if (await this.installed(artifact)) return
+        const code = (error as NodeJS.ErrnoException).code
+        if (!["EEXIST", "ENOTEMPTY", "EPERM"].includes(code ?? "")) throw error
+      }
       try {
         const existing = await lstat(destination)
         if (!existing.isDirectory() || existing.isSymbolicLink())
@@ -167,5 +162,28 @@ async function readVerifiedFile(path: string, file: FeatureFile) {
     return verified
   } finally {
     await handle.close()
+  }
+}
+
+async function writePreparedFiles(
+  temporary: string,
+  artifact: FeatureArtifact,
+  files: ReadonlyMap<string, Buffer>,
+  signal: AbortSignal,
+) {
+  for (const file of artifact.files) {
+    if (!featureFileNames(artifact.id).includes(file.name))
+      throw new FeatureInstallError("integrity", "Invalid feature filename")
+    const content = files.get(file.name)
+    if (!content || featureDigest(content) !== file.sha256 || content.length !== file.size)
+      throw new FeatureInstallError("integrity", "Refusing to store an unverified feature")
+    signal.throwIfAborted()
+    const handle = await open(join(temporary, file.name), "wx", 0o600)
+    try {
+      await handle.writeFile(content)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
   }
 }

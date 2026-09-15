@@ -87,7 +87,9 @@ describe("official feature installation", () => {
     const artifact = catalog.artifacts[1]!
     expect(await store.installed(artifact)).toBe(false)
     await Promise.all(
-      Array.from({ length: 4 }, () => store.publish(artifact, contents.get("git")!, signal())),
+      Array.from({ length: 12 }, () =>
+        new FeatureStore(store.directory).publish(artifact, contents.get("git")!, signal()),
+      ),
     )
     expect(await store.read(artifact)).toEqual(contents.get("git")!)
     const folder = join(store.directory, artifact.version, `${artifact.id}-${artifact.sha256}`)

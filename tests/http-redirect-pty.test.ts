@@ -49,6 +49,7 @@ for (const layout of ["compact", "framed"]) {
             COLORTERM: "truecolor",
             XDG_CONFIG_HOME: config,
             TUIMINAL_TEST_SKIP_STARTUP: "1",
+            TUIMINAL_SOURCE_FEATURES: "1",
           },
           terminal: {
             cols: 120,
@@ -75,6 +76,9 @@ for (const layout of ["compact", "framed"]) {
       }
       try {
         await waitFor(() => Bun.stripANSI(output).includes("Scratch"))
+        // Fresh HTTP workspaces focus the URL input. Leave it before invoking the
+        // global focus shortcut, otherwise "/" becomes part of the request URL.
+        await send("\x1b")
         await send("/")
         await send(`http://127.0.0.1:${source.port}/start`)
         await send("\x1b")
