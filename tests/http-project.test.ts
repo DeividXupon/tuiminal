@@ -2,42 +2,44 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { exportPreparedRequestAsCurl } from "../src/features/http/exporting/curl"
-import { importCurl, tokenizeCurl } from "../src/features/http/importing/curl"
+import { exportPreparedRequestAsCurl } from "../packages/feature-http/src/exporting/curl"
+import { importCurl, tokenizeCurl } from "../packages/feature-http/src/importing/curl"
 import {
   parseHttpFile,
   replaceHttpRequestBlock,
   requestFromHttpFile,
   serializeHttpRequestBlock,
-} from "../src/features/http/model/http-file"
+} from "../packages/feature-http/src/model/http-file"
 import {
   createHttpVariableContext,
   httpVariableSuggestions,
   redactHttpTemplate,
   resolveHttpTemplate,
-} from "../src/features/http/model/variables"
-import { httpRequestSecretValues } from "../src/features/http/model/secrets"
-import { prepareHttpRequest } from "../src/features/http/services/request-builder"
-import { createScratchRequest } from "../src/features/http/model/workspace"
+} from "../packages/feature-http/src/model/variables"
+import { httpRequestSecretValues } from "../packages/feature-http/src/model/secrets"
+import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
 import {
   applyHttpWorkspaceConfig,
   loadHttpWorkspaceConfigSnapshot,
   parseHttpWorkspaceConfig,
   saveHttpWorkspaceConfig,
-} from "../src/features/http/storage/config"
+} from "../packages/feature-http/src/storage/config"
 import {
   deleteHttpRequest,
   duplicateHttpRequest,
   HttpExternalChangeError,
+  httpProjectChangeRequiresRefresh,
   moveHttpRequest,
   saveHttpRequest,
   scanHttpProject,
+  HTTP_PROJECT_MAX_FILES,
   watchHttpProject,
-} from "../src/features/http/storage/collections"
+} from "../packages/feature-http/src/storage/collections"
 import {
   inspectHttpExternalConflict,
   resolveHttpExternalConflict,
-} from "../src/features/http/storage/conflicts"
+} from "../packages/feature-http/src/storage/conflicts"
 import {
   createPrivateHttpEnvironment,
   environmentVariableContext,
@@ -48,8 +50,8 @@ import {
   type HttpCredentialStore,
   loadHttpEnvironmentCatalog,
   loadHttpEnvironments,
-} from "../src/features/http/storage/environments"
-import { saveCapturedHttpResponse } from "../src/features/http/storage/responses"
+} from "../packages/feature-http/src/storage/environments"
+import { saveCapturedHttpResponse } from "../packages/feature-http/src/storage/responses"
 
 const temporaryDirectories: string[] = []
 const httpFixtureRoot = resolve(import.meta.dir, "fixtures/http")
@@ -344,6 +346,18 @@ describe(".http project model", () => {
     expect(collection.files[0]?.requests).toHaveLength(2)
   })
 
+  test("stops project discovery at its aggregate file budget", async () => {
+    const root = await temporaryProject()
+    await Promise.all(
+      Array.from({ length: HTTP_PROJECT_MAX_FILES + 5 }, (_, index) =>
+        writeFile(resolve(root, `request-${index}.http`), `GET https://example.test/${index}\n`),
+      ),
+    )
+    const collection = await scanHttpProject(root)
+    expect(collection.files).toHaveLength(HTTP_PROJECT_MAX_FILES)
+    expect(collection.errors.some((error) => error.message.includes("500 arquivos"))).toBe(true)
+  })
+
   test("starts watching project directories created after initialization", async () => {
     const root = await temporaryProject()
     let changes = 0
@@ -352,20 +366,37 @@ describe(".http project model", () => {
     })
     try {
       await mkdir(resolve(root, "new/api"), { recursive: true })
-      for (let attempt = 0; attempt < 30 && changes === 0; attempt += 1) {
-        await Bun.sleep(20)
-      }
-      expect(changes).toBeGreaterThan(0)
-      await Bun.sleep(120)
-      const beforeNestedWrite = changes
       await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/users\n")
-      for (let attempt = 0; attempt < 30 && changes === beforeNestedWrite; attempt += 1) {
-        await Bun.sleep(20)
+      const waitForChange = async () => {
+        const deadline = performance.now() + 3_000
+        while (changes === 0 && performance.now() < deadline) await Bun.sleep(20)
+        expect(changes).toBeGreaterThan(0)
       }
-      expect(changes).toBeGreaterThan(beforeNestedWrite)
+      await waitForChange()
+      expect((await scanHttpProject(root)).files.map((file) => file.path)).toEqual([
+        "new/api/users.http",
+      ])
+      changes = 0
+      await writeFile(resolve(root, "new/api/users.http"), "GET https://example.test/updated\n")
+      await waitForChange()
+      expect((await scanHttpProject(root)).files[0]?.requests[0]?.url).toContain("/updated")
+      changes = 0
+      await rm(resolve(root, "new"), { recursive: true })
+      await waitForChange()
+      expect((await scanHttpProject(root)).files).toEqual([])
     } finally {
       stop()
     }
+  })
+
+  test("refreshes discovery only for files that affect the HTTP workspace", () => {
+    expect(httpProjectChangeRequiresRefresh("src/app.ts")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("node_modules/pkg/request.http")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("api/users.http")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh("nested/http-client.env.json")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh(".tuiminal/http/config.json")).toBe(true)
+    expect(httpProjectChangeRequiresRefresh("config.json")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh(null)).toBe(true)
   })
 
   test("saves scratch atomically, duplicates it, and rejects external changes", async () => {
@@ -386,6 +417,16 @@ describe(".http project model", () => {
         "utf8",
       ),
     ).toContain("List users copy")
+  })
+
+  test("refuses scratch writes through a symlinked project ancestor", async () => {
+    const root = await temporaryProject()
+    const outside = await temporaryProject()
+    await symlink(outside, resolve(root, ".tuiminal"))
+    const scratch = importCurl("curl https://example.test/users", "scratch")
+
+    await expect(saveHttpRequest(root, scratch)).rejects.toThrow(/symlink|fora do projeto/i)
+    expect(await Bun.file(resolve(outside, "http", "scratch.http")).exists()).toBe(false)
   })
 
   test("previews and resolves external edits without overwriting sibling blocks", async () => {

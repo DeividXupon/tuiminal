@@ -1,0 +1,138 @@
+name: Release candidate matrix
+
+on:
+  push:
+    branches: [main, feat/on-demand-features]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  features:
+    name: Canonical official features
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run build:features
+      - name: Stage canonical payloads
+        run: |
+          bun -e 'import { cpSync } from "node:fs"; import { version } from "./package.json"; cpSync(`dist/features/${version}`, "release-features", { recursive: true })'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: official-features
+          path: release-features/
+          if-no-files-found: error
+  verify:
+    needs: features
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-x64
+            package-os: linux
+            package-cpu: x64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+            package-os: linux
+            package-cpu: arm64
+          - runner: macos-15-intel
+            target: darwin-x64
+            package-os: darwin
+            package-cpu: x64
+          - runner: macos-15
+            target: darwin-arm64
+            package-os: darwin
+            package-cpu: arm64
+          - runner: windows-2025
+            target: win32-x64
+            package-os: win32
+            package-cpu: x64
+          - runner: windows-11-arm
+            target: win32-arm64
+            package-os: win32
+            package-cpu: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Preserve canonical line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install the exact target dependency graph
+        run: bun install --frozen-lockfile --ignore-scripts --os=${{ matrix.package-os }} --cpu=${{ matrix.package-cpu }}
+      - name: Audit the dependency graph
+        run: bun audit --json
+      - name: Verify Unix source gate and isolated workspace packages
+        if: runner.os != 'Windows'
+        run: |
+          bun run check
+          bun run test:packages
+      - name: Verify Windows source gate
+        if: runner.os == 'Windows'
+        run: |
+          bun run typecheck
+          bun run format:check
+          bun run lint
+          bun run check:workspaces
+          bun run check:architecture
+          bun run check:maintainability
+          bun run check:licenses
+          bun run test:windows
+      - name: Exercise native Windows Runner rendering
+        if: runner.os == 'Windows'
+        run: bun test --preload ./tests/tui/setup.ts tests/tui/runner-empty.test.tsx
+      - name: Exercise real HTTP PTY flows
+        if: runner.os != 'Windows'
+        env:
+          TUIMINAL_HTTP_PTY: "1"
+        run: bun test tests/http-redirect-pty.test.ts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: official-features
+          path: release-features
+      - name: Build final target package
+        env:
+          TUIMINAL_RELEASE_FEATURES_DIR: release-features
+        run: bun run build:release ${{ matrix.target }}
+      - name: Install and exercise final npm tarballs
+        run: bun run test:release ${{ matrix.target }}
+      - name: Preserve executable modes in candidate artifact
+        run: tar -czf npm-${{ matrix.target }}.tar.gz -C dist/npm .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-${{ matrix.target }}
+          path: npm-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+      - name: Reject whitespace damage
+        run: git diff --check
+
+  database:
+    name: Native database drivers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run test:database:drivers

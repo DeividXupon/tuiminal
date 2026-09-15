@@ -7,7 +7,7 @@ import {
   DEFAULT_ISSUE_SECTIONS,
   issueProfileForRoot,
   parseIssueConfig,
-} from "../src/features/git/model/issue/config"
+} from "../packages/feature-git/src/model/issue/config"
 import {
   addIssueClonePath,
   addIssueProfileRepository,
@@ -15,7 +15,7 @@ import {
   resolveIssueProfileRoot,
   saveIssueConfig,
   updateIssueProfile,
-} from "../src/features/git/storage/issue/config"
+} from "../packages/feature-git/src/storage/issue/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-issue-config-"))
 const configPath = join(temporaryDirectory, "nested", "git-issues.yaml")
@@ -23,16 +23,30 @@ const configPath = join(temporaryDirectory, "nested", "git-issues.yaml")
 afterAll(() => rmSync(temporaryDirectory, { recursive: true, force: true }))
 
 describe("Issue configuration", () => {
-  test("starts new profiles with only the English My Issues selector", () => {
+  test("starts new profiles with personal and all/open/closed selectors", () => {
     expect(issueProfileForRoot(DEFAULT_ISSUE_CONFIG, "/project/new").sections).toEqual([
       ...DEFAULT_ISSUE_SECTIONS,
     ])
     expect(DEFAULT_ISSUE_SECTIONS).toEqual([
       { id: "mine", title: "My Issues", query: "is:open author:@me" },
+      { id: "all", title: "All", query: "archived:false" },
+      { id: "open", title: "Open", query: "is:open" },
+      { id: "closed", title: "Closed", query: "is:closed" },
     ])
   })
 
-  test("migrates only the untouched legacy selector set", () => {
+  test("migrates only untouched previous default selector sets", () => {
+    const previous = parseIssueConfig({
+      version: 1,
+      profiles: {
+        "/project/previous": {
+          repositories: [],
+          sections: [{ id: "mine", title: "My Issues", query: "is:open author:@me" }],
+        },
+      },
+    })
+    expect(previous.profiles["/project/previous"]?.sections).toEqual([...DEFAULT_ISSUE_SECTIONS])
+
     const legacy = parseIssueConfig({
       version: 1,
       profiles: {
@@ -63,7 +77,12 @@ describe("Issue configuration", () => {
         },
       },
     })
-    expect(customized.profiles["/project/custom"]?.sections).toHaveLength(4)
+    expect(customized.profiles["/project/custom"]?.sections).toEqual([
+      { id: "created", title: "Created by me", query: "is:open author:@me" },
+      { id: "assigned", title: "Atribuídas a mim", query: "is:open assignee:@me" },
+      { id: "involved", title: "Estou envolvido", query: "is:open involves:@me" },
+      { id: "mentioned", title: "Mencionaram-me", query: "is:open mentions:@me" },
+    ])
   })
 
   test("uses safe defaults for unknown schema versions", () => {

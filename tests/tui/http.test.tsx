@@ -1,21 +1,27 @@
 import "./setup"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
+import { RGBA, type BoxRenderable } from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { act } from "react"
-import { getUiSettings, type LayoutMode, updateUiSettings } from "../../src/core/settings/theme"
-import { HttpClient } from "../../src/features/http/HttpWorkspace"
-import { HTTP_TUTORIAL_STEPS } from "../../src/features/http"
-import { App } from "../../src/app/App"
-import { UnsavedChangesExitModal } from "../../src/app/ui/UnsavedChangesExitModal"
-import { HttpExternalConflictModal } from "../../src/features/http/ui/HttpExternalConflictModal"
-import { resolveHttpWorkspaceLayout } from "../../src/features/http/model/layout"
-import { HTTP_RENDERER_LISTENER_BUDGET } from "../../src/features/http/model/renderer-listener-budget"
-import { displayWidth, type LanguageId } from "../../src/shared/i18n"
+import {
+  COLORS,
+  getUiSettings,
+  type LayoutMode,
+  updateUiSettings,
+} from "../../packages/core/src/settings/theme"
+import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { HTTP_TUTORIAL_STEPS } from "../../packages/feature-http/src"
+import { App } from "../../apps/cli/src/App"
+import { UnsavedChangesExitModal } from "../../apps/cli/src/ui/UnsavedChangesExitModal"
+import { HttpExternalConflictModal } from "../../packages/feature-http/src/ui/HttpExternalConflictModal"
+import { resolveHttpWorkspaceLayout } from "../../packages/feature-http/src/model/layout"
+import { HTTP_RENDERER_LISTENER_BUDGET } from "../../packages/feature-http/src/model/renderer-listener-budget"
+import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -30,9 +36,9 @@ async function settle(until: () => boolean) {
   throw new Error(`TUI HTTP não estabilizou:\n${tui.captureCharFrame()}`)
 }
 
-async function key(name: string, ctrl = false) {
+async function key(name: string, ctrl = false, shift = false) {
   await act(async () => {
-    tui?.mockInput.pressKey(name, { ctrl })
+    tui?.mockInput.pressKey(name, { ctrl, shift })
     await Bun.sleep(name === "ESCAPE" || name.startsWith("F") ? 60 : 5)
     await tui?.renderOnce()
   })
@@ -107,6 +113,123 @@ describe("HTTP TUI", () => {
     expect(frame).toContain("GET Buscar usuário")
     expect(frame).toContain("200 OK")
     expect(frame).toContain("TOKEN EXTRAÍDO · VOLÁTIL")
+  })
+
+  test("cycles URL, navigation, request, and response panels from the keyboard", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+
+    await key("TAB")
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection")
+    await key("TAB")
+    const requestPane = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1") as
+      | BoxRenderable
+      | undefined
+    expect(requestPane?.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
+
+    await key("l")
+    const responsePane = tui.renderer.root.findDescendantById(
+      "http-response-pane-http-scratch-1",
+    ) as BoxRenderable | undefined
+    expect(responsePane?.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
+
+    await key("l")
+    const urlPane = tui.renderer.root.findDescendantById("http-url-pane") as
+      | BoxRenderable
+      | undefined
+    expect(urlPane?.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
+
+    await key("h")
+    expect(responsePane?.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
+  })
+
+  test("shows contextual request arrows and cycles all five request views", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    expect(tui.renderer.root.findDescendantById("http-request-view-next")).toBeUndefined()
+
+    await key("TAB")
+    await key("TAB")
+    expect(tui.renderer.root.findDescendantById("http-request-view-previous")).toBeDefined()
+    expect(tui.renderer.root.findDescendantById("http-request-view-next")).toBeDefined()
+
+    await key("f")
+    await settle(() => tui?.captureCharFrame().includes("HEADERS") ?? false)
+    expect(tui.captureCharFrame()).not.toContain("QUERY PARAMS")
+    await key("f")
+    await settle(() => tui?.captureCharFrame().includes("BODY DESATIVADO") ?? false)
+    await key("f")
+    await settle(
+      () => tui?.captureCharFrame().includes("Nenhuma autenticação configurada.") ?? false,
+    )
+    await key("f")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
+    await key("f")
+    await settle(() => tui?.captureCharFrame().includes("QUERY PARAMS") ?? false)
+    await key("a")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
+
+    await key("l")
+    expect(tui.renderer.root.findDescendantById("http-request-view-next")).toBeUndefined()
+    await key("f")
+    await key("h")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
+  })
+
+  test("navigates Params vertically, adds only to the focused subpanel, and cycles nested strips", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await key("TAB")
+    await key("TAB")
+
+    expect(
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query")),
+    ).toBe(true)
+    expect(
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
+    ).toBe(false)
+
+    await key("j")
+    await settle(
+      () =>
+        !tui?.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query") &&
+        Boolean(tui?.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
+    )
+    expect(
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query")),
+    ).toBe(false)
+    expect(
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
+    ).toBe(true)
+    expect(tui.captureCharFrame().match(/Nenhum item definido\./g)?.length).toBe(2)
+
+    await key("n")
+    await settle(() => tui?.captureCharFrame().match(/Nenhum item definido\./g)?.length === 1)
+    expect(tui.captureCharFrame().match(/Nenhum item definido\./g)?.length).toBe(1)
+
+    await key("f")
+    await key("f")
+    expect(tui.renderer.root.findDescendantById("http-body-kind-previous")).toBeDefined()
+    expect(tui.renderer.root.findDescendantById("http-body-kind-next")).toBeDefined()
+    await key("v")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-body-editor-http-scratch-1")),
+    )
+
+    await key("f")
+    expect(tui.renderer.root.findDescendantById("http-auth-kind-next")).toBeDefined()
+    await key("v")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-auth-token-http-scratch-1")),
+    )
+
+    await key("f")
+    expect(tui.renderer.root.findDescendantById("http-request-more-next")).toBeDefined()
+    await key("v")
+    await settle(() => tui?.captureCharFrame().includes("ASSERTIONS DO REQUEST") ?? false)
+    expect(tui.renderer.root.findDescendantById("http-assertion-add")).toBeDefined()
+    await key("l")
+    await settle(() => !tui?.renderer.root.findDescendantById("http-assertion-add"))
   })
 
   test("opens opaque .http blocks as exact read-only raw content", async () => {
@@ -354,6 +477,9 @@ describe("HTTP TUI", () => {
         () => tui?.renderer.currentFocusedRenderable?.id === "http-workspace-settings-modal",
       )
       expect(tui.captureCharFrame()).toContain("DEFAULTS DO WORKSPACE HTTP")
+      expect(tui.captureCharFrame()).toContain("Nenhum item definido.")
+      await key("n")
+      await settle(() => !(tui?.captureCharFrame().includes("Nenhum item definido.") ?? true))
       await press("http-workspace-default-timeout")
       await settle(() => tui?.captureCharFrame().includes("[T] Timeout: 5s") ?? false)
       await press("http-workspace-history-metadata")
@@ -434,7 +560,7 @@ describe("HTTP TUI", () => {
       await key("n", true)
       expect(tui.captureCharFrame().match(/GET Scratch/g)).toHaveLength(4)
       await key("ESCAPE")
-      await key("h")
+      await press("http-request-view-headers")
       await settle(() =>
         (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith("http-key-value-name-"),
       )
@@ -693,9 +819,12 @@ describe("HTTP TUI", () => {
     await press("http-jump-button")
     await settle(() => tui?.captureCharFrame().includes("IR PARA") ?? false)
     expect(tui.captureCharFrame()).toContain("IR PARA")
-    await key("h")
-    expect(tui.captureCharFrame()).not.toContain("IR PARA")
-    expect(tui.captureCharFrame()).toContain("HEADERS")
+    expect(tui.renderer.root.findDescendantById("http-overlay-jump-headers")).toBeUndefined()
+    await key("p")
+    expect(tui.captureCharFrame()).toContain("IR PARA")
+    await key("r")
+    await settle(() => !(tui?.captureCharFrame().includes("IR PARA") ?? true))
+    expect(tui.captureCharFrame()).toContain("SEM RESPOSTA")
   })
 
   test("resizes the request/response split with a real mouse drag", async () => {
@@ -728,11 +857,11 @@ describe("HTTP TUI", () => {
     )
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
-    await key("o")
+    await key("a")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
     await key("c")
     await settle(() => tui?.captureCharFrame().includes("[C] Cookie jar: ignorar") ?? false)
-    await key("4")
+    await key("z")
     await key("F10")
     await settle(() => tui?.captureCharFrame().includes("COOKIE JAR") ?? false)
     expect(tui.captureCharFrame()).toContain("ignorar")
@@ -745,7 +874,7 @@ describe("HTTP TUI", () => {
     )
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
-    await key("o")
+    await key("a")
     await settle(() =>
       Boolean(tui?.renderer.root.findDescendantById("http-request-proxy-http-scratch-1")),
     )
@@ -756,7 +885,7 @@ describe("HTTP TUI", () => {
       await tui?.renderOnce()
     })
     await key("ESCAPE")
-    await key("4")
+    await key("z")
     await key("F10")
     await settle(() => tui?.captureCharFrame().includes("http://proxy.test:8080/") ?? false)
     expect(tui.captureCharFrame()).toContain("PROXY")
@@ -769,12 +898,12 @@ describe("HTTP TUI", () => {
     )
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
-    await key("o")
+    await key("a")
     await settle(() =>
       Boolean(tui?.renderer.root.findDescendantById("http-request-tls-verification")),
     )
-    await key("v")
-    await settle(() => tui?.captureCharFrame().includes("[V] TLS INSEGURO") ?? false)
+    await key("v", false, true)
+    await settle(() => tui?.captureCharFrame().includes("[Shift+V] TLS INSEGURO") ?? false)
     await press("http-send-button")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-insecure-tls-modal")))
 
@@ -790,6 +919,7 @@ describe("HTTP TUI", () => {
     let server: Server
     let url = ""
     let receivedUrl = ""
+    let continuousClosed = false
 
     beforeEach(async () => {
       server = createServer((request, response) => {
@@ -797,8 +927,28 @@ describe("HTTP TUI", () => {
         if (request.url === "/continuous") {
           response.writeHead(200, { "content-type": "text/plain" })
           const chunk = `${"0123456789abcdef".repeat(4)}\n`.repeat(1_000)
-          const timer = setInterval(() => response.write(chunk), 1)
-          response.on("close", () => clearInterval(timer))
+          continuousClosed = false
+          let scheduled: ReturnType<typeof setImmediate> | undefined
+          const send = () => {
+            if (continuousClosed) return
+            if (response.write(chunk)) scheduled = setImmediate(send)
+            else
+              response.once("drain", () => {
+                scheduled = setImmediate(send)
+              })
+          }
+          // Bun 1.3.14 emits socket close when the client cancels, but does not
+          // reliably emit ServerResponse.close. Stop the exact fixture producer.
+          request.socket.once("close", () => {
+            continuousClosed = true
+            clearImmediate(scheduled)
+          })
+          send()
+          return
+        }
+        if (request.url === "/nested") {
+          response.writeHead(200, { "content-type": "application/json" })
+          response.end('{"user":{"profile":{"name":"Ada"}},"tags":["one","two"]}')
           return
         }
         response.writeHead(200, { "content-type": "application/json" })
@@ -845,6 +995,31 @@ describe("HTTP TUI", () => {
       expect(tui.captureCharFrame()).not.toContain("[Enter] Próximo")
     })
 
+    test("navigates, collapses, and expands formatted JSON blocks", async () => {
+      const nestedUrl = `${new URL(url).origin}/nested`
+      tui = await testRender(<HttpClient active initialUrlRequest={{ id: 1, url: nestedUrl }} />, {
+        width: 120,
+        height: 32,
+      })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      act(() => tui?.mockInput.pressEnter())
+      await settle(() => tui?.captureCharFrame().includes('▾ "user": {') ?? false)
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-response-scroll-http-scratch-1",
+      )
+      expect(tui.captureCharFrame()).toContain('"name": "Ada"')
+
+      await key("ARROW_DOWN")
+      await key("ARROW_LEFT")
+      await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
+      expect(tui.captureCharFrame()).not.toContain('"name": "Ada"')
+
+      await key("ARROW_RIGHT")
+      await settle(() => tui?.captureCharFrame().includes('"name": "Ada"') ?? false)
+      await key("RETURN")
+      await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
+    })
+
     test("submits the freshly pasted URL when Enter follows in the same input batch", async () => {
       const origin = new URL(url).origin
       tui = await testRender(<HttpClient active />, { width: 120, height: 32 })
@@ -857,6 +1032,7 @@ describe("HTTP TUI", () => {
 
       await settle(() => receivedUrl === "/pasted")
       expect(receivedUrl).toBe("/pasted")
+      await settle(() => tui?.captureCharFrame().includes("200 OK") ?? false)
       expect(tui.captureCharFrame()).toContain("200 OK")
     })
 
@@ -869,6 +1045,11 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-send-button")
       await settle(() => tui?.captureCharFrame().includes("TRUNCADO") ?? false)
+      // Socket retirement is an I/O condition. Repainting a 1.5 MB response on
+      // every poll can delay that event and exhaust the TUI test's deadline.
+      const deadline = performance.now() + 2_000
+      while (!continuousClosed && performance.now() < deadline) await Bun.sleep(10)
+      expect(continuousClosed).toBe(true)
       await key("2")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-response-scroll-http-scratch-1",

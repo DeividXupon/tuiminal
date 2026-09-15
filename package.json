@@ -1,43 +1,42 @@
 {
-  "name": "tuiminal",
-  "version": "0.2.0-pre-alpha.0",
+  "name": "tuiminal-workspace",
+  "version": "0.2.0-alpha.0",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeividXupon/tuiminal.git"
+  },
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.2",
   "engines": {
-    "bun": "1.3.14"
-  },
-  "bin": {
-    "tuiminal": "./bin/tuiminal.ts"
+    "bun": "1.4.2"
   },
   "scripts": {
-    "check": "bun run typecheck && bun run format:check && bun run lint && bun run check:architecture && bun run check:maintainability && bun run test",
+    "check": "bun run typecheck && bun run format:check && bun run lint && bun run check:workspaces && bun run check:architecture && bun run check:maintainability && bun run check:licenses && bun run test",
     "check:architecture": "bun scripts/check-architecture.ts",
+    "check:licenses": "bun scripts/generate-third-party-notices.ts --check",
     "check:maintainability": "bun scripts/check-maintainability.ts",
     "build:release": "bun scripts/build-release.ts",
     "docs:demos": "bun scripts/generate-readme-demos.tsx",
-    "format": "biome format --write src bin tests scripts package.json tsconfig.json biome.json .dependency-cruiser.cjs",
-    "format:check": "biome format src bin tests scripts package.json tsconfig.json biome.json .dependency-cruiser.cjs",
-    "dev": "bun --watch src/index.tsx",
-    "lint": "biome lint src bin tests scripts --max-diagnostics=10",
-    "lint:fix": "biome lint --write src bin tests scripts",
-    "start": "bun src/index.tsx",
+    "docs:licenses": "bun scripts/generate-third-party-notices.ts",
+    "format": "biome format --write apps packages tests scripts package.json tsconfig.json tsconfig.packages.json biome.json .dependency-cruiser.cjs",
+    "format:check": "biome format apps packages tests scripts package.json tsconfig.json tsconfig.packages.json biome.json .dependency-cruiser.cjs",
+    "dev": "bun run build:features && bun --watch apps/cli/src/index.tsx",
+    "lint": "biome lint apps packages tests scripts --max-diagnostics=10",
+    "lint:fix": "biome lint --write apps packages tests scripts",
+    "start": "bun run build:features && bun apps/cli/src/index.tsx",
     "test": "bun run test:unit && bun run test:tui",
     "test:unit": "bun test tests/*.test.ts",
+    "test:windows": "bun test tests/atomic-file.test.ts tests/cli.test.ts tests/commands.test.ts tests/configuration.test.ts tests/core.test.ts tests/database-cell-value.test.ts tests/database-layout.test.ts tests/database-query-edit.test.ts tests/database-read-policy.test.ts tests/database-sql-tokens.test.ts tests/git-detail-lifecycle.test.ts tests/git-diff-content.test.ts tests/git-issues.test.ts tests/git-pr.test.ts tests/git-query-autocomplete.test.ts tests/git-query-quoting.test.ts tests/git-reactions.test.ts tests/git-resource-disposal.test.ts tests/git-watch-lifecycle.test.ts tests/github-cli-installer.test.ts tests/github-process-lifecycle.test.ts tests/http-assertions.test.ts tests/http-path-parameters.test.ts tests/http-redirect-credentials.test.ts tests/http-redirect-lifecycle.test.ts tests/http-redirect-safety.test.ts tests/http-response-reader.test.ts tests/http-response.test.ts tests/http-runner.test.ts tests/http-workspace.test.ts tests/i18n-prefixes.test.ts tests/i18n.test.ts tests/runner-health.test.ts tests/runner-log.test.ts tests/runner-ports.test.ts tests/runner-project-discovery.test.ts tests/runner-pty-output.test.ts tests/sql-autocomplete.test.ts tests/sql-highlight.test.ts tests/sql-statements.test.ts tests/terminal-commands.test.ts tests/terminal-native.test.ts tests/terminal-presentation.test.ts",
     "test:tui": "bun test --preload ./tests/tui/setup.ts tests/tui",
     "test:database:drivers": "TUIMINAL_DATABASE_INTEGRATION=1 bun test tests/database-drivers.integration.test.ts --timeout 120000",
-    "typecheck": "bun node_modules/typescript-native/bin/tsc --noEmit"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "@opentui/core": "^0.5.9",
-    "@opentui/react": "^0.5.9",
-    "@tuiparts/core": "^0.0.6",
-    "@tuiparts/react": "^0.0.6",
-    "react": "^19.2.8",
-    "string-width": "^7.2.0",
-    "yaml": "^2.9.0"
+    "test:release": "bun scripts/verify-release.ts",
+    "typecheck": "bun node_modules/typescript-native/bin/tsc --noEmit",
+    "build:packages": "bun scripts/build-packages.ts",
+    "test:packages": "bun scripts/verify-packages.ts",
+    "check:workspaces": "bun scripts/check-workspaces.ts",
+    "build:features": "bun scripts/build-features.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
@@ -46,6 +45,31 @@
     "@types/react": "^19.2.18",
     "dependency-cruiser": "18.2.0",
     "typescript": "6.0.3",
-    "typescript-native": "npm:typescript@7.0.2"
-  }
+    "typescript-native": "npm:typescript@7.0.2",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "@tuiparts/core": "^0.0.6",
+    "@tuiparts/react": "^0.0.6",
+    "react": "^19.2.8",
+    "string-width": "^7.2.0",
+    "tldts": "7.4.12",
+    "yaml": "^2.9.0",
+    "@xupon/tuiminal-core": "workspace:*",
+    "@xupon/tuiminal-feature-database": "workspace:*",
+    "@xupon/tuiminal-feature-git": "workspace:*",
+    "@xupon/tuiminal-feature-http": "workspace:*",
+    "@xupon/tuiminal-feature-runner": "workspace:*",
+    "@xupon/tuiminal-feature-terminal": "workspace:*"
+  },
+  "overrides": {
+    "qs": "6.16.0",
+    "@opentui/core": "0.5.9",
+    "@opentui/react": "0.5.9",
+    "react": "19.2.8"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

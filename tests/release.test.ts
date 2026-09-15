@@ -6,7 +6,7 @@ import {
   platformPackageJson,
   RELEASE_TARGETS,
 } from "../scripts/release-model"
-import { sqliteQueryProcessCommand } from "../src/features/database/services/sqlite-query-runtime"
+import { sqliteQueryProcessCommand } from "../packages/feature-database/src/services/sqlite-query-runtime"
 
 describe("standalone npm release", () => {
   test("covers supported operating systems and architectures with unique packages", () => {
@@ -28,22 +28,23 @@ describe("standalone npm release", () => {
     const manifest = mainPackageJson(version)
     expect(manifest.bin).toEqual({ tuiminal: "bin/tuiminal.js" })
     expect(manifest.license).toBe("Apache-2.0")
-    expect(manifest.engines).toEqual({ node: ">=18" })
+    expect(manifest.engines).toEqual({ node: ">=22" })
     expect(Object.keys(manifest.optionalDependencies)).toHaveLength(RELEASE_TARGETS.length)
     expect(Object.values(manifest.optionalDependencies).every((value) => value === version)).toBe(
       true,
     )
   })
 
-  test("uses a Node launcher while platform packages contain both executables", () => {
+  test("uses a Node launcher while platform packages contain the minimal executable", () => {
     const launcher = npmLauncherSource()
     expect(launcher.startsWith("#!/usr/bin/env node\n")).toBe(true)
     expect(launcher).toContain("spawnSync(executable")
     for (const target of RELEASE_TARGETS) {
       expect(launcher).toContain(target.npmPackage)
       const manifest = platformPackageJson(target, "1.0.0")
-      expect(manifest.files).toEqual(["bin"])
+      expect(manifest.files).toEqual(["bin", "THIRD_PARTY_NOTICES.md"])
       expect(manifest.license).toBe("Apache-2.0")
+      expect(manifest.repository.url).toBe("git+https://github.com/DeividXupon/tuiminal.git")
     }
   })
 

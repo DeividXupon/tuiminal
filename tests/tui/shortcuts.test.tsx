@@ -4,16 +4,16 @@ import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { ShortcutText } from "../../src/shared/ui/ShortcutText"
-import { InlineButton } from "../../src/shared/ui/InlineButton"
+import { ShortcutText } from "../../packages/core/src/ui/ShortcutText"
+import { InlineButton } from "../../packages/core/src/ui/InlineButton"
 import {
   COLORS,
   getUiSettings,
   PALETTES,
   updateUiSettings,
   type PaletteId,
-} from "../../src/core/settings/theme"
-import { App } from "../../src/app/App"
+} from "../../packages/core/src/settings/theme"
+import { App } from "../../apps/cli/src/App"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -74,4 +74,16 @@ test("translation and wide glyphs retain their text and shortcut accent", async 
   await tui.renderOnce()
   expect(tui.captureCharFrame()).not.toContain("Digite uma URL")
   expect(colorOf("[Enter]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+})
+
+test("directional hints distinguish the A/F key from the semantic arrow", async () => {
+  tui = await testRender(
+    <ShortcutText content="[A←] anterior  [F→] próximo" style={{ fg: "#A0A0A0" }} />,
+    { width: 40, height: 4 },
+  )
+  await tui.renderOnce()
+  expect(colorOf("[A")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+  expect(colorOf("[F")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+  expect(colorOf("←]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
+  expect(colorOf("→]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
 })

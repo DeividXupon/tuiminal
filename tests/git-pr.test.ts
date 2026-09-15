@@ -2,23 +2,27 @@ import { describe, expect, test } from "bun:test"
 import {
   preparePullRequestAction,
   transitionPullRequestAction,
-} from "../src/features/git/model/pr/actions"
-import { DEMO_PERMISSION_DENIED, DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
+} from "../packages/feature-git/src/model/pr/actions"
+import {
+  DEMO_PERMISSION_DENIED,
+  DEMO_PULL_REQUESTS,
+} from "../packages/feature-git/src/model/pr/fixtures"
 import {
   adjacentPreviewTab,
   movePullRequestIndex,
   nextPullRequestPreviewPosition,
   pullRequestNavigationAction,
+  pullRequestActionKindForShortcut,
   pullRequestWorkspaceAction,
   resolvePullRequestLayout,
-} from "../src/features/git/model/pr/navigation"
+} from "../packages/feature-git/src/model/pr/navigation"
 import {
   buildEffectivePullRequestQueries,
   normalizePullRequestQuery,
   pullRequestIdentityKey,
   samePullRequestIdentity,
   validatePullRequestIdentity,
-} from "../src/features/git/model/pr/query"
+} from "../packages/feature-git/src/model/pr/query"
 import {
   createPullRequestSectionId,
   duplicatePullRequestSection,
@@ -26,17 +30,17 @@ import {
   movePullRequestSection,
   removePullRequestSection,
   updatePullRequestSection,
-} from "../src/features/git/model/pr/sections"
-import type { PullRequestAuthContext } from "../src/features/git/model/pr/types"
+} from "../packages/feature-git/src/model/pr/sections"
+import type { PullRequestAuthContext } from "../packages/feature-git/src/model/pr/types"
 import {
   DEFAULT_GIT_WORKSPACE_TAB,
   gitWorkspaceTabForKey,
-} from "../src/features/git/model/workspace"
+} from "../packages/feature-git/src/model/workspace"
 import {
   gitHistoryNavigationDelta,
   isGitHistoryFocused,
-} from "../src/features/git/model/base-navigation"
-import { pullRequestDashboardPresentation } from "../src/features/git/ui/pr/presentation"
+} from "../packages/feature-git/src/model/base-navigation"
+import { pullRequestDashboardPresentation } from "../packages/feature-git/src/ui/pr/presentation"
 
 const identity = DEMO_PULL_REQUESTS[0]?.identity ?? {
   host: "github.com",
@@ -116,6 +120,14 @@ describe("Git Diffs/PR workspace", () => {
     expect(adjacentPreviewTab("files", 1)).toBe("overview")
   })
 
+  test("keeps PR action shortcuts available inside the action menu", () => {
+    expect(pullRequestActionKindForShortcut({ name: "a" })).toBe("assign")
+    expect(pullRequestActionKindForShortcut({ name: "a", shift: true })).toBe("unassign")
+    expect(pullRequestActionKindForShortcut({ name: "a", ctrl: true })).toBe("approve-workflow")
+    expect(pullRequestActionKindForShortcut({ name: "f" })).toBeNull()
+    expect(pullRequestActionKindForShortcut({ name: "e", shift: true })).toBe("reaction")
+  })
+
   test("maps list, preview and section navigation without UI state", () => {
     expect(
       pullRequestNavigationAction({ keyName: "j", focus: "list", hasSelection: true }),
@@ -127,8 +139,25 @@ describe("Git Diffs/PR workspace", () => {
       pullRequestNavigationAction({ keyName: "h", focus: "preview", hasSelection: true }),
     ).toEqual({ type: "focus", target: "list" })
     expect(
-      pullRequestNavigationAction({ keyName: ".", shift: true, focus: "list", hasSelection: true }),
+      pullRequestNavigationAction({ keyName: "v", focus: "preview", hasSelection: true }),
+    ).toEqual({ type: "move-preview-tab", delta: 1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "z", focus: "preview", hasSelection: true }),
+    ).toEqual({ type: "move-preview-tab", delta: -1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "f", focus: "list", hasSelection: true }),
     ).toEqual({ type: "move-section", delta: 1 })
+    expect(
+      pullRequestNavigationAction({ keyName: "a", focus: "list", hasSelection: true }),
+    ).toEqual({ type: "move-section", delta: -1 })
+    expect(
+      pullRequestNavigationAction({
+        keyName: "f",
+        shift: true,
+        focus: "list",
+        hasSelection: true,
+      }),
+    ).toBeNull()
     expect(
       pullRequestWorkspaceAction({
         keyName: "/",
@@ -138,7 +167,7 @@ describe("Git Diffs/PR workspace", () => {
     ).toEqual({ type: "edit-query" })
     expect(
       pullRequestWorkspaceAction({
-        keyName: "+",
+        keyName: "#",
         focus: "list",
         hasSelection: true,
       }),

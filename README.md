@@ -2,52 +2,84 @@
 
 # Tuiminal
 
-### Um workspace completo de desenvolvimento dentro do terminal.
+**English** · [Português (Brasil)](./README.pt-BR.md)
 
-Banco de dados, GitHub, processos, APIs e terminais reais em uma única interface rápida e responsiva.
+<a id="um-workspace-completo-de-desenvolvimento-dentro-do-terminal"></a>
+
+### A complete developer workspace inside your terminal.
+
+Databases, GitHub, processes, APIs, and real terminals in one fast, responsive interface.
 
 [![npm](https://img.shields.io/npm/v/tuiminal?label=npm&color=4B75FF)](https://www.npmjs.com/package/tuiminal)
 [![status](https://img.shields.io/badge/status-pre--alpha-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-5FA04E)](#instalação)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#installation)
 
-[Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribuir](#desenvolvimento)
+[Install](#installation) · [Database](#database) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribute](#development)
 
 </div>
 
 > [!WARNING]
-> O Tuiminal está em **pré-alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
+> Tuiminal is in **alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
 
-O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de alternar entre um cliente de banco, uma interface Git, vários terminais e um cliente HTTP, você abre o projeto uma vez e troca de ferramenta com `[Alt+1–5]`.
+Tuiminal keeps your workflow in one place. Open a project once and switch between its database client, Git interface, processes, HTTP client, and terminals with `[Alt+1–5]`.
 
-- Interface densa construída com Bun, OpenTUI, React e tuiparts.
-- Funciona em qualquer diretório; Git, Runner e terminais usam o projeto informado ao CLI.
-- Teclado e mouse são cidadãos de primeira classe.
-- Layout moldurado ou compacto, sete paletas e seis idiomas.
-- Processos e PTYs permanecem vivos enquanto você troca de tab.
-- Dados sensíveis, escritas e operações remotas recebem proteções explícitas.
+- Dense interface built with Bun, OpenTUI, React, and tuiparts.
+- Works in any directory; Git, Runner, and terminals use the project passed to the CLI.
+- Full keyboard and mouse support.
+- Framed or compact layouts, seven palettes, and six languages.
+- Processes and PTYs stay alive when you switch tabs.
+- Explicit protections for sensitive data, writes, and remote operations.
 
-## Instalação
+<a id="instalação"></a>
 
-Instale a pré-alfa pelo npm:
+## Installation
+
+Install the alpha from npm:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 tuiminal
 ```
 
-Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 18 ou superior é usado pelo pequeno launcher do pacote.
+You **do not need to install Bun** to use the published package. npm downloads the binary for macOS, Linux glibc, or Windows on x64 and ARM64. The small package launcher requires Node.js 22 or later.
 
-Para atualizar ou remover:
+A fresh installation opens **Install official features**. Choose Database, Git, Runner,
+HTTP, or Free Terminal with `[↑/↓]` / `[J/K]` or the mouse, then press `[Enter]` to
+install and again to open. Use `[Space]` and `[I]` to install several tools. Reopen
+this screen through `[,]` → **Official features → Manage features** or
+`tuiminal features`. Only installed tools appear in the tabs; Runner is the default
+when available. Downloads are version-matched and verified, and live in Tuiminal's
+own data directory, outside your projects.
+
+Installed tools have a **[D] Uninstall** button. Confirm with `[Y]` or cancel with
+`[Esc]`. Uninstalling closes that tool's sessions and discards unsaved work while
+preserving projects and saved settings. You can install it again from the same screen.
+
+For scripted setup: `tuiminal features install git runner` or `tuiminal features install all`.
+
+Each tool includes a detailed description. Hover over a row or navigate with
+`[↑/↓/J/K]` to see an animated icon for the tool. Database fills a storage cylinder;
+Runner plays, progresses and completes; HTTP sends a request and receives a response
+between a client and server. Git shows a branch, and Free Terminal shows a window
+with a blinking cursor. Icons adapt to smaller terminals.
+During a download, the tool's row fills from left to right with its actual progress.
+
+![Official feature installation](./docs/media/installation.gif)
+
+
+To update or uninstall:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 npm uninstall --global tuiminal
 ```
 
-## Primeiros passos
+<a id="primeiros-passos"></a>
 
-Abra o diretório atual, outro projeto ou somente uma ferramenta:
+## Getting started
+
+Open the current directory, another project, or a single tool:
 
 ```bash
 tuiminal
@@ -60,172 +92,240 @@ tuiminal http ./meu-projeto
 tuiminal terminal ./meu-projeto
 ```
 
-Os aliases `database`/`db`, `run` e `term`/`tty` também são aceitos. No modo isolado, ferramentas ocultas não são inicializadas.
+The aliases `database`/`db`, `run`, and `term`/`tty` are also accepted. In isolated mode, hidden tools are not initialized. Only these commands and aliases are treated as tools; other names are directory paths.
 
-### Navegação global
+`tuiminal --version` prints the version without loading settings or UI. `tuiminal --help` uses the configured language.
 
-| Ação | Atalho |
+<a id="navegação-global"></a>
+
+### Global navigation
+
+| Action | Shortcut |
 | --- | --- |
-| Abrir Banco | `[Alt+1]` |
-| Abrir Git | `[Alt+2]` |
-| Abrir Runner | `[Alt+3]` |
-| Abrir HTTP | `[Alt+4]` |
-| Abrir Free Terminal | `[Alt+5]` |
-| Abrir configurações | `[,]` |
-| Sair | `[Q]`, `[Esc]` ou `[Ctrl+C]` |
+| Open Database | `[Alt+1]` |
+| Open Git | `[Alt+2]` |
+| Open Runner | `[Alt+3]` |
+| Open HTTP | `[Alt+4]` |
+| Open Free Terminal | `[Alt+5]` |
+| Open settings | `[,]` |
+| Quit | `[Q]`, `[Esc]`, or `[Ctrl+C]` |
 
-No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combinações, ative **Use Option as Meta key** ou a opção equivalente. Os números sem modificador continuam livres para ações locais das ferramentas.
+On macOS, `Alt` corresponds to `Option`. If your terminal does not send these combinations, enable **Use Option as Meta key** or the equivalent setting. Unmodified numbers remain available for actions within each tool.
 
-## Cinco ferramentas, um único fluxo
+All tools share floating notifications: at most three cards are retained, without taking keyboard focus. Temporary messages expire automatically; errors remain until dismissed. Replaced or removed events also release their timers, including during notification bursts.
 
-| Tab | Para quê serve |
+<a id="cinco-ferramentas-um-único-fluxo"></a>
+
+## Five tools, one workflow
+
+| Tab | Purpose |
 | --- | --- |
-| `[Alt+1]` Banco | Explorar dados e schema, escrever SQL e preparar alterações transacionais. |
-| `[Alt+2]` Git | Revisar diffs locais, PRs, Issues e notificações do GitHub. |
-| `[Alt+3]` Runner | Detectar comandos, executar serviços e acompanhar vários logs. |
-| `[Alt+4]` HTTP | Criar, salvar, executar e automatizar requisições de API. |
-| `[Alt+5]` Free Terminal | Abrir shells e qualquer CLI em seções com splits `2 × 2`. |
+| `[Alt+1]` Database | Explore data and schemas, write SQL, and prepare transactional changes. |
+| `[Alt+2]` Git | Review local diffs, PRs, Issues, and GitHub notifications. |
+| `[Alt+3]` Runner | Discover commands, run services, and follow multiple logs. |
+| `[Alt+4]` HTTP | Build, save, send, and automate API requests. |
+| `[Alt+5]` Free Terminal | Run shells and any CLI in sections with `2 × 2` splits. |
 
 <a id="banco"></a>
+<a id="database"></a>
 
-## Banco
+## Database
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/database.gif" alt="Demonstração da tab Banco do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/database.gif" alt="Tuiminal Database tab demo" width="100%">
 </p>
 
-Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL. Nenhuma conexão é criada automaticamente: a primeira abertura leva ao gerenciador de conexões.
+A responsive database explorer with a catalog, grid, inspector, and SQL workspace. No connection is created automatically: the first launch opens the connection manager.
 
-### O que você pode fazer
+<a id="o-que-você-pode-fazer"></a>
 
-- **Conectar:** MySQL/MariaDB, PostgreSQL, SQLite e servidores MySQL MCP opcionais. MCP é sempre explícito e somente leitura.
-- **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos.
-- **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
-- **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
-- **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
-- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado.
-- **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
-- **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
+### What you can do
 
-### Fluxo de escrita
+- **Connect:** MySQL/MariaDB, PostgreSQL, SQLite, and optional MySQL MCP servers. MCP is always explicit and read-only.
+- **Explore:** schemas, tables, and views; inspect records, columns, indexes, DDL, constraints, and relationships.
+- **Find data:** sort the active column, search all columns, paginate, and scroll horizontally while keeping the selected row.
+- **Select batches:** `[Space]` marks rows; `[Alt+Space]` sets an anchor and `[↑/↓]` grows or shrinks a spreadsheet-style range.
+- **Review writes:** stage `INSERT`, `UPDATE`, and `DELETE` locally. `[Ctrl+S]` opens review and executes the approved batch in a single transaction.
+- **Edit large selections:** indexed lookup of staged changes preserves snapshots and exact `BigInt` keys before review.
+- **Preserve decimals:** `DECIMAL`, `NUMERIC`, and `MONEY` values retain their entered digits through submission, including scientific notation. Database precision and scale still apply.
+- **Write SQL:** keep up to six independent tabs, execute only the statement under the cursor, cancel queries, and adjust the editor/result split. Layout changes and maximization preserve the editor and draft.
+- **Inspect and export:** view every field in a row and export marked rows as CSV, TSV, or JSON.
+- **Protect information:** mask sensitive columns on demand and customize the terms used to identify them.
 
-1. Abra uma tabela ou execute um `SELECT` simples editável.
-2. Use `[Enter]`/`[E]` para editar, `[Ctrl+A]` para preparar uma linha ou `[dd]` para preparar exclusão.
-3. Confira os indicadores de alterações locais na grade.
-4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
-5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
+<a id="fluxo-de-escrita"></a>
 
-Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
+### Write workflow
 
-### Atalhos essenciais do Banco
+1. Open a table or run an editable simple `SELECT`.
+2. Use `[Enter]`/`[E]` to edit, `[Ctrl+A]` to stage a row, or `[dd]` to stage deletion.
+3. Review the local-change indicators in the grid.
+4. Press `[Ctrl+S]`, review every statement, and confirm again.
+5. Tuiminal executes one transaction; a failed statement rolls back the entire batch.
 
-| Ação | Atalho |
+Repeated rapid confirmations do not duplicate an in-flight execution. Approved statements cannot be changed during the transaction. Pagination adapts to terminal height without skipping records when more than 50 rows fit.
+
+SQL results are editable only when they directly select columns or `*` from one identifiable table. Expressions, aliases, duplicate columns, aggregates, grouping, `DISTINCT`, and ambiguous queries remain read-only. Editing or deleting requires the complete primary key in the result.
+
+In MySQL, unqualified double-quoted fields remain read-only because they may be string literals; prefer backtick-quoted identifiers. Double-quoted columns remain editable in PostgreSQL and SQLite.
+
+Profiles start **read-only**. Passwords are not written to configuration JSON: when requested, they go to macOS Keychain, Linux libsecret, or Windows Credential Manager. `DATABASE_URL`, `MYSQL_URL`, and `POSTGRES_URL` can be discovered without silently becoming editable profiles. The password field stays masked while editing and resizing, including wide characters such as ideographs and emoji.
+
+Connection tests release temporary clients on failure as well as success. Environment URL passwords are decoded once, and a passwordless URL does not inherit the previous password.
+
+Native reads use PostgreSQL `READ ONLY` transactions, MySQL/MariaDB transaction and session protection, and a read-only SQLite handle in the editor, even for writable profiles. Unknown routines, state-changing PRAGMAs, and effectful commands require enabled writes and confirmation. Use least-privilege server credentials: application mode is not a sandbox for database routines. Optional MCP servers and their credentials must enforce read-only access themselves.
+
+New SQL history entries store metadata only. Full SQL, parameters, and detailed errors stay in a session cache limited to 200 entries and 2 MB. After shutdown or eviction, metadata remains without rerun capability. In Database settings, `[D]` opens legacy-content cleanup and `[Y]` confirms it: metadata and favorites are preserved, but cleanup cannot be undone and does not remove backups. **Explicitly saved favorites still write full SQL to disk**; avoid saving secrets in them.
+
+Export previews process only the first visible rows and retain the original language of values. Copying or saving includes the entire selection in CSV, TSV, or JSON.
+
+<a id="atalhos-essenciais-do-banco"></a>
+
+### Essential Database shortcuts
+
+| Action | Shortcut |
 | --- | --- |
-| Gerenciar conexões | `[C]` |
-| Dados, colunas, índices e schema | `[1]`, `[2]`, `[3]`, `[4]` |
-| Navegar por linhas | `[J/K]` ou `[↑/↓]` |
-| Abrir tabela ou editar célula | `[Enter]` |
-| Buscar tabela / buscar nos dados | `[/]` / `[S]` |
-| Ordenar coluna | `[F]` |
-| Marcar linha / selecionar intervalo | `[Space]` / `[Alt+Space]` |
-| Exportar seleção | `[X]` |
-| Página anterior / seguinte | `[P]` / `[N]` |
-| Abrir workspace SQL | `[A]` |
-| Executar comando SQL atual | `[Ctrl+A]` |
-| Cancelar consulta | `[Ctrl+X]` |
-| Nova aba / fechar aba SQL | `[Ctrl+N]` / `[Ctrl+W]` |
-| Alternar abas SQL | `[Alt+←/→]` |
-| Ajustar divisão / maximizar painel | `[Ctrl+↑/↓]` / `[F10]` |
-| Revisar escritas preparadas | `[Ctrl+S]` |
-| Atualizar dados e catálogo | `[R]` |
+| Manage connections | `[C]` |
+| Data, columns, indexes, and schema | `[1]`, `[2]`, `[3]`, `[4]` |
+| Navigate rows | `[J/K]` or `[↑/↓]` |
+| Open table or edit cell | `[Enter]` |
+| Search tables / search data | `[/]` / `[S]` |
+| Sort column | `[O]` |
+| Mark row / select range | `[Space]` / `[Alt+Space]` |
+| Export selection | `[X]` |
+| Previous / next page | `[P]` / `[N]` |
+| Previous / next table | `[A←]` / `[F→]` |
+| Open SQL workspace | `[W]` |
+| Execute current SQL statement | `[Ctrl+A]` |
+| Cancel query | `[Ctrl+X]` |
+| New / close SQL tab | `[Ctrl+N]` / `[Ctrl+W]` |
+| Switch SQL tabs | `[Alt+←/→]` |
+| Adjust split / maximize pane | `[Ctrl+↑/↓]` / `[F10]` |
+| Review staged writes | `[Ctrl+S]` |
+| Refresh data and catalog | `[R]` |
 
-Configurações, termos sensíveis e até 100 leituras recentes ficam em `~/.config/tuiminal/databases.json`. Alterações são preservadas por 184 dias; parâmetros sensíveis são persistidos somente como `<mascarado>`.
+Connection settings and history metadata live in `~/.config/tuiminal/databases.json`, retaining up to 100 recent reads and 184 days of writes. New entries do not persist SQL, parameters, or diagnostics; sensitive-column terms belong to global settings.
 
 <a id="git"></a>
 
 ## Git
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/git.gif" alt="Demonstração da tab Git do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/git.gif" alt="Tuiminal Git tab demo" width="100%">
 </p>
 
-Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-dash. Diffs funciona offline; PR, Issues e Inbox são carregados separadamente somente quando você os abre.
+A lazygit-style local workspace and three remote dashboards inspired by gh-dash. Diffs works offline; PR, Issues, and Inbox load separately when first opened.
 
 ### `[1] Diffs`
 
-- Agrupa arquivos modificados em uma árvore real de diretórios.
-- Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
-- Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos.
-- Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre o histórico detalhado.
-- `[Space]` aplica ou remove stage do arquivo; `[A]` faz o mesmo para todos.
-- `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
-- `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox.
+- Groups changed files into a real tree. Unbranched directory chains show each folder on its own line without artificial indentation; `[J/K]` treats the chain as one navigable block.
+- Distinguishes staged, unstaged, and untracked files using Git's two-character status.
+- Shows unified, side-by-side, or intraline previews with syntax highlighting and old/new line numbers. Character-level comparison is computed only in intraline mode and reused until the document changes.
+- Keeps a small commit graph below the tree. `[G]` expands it; `[O]` opens a `git log`-style history with a colored graph spanning each commit block. Blocks include hash, branches/tags, merge parents, author/email, relative date, file count, `+/-` statistics, subject, and message body.
+- `[Space]` stages/unstages the selected file or all descendants of a folder, including names containing `*`, `?`, brackets, or `:`. `[A]` stages a folder's descendants or toggles all files when a file is selected. Colors update immediately; subsequent staging actions remain available, and confirmation reloads only status. The mounted preview reconciles silently without a loader or scroll reset; the graph refreshes in the background only when refs change.
+- `[Enter]` on a tree file opens and focuses its diff. With a tracked text file focused, `[S]` opens partial staging in unified mode. Unstaged and staged panes sit side by side and include hunks already in the index so they can be removed. `[S]` switches hunk/line mode without losing pending transfers or highlighting; `[H/L/←/→]` switches panes, `[J/K]` navigates, and `[Space]` transfers an item. Scrolling keeps the entire target above the action row even for uneven hunk heights. The Git terminal is hidden while partial staging is open, and `[Tab]` stays within its two panes. `[Enter]` and `[Esc]` apply the displayed state and exit. The active hunk has a full-height blue left rail; file changes during selection cause safe rejection.
+- In a focused diff, `[Shift+H/L]` or `[Shift+←/→]` scroll to the last character, with clickable controls at the lower right. Numbers, signs, and change backgrounds remain fixed. Split-mode code scrolls together without hiding either column. Vertical navigation preserves horizontal position; leaving the diff resets it to the left.
+- The project/branch header retains its space while navigating the tree, including when a larger diff finishes loading.
+- `[D]` discards the selected file or folder after explicit confirmation, restoring tracked changes and removing new files.
+- A Git terminal below the diff shows seven rows and retains up to 2,000 history lines of actual command output. `[T]` focuses it for manual commands; `[↑/↓]` and mouse scroll output; `[F10]` maximizes/restores it within the preview pane. The `git` prefix is fixed, without shell command composition. Autocomplete suggests commands, options, known local/remote branches, tags, remotes, and changed files: `[Ctrl+N/P]` navigates, `[Ctrl+Y]` applies, and `[Esc]` dismisses.
+- `[C]` switches to **Compare**, comparing two known refs through `base...compared` without checkout or uncommitted changes.
+- `[Ctrl+P]` chooses another local repository/branch without changing PR, Issues, or Inbox scope. In the terminal it belongs to autocomplete; it cannot open settings over a modal or partial staging.
+- The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Git · Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub.
 
 ### `[2] PR`
 
-- Começa com as seções **My PRs** e **Review requested**.
-- Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
-- A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
-- O diff remoto abre dentro do Tuiminal e mantém a fila preservada ao voltar.
-- Busca e seções usam qualifiers do GitHub com autocomplete para `repo:`, `author:`, `review-requested:` e outros filtros.
-- Comentários, review, merge e demais escritas usam preparação, reautenticação, releitura do estado remoto e confirmação antes da execução.
+- Starts with **My PRs**, **Review requested**, **All**, **Open**, and **Closed**. The last three select non-archived PRs by state within the current scope.
+- Lists state, repository, review, CI, author, assignees, comments, labels, and diff size.
+- Preview tabs show overview, checks, activity, commits, and files.
+- Stopping CI watch or closing its screen cancels the active request; old responses neither notify nor interrupt a new watch.
+- In Activity, `[J/K]` selects comments, `[E]` opens five quick reactions (👍 ❤️ 🎉 😄 👀), and `[Enter]` replies with a reference to the original comment. Replies group under their parent; a comment with reactions offers a new reaction. `[Shift+E]` reacts to the PR itself.
+- Remote diffs open inside Tuiminal and preserve the queue on return.
+- Queries and sections use GitHub qualifiers with autocomplete for `repo:`, `author:`, `review-requested:`, and other filters.
+- Comments, reviews, merges, and other writes use preparation, reauthentication, remote-state rereading, and confirmation before execution.
 
 ### `[3] Issues`
 
-- Começa com a seção **My Issues** e permite criar outras filas por query.
-- Combina uma lista densa de duas linhas com visão geral e atividade da issue.
-- Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
-- A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
+- Starts with **My Issues**, **All**, **Open**, and **Closed**, selecting non-archived issues by state within the current scope.
+- Combines a dense two-line list with overview and activity previews.
+- In Activity, `[J/K]` selects comments, `[E]` reacts with 👍 ❤️ 🎉 😄 or 👀, and `[Enter]` replies. Replies group under the parent; existing reactions do not hide the new-reaction control. `[Shift+E]` reacts to the issue itself.
+- Supports comments, assignment/unassignment, label edits, branch creation with checkout, closing, and reopening.
+- Searches remain scoped to non-archived issues and never accidentally become GitHub-wide searches.
 
 ### `[4] Inbox`
 
-- Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
-- Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
-- A atualização automática preserva os dados visíveis quando a rede falha.
+- Combines Inbox, review requests, assignments, mentions, and locally saved items.
+- Marking read is explicit; completing and unsubscribing require confirmation.
+- Automatic refresh preserves visible data when the network fails.
 
-PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) autenticado.
+PR and Issues use the `origin` repository when recognized. Outside a repository, the default is the authenticated account, explicitly including organizations and external repositories rather than searching all of GitHub. Remote views require [GitHub CLI](https://cli.github.com/) 2.40.0 or later.
 
-### Atalhos essenciais do Git
+When `gh` is missing or outdated, PR, Issues, and Inbox explain it, display the detected official command, provide `[C]` to copy, and offer a mini terminal focused with `[Enter]` or mouse. Tuiminal starts only the shell: you paste and execute the command, and version detection updates automatically. `[Enter]` reopens an exited shell. Missing authentication uses the same guidance for `gh auth login --hostname <host> --web`; `gh`/GitHub own login and tokens, and the view reloads when the account is detected.
 
-| Ação | Atalho |
+Automated `gh` calls have time limits and wait for process exit on cancellation. A PR/Issue write without confirmation—because of timeout, cancellation, output limits, or incomplete input—is never replayed automatically. Check remote state before retrying.
+
+Switching PR/Issue details releases pagination immediately; stale responses cannot replace a newer refresh. Repeated load-more actions in one event batch issue one request. PR discussion changes invalidate the detail cache even if the head SHA stays the same. PR, Issues, and Inbox reuse row text during navigation while keeping language, colors, and data current.
+
+Git settings show local projects and remote repositories independently as each discovery finishes. Closing or reloading the modal cancels its old remote request. Query autocomplete processes only enough candidates to fill visible suggestions.
+
+Repeated `[Enter]` presses do not repeat an in-flight project/branch selection. Closing a picker with `[Esc]`, its button, or an outside click prevents a late response from closing a replacement picker. Closing does not cancel or undo an already-started Git command.
+
+Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phrase does not remove account scope. Values such as `label:"help wanted"` retain spaces. Unclosed quotes must be completed before submission; applying or saving an incomplete query shows a warning in the same modal while preserving text and focus.
+
+<a id="atalhos-essenciais-do-git"></a>
+
+### Essential Git shortcuts
+
+| Action | Shortcut |
 | --- | --- |
-| Abrir Diffs, PR, Issues ou Inbox | `[1]`, `[2]`, `[3]`, `[4]` |
-| Alternar Diffs / Comparar | `[C]` |
-| Navegar na lista | `[J/K]` ou `[↑/↓]` |
-| Alternar foco entre lista e preview | `[H/L]` ou `[←/→]` |
-| Mudar seção | `[<]` / `[>]` |
-| Abrir diff remoto | `[D]` |
-| Abrir ações remotas | `[?]` |
-| Stage do arquivo / todos | `[Space]` / `[A]` |
-| Abrir histórico / grafo local | `[O]` / `[G]` |
-| Mudar visualização do diff | `[V]` |
-| Alterar projeto/branch de Diffs | `[Ctrl+P]` |
-| Editar query remota | `[/]` |
+| Open Diffs, PR, Issues, or Inbox | `[1]`, `[2]`, `[3]`, `[4]` |
+| Toggle Diffs / Compare | `[C]` |
+| Navigate list | `[J/K]` or `[↑/↓]` |
+| Switch tree, preview, and Git terminal focus | `[Tab]`; `[H/L]` or `[←/→]` between tree and preview |
+| Scroll a focused diff horizontally | `[Shift+H/L]` or `[Shift+←/→]` |
+| Change section | `[A←]` / `[F→]` |
+| Change internal preview tab | `[Z←]` / `[V→]` |
+| Open remote diff | `[D]` |
+| Open remote actions | `[?]` |
+| Stage file/folder or all files | `[Space]` / `[A]` |
+| Stage hunks or lines in the focused diff | `[S]`, then `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]`, and `[Enter]` |
+| Discard file/folder with confirmation | `[D]` |
+| Focus Git terminal | `[T]` |
+| Open local history / graph | `[O]` / `[G]` |
+| Change diff layout | `[V]` |
+| Change Diffs project/branch | `[Ctrl+P]` |
+| Edit remote query | `[/]` |
 
-O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separada em `~/.config/tuiminal/git-diffs.json`; itens salvos do Inbox ficam em `~/.config/tuiminal/git-inbox.json` com permissão `0600`.
+Remote scope is saved in Git profiles. The local Diffs selection is separate in `~/.config/tuiminal/git-diffs.json`; saved Inbox items live in `~/.config/tuiminal/git-inbox.json` with `0600` permissions.
 
 <a id="runner"></a>
 
 ## Runner
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/runner.gif" alt="Demonstração da tab Runner do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/runner.gif" alt="Tuiminal Runner tab demo" width="100%">
 </p>
 
-O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia processos de curta ou longa duração e mantém logs, entrada e histórico dentro do mesmo workspace.
+Runner is Tuiminal's initial screen. It discovers project commands, starts short- and long-running processes, and keeps logs, input, and history in the same workspace.
 
-### O que você pode fazer
+<a id="o-que-você-pode-fazer-1"></a>
 
-- **Detectar automaticamente:** scripts JavaScript, Composer/PHP, Laravel, Symfony, Python/Django, Go, Rust, Ruby/Rails, Maven, Gradle, .NET, Deno, Taskfile, Makefile, justfile e Docker Compose.
-- **Executar qualquer coisa:** o campo manual aceita o comando literal; `[Ctrl+S]` salva o comando com nome e opção explícita de PTY.
-- **Manter processos vivos:** selecionar um comando já ativo abre a sessão existente. `[R]` é a ação separada para iniciar outra instância.
-- **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
-- **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
-- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
-- **Trocar de projeto:** `[+]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
-- **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
+### What you can do
 
-Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode iniciar um processo automaticamente.
+- **Discover automatically:** JavaScript scripts, Composer/PHP, Laravel, Symfony, Python/Django, Go, Rust, Ruby/Rails, Maven, Gradle, .NET, Deno, Taskfile, Makefile, justfile, and Docker Compose.
+- **Run any command:** the manual field accepts literal command text; `[Ctrl+S]` saves a name and explicit PTY option.
+- **Keep processes alive:** selecting an active command opens its existing session. `[R]` starts another instance separately.
+- **Follow logs:** switch stdout/stderr, filter, copy, export, show timestamps, and send input to stdin or a PTY.
+- **Watch multiple services:** Multi mode shows up to three logs side by side and navigates additional groups.
+- **Act on groups:** select commands and start, stop, or restart them in parallel; groups are not dependency graphs.
+- **Switch projects:** `[N]` opens another repository/directory without interrupting active processes. Up to four projects occupy local tabs `[1]–[4]`.
+- **Use detected ports:** open or copy a URL, or send it directly to the HTTP tab.
+
+Logs update in batches and retain up to 1,200 entries, with per-entry and per-process size limits. Clearing a log also discards output pending display; final lines remain visible after exit.
+
+Single and Multi retain the original language of program output; only Tuiminal messages are translated. Port discovery waits for each probe before starting the next and cancels only its own helper when leaving the context.
+
+Project discovery deduplicates overlapping directories and performs up to 16 concurrent reads, with limits of 300 projects and seven levels. Detected commands use the selected project's paths. Deno JSONC task text is preserved even when it contains comment markers.
+
+Discovery reads `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile`, and other supported formats. Only `autostart: true` in Tuiminal's own file can request automatic startup. The first request shows the project, commands, directories, profile, and variable names for approval. Trust is local, and a material configuration change requires renewed confirmation. `mprocs` and `Procfile` never start implicitly.
 
 ```yaml
 version: 1
@@ -249,66 +349,80 @@ commands:
       timeoutMs: 30000
 ```
 
-### Atalhos essenciais do Runner
+<a id="atalhos-essenciais-do-runner"></a>
 
-| Ação | Atalho |
+### Essential Runner shortcuts
+
+| Action | Shortcut |
 | --- | --- |
-| Executar ou abrir processo existente | `[Enter]` |
-| Iniciar outra instância | `[R]` |
-| Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
-| Comandos / processos ativos | `[P]` |
-| Visualização única / múltipla | `[M]` |
-| Selecionar grupo | `[Space]` |
-| Iniciar / parar / reiniciar grupo | `[G]` / `[Shift+G]` / `[Shift+R]` |
-| Lista → log / log → lista | `[L/→]` / `[H/←]` |
-| Abrir ou recolher histórico | `[S]` |
-| Parar processo atual | `[Shift+K]` |
-| Abrir menu de ações | `[A]` |
-| Abrir outro projeto | `[+]` |
-| Alternar projetos do Runner | `[1]`–`[4]` |
-| Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
+| Run or open an existing process | `[Enter]` |
+| Start another instance | `[R]` |
+| Focus manual command / save | `[/]` / `[Ctrl+S]` |
+| Commands / active processes | `[P]` |
+| Single / Multi view | `[M]` |
+| Previous / next Multi group | `[A←]` / `[F→]` |
+| Select group | `[Space]` |
+| Start / stop / restart group | `[G]` / `[Shift+G]` / `[Shift+R]` |
+| List → log / log → list | `[L/→]` / `[H/←]` |
+| Expand / collapse history | `[S]` |
+| Stop current process | `[Shift+K]` |
+| Open action menu | `[A]` (Single) / `[Shift+A]` (Multi) |
+| Open another project | `[N]` |
+| Switch Runner projects | `[1]`–`[4]` |
+| Close project tab without stopping processes | `[Ctrl+X]` |
 
-Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
+Session state and saved commands live in `~/.config/tuiminal/runner.json`. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
 
 <a id="http"></a>
 
 ## HTTP
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Tuiminal HTTP tab demo" width="100%">
 </p>
 
-Um cliente de API compacto com documentos, coleção, builder, resposta e automação. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
+A compact API client with documents, collection, request builder, response inspection, and automation. Layout adapts from three columns to split or single-pane views without losing drafts, cursor, response, or focus.
 
-### O que você pode fazer
+<a id="o-que-você-pode-fazer-2"></a>
 
-- **Montar requests:** método, URL, query params, headers, JSON/texto/XML, form URL encoded, multipart, arquivo e autenticação Bearer, Basic ou API Key.
-- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação.
-- **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
-- **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
-- **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
-- **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
-- **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit.
-- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema.
-- **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
+### What you can do
 
-### Atalhos essenciais do HTTP
+- **Build requests:** method, URL, query parameters, headers, JSON/text/XML, URL-encoded forms, multipart, file bodies, and Bearer, Basic, or API Key authentication.
+- **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block.
+- **Control space:** request/response starts at `50/50`; `[Ctrl+↑/↓]` and the drag handle share a per-document ratio limited to 25–70%.
+- **Version collections:** open and save interoperable `.http`/`.rest` files without silently rewriting unsupported blocks.
+- **Import:** Postman v2.1 and OpenAPI 3.0/3.1, with conversion previews, loss warnings, and protection for detected secrets.
+- **Automate:** status/header/body/JSONPath assertions, request dependencies, and public or volatile variable extraction.
+- **Run collections:** resolve dependencies topologically, use JSON/CSV datasets, limit concurrency, and emit text, JSON, or JUnit reports. Selection works with duplicate request names. Reopening the runner or changing its target cancels the previous run; stale results cannot replace the new one.
+- **Use environments:** per-directory public/private variables, workspace defaults, and opaque references to system credential storage. Private-value fields remain masked during editing and resizing, including ideographs and emoji.
+- **Control transport:** timeout, redirects, cookie jar, HTTP/HTTPS proxy, and TLS. Cookies use Public Suffix List validation and bounded storage isolated by environment and collection directory. `[C]` disables both cookie reads and writes per request. Disabling TLS verification is explicit, visibly red, and requires approval per destination.
+- **Review sensitive redirects:** sending a private body/URL to another origin or downgrading HTTPS to HTTP pauses for authorization. `[Y]` continues that hop; `[Esc]` refuses. The confirmation shows destination and risks with known private values masked. Cancellation cannot undo a request already received by the previous server.
+- **Handle external responses carefully:** `[O]` opens only allowlisted raster images with matching MIME and signatures. SVG, PDF, generic binaries, and disguised content cannot open through the system handler, but can be explicitly saved. Full download resends only GET, caps at 256 MB, and removes partial files on failure. Repeated activation does not duplicate downloads; closing the owning document cancels them. Completed files are published only after all bytes are written, without replacing an existing destination.
 
-| Ação | Atalho |
+<a id="atalhos-essenciais-do-http"></a>
+
+### Essential HTTP shortcuts
+
+| Action | Shortcut |
 | --- | --- |
-| Focar URL / enviar / cancelar | `[/]` / `[S]` ou `[Enter]` / `[X]` |
-| Método anterior / seguinte | `[Shift+M]` / `[M]` |
-| Params, headers, body, auth e mais | `[P]`, `[H]`, `[B]`, `[A]`, `[O]` |
-| Abrir ambientes | `[E]` |
-| Alternar visualização da resposta | `[V]` |
-| Abrir coleção / histórico | `[C]` / `[Y]` |
-| Nova tab / fechar tab | `[Ctrl+N]` / `[Ctrl+W]` |
-| Alternar documentos | `[Alt+←/→]` |
-| Salvar `.http` | `[Ctrl+S]` |
-| Ajustar split / maximizar | `[Ctrl+↑/↓]` / `[F10]` |
-| Abrir jump mode | `[Ctrl+O]` |
+| Switch route, collection, request, and response | `[Tab]` / `[Shift+Tab]` or `[H/L]` |
+| Focus URL / send / cancel | `[/]` / `[S]` or `[Enter]` / `[X]` |
+| Previous / next method | `[Shift+M]` / `[M]` |
+| Cycle Params, Headers, Body, Auth, and More with request focused | `[A←]` / `[F→]` |
+| Cycle nested Body, Auth, or More options | `[Z←]` / `[V→]` |
+| Switch Query Params / Path Params | `[J/K]` or `[↑/↓]` |
+| Add an item to the focused subpanel | `[N]` |
+| Navigate / collapse / expand JSON | `[↑/↓]` or `[J/K]` / `[←/→]` / `[Enter]` |
+| Open environments | `[E]` |
+| Switch main response view / internal tab | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
+| Open collection / history | `[C]` / `[Y]` |
+| New / close tab | `[Ctrl+N]` / `[Ctrl+W]` |
+| Switch documents | `[Alt+←/→]` |
+| Save `.http` | `[Ctrl+S]` |
+| Adjust split / maximize | `[Ctrl+↑/↓]` / `[F10]` |
+| Open jump mode | `[Ctrl+O]` |
 
-Exemplo de request versionável:
+A versionable request example:
 
 ```http
 ### Buscar usuário
@@ -321,7 +435,7 @@ GET {{baseUrl}}/users/42
 Authorization: Bearer {{token}}
 ```
 
-O mesmo motor também funciona sem abrir a interface:
+The same engine also runs without opening the UI:
 
 ```bash
 tuiminal http run api.http#buscar-usuario --env local --report text
@@ -330,63 +444,83 @@ tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
 ```
 
-Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. Segredos são removidos de preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
+Headless redirects carrying a private body/URL require `--allow-private-redirect-to https://destino.example`; downgrades require `--allow-http-redirect-to http://destino.example`. Each flag accepts an exact origin (scheme, host, and port), can be repeated for additional destinations, and lasts only for that invocation. When both risks apply, both authorizations are required. `--allow-insecure-tls` is separate. Even with approval, private/authentication headers from the original origin are not forwarded. Continuing does not replay the previous request or collection dependencies. Timeout and cancellation dismiss pending confirmations; late approvals send nothing. Insecure TLS in the UI retains `[I]` approval by destination, environment, and session.
+
+Responses are captured up to roughly 1.5 MB and rendered within a bounded preview. Capture releases its reader on completion/failure and reports truncation only after observing bytes beyond the limit. Search tracks lines and columns without repeatedly processing the preceding text. Known secrets are masked in preview, cURL, conflicts, reports, and errors; secret extractions stay in memory.
+
+Persistent history is optional and masks known secrets in URLs, redirects, and metadata. Even with body persistence enabled, executions involving private variables, authentication, or known cookies keep bodies in the session only. Original responses remain in memory for inspection and explicit export. Other bodies may contain private data Tuiminal does not recognize: opting in does not make them safe to share. This protection does not automatically clean older history, exports, or backups.
+
+Redirects changing host, port, or scheme remove authentication and other sensitive headers, including custom API key names and resolved private values. These headers remain on same-origin redirects.
+
+In Params → Path, use `:id` segments or explicit `{id}` tokens, such as `/users/:id` or `/reports/{id}.json`. Substitution affects only the path, distinguishes names such as `id` and `id2`, and uses the first enabled row for duplicate names. Query, host, and port remain independent.
+
+Sensitive Path values receive the same protection, including encoded URLs and disabled rows. To save them in `.http`, use private-variable references; literal secrets are rejected without changing the file.
 
 <a id="free-terminal"></a>
 
 ## Free Terminal
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Demonstração da tab Free Terminal do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Tuiminal Free Terminal tab demo" width="100%">
 </p>
 
-Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada painel usa um PTY real e pode executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
+A general-purpose multiplexer. Every pane uses a real PTY and can run shells, REPLs, interactive database clients, Codex, Claude, or any CLI available in `PATH`.
 
-### O que você pode fazer
+Custom commands accept full shell expressions, including `&&`, `||`, `;`, pipes, variables, and loops. For example, `npm install && npm run dev` runs the second step after the first succeeds.
 
-- Criar seções independentes e manter até 12 terminais na execução.
-- Organizar cada seção em até quatro painéis numa grade `2 × 2`.
-- Dividir o painel ativo para o lado ou criar uma linha inferior.
-- Alternar entre a seção inteira e um terminal maximizado.
-- Preservar cores, cursor, prompts interativos e aplicações TUI em tela cheia.
-- Trocar de tab sem encerrar as sessões.
-- Focar, dividir, reiniciar e fechar painéis pelo teclado ou mouse.
+<a id="o-que-você-pode-fazer-3"></a>
 
-O prefixo `[Ctrl+B]`, inspirado no tmux, separa os comandos do multiplexador das teclas enviadas ao processo aberto:
+### What you can do
 
-| Depois de `[Ctrl+B]` | Ação |
+- Create independent sections and keep up to 12 terminals running.
+- Arrange each section as up to four panes in a `2 × 2` grid.
+- Split the active pane sideways or add a lower row.
+- Switch between a full section and a maximized terminal.
+- Wait for owned processes to exit on restart, pane close, or application shutdown. After a grace period, termination escalates only to the created process tree, without finding/killing processes by name or port.
+- Resize without losing output or rerunning exited commands. Repeated restart requests create only the newest session; closing a pane cancels a restart still waiting for its predecessor.
+- Preserve colors, cursor, interactive prompts, and fullscreen TUIs.
+- Switch tabs without ending sessions.
+- Focus, split, restart, and close panes by keyboard or mouse.
+
+The tmux-inspired `[Ctrl+B]` prefix separates multiplexer commands from input sent to the running process:
+
+| After `[Ctrl+B]` | Action |
 | --- | --- |
-| `[C]` | Criar seção |
-| `[V]` | Dividir para o lado |
-| `[S]` | Dividir para baixo |
-| `[N]` / `[P]` | Próximo terminal / terminal anterior |
-| `[1]`–`[4]` | Focar terminal visível |
-| `[M]` ou `[F]` | Alternar seção / foco |
-| `[[]` / `[]]` | Seção anterior / seguinte |
-| `[R]` | Reiniciar sessão |
-| `[X]` | Fechar sessão |
-| `[G]` | Liberar o terminal para usar os atalhos globais |
-| `[Ctrl+B]` | Enviar `Ctrl+B` ao processo aberto |
+| `[C]` | Create section |
+| `[V]` | Split sideways |
+| `[S]` | Split downward |
+| `[N]` / `[P]` | Next / previous terminal |
+| `[1]`–`[4]` | Focus visible terminal |
+| `[M]` or `[F]` | Toggle section / focused view |
+| `[[]` / `[]]` | Previous / next section |
+| `[R]` | Restart session |
+| `[X]` | Close session |
+| `[G]` | Release terminal capture for global shortcuts |
+| `[Ctrl+B]` | Send `Ctrl+B` to the running process |
 
-O campo `CMD` é opcional: vazio abre o shell padrão; preenchido executa o comando informado. Ao fechar o Tuiminal, somente os processos criados por ele são encerrados.
+`CMD` is optional: leave it empty for the default shell or enter a command to run. Tuiminal stops only processes it created when closing.
 
-## Interface e personalização
+<a id="interface-e-personalização"></a>
 
-`[,]` abre configurações contextuais. As mudanças são aplicadas sem desmontar editores, perder foco ou apagar o estado das ferramentas.
+## Interface and customization
 
-- **Modo de cor:** Dark ou Light.
-- **Paletas:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin e Tokyo Night.
-- **Layout:** Moldurado, com gaps e bordas completas; ou Compacto, com mais espaço e uma linha de foco por painel.
-- **Idiomas:** português brasileiro, inglês, espanhol, japonês, chinês simplificado e coreano.
-- **Tutorial:** um tour da ferramenta ativa com dados simulados e sem acesso a serviços reais.
-- **Mouse:** tabs, listas, botões, campos, commits, diffs, scroll e splits continuam clicáveis.
-- **Notificações:** informações, sucessos, avisos e erros aparecem sem roubar o foco.
+`[,]` opens contextual settings. Changes apply without remounting editors, losing focus, or clearing tool state.
 
-As preferências ficam em `~/.config/tuiminal/settings.json`.
+- **Color mode:** Dark or Light.
+- **Palettes:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, and Tokyo Night.
+- **Layout:** Framed, with gaps and full borders; or Compact, with more content space and a focus rail per panel.
+- **Languages:** Brazilian Portuguese, English, Spanish, Japanese, Simplified Chinese, and Korean.
+- **Tutorial:** an active-tool tour using simulated data without real service access.
+- **Mouse:** tabs, lists, buttons, fields, commits, diffs, scrolling, and splits remain clickable.
+- **Notifications:** information, success, warnings, and errors without stealing focus.
 
-## Desenvolvimento
+Preferences live in `~/.config/tuiminal/settings.json`. An invalid palette name falls back to Prime while preserving other valid preferences. Translating repeated error/warning prefixes does not truncate text or depend on call-stack depth.
 
-O pacote npm não exige Bun do usuário final. O checkout de desenvolvimento usa **Bun 1.3.14**, registrado em `.bun-version` e `package.json`:
+<a id="desenvolvimento"></a>
+
+## Development
+
+The npm distribution does not require Bun for end users. The development checkout uses **Bun 1.4.2**, recorded in `.bun-version` and `package.json`:
 
 ```bash
 git clone https://github.com/DeividXupon/tuiminal.git
@@ -395,39 +529,80 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Comandos principais:
+Development uses the same installer with locally generated payloads and a separate
+cache. After editing a feature, restart `bun run dev` and install its new snapshot.
+If you rebuild separately with `bun run build:features`, restart the application
+before installing. No npm publication is needed. See the
+[installation contract](./docs/design/official-feature-installation.md).
 
-| Comando | Finalidade |
+Main commands:
+
+| Command | Purpose |
 | --- | --- |
-| `bun run dev` | Executar com reload durante o desenvolvimento |
-| `bun run test:unit` | Testar regras e integrações locais |
-| `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
-| `bun run check` | Typecheck, formato, lint, arquitetura, manutenção e testes |
-| `bun run docs:demos` | Recriar os cinco GIFs deste README a partir da UI real |
-| `bun run build:release` | Gerar os pacotes de distribuição por plataforma |
+| `bun run dev` | Build local feature payloads and launch the installation flow |
+| `bun run build:features` | Rebuild the five installable official payloads |
+| `bun run test:unit` | Test rules and local integrations |
+| `bun run test:tui` | Test UI with the real OpenTUI renderer |
+| `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |
+| `bun run check:workspaces` | Check package versions, exports, and dependencies |
+| `bun run build:packages` | Generate JavaScript, types, and manifests for six internal modules |
+| `bun run test:packages` | Pack and install modules in a temporary consumer |
+| `bun run check:licenses` | Check the reproducible production license inventory |
+| `bun run docs:demos` | Recreate the installer and five tool GIFs from the real UI |
+| `bun run build:release` | Build platform distribution packages |
+| `bun run test:release` | Check hashes, tarballs, and final installation without Bun in `PATH` |
 
-`bun run docs:demos` usa dados simulados ou um repositório temporário, nunca credenciais e serviços do usuário. A conversão final dos frames requer [ImageMagick](https://imagemagick.org/).
+`bun run docs:demos` uses simulated data or a temporary repository, never user credentials or services. Final frame conversion requires [ImageMagick](https://imagemagick.org/).
 
-Antes de contribuir, leia:
+Before contributing, read:
 
-- [Guia de contribuição](./CONTRIBUTING.md)
-- [Arquitetura do projeto](./docs/architecture.md)
-- [Decisão do monólito modular](./docs/adr/0001-modular-monolith.md)
+- [Contribution guide](./CONTRIBUTING.md)
+- [Security policy](./SECURITY.md)
+- [Release process](./docs/release-process.md)
+- [Project architecture](./docs/architecture.md)
+- [Modular monolith decision](./docs/adr/0001-modular-monolith.md)
 
-## Arquitetura e próximos passos
+English is the primary documentation language. Keep this README and [README.pt-BR.md](./README.pt-BR.md) synchronized when shared content changes.
 
-O código atual é um monólito modular: `src/app` compõe a aplicação, `src/core` contém infraestrutura, `src/shared` oferece peças reutilizáveis e `src/features` separa cada ferramenta.
+<a id="arquitetura-e-próximos-passos"></a>
 
-O objetivo futuro é permitir que ferramentas oficiais e comunitárias usem o mesmo SDK público de plugins. Os documentos abaixo registram direção e evidências atuais; são planos evolutivos, não promessas de API congelada:
+## Architecture and next steps
 
-- [Plano do sistema de plugins](./PLUGIN_SYSTEM_PLAN.md)
-- [Plano do cliente HTTP](./HTTP_CLIENT_PLAN.md)
-- [Git Diffs e Pull Requests](./GIT_PR_PLAN.md)
-- [Git Issues](./GIT_ISSUES_PLAN.md)
-- [Git Inbox](./GIT_INBOX_PLAN.md)
+The code uses a **Bun workspaces monorepo**. `apps/cli` composes the application,
+`packages/core` holds shared infrastructure/components, and
+`packages/feature-{git,database,runner,http,terminal}` contains the five tools. Each
+package has its own `package.json`; `bun install` links `workspace:*` dependencies
+locally without manual links.
 
-## Licença
+The six modules emitted by `bun run build:packages` live in `dist/packages` and
+point to their directories in this repository. Their contracts are internal and
+versions follow the CLI. Source manifests remain private; packaging prepares
+artifacts without publishing them. Current npm distribution remains the `tuiminal`
+launcher with a minimal platform binary and five separately installed official payloads.
+
+The [alpha readiness checklist](./ALPHA_READINESS_PLAN.md) records local hardening
+and outstanding alpha acceptance. It is not release approval or a newly published
+npm version.
+
+Database, Git, Runner, HTTP, and Free Terminal are official internal Tuiminal
+features. A public SDK, marketplace, and community plugin loader are not planned.
+The minimal installation downloads compatible official components on demand,
+managed by Tuiminal without modifying the user's opened project.
+
+The [HTTP client plan](./HTTP_CLIENT_PLAN.md) records that tool's next steps.
+Maintained Git interface specifications and contracts are in:
+
+- [Git Diffs and Pull Requests](./docs/design/git-pr-interface.md)
+- [Git Issues](./docs/design/git-issues-interface.md)
+- [Git Inbox](./docs/design/git-inbox-interface.md)
+
+<a id="licença"></a>
+
+## License
 
 Copyright 2026 DeividXupon.
 
-Distribuído sob a [Apache License 2.0](./LICENSE). Você pode usar, modificar e distribuir o Tuiminal, inclusive comercialmente, desde que preserve os termos e avisos exigidos pela licença.
+Distributed under the [Apache License 2.0](./LICENSE). You may use, modify, and
+distribute Tuiminal, including commercially, while preserving the terms and notices
+required by the license. Bundled component notices are in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

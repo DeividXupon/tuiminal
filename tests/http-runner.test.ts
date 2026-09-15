@@ -4,8 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { parseHttpFile, requestFromHttpFile } from "../src/features/http/model/http-file"
-import { environmentVariableContext } from "../src/features/http/storage/environments"
+import { parseHttpFile, requestFromHttpFile } from "../packages/feature-http/src/model/http-file"
+import { environmentVariableContext } from "../packages/feature-http/src/storage/environments"
 import {
   loadHttpRunnerDataset,
   loadHttpProjectRunnerDataset,
@@ -13,8 +13,8 @@ import {
   redactHttpRunUrl,
   runHttpCollectionCase,
   runHttpDataset,
-} from "../src/features/http/services/collection-runner"
-import { formatHttpRunReport, httpRunExitCode } from "../src/features/http/cli/report"
+} from "../packages/feature-http/src/services/collection-runner"
+import { formatHttpRunReport, httpRunExitCode } from "../packages/feature-http/src/cli/report"
 
 let server: Server
 let baseUrl = ""
@@ -23,6 +23,19 @@ let root = ""
 beforeAll(async () => {
   root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-runner-"))
   server = createServer((request, response) => {
+    if (request.url === "/cookie/source") {
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "set-cookie": "scoped=source; Path=/",
+      })
+      response.end('{"stored":true}')
+      return
+    }
+    if (request.url === "/cookie/target") {
+      response.writeHead(200, { "content-type": "application/json" })
+      response.end(JSON.stringify({ cookie: request.headers.cookie ?? null }))
+      return
+    }
     if (request.url === "/login") {
       response.writeHead(200, { "content-type": "application/json" })
       response.end('{"token":"very-secret"}')
@@ -69,7 +82,42 @@ Authorization: Bearer {{token}}
   }))
 }
 
+function scopedCookieCollection() {
+  const sourceFile = parseHttpFile(
+    `### Source\n# @name source\nGET ${baseUrl}/cookie/source\n`,
+    "services/a/source.http",
+  )
+  const targetFile = parseHttpFile(
+    `### Target\n# @name target\n# @depends source\nGET ${baseUrl}/cookie/target\n`,
+    "services/b/target.http",
+  )
+  return [sourceFile, targetFile].flatMap((file) =>
+    file.requests.map((block) => ({
+      filePath: file.path,
+      request: requestFromHttpFile(file, block),
+    })),
+  )
+}
+
 describe("HTTP headless collection runner", () => {
+  test("an exact request ID selects only that request when display names are equal", async () => {
+    const items = collection().map((item) => ({
+      ...item,
+      request: { ...item.request, name: "Same name", headers: [], chain: { extract: [] } },
+    }))
+    const selected = items[1]
+    if (!selected) throw new Error("Missing second request fixture")
+    const result = await runHttpCollectionCase({
+      name: "exact-id",
+      items,
+      selector: selected.request.id,
+      variables: new Map(),
+      root,
+    })
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.requestId).toBe(selected.request.id)
+    expect(result.items[0]?.response?.status).toBe(401)
+  })
   test("runs dependencies, keeps extracted secrets in memory and evaluates assertions", async () => {
     const items = collection()
     const result = await runHttpCollectionCase({
@@ -85,6 +133,22 @@ describe("HTTP headless collection runner", () => {
     const report = formatHttpRunReport([result], "json")
     expect(report).not.toContain("very-secret")
     expect(httpRunExitCode([result])).toBe(0)
+  })
+
+  test("does not share collection cookies between sibling request scopes", async () => {
+    const items = scopedCookieCollection()
+    const result = await runHttpCollectionCase({
+      name: "scoped-cookies",
+      items,
+      selector: "target",
+      variables: environmentVariableContext(undefined),
+      root,
+      environmentName: "local",
+    })
+
+    expect(result.items).toHaveLength(2)
+    const targetBody = new TextDecoder().decode(result.items[1]?.response?.body)
+    expect(JSON.parse(targetBody)).toEqual({ cookie: null })
   })
 
   test("redacts private values even when URL fields have harmless names", () => {
@@ -184,14 +248,19 @@ describe("HTTP headless collection runner", () => {
     const process = Bun.spawn(
       [
         "bun",
-        resolve(import.meta.dir, "../bin/tuiminal.ts"),
+        resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
         "http",
         "run",
         "api.http#ping",
         "--report",
         "json",
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     )
     const [exitCode, stdout, stderr] = await Promise.all([
       process.exited,
@@ -213,7 +282,7 @@ describe("HTTP headless collection runner", () => {
       const process = Bun.spawn(
         [
           "bun",
-          resolve(import.meta.dir, "../bin/tuiminal.ts"),
+          resolve(import.meta.dir, "../apps/cli/bin/tuiminal.ts"),
           "http",
           "run",
           "insecure.http#insecure",
@@ -221,7 +290,12 @@ describe("HTTP headless collection runner", () => {
           "json",
           ...(allow ? ["--allow-insecure-tls"] : []),
         ],
-        { cwd: root, stdout: "pipe", stderr: "pipe" },
+        {
+          cwd: root,
+          env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       )
       const [exitCode, stdout, stderr] = await Promise.all([
         process.exited,

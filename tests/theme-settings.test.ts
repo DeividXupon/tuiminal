@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DEFAULT_SENSITIVE_TERMS } from "../src/shared/security/sensitive-data"
-import { PALETTE_OPTIONS, paletteFor } from "../src/core/settings/theme"
+import { DEFAULT_SENSITIVE_TERMS } from "../packages/core/src/security/sensitive-data"
+import { PALETTE_OPTIONS, paletteFor } from "../packages/core/src/settings/theme"
 
 describe("UI settings", () => {
   test("offers seven complete palettes in Dark and Light", () => {
@@ -37,8 +37,8 @@ describe("UI settings", () => {
     )
 
     try {
-      const themeUrl = new URL("../src/core/settings/theme.ts", import.meta.url).href
-      const syntaxUrl = new URL("../src/shared/ui/syntax-style.ts", import.meta.url).href
+      const themeUrl = new URL("../packages/core/src/settings/theme.ts", import.meta.url).href
+      const syntaxUrl = new URL("../packages/core/src/ui/syntax-style.ts", import.meta.url).href
       const script = `
         const theme = await import(${JSON.stringify(themeUrl)});
         theme.initializeUiSettings();

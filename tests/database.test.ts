@@ -3,6 +3,8 @@ import { Database } from "bun:sqlite"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { clearHistoryContent } from "../packages/feature-database/src/services/history-content"
+import type { RuntimeSqlExecutor } from "../packages/feature-database/src/services/read-only-query"
 
 const originalConfigRoot = process.env.XDG_CONFIG_HOME
 const configRoot = mkdtempSync(join(tmpdir(), "tuiminal-database-test-"))
@@ -41,11 +43,34 @@ function createFixtureDatabase(filename: string, userCount: number) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       enabled INTEGER NOT NULL DEFAULT 1
     );
+    CREATE TABLE exact_decimal_bindings (
+      id INTEGER PRIMARY KEY,
+      amount DECIMAL TEXT NOT NULL
+    );
     CREATE TABLE posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL
     );
+    CREATE TABLE optimistic_rows (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      note TEXT NOT NULL
+    );
+    INSERT INTO optimistic_rows (id, name, note) VALUES
+      (1, 'One', 'original'),
+      (2, 'Two', 'original'),
+      (3, 'Three', 'original'),
+      (4, 'Four', 'original'),
+      (5, 'Five', 'original'),
+      (6, 'Six', 'original'),
+      (7, 'Seven', 'original');
+    CREATE TRIGGER optimistic_ignore_update
+      BEFORE UPDATE OF name ON optimistic_rows
+      WHEN NEW.name = 'blocked'
+      BEGIN
+        SELECT RAISE(IGNORE);
+      END;
   `)
   const insertUser = database.query(`
     INSERT INTO users (name, email, password, bio, payload, active)
@@ -125,6 +150,7 @@ const {
   applyTableMutations,
   awaitCancelableDatabaseQuery,
   closeDatabaseConnection,
+  clearLegacyDatabaseQueryHistoryContent,
   coerceDatabaseCellValue,
   databaseConnectionCanWrite,
   databaseQueryHistoryEntryIsRead,
@@ -145,21 +171,29 @@ const {
   loadTableIndexes,
   loadTablePage,
   previewDatabaseQuery,
+  profileFromDraft,
   previewDatabaseTablePageQuery,
   previewTableMutation,
   removeDatabaseConnection,
   removeDatabaseSavedQuery,
   retainDatabaseQueryHistory,
+  normalizeQueryHistoryEntry,
+  readSettings,
+  writeSettings,
   saveDatabaseQuery,
   setDefaultDatabaseConnection,
   testDatabaseConnection,
   updateDatabaseConnection,
   updateTableRow,
   DatabaseQueryCancelledError,
+  DatabaseMutationCommitUncertainError,
+  DATABASE_SCHEMA_CACHE_LIMIT,
   DATABASE_QUERY_HISTORY_CHANGE_RETENTION_DAYS,
-} = await import("../src/features/database/services/database")
+  nativeClients,
+  schemaCache,
+} = await import("../packages/feature-database/src/services/database")
 const { DEFAULT_SENSITIVE_TERMS, setActiveSensitiveTerms } = await import(
-  "../src/shared/security/sensitive-data"
+  "../packages/core/src/security/sensitive-data"
 )
 
 afterAll(async () => {
@@ -170,6 +204,14 @@ afterAll(async () => {
 })
 
 describe("database query safety", () => {
+  test("does not inherit an existing connection's identity when copying a draft", () => {
+    const original = listDatabaseConnections().find((profile) => profile.id === "write-one")
+    if (!original) throw new Error("Missing fixture")
+    const copy = profileFromDraft({ ...original, writeEnabled: false })
+    expect(copy.id).not.toBe(original.id)
+    expect(copy.writeEnabled).toBe(false)
+    expect(profileFromDraft(original, "explicit-new-id").id).toBe("explicit-new-id")
+  })
   test("cancels a running native query through its real query handle", async () => {
     let cancelled = false
     let rejectQuery: (error: Error) => void = () => undefined
@@ -232,6 +274,25 @@ describe("database query safety", () => {
     expect(() => previewDatabaseQuery("read-only", "DELETE FROM users WHERE id = 1")).toThrow(
       "somente leitura",
     )
+  })
+
+  test("does not misclassify SQLite setting PRAGMAs as reads", async () => {
+    expect(previewDatabaseQuery("write-one", "PRAGMA user_version = 7").mutating).toBe(true)
+    expect(() => previewDatabaseQuery("read-only", "PRAGMA user_version = 7")).toThrow(
+      "somente leitura",
+    )
+    await expect(executeDatabaseQuery("read-only", "PRAGMA user_version = 7")).rejects.toThrow(
+      "somente leitura",
+    )
+    expect((await executeDatabaseQuery("read-only", "PRAGMA user_version")).rows[0]).toEqual({
+      user_version: 0,
+    })
+    const result = await executeDatabaseQuery("write-one", "PRAGMA user_version = 7")
+    expect(result.mutating).toBe(true)
+    expect((await executeDatabaseQuery("write-one", "PRAGMA user_version")).rows[0]).toEqual({
+      user_version: 7,
+    })
+    await executeDatabaseQuery("write-one", "PRAGMA user_version = 0")
   })
 
   test("rejects multiple or incomplete statements", () => {
@@ -380,13 +441,32 @@ describe("SQLite catalog and data browsing", () => {
     ).toEqual(["tenant_id", "code"])
   })
 
+  test("shares concurrent schema reads and keeps the schema cache bounded", async () => {
+    const cacheKey = "write-one:main:users"
+    schemaCache.delete(cacheKey)
+    const schemas = await Promise.all(
+      Array.from({ length: 12 }, () => loadDatabaseTableColumns("write-one", usersTable)),
+    )
+    expect(schemas.every((schema) => schema === schemas[0])).toBe(true)
+
+    for (let index = 0; index <= DATABASE_SCHEMA_CACHE_LIMIT; index += 1) {
+      schemaCache.set(`benchmark:${index}:table`, [])
+    }
+    schemaCache.delete(cacheKey)
+    await loadDatabaseTableColumns("write-one", usersTable)
+    expect(schemaCache.size).toBeLessThanOrEqual(DATABASE_SCHEMA_CACHE_LIMIT)
+    for (const key of schemaCache.keys()) {
+      if (key.startsWith("benchmark:")) schemaCache.delete(key)
+    }
+  })
+
   test("paginates deterministically and clamps unsafe bounds", async () => {
     const first = await loadTablePage("write-one", usersTable, -100, 0)
     expect(first.rows).toHaveLength(1)
     expect(first.rows[0]?.id).toBe(1)
     expect(first.hasMore).toBe(true)
 
-    const middle = await loadTablePage("write-one", usersTable, 50, 500)
+    const middle = await loadTablePage("write-one", usersTable, 50, 50)
     expect(middle.rows).toHaveLength(50)
     expect(middle.rows[0]?.id).toBe(51)
     expect(middle.rows.at(-1)?.id).toBe(100)
@@ -396,6 +476,18 @@ describe("SQLite catalog and data browsing", () => {
     expect(last.rows).toHaveLength(20)
     expect(last.rows[0]?.id).toBe(601)
     expect(last.hasMore).toBe(false)
+  })
+
+  test("tall table pages return every requested row without pagination gaps", async () => {
+    const ids: unknown[] = []
+    for (let offset = 0; offset < 620; offset += 87) {
+      const page = await loadTablePage("write-one", usersTable, offset, 87)
+      expect(page.rows).toHaveLength(Math.min(87, 620 - offset))
+      expect(page.hasMore).toBe(offset + 87 < 620)
+      expect(page.rowKeys).toHaveLength(page.rows.length)
+      ids.push(...page.rows.map((row) => row.id))
+    }
+    expect(ids).toEqual(Array.from({ length: 620 }, (_, index) => index + 1))
   })
 
   test("records table rendering without recording internal catalog queries", async () => {
@@ -736,6 +828,86 @@ describe("SQL execution", () => {
     expect(listDatabaseQueryHistory()).toContainEqual(selected)
   })
 
+  test("persists only execution metadata, not ad-hoc SQL, comments, literals or driver errors", async () => {
+    const secret = "SQL_HISTORY_FAKE_PRIVATE_VALUE"
+    for (const sql of [
+      `SELECT '${secret}' AS value /* https://example.test/${secret} */`,
+      `UPDATE audit_log SET message = '${secret}'`,
+      `INSERT INTO audit_log (message) VALUES ('${secret}')`,
+    ])
+      await executeDatabaseQuery("write-two", sql)
+    await expect(
+      executeDatabaseQuery("write-two", `SELECT * FROM missing_${secret}`),
+    ).rejects.toThrow()
+    const entries = listDatabaseQueryHistory("write-two").filter((entry) =>
+      entry.sql.includes(secret),
+    )
+    expect(entries).toHaveLength(4)
+    expect(entries.every(databaseQueryHistoryCanRerun)).toBe(true)
+    const persisted = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
+    expect(persisted).not.toContain(secret)
+    const stored = JSON.parse(persisted).queryHistory.find(
+      (entry: { id: string }) => entry.id === entries[0]?.id,
+    )
+    expect(stored).toMatchObject({
+      storage: "metadata-only",
+      sql: "",
+      rerunnable: false,
+      parameterPreview: [],
+    })
+    expect(stored.error).toBe("Não foi possível executar a consulta.")
+    clearHistoryContent()
+    for (const old of entries) {
+      const restarted = listDatabaseQueryHistory("write-two").find((entry) => entry.id === old.id)
+      expect(restarted?.sql).toBe("")
+      if (!restarted) throw new Error("Missing retained metadata")
+      expect(databaseQueryHistoryCanRerun(restarted)).toBe(false)
+      expect(databaseQueryHistoryEntryIsRead(restarted)).toBe(databaseQueryHistoryEntryIsRead(old))
+      expect(normalizeQueryHistoryEntry(restarted)).toEqual(restarted)
+    }
+  })
+
+  test("legacy cleanup is explicit, preserves metadata and never removes saved favorites", async () => {
+    await executeDatabaseQuery("write-two", "SELECT 42 AS answer")
+    const current = listDatabaseQueryHistory("write-two")[0]
+    if (!current) throw new Error("Missing fixture execution")
+    const legacy = {
+      ...current,
+      id: "legacy-privacy-fixture",
+      sql: "SELECT 'LEGACY_FAKE_SECRET'",
+      storage: undefined,
+      readOnly: undefined,
+    }
+    const { storage: _storage, readOnly: _readOnly, ...legacyEntry } = legacy
+    const settings = readSettings()
+    writeSettings({ ...settings, queryHistory: [legacyEntry, ...settings.queryHistory] })
+    const favorite = saveDatabaseQuery("write-two", {
+      name: "Explicit favorite",
+      sql: "SELECT 'FAVORITE_FAKE_SECRET'",
+    })
+    await executeDatabaseQuery("write-two", "SELECT 43 AS answer")
+    expect(readFileSync(join(settingsDirectory, "databases.json"), "utf8")).toContain(
+      "LEGACY_FAKE_SECRET",
+    )
+    expect(
+      listDatabaseQueryHistory("write-two").find((entry) => entry.id === legacyEntry.id)?.sql,
+    ).toBe(legacyEntry.sql)
+    clearLegacyDatabaseQueryHistoryContent()
+    const cleaned = listDatabaseQueryHistory("write-two").find(
+      (entry) => entry.id === legacyEntry.id,
+    )
+    expect(cleaned).toMatchObject({
+      id: legacyEntry.id,
+      sql: "",
+      storage: "metadata-only",
+      executedAt: current.executedAt,
+    })
+    const persisted = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
+    expect(persisted).not.toContain("LEGACY_FAKE_SECRET")
+    expect(persisted).toContain("FAVORITE_FAKE_SECRET")
+    removeDatabaseSavedQuery("write-two", favorite.id)
+  })
+
   test("returns query metadata and caps large result sets", async () => {
     const result = await executeDatabaseQuery(
       "write-one",
@@ -746,7 +918,7 @@ describe("SQL execution", () => {
       command: "SELECT",
       mutating: false,
       columns: ["id", "name", "active"],
-      rowCount: 620,
+      rowCount: 500,
       truncated: true,
     })
     expect(result.rows).toHaveLength(500)
@@ -929,6 +1101,7 @@ describe("staged table mutations", () => {
         name: "Mutation updated",
         active: 0,
       },
+      { id, name: "Mutation target", active: 1 },
     )
     const updated = await executeDatabaseQuery(
       "write-one",
@@ -936,7 +1109,12 @@ describe("staged table mutations", () => {
     )
     expect(updated.rows[0]).toEqual({ name: "Mutation updated", active: 0 })
 
-    await deleteTableRow("write-one", usersTable, { id })
+    await deleteTableRow(
+      "write-one",
+      usersTable,
+      { id },
+      { id, name: "Mutation updated", active: 0 },
+    )
     const deleted = await executeDatabaseQuery("write-one", `SELECT id FROM users WHERE id = ${id}`)
     expect(deleted.rows).toEqual([])
   })
@@ -959,11 +1137,60 @@ describe("staged table mutations", () => {
     expect(coerceDatabaseCellValue(column("INTEGER"), "42")).toBe(42)
     expect(coerceDatabaseCellValue(column("BIGINT"), "9007199254740993")).toBe(9007199254740993n)
     expect(coerceDatabaseCellValue(column("BOOLEAN"), "false")).toBe(false)
-    expect(coerceDatabaseCellValue(column("DECIMAL(10,2)"), "12.50")).toBe(12.5)
+    expect(coerceDatabaseCellValue(column("DECIMAL(10,2)"), "12.50")).toBe("12.50")
     expect(coerceDatabaseCellValue(column("JSON"), '{"active":true}')).toEqual({ active: true })
     expect(coerceDatabaseCellValue(column("TEXT"), "001")).toBe("001")
     expect(() => coerceDatabaseCellValue(column("INTEGER"), "4.2")).toThrow("inteiro")
     expect(() => coerceDatabaseCellValue(column("JSON"), "{")).toThrow("JSON")
+  })
+
+  test("preserves exact decimal text through preview, native transaction binding, and history", async () => {
+    const table = { schema: "main", name: "exact_decimal_bindings", type: "table" as const }
+    // TEXT is intentional: SQLite NUMERIC affinity itself rounds decimal values.
+    // This fixture isolates the application's actual binding path from that storage rule.
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const amountColumn = columns.find((column) => column.field === "amount")
+    if (!amountColumn) throw new Error("Missing decimal fixture column")
+    const initial = "123456789012345678.123456789012345678"
+    const changed = "9007199254740993.010000000000000001"
+    const mutation = {
+      kind: "insert" as const,
+      values: { id: 1, amount: coerceDatabaseCellValue(amountColumn, initial) },
+    }
+    const preview = previewTableMutation("write-one", table, columns, mutation)
+    await applyTableMutations("write-one", [{ table, columns, mutation, originalRow: null }])
+    const inserted = await executeDatabaseQuery(
+      "write-one",
+      "SELECT amount FROM exact_decimal_bindings",
+      true,
+    )
+    expect(inserted.rows).toEqual([{ amount: initial }])
+    expect(preview.parameters).toEqual([1, initial])
+
+    await applyTableMutations("write-one", [
+      {
+        table,
+        columns,
+        mutation: {
+          kind: "update",
+          rowKey: { id: 1 },
+          values: {
+            amount: coerceDatabaseCellValue(amountColumn, "9.007199254740993010000000000000001e15"),
+          },
+        },
+        originalRow: { id: 1, amount: initial },
+      },
+    ])
+    const updated = await executeDatabaseQuery(
+      "write-one",
+      "SELECT amount, typeof(amount) AS storage FROM exact_decimal_bindings",
+      true,
+    )
+    expect(updated.rows).toEqual([{ amount: changed, storage: "text" }])
+    const history = listDatabaseQueryHistory("write-one").find((entry) =>
+      entry.sql.startsWith('UPDATE "exact_decimal_bindings"'),
+    )
+    expect(history?.parameterPreview?.[0]?.value).toBe(JSON.stringify(changed))
   })
 
   test("commits an approved batch atomically and rolls every command back on failure", async () => {
@@ -973,6 +1200,7 @@ describe("staged table mutations", () => {
         table: usersTable,
         columns: userColumns,
         mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Atomic commit" } },
+        originalRow: { id: 1, name: "User 0001" },
       },
       {
         table: usersTable,
@@ -981,6 +1209,7 @@ describe("staged table mutations", () => {
           kind: "insert",
           values: { name: "Atomic insert", email: "atomic@example.test" },
         },
+        originalRow: null,
       },
     ])
     const committed = await executeDatabaseQuery("write-one", "SELECT name FROM users WHERE id = 1")
@@ -1017,7 +1246,7 @@ describe("staged table mutations", () => {
       },
     ])
     const persistedHistory = readFileSync(join(settingsDirectory, "databases.json"), "utf8")
-    expect(persistedHistory).toContain("Atomic commit")
+    expect(persistedHistory).not.toContain("Atomic commit")
     expect(persistedHistory).not.toContain("atomic@example.test")
     expect(persistedHistory).not.toContain("revealedValue")
 
@@ -1027,6 +1256,7 @@ describe("staged table mutations", () => {
           table: usersTable,
           columns: userColumns,
           mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Must roll back" } },
+          originalRow: { id: 1, name: "Atomic commit" },
         },
         {
           table: usersTable,
@@ -1035,6 +1265,7 @@ describe("staged table mutations", () => {
             kind: "insert",
             values: { name: "Duplicate", email: "atomic@example.test" },
           },
+          originalRow: null,
         },
       ]),
     ).rejects.toThrow()
@@ -1050,6 +1281,180 @@ describe("staged table mutations", () => {
     expect(rolledBackWrites).toHaveLength(2)
     expect(rolledBackWrites.map((entry) => entry.command).sort()).toEqual(["INSERT", "UPDATE"])
     expect(rolledBackWrites.every((entry) => entry.error)).toBe(true)
+  })
+
+  test("rejects stale row snapshots, changed primary keys, and trigger-suppressed writes", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const external = new Database(writableDatabasePath, { strict: true })
+    external.query("UPDATE optimistic_rows SET name = 'external' WHERE id = 1").run()
+    external.query("UPDATE optimistic_rows SET note = 'external' WHERE id = 2").run()
+    external.query("UPDATE optimistic_rows SET id = 30 WHERE id = 3").run()
+    external.close()
+
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "local" } },
+          originalRow: { id: 1, name: "One", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "delete", rowKey: { id: 2 } },
+          originalRow: { id: 2, name: "Two", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 3 }, values: { name: "local" } },
+          originalRow: { id: 3, name: "Three", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("alterado desde a revisão")
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 4 }, values: { name: "blocked" } },
+          originalRow: { id: 4, name: "Four", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("não confirmou os valores")
+
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(
+      database
+        .query("SELECT id, name, note FROM optimistic_rows WHERE id IN (1, 2, 4) ORDER BY id")
+        .all(),
+    ).toEqual([
+      { id: 1, name: "external", note: "original" },
+      { id: 2, name: "Two", note: "external" },
+      { id: 4, name: "Four", note: "original" },
+    ])
+    expect(database.query("SELECT id FROM optimistic_rows WHERE id IN (3, 30)").all()).toEqual([
+      { id: 30 },
+    ])
+    database.close()
+  })
+
+  test("reports no-ops and rolls back an earlier batch write when a trigger blocks a later row", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const noOp = await applyTableMutations("write-one", [
+      {
+        table,
+        columns,
+        mutation: { kind: "update", rowKey: { id: 7 }, values: { name: "Seven" } },
+        originalRow: { id: 7, name: "Seven", note: "original" },
+      },
+    ])
+    expect(noOp).toMatchObject({
+      plannedStatements: 1,
+      sentStatements: 0,
+      matchedRows: 1,
+      affectedRows: 0,
+      confirmedRows: 0,
+      noOpStatements: 1,
+      transactional: true,
+    })
+
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 5 }, values: { name: "changed" } },
+          originalRow: { id: 5, name: "Five", note: "original" },
+        },
+        {
+          table,
+          columns,
+          mutation: { kind: "update", rowKey: { id: 4 }, values: { name: "blocked" } },
+          originalRow: { id: 4, name: "Four", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("não confirmou os valores")
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 5").get()).toEqual({
+      name: "Five",
+    })
+    database.close()
+  })
+
+  test("keeps the review outcome uncertain when the connection fails during commit", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const columns = await loadDatabaseTableColumns("write-one", table)
+    const realPromise = nativeClients.get("write-one")
+    if (!realPromise) throw new Error("Expected an open SQLite client")
+    const realClient = await realPromise
+    const uncertainClient = {
+      unsafe: realClient.unsafe.bind(realClient),
+      begin: (async (callback: (transaction: RuntimeSqlExecutor) => unknown) => {
+        await realClient.begin(callback)
+        const error = new Error("connection lost during commit") as Error & { code: string }
+        error.code = "ECONNRESET"
+        throw error
+      }) as unknown as typeof realClient.begin,
+      close: realClient.close.bind(realClient),
+    }
+    nativeClients.set("write-one", Promise.resolve(uncertainClient))
+    try {
+      await expect(
+        applyTableMutations("write-one", [
+          {
+            table,
+            columns,
+            mutation: {
+              kind: "insert",
+              values: { id: 8, name: "Committed", note: "unknown to caller" },
+            },
+            originalRow: null,
+          },
+        ]),
+      ).rejects.toBeInstanceOf(DatabaseMutationCommitUncertainError)
+    } finally {
+      nativeClients.set("write-one", realPromise)
+    }
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 8").get()).toEqual({
+      name: "Committed",
+    })
+    database.close()
+  })
+
+  test("rejects a schema changed after review before dispatching a write", async () => {
+    const table = { schema: "main", name: "optimistic_rows", type: "table" as const }
+    const reviewedColumns = await loadDatabaseTableColumns("write-one", table)
+    const external = new Database(writableDatabasePath, { strict: true })
+    external.query("ALTER TABLE optimistic_rows ADD COLUMN added_later TEXT").run()
+    external.close()
+    await expect(
+      applyTableMutations("write-one", [
+        {
+          table,
+          columns: reviewedColumns,
+          mutation: { kind: "update", rowKey: { id: 6 }, values: { name: "local" } },
+          originalRow: { id: 6, name: "Six", note: "original" },
+        },
+      ]),
+    ).rejects.toThrow("schema da tabela mudou")
+    const database = new Database(writableDatabasePath, { readonly: true, strict: true })
+    expect(database.query("SELECT name FROM optimistic_rows WHERE id = 6").get()).toEqual({
+      name: "Six",
+    })
+    database.close()
   })
 })
 

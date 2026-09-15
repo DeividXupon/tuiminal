@@ -3,9 +3,12 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { App } from "../../src/app/App"
-import { STARTUP_ANIMATION_TIMING, STARTUP_WORDMARK } from "../../src/app/model/startup-animation"
-import { StartupAnimationFrame } from "../../src/app/ui/StartupAnimation"
+import { App } from "../../apps/cli/src/App"
+import {
+  STARTUP_ANIMATION_TIMING,
+  STARTUP_WORDMARK,
+} from "../../apps/cli/src/model/startup-animation"
+import { StartupAnimationFrame } from "../../apps/cli/src/ui/StartupAnimation"
 
 let tui: TestRendererSetup | undefined
 

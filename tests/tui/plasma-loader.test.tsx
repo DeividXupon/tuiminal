@@ -5,9 +5,9 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { useKeyboard } from "@opentui/react"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { COLORS } from "../../src/core/settings/theme"
-import { DatabaseLoadingOverlay } from "../../src/features/database/ui/DatabaseLoadingOverlay"
-import { PlasmaLoadingOverlay } from "../../src/shared/ui/PlasmaLoadingOverlay"
+import { COLORS } from "../../packages/core/src/settings/theme"
+import { DatabaseLoadingOverlay } from "../../packages/feature-database/src/ui/DatabaseLoadingOverlay"
+import { PlasmaLoadingOverlay } from "../../packages/core/src/ui/PlasmaLoadingOverlay"
 
 let tui: TestRendererSetup | undefined
 

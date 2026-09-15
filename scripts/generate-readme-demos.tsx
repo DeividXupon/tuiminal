@@ -1,3 +1,5 @@
+import type { FeatureState } from "../apps/cli/src/features/controller"
+import { demoTextRuns } from "./readme-demo-text"
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -5,7 +7,7 @@ import { join, resolve } from "node:path"
 import type { CapturedFrame } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
-import { act, createElement } from "react"
+import { act, createElement, useState } from "react"
 
 type FocusRect = {
   x: number
@@ -35,6 +37,7 @@ const CAPTURE_ROOT = mkdtempSync(join(tmpdir(), "tuiminal-readme-demos-"))
 const PROJECT_ROOT = join(CAPTURE_ROOT, "workspace")
 
 process.env.XDG_CONFIG_HOME = join(CAPTURE_ROOT, "config")
+process.env.XDG_DATA_HOME = join(CAPTURE_ROOT, "data")
 process.env.TUIMINAL_WORKDIR = PROJECT_ROOT
 process.env.TUIMINAL_PROJECT_ROOTS = CAPTURE_ROOT
 process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
@@ -91,16 +94,22 @@ writeFileSync(
 )
 writeFileSync(join(PROJECT_ROOT, "src", "cache.ts"), "export const ttl = 30_000\n")
 
-const { updateUiSettings } = await import("../src/core/settings/theme")
+// Import app runtime only after isolating config, data and project paths.
+const { FeatureInstaller } = await import("../apps/cli/src/features/FeatureInstaller")
+const { updateUiSettings, UI_SETTINGS_PATH } = await import("../packages/core/src/settings/theme")
+if (UI_SETTINGS_PATH !== join(CAPTURE_ROOT, "config", "tuiminal", "settings.json"))
+  throw new Error("Documentation captures must use isolated settings")
 const { DatabaseTutorialDemo } = await import(
-  "../src/features/database/tutorial/DatabaseTutorialDemo"
+  "../packages/feature-database/src/tutorial/DatabaseTutorialDemo"
 )
-const { GitViewer } = await import("../src/features/git")
-const { Runner } = await import("../src/features/runner")
-const { HttpTutorialDemo } = await import("../src/features/http/tutorial/HttpTutorialDemo")
-const { FreeTerminal } = await import("../src/features/terminal")
-const { stopAllRunnerProcesses } = await import("../src/features/runner/services/process")
-const { stopAllFreeTerminalProcesses } = await import("../src/features/terminal/services/terminal")
+const { GitViewer } = await import("../packages/feature-git/src")
+const { Runner } = await import("../packages/feature-runner/src")
+const { HttpTutorialDemo } = await import("../packages/feature-http/src/tutorial/HttpTutorialDemo")
+const { FreeTerminal } = await import("../packages/feature-terminal/src")
+const { stopAllRunnerProcesses } = await import("../packages/feature-runner/src/services/process")
+const { stopAllFreeTerminalProcesses } = await import(
+  "../packages/feature-terminal/src/services/terminal"
+)
 
 updateUiSettings({
   colorMode: "dark",
@@ -172,6 +181,7 @@ async function pressKey(
 ) {
   act(() => {
     if (name === "enter") tui.mockInput.pressEnter()
+    else if (name === "space") tui.mockInput.pressKey(" ")
     else if (name === "escape") tui.mockInput.pressEscape()
     else if (name === "down") tui.mockInput.pressArrow("down")
     else if (name === "up") tui.mockInput.pressArrow("up")
@@ -215,6 +225,96 @@ async function clickRenderable(tui: TestRendererSetup, id: string) {
 function destroy(tui: TestRendererSetup | undefined) {
   if (!tui) return
   act(() => tui.renderer.destroy())
+}
+
+async function installationFrames() {
+  let update = (_patch: Partial<FeatureState>) => {}
+  let animate = (_step: number) => {}
+  function DemoInstaller() {
+    const [previewStep, setPreviewStep] = useState(0)
+    animate = setPreviewStep
+    const [state, setState] = useState<FeatureState>({
+      ready: true,
+      installed: [],
+      busy: null,
+      progress: null,
+      error: "",
+    })
+    update = (patch) => setState((current) => ({ ...current, ...patch }))
+    return createElement(FeatureInstaller, {
+      state,
+      selected: "runner",
+      blocked: false,
+      previewStep,
+      onInstall: () => update({ busy: "runner", progress: { received: 0, total: 100 } }),
+      onUninstall: (id) => update({ installed: state.installed.filter((item) => item !== id) }),
+      onOpen: () => {},
+      onCancel: () => update({ busy: null, progress: null }),
+      onClose: () => {},
+      onSettings: () => {},
+    })
+  }
+  const tui = await testRender(createElement(DemoInstaller), {
+    width: TERMINAL_COLUMNS,
+    height: TERMINAL_ROWS,
+  })
+  try {
+    await settle(tui)
+    const frames = [
+      snapshot(
+        tui,
+        "Primeira abertura · escolha suas ferramentas oficiais",
+        "feature-option-runner",
+        170,
+      ),
+    ]
+    for (const id of ["database", "git", "runner", "http", "terminal"]) {
+      const target = tui.renderer.root.findDescendantById(`feature-option-${id}`)!
+      await act(async () => {
+        await tui.mockMouse.moveTo(target.screenX + 8, target.screenY + 1)
+      })
+      for (const step of [0, 6, 12, 18, 24, 30, 36, 42]) {
+        act(() => animate(step))
+        await tui.renderOnce()
+        frames.push(
+          snapshot(
+            tui,
+            "Passe o mouse ou use [↑/↓/J/K] para explorar cada ferramenta",
+            "feature-preview",
+            45,
+          ),
+        )
+      }
+    }
+    await pressKey(tui, "up")
+    await pressKey(tui, "up")
+    await pressKey(tui, "space")
+    await pressKey(tui, "up")
+    await pressKey(tui, "space")
+    frames.push(
+      snapshot(tui, "[Space] selecionar · [I] instalar em sequência", "feature-option-git", 170),
+    )
+    await pressKey(tui, "i")
+    for (const received of [10, 30, 55, 80, 100]) {
+      act(() => update({ progress: { received, total: 100 } }))
+      await settle(tui)
+      frames.push(
+        snapshot(tui, "O fundo da ferramenta acompanha o download", "feature-option-runner", 40),
+      )
+    }
+    act(() => update({ busy: null, progress: null, installed: ["runner", "git"] }))
+    await settle(tui)
+    frames.push(snapshot(tui, "Ferramentas instaladas · [Enter] abrir", "feature-option-git", 190))
+    await pressKey(tui, "d")
+    frames.push(snapshot(tui, "[D] Desinstalar pede confirmação", "feature-uninstall-dialog", 190))
+    await pressKey(tui, "y")
+    frames.push(
+      snapshot(tui, "A ferramenta pode ser instalada novamente", "feature-option-git", 170),
+    )
+    return frames
+  } finally {
+    destroy(tui)
+  }
 }
 
 async function databaseFrames() {
@@ -325,10 +425,10 @@ async function runnerFrames() {
       snapshot(tui, "[P] alterna entre comandos e processos ativos", "runner-process-list"),
     )
 
-    await pressKey(tui, "+")
+    await pressKey(tui, "n")
     await settle(tui, () => tui.captureCharFrame().includes("PROCURAR NOS ARQUIVOS"))
     frames.push(
-      snapshot(tui, "[+] abre outro projeto sem parar os atuais", "runner-project-list", 170),
+      snapshot(tui, "[N] abre outro projeto sem parar os atuais", "runner-project-list", 170),
     )
     return frames
   } finally {
@@ -455,6 +555,7 @@ function frameSvg(frame: DemoFrame, title: string, index: number, count: number)
 
   for (const [lineIndex, line] of frame.capture.lines.entries()) {
     let column = 0
+    const textRuns: string[] = []
     for (const span of line.spans) {
       const spanWidth = span.width * CELL_WIDTH
       const background = rgbaToHex(span.bg, "#0c0f18")
@@ -464,13 +565,15 @@ function frameSvg(frame: DemoFrame, title: string, index: number, count: number)
       chunks.push(
         `<rect x="${x}" y="${y}" width="${spanWidth + 0.2}" height="${CELL_HEIGHT}" fill="${background}"/>`,
       )
-      if (span.text.trim()) {
-        chunks.push(
-          `<text x="${x}" y="${y + 12.4}" fill="${foreground}" font-family="Menlo, Monaco, monospace" font-size="${FONT_SIZE}" xml:space="preserve">${xml(span.text)}</text>`,
+      for (const run of demoTextRuns(span.text)) {
+        textRuns.push(
+          `<text x="${x + run.column * CELL_WIDTH}" y="${y + 12.4}" fill="${foreground}" font-family="Menlo, Monaco, monospace" font-size="${FONT_SIZE}" textLength="${run.width * CELL_WIDTH}" lengthAdjust="spacingAndGlyphs">${xml(run.text)}</text>`,
         )
       }
       column += span.width
     }
+    // Paint backgrounds first so a neighboring span cannot erase a glyph edge.
+    chunks.push(...textRuns)
   }
 
   if (frame.focus) {
@@ -490,9 +593,11 @@ function frameSvg(frame: DemoFrame, title: string, index: number, count: number)
   chunks.push(
     `<text x="${terminalX + 14}" y="${footerY + 23}" fill="#eef2ff" font-family="Menlo, Monaco, monospace" font-size="12.5" font-weight="600">${xml(frame.caption)}</text>`,
   )
-  for (let dot = 0; dot < count; dot += 1) {
+  const dots = Math.min(count, 8)
+  const activeDot = Math.min(dots - 1, Math.floor((index / count) * dots))
+  for (let dot = 0; dot < dots; dot += 1) {
     chunks.push(
-      `<circle cx="${terminalX + terminalWidth - 18 - (count - dot - 1) * 12}" cy="${footerY + 18}" r="${dot === index ? 4 : 2.5}" fill="${dot === index ? "#4b75ff" : "#4a5268"}"/>`,
+      `<circle cx="${terminalX + terminalWidth - 18 - (dots - dot - 1) * 12}" cy="${footerY + 18}" r="${dot === activeDot ? 4 : 2.5}" fill="${dot === activeDot ? "#4b75ff" : "#4a5268"}"/>`,
     )
   }
   chunks.push(`</svg>`)
@@ -545,6 +650,7 @@ function renderGif(name: string, title: string, frames: DemoFrame[]) {
 
 try {
   mkdirSync(OUTPUT_ROOT, { recursive: true })
+  renderGif("installation", "Ferramentas oficiais", await installationFrames())
   renderGif("database", "Banco", await databaseFrames())
   renderGif("git", "Git", await gitFrames())
   renderGif("runner", "Runner", await runnerFrames())

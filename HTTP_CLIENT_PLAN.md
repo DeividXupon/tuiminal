@@ -1,751 +1,688 @@
-# Plano de evolução do cliente HTTP
+# HTTP client evolution plan
 
-> Status: plano técnico vivo e registro de execução. As fases descrevem a direção
-> alvo; o quadro de andamento distingue o que já possui evidência no worktree do
-> que ainda depende de implementação ou validação.
+> Status: living technical plan and implementation record. Phases describe the
+> target direction; the progress section distinguishes work supported by checkout
+> evidence from work still requiring implementation or validation.
 >
-> Pesquisa e auditoria atualizadas em 5 de setembro de 2026.
+> Reference research was conducted on 2026-09-05. Read proposals alongside progress
+> below, rather than treating every proposed item as an outstanding task.
 >
-> Decisão de implementação: o HTTP será reconstruído do zero. Código, modelos,
-> estado, componentes e testes específicos da implementação HTTP anterior não são
-> base de migração. Somente contratos externos e infraestrutura compartilhada do
-> Tuiminal podem ser reutilizados.
+> The rebuild replaced the previous HTTP implementation. Current behavior and
+> invariants are documented in the [README](./README.md) and [AGENTS.md](./AGENTS.md);
+> module organization is in [docs/architecture.md](./docs/architecture.md).
 >
-> Para retomar o trabalho sem o contexto da sessão anterior, comece pelo
-> [handoff da reconstrução HTTP](./docs/handoffs/http-client-rebuild.md). Ele
-> registra o mapa do código entregue, as invariantes e a ordem das pendências.
+> File compatibility remains documented in
+> [tests/fixtures/http/README.md](./tests/fixtures/http/README.md).
 
-## Resumo executivo
+### Release readiness
 
-O cliente HTTP deve evoluir de uma chamada avulsa com histórico de sessão para um
-workspace de API integrado ao Tuiminal. A direção recomendada combina:
+Completing functional phases does not approve a release. The
+[alpha checklist](./ALPHA_READINESS_PLAN.md) separates local privacy, redirect,
+cookie, filesystem, and limit fixes from outstanding acceptance on packaged target
+systems. Consult it before qualifying a candidate; local tests alone do not establish
+security.
 
-- a hierarquia visual do Posting: URL sempre visível, coleção lateral, request e
-  response simultâneos, foco evidente, tabs densas e ajuda contextual;
-- o modelo de projeto do Restless: arquivos `.http` legíveis, versionáveis e úteis
-  também fora da TUI;
-- a cobertura do ATAC como referência de longo prazo, sem copiar de imediato sua
-  grande superfície de protocolos, autenticações e estados;
-- a clareza do post-tui como referência de onboarding, mas superando seus limites
-  de edição, responsividade, cancelamento, segurança e testes.
+## Executive overview
 
-A tese de produto é: **a aparência e o fluxo principal lembram Posting; os dados
-pertencem ao projeto; a execução é limitada, cancelável e segura por padrão; e o
-resultado continua sendo uma parte coerente do Tuiminal, não outro aplicativo
-encaixado dentro dele**.
+The rebuild takes HTTP from individual calls with session history to an integrated
+API workspace. The direction combines:
 
-As primeiras entregas não devem começar por OpenAPI, scripts ou WebSocket. A nova
-feature começa por contratos de domínio, resolver de layout, ownership de execução,
-transporte limitado/cancelável e uma composição nova. Coleções, ambientes, inspeção
-avançada e automação entram sobre essa fundação.
+- Posting's hierarchy: persistent URL, side collection, simultaneous request/response,
+  clear focus, dense tabs, and contextual help.
+- Restless's project model: readable, versionable `.http` files useful outside the TUI.
+- ATAC's coverage as a long-term reference, without immediately copying its broad
+  set of protocols, authentication modes, and states.
+- post-tui's onboarding clarity, while addressing its editing, responsiveness,
+  cancellation, security, and testing limitations.
 
-## Estado da execução
+The product direction is **Posting-inspired interaction, project-owned data,
+bounded and cancellable execution with protective defaults, and a coherent part
+of Tuiminal**.
 
-- **Fase 0 — implementada e coberta por testes direcionados:** a implementação
-  anterior foi substituída por módulos novos de domínio, layout, transporte,
-  storage e UI; ownership de execução, cancelamento, timeout, captura limitada e
-  propagação de `[Esc]` já possuem regressões.
-- **Fase 1 — concluída no escopo atual:** os quatro modos responsivos, builder/response, seis tabs,
-  split, maximização, jump mode, Params/Headers/Body/Auth/Mais e método customizado
-  estão conectados. O preview mostra a requisição preparada com origens e segredos
-  mascarados, e sair do aplicativo com drafts HTTP exige confirmação. Uma matriz
-  automatizada cobre `60×16`, `72×18`, `80×24`, `96×24`, `120×30` e `160×40` nos
-  layouts framed/compact e nas seis línguas, incluindo URL/CJK longos, seis tabs,
-  bounds dos controles e resize sem remount. Sessões PTY reais confirmaram framed e
-  compact nas seis dimensões, resize durante edição, sequência de `[Esc]`, drag real
-  do divisor e alinhamento CJK em japonês, dentro de WezTerm/WSL2 e tmux.
-- **Fase 2 — concluída no escopo atual:** scanner/watcher, parser e serializer `.http`, arquivos,
-  ambientes público/privado carregados do projeto, cURL, multipart e body por
-  arquivo existem. Conflitos externos agora abrem um diff redigido com escolhas
-  explícitas para recarregar, aplicar a versão local ou salvá-la como cópia. O
-  gerenciador de ambientes cria valores privados em arquivo `0600`, oferece a regra
-  de `.gitignore` e pode guardar somente uma referência opaca no keychain. O editor
-  visual de defaults não secretos persiste `.tuiminal/http/config.json` e mantém a
-  precedência request explícito > workspace. A primeira auditoria corrigiu unidades
-  JetBrains de `@timeout`, diretivas `//`, `# @name =`, GET abreviado e URLs
-  multilinha. A matriz versionada cobre requests editáveis, bodies, diretivas,
-  scripts, redirects de saída, versão HTTP e protocolos não iniciados. Sintaxe
-  opaca abre com o bloco raw exato, sem builder/omnibar editável, e fica bloqueada
-  para execução, save, move e duplicação. Ambientes são resolvidos por nome, por
-  request, do diretório do `.http` até a raiz, sem misturar o escopo vencedor com
-  pais ou irmãos; novos valores privados são gravados ao lado do arquivo ativo.
-- **Fase 3 — concluída no escopo atual:** busca, folding, JSONPath, copy/save, resposta binária,
-  redirect, cookies, timing, histórico opt-in, diff e download completo existem.
-  `[C]` agora controla o cookie jar por request, desativa leitura e escrita quando
-  necessário, aparece no preview e faz round-trip por `@no-cookie-jar`. Proxy
-  HTTP/HTTPS explícito, `@proxy`, cURL `--proxy`, verificação TLS por request,
-  `@insecure-tls` e cURL `--insecure` também estão completos. TLS inseguro exige
-  aprovação por target/ambiente/sessão na TUI ou `--allow-insecure-tls` no modo
-  headless. A auditoria de carga confirmou cancelamento do stream no limite de
-  1,5 MB e motivou um preview nativo limitado a 50 mil caracteres.
-- **Fase 4 — concluída no escopo atual:** Postman/OpenAPI com preview, assertions, chaining,
-  extrações secretas voláteis, runner TUI com dataset/concorrência e CLI
-  text/JSON/JUnit estão implementados. O envio individual usa o mesmo motor e
-  resolve dependências topologicamente. Fixtures versionadas cobrem Postman v2.1,
-  OpenAPI 3.0 JSON e 3.1 YAML, incluindo herança, secrets, bodies, `$ref` local,
-  `allOf`, servers, overrides e perdas explícitas. CLI e TUI percorrem import,
-  preview e escrita protegida sem vazar literais.
-- **Fase 5 — não iniciada por decisão:** OAuth2, certificados, SSE, WebSocket,
-  scripting, GraphQL e gRPC permanecem sujeitos à evidência prevista nesta fase.
+The initial sequence starts with domain contracts, layout resolution, execution
+ownership, bounded/cancellable transport, and new composition. Collections,
+environments, advanced inspection, and automation build on that foundation;
+OpenAPI, scripts, and WebSocket do not come first.
 
-O programa das fases 0–4 atende à definição de concluído. A auditoria manual
-disponível foi executada em WezTerm/WSL2 e tmux com Bun 1.3.14; GNU Screen, VS Code
-Terminal, Windows Terminal e macOS não estavam disponíveis e permanecem como
-validação de compatibilidade futura, não como lacuna funcional conhecida. O gate
-final aprovou 337 testes unitários e 44 testes TUI, sem falhas, violações
-arquiteturais ou regressões de manutenção. A Fase 5 continua deliberadamente fora
-do escopo até existir demanda e evidência de segurança.
+## Implementation status
 
-## Objetivos e não objetivos
+- **Phase 0 — implemented with targeted regression coverage:** new domain, layout,
+  transport, storage, and UI modules replace the old implementation. Ownership,
+  cancellation, timeout, bounded capture, and `[Esc]` propagation have regressions.
+- **Phase 1 — complete within current scope:** four responsive modes, builder/response,
+  six document tabs, split, maximization, jump mode, Params/Headers/Body/Auth/More,
+  and custom methods are connected. Prepared-request preview shows provenance and
+  masks secrets; application exit with HTTP drafts requires confirmation. An
+  automated matrix covers `60×16`, `72×18`, `80×24`, `96×24`, `120×30`, and `160×40`
+  in framed/compact layouts and six languages, including long URLs/CJK, six tabs,
+  control bounds, and resize without remount. Real PTY sessions confirmed both
+  layouts at all six dimensions, resize during editing, `[Esc]` sequences, actual
+  divider drag, and Japanese CJK alignment in WezTerm/WSL2 and tmux.
+- **Phase 2 — complete within current scope:** scanner/watcher, `.http` parser and
+  serializer, files, project public/private environments, cURL, multipart, and file
+  bodies exist. External conflicts show a redacted diff with explicit reload,
+  overwrite-with-local, or save-copy choices. The environment manager writes private
+  values to `0600` files, offers a `.gitignore` rule, and can store only an opaque
+  keychain reference. Visual nonsecret defaults persist in `.tuiminal/http/config.json`
+  with explicit-request > workspace precedence. The initial audit fixed JetBrains
+  `@timeout` units, `//` directives, `# @name =`, abbreviated GET, and multiline URLs.
+  Versioned fixtures cover editable requests/bodies and opaque directives, scripts,
+  output redirects, HTTP versions, and unimplemented protocols. Opaque blocks open
+  as exact raw content with builder/omnibar editing disabled; execution, save, move,
+  and duplication are blocked. Named environments resolve per request from the
+  `.http` directory toward the root, without merging the winning scope with parents
+  or siblings; new private values are written beside the active file.
+- **Phase 3 — complete within current scope:** search, folding, JSONPath, copy/save,
+  binary responses, redirects, cookies, timing, opt-in history, diff, and full download.
+  `[C]` controls cookie reads/writes per request, appears in preview, and round-trips
+  as `@no-cookie-jar`. Explicit HTTP/HTTPS proxy, `@proxy`, cURL `--proxy`, per-request
+  TLS verification, `@insecure-tls`, and cURL `--insecure` are implemented. Insecure
+  TLS requires target/environment/session approval in the TUI or `--allow-insecure-tls`
+  headlessly. Load auditing confirmed stream cancellation at 1.5 MB and led to a
+  native preview capped at 50,000 characters. Desktop opening is limited to
+  PNG/JPEG/GIF/WebP/BMP with matching MIME/signatures; SVG, PDF, generic binary, and
+  forged MIME can only be saved. Full download resends only GET, caps at 256 MB,
+  rejects non-2xx responses, and removes partial files on cancellation/stream/disk failure.
+- **Phase 4 — complete within current scope:** Postman/OpenAPI preview imports,
+  assertions, chaining, volatile secret extraction, TUI dataset/concurrency runner,
+  and text/JSON/JUnit CLI reports. Individual sends use the same engine and resolve
+  dependencies topologically. Versioned Postman v2.1, OpenAPI 3.0 JSON, and 3.1 YAML
+  fixtures cover inheritance, secrets, bodies, local `$ref`, `allOf`, servers,
+  overrides, and explicit losses. CLI/TUI import, preview, and protected writes
+  are exercised without leaking literals.
+- **Phase 5 — deliberately not started:** OAuth2, certificates, SSE, WebSocket,
+  scripting, GraphQL, and gRPC remain subject to the evidence requirements below.
 
-### Objetivos
+Phases 0–4 met their recorded definition of done. Manual auditing used
+WezTerm/WSL2 and tmux with Bun 1.3.14. GNU Screen, VS Code Terminal, Windows Terminal,
+and macOS were unavailable in that audit and remain future compatibility validation,
+not known functional gaps. The recorded gate passed 337 unit and 44 TUI tests with
+no failures, architecture violations, or maintainability regressions. These are
+historical results, not current release qualification. Phase 5 remains outside scope
+until supported by demand and security evidence.
 
-1. Tornar requisições frequentes rápidas para teclado e mouse.
-2. Manter coleção, ambientes e exemplos junto do projeto, em formato textual.
-3. Dar à resposta a maior parte do espaço útil e ferramentas reais de depuração.
-4. Reimplementar como requisitos: cancelamento, timeout, limite de captura,
-   interface multilíngue e integração com a porta detectada pelo Runner.
-5. Impedir que histórico, exports, logs ou arquivos privados vazem credenciais por
-   padrão.
-6. Permitir evolução posterior para execução headless, assertions e novos
-   protocolos sem transformar `HttpWorkspace.tsx` em um controlador monolítico.
+## Goals and non-goals
 
-### Não objetivos imediatos
+### Goals
 
-- reproduzir toda a superfície do Postman;
-- sincronização em nuvem, conta ou colaboração em tempo real;
-- executar scripts importados sem consentimento e isolamento;
-- implementar GraphQL, gRPC, MQTT, WebSocket e SSE na primeira sequência;
-- criar um formato proprietário quando `.http` atende ao núcleo do caso de uso;
-- copiar código ou identidade visual de outro projeto.
+1. Make frequent requests fast with keyboard and mouse.
+2. Keep collections, environments, and examples beside the project in text files.
+3. Give responses most usable space and real debugging tools.
+4. Preserve cancellation, timeout, capture limits, multilingual UI, and Runner-port
+   integration as requirements of the rebuild.
+5. Prevent credential leakage through history, exports, logs, and private files by default.
+6. Enable later headless execution, assertions, and protocols without turning
+   `HttpWorkspace.tsx` into a monolithic controller.
 
-## Método e fontes analisadas
+### Immediate non-goals
 
-A análise considerou documentação, screenshots e código-fonte nos seguintes
-snapshots. Links apontam para a revisão estudada sempre que possível.
+- Reproducing the entire Postman feature set.
+- Cloud synchronization, accounts, or real-time collaboration.
+- Running imported scripts without consent and isolation.
+- Implementing GraphQL, gRPC, MQTT, WebSocket, and SSE in the initial sequence.
+- Creating a proprietary format when `.http` serves the core use case.
+- Copying another project's code or visual identity.
 
-| Projeto | Snapshot | Base técnica | Material principal |
+## Research method and sources
+
+The research examined documentation, screenshots, and source at the following
+snapshots. Links identify the inspected revision where available. Comparisons below
+are historical observations, not claims about later versions.
+
+| Project | Snapshot | Stack | Main material |
 | --- | --- | --- | --- |
-| Tuiminal | worktree local em 2026-09-04 | Bun, OpenTUI, React | [`HttpWorkspace.tsx`](./src/features/http/HttpWorkspace.tsx), [`collection-runner.ts`](./src/features/http/services/collection-runner.ts), [`http.test.ts`](./tests/http.test.ts) |
-| Posting | [`56703a1`](https://github.com/darrenburns/posting/tree/56703a11513e8e74e681b4f859f31945b71e746f), versão 2.10.0 | Python, Textual, httpx | [guia](https://posting.sh/guide/), [navegação](https://posting.sh/guide/navigation/), [roadmap](https://posting.sh/roadmap/) |
-| ATAC | [`e5daf66`](https://github.com/Julien-cpsn/ATAC/tree/e5daf666e5b5fc75eb787f1551083fdc37507ffb), versão 0.23.1 | Rust, Ratatui, reqwest | [README e matriz de recursos](https://github.com/Julien-cpsn/ATAC#features) |
-| Restless | [`b5d7d3e`](https://github.com/shahadulhaider/restless/tree/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3) | Go, Bubble Tea, `net/http` | [README](https://github.com/shahadulhaider/restless), [atalhos](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/docs/keybindings.md) |
-| post-tui | [`b73d912`](https://github.com/raufendro-dev/post-tui/tree/b73d91273447c05f7acdd3f4f9cdf5cedd901f48), versão 1.0.3 | Rust, Ratatui, reqwest | [README, limitações e roadmap](https://github.com/raufendro-dev/post-tui#current-limitations) |
-| Sintaxe `.http` | documentação 2026.2 | formato de arquivo interoperável | [sintaxe](https://www.jetbrains.com/help/idea/exploring-http-syntax.html), [variáveis e arquivos privados](https://www.jetbrains.com/help/idea/http-client-variables.html) |
+| Tuiminal | Local worktree on 2026-09-04 | Bun, OpenTUI, React | Former `HttpWorkspace.tsx`; current [collection-runner.ts](./packages/feature-http/src/services/collection-runner.ts) and [http.test.ts](./tests/http.test.ts) |
+| Posting | [`56703a1`](https://github.com/darrenburns/posting/tree/56703a11513e8e74e681b4f859f31945b71e746f), v2.10.0 | Python, Textual, httpx | [Guide](https://posting.sh/guide/), [navigation](https://posting.sh/guide/navigation/), [roadmap](https://posting.sh/roadmap/) |
+| ATAC | [`e5daf66`](https://github.com/Julien-cpsn/ATAC/tree/e5daf666e5b5fc75eb787f1551083fdc37507ffb), v0.23.1 | Rust, Ratatui, reqwest | [README and features](https://github.com/Julien-cpsn/ATAC#features) |
+| Restless | [`b5d7d3e`](https://github.com/shahadulhaider/restless/tree/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3) | Go, Bubble Tea, `net/http` | [README](https://github.com/shahadulhaider/restless), [keybindings](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/docs/keybindings.md) |
+| post-tui | [`b73d912`](https://github.com/raufendro-dev/post-tui/tree/b73d91273447c05f7acdd3f4f9cdf5cedd901f48), v1.0.3 | Rust, Ratatui, reqwest | [README, limitations, and roadmap](https://github.com/raufendro-dev/post-tui#current-limitations) |
+| `.http` syntax | 2026.2 documentation | Interoperable file format | [Syntax](https://www.jetbrains.com/help/idea/exploring-http-syntax.html), [variables/private files](https://www.jetbrains.com/help/idea/http-client-variables.html) |
 
-### Base de UX/UI usada no desenho
+### UX/UI design basis
 
-O layout não deriva somente da aparência dos concorrentes. As decisões abaixo
-cruzam referências gerais de interação, recomendações específicas para terminal e
-limitações observadas em TUIs reais.
+Design draws on general interaction principles, terminal guidance, and observed TUI
+limitations, in addition to competitor appearance.
 
-| Evidência | Consequência para o Tuiminal |
+| Evidence | Consequence for Tuiminal |
 | --- | --- |
-| As [heurísticas de Nielsen](https://www.nngroup.com/articles/ten-usability-heuristics/) priorizam visibilidade do estado, controle e liberdade, consistência, prevenção de erro, reconhecimento em vez de memorização e minimalismo. | Execução, foco, ambiente, dirty state, truncamento e resultado ficam visíveis; cancelar e desfazer são caminhos explícitos; ajuda e ações primárias são reconhecíveis sem memorizar uma gramática inteira. |
-| [Progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/) reduz sobrecarga em aplicações com muitos comandos, e a orientação para [aplicações complexas](https://www.nngroup.com/articles/complex-application-design/) recomenda revelar opções avançadas no contexto em que se tornam relevantes. | A superfície principal não replica todas as tabs do Posting/ATAC. Params, Headers, Body e Auth permanecem visíveis; opções raras ficam em `Mais`, command palette ou menus contextuais. |
-| O guia de layout do [Textual](https://textual.textualize.io/how-to/design-a-layout/) recomenda esboçar retângulos, registrar quais regiões rolam e construir de fora para dentro, com áreas flexíveis absorvendo o espaço restante. | Cada pane tem mínimo, máximo, política de scroll e prioridade declarados. O response recebe o espaço elástico, enquanto barras e identidade do request permanecem estáveis. |
-| As fundações do [TUIKit](https://github.com/github/TUIKit/blob/main/docs/foundations.md) tratam responsividade como medição de colunas/linhas, recomendam animação com parcimônia e definem ordem de foco igual à ordem visual. | Breakpoints usam a área útil da feature e restrições de conteúdo, não apenas percentuais. A ordem é esquerda-direita/cima-baixo; animação nunca é o único indicador. |
-| O [Command Line Interface Guidelines](https://clig.dev/) recomenda feedback em menos de 100 ms, progresso para esperas, timeout, erros acionáveis, cor intencional e saída simples para automação. | Enviar muda imediatamente para estado `Enviando`; a fase atual e o cancelamento permanecem visíveis; erros mostram causa e próximo passo; o modo headless tem saída `text`, `json` e `junit` estável. |
-| A experiência do [GitHub CLI com acessibilidade](https://github.blog/engineering/user-experience/building-a-more-accessible-github-cli/) mostra que redraw constante, prompts ornamentais e spinners podem confundir leitores de tela; também favorece cores 4-bit configuráveis. | Haverá modo acessível/reduced-motion com progresso textual estático, menos ornamento e sem dependência de truecolor. Paletas precisam funcionar em fundo claro, escuro e alto contraste. |
-| A orientação [WCAG2ICT para terminal](https://github.com/w3c/wcag2ict/blob/main/text-command-line-terminal-applications-and-interfaces.md), além dos princípios de [reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow), [contraste](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum) e [foco visível](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html), continua útil mesmo sem DOM. | Redimensionar nunca remove funcionalidade; cor não carrega significado sozinha; foco combina fundo, accent e marcador textual; o modo estreito oferece uma coluna em vez de exigir scroll bidimensional fora de tabelas/editores. |
-| A discussão de UX do [lazygit](https://github.com/jesseduffield/lazygit/issues/1712) registra dois conflitos recorrentes: novatos versus usuários experientes e atalhos globais com significado local diferente. | Ações perigosas confirmam por padrão e podem ganhar preferência posterior; um atalho global nunca muda de significado dentro de um pane; atalhos locais aparecem em ajuda contextual. |
+| [Nielsen's heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/): visible state, user control, consistency, error prevention, recognition, and minimalism. | Keep execution, focus, environment, dirty state, truncation, and result visible; make cancellation/undo explicit and primary actions discoverable. |
+| [Progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/) and [complex application design](https://www.nngroup.com/articles/complex-application-design/). | Keep Params, Headers, Body, and Auth visible; put infrequent options in More, a command palette, or contextual menus. |
+| [Textual layout guidance](https://textual.textualize.io/how-to/design-a-layout/): sketch regions, define scrolling, build outside-in, allocate flexible space. | Declare pane minimums/maximums, scrolling policies, and priorities. Response takes elastic space; bars and request identity stay stable. |
+| [TUIKit foundations](https://github.com/github/TUIKit/blob/main/docs/foundations.md): measure columns/rows, use animation sparingly, align focus with visual order. | Breakpoints use feature content constraints and usable area, with left-to-right/top-to-bottom focus and non-animation status signals. |
+| [CLI Guidelines](https://clig.dev/): feedback within 100 ms, progress, timeout, actionable errors, intentional color, simple automation output. | Sending immediately shows phase and cancellation; errors explain a next action; headless text/JSON/JUnit output is stable. |
+| [GitHub CLI accessibility](https://github.blog/engineering/user-experience/building-a-more-accessible-github-cli/): redraw, ornamental prompts, and spinners can confuse screen readers; configurable 4-bit colors help. | Plan accessible/reduced-motion behavior with static progress, less decoration, and no truecolor dependency; test light/dark/high-contrast palettes. |
+| [WCAG2ICT terminal guidance](https://github.com/w3c/wcag2ict/blob/main/text-command-line-terminal-applications-and-interfaces.md), [reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow), [contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum), and [visible focus](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html). | Resize must preserve functionality; combine text, background, and accent for state/focus; use one column on narrow terminals rather than unnecessary two-dimensional scrolling outside tables/editors. |
+| [lazygit UX discussion](https://github.com/jesseduffield/lazygit/issues/1712): novice/expert needs and conflicting global/local bindings. | Confirm dangerous actions by default; consider later preferences; never repurpose a global shortcut by pane, and expose local bindings contextually. |
 
-Essas fontes não são tratadas como regras transplantadas literalmente da web ou de
-CLIs lineares. Elas fornecem critérios verificáveis para uma TUI full-screen: cada
-estado deve responder “onde estou, o que está selecionado, o que está rodando, o
-que mudou e qual é a próxima ação?” sem depender apenas de cor ou memória.
+These sources provide testable criteria, not web/linear-CLI rules transplanted
+literally. Every fullscreen state should answer where focus is, what is selected,
+what is running, what changed, and what can happen next without color or memory alone.
+Roadmap-only features were not treated as implemented. “Not identified” means absent
+from inspected documentation/execution paths, not that no other revision ever had it.
 
-Não foram tratados como prova recursos que aparecem apenas em um roadmap. Na
-comparação, “não identificado” significa que a capacidade não apareceu nem na
-documentação nem no caminho de execução inspecionado; não significa que jamais
-tenha existido em outra revisão.
+## Diagnosis before the rebuild
 
-## Auditoria do HTTP atual do Tuiminal
+This section records the research starting point, not presumed defects in the current
+implementation. Consult implementation status before opening new work.
 
-### Capacidades atuais que precisam ser reimplementadas
+### Previous capabilities
 
-- métodos GET, POST, PUT, PATCH, DELETE, HEAD e OPTIONS;
-- normalização de URL sem protocolo para `http://` e rejeição de protocolos não
-  HTTP;
-- headers em texto, body textual/JSON e `Content-Type` automático;
-- resposta com status, duração total, bytes capturados, headers e JSON formatado;
-- timeout de 30 segundos, cancelamento com `AbortController` e captura limitada a
-  aproximadamente 1,5 MB;
-- histórico de até 30 chamadas na sessão;
-- layout request/response lado a lado e fallback por painéis em terminal estreito;
-- envio de uma URL detectada pelo Runner para a aba HTTP;
-- mouse nos principais botões e listas;
-- textos integrados ao sistema de tradução do Tuiminal.
+- GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS.
+- Scheme-less URLs normalized to `http://`; non-HTTP schemes rejected.
+- Text headers, text/JSON bodies, and automatic `Content-Type`.
+- Status, total duration, captured bytes, headers, and formatted JSON.
+- 30-second timeout, `AbortController` cancellation, and roughly 1.5 MB capture limit.
+- Up to 30 session calls in history.
+- Side-by-side request/response with narrow-terminal pane fallback.
+- Runner-detected URLs forwarded to HTTP.
+- Mouse support for main buttons/lists and integrated Tuiminal translations.
 
-Os três testes HTTP anteriores cobriam normalização, parsing básico de headers e uma
-chamada JSON local. Eles são substituídos por testes dos contratos novos; não devem
-ditar nomes, tipos ou arquitetura. A cobertura nova precisa provar TUI, cancelamento,
-truncamento, redirects, binários, erros, ownership e segurança.
+The previous three HTTP tests covered normalization, basic header parsing, and one
+local JSON request. New contract tests replace them; old tests do not dictate names,
+types, or architecture. Coverage must establish TUI behavior, cancellation,
+truncation, redirects, binary/error handling, ownership, and security.
 
-### Lacunas de produto
+### Previous product gaps
 
-- Não há coleção de projeto, requests salvos, pastas, busca ou múltiplos requests
-  abertos.
-- Histórico, draft e resposta vivem apenas no estado React; reiniciar perde tudo.
-- Query params e path params não têm editores próprios nem preservam duplicatas e
-  estado habilitado/desabilitado de forma explícita.
-- Não há autenticação estruturada, ambientes, variáveis ou separação de segredos.
-- Body é apenas raw; faltam form URL encoded, multipart, arquivo e tipos explícitos.
-- A resposta só alterna body/headers. Faltam raw/pretty, cookies, redirects, timing
-  por etapa disponível, busca, folding JSON, cópia, download e diff.
-- Não há import/export de cURL, `.http`, Postman ou OpenAPI.
-- Não há assertions, execução headless ou collection runner.
+- No project collection, saved requests, folders, search, or multiple open requests.
+- History, drafts, and responses lived only in React state and disappeared on restart.
+- No dedicated query/path editors with explicit order, duplicates, or enable/disable.
+- No structured authentication, environments, variables, or secret separation.
+- Raw-only bodies, without forms, multipart, files, or explicit kinds.
+- Body/headers-only response view: no Pretty/Raw, cookies, redirects, available timing
+  stages, search, JSON folding, copy, download, or diff.
+- No cURL, `.http`, Postman, or OpenAPI import/export.
+- No assertions, headless execution, or collection runner.
 
-### Riscos técnicos e de interação
+### Previous technical and interaction risks
 
-- `HttpWorkspace.tsx` concentra cerca de 731 linhas de layout, estado, teclado,
-  execução, histórico e apresentação. Acrescentar coleções e ambientes nesse mesmo
-  controlador aumentaria o acoplamento e dificultaria testes.
-- O modelo `HttpRequestDraft` representa headers como um único texto e body como
-  uma única string. Ele não consegue expressar enable/disable, segredo, tipo de
-  body, arquivos, autenticação ou a origem de uma variável.
-- A troca entre Headers e Body usa uma `key` que remonta o textarea. Mesmo com a
-  sincronização atual, o padrão perde cursor, seleção e histórico de edição; a nova
-  UI deve manter os editores montados e inativos.
-- O escopo global de teclado lista somente URL e editor. A lista de histórico e o
-  scroll da resposta também recebem foco, e o handler de histórico fecha com
-  `[Esc]` sem consumir explicitamente o evento. Isso precisa de um teste real de
-  propagação antes de ampliar a TUI.
-- `Response.headers.entries()` não é suficiente como contrato para headers
-  repetidos, principalmente `Set-Cookie`. O novo snapshot deve preservar ordem e
-  múltiplos valores.
-- O tamanho exibido é o número de bytes retidos. Em uma resposta truncada, isso
-  não representa necessariamente o tamanho declarado ou transferido.
-- O `fetch` fornece um bom tempo total, mas não expõe DNS/TCP/TLS detalhados. A UI
-  não deve inventar métricas que o transporte não consegue medir.
-- Trinta respostas no limite máximo podem reter dezenas de megabytes. O número de
-  entradas e o orçamento total dos corpos precisam ser limites independentes.
+- `HttpWorkspace.tsx` combined roughly 731 lines of layout, state, keyboard,
+  execution, history, and presentation, making further features harder to test.
+- `HttpRequestDraft` used one header string and one body string, unable to represent
+  enable/disable, sensitivity, files, body kinds, authentication, or variable provenance.
+- Switching Headers/Body used a `key` that remounted the textarea, risking cursor,
+  selection, and undo history. New editors must stay mounted while inactive.
+- Global keyboard scope knew only URL/editor; history and response scrolling also
+  took focus, and history `[Esc]` did not explicitly consume the event. Test real
+  propagation before expanding the TUI.
+- `Response.headers.entries()` alone is insufficient for ordered duplicate headers,
+  particularly `Set-Cookie`.
+- Retained bytes do not necessarily equal declared/transferred size when truncated.
+- `fetch` measures total duration but does not expose detailed DNS/TCP/TLS timings;
+  the UI must not invent measurements.
+- Thirty maximum-size responses can retain tens of megabytes. Entry count and total
+  body budget must be independent limits.
 
-## Comparação funcional
+## Historical feature comparison
 
-| Capacidade | Tuiminal atual | Posting | ATAC | Restless | post-tui |
+“Tuiminal baseline” refers to the pre-rebuild snapshot above.
+
+| Capability | Tuiminal baseline | Posting | ATAC | Restless | post-tui |
 | --- | --- | --- | --- | --- | --- |
-| Request e response simultâneos | Sim | Sim | Sim | Alternância | Sim |
-| Coleção local | Não | Diretório + YAML por request | JSON/YAML | Arquivos `.http` | JSON interno + import Postman |
-| Ambientes/variáveis | Não | `.env`, hot reload | Arquivos de ambiente | JSON, inline e dinâmicas | Não |
-| Params estruturados | Não | Query e path | Query/path | Sintaxe `.http` | Query |
-| Auth estruturada | Não | Basic, Digest, Bearer | Basic, Bearer, Digest, JWT | Header no `.http` | Basic, Bearer, API key |
-| Body além de raw | Não | Raw e URL encoded | Raw, form, multipart e arquivo | Inline e arquivo | Não |
-| Resposta avançada | Body/headers | Body, headers, cookies, scripts, trace | Body/imagem, cookies, headers, console | Body, headers, timing, assertions, folding | Pretty, tree, raw, HTML, headers, erro |
-| Histórico comparável | Sessão, 30 | Não identificado | Resposta pode acompanhar request | Persistente por request + diff | Persistente, 100 |
-| Busca na resposta | Não | Planejada | Não identificada | Sim | Sim |
-| cURL | Não | Import/export | Import/export e outras linguagens | Import/export + codegen | Export |
-| Import Postman/OpenAPI | Não | Ambos, experimentais | Ambos | Postman, Insomnia, Bruno e OpenAPI | Postman v2.1 |
-| Assertions/headless | Não | Testes planejados | CLI ampla, sem framework de assertions identificado | Sim | Não |
-| Cancelamento explícito | Sim | Worker assíncrono, sem ação clara de cancelar | `CancellationToken` | Não identificado na TUI | Planejado |
-| Limite explícito de corpo | 1,5 MB | Não identificado | Não identificado | Não; usa leitura integral | Não; usa leitura integral |
-| Mouse documentado/implementado | Parcial | Completo | Não identificado | Completo, inclusive divisor | Não identificado |
-| Testes automatizados no snapshot | 3 HTTP | Unitários + snapshots de TUI | Não identificados | Cobertura ampla por módulo e TUI | Não identificados |
-| Internacionalização | 6 idiomas | Não | Não | Não | Não |
+| Simultaneous request/response | Yes | Yes | Yes | Alternating | Yes |
+| Local collection | No | Directory + per-request YAML | JSON/YAML | `.http` files | Internal JSON + Postman import |
+| Environments/variables | No | `.env`, hot reload | Environment files | JSON, inline, dynamic | No |
+| Structured parameters | No | Query/path | Query/path | `.http` syntax | Query |
+| Structured auth | No | Basic, Digest, Bearer | Basic, Bearer, Digest, JWT | `.http` header | Basic, Bearer, API key |
+| Non-raw bodies | No | Raw/URL encoded | Raw, form, multipart, file | Inline/file | No |
+| Advanced response | Body/headers | Body, headers, cookies, scripts, trace | Body/image, cookies, headers, console | Body, headers, timing, assertions, folding | Pretty, tree, raw, HTML, headers, error |
+| Comparable history | Session, 30 | Not identified | Response can accompany request | Per-request persistent + diff | Persistent, 100 |
+| Response search | No | Planned | Not identified | Yes | Yes |
+| cURL | No | Import/export | Import/export + other languages | Import/export + codegen | Export |
+| Postman/OpenAPI import | No | Both experimental | Both | Postman, Insomnia, Bruno, OpenAPI | Postman v2.1 |
+| Assertions/headless | No | Tests planned | Broad CLI; assertion framework not identified | Yes | No |
+| Explicit cancellation | Yes | Async worker; clear cancel action not identified | `CancellationToken` | Not identified in TUI | Planned |
+| Explicit body limit | 1.5 MB | Not identified | Not identified | No; full read | No; full read |
+| Documented/implemented mouse | Partial | Full | Not identified | Full, including divider | Not identified |
+| Automated tests in snapshot | 3 HTTP | Unit + TUI snapshots | Not identified | Broad module/TUI coverage | Not identified |
+| Internationalization | 6 languages | No | No | No | No |
 
-## Pontos fortes e críticas por referência
+## Strengths and limitations of each reference
 
 ### Posting
 
-**O que adotar**
+**Adopt:** stable URL/send bar; clear choose/build/send/inspect hierarchy with a side
+collection and stacked request/response; compact method/status colors; specialized
+request Headers/Body/Path/Query/Auth/Info/Scripts/Options and response
+Body/Headers/Cookies/Scripts/Trace tabs; jump mode `[Ctrl+O]`, contextual `[F1]` help,
+command palette, autocomplete, external editor/pager integration; compact mode that
+removes borders/padding while retaining surface hierarchy.
 
-- URL e ação de envio formam uma barra estável, acima do restante do trabalho.
-- Coleção lateral, request em cima e response embaixo criam uma hierarquia clara:
-  escolher, montar, executar, inspecionar.
-- A cor do método e do status transmite estado sem adicionar texto redundante.
-- Tabs separam Headers, Body, Path, Query, Auth, Info, Scripts e Options; resposta
-  separa Body, Headers, Cookies, Scripts e Trace.
-- Jump mode `[Ctrl+O]`, ajuda contextual `[F1]`, command palette, autocomplete e
-  integração com editor/pager reduzem o custo de uma interface rica.
-- O modo compacto remove bordas e padding sem perder a hierarquia de superfícies.
-
-**O que fazer melhor**
-
-- O próprio roadmap reconhece footer congestionado, falta de resize manual,
-  busca na resposta, switchers de coleção/ambiente e contexto de estado mais claro.
-- Muitas tabs sempre visíveis aumentam carga visual. O Tuiminal deve agrupar itens
-  raros em `Mais`/command palette e mostrar indicadores somente quando há conteúdo.
-- A coleção global padrão contraria a regra do Tuiminal de respeitar o diretório de
-  lançamento. Scratch global pode existir, mas nunca substituir a coleção do projeto.
-- Não foi identificado histórico de execuções comparável. O Tuiminal já tem sessão
-  e deve evoluí-la sem perder privacidade.
-- [Scripts Python](https://github.com/darrenburns/posting/blob/56703a11513e8e74e681b4f859f31945b71e746f/docs/guide/scripting.md)
-  rodam no mesmo processo e ambiente; a própria documentação alerta para operações
-  globais destrutivas. Esse modelo não será copiado.
-- O controlador principal continua grande, embora os widgets estejam separados. A
-  composição visual pode ser adotada sem repetir esse acoplamento.
-- Internacionalização e largura dupla ainda aparecem como trabalho futuro no
-  roadmap; o Tuiminal já precisa preservar isso desde o primeiro componente.
+**Improve:** the reviewed roadmap identified a crowded footer, missing manual resize,
+response search, collection/environment switchers, and state context. Move infrequent
+tabs into More/palette and show badges only for content. Respect launch-directory
+collections rather than replacing them with a global default; global scratch may
+remain optional. Preserve privacy while adding comparable execution history, which
+was not identified in the snapshot. [Python scripts](https://github.com/darrenburns/posting/blob/56703a11513e8e74e681b4f859f31945b71e746f/docs/guide/scripting.md)
+run in the same process/environment and the docs warn about destructive global
+operations; do not copy that execution model. Adopt composition without reproducing
+a large central controller. Internationalization/double-width handling appeared as
+future work there, but are Tuiminal requirements from the first component.
 
 ### ATAC
 
-**O que adotar**
+**Adopt:** explicit coverage of bodies, auth, proxy, redirects, cookies, files, export,
+and WebSocket as a maturity checklist; readable, backward-compatible local JSON/YAML
+collections; configurable keymaps/themes with event-derived help; HTTP/WebSocket
+modeled as protocol variants instead of scattered flags.
 
-- Cobertura explícita de body, autenticação, proxy, redirects, cookies, arquivos,
-  export e WebSocket serve como checklist de maturidade.
-- Coleções em JSON ou YAML são locais, legíveis e retrocompatíveis.
-- Keymaps e temas são configuráveis, e o help é derivado dos eventos disponíveis.
-- O protocolo é modelado como variante HTTP/WebSocket, em vez de espalhar flags por
-  toda a aplicação.
-
-**O que fazer melhor**
-
-- A amplitude vem acompanhada de cerca de 18 mil linhas Rust e um
-  [enum de estado](https://github.com/Julien-cpsn/ATAC/blob/e5daf666e5b5fc75eb787f1551083fdc37507ffb/src/tui/app_states.rs)
-  com dezenas de modos de edição. O Tuiminal deve usar estado por pane/modal/tab e
-  reducers testáveis, evitando uma máquina global combinatória.
-- O [layout principal](https://github.com/Julien-cpsn/ATAC/blob/e5daf666e5b5fc75eb787f1551083fdc37507ffb/src/tui/ui/ui.rs)
-  usa proporções fixas de 20/80 e 50/50. A UI do Tuiminal precisa
-  responder à largura, altura, conteúdo e ao divisor movido pelo usuário.
-- Não foi encontrada suíte automatizada no snapshot. Recursos como auth, import e
-  scripts não entram sem testes determinísticos.
-- Não foi identificado mouse. No Tuiminal, qualquer ação visível deve continuar
-  acessível por clique.
-- O README classifica o import OpenAPI como gerado por IA e sujeito a bugs. Import
-  deve ser tratado como parser não confiável, com preview, validação e testes de
-  fixtures antes de escrever no projeto.
-- A lista de recursos incentiva implementar muitos protocolos cedo. Para o
-  Tuiminal, HTTP precisa ficar excelente antes de abrir outra frente.
+**Improve:** roughly 18,000 Rust lines and a [state enum](https://github.com/Julien-cpsn/ATAC/blob/e5daf666e5b5fc75eb787f1551083fdc37507ffb/src/tui/app_states.rs)
+with many editor modes argue for per-pane/modal/tab state and testable reducers
+rather than a combinatorial global machine. The [main layout](https://github.com/Julien-cpsn/ATAC/blob/e5daf666e5b5fc75eb787f1551083fdc37507ffb/src/tui/ui/ui.rs)
+uses fixed 20/80 and 50/50 proportions; Tuiminal must honor dimensions, content, and
+user-adjusted dividers. No automated suite or mouse support was identified: require
+deterministic auth/import/script tests and clickable visible actions. The README
+labels OpenAPI import as AI-generated and potentially buggy; treat imports as
+untrusted parsing with preview, validation, and fixtures before project writes.
+Breadth is not a reason to add protocols before HTTP is solid.
 
 ### Restless
 
-**O que adotar**
+**Adopt:** simple, versionable, IDE-compatible `.http` with multiple requests,
+variables, names, and assertions; per-request history and response comparison;
+Pretty/Raw, JSON folding, search, line navigation, wrap, visual selection, JSON path,
+OSC52 copy, and codegen; assertions, chaining, headless and data-driven runs using
+one request definition; separate parser, engine, history, importers, exporter,
+scripts, writer, and TUI with focused tests; external-body paths constrained to
+the collection.
 
-- `.http` é simples, versionável e interoperável com IDEs. Um arquivo pode conter
-  múltiplos requests, variáveis, nomes e assertions.
-- O histórico pertence ao request e permite carregar duas execuções para diff.
-- Pretty/raw, folding JSON, busca, linha, wrap, seleção visual, JSON path, cópia via
-  OSC52 e codegen tornam a resposta uma ferramenta de depuração de verdade.
-- Assertions, request chaining, execução headless e data-driven runner conectam uso
-  interativo a CI sem duplicar a definição do request.
-- O código está dividido entre parser, engine, history, importers, exporter,
-  scripts, writer e TUI, com testes próximos de cada responsabilidade.
-- O carregamento de body externo valida que o caminho não atravesse para fora da
-  coleção; esse limite deve existir no Tuiminal.
-
-**O que fazer melhor**
-
-- Request e response alternam no mesmo painel. Para o fluxo interativo do Tuiminal,
-  ambos devem permanecer visíveis quando houver espaço.
-- A gramática Vim de múltiplas teclas é poderosa, mas tem curva de aprendizado. O
-  Tuiminal pode oferecer prefixes somente com um which-key contextual e manter
-  ações essenciais em um único atalho.
-- O editor interno preserva assertions e scripts sem conseguir editá-los. A UI não
-  deve dar a impressão de edição completa quando parte do arquivo é opaca.
-- O [engine](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/internal/engine/engine.go)
-  usa leitura integral do corpo. Uma resposta grande pode bloquear ou esgotar
-  memória; o limite e o streaming atuais do Tuiminal são melhores.
-- O [histórico](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/internal/history/history.go)
-  cria diretório `0755`, arquivo `0644` e serializa request e response sem redação.
-  Tokens, cookies e payloads podem ficar legíveis no disco. O Tuiminal deve
-  persistir somente metadados redigidos por padrão e usar `0700`/`0600`.
-- Scripts JavaScript têm timeout, mas ainda executam dentro do processo. Scripts
-  ficam adiados até existir isolamento e permissões coerentes com o plano de plugins.
+**Improve:** keep request/response simultaneously visible when space permits rather
+than alternating. Offer multi-key prefixes only with contextual which-key guidance;
+essential actions need one shortcut. Do not imply full visual editing when assertions
+or scripts remain opaque. The [engine](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/internal/engine/engine.go)
+reads entire bodies, risking blocking/exhaustion; retain Tuiminal's bounded streaming.
+The [history implementation](https://github.com/shahadulhaider/restless/blob/b5d7d3e34cccaf0c7e98fae8cb3d9c3e6e1818b3/internal/history/history.go)
+uses `0755` directories and `0644` files and serializes unredacted requests/responses.
+Use redacted metadata by default with `0700`/`0600`. JavaScript script timeouts do
+not isolate in-process execution; defer scripting until an isolated, permissioned
+internal runtime exists.
 
 ### post-tui
 
-**O que adotar**
+**Adopt:** immediately understandable sidebar/builder/response regions; request
+summaries before editing; progressive disclosure for Pretty/tree/Raw/HTML/headers/error;
+one sidebar for imports, saved requests, and history; explicit documented limitations.
 
-- O layout de três áreas é imediatamente compreensível: sidebar, builder e response.
-- O builder resume método, URL, headers, query, auth e body antes de entrar em edição.
-- Pretty, tree, raw, HTML, headers e erro demonstram bom progressive disclosure.
-- Coleções importadas, requests salvos e histórico compartilham uma sidebar simples.
-- O README explicita limitações, tornando a fronteira do produto fácil de avaliar.
+**Improve:** the [fixed sidebar and 48/52 split](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/ui.rs)
+fit small terminals/long content poorly. Compact header/body buffers lack multiline,
+variables, request tabs, and environments, which were roadmap items. Requests run
+on the main path without cancellation or configurable timeout. [Transport](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/http.rs)
+records duration after headers but before body reading, so it is not total duration;
+it fully reads and lossily decodes bodies, including binary content. [Storage](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/storage.rs)
+writes requests/history including auth to JSON without explicit mode protection or
+redaction. `app.rs` had roughly 1,350 lines and `ui.rs` 637, with no tests found.
+Treat it as a product prototype rather than an architectural template.
 
-**O que fazer melhor**
+## Observed public backlog pressure
 
-- A [sidebar fixa e divisão 48/52](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/ui.rs)
-  não respondem bem a terminais pequenos ou conteúdo longo.
-- Headers e body usam um buffer de edição compacto; multiline, variáveis, tabs de
-  request e ambientes ainda estão no roadmap.
-- Requests rodam no fluxo principal, sem cancelamento, e o cliente não define
-  timeout configurável.
-- No [transporte](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/http.rs),
-  o tempo é capturado após receber headers e antes de ler o body; portanto não é o
-  tempo total exibido ao usuário.
-- O mesmo transporte lê o corpo integralmente e o converte com perda para UTF-8,
-  inclusive binário.
-- Requests e histórico incluem auth e são gravados em JSON pelo
-  [storage](https://github.com/raufendro-dev/post-tui/blob/b73d91273447c05f7acdd3f4f9cdf5cedd901f48/src/storage.rs),
-  sem proteção explícita de modo ou redação.
-- `app.rs` tem cerca de 1.350 linhas e `ui.rs` cerca de 637; não foram encontrados
-  testes. É um bom protótipo de produto, mas não um molde de arquitetura.
+Snapshot: 2026-09-04. Counts include bugs, enhancements, questions, and duplicates;
+they indicate public demand, not absolute quality.
 
-## Pressão observada nos backlogs públicos
-
-Snapshot consultado em 4 de setembro de 2026. A contagem inclui bugs, melhorias,
-dúvidas e duplicatas; ela mede pressão pública, não qualidade absoluta.
-
-| Projeto | Issues abertas | Sinais principais | Efeito neste plano |
+| Project | Open issues | Observed signals | Consequence |
 | --- | ---: | --- | --- |
-| [Posting](https://github.com/darrenburns/posting/issues) | 67 | Query params enviados como `null` ([#362](https://github.com/darrenburns/posting/issues/362)), resposta de outro request aparecendo no foco atual ([#320](https://github.com/darrenburns/posting/issues/320)), certificado de cliente ignorado ([#325](https://github.com/darrenburns/posting/issues/325)), além de pedidos por variáveis internas ([#279](https://github.com/darrenburns/posting/issues/279)), CLI/headless ([#303](https://github.com/darrenburns/posting/issues/303)) e OAuth2 ([#306](https://github.com/darrenburns/posting/issues/306)). | Execução recebe `executionId` e ownership por tab; URL resolvida e request preparado ficam inspecionáveis; certificados/OAuth2 entram apenas após testes; variáveis e automação são fundações, não remendos de UI. |
-| [ATAC](https://github.com/Julien-cpsn/ATAC/issues) | 13 | Request fica pendente quando post-script falha ([#209](https://github.com/Julien-cpsn/ATAC/issues/209)); há problemas com cookie ([#163](https://github.com/Julien-cpsn/ATAC/issues/163)), AltGr ([#204](https://github.com/Julien-cpsn/ATAC/issues/204)), Vim/yank e GNU Screen; usuários pedem herança de variáveis, headers e auth por coleção ([#124](https://github.com/Julien-cpsn/ATAC/issues/124)) e `.http` ([#109](https://github.com/Julien-cpsn/ATAC/issues/109)). | Todo caminho assíncrono termina em sucesso, erro ou cancelado; compatibilidade de teclado/terminal entra na matriz de teste; herança por escopo e `.http` precedem protocolos adicionais. |
-| [Restless](https://github.com/shahadulhaider/restless/issues) | 0 | O tracker não expõe pedidos atuais; o produto já demonstra `.http`, history diff, assertions, chaining, busca/folding e resize por mouse. | Adotar o modelo versionável e as ferramentas de depuração, mas testar privacidade do histórico, limites de corpo e discoverability sem assumir que ausência de issue significa ausência de risco. |
-| [post-tui](https://github.com/raufendro-dev/post-tui/issues) | 0 | O [roadmap](https://github.com/raufendro-dev/post-tui#roadmap) reconhece editor multiline, variáveis, export de coleção, background/cancelamento, clipboard, request tabs e configuração como trabalho futuro. | Essas capacidades precisam nascer no modelo e no layout, sem bloquear o fluxo scratch; cancelamento, variáveis e tabs não podem ser acrescentados apenas como flags no componente principal. |
+| [Posting](https://github.com/darrenburns/posting/issues) | 67 | Params sent as `null` ([#362](https://github.com/darrenburns/posting/issues/362)), another request's response in the active view ([#320](https://github.com/darrenburns/posting/issues/320)), ignored client certificate ([#325](https://github.com/darrenburns/posting/issues/325)); requests for built-in variables ([#279](https://github.com/darrenburns/posting/issues/279)), headless CLI ([#303](https://github.com/darrenburns/posting/issues/303)), OAuth2 ([#306](https://github.com/darrenburns/posting/issues/306)). | Per-tab `executionId` ownership, inspectable resolved requests, tests before certificates/OAuth2, variables/automation as foundational models. |
+| [ATAC](https://github.com/Julien-cpsn/ATAC/issues) | 13 | Pending request after post-script failure ([#209](https://github.com/Julien-cpsn/ATAC/issues/209)); cookie ([#163](https://github.com/Julien-cpsn/ATAC/issues/163)), AltGr ([#204](https://github.com/Julien-cpsn/ATAC/issues/204)), Vim/yank and GNU Screen issues; collection variable/header/auth inheritance ([#124](https://github.com/Julien-cpsn/ATAC/issues/124)) and `.http` ([#109](https://github.com/Julien-cpsn/ATAC/issues/109)). | Every async path settles; keyboard/terminal matrix, explicit inheritance, and `.http` precede more protocols. |
+| [Restless](https://github.com/shahadulhaider/restless/issues) | 0 | No current tracker requests; product demonstrates `.http`, history diff, assertions, chaining, search/folding, and mouse resize. | Adopt versionable data/debugging while testing privacy, body bounds, and discoverability; zero issues does not mean zero risk. |
+| [post-tui](https://github.com/raufendro-dev/post-tui/issues) | 0 | [Roadmap](https://github.com/raufendro-dev/post-tui#roadmap) lists multiline editing, variables, collection export, background/cancellation, clipboard, request tabs, and settings. | Model these capabilities without blocking scratch; avoid adding cancellation, variables, and tabs as central-component flags. |
 
-Os padrões comuns tornam não negociáveis: vínculo inequívoco entre request e
-response, término de todo estado de loading, foco compatível com diferentes
-terminais, herança explícita de configuração, persistência redigida e um caminho
-headless acessível. A extensão de protocolos continua posterior a essa base.
+Common requirements: unambiguous request/response identity, termination of every
+loading state, terminal-compatible focus, explicit inheritance, redacted persistence,
+and accessible headless execution. Additional protocols come later.
 
-## Direção de produto
+## Product direction
 
-### Princípios
+### Principles
 
-1. **Projeto primeiro.** O diretório passado ao CLI determina coleção, ambientes e
-   histórico opt-in. Restaurar sessão nunca troca essa raiz.
-2. **Scratch sem cerimônia.** Abrir HTTP continua permitindo colar URL e enviar sem
-   criar arquivos.
-3. **Visual inspirado, não clonado.** Usar a hierarquia do Posting com paletas,
-   layout compacto/framed, botões, i18n e convenções próprias do Tuiminal.
-4. **Resposta em primeiro plano.** Depois do envio, foco e espaço favorecem o
-   resultado sem esconder o request em terminais largos.
-5. **Texto como fonte de verdade.** Requests salvos usam `.http`; estado efêmero de
-   UI não contamina os arquivos versionados.
-6. **Seguro e limitado por padrão.** Nada de scripts automáticos, histórico cru,
-   host env implícito ou leitura sem limite.
-7. **Capacidade honesta.** Mostrar somente métricas que o transporte mede e avisar
-   sempre que dados forem truncados, redigidos ou não persistidos.
-8. **Paridade de interação.** Teclado e mouse alcançam todas as ações; `[Esc]` fecha
-   somente a camada superior.
-9. **Interop antes de ecossistema próprio.** `.http` e cURL precedem formatos e SDKs
-   específicos do Tuiminal.
-10. **Automação nasce do mesmo modelo.** TUI e `tuiminal http run` executam a mesma
-    preparação, transporte, assertions e política de segurança.
+1. **Project first:** CLI directory determines collections, environments, and opt-in
+   history. Session restoration cannot change that root.
+2. **Immediate scratch:** paste a URL and send without creating files.
+3. **Adapted visual design:** Posting hierarchy with Tuiminal palettes, framed/compact
+   layouts, controls, i18n, and conventions.
+4. **Response priority:** after sending, focus/space favors results without hiding
+   requests on wide terminals.
+5. **Text as source of truth:** `.http` stores requests; ephemeral UI state stays out.
+6. **Protective, bounded defaults:** no automatic scripts, raw history, implicit host
+   environment, or unbounded reads.
+7. **Honest capabilities:** show only measured timing and identify truncation,
+   redaction, or nonpersistent data.
+8. **Interaction parity:** keyboard and mouse reach actions; `[Esc]` closes one layer.
+9. **Interoperability first:** `.http` and cURL precede Tuiminal-specific formats/SDKs.
+10. **Shared automation model:** TUI and `tuiminal http run` use the same preparation,
+    transport, assertions, and security policy.
 
-### Indicadores de sucesso
+### Success indicators
 
-- Um usuário novo consegue enviar uma URL, editar JSON e entender a resposta sem
-  abrir o help.
-- Um usuário frequente abre, troca, executa e salva requests sem tirar as mãos do
-  teclado, mas todas essas ações também têm controles de mouse.
-- Em 80×24 não há sobreposição, clipping de ações ou perda do caminho para request e
-  response; em 120×30 ambos ficam visíveis.
-- Cancelar interrompe leitura e para atualizações em até uma iteração do event loop.
-- O limite de captura continua funcionando para corpo normal, chunked e comprimido.
-- Nenhuma credencial entra em histórico persistente, log, export ou mensagem de erro
-  sem ação explícita do usuário.
-- Salvar e reabrir um `.http` preserva requests, comentários e blocos ainda não
-  compreendidos pelo editor visual.
-- Toda lógica nova relevante tem teste; o gate final continua `bun run check`.
+- New users can send a URL, edit JSON, and understand a response without help.
+- Frequent users can open, switch, run, and save entirely by keyboard, with mouse
+  controls for the same actions.
+- At 80×24, no overlap or clipped actions block either request or response; at
+  120×30 both remain visible.
+- Cancellation interrupts reading and stops updates within one event-loop iteration.
+- Capture bounds hold for normal, chunked, and compressed bodies.
+- Credentials do not reach persistent history, logs, exports, or errors without
+  explicit user action.
+- Saving/reopening `.http` preserves requests, comments, and visually unsupported blocks.
+- Relevant new logic has tests, with `bun run check` as the final gate.
 
-## Experiência alvo e sistema de layout
+## Target experience and layout system
 
-### Modelo mental e hierarquia
+### Interaction model and hierarchy
 
-O workspace segue a sequência natural `escolher → montar → executar → inspecionar`.
-O usuário pode entrar em qualquer etapa, mas a geometria não muda arbitrariamente:
+The workspace follows `choose → build → execute → inspect`. Users can enter at any
+step while geometry stays predictable:
 
-1. **Tabs de documentos** identificam os requests montados e seu dirty state.
-2. **Omnibar** mantém método, URL resolvível, ambiente e enviar/cancelar no mesmo
-   lugar em todos os modos.
-3. **Navegação** alterna coleção e histórico sem mostrar duas árvores competindo.
-4. **Request builder** organiza somente a preparação da chamada.
-5. **Response inspector** recebe o espaço flexível e todo o estado de execução.
-6. **Footer contextual** mostra poucas ações válidas para o foco atual; `[F1]` abre
-   o mapa completo.
+1. Document tabs identify mounted requests and dirty state.
+2. The omnibar keeps method, resolvable URL, environment, and send/cancel in a stable
+   location across layouts.
+3. Navigation switches collection/history without competing trees.
+4. The request builder handles request preparation.
+5. The response inspector takes flexible space and execution state.
+6. A contextual footer shows a few valid actions; `[F1]` opens the full map.
 
-Tabs de documentos e tabs internas são visualmente diferentes. Documentos formam
-uma faixa própria acima da omnibar; Params/Headers/Body/Auth e
-Pretty/Raw/Headers/Timing pertencem aos panes. Isso evita a sensação de uma única
-fileira com dois níveis de navegação misturados.
+Document tabs have a separate strip above the omnibar. Internal
+Params/Headers/Body/Auth and Pretty/Raw/Headers/Timing tabs belong to their panes,
+so two navigation levels never look like one ambiguous strip.
 
-### Anatomia persistente
+### Persistent anatomy
 
 ```text
- GET listar usuários ● ×   POST criar usuário ×   [+]
- GET ▾  https://api.exemplo.com/users/{{id}}   ambiente: dev ▾   [S] Enviar
- ─────────────────────────────────────────────────────────────────────────────
- área adaptativa: navegação | request | response
- ─────────────────────────────────────────────────────────────────────────────
- ajuda curta do foco                                      [F1] Todos os atalhos
-```
-
-- O tab ativo usa background + accent; `●` significa modificado e `×` é somente o
-  controle de mouse para fechar, com tooltip `[Ctrl+W]`.
-- A omnibar nunca some quando coleção, histórico ou response recebem foco. Em
-  largura mínima, ela quebra em duas linhas antes de truncar URL ou enviar.
-- Método e ambiente abrem pickers por mouse ou `[Enter]`; o ambiente nunca desaparece
-  silenciosamente, principalmente quando marcado como produção.
-- Durante execução, `[S] Enviar` é substituído no mesmo lugar por `[X] Cancelar` e
-  o response anuncia a fase atual imediatamente.
-- O footer não é um catálogo permanente. Ele tem no máximo cinco ações primárias,
-  ordenadas pela frequência/contexto; recursos raros ficam em `[F1]` ou `[Ctrl+P]`.
-
-### Resolução por restrições, não por percentuais fixos
-
-Os breakpoints abaixo usam a largura e altura **úteis da feature**, depois da
-navegação global do Tuiminal. São valores iniciais para protótipo: o resolver só
-escolhe um modo se todos os mínimos couberem; caso contrário, desce para o próximo.
-
-| Modo | Condição inicial | Composição | Restrições principais |
-| --- | --- | --- | --- |
-| Panorama | `W ≥ 132` e `H ≥ 24` | `navegação │ request │ response` | Navegação 22–32 colunas; request e response começam com larguras iguais e mantêm mínimos de 42. |
-| Workbench | `W ≥ 96` e `H ≥ 22` | `navegação │ request sobre response` | Navegação 22–30; área direita mínima 65. Request e response começam com a mesma altura. |
-| Foco | `W ≥ 72` e `H ≥ 18` | request sobre response, sem sidebar fixa | Coleção/history abrem como drawer; request e response começam com a mesma altura e mantêm seus mínimos. |
-| Mínimo | abaixo desses limites | um pane por vez | Omnibar em duas linhas e seletor local Coleção/Request/Response; nenhuma função desaparece. |
-
-Prioridade de degradação: recolher navegação, mover request para cima do response,
-quebrar omnibar, trocar para um pane. Nunca comprimir silenciosamente response,
-editor ou botões até ficarem inutilizáveis. Percentuais só são aplicados depois dos
-mínimos, e um divisor movido pelo usuário é preservado por modo durante a sessão e
-clampado com segurança ao redimensionar.
-
-### Panorama: três colunas
-
-Usado apenas quando o response ainda preserva uma largura adequada para código,
-tabelas e headers. Ele aproveita terminais ultrawide sem produzir linhas JSON
-excessivamente longas.
-
-```text
- GET listar ● ×   POST criar ×   [+]
- GET ▾  https://api.exemplo.com/users/{{id}}      dev ▾       [S] Enviar
-┌ NAVEGAÇÃO ─────────┬ REQUEST ─────────────────┬ RESPONSE ───────────────────┐
-│ Coleção  Histórico │ Params Headers Body Auth │ 200 OK · total 143 ms       │
-│ / buscar            │                         │ Pretty Raw Headers Timing   │
-│ ▾ api               │ id       42             │ 1 {                         │
-│   ▾ users           │ verbose  true           │ 2   "id": 42,              │
-│     GET listar ●    │                         │ 3   "name": "Ada"         │
-│     POST criar      │                         │ 4 }                          │
-│                     │                         │                              │
-└─────────────────────┴─────────────────────────┴──────────────────────────────┘
- Params: [Enter] Editar [Space] Ativar [Ctrl+A] Adicionar          [F1] Ajuda
-```
-
-- Inspirado na leitura imediata do post-tui e na hierarquia do Posting, mas com
-  mínimos que impedem a divisão fixa observada em post-tui/ATAC.
-- Request e response começam com larguras iguais; o divisor continua respeitando
-  a largura mínima de ambos ao ser movido.
-- O divisor navegação/request e o divisor request/response são arrastáveis. Duplo
-  clique restaura o tamanho recomendado; o controle também existe por teclado.
-
-### Workbench: sidebar e split vertical
-
-É o modo padrão esperado na maioria dos terminais desktop. Mantém a coleção visível
-e dá largura integral ao conteúdo do request/response.
-
-```text
- GET listar ● ×   POST criar ×   [+]
- GET ▾  https://api.exemplo.com/users/{{id}}   dev ▾   [S] Enviar
-┌ NAVEGAÇÃO ─────────┬ REQUEST · Params Headers Body Auth Mais ───────────────┐
-│ Coleção  Histórico │ key/value, editor ou formulário da seção               │
-│ / buscar            ├ RESPONSE · Pretty Raw Headers Timing Mais ────────────┤
-│ ▾ api               │ 200 OK · JSON · headers 68 ms · total 143 ms · 12 KB  │
-│   ▾ users           │ 1 {                                                    │
-│     GET listar ●    │ 2   "id": 42                                          │
-└─────────────────────┴────────────────────────────────────────────────────────┘
-```
-
-- O split inicia em 50/50.
-- `[Ctrl+↑/↓]` ajusta em passos estáveis; `[F10]` maximiza o pane focado e restaura
-  exatamente o split anterior.
-- Coleção e Histórico são dois modos da mesma sidebar, não duas listas permanentes.
-  Histórico agrupa execuções pelo request e oferece compare sem poluir a árvore.
-
-### Foco: sem sidebar fixa
-
-Em aproximadamente 80×24, coleção e histórico viram drawers sobrepostos à esquerda,
-sem desmontar os editores. Request e response continuam simultâneos enquanto a
-altura útil respeitar os mínimos.
-
-```text
- GET listar ● ×   [+]
- GET ▾  http://localhost:3000/users   dev ▾   [S] Enviar
- [C] Coleção  [Y] Histórico
- REQUEST · Params Headers Body Auth Mais
+ GET list users ● ×   POST create user ×   [Ctrl+N]
+ GET ▾ https://api.example.com/users/{{id}}  environment: dev ▾ [S] Send
  ──────────────────────────────────────────────────────────────────────
- RESPONSE · Pretty Raw Headers Timing Mais
+ adaptive area: navigation | request | response
+ ──────────────────────────────────────────────────────────────────────
+ short help for current focus                        [F1] All shortcuts
+```
+
+- Active documents use background + accent. `●` means modified; `×` is the mouse
+  close control, with `[Ctrl+W]` tooltip.
+- The omnibar remains visible when collection, history, or response has focus. At
+  minimum width it wraps to two rows before truncating the URL or send control.
+- Method/environment pickers open by mouse or `[Enter]`. Environment identity never
+  silently disappears, especially when marked production.
+- During execution, `[X] Cancel` replaces `[S] Send` in place and response immediately
+  announces the active phase.
+- Footer contains at most five primary actions ordered by frequency/context. Rare
+  actions belong to `[F1]` or a future `[Ctrl+P]` command palette.
+
+### Constraint-based layout resolution
+
+Breakpoints use **usable feature width/height** after global navigation. These are
+prototype starting points; the resolver picks a mode only if every minimum fits,
+otherwise moving to the next smaller composition.
+
+| Mode | Initial condition | Composition | Main constraints |
+| --- | --- | --- | --- |
+| Panorama | `W ≥ 132`, `H ≥ 24` | `navigation │ request │ response` | Navigation 22–32 columns; request/response start equally wide with minimum width 42 each. |
+| Workbench | `W ≥ 96`, `H ≥ 22` | `navigation │ request above response` | Navigation 22–30; right area at least 65; request/response initially equal height. |
+| Focus | `W ≥ 72`, `H ≥ 18` | Stacked request/response, no fixed sidebar | Collection/history use drawers; equal starting heights subject to pane minimums. |
+| Minimum | Below those limits | One pane at a time | Two-row omnibar and local Collection/Request/Response selector; no missing functionality. |
+
+Fallback order: collapse navigation, stack request above response, wrap omnibar,
+then use one pane. Never silently compress editors, responses, or buttons into
+unusable space. Apply ratios after minimums. Preserve user-adjusted dividers by
+mode during the session, clamping safely on resize.
+
+### Panorama: three columns
+
+Use when response still has useful width for code, tables, and headers, taking
+advantage of ultrawide terminals without excessively long JSON lines.
+
+```text
+ GET list ● ×   POST create ×   [Ctrl+N]
+ GET ▾ https://api.example.com/users/{{id}}    dev ▾    [S] Send
+┌ NAVIGATION ─────────┬ REQUEST ─────────────────┬ RESPONSE ─────────────────┐
+│ Collection History  │ Params Headers Body Auth │ 200 OK · total 143 ms     │
+│ / search            │                          │ Pretty Raw Headers Timing │
+│ ▾ api               │ id       42              │ 1 {                       │
+│   ▾ users           │ verbose  true            │ 2   "id": 42,             │
+│     GET list ●      │                          │ 3   "name": "Ada"         │
+│     POST create     │                          │ 4 }                       │
+└─────────────────────┴──────────────────────────┴───────────────────────────┘
+ Params: [Enter] Edit [Space] Enable [N] Add                    [F1] Help
+```
+
+Use post-tui's immediate readability and Posting's hierarchy with minimums that
+avoid fixed-ratio failures. Request/response begin equally wide and retain minimums
+while the divider moves. The target design allows dragging navigation/request and
+request/response dividers, double-click reset, and keyboard equivalents; consult
+implementation status rather than assuming every proposed divider exists.
+
+### Workbench: sidebar and vertical split
+
+Expected for most desktop terminals: retain collection visibility and full right-side
+width for request/response content.
+
+```text
+ GET list ● ×   POST create ×   [Ctrl+N]
+ GET ▾ https://api.example.com/users/{{id}}  dev ▾ [S] Send
+┌ NAVIGATION ─────────┬ REQUEST · Params Headers Body Auth More ──────────┐
+│ Collection History  │ key/value, editor, or active section form         │
+│ / search            ├ RESPONSE · Pretty Raw Headers Timing More ────────┤
+│ ▾ api               │ 200 OK · JSON · headers 68 ms · total 143 ms      │
+│   ▾ users           │ 1 {                                               │
+│     GET list ●      │ 2   "id": 42                                      │
+└─────────────────────┴───────────────────────────────────────────────────┘
+```
+
+Start at 50/50. `[Ctrl+↑/↓]` adjusts in stable steps; `[F10]` maximizes the focused
+pane and restores the previous split. Collection/History are modes of one sidebar,
+not permanent parallel lists. History groups runs by request and supports comparison
+without cluttering the collection tree.
+
+### Focus: no fixed sidebar
+
+Around 80×24, collection/history become left drawers without remounting editors.
+Request/response remain simultaneous while usable height satisfies minimums.
+
+```text
+ GET list ● ×   [Ctrl+N]
+ GET ▾ http://localhost:3000/users  dev ▾ [S] Send
+ [C] Collection  [Y] History
+ REQUEST · Params Headers Body Auth More
+ ──────────────────────────────────────────────────────────────────────
+ RESPONSE · Pretty Raw Headers Timing More
  200 OK · 143 ms · 12 KB
 ```
 
-- Abrir drawer move o foco para ele; fechar devolve o foco ao controle de origem.
-- O drawer ocupa entre 24 e 70% da largura, nunca cobre a indicação de ambiente nem
-  exige que request/response percam estado.
-- Barras internas rolam horizontalmente como unidade somente se os labels essenciais
-  não couberem; conteúdo não é desenhado por cima do último botão.
+Opening a drawer focuses it; closing restores its trigger. Target drawer sizing is
+24–70% of width, without covering environment identity or discarding pane state.
+Internal tab strips scroll as a unit only when essential labels cannot fit; content
+must not draw over the last button.
 
-### Mínimo: um pane por vez
+### Minimum: one pane at a time
 
 ```text
- GET listar ● ×   [+]
- GET ▾  http://localhost:3000/users
- dev ▾                                      [S] Enviar
- [C] Coleção   [1] Request   [2] Response
+ GET list ● ×   [Ctrl+N]
+ GET ▾ http://localhost:3000/users
+ dev ▾                                      [S] Send
+ [C] Collection   [1] Request   [2] Response
  ─────────────────────────────────────────────────────
- conteúdo do pane ativo
+ active pane content
  ─────────────────────────────────────────────────────
- [Tab] Navegar  [Enter] Abrir                   [F1] Ajuda
+ [Tab] Navigate [Enter] Open                  [F1] Help
 ```
 
-- Enviar seleciona Response, mas `[1]` retorna ao Request com cursor, seleção,
-  autocomplete e scroll preservados.
-- O seletor local mantém significado constante; breakpoints nunca reinterpretam uma
-  tecla existente.
-- Status, duração, tamanho e truncamento quebram em linhas sem omitir o estado.
-- A área informa o mínimo recomendado quando tão pequena que nem o modo de um pane
-  consegue manter controles seguros; o app não deve tentar pintar fragmentos.
+Sending selects Response; `[1]` returns to Request with cursor, selection,
+autocomplete, and scroll preserved. Local selectors keep the same meaning across
+breakpoints. Status, duration, size, and truncation wrap rather than disappearing.
+Below safe control minimums, show the recommended terminal size instead of painting
+unusable fragments.
 
-### Divulgação progressiva nos panes
+### Progressive disclosure within panes
 
-O Posting prova a utilidade de tabs especializadas, mas seu próprio roadmap registra
-congestionamento. O ATAC mostra o custo de muitos modos simultâneos. O desenho alvo
-mantém um primeiro nível estável e move o restante para contexto:
+Posting demonstrates specialized tabs but its roadmap also notes crowding; ATAC
+illustrates the cost of many simultaneous modes. Keep stable top-level sections:
 
-- Request: `Params`, `Headers`, `Body`, `Auth`, `Mais`.
-- `Params` contém subseções Query e Path, com contadores e validação; não consome duas
-  tabs permanentes.
-- `Mais` contém Options, documentação gerada e, futuramente, certificados/scripts.
-- Response: `Pretty`, `Raw`, `Headers`, `Timing`, `Mais`.
-- `Mais` contém Cookies, Redirects, Assertions e Console; badges indicam conteúdo ou
-  falha sem mover tabs de posição.
-- A tab ativa, erro e quantidade de itens usam texto/símbolo além da cor.
-- Se uma função avançada se tornar frequente nos testes de uso, ela pode ser promovida
-  com evidência; não se adiciona uma tab permanente apenas porque outro cliente tem.
+- Request: Params, Headers, Body, Auth, More.
+- Params contains Query/Path subsections, counts, and validation rather than two
+  permanent top-level tabs.
+- Request More contains Options, generated documentation, and future certificates/scripts.
+- Response: Pretty, Raw, Headers, Timing, More.
+- Response More contains Cookies, Redirects, Assertions, and Console; badges signal
+  content/failure without moving tabs.
+- Active tab, errors, and counts have text/symbols as well as color.
+- Promote advanced features only when usage evidence justifies permanent visibility.
 
-### Foco, navegação e mouse
+### Focus, navigation, and mouse
 
-- `[Tab]`/`[Shift+Tab]` percorrem regiões na ordem visual; setas percorrem controles
-  dentro da região. Campos de texto mantêm navegação nativa.
-- `[Ctrl+O]` abre jump mode sobre panes e ações, como no Posting, mas os targets usam
-  a mesma letra em todos os breakpoints.
-- Um atalho global não ganha significado local diferente. Se houver conflito, a ação
-  rara vai para menu/ajuda em vez de sequestrar memória muscular.
-- `[Esc]` fecha exatamente uma camada: autocomplete → input → modal/drawer →
-  maximização → tela. Cada camada consome o evento antes de devolver foco.
-- Pane oculto ou tab inativa não recebe input, mouse wheel nem shortcuts.
-- Clique primeiro estabelece foco e depois executa a ação prevista; áreas clicáveis
-  cobrem o label inteiro, não apenas um glyph de uma coluna.
-- Wheel rola o pane sob o ponteiro; drag move apenas divisores; seleção nativa do
-  terminal continua disponível por uma ação/modificador documentado.
-- Scrollbars discretas aparecem somente quando informam posição; início/fim também
-  são anunciados por texto na navegação por teclado.
+- `[Tab]`/`[Shift+Tab]` follow `route → collection → request → response`. `[H/L]`
+  and, outside JSON tree navigation, `[←/→]` offer equivalent pane movement.
+  `[Tab]` deliberately leaves HTTP inputs; other text keys retain native editing.
+- With Request focused and no editor owning keys, `[A←]`/`[F→]` cycles
+  `Params → Headers → Body → Auth → More`. Show controls only in that focus and
+  keep focus in the pane for repeated cycling.
+- Nested horizontal strips use `[Z←]`/`[V→]`: Body/Auth kinds and request/response
+  More subsections. Primary response views use `[A←]`/`[F→]`. None crosses a
+  focused editor.
+- In Params, `[J/K]` or `[↑/↓]` switches Query/Path focus. Only the focused subpanel
+  shows and accepts `[N] Add`.
+- Bounded valid JSON Pretty uses `[↑/↓]`/`[J/K]` for blocks, `[←/→]` to
+  collapse/expand, and `[Enter]` to toggle. Selected paths and folded blocks belong
+  to the document and never change captured bytes.
+- `[Ctrl+O]` opens jump mode with stable target letters across breakpoints.
+- Global shortcuts never gain a conflicting local meaning. Infrequent actions move
+  to menus/help instead of overriding established navigation.
+- `[Esc]` closes one layer: autocomplete → input → modal/drawer → maximization →
+  screen. Each layer consumes the event before restoring focus.
+- Hidden panes/inactive tabs receive no input, wheel, or shortcuts.
+- Clicking establishes focus and performs the intended action; hit areas cover the
+  entire label, not one glyph.
+- Wheel scrolls under the pointer; drag changes only dividers. Native terminal
+  selection remains available through a documented action/modifier.
+- Subtle scrollbars show position when useful; keyboard navigation also communicates
+  start/end in text.
 
-### Estado visual e feedback
+### Visual state and feedback
 
-| Pergunta do usuário | Tratamento obrigatório |
+| User question | Required treatment |
 | --- | --- |
-| Onde está o foco? | Accent + mudança de background + título ativo; foco não depende de borda fina ou hover. |
-| O que foi modificado? | `● Modificado` no documento, contador por seção e confirmação antes de perder draft. |
-| Qual ambiente será usado? | Nome sempre na omnibar; produção mostra `PROD` por texto e cor de perigo. |
-| A chamada começou? | Em até uma atualização de UI, `Enviando · aguardando headers` e `[X] Cancelar`. |
-| A chamada terminou? | Status textual, URL final, tipo, bytes e timing honesto no cabeçalho do response. |
-| Algo está incompleto? | `TRUNCADO`, `REDIGIDO`, `TLS INSEGURO` e `HISTÓRICO DESATIVADO` aparecem literalmente. |
-| O resultado pertence a quê? | Nome/método e `executionId` ficam associados à tab; resultado tardio nunca escreve em outra tab. |
-| Como corrigir um erro? | Resumo humano, causa provável, próximo passo e `[D] Detalhes`; detalhes técnicos são redigidos. |
+| Where is focus? | Accent, background, and active title; not a thin border or hover alone. |
+| What changed? | Modified marker, per-section counts, and confirmation before draft loss. |
+| Which environment is used? | Name always in omnibar; production marked `PROD` with text and danger color. |
+| Did execution start? | Sending/waiting-for-headers state and `[X] Cancel` within one UI update. |
+| Did it finish? | Text status, final URL, type, bytes, and measured timing in response header. |
+| Is something incomplete? | Explicit truncated, redacted, insecure-TLS, and history-disabled labels. |
+| Which request owns the result? | Name/method and `executionId` associated with the tab; late results cannot target another tab. |
+| How do I fix an error? | Human summary, probable cause, next step, and `[D] Details`; redact technical details. |
 
-Animação é decorativa. No modo normal, um spinner discreto pode acompanhar o texto;
-se parar, a mensagem e o tempo decorrido ainda provam que existe trabalho. Sucesso,
-aviso, erro, método HTTP e seleção têm símbolos/labels para funcionar sem cor.
+Animation is supplementary. A normal-mode spinner may accompany text, but phase and
+elapsed time remain useful if animation stops. Success, warning, error, method,
+and selection have labels/symbols that work without color.
 
-### Acessibilidade e compatibilidade de terminal
+### Accessibility and terminal compatibility
 
-- O HTTP deve respeitar um futuro ajuste global de acessibilidade/reduced-motion;
-  até ele existir, o protótipo precisa manter uma variante testável sem animação.
-- Essa variante troca spinners por texto estático atualizado com baixa frequência,
-  reduz bordas decorativas e escreve alternativas como `(selecionado)`, `(erro)` e
-  `(modificado)` onde o layout visual usaria apenas glyph/cor.
-- Ordem de foco acompanha ordem de leitura e nenhum prompt exige varredura visual
-  sem label. Help é contextual, pesquisável e também disponível fora da TUI.
-- Paletas usam tokens semânticos mapeáveis a 4-bit/256/truecolor e são verificadas
-  em fundos claro, escuro e alto contraste. `dim` não carrega informação essencial.
-- CJK, português e outros textos passam por medição grapheme-aware; truncamento
-  preserva o atalho/estado e fornece o valor completo no detalhe.
-- O modo headless é a alternativa linear e automatizável: sem animação quando não há
-  TTY, respeita `NO_COLOR` e oferece JSON estável para ferramentas assistivas.
+- Respect a future global accessible/reduced-motion setting; until available, keep
+  a testable nonanimated prototype variant.
+- That variant replaces spinners with infrequently updated static text, reduces
+  decorative borders, and adds selected/error/modified labels where visual mode
+  might otherwise rely on glyphs/colors.
+- Focus follows reading order; prompts have labels rather than requiring visual
+  scanning. Help is contextual, searchable, and available outside the TUI.
+- Semantic palettes should map to 4-bit/256/truecolor and be checked on light, dark,
+  and high-contrast backgrounds. Essential information must not depend on `dim`.
+- CJK, Portuguese, and other text use grapheme-aware widths. Truncation preserves
+  shortcuts/state and offers complete values in detail.
+- Headless output is the linear automation alternative: no animation without a TTY,
+  respect `NO_COLOR`, and offer stable JSON for assistive tools.
 
-### Mapa de atalhos proposto
+### Proposed shortcut map
 
-Atalhos atuais continuam disponíveis durante a migração. Novos atalhos só passam a
-ser documentados quando tiverem controle de mouse equivalente e teste de propagação.
+Retain current bindings during migration. Document new ones only with equivalent
+mouse controls and propagation tests. This remains a target map; implemented
+bindings are documented in the README.
 
-| Ação | Atalho |
+| Action | Shortcut |
 | --- | --- |
-| Focar URL | `[/]` |
-| Enviar | `[S]` fora de inputs; `[Ctrl+Enter]` em qualquer editor |
-| Cancelar | `[X]` durante execução |
-| Próximo/anterior método | `[M]` / `[Shift+M]` |
-| Params / Headers / Body / Auth / Mais | `[P]` / `[H]` / `[B]` / `[A]` / `[O]` |
-| Alternar views do response | `[V]` |
-| Buscar no response focado | `[Ctrl+F]` |
-| Abrir coleção | `[C]` |
-| Abrir/fechar histórico | `[Y]` |
-| Novo request scratch | `[Ctrl+N]` |
-| Salvar request | `[Ctrl+S]` |
-| Fechar request aberto | `[Ctrl+W]` |
-| Ciclar requests abertos | `[Alt+←/→]` |
+| Focus URL | `[/]` |
+| Send | `[S]` outside inputs; `[Ctrl+Enter]` in an editor |
+| Cancel | `[X]` during execution |
+| Next / previous method | `[M]` / `[Shift+M]` |
+| Switch route / collection / request / response | `[Tab]` / `[Shift+Tab]` or `[H/L]` |
+| Cycle focused Request sections | `[A←]` / `[F→]` |
+| Cycle nested horizontal strip | `[Z←]` / `[V→]` |
+| Switch Query / Path Params | `[J/K]` or `[↑/↓]` |
+| Add to focused subpanel | `[N]` |
+| Switch primary Response views | `[A←]` / `[F→]` |
+| Navigate / collapse / expand JSON blocks | `[↑/↓]` or `[J/K]` / `[←/→]` / `[Enter]` |
+| Search focused response | `[Ctrl+F]` |
+| Open collection | `[C]` |
+| Toggle history | `[Y]` |
+| New scratch request | `[Ctrl+N]` |
+| Save request | `[Ctrl+S]` |
+| Close request | `[Ctrl+W]` |
+| Cycle open requests | `[Alt+←/→]` |
 | Jump mode | `[Ctrl+O]` |
-| Ajuda contextual | `[F1]` |
-| Ajustar split | `[Ctrl+↑/↓]` |
-| Maximizar/restaurar pane | `[F10]` |
-| Fechar autocomplete/input/modal/pane | `[Esc]`, uma camada por vez |
+| Contextual help | `[F1]` |
+| Adjust split | `[Ctrl+↑/↓]` |
+| Maximize/restore pane | `[F10]` |
+| Close autocomplete/input/modal/pane | `[Esc]`, one layer at a time |
 
-`[/]` nunca vira busca contextual: continua focando URL em qualquer pane. Busca no
-response usa `[Ctrl+F]`, evitando o conflito de atalhos globais observado em TUIs
-maduras. `[Ctrl+P]` fica reservado para command palette quando houver comandos raros
-em número suficiente; não criar uma palette vazia apenas por semelhança com Posting.
+`[/]` always focuses URL rather than becoming contextual search. Response search uses
+`[Ctrl+F]`. Reserve `[Ctrl+P]` for a command palette only when enough rare actions
+justify one; do not create an empty palette merely to resemble Posting.
 
-### Matriz obrigatória do protótipo visual
+### Required visual prototype matrix
 
-Antes de ligar coleção, ambientes ou transporte novo, renderizar fixtures realistas
-em `60×16`, `72×18`, `80×24`, `96×24`, `120×30` e `160×40`, nos layouts framed e
-compact. A revisão precisa verificar:
+Before connecting collections, environments, or new transport, render realistic
+fixtures at `60×16`, `72×18`, `80×24`, `96×24`, `120×30`, and `160×40` in framed/compact.
+Review:
 
-- URL longa, seis documents tabs, nomes CJK e tradução mais larga;
-- JSON profundo, texto longo, binário, resposta vazia, erro e loading;
-- headers/params suficientes para scroll vertical e horizontal;
-- mouse, drag de divisor, resize durante edição e restauração de foco;
-- macOS/Windows/Linux, VS Code terminal, tmux e GNU Screen quando disponíveis;
-- AltGr, setas, teclas de função, `[Cmd+C]`/seleção e fallbacks documentados;
-- paletas 4-bit, 256 e truecolor em fundo claro/escuro/alto contraste;
-- variante accessible/reduced-motion sem animação ou significado exclusivo por cor.
+- Long URLs, six document tabs, CJK names, and wide translations.
+- Deep JSON, long text, binary/empty responses, errors, and loading.
+- Enough headers/params to require vertical/horizontal scrolling.
+- Mouse, divider drag, resize during editing, and focus restoration.
+- macOS/Windows/Linux, VS Code Terminal, tmux, and GNU Screen where available.
+- AltGr, arrows, function keys, `[Cmd+C]`/selection, and documented fallbacks.
+- 4-bit/256/truecolor palettes on light/dark/high-contrast backgrounds.
+- Accessible/reduced-motion variant without animation or color-only meaning.
 
-Breakpoints só se tornam decisão implementada depois dessa matriz. Screenshots
-isolados não bastam: os testes devem enviar teclas, mover mouse, redimensionar e
-afirmar foco, conteúdo preservado e camada fechada por `[Esc]`.
+Breakpoints become implemented decisions only after this matrix. Screenshots alone
+are insufficient: tests must send keys, move the mouse, resize, and assert focus,
+preserved content, and the layer closed by `[Esc]`.
 
-## Especificação funcional alvo
+## Target functional specification
 
 ### Request builder
 
-- presets dos métodos atuais e campo para método HTTP customizado válido;
-- URL com syntax highlight, autocomplete de histórico/variáveis e preview da URL
-  resolvida sem revelar segredos;
-- query e path params em tabelas de key/value com enable/disable, duplicatas, ordem e
-  sincronização previsível com a URL, reunidos visualmente na tab `Params`;
-- headers em tabela com autocomplete de nomes/valores, duplicatas e indicação dos
-  headers adicionados automaticamente ou herdados, incluindo badge de origem;
-- auth: No Auth, Bearer, Basic e API Key na primeira versão estruturada; Digest,
-  OAuth2 e certificados de cliente só depois da base segura;
-- body: none, JSON, raw/text, XML, form URL encoded, multipart e arquivo;
-- Content-Type automático visível e sempre substituível pelo usuário;
-- options: timeout, redirects, cookie jar, proxy e verificação TLS;
-- dirty state por request e aviso antes de fechar/trocar quando houver perda;
-- até seis requests montados; reabrir o mesmo request foca a tab existente;
-- preview inspecionável da chamada preparada, mostrando valores herdados/resolvidos
-  e headers automáticos sem revelar segredos.
+- Standard method presets plus a valid custom HTTP method field.
+- URL highlighting, history/variable autocomplete, and secret-safe resolved preview.
+- Ordered, duplicate-preserving Query/Path key/value tables with enable/disable,
+  predictable URL synchronization, and a shared Params section.
+- Path substitution replaces full `:name` segments or `{name}` tokens only in the
+  pathname, never authority/query/fragment. The first enabled duplicate wins;
+  resolved values are encoded once without recursive substitution.
+- Header key/value autocomplete, duplicates, and provenance badges for inherited/
+  automatically added values.
+- Initial structured No Auth, Bearer, Basic, API Key; Digest, OAuth2, and client
+  certificates follow the protective foundation.
+- None, JSON, raw/text, XML, URL-encoded form, multipart, and file bodies.
+- Visible automatic Content-Type that users can override.
+- Timeout, redirects, cookie jar, proxy, and TLS verification options.
+- Per-request dirty state with warnings before destructive close/switch.
+- Up to six mounted requests; reopening the same request focuses its existing tab.
+- Inspectable prepared-request preview showing inherited/resolved values and automatic
+  headers without revealing secrets.
 
-### Coleções e formato `.http`
+### Collections and `.http` format
 
-- O Tuiminal descobre `.http`/`.rest` sob a raiz do projeto, ignorando `.git`,
-  `node_modules`, diretórios de build e symlinks que escapem da raiz.
-- `.tuiminal/http/` é a pasta sugerida para novos requests, não a única pasta lida.
-- Arquivos podem conter múltiplos requests separados por `###` e nomeados por
-  `# @name`.
-- O parser produz AST com trivia para preservar comentários, ordem, espaçamento e
-  blocos desconhecidos. O editor visual nunca reserializa o arquivo inteiro a partir
-  de um modelo com perda.
-- Se um bloco não puder ser editado com segurança, ele abre em modo raw com mensagem
-  clara; salvar outras partes não o remove.
-- A árvore representa pastas, arquivos e requests, permite fuzzy search, duplicar,
-  renomear, mover e excluir com confirmação.
-- Alterações externas são observadas. Se houver draft local sujo, oferecer diff e
-  escolha; nunca sobrescrever silenciosamente.
-- Defaults opcionais de workspace/coleção podem viver em
-  `.tuiminal/http/config.json`, separados do conteúdo canônico `.http`. O arquivo
-  aceita headers não secretos, options e referências de auth; nunca token/senha
-  literal. Essa extensão precisa de schema versionado e protótipo antes de congelar.
+- Discover `.http`/`.rest` under the project root, ignoring `.git`, `node_modules`,
+  build trees, and symlinks escaping the root.
+- Suggest `.tuiminal/http/` for new requests without making it the only scanned path.
+- Support multiple requests separated by `###`, named with `# @name`.
+- Parse an AST with trivia preserving comments, order, whitespace, and unknown blocks.
+  Visual editing must not regenerate whole files from a lossy model.
+- Blocks that cannot be safely edited open as raw content with an explanation;
+  saving supported parts must not remove them.
+- Tree represents folders/files/requests with fuzzy search, duplicate, rename, move,
+  and confirmed deletion.
+- Watch external changes. Dirty conflicts require a diff and explicit choice,
+  never silent overwrite.
+- Optional workspace/collection defaults may use `.tuiminal/http/config.json`,
+  separate from canonical `.http`. Allow nonsecret headers/options and auth references,
+  never literal tokens/passwords. Prototype and version its schema before freezing.
 
-Exemplo canônico inicial:
+Initial canonical example:
 
 ```http
 @baseUrl = https://api.exemplo.com
@@ -759,118 +696,117 @@ Authorization: Bearer {{apiToken}}
 # @assert status == 200
 ```
 
-### Ambientes e segredos
+### Environments and secrets
 
-- Suportar `http-client.env.json` para valores públicos e
-  `http-client.private.env.json` para overrides privados, aproveitando a convenção
-  documentada por IDEs.
-- Ao criar o arquivo privado, verificar `.gitignore` e oferecer a inclusão explícita;
-  não presumir que a IDE fará isso.
-- Arquivo privado usa diretório `0700`, arquivo `0600` e escrita atômica. Segredos de
-  maior valor podem ficar no keychain e aparecer no arquivo apenas como referência.
-- Precedência inicial: variável do request > variável do arquivo > ambiente privado
-  > ambiente público > built-in dinâmica. Duplicatas mostram a origem vencedora.
-- Escopo por arquivo: para um request salvo, procurar o nome de ambiente selecionado
-  primeiro no diretório do `.http` e depois em cada diretório pai até a raiz do
-  projeto. O primeiro diretório que definir esse ambiente vence por inteiro; não
-  mesclar variáveis homônimas de um pai depois que um escopo mais próximo foi
-  encontrado. Dentro do mesmo diretório, o arquivo privado sobrescreve o público.
-- Requests scratch consultam somente a raiz. Ambientes existentes apenas em
-  diretórios irmãos não aparecem nem são usados, evitando importar acidentalmente
-  segredos de outro serviço. A seleção é o nome do ambiente; em collection runs,
-  cada request resolve esse mesmo nome contra a sua própria cadeia de diretórios.
-- `[N] Novo ambiente privado` grava no diretório do arquivo ativo, ou na raiz para
-  scratch, e mostra o caminho de destino antes da confirmação. Ao trocar para um
-  documento cuja cadeia não contenha o nome selecionado, voltar explicitamente a
-  `Sem ambiente`.
-- Para headers/options/auth: valor explícito do request > defaults da coleção mais
-  próxima > defaults do workspace > valor automático do cliente. O preview mostra
-  origem e conflito; auth herdada nunca fica implícita apenas em uma cor.
-- Host environment é bloqueado por padrão e exige habilitação explícita, seguindo a
-  decisão segura adotada pelo Posting.
-- Segredos aparecem mascarados no preview, autocomplete, logs, history, copy e erros.
-- Trocar para um ambiente marcado como produção pode exigir confirmação por sessão.
+- Use `http-client.env.json` for public values and `http-client.private.env.json`
+  for private overrides, following IDE conventions.
+- When creating private files, check `.gitignore` and offer explicit inclusion;
+  do not assume an IDE handles it.
+- Private storage uses `0700` directories, atomic `0600` files; higher-value secrets
+  may live in the keychain with only references in files.
+- Variable precedence: request > file > private environment > public environment >
+  dynamic built-in. Identify the winning source for duplicates.
+- For a saved request, find the selected environment name from its `.http` directory
+  through parents to the project root. The first directory defining it wins entirely;
+  do not merge matching parent variables after finding a closer scope. Within that
+  directory, private overrides public.
+- Scratch uses root only. Sibling-only environments neither appear nor apply. Selection
+  is an environment name; each collection request resolves it against its own ancestry.
+- Creating a private environment with `[N]` writes beside the active file or at root
+  for scratch, showing the destination before confirmation. Switching to a document
+  without the selected name explicitly returns to no environment.
+- Header/options/auth precedence: explicit request > nearest collection defaults >
+  workspace defaults > automatic client values. Preview exposes provenance/conflicts;
+  inherited auth must not be indicated by color alone.
+- Host environment is blocked by default and requires explicit enablement.
+- Mask secrets in preview, autocomplete, logs, history, copy, and errors.
+- Switching to production may require per-session confirmation.
 
 ### Response inspector
 
-- tabs primárias fixas: Pretty, Raw, Headers, Timing e Mais; Cookies, Redirects,
-  Assertions e Console ficam em Mais, com badges de conteúdo/erro;
-- JSON/XML/HTML com highlight; JSON com folding, busca, linha, wrap e JSON path;
-- cópia via OSC52 de seleção, linha, body, headers, JSON path/value e cURL redigido;
-- bytes não textuais não são convertidos com perda: mostrar tipo, tamanho e ações
-  `[S] Salvar`/`[O] Abrir` quando seguras;
-- status, URL final, content type, encoding, tamanho declarado, bytes capturados,
-  bytes baixados conhecidos e truncamento são campos distintos;
-- medir `até headers`, `download` e `total` com `performance.now()`. DNS/TCP/TLS só
-  aparecem se um transporte futuro fornecer esses dados;
-- redirect chain opcional com status e host por salto;
-- erros classificados em URL, DNS/conexão, TLS, timeout, cancelamento, redirect,
-  corpo e parse, sem despejar tokens na mensagem;
-- resposta vazia, 204, HEAD, streaming e truncamento têm estados próprios.
+- Stable Pretty, Raw, Headers, Timing, More tabs. Cookies, Redirects, Assertions,
+  and Console live in More with content/error badges.
+- JSON/XML/HTML highlighting; JSON folding, search, line navigation, wrap, and paths.
+- OSC52 copy of selection, line, body, headers, JSON path/value, and redacted cURL.
+- Never lossily decode binary as text: show type/size and safe `[S] Save`/`[O] Open`.
+- Distinguish status, final URL, content type, encoding, declared/captured/known
+  downloaded bytes, and truncation.
+- Measure headers, download, and total with `performance.now()`. Show DNS/TCP/TLS
+  only if a future transport actually supplies them.
+- Optional redirect chain with status and host per hop.
+- Classify URL, DNS/connection, TLS, timeout, cancellation, redirect, body, and parse
+  errors without including tokens.
+- Distinct empty, 204, HEAD, streaming, and truncated states.
 
-### Histórico
+### History
 
-- Histórico de sessão mantém até 30 metadados, mas usa orçamento global de corpos;
-  corpos antigos são descartados antes de metadados.
-- Histórico persistente é opt-in por projeto. Por padrão guarda apenas metadados e
-  preview redigido em arquivo `0600`.
-- Guardar corpo completo exige opt-in separado, limite por item e limite global.
-- Requests podem declarar `@no-log`; ações com auth literal sugerem não persistir.
-- Histórico se agrupa por request estável, permite reabrir e comparar duas respostas.
-- Rerun usa o ambiente atual e passa pela preparação/confirmação normal; nunca
-  reaproveita segredo serializado de uma execução antiga.
+- Keep up to 30 session metadata records with a separate global body budget;
+  evict older bodies before metadata.
+- Persistent history is opt-in per project, storing only metadata/redacted preview
+  by default in `0600` files.
+- Full body storage requires separate opt-in plus per-item/global limits.
+- Even with opt-in, known-private executions never persist bodies. Private context
+  follows every hop, sent/received cookie, and extraction before history recording,
+  without serializing secret-value lists. Metadata, errors, and assertions also mask
+  common percent-encoded, double-encoded, form, and JSON representations. The active
+  snapshot stays exact and volatile; manual export is separate. Do not promise complete
+  sanitization of arbitrary bodies or retroactive cleanup of old files/backups.
+- Requests may declare `@no-log`; literal auth suggests disabling persistence.
+- Group by stable request identity, supporting reopen and two-response comparison.
+- Rerun uses the current environment and normal preparation/confirmation, never old
+  serialized secrets.
 
-### Import, export e automação
+### Import, export, and automation
 
-Ordem de implementação:
+Implementation order:
 
-1. copiar/exportar cURL com quoting correto e segredo redigido por padrão;
-2. importar cURL com preview antes de substituir o draft;
-3. ler, editar e executar `.http`;
-4. importar Postman v2.1 e OpenAPI 3.x para uma pasta escolhida, com relatório de
-   itens suportados, ignorados e conflitantes;
-5. importar Bruno/Insomnia apenas se houver demanda comprovada;
-6. assertions declarativas e execução headless;
-7. codegen adicional somente depois de cURL e `.http` estarem corretos.
+1. Copy/export cURL with correct quoting and default redaction.
+2. Import cURL with preview before replacing drafts.
+3. Read, edit, and execute `.http`.
+4. Import Postman v2.1/OpenAPI 3.x into a selected directory with supported/ignored/
+   conflicting item reports.
+5. Consider Bruno/Insomnia only with demonstrated demand.
+6. Declarative assertions and headless execution.
+7. Additional codegen after cURL and `.http` are correct.
 
-CLI futuro, preservando `tuiminal http [diretório]`:
+Target CLI, preserving `tuiminal http [directory]`:
 
 ```text
-tuiminal http [diretório]
-tuiminal http run <arquivo>[#request] [--env <nome>] [--report text|json|junit]
-tuiminal http import curl <comando> [--output <diretório>]
-tuiminal http import postman|openapi <arquivo> [--output <diretório>]
+tuiminal http [directory]
+tuiminal http run <file>[#request] [--env <name>] [--report text|json|junit]
+tuiminal http import curl <command> [--output <directory>]
+tuiminal http import postman|openapi <file> [--output <directory>]
 ```
 
-`run` e `import` são palavras reservadas somente depois de `http`; um caminho de
-projeto continua funcionando como hoje. TUI e modo headless compartilham parser,
-resolver, transporte, assertions e redação.
+`run` and `import` are reserved only after `http`; project-directory invocation
+continues to work. TUI/headless share parser, resolver, transport, assertions, and
+redaction. This target sketch must be read alongside implemented scope above.
 
-## Arquitetura proposta
+## Proposed architecture
 
-### Fronteiras
+### Boundaries
 
 ```text
-src/features/http/
-  index.ts                         API pública mínima da feature
-  HttpWorkspace.tsx               composição fina dos panes
-  keyboard.ts                     posse de foco e atalhos locais
+packages/feature-http/src/
+  index.ts                         minimal feature API
+  HttpWorkspace.tsx                thin pane composition (proposed name)
+  keyboard.ts                      focus ownership and local shortcuts
   model/
-    types.ts                      request, response, env e history
-    workspace.ts                  reducer de tabs, pane, modal e dirty state
-    variables.ts                  resolução, precedência e masking
-    http-file.ts                  AST lossless e seleção de request
-    response.ts                   view model, busca e folding
+    types.ts                       request, response, environment, history
+    workspace.ts                   tabs, panes, modals, and dirty-state reducer
+    variables.ts                   resolution, precedence, and masking
+    http-file.ts                   lossless AST and request selection
+    response.ts                    view model, search, and folding
   services/
-    transport.ts                  contrato cancelável
-    fetch-transport.ts            implementação Bun inicial
-    request-builder.ts            modelo -> request preparado
-    response-reader.ts            streaming, limites e decoding
-    redirects.ts                  política e remoção de credenciais
+    transport.ts                   cancellable contract
+    fetch-transport.ts             initial Bun implementation
+    request-builder.ts             model to prepared request
+    response-reader.ts             streaming, limits, and decoding
+    redirects.ts                   policy and credential stripping
   storage/
-    collections.ts                descoberta e escrita atômica `.http`
-    environments.ts               público/privado/keychain
-    history.ts                    sessão e persistência opt-in
+    collections.ts                 discovery and atomic `.http` writes
+    environments.ts                public/private/keychain
+    history.ts                     session and opt-in persistence
   importing/
     curl.ts
     postman.ts
@@ -886,14 +822,15 @@ src/features/http/
     HttpEnvironmentModal.tsx
     HttpHistoryOverlay.tsx
 tests/
-  http-*.test.ts                  regras e integrações locais
-  tui/http.test.tsx               sequências reais OpenTUI
+  http-*.test.ts                    rules and local integrations
+  tui/http.test.tsx                real OpenTUI sequences
 ```
 
-Criar pastas apenas quando a fase correspondente existir. O desenho é uma direção
-de dependências, não autorização para arquivos vazios.
+Create directories when their phase exists. This diagram describes dependency
+direction, not permission to add empty files or a claim that all proposed names
+match the final source tree.
 
-### Modelo essencial
+### Essential model
 
 ```ts
 type HttpRequestDefinition = {
@@ -936,335 +873,338 @@ type HttpResponseSnapshot = {
 }
 ```
 
-O estado do workspace usa reducer puro. Cada tab preserva draft, resposta, erro,
-scroll, busca, tab interna e split. Modais e autocomplete ficam em uma pilha
-explícita para que `[Esc]` sempre remova exatamente uma camada.
+Use a pure workspace reducer. Each tab preserves draft, response, error, scroll,
+search, internal tab, and split. Modals/autocomplete form an explicit stack so
+`[Esc]` removes exactly one layer.
 
-O reducer só aceita um resultado se `executionId`, `requestId` e revisão ainda
-corresponderem à execução pendente daquela tab. Trocar foco, fechar uma tab ou
-enviar novamente nunca permite que uma resposta tardia seja anexada a outro request.
+Accept results only when `executionId`, `requestId`, and revision still match that
+tab's pending execution. Focus changes, closing a tab, and resending must never
+attach a late response to another request.
 
-### Pipeline de execução
+### Execution pipeline
 
 ```text
 draft
-  -> validar sem mutar
-  -> resolver variáveis e registrar origem/masking
-  -> aplicar auth e headers automáticos visíveis
-  -> preparar URL/body/arquivos
-  -> confirmar opções perigosas
-  -> executar com AbortSignal
-  -> ler stream dentro de limites
-  -> classificar/formatar sem bloquear a TUI
-  -> atualizar snapshot
-  -> registrar histórico redigido conforme política
+  -> validate without mutation
+  -> resolve variables and record provenance/masking
+  -> apply visible auth and automatic headers
+  -> prepare URL/body/files
+  -> confirm dangerous options
+  -> execute with AbortSignal
+  -> read stream within limits
+  -> classify/format without blocking input
+  -> update snapshot
+  -> record redacted history according to policy
 ```
 
-O transport não conhece React, storage ou componentes. O mesmo serviço é usado por
-TUI e CLI. A feature não importa `app`; callbacks continuam sendo a fronteira com
-Runner e navegação global, mantendo compatibilidade com a futura migração de plugins.
+Transport knows nothing about React, storage, or components. TUI and CLI use the
+same service. HTTP does not import the application; callbacks connect it to Runner
+and global navigation, preserving independent first-party workspace boundaries.
 
-### Reuso dentro do Tuiminal
+### Reuse within Tuiminal
 
-- usar o padrão de tabs montadas, split `[Ctrl+↑/↓]` e `[F10]` do SQL workspace;
-- usar `InlineButton`, seleção mouse e superfícies do tema, sem criar um segundo kit;
-- usar escrita protegida/atômica já aplicada em Runner e Database;
-- usar OSC52 já usado por Runner e export do Database;
-- aproveitar o lexer/highlight estável do projeto quando couber, sem remount de
-  editor;
-- seguir o lifecycle registry apenas para recursos realmente criados pelo HTTP,
-  como watchers, workers ou cookie jars persistentes.
+- Mounted-tab patterns, `[Ctrl+↑/↓]` splits, and `[F10]` from the SQL workspace.
+- `InlineButton`, mouse selection, and theme surfaces, without a second UI kit.
+- Protected atomic writes already used by Runner and Database.
+- OSC52 already used by Runner and Database exports.
+- Stable project lexing/highlighting where suitable, without remounting editors.
+- Lifecycle registration only for HTTP-owned resources such as watchers, workers,
+  or persistent cookie jars.
 
-## Segurança, privacidade e robustez
+## Security, privacy, and robustness
 
-Requisitos obrigatórios antes de persistência ou import:
+Required before persistence or import:
 
-- sanitizar controles ANSI/C0/C1 vindos de URL, headers e body antes de renderizar,
-  evitando terminal injection;
-- preservar dados brutos somente em memória/arquivo protegido e renderizar uma view
-  segura;
-- remover `Authorization`, `Proxy-Authorization`, `Cookie` e headers configuráveis ao
-  redirecionar para outra origem;
-- limitar quantidade de redirects e detectar loops;
-- aplicar limite depois de descompressão e ter proteção contra payload comprimido
-  desproporcional;
-- limitar preview e leitura de arquivo de body; caminhos relativos ficam dentro da
-  coleção, salvo aprovação explícita para arquivo externo;
-- nunca escrever auth, cookie, query sensível ou body cru em log de erro;
-- exports com segredo são redigidos por padrão; revelar/exportar requer ação clara;
-- scripts importados permanecem desabilitados. Futuro scripting deve usar processo
-  ou worker isolado, timeout, limite de memória, API reduzida e permissões declaradas;
-- TLS inseguro aparece em vermelho e exige confirmação por target/ambiente;
-- arquivos privados e histórico usam `0700`/`0600`, escrita atômica e nunca seguem
-  symlink inesperado;
-- import nunca sobrescreve arquivo sem preview e confirmação;
-- erros de parse apontam arquivo/linha sem imprimir o valor secreto.
+- Sanitize ANSI/C0/C1 controls from URLs, headers, and bodies before rendering to
+  prevent terminal injection. Keep raw data only in memory/protected files and
+  render a safe view.
+- Strip `Authorization`, `Proxy-Authorization`, `Cookie`, and configured sensitive
+  headers on cross-origin redirects. Local A05 fixes preserve auth/private-header
+  provenance; cookies learned at one origin cannot reappear at another on later
+  hops. Destination-owned cookies remain available.
+- Pause the current transport to confirm cross-origin private bodies/URLs, downgrade,
+  or unapproved insecure TLS. `[Y]` approves only that hop; `[I]` remains TLS approval
+  by target/environment/session. Never replay POSTs/dependencies to continue a
+  redirect. The 16-item confirmation queue accepts one decision per item and retires
+  on abort/timeout/unmount.
+- Headless private-body/URL redirects require repeatable exact-origin
+  `--allow-private-redirect-to <origin>`; downgrade requires
+  `--allow-http-redirect-to <origin>`. Insecure TLS remains separately authorized by
+  `--allow-insecure-tls`. Original credentials stay stripped after consent. Reject
+  non-HTTP/HTTPS redirect schemes and credentials embedded in redirect URLs.
+- Bound redirect count and detect loops.
+- Apply capture limits after decompression and protect against disproportionate
+  compressed payloads.
+- Bound body-file reading and preview. Relative paths remain within the collection
+  unless an external file is explicitly approved.
+- Never put auth, cookies, sensitive queries, or raw bodies in error logs.
+- Include sensitive Path values in masking for preview, cURL, conflicts, report URLs,
+  evaluated assertions, and diagnostics, even for disabled rows. Reject literal
+  secrets in public `.http` while preserving private references and transmitted values.
+- Redact exports by default; revealing/exporting secrets requires a clear action.
+- System-handler opening requires allowlisted raster MIME and matching magic bytes.
+  Never directly open SVG, PDF, or conflicting MIME/extensions. Saving is separate.
+- Imported scripts stay disabled. Future scripting requires an isolated process or
+  worker, timeout, memory limits, a reduced API, and declared permissions.
+- Show insecure TLS in red and require target/environment confirmation.
+- Private files/history use `0700`/`0600`, atomic writes, and no unexpected symlink following.
+- Imports never overwrite without preview and confirmation.
+- Parse errors identify file/line without printing secret values.
 
-## Performance e limites
+## Performance and limits
 
-- captura padrão: 1,5 MB por resposta, configurável apenas dentro de teto seguro;
-- histórico: 30 metadados por sessão e orçamento inicial de 12 MB para corpos;
-- renderizar response como um documento estilizado, não um renderable por linha;
-- JSON grande é formatado/foldado incrementalmente ou fora do caminho de input;
-- manter URL, body, busca e scroll responsivos durante download;
-- cancelamento deve encerrar reader e impedir commit tardio de resposta cancelada;
-- preservar seleção absoluta, scroll e split em resize;
-- descoberta de `.http` ignora árvores pesadas e é incremental;
-- watchers são encerrados ao trocar raiz/fechar aplicação;
-- body completo maior que o limite pode ser salvo por streaming em arquivo `0600`
-  escolhido pelo usuário, sem ficar inteiro em memória.
+- Default capture: 1.5 MB per response, configurable only within a safe ceiling.
+- History: 30 session metadata records and an initial 12 MB body budget.
+- Render response as one styled document, not one renderable per line.
+- Format/fold large JSON incrementally or outside the input path.
+- Keep URL, body, search, and scrolling responsive during download.
+- Cancellation closes the reader and prevents late publication of cancelled results.
+- Preserve absolute selection, scroll, and split on resize.
+- Discover `.http` incrementally while ignoring large irrelevant trees.
+- Close watchers when changing roots or shutting down.
+- Stream full bodies larger than capture to a `0600` file, capped at 256 MB, without
+  retaining the whole body in memory. Explicitly resend only GET; non-2xx status,
+  cancellation, and failures remove the `.part` file.
 
-## Plano de entrega
+## Delivery plan
 
-Tamanhos representam complexidade relativa, não prazo. Cada fase termina com seus
-critérios antes da seguinte ampliar o modelo.
+Sizes express relative complexity, not deadlines. Each phase must satisfy its exit
+criteria before the next expands the model. See implementation status for completed
+phases; these delivery definitions remain as design history and acceptance contracts.
 
-### Fase 0 — estabilizar e separar a base (M)
+### Phase 0 — stabilize and separate the foundation (M)
 
-Entregas:
+Deliverables:
 
-- testes de TUI para foco de URL/editor/history/response e propagação de `[Esc]`;
-- incluir todos os focos HTTP no keyboard scope;
-- extrair reducer/modelo de workspace e serviço de leitura da resposta;
-- vincular toda execução a `executionId`, request, revisão e tab, descartando commit
-  tardio ou pertencente a outro contexto;
-- distinguir bytes capturados, declarados e truncamento;
-- preservar headers repetidos e classificar body textual/binário;
-- testes de timeout, cancelamento, resposta grande, chunked, binário e erro;
-- remover a implementação HTTP anterior depois de registrar os contratos externos
-  com App/Runner/i18n e construir substitutos novos para eles.
+- TUI tests for URL/editor/history/response focus and `[Esc]` propagation.
+- Every HTTP focus registered in keyboard scope.
+- Extracted workspace reducer/model and response-reading service.
+- Execution pinned to `executionId`, request, revision, and tab; reject late/wrong-context results.
+- Distinct captured/declared bytes and truncation.
+- Repeated headers and text/binary classification.
+- Timeout, cancellation, large/chunked/binary/error response tests.
+- Remove the old implementation after recording required App/Runner/i18n contracts
+  and building their replacements.
 
-Saída:
+Exit criteria:
 
-- `HttpWorkspace.tsx` novo apenas compõe; parsing/transporte/history pertencem a
-  módulos novos e nenhum deles importa o serviço HTTP anterior;
-- uma request scratch é enviada pelo pipeline novo, sem adapter de migração;
-- `[Esc]` fecha history ou desfoca input sem encerrar o app na mesma tecla;
-- sucesso, erro, timeout e cancelamento sempre encerram loading da execução correta;
-- nenhum teste usa rede externa ou dados reais do usuário.
+- New workspace only composes; new parsing/transport/history modules never import
+  the previous HTTP service.
+- Scratch sends through the new pipeline without a migration adapter.
+- `[Esc]` closes history or unfocuses input without exiting the app in the same event.
+- Success, error, timeout, and cancellation always settle the correct execution's loading state.
+- No tests use external networks or real user data.
 
-### Fase 1 — workbench visual e request completo (L)
+### Phase 1 — visual workbench and complete request (L)
 
-Entregas:
+Deliverables:
 
-- protótipo fixture-first dos quatro modos Panorama/Workbench/Foco/Mínimo antes de
-  ligar o novo transporte ou storage;
-- resolver puro de layout por mínimos de conteúdo, área útil e preferências de
-  split, nos layouts framed/compact;
-- sidebar inicial com scratch e histórico de sessão;
-- tabs primárias de request: Params, Headers, Body, Auth e Mais;
-- tabs primárias de response: Pretty, Raw, Headers, Timing e Mais;
-- até seis requests scratch montados, dirty state, close e cycle;
-- split ajustável, maximização, jump mode e help contextual;
-- key/value editor reutilizável com mouse, enable/disable e autocomplete básico;
-- auth No Auth/Bearer/Basic/API Key e body JSON/raw/form URL encoded.
+- Fixture-first Panorama/Workbench/Focus/Minimum prototypes before new transport/storage.
+- Pure layout resolution by content minimums, usable area, and split preferences in
+  framed/compact layouts.
+- Initial scratch/session-history sidebar.
+- Request Params/Headers/Body/Auth/More; response Pretty/Raw/Headers/Timing/More.
+- Up to six mounted scratch documents with dirty state, close, and cycling.
+- Adjustable split, maximization, jump mode, and contextual help.
+- Reusable key/value editor with mouse, enable/disable, and basic autocomplete.
+- No Auth/Bearer/Basic/API Key and JSON/raw/URL-encoded bodies.
 
-Saída:
+Exit criteria:
 
-- fluxo completo funciona em `60×16`, `72×18`, `80×24`, `96×24`, `120×30` e
-  `160×40`, degradando sem perder ações;
-- mudar tab/pane/layout não perde cursor, draft, resposta ou foco indevidamente;
-- headers automáticos aparecem na preparação antes do envio;
-- toda ação visível tem mouse e texto com atalhos entre colchetes.
+- Complete workflow at `60×16`, `72×18`, `80×24`, `96×24`, `120×30`, and `160×40`
+  without losing actions when layout shrinks.
+- Tab/pane/layout changes preserve cursor, draft, response, and appropriate focus.
+- Automatic headers are visible before sending.
+- Every visible action has mouse access and bracketed shortcuts.
 
-### Fase 2 — projeto, `.http`, ambientes e cURL (XL)
+### Phase 2 — projects, `.http`, environments, and cURL (XL)
 
-Entregas:
+Deliverables:
 
-- scanner de `.http`/`.rest`, árvore, busca e watcher;
-- parser/serializer lossless com múltiplos requests por arquivo;
-- salvar, duplicar, renomear, mover e excluir requests;
-- ambientes público/privado, variable preview, autocomplete e keychain opcional;
-- protótipo e schema versionado de `.tuiminal/http/config.json` para defaults
-  não secretos de workspace/coleção;
-- import/export cURL com preview, quoting e masking;
-- multipart e body de arquivo com sandbox de caminho;
-- migração do scratch para arquivo sem apagar dados;
-- CLI continua aceitando `tuiminal http [diretório]`.
+- `.http`/`.rest` scanner, tree, search, watcher, and lossless multi-request parser/serializer.
+- Save, duplicate, rename, move, and delete requests.
+- Public/private environments, variable preview/autocomplete, optional keychain.
+- Prototyped, versioned `.tuiminal/http/config.json` schema for nonsecret workspace/
+  collection defaults.
+- cURL preview import/export with quoting and masking.
+- Multipart/file bodies with constrained paths.
+- Scratch-to-file migration without data loss.
+- Compatibility with `tuiminal http [directory]`.
 
-Saída:
+Exit criteria:
 
-- round-trip de fixtures `.http` não altera bytes fora do bloco editado;
-- abrir outro projeto não restaura coleção/ambiente do projeto anterior;
-- segredo privado nunca aparece em arquivo público, snapshot ou histórico;
-- alteração externa conflituosa nunca é sobrescrita silenciosamente.
+- `.http` fixture round-trips do not change bytes outside the edited block.
+- A new project never restores the previous project's collection/environment.
+- Private secrets do not appear in public files, exposed snapshots, or history.
+- External conflicts are never silently overwritten.
 
-### Fase 3 — depuração de resposta e histórico (L)
+### Phase 3 — response debugging and history (L)
 
-Entregas:
+Deliverables:
 
-- folding JSON, busca, wrap, line numbers e JSON path;
-- copy/yank via OSC52 e save seguro de texto/binário;
-- redirect chain, cookies por ambiente e timing honesto;
-- histórico por request, persistence opt-in e diff de duas respostas;
-- política de orçamento global para corpos e limpeza;
-- controles de truncamento e download completo por streaming.
+- JSON folding, search, wrap, line numbers, and paths.
+- OSC52 copy/yank and protected text/binary saving.
+- Redirect chain, environment-scoped cookies, and honest timing.
+- Per-request history, opt-in persistence, and two-response diff.
+- Global body budget and cleanup policy.
+- Truncation controls and streamed full downloads.
 
-Saída:
+Exit criteria:
 
-- resposta grande não bloqueia navegação;
-- cookie/redirect respeita domínio, path, secure, expiry e remoção cross-origin;
-- history diff funciona sem persistir credencial ou corpo quando desabilitado;
-- terminal control sequences aparecem neutralizadas.
+- Large responses do not block navigation.
+- Cookies/redirects respect domain, path, secure, expiry, and cross-origin removal.
+- History diff works without persisting credentials or disabled bodies.
+- Terminal control sequences are neutralized.
 
-### Fase 4 — import amplo, assertions e modo headless (XL)
+### Phase 4 — broader imports, assertions, and headless execution (XL)
 
-Entregas:
+Deliverables:
 
-- import Postman v2.1 e OpenAPI 3.x com relatório de compatibilidade;
-- assertions declarativas em `.http` e tab de resultados;
-- request chaining sem serializar segredo extraído;
-- `tuiminal http run` com saída text/JSON/JUnit e exit codes documentados;
-- collection runner com dataset local e concorrência limitada;
-- fixtures de compatibilidade e integração CLI/TUI.
+- Postman v2.1/OpenAPI 3.x imports with compatibility reports.
+- Declarative `.http` assertions and a results tab.
+- Chaining without serializing extracted secrets.
+- `tuiminal http run` with text/JSON/JUnit reports and documented exit codes.
+- Local datasets and bounded collection concurrency.
+- Compatibility fixtures and CLI/TUI integration.
 
-Saída:
+Exit criteria:
 
-- o mesmo request produz preparação equivalente na TUI e no CLI;
-- CI falha apenas por parse, transporte ou assertion, com exit codes estáveis;
-- import é determinístico, não sobrescreve e explica perdas;
-- runner cancela filhos e conexões criados por ele, nunca processos externos.
+- Equivalent preparation for the same request in TUI and CLI.
+- Stable CI exit codes for parse, transport, and assertion failures.
+- Deterministic imports that avoid overwrite and explain losses.
+- Runner cancellation stops only its own children/connections, never unrelated processes.
 
-### Fase 5 — recursos avançados sob evidência (pesquisa)
+### Phase 5 — advanced features with evidence (research)
 
-Avaliar, nessa ordem:
+Evaluate in this order:
 
-1. OAuth2 com armazenamento no keychain;
-2. certificados de cliente;
-3. SSE como resposta streaming;
-4. WebSocket como modo dentro da feature HTTP;
-5. scripting isolado e permissionado;
-6. GraphQL assistido por schema;
-7. gRPC em proposta própria, não como extensão improvisada do HTTP builder.
+1. OAuth2 with keychain storage.
+2. Client certificates.
+3. SSE streaming responses.
+4. WebSocket mode within HTTP.
+5. Isolated, permissioned scripting.
+6. Schema-assisted GraphQL.
+7. A separate gRPC proposal rather than an improvised HTTP-builder extension.
 
-Nenhum item entra apenas porque um concorrente o possui. Exigir caso de uso,
-protótipo, modelo de segurança e impacto de manutenção.
+Require a use case, prototype, security model, and maintenance assessment. Competitor
+support alone does not justify a feature.
 
-## Estratégia de testes
+## Test strategy
 
-### Unitários
+### Unit tests
 
-- resolver de layout em cada limiar, mínimos de pane, clamp/restauração de divisor e
-  largura grapheme-aware;
-- reducer rejeita resposta cancelada, tardia, de revisão anterior ou de outra tab;
-- URL, métodos customizados e rejeição de CR/LF em nome de header;
-- duplicatas e ordem de query/headers;
-- coerção de body, Content-Type e auth;
-- precedência, ciclos, unresolved variables e masking;
-- parser/AST/round-trip `.http`, inclusive quotes, comentários e múltiplos requests;
-- quoting cURL em Unix e representação segura em plataformas suportadas;
-- leitura limitada, UTF-8 quebrado, binário, compressão e truncamento;
-- redirects, remoção de credenciais e cookie matching;
-- budget/redação do histórico e escrita protegida;
-- folding, busca, JSON path e diff.
+- Layout thresholds, pane minimums, divider clamp/restore, grapheme-aware width.
+- Reducer rejection of cancelled, late, old-revision, and other-tab responses.
+- URLs/custom methods and CR/LF rejection in header names.
+- Query/header ordering and duplicates.
+- Body coercion, Content-Type, and auth.
+- Variable precedence, cycles, unresolved values, and masking.
+- `.http` parser/AST/round-trip, including quotes, comments, and multiple requests.
+- Unix cURL quoting and safe representations on supported platforms.
+- Bounded reads, split UTF-8, binary, compression, and truncation.
+- Redirects, credential removal, and cookie matching.
+- History budgets/redaction and protected writes.
+- Folding, search, JSON paths, and diff.
 
-### Integração local
+### Local integration
 
-Servidor HTTP efêmero e isolado para:
+Use an isolated ephemeral HTTP server for:
 
-- status 1xx/2xx/3xx/4xx/5xx, HEAD, 204 e headers repetidos;
-- redirect same-origin/cross-origin/loop;
-- resposta lenta antes dos headers e durante o body;
-- cancelamento, timeout, chunked, gzip/brotli, body grande e conexão interrompida;
-- upload JSON, form, multipart e arquivo;
-- cookies com domain/path/secure/expiry;
-- proxy HTTP local e TLS com certificado descartável; strict falha, insecure exige
-  aprovação anterior ao transporte e só então desativa a verificação.
+- 1xx/2xx/3xx/4xx/5xx statuses, HEAD, 204, and repeated headers.
+- Same-origin/cross-origin/looping redirects.
+- Slow headers and body streams.
+- Cancellation, timeout, chunked, gzip/brotli, large bodies, and interrupted connections.
+- JSON, form, multipart, and file uploads.
+- Cookie domain/path/secure/expiry behavior.
+- Local HTTP proxy and TLS with disposable certificates: strict verification fails;
+  insecure mode requires approval before transport disables verification.
 
-### TUI real
+### Real TUI
 
-- clicar, focar, editar, enviar, cancelar e rolar;
-- sequência completa de `[Esc]` em autocomplete, input, modal, sidebar e app;
-- global shortcuts bloqueados enquanto input/modal/picker possui o teclado;
-- layouts compact/framed na matriz `60×16` a `160×40`, inclusive resize atravessando
-  todos os breakpoints;
-- tabs montadas preservam conteúdo, cursor e resposta;
-- divisor por mouse e teclado;
-- coleção alterada externamente e conflito de draft;
-- todos os textos e targets de tutorial nos seis idiomas;
-- variante accessible/reduced-motion com progresso estático, ordem de foco linear e
-  estado compreensível sem cor;
-- AltGr, tmux/GNU Screen, VS Code terminal, seleção/cópia no macOS e fallbacks de
-  teclas de função quando o ambiente estiver disponível.
+- Click, focus, edit, send, cancel, and scroll.
+- Complete `[Esc]` sequences through autocomplete, input, modal, sidebar, and app.
+- Inputs/modals/pickers block global shortcuts while owning the keyboard.
+- Framed/compact matrix from `60×16` to `160×40`, resizing across every breakpoint.
+- Mounted tabs retain content, cursor, and response.
+- Mouse and keyboard dividers.
+- External collection changes and draft conflicts.
+- All tutorial text/targets in six languages.
+- Accessible/reduced-motion variant with static progress, linear focus, and
+  understandable non-color state.
+- AltGr, tmux/GNU Screen, VS Code Terminal, macOS selection/copy, and function-key
+  fallbacks when those environments are available.
 
-### CLI e gate
+### CLI and gate
 
-- compatibilidade de `tuiminal http [diretório]`;
-- `run`, reports e exit codes sem rede externa;
-- import em diretório temporário;
-- `bun run check` e `git diff --check` em toda entrega;
-- nunca ler config, keychain, `.env` ou serviços reais do usuário nos testes.
+- Preserve `tuiminal http [directory]`.
+- Test `run`, reports, and exit codes without external network access.
+- Import into temporary directories.
+- Run `bun run check` and `git diff --check` for every delivery.
+- Never read real user configuration, keychain, `.env`, or services in tests.
 
-## Priorização resumida
+## Priority summary
 
-| Item | Valor | Risco | Decisão |
+| Item | Value | Risk | Decision |
 | --- | --- | --- | --- |
-| Foco, `[Esc]`, cancelamento e limites | Muito alto | Médio | Primeiro |
-| Layout Posting-inspired | Muito alto | Médio | Fase 1 |
-| Query/headers/auth/body estruturados | Muito alto | Médio | Fase 1 |
-| `.http` lossless e coleção de projeto | Muito alto | Alto | Fase 2 |
-| Ambientes + segredo privado/keychain | Muito alto | Alto | Fase 2 |
-| cURL import/export | Alto | Médio | Fase 2 |
-| Busca/folding/copy da resposta | Alto | Médio | Fase 3 |
-| Histórico persistente + diff | Alto | Alto por privacidade | Fase 3, opt-in |
-| Postman/OpenAPI | Médio | Alto | Fase 4 |
-| Assertions/headless | Alto | Alto | Fase 4 |
-| Codegen multi-linguagem | Médio | Médio | Depois de cURL |
-| Scripts | Alto para poucos casos | Muito alto | Adiado até isolamento |
-| WebSocket/SSE | Médio | Alto | Pesquisa após HTTP maduro |
-| gRPC/MQTT | Baixo no escopo atual | Muito alto | Fora do plano imediato |
+| Focus, `[Esc]`, cancellation, limits | Very high | Medium | First |
+| Posting-inspired layout | Very high | Medium | Phase 1 |
+| Structured query/headers/auth/body | Very high | Medium | Phase 1 |
+| Lossless `.http` and project collection | Very high | High | Phase 2 |
+| Environments and private/keychain secrets | Very high | High | Phase 2 |
+| cURL import/export | High | Medium | Phase 2 |
+| Response search/folding/copy | High | Medium | Phase 3 |
+| Persistent history and diff | High | High privacy risk | Phase 3, opt-in |
+| Postman/OpenAPI | Medium | High | Phase 4 |
+| Assertions/headless | High | High | Phase 4 |
+| Multiple-language codegen | Medium | Medium | After cURL |
+| Scripts | High for some cases | Very high | Deferred until isolated |
+| WebSocket/SSE | Medium | High | Research after mature HTTP |
+| gRPC/MQTT | Low in current scope | Very high | Outside immediate plan |
 
-## Decisões que precisam permanecer explícitas
+## Decisions that must remain explicit
 
-- **Escolhido:** visual baseado no Posting, adaptado às regras do Tuiminal.
-- **Escolhido:** reconstrução do zero da feature HTTP; não copiar componentes,
-  reducers, tipos, helpers, testes ou fluxo de execução anteriores.
-- **Escolhido:** preservar apenas os contratos públicos necessários (`active`, URL
-  encaminhada pelo Runner, keyboard scope e shutdown futuro) e reutilizar somente
-  infraestrutura transversal do Tuiminal, como tema, i18n, OpenTUI e UI compartilhada.
-- **Escolhido:** quatro composições por restrição: Panorama em três colunas,
-  Workbench com sidebar/split, Foco sem sidebar fixa e Mínimo com um pane.
-- **Escolhido:** tabs primárias estáveis e divulgação progressiva; Params reúne
-  Query/Path e `Mais` abriga capacidades raras sem mover controles de posição.
-- **Escolhido:** URL, ambiente e enviar/cancelar permanecem na omnibar; footer é
-  contextual e limitado, não uma lista de todo o keymap.
-- **Escolhido:** foco segue ordem visual, atalhos globais não mudam de significado e
-  `[Esc]` fecha uma camada por vez em qualquer breakpoint.
-- **Escolhido:** estado nunca depende apenas de cor/animação; o layout terá variante
-  accessible/reduced-motion e saída headless linear.
-- **Escolhido:** `.http` como formato canônico versionável; estado de UI fica fora.
-- **Escolhido:** raiz do projeto atual acima de qualquer sessão restaurada.
-- **Escolhido:** histórico de sessão padrão; persistência é opt-in e redigida.
-- **Escolhido:** host environment não é carregado implicitamente.
-- **Escolhido:** até seis requests montados, alinhado ao SQL workspace.
-- **Escolhido:** timing parcial é rotulado como parcial; não simular DNS/TLS.
-- **Escolhido:** scripts e protocolos adicionais não bloqueiam as quatro primeiras
-  fases.
-- **Validar em protótipo:** qualidade de um AST lossless `.http` em TypeScript/Bun.
-- **Validar em protótipo:** custo de formatar/foldar JSON grande fora do caminho de
-  input no OpenTUI.
-- **Validar em protótipo:** API de Bun para múltiplos `Set-Cookie`, trailers,
-  streaming e redirects manuais nas versões suportadas.
+- **Chosen:** Posting-inspired visuals adapted to Tuiminal conventions.
+- **Chosen:** rebuild HTTP without copying its previous components, reducers, types,
+  helpers, tests, or execution flow.
+- **Chosen:** preserve only required public contracts (`active`, Runner-forwarded URL,
+  keyboard scope, future shutdown) and reuse cross-cutting theme/i18n/OpenTUI/shared UI.
+- **Chosen:** four constraint-based compositions: Panorama, Workbench, Focus, Minimum.
+- **Chosen:** stable primary tabs and progressive disclosure; Params groups Query/Path;
+  More holds rare features without moving controls.
+- **Chosen:** persistent method/URL/environment/send/cancel omnibar and bounded contextual footer.
+- **Chosen:** visual focus order, stable global meanings, and one-layer `[Esc]` at all sizes.
+- **Chosen:** state independent of color/animation; accessible/reduced-motion target
+  and linear headless output.
+- **Chosen:** canonical versionable `.http`, with UI state stored separately.
+- **Chosen:** current project root takes priority over restored sessions.
+- **Chosen:** session history by default; redacted persistence only by opt-in.
+- **Chosen:** no implicit host-environment loading.
+- **Chosen:** up to six mounted requests, matching SQL workspace limits.
+- **Chosen:** label partial timing honestly; do not simulate DNS/TLS measurements.
+- **Chosen:** scripts/additional protocols do not block the initial phases.
+- **Prototype validation:** TypeScript/Bun lossless `.http` AST quality.
+- **Prototype validation:** large JSON formatting/folding cost outside OpenTUI's input path.
+- **Prototype validation:** Bun APIs for repeated `Set-Cookie`, trailers, streaming,
+  and manual redirects on supported versions.
 
-Se uma validação falhar, atualizar este documento com a evidência e a alternativa;
-não esconder a limitação atrás de uma abstração que prometa mais do que entrega.
+If validation fails, record the evidence and alternative here rather than hiding a
+limitation behind an abstraction that promises more than it delivers. Read prototype
+items against recorded progress, not as automatic new tasks.
 
-## Definição de concluído do programa
+## Program definition of done
 
-O plano estará implementado, e não apenas “com a tela nova”, quando:
+The plan is implemented, beyond a new-looking screen, when:
 
-1. scratch, projeto `.http`, ambiente, segredo e histórico tenham limites claros;
-2. os fluxos de request e response funcionem por teclado e mouse nos dois layouts;
-3. `.http` faça round-trip sem perda e seja executável na TUI e no modo headless;
-4. response tenha inspeção, busca, copy/save, truncamento e erro honestos;
-5. cancelamento, redirects, cookies, arquivos e persistência passem pelos testes de
-   segurança descritos;
-6. import nunca sobrescreva silenciosamente e sempre produza relatório;
-7. nenhum recurso novo quebre Database, Git, Runner ou Free Terminal;
-8. README, AGENTS, atalhos, traduções, tutorial e testes estejam atualizados por
-   fase;
-9. `bun run check` e `git diff --check` passem;
-10. uma auditoria manual confirme a matriz `60×16`–`160×40`, compact, framed,
-    mouse, drag, resize e sequência real de `[Esc]`;
-11. foco, status, dirty state, produção, erro, truncamento e redação continuem
-    compreensíveis sem cor e sem animação.
+1. Scratch, project `.http`, environments, secrets, and history have clear boundaries.
+2. Request/response workflows support keyboard and mouse in both layouts.
+3. `.http` round-trips losslessly and runs in TUI and headless mode.
+4. Response inspection, search, copy/save, truncation, and errors are accurate.
+5. Cancellation, redirects, cookies, files, and persistence pass the security tests above.
+6. Imports never silently overwrite and always produce a report.
+7. New features do not break Database, Git, Runner, or Free Terminal.
+8. README, AGENTS, shortcuts, translations, tutorial, and tests are updated per phase.
+9. `bun run check` and `git diff --check` pass.
+10. Manual auditing confirms `60×16`–`160×40`, compact/framed, mouse, drag, resize,
+    and real `[Esc]` sequences.
+11. Focus, status, dirty state, production, errors, truncation, and redaction remain
+    understandable without color or animation.

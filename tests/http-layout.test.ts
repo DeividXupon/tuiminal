@@ -3,7 +3,7 @@ import {
   resizeHttpSplitRatio,
   resolveHttpLayout,
   resolveHttpWorkspaceLayout,
-} from "../src/features/http/model/layout"
+} from "../packages/feature-http/src/model/layout"
 
 describe("HTTP adaptive layout", () => {
   test.each([

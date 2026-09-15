@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { evaluateHttpAssertions } from "../src/features/http/model/assertions"
-import { validateHttpRequestAutomation } from "../src/features/http/model/automation"
+import { evaluateHttpAssertions } from "../packages/feature-http/src/model/assertions"
+import { validateHttpRequestAutomation } from "../packages/feature-http/src/model/automation"
 import {
   parseHttpFile,
   requestFromHttpFile,
   serializeHttpRequestBlock,
-} from "../src/features/http/model/http-file"
-import type { HttpResponseSnapshot } from "../src/features/http/model/types"
+} from "../packages/feature-http/src/model/http-file"
+import type { HttpResponseSnapshot } from "../packages/feature-http/src/model/types"
 
 const response: HttpResponseSnapshot = {
   executionId: "execution",

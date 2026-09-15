@@ -1,33 +1,41 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { createServer, type Server } from "node:http"
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
-import { createScratchRequest } from "../src/features/http/model/workspace"
-import { executePreparedHttpRequest } from "../src/features/http/services/fetch-transport"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import { executePreparedHttpRequest } from "../packages/feature-http/src/services/fetch-transport"
 import {
   HttpRequestValidationError,
+  HTTP_REQUEST_LIMITS,
   normalizeHttpProxyUrl,
   normalizeHttpUrl,
   prepareHttpRequest,
-} from "../src/features/http/services/request-builder"
+} from "../packages/feature-http/src/services/request-builder"
 import {
   classifyResponseBody,
   readLimitedResponseBody,
   responseBodyText,
   sanitizeTerminalText,
-} from "../src/features/http/services/response-reader"
-import { fetchWithHttpRedirects, HttpRedirectError } from "../src/features/http/services/redirects"
-import { HttpCookieJar } from "../src/features/http/services/cookies"
-import { downloadCompleteHttpResponse } from "../src/features/http/services/download"
-import { createHttpVariableContext } from "../src/features/http/model/variables"
-import { createHttpPreparedRequestPreview } from "../src/features/http/services/request-preview"
-import { applyHttpWorkspaceConfig } from "../src/features/http/storage/config"
+} from "../packages/feature-http/src/services/response-reader"
+import {
+  fetchWithHttpRedirects,
+  HttpRedirectError,
+} from "../packages/feature-http/src/services/redirects"
+import {
+  HTTP_COOKIE_LIMITS,
+  HttpCookieJar,
+  HttpCookieJarStore,
+} from "../packages/feature-http/src/services/cookies"
+import { downloadCompleteHttpResponse } from "../packages/feature-http/src/services/download"
+import { createHttpVariableContext } from "../packages/feature-http/src/model/variables"
+import { createHttpPreparedRequestPreview } from "../packages/feature-http/src/services/request-preview"
+import { applyHttpWorkspaceConfig } from "../packages/feature-http/src/storage/config"
 import {
   httpInsecureTlsApproval,
   HttpInsecureTlsApprovalError,
-} from "../src/features/http/model/tls-policy"
+} from "../packages/feature-http/src/model/tls-policy"
 
 describe("HTTP request preparation", () => {
   test("normalizes hostnames and only accepts HTTP protocols", () => {
@@ -35,6 +43,32 @@ describe("HTTP request preparation", () => {
     expect(normalizeHttpUrl("https://example.com/path").toString()).toBe("https://example.com/path")
     expect(() => normalizeHttpUrl(" ")).toThrow("Informe uma URL")
     expect(() => normalizeHttpUrl("file:///tmp/data.json")).toThrow("HTTP ou HTTPS")
+  })
+
+  test("rejects oversized URLs, headers, fields, and bodies before transport", () => {
+    const tooManyHeaders = createScratchRequest("headers", "https://example.test")
+    tooManyHeaders.headers = Array.from(
+      { length: HTTP_REQUEST_LIMITS.headers + 1 },
+      (_, index) => ({
+        id: `header-${index}`,
+        enabled: true,
+        name: `X-Header-${index}`,
+        value: "value",
+        sensitivity: "normal" as const,
+      }),
+    )
+    expect(() => prepareHttpRequest(tooManyHeaders, "headers", 0)).toThrow("200 headers")
+
+    const longUrl = createScratchRequest(
+      "url",
+      `https://example.test/${"x".repeat(HTTP_REQUEST_LIMITS.urlBytes)}`,
+    )
+    expect(() => prepareHttpRequest(longUrl, "url", 0)).toThrow("16 KB")
+
+    const body = createScratchRequest("body", "https://example.test")
+    body.method = "POST"
+    body.body = { kind: "text", text: "x".repeat(HTTP_REQUEST_LIMITS.bodyBytes + 1), form: [] }
+    expect(() => prepareHttpRequest(body, "body", 0)).toThrow("8 MB")
   })
 
   test("normalizes and resolves an explicit proxy without exposing private credentials", () => {
@@ -292,6 +326,114 @@ describe("HTTP cookie jar", () => {
     expect(jar.header("https://api.example.com/", 62_000)).toBe("")
   })
 
+  test("rejects ICANN and private public suffixes while accepting a registrable parent", () => {
+    const jar = new HttpCookieJar()
+    const rejected = new Headers()
+    rejected.append("set-cookie", "tld=one; Domain=com; Path=/")
+    rejected.append("set-cookie", "country=two; Domain=co.uk; Path=/")
+    rejected.append("set-cookie", "private=three; Domain=github.io; Path=/")
+    jar.store("https://shop.example.com/", rejected)
+    jar.store("https://shop.example.co.uk/", rejected)
+    jar.store("https://user.github.io/", rejected)
+    expect(jar.list()).toHaveLength(0)
+
+    jar.store(
+      "https://api.example.com/",
+      new Headers({ "set-cookie": "shared=ok; Domain=example.com; Path=/" }),
+    )
+    expect(jar.header("https://www.example.com/")).toBe("shared=ok")
+  })
+
+  test("enforces secure cookie prefixes and protects secure cookies from HTTP overwrite", () => {
+    const jar = new HttpCookieJar()
+    const headers = new Headers()
+    headers.append("set-cookie", "__Secure-missing=bad; Path=/")
+    headers.append("set-cookie", "__Host-domain=bad; Secure; Domain=example.com; Path=/")
+    headers.append("set-cookie", "__Host-path=bad; Secure; Path=/api")
+    headers.append("set-cookie", "__Host-implicit=bad; Secure")
+    headers.append("set-cookie", "none=bad; SameSite=None; Path=/")
+    headers.append("set-cookie", "__Secure-good=one; Secure; Path=/")
+    headers.append("set-cookie", "__Host-good=two; Secure; Path=/")
+    jar.store("https://api.example.com/", headers)
+
+    expect(jar.header("https://api.example.com/")).toBe("__Secure-good=one; __Host-good=two")
+    jar.store(
+      "http://api.example.com/",
+      new Headers({ "set-cookie": "__Secure-good=overwritten; Path=/" }),
+    )
+    expect(jar.header("https://api.example.com/")).toContain("__Secure-good=one")
+    jar.store(
+      "http://api.example.com/",
+      new Headers({ "set-cookie": "insecure=bad; Secure; Path=/" }),
+    )
+    expect(jar.header("https://api.example.com/")).not.toContain("insecure")
+  })
+
+  test("normalizes IDNs, rejects Domain on IPs, and bounds lifetime, count, and headers", () => {
+    const jar = new HttpCookieJar()
+    const now = 10_000
+    jar.store(
+      "https://shop.bücher.example/",
+      new Headers({ "set-cookie": "idn=ok; Domain=bücher.example; Path=/" }),
+      now,
+    )
+    jar.store(
+      "http://127.0.0.1/",
+      new Headers({ "set-cookie": "ip-domain=bad; Domain=127.0.0.1; Path=/" }),
+      now,
+    )
+    jar.store("http://127.0.0.1/", new Headers({ "set-cookie": "ip-host=ok; Path=/" }), now)
+    jar.store(
+      "https://ttl.example.test/",
+      new Headers({ "set-cookie": "ttl=ok; Max-Age=999999999; Path=/" }),
+      now,
+    )
+    jar.store(
+      "https://oversized.example.test/",
+      new Headers({ "set-cookie": `large=${"x".repeat(HTTP_COOKIE_LIMITS.cookieBytes)}; Path=/` }),
+      now,
+    )
+    for (let index = 0; index < HTTP_COOKIE_LIMITS.cookiesPerDomain + 5; index += 1) {
+      jar.store(
+        "https://bounded.example.test/",
+        new Headers({ "set-cookie": `c${index}=${"x".repeat(180)}; Path=/` }),
+        now,
+      )
+    }
+
+    expect(jar.header("https://shop.xn--bcher-kva.example/", now)).toBe("idn=ok")
+    expect(jar.header("http://127.0.0.1/", now)).toBe("ip-host=ok")
+    expect(jar.list(now).find((cookie) => cookie.name === "ttl")?.expiresAt).toBe(
+      now + HTTP_COOKIE_LIMITS.lifetimeMs,
+    )
+    expect(jar.list(now).some((cookie) => cookie.name === "large")).toBe(false)
+    expect(jar.list(now).filter((cookie) => cookie.domain === "bounded.example.test")).toHaveLength(
+      HTTP_COOKIE_LIMITS.cookiesPerDomain,
+    )
+    expect(Buffer.byteLength(jar.header("https://bounded.example.test/", now))).toBeLessThanOrEqual(
+      HTTP_COOKIE_LIMITS.headerBytes,
+    )
+  })
+
+  test("isolates equal environment names by request directory", () => {
+    const store = new HttpCookieJarStore()
+    const left = createScratchRequest("left")
+    const leftPeer = createScratchRequest("left-peer")
+    const right = createScratchRequest("right")
+    left.source = { kind: "file", path: "services/a/api.http", blockId: "a", sourceHash: "a" }
+    leftPeer.source = {
+      kind: "file",
+      path: "services/a/other.http",
+      blockId: "b",
+      sourceHash: "b",
+    }
+    right.source = { kind: "file", path: "services/b/api.http", blockId: "c", sourceHash: "c" }
+
+    expect(store.forRequest(left, "local")).toBe(store.forRequest(leftPeer, "local"))
+    expect(store.forRequest(left, "local")).not.toBe(store.forRequest(right, "local"))
+    expect(store.forRequest(left, "local")).not.toBe(store.forRequest(left, "production"))
+  })
+
   test("applies matching cookies while following redirects without leaking explicit cookies", async () => {
     const jar = new HttpCookieJar()
     const seen: Array<{ url: string; cookie: string | null }> = []
@@ -434,6 +576,17 @@ describe("HTTP transport", () => {
         response.writeHead(200, { "content-type": "application/octet-stream" })
         const timer = setInterval(() => response.write(Buffer.alloc(1_024)), 5)
         request.on("close", () => clearInterval(timer))
+        return
+      }
+      if (request.url === "/partial-download") {
+        response.writeHead(200, { "content-type": "application/octet-stream" })
+        response.write(Buffer.alloc(1_024))
+        response.socket?.destroy()
+        return
+      }
+      if (request.url === "/failed-download") {
+        response.writeHead(404, { "content-type": "text/plain" })
+        response.end("not found")
         return
       }
       if (request.url === "/broken") {
@@ -679,7 +832,12 @@ describe("HTTP transport", () => {
       await Bun.sleep(25)
       controller.abort()
       await expect(pending).rejects.toBeDefined()
-      expect(await readdir(resolve(root, "tuiminal-exports/http"))).toEqual([])
+      expect(
+        await readdir(resolve(root, "tuiminal-exports/http")).catch((error) => {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return []
+          throw error
+        }),
+      ).toEqual([])
 
       const postRequest = createScratchRequest("post-download", `${baseUrl}/download`)
       postRequest.method = "POST"
@@ -692,6 +850,68 @@ describe("HTTP transport", () => {
           signal: new AbortController().signal,
         }),
       ).rejects.toThrow("requests GET")
+    } finally {
+      await rm(root, { recursive: true })
+    }
+  })
+
+  test("rejects unexpected status, stream failure, and disk errors without a final file", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-download-failure-"))
+    try {
+      const failedStatus = prepareHttpRequest(
+        createScratchRequest("failed-download", `${baseUrl}/failed-download`),
+        "failed-download-execution",
+        0,
+      )
+      await expect(
+        downloadCompleteHttpResponse({
+          root,
+          requestName: "Missing response",
+          request: failedStatus,
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow("status HTTP 404")
+
+      const partial = prepareHttpRequest(
+        createScratchRequest("partial-download", `${baseUrl}/partial-download`),
+        "partial-download-execution",
+        0,
+      )
+      await expect(
+        downloadCompleteHttpResponse({
+          root,
+          requestName: "Partial response",
+          request: partial,
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toBeDefined()
+      expect(
+        await readdir(resolve(root, "tuiminal-exports/http")).catch((error) => {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return []
+          throw error
+        }),
+      ).toEqual([])
+
+      const blockedRoot = await mkdtemp(resolve(tmpdir(), "tuiminal-http-download-disk-"))
+      try {
+        await mkdir(resolve(blockedRoot, "tuiminal-exports"))
+        await writeFile(resolve(blockedRoot, "tuiminal-exports/http"), "not a directory")
+        await expect(
+          downloadCompleteHttpResponse({
+            root: blockedRoot,
+            requestName: "Disk failure",
+            request: prepareHttpRequest(
+              createScratchRequest("download", `${baseUrl}/download`),
+              "disk-failure-execution",
+              0,
+            ),
+            signal: new AbortController().signal,
+          }),
+        ).rejects.toBeDefined()
+        expect(await readdir(resolve(blockedRoot, "tuiminal-exports"))).toEqual(["http"])
+      } finally {
+        await rm(blockedRoot, { recursive: true })
+      }
     } finally {
       await rm(root, { recursive: true })
     }

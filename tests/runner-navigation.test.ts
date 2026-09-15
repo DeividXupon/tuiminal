@@ -5,19 +5,18 @@ import {
   runnerLogIsAtBottom,
   runnerProjectCloseResult,
   runnerProjectPickerShortcut,
-} from "../src/features/runner/model/navigation"
+} from "../packages/feature-runner/src/model/navigation"
 
 describe("Runner spatial keyboard navigation", () => {
-  test("opens the project picker with plus across terminal key encodings", () => {
-    expect(runnerProjectPickerShortcut({ name: "+" })).toBe(true)
-    expect(runnerProjectPickerShortcut({ name: "plus", sequence: "+" })).toBe(true)
-    expect(runnerProjectPickerShortcut({ name: "plus", raw: "+" })).toBe(true)
-    expect(runnerProjectPickerShortcut({ name: "=", shift: true })).toBe(true)
+  test("opens the project picker with the global N convention", () => {
+    expect(runnerProjectPickerShortcut({ name: "n" })).toBe(true)
+    expect(runnerProjectPickerShortcut({ name: "N" })).toBe(true)
     expect(runnerProjectPickerShortcut({ name: "=" })).toBe(false)
     expect(runnerProjectPickerShortcut({ name: "p" })).toBe(false)
-    expect(runnerProjectPickerShortcut({ name: "+", ctrl: true })).toBe(false)
-    expect(runnerProjectPickerShortcut({ name: "+", meta: true })).toBe(false)
-    expect(runnerProjectPickerShortcut({ name: "+", super: true })).toBe(false)
+    expect(runnerProjectPickerShortcut({ name: "n", ctrl: true })).toBe(false)
+    expect(runnerProjectPickerShortcut({ name: "n", shift: true })).toBe(false)
+    expect(runnerProjectPickerShortcut({ name: "n", meta: true })).toBe(false)
+    expect(runnerProjectPickerShortcut({ name: "n", super: true })).toBe(false)
   })
 
   test("moves between commands, log, and history without stealing local navigation", () => {

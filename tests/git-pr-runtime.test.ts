@@ -14,24 +14,32 @@ import { join } from "node:path"
 import {
   pullRequestCheckTransitionShouldNotify,
   summarizePullRequestChecks,
-} from "../src/features/git/model/pr/checks"
-import { pullRequestMarkdownLines, sanitizeGitHubText } from "../src/features/git/model/pr/content"
+} from "../packages/feature-git/src/model/pr/checks"
+import {
+  pullRequestMarkdownLines,
+  sanitizeGitHubText,
+} from "../packages/feature-git/src/model/pr/content"
 import {
   adjacentPullRequestHunkOffset,
   boundedPullRequestDiff,
   pullRequestDiffHunkOffsets,
   pullRequestDiffKeyboardAction,
-} from "../src/features/git/model/pr/diff"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import type { PullRequestCheck } from "../src/features/git/model/pr/types"
-import { resolveDiffDocumentPath } from "../src/features/git/model/view"
-import { parseDiffDocuments } from "../src/features/git/rendering/diff"
-import { loadPullRequestDiff } from "../src/features/git/services/github/diff"
-import { openWorkflowRunInBrowser } from "../src/features/git/services/github/read-actions"
-import { loadPullRequestWorkflowRuns } from "../src/features/git/services/github/workflows"
-import { inspectCheckoutClone, parseGitHubRemote } from "../src/features/git/services/pr-checkout"
-import { PullRequestWatchScheduler } from "../src/features/git/services/pr-watch"
-import { pullRequestNotificationCommand } from "../src/features/git/services/pr-notifications"
+} from "../packages/feature-git/src/model/pr/diff"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import type { PullRequestCheck } from "../packages/feature-git/src/model/pr/types"
+import { resolveDiffDocumentPath } from "../packages/feature-git/src/model/view"
+import { parseDiffDocuments } from "../packages/feature-git/src/rendering/diff"
+import { loadPullRequestDiff } from "../packages/feature-git/src/services/github/diff"
+import { openWorkflowRunInBrowser } from "../packages/feature-git/src/services/github/read-actions"
+import { loadPullRequestWorkflowRuns } from "../packages/feature-git/src/services/github/workflows"
+import {
+  type CheckoutGitProbeResult,
+  inspectCheckoutClone,
+  parseGitHubRemote,
+  withValidatedCheckoutClone,
+} from "../packages/feature-git/src/services/pr-checkout"
+import { PullRequestWatchScheduler } from "../packages/feature-git/src/services/pr-watch"
+import { pullRequestNotificationCommand } from "../packages/feature-git/src/services/pr-notifications"
 
 const roots: string[] = []
 const item = (() => {
@@ -66,6 +74,33 @@ function fixtureRepository() {
   git(root, "add", "README.md")
   git(root, "commit", "-qm", "fixture")
   return root
+}
+
+function nativeGitProbe(
+  fail: (args: readonly string[]) => CheckoutGitProbeResult | null = () => null,
+) {
+  return async (cwd: string, args: readonly string[]): Promise<CheckoutGitProbeResult> => {
+    const failed = fail(args)
+    if (failed) return failed
+    try {
+      return {
+        ok: true,
+        stdout: execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }),
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+      }
+    } catch (error) {
+      const failure = error as { status?: number; stdout?: string; stderr?: string }
+      return {
+        ok: false,
+        stdout: failure.stdout ?? "",
+        stderr: failure.stderr ?? "",
+        exitCode: failure.status ?? null,
+        timedOut: false,
+      }
+    }
+  }
 }
 
 function fakeGitHubExecutable() {
@@ -214,6 +249,19 @@ describe("checkout safeguards", () => {
     })
   })
 
+  test("revalidates changes made after confirmation before dispatch", async () => {
+    const root = fixtureRepository()
+    expect(await inspectCheckoutClone(root, item.identity)).toMatchObject({ eligible: true })
+    writeFileSync(join(root, "changed-after-confirmation.txt"), "local work")
+    let dispatched = false
+    expect(
+      await withValidatedCheckoutClone(root, item.identity, async () => {
+        dispatched = true
+      }),
+    ).toEqual({ status: "rejected", reason: "worktree-dirty" })
+    expect(dispatched).toBe(false)
+  })
+
   test("blocks wrong remotes and Git operations in progress", async () => {
     const wrong = fixtureRepository()
     git(wrong, "remote", "set-url", "origin", "https://github.com/other/repo.git")
@@ -242,6 +290,70 @@ describe("checkout safeguards", () => {
       root: realpathSync(worktree),
       branch: "fixture/feature",
     })
+  })
+
+  test("fails closed when status, index, or Git metadata cannot be validated", async () => {
+    const statusRoot = fixtureRepository()
+    const unavailable = {
+      ok: false,
+      stdout: "",
+      stderr: "permission denied",
+      exitCode: 128,
+      timedOut: false,
+    }
+    expect(
+      await inspectCheckoutClone(statusRoot, item.identity, {
+        runGit: nativeGitProbe((args) => (args[0] === "status" ? unavailable : null)),
+      }),
+    ).toMatchObject({ eligible: false, reason: "worktree-status-unavailable" })
+    expect(
+      await inspectCheckoutClone(statusRoot, item.identity, {
+        runGit: nativeGitProbe((args) =>
+          args[0] === "rev-parse" && args[1] === "--git-dir" ? unavailable : null,
+        ),
+      }),
+    ).toMatchObject({ eligible: false, reason: "git-metadata-unavailable" })
+
+    const corruptIndexRoot = fixtureRepository()
+    rmSync(join(corruptIndexRoot, ".git", "index"))
+    mkdirSync(join(corruptIndexRoot, ".git", "index"))
+    expect(await inspectCheckoutClone(corruptIndexRoot, item.identity)).toMatchObject({
+      eligible: false,
+      reason: "worktree-status-unavailable",
+    })
+  })
+
+  test("fails closed on a timed-out probe and serializes checkout by canonical clone", async () => {
+    const root = fixtureRepository()
+    expect(
+      await inspectCheckoutClone(root, item.identity, {
+        runGit: nativeGitProbe((args) =>
+          args[0] === "status"
+            ? { ok: false, stdout: "", stderr: "", exitCode: null, timedOut: true }
+            : null,
+        ),
+      }),
+    ).toMatchObject({ eligible: false, reason: "worktree-status-unavailable" })
+
+    let release: (() => void) | undefined
+    let started: (() => void) | undefined
+    const didStart = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const first = withValidatedCheckoutClone(root, item.identity, async () => {
+      started?.()
+      await gate
+      return "done"
+    })
+    await didStart
+    expect(await withValidatedCheckoutClone(root, item.identity, async () => "unexpected")).toEqual(
+      { status: "rejected", reason: "checkout-clone-in-progress" },
+    )
+    release?.()
+    await expect(first).resolves.toMatchObject({ status: "executed", value: "done" })
   })
 })
 

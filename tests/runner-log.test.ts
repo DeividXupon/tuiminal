@@ -1,15 +1,22 @@
 import { describe, expect, test } from "bun:test"
+import type { ChildProcess } from "node:child_process"
+import { PassThrough } from "node:stream"
 import {
-  appendRunnerLogToBuffer,
   buildRunnerLogDocument,
   filterRunnerLogs,
-  RUNNER_LOG_BUFFER_LIMIT,
-  RUNNER_LOG_FLUSH_INTERVAL_MS,
-  RUNNER_LOG_TRIM_HEADROOM,
   type RunnerLogEntry,
   runnerLogPresentation,
   serializeRunnerLogs,
-} from "../src/features/runner/rendering/log-document"
+} from "../packages/feature-runner/src/rendering/log-document"
+import {
+  RunnerLogBuffer,
+  RUNNER_LOG_BUFFER_LIMIT,
+  RUNNER_LOG_BUFFER_MAX_CHARS,
+  RUNNER_LOG_ENTRY_MAX_CHARS,
+  RUNNER_LOG_FLUSH_INTERVAL_MS,
+} from "../packages/feature-runner/src/model/log-buffer"
+import { pipeLines } from "../packages/feature-runner/src/services/process"
+import { getLanguage, setLanguage } from "../packages/core/src/i18n"
 
 const palette = {
   canvas: "#000000",
@@ -29,6 +36,21 @@ function runnerLog(
 }
 
 describe("Runner log rendering", () => {
+  test("changing UI language never translates child-process output", () => {
+    const previous = getLanguage()
+    try {
+      setLanguage("en")
+      const document = buildRunnerLogDocument([runnerLog(1, "Nenhum processo ativo.")], {
+        width: 80,
+        showTimestamps: false,
+        palette,
+      })
+      expect(document.chunks[0]?.text).toBe("  Nenhum processo ativo.")
+    } finally {
+      setLanguage(previous)
+    }
+  })
+
   test("collapses a full same-style buffer into one native text chunk", () => {
     const logs = Array.from({ length: RUNNER_LOG_BUFFER_LIMIT }, (_, index) =>
       runnerLog(index, `linha ${index}`),
@@ -80,19 +102,73 @@ describe("Runner log rendering", () => {
     expect(RUNNER_LOG_FLUSH_INTERVAL_MS).toBeGreaterThanOrEqual(50)
   })
 
-  test("amortizes buffer trimming instead of copying on every line", () => {
-    const logs: RunnerLogEntry[] = []
-    const beforeTrim = RUNNER_LOG_BUFFER_LIMIT + RUNNER_LOG_TRIM_HEADROOM
-    let returned = logs
-    for (let index = 0; index < beforeTrim; index += 1) {
-      returned = appendRunnerLogToBuffer(logs, runnerLog(index, `linha ${index}`))
+  test("retains ordered snapshots across multiple ring wraps without rescanning old text", () => {
+    const buffer = new RunnerLogBuffer()
+    let reads = 0
+    const total = RUNNER_LOG_BUFFER_LIMIT * 5
+    for (let index = 0; index < total; index += 1) {
+      buffer.append({
+        ...runnerLog(index, ""),
+        get text() {
+          reads += 1
+          return `linha ${index}`
+        },
+      })
     }
-    expect(returned).toBe(logs)
-    expect(logs).toHaveLength(beforeTrim)
+    expect(reads).toBeLessThan(total * 4)
+    const previous = buffer.snapshot()
+    expect(previous.map((entry) => entry.id)).toEqual(
+      Array.from(
+        { length: RUNNER_LOG_BUFFER_LIMIT },
+        (_, index) => total - RUNNER_LOG_BUFFER_LIMIT + index,
+      ),
+    )
+    buffer.append(runnerLog(total, "last"))
+    expect(buffer.snapshot()[0]?.id).toBe(total - RUNNER_LOG_BUFFER_LIMIT + 1)
+    expect(previous.at(-1)?.id).toBe(total - 1)
+    buffer.clear()
+    expect(buffer.snapshot()).toEqual([])
+    buffer.append(runnerLog(total + 1, "after clear"))
+    expect(buffer.snapshot()).toEqual([runnerLog(total + 1, "after clear")])
+  })
 
-    appendRunnerLogToBuffer(logs, runnerLog(beforeTrim, `linha ${beforeTrim}`))
-    expect(logs).toHaveLength(RUNNER_LOG_BUFFER_LIMIT)
-    expect(logs[0]?.id).toBe(RUNNER_LOG_TRIM_HEADROOM + 1)
+  test("bounds individual and aggregate logs even without line breaks", () => {
+    const buffer = new RunnerLogBuffer()
+    for (let index = 0; index < 300; index += 1) {
+      buffer.append(runnerLog(index, "x".repeat(RUNNER_LOG_ENTRY_MAX_CHARS * 2)))
+    }
+    const logs = buffer.snapshot()
+    expect(Math.max(...logs.map((entry) => entry.text.length))).toBeLessThanOrEqual(
+      RUNNER_LOG_ENTRY_MAX_CHARS,
+    )
+    expect(logs.reduce((total, entry) => total + entry.text.length, 0)).toBeLessThanOrEqual(
+      RUNNER_LOG_BUFFER_MAX_CHARS,
+    )
+    expect(logs.at(-1)?.text).toContain("truncada")
+    expect(logs.at(-1)?.id).toBe(299)
+    buffer.clear()
+    buffer.append(runnerLog(300, "next"))
+    expect(buffer.snapshot()).toEqual([runnerLog(300, "next")])
+  })
+
+  test("bounds seeded history with the same limits as live output", () => {
+    const initial = Array.from({ length: 3_000 }, (_, id) => runnerLog(id, "line"))
+    const buffer = new RunnerLogBuffer(initial)
+    expect(buffer.snapshot()).toEqual(initial.slice(-RUNNER_LOG_BUFFER_LIMIT))
+    expect(initial).toHaveLength(3_000)
+  })
+
+  test("flushes a continuous process stream in bounded fragments", async () => {
+    const stdout = new PassThrough()
+    const lines: string[] = []
+    pipeLines({ stdout } as unknown as ChildProcess, "stdout", (line) => lines.push(line))
+    stdout.end("x".repeat(2_000_000))
+    await new Promise((resolve) => stdout.once("close", resolve))
+    expect(lines.length).toBeGreaterThan(100)
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(
+      RUNNER_LOG_ENTRY_MAX_CHARS,
+    )
+    expect(lines.at(-1)?.length).toBeGreaterThan(0)
   })
 
   test("keeps wide Unicode log lines inside the terminal width", () => {

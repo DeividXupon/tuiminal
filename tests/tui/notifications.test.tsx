@@ -1,5 +1,5 @@
 import "./setup"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { createServer } from "node:http"
@@ -10,12 +10,12 @@ import {
   NotificationProvider,
   useNotifications,
   type NotificationInput,
-} from "../../src/shared/notifications/index"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { App } from "../../src/app/App"
-import { HttpClient } from "../../src/features/http"
-import { DatabaseConnectionModal } from "../../src/features/database/ui/DatabaseConnectionModal"
-import { useRunnerNotifications } from "../../src/features/runner/hooks/use-runner-notifications"
+} from "../../packages/core/src/notifications/index"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { App } from "../../apps/cli/src/App"
+import { HttpClient } from "../../packages/feature-http/src"
+import { DatabaseConnectionModal } from "../../packages/feature-database/src/ui/DatabaseConnectionModal"
+import { useRunnerNotifications } from "../../packages/feature-runner/src/hooks/use-runner-notifications"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -23,9 +23,16 @@ const initialOnlyTab = process.env.TUIMINAL_ONLY_TAB
 const initialGitHubExecutable = process.env.TUIMINAL_GH_EXECUTABLE
 const initialGitDemo = process.env.TUIMINAL_GIT_PR_DEMO
 
-function NotificationHarness({ notifications }: { notifications: NotificationInput[] }) {
+function NotificationHarness({
+  notifications,
+  onReady,
+}: {
+  notifications: NotificationInput[]
+  onReady?: ((notify: ReturnType<typeof useNotifications>["notify"]) => void) | undefined
+}) {
   const { notify } = useNotifications()
   const sent = useRef(false)
+  useEffect(() => onReady?.(notify), [notify, onReady])
   useEffect(() => {
     if (sent.current) return
     sent.current = true
@@ -44,10 +51,11 @@ function RunnerNotificationHarness() {
 async function renderNotifications(
   notifications: NotificationInput[],
   dimensions = { width: 90, height: 32 },
+  onReady?: (notify: ReturnType<typeof useNotifications>["notify"]) => void,
 ) {
   tui = await testRender(
     <NotificationProvider>
-      <NotificationHarness notifications={notifications} />
+      <NotificationHarness notifications={notifications} onReady={onReady} />
     </NotificationProvider>,
     dimensions,
   )
@@ -131,6 +139,73 @@ test("transient notification closes automatically while an error remains", async
   await tui?.renderOnce()
   expect(tui?.captureCharFrame()).not.toContain("Salvo")
   expect(tui?.captureCharFrame()).toContain("Falha persistente")
+})
+
+test("notification bursts schedule timers only for retained cards and release them on unmount", async () => {
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const retainedTimers = new Set<ReturnType<typeof setTimeout>>()
+  let publish: ReturnType<typeof useNotifications>["notify"] = () => {
+    throw new Error("Notifications not mounted")
+  }
+  let scheduled = 0
+  const schedule = spyOn(globalThis, "setTimeout").mockImplementation(
+    new Proxy(originalSetTimeout, {
+      apply(target, receiver, args) {
+        const timer = Reflect.apply(target, receiver, args) as ReturnType<typeof setTimeout>
+        if (Number(args[1]) > 500_000) {
+          retainedTimers.add(timer)
+          scheduled += 1
+        }
+        return timer
+      },
+    }),
+  )
+  const cancel = spyOn(globalThis, "clearTimeout").mockImplementation(
+    new Proxy(originalClearTimeout, {
+      apply(target, receiver, args) {
+        retainedTimers.delete(args[0])
+        return Reflect.apply(target, receiver, args)
+      },
+    }),
+  )
+  try {
+    await renderNotifications(
+      Array.from({ length: 1_000 }, (_value, index) => ({
+        source: "Teste",
+        message: `Evento ${index}`,
+        durationMs: 1_000_000,
+      })),
+      undefined,
+      (notify) => {
+        publish = notify
+      },
+    )
+    expect(tui?.captureCharFrame()).toContain("Evento 999")
+    expect(scheduled).toBe(3)
+    expect(retainedTimers.size).toBe(3)
+    const firstTimers = [...retainedTimers]
+    act(() => {
+      for (let index = 997; index <= 999; index += 1) {
+        publish({ source: "Teste", message: `Evento ${index}`, durationMs: 1_000_000 })
+      }
+    })
+    await tui?.renderOnce()
+    expect(scheduled).toBe(6)
+    expect(retainedTimers.size).toBe(3)
+    expect(firstTimers.every((timer) => !retainedTimers.has(timer))).toBe(true)
+    await click("app-notification-dismiss-1")
+    expect(retainedTimers.size).toBe(2)
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    expect(retainedTimers.size).toBe(0)
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    schedule.mockRestore()
+    cancel.mockRestore()
+    for (const timer of retainedTimers) originalClearTimeout(timer)
+  }
 })
 
 test("compact narrow viewport shows only the newest card within terminal bounds", async () => {

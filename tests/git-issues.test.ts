@@ -5,8 +5,8 @@ import {
   issueActionKindForShortcut,
   issueMutationWasReconciled,
   prepareIssueAction,
-} from "../src/features/git/model/issue/actions"
-import { DEMO_ISSUES, demoIssueDetails } from "../src/features/git/model/issue/fixtures"
+} from "../packages/feature-git/src/model/issue/actions"
+import { DEMO_ISSUES, demoIssueDetails } from "../packages/feature-git/src/model/issue/fixtures"
 import {
   adjacentIssuePreviewTab,
   type IssueFocus,
@@ -14,13 +14,13 @@ import {
   moveIssueIndex,
   nextIssuePreviewPosition,
   resolveIssueLayout,
-} from "../src/features/git/model/issue/navigation"
+} from "../packages/feature-git/src/model/issue/navigation"
 import {
   buildEffectiveIssueQueries,
   issueIdentityKey,
   normalizeIssueQuery,
   validateIssueIdentity,
-} from "../src/features/git/model/issue/query"
+} from "../packages/feature-git/src/model/issue/query"
 import {
   createIssueSectionId,
   duplicateIssueSection,
@@ -29,9 +29,9 @@ import {
   parseIssueSectionOptions,
   removeIssueSection,
   updateIssueSection,
-} from "../src/features/git/model/issue/sections"
-import type { IssueAuthContext } from "../src/features/git/model/issue/types"
-import { gitWorkspaceTabForKey } from "../src/features/git/model/workspace"
+} from "../packages/feature-git/src/model/issue/sections"
+import type { IssueAuthContext } from "../packages/feature-git/src/model/issue/types"
+import { gitWorkspaceTabForKey } from "../packages/feature-git/src/model/workspace"
 
 const item = (() => {
   const candidate = DEMO_ISSUES[0]
@@ -77,6 +77,8 @@ describe("Git Issues workspace model", () => {
         canLoadPreview: true,
       })
     expect(action({ name: "j" })).toEqual({ type: "move-row", delta: 1 })
+    expect(action({ name: "a" })).toEqual({ type: "move-section", delta: -1 })
+    expect(action({ name: "f" })).toEqual({ type: "move-section", delta: 1 })
     expect(action({ name: "l" })).toEqual({ type: "focus", target: "preview" })
     expect(action({ name: "l", shift: true })).toEqual({
       type: "prepare-action",
@@ -93,9 +95,11 @@ describe("Git Issues workspace model", () => {
       kind: "reopen",
     })
     expect(action({ name: "n" }, "preview")).toEqual({ type: "load-preview-more" })
+    expect(action({ name: "v" }, "preview")).toEqual({ type: "move-preview-tab", delta: 1 })
+    expect(action({ name: "z" }, "preview")).toEqual({ type: "move-preview-tab", delta: -1 })
     expect(action({ name: "escape" }, "preview")).toEqual({ type: "focus", target: "list" })
     expect(action({ name: "e", ctrl: true })).toBeNull()
-    expect(action({ name: "+" })).toBeNull()
+    expect(action({ name: "#" })).toBeNull()
     expect(moveIssueIndex(0, 3, -1)).toBe(0)
     expect(moveIssueIndex(2, 3, 1)).toBe(2)
     expect(adjacentIssuePreviewTab("overview", -1)).toBe("activity")
@@ -110,6 +114,7 @@ describe("Git Issues workspace model", () => {
     expect(issueActionKindForShortcut({ name: "x" })).toBe("close")
     expect(issueActionKindForShortcut({ name: "x", shift: true })).toBe("reopen")
     expect(issueActionKindForShortcut({ name: "l" })).toBeNull()
+    expect(issueActionKindForShortcut({ name: "e", shift: true })).toBe("reaction")
   })
 })
 
@@ -239,6 +244,29 @@ describe("Prepared Issue actions", () => {
               reactionCount: 0,
             },
           ],
+        },
+        viewerLogin: "deivid",
+      }),
+    ).toBe(true)
+    expect(
+      issueMutationWasReconciled({
+        action: prepareIssueAction({
+          actionId: "reaction",
+          kind: "reaction",
+          target: item.identity,
+          expectedUpdatedAt: item.updatedAt,
+          expectedState: item.state,
+          auth,
+          payload: {
+            subjectId: item.identity.nodeId,
+            subjectKind: "item",
+            reaction: "THUMBS_UP",
+          },
+        }).action,
+        before,
+        after: {
+          ...before,
+          reactionGroups: [{ content: "THUMBS_UP", count: 1, viewerHasReacted: true }],
         },
         viewerLogin: "deivid",
       }),

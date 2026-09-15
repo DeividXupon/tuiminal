@@ -2,37 +2,38 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DEFAULT_PULL_REQUEST_CONFIG } from "../src/features/git/model/pr/config"
-import { mergePullRequestDetailPage } from "../src/features/git/model/pr/detail-pagination"
+import { DEFAULT_PULL_REQUEST_CONFIG } from "../packages/feature-git/src/model/pr/config"
+import { mergePullRequestDetailPage } from "../packages/feature-git/src/model/pr/detail-pagination"
 import {
   detectGhCapabilities,
   ghVersionIsSupported,
+  GitHubAuthenticationRequiredError,
   loadGhAuthContext,
   parseGhVersion,
-} from "../src/features/git/services/github/auth"
-import { loadGitHubAccountScope } from "../src/features/git/services/github/account-scope"
-import { loadPullRequestDetailPage } from "../src/features/git/services/github/detail-pages"
-import { PULL_REQUEST_DETAILS_QUERY } from "../src/features/git/services/github/detail-query"
+} from "../packages/feature-git/src/services/github/auth"
+import { loadGitHubAccountScope } from "../packages/feature-git/src/services/github/account-scope"
+import { loadPullRequestDetailPage } from "../packages/feature-git/src/services/github/detail-pages"
+import { PULL_REQUEST_DETAILS_QUERY } from "../packages/feature-git/src/services/github/detail-query"
 import {
   loadPullRequestDetails,
   normalizePullRequestDetails,
-} from "../src/features/git/services/github/details"
+} from "../packages/feature-git/src/services/github/details"
 import {
   assertAllowedGitHubHost,
   isValidGitHubHost,
-} from "../src/features/git/services/github/host"
-import { openPullRequestInBrowser } from "../src/features/git/services/github/read-actions"
+} from "../packages/feature-git/src/services/github/host"
+import { openPullRequestInBrowser } from "../packages/feature-git/src/services/github/read-actions"
 import {
   normalizePullRequestSearchPage,
   searchPullRequestsPage,
-} from "../src/features/git/services/github/search"
+} from "../packages/feature-git/src/services/github/search"
 import {
   GitHubTransportError,
   runGhCommand,
   runGhJson,
-} from "../src/features/git/services/github/transport"
-import { PullRequestSession } from "../src/features/git/services/pr-session"
-import { savePullRequestConfig } from "../src/features/git/storage/pr/config"
+} from "../packages/feature-git/src/services/github/transport"
+import { PullRequestSession } from "../packages/feature-git/src/services/pr-session"
+import { savePullRequestConfig } from "../packages/feature-git/src/storage/pr/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-gh-fake-"))
 const fakeGh = join(temporaryDirectory, "gh")
@@ -52,9 +53,16 @@ if (args[0] === "--version") {
 } else if (args[0] === "auth-error") {
   console.error("not logged into any GitHub hosts")
   process.exit(1)
+} else if (args[0] === "auth-401") {
+  console.error("gh: Bad credentials (HTTP 401)")
+  process.exit(1)
 } else if (args[0] === "echo-stdin") {
   process.stdout.write(await Bun.stdin.text())
 } else if (args[0] === "api" && args.at(-1) === "user") {
+  if (process.env.FAKE_GH_AUTH_ERROR === "1") {
+    console.error("not logged into any GitHub hosts")
+    process.exit(1)
+  }
   const viewer = process.env.FAKE_GH_VIEWER || "fixture-user"
   console.log(JSON.stringify({ login: viewer, node_id: "node-" + viewer }))
 } else if (args[0] === "api" && args[1] === "graphql") {
@@ -188,6 +196,9 @@ describe("GitHub CLI transport", () => {
       kind: "invalid-json",
     })
     expect(runGhCommand({ args: ["auth-error"] }, { executable: fakeGh })).rejects.toMatchObject({
+      kind: "not-authenticated",
+    })
+    expect(runGhCommand({ args: ["auth-401"] }, { executable: fakeGh })).rejects.toMatchObject({
       kind: "not-authenticated",
     })
     expect(
@@ -492,6 +503,27 @@ describe("Pull request session coordination", () => {
       status: "requirements",
       capabilities: { available: false, version: null, supported: false, reason: "missing" },
     })
+    session.dispose()
+  })
+
+  test("keeps the host on authentication failures for the guided screen", async () => {
+    const session = new PullRequestSession({
+      transport: { executable: fakeGh, env: { FAKE_GH_AUTH_ERROR: "1" } },
+    })
+    await expect(session.loadSection(temporaryDirectory)).rejects.toEqual(
+      expect.objectContaining({
+        name: "GitHubAuthenticationRequiredError",
+        kind: "not-authenticated",
+        host: "github.com",
+      }),
+    )
+    await expect(
+      loadGhAuthContext({
+        host: "github.example.test",
+        generation: 0,
+        options: { executable: fakeGh, env: { FAKE_GH_AUTH_ERROR: "1" } },
+      }),
+    ).rejects.toBeInstanceOf(GitHubAuthenticationRequiredError)
     session.dispose()
   })
 })

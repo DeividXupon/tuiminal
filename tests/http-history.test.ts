@@ -8,14 +8,17 @@ import {
   groupHttpHistoryByRequest,
   HTTP_SESSION_BODY_BUDGET,
   redactHttpHistoryUrl,
-} from "../src/features/http/model/history"
-import type { HttpResponseSnapshot } from "../src/features/http/model/types"
+} from "../packages/feature-http/src/model/history"
+import type { HttpResponseSnapshot } from "../packages/feature-http/src/model/types"
 import {
   createHttpWorkspaceState,
   createScratchRequest,
-} from "../src/features/http/model/workspace"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../src/features/http/storage/config"
-import { loadHttpHistory, persistHttpHistoryEntry } from "../src/features/http/storage/history"
+} from "../packages/feature-http/src/model/workspace"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../packages/feature-http/src/storage/config"
+import {
+  loadHttpHistory,
+  persistHttpHistoryEntry,
+} from "../packages/feature-http/src/storage/history"
 
 const directories: string[] = []
 
@@ -50,9 +53,9 @@ function response(id: string, body: Uint8Array): HttpResponseSnapshot {
   }
 }
 
-function entry(id: string, body: Uint8Array) {
+function entry(id: string, body: Uint8Array, snapshot = response(id, body)) {
   const document = createHttpWorkspaceState(createScratchRequest("request")).documents[0]!
-  return createHttpSuccessHistoryEntry(document, response(id, body), "local", 1)
+  return createHttpSuccessHistoryEntry(document, snapshot, "local", 1)
 }
 
 describe("HTTP history budgeting", () => {
@@ -123,7 +126,12 @@ describe("persistent HTTP history", () => {
       history: { persistMetadata: true, persistBodies: true },
     }
     const body = new TextEncoder().encode('{"ok":true}')
-    await persistHttpHistoryEntry(root, config, entry("body", body))
+    const publicResponse = {
+      ...response("body", body),
+      headers: [],
+      url: "https://example.test/public",
+    }
+    await persistHttpHistoryEntry(root, config, entry("body", body, publicResponse))
     const loaded = await loadHttpHistory(root, config)
     expect(loaded[0]?.response?.body).toEqual(body)
     expect(loaded[0]?.bodyDiscarded).toBe(false)

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { RGBA, StyledText } from "@opentui/core"
-import { BRAND_COLOR } from "../src/shared/ui/brand"
-import { shortcutContent } from "../src/shared/ui/shortcut-content"
+import { BRAND_COLOR } from "../packages/core/src/ui/brand"
+import { shortcutContent } from "../packages/core/src/ui/shortcut-content"
 
 describe("shortcut accent", () => {
   test("colors only bracketed keys, preserving labels and spacing", () => {
@@ -33,6 +33,32 @@ describe("shortcut accent", () => {
       "[[]",
       "[]]",
     ])
+  })
+
+  test("keeps the direction glyph neutral in global A/F navigation hints", () => {
+    const value = "[A←] anterior  [F→] próximo"
+    const result = shortcutContent(value)
+    if (typeof result === "string") throw new Error("Expected styled shortcuts")
+    expect(result.chunks.map((chunk) => chunk.text).join("")).toBe(value)
+    expect(result.chunks.filter((chunk) => chunk.fg).map((chunk) => chunk.text)).toEqual([
+      "[A",
+      "[F",
+    ])
+    expect(result.chunks.filter((chunk) => !chunk.fg).map((chunk) => chunk.text)).toContain("←]")
+    expect(result.chunks.filter((chunk) => !chunk.fg).map((chunk) => chunk.text)).toContain("→]")
+  })
+
+  test("keeps nested Z/V arrows neutral too", () => {
+    const value = "[Z←] anterior  [V→] próximo"
+    const result = shortcutContent(value)
+    if (typeof result === "string") throw new Error("Expected styled shortcuts")
+    expect(result.chunks.map((chunk) => chunk.text).join("")).toBe(value)
+    expect(result.chunks.filter((chunk) => chunk.fg).map((chunk) => chunk.text)).toEqual([
+      "[Z",
+      "[V",
+    ])
+    expect(result.chunks.filter((chunk) => !chunk.fg).map((chunk) => chunk.text)).toContain("←]")
+    expect(result.chunks.filter((chunk) => !chunk.fg).map((chunk) => chunk.text)).toContain("→]")
   })
 
   test("does not allocate styled text for ordinary text or incomplete hints", () => {

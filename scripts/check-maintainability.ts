@@ -4,11 +4,13 @@ type Budget = { maxLines: number; complexity: number[] }
 type Baseline = { version: 1; newFileMaxLines: number; files: Record<string, Budget> }
 type Diagnostic = { message: string; location: { path: string } }
 const baselinePath = new URL("../docs/quality-baseline.json", import.meta.url)
+const normalizeProjectPath = (path: string) => path.replaceAll("\\", "/")
 const check = Bun.spawnSync(
   [
     "node_modules/.bin/biome",
     "lint",
-    "src",
+    "apps",
+    "packages",
     "--only=complexity/noExcessiveCognitiveComplexity",
     "--reporter=json",
     "--max-diagnostics=10000",
@@ -25,13 +27,20 @@ const report = JSON.parse(check.stdout.toString()) as {
 }
 if (report.summary.diagnosticsNotPrinted) throw new Error("Incomplete complexity report")
 const current: Baseline = { version: 1, newFileMaxLines: 400, files: {} }
-for (const file of [...new Bun.Glob("src/**/*.{ts,tsx}").scanSync()].sort()) {
-  const maxLines = (await Bun.file(file).text()).trimEnd().split("\n").length
+for (const discoveredFile of [
+  ...new Bun.Glob("apps/cli/**/*.ts").scanSync(),
+  ...new Bun.Glob("apps/cli/**/*.tsx").scanSync(),
+  ...new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scanSync(),
+].sort()) {
+  const file = normalizeProjectPath(discoveredFile)
+  const maxLines = (await Bun.file(discoveredFile).text()).trimEnd().split("\n").length
   current.files[file] = { maxLines, complexity: [] }
 }
+if (!Object.keys(current.files).length)
+  throw new Error("Maintainability analysis found no source files")
 for (const diagnostic of report.diagnostics) {
   const score = Number(diagnostic.message.match(/complexity of (\d+)/)?.[1])
-  const file = relative(process.cwd(), resolve(diagnostic.location.path))
+  const file = normalizeProjectPath(relative(process.cwd(), resolve(diagnostic.location.path)))
   const budget = current.files[file]
   if (!Number.isFinite(score) || !budget)
     throw new Error(`Unrecognized complexity diagnostic: ${file}`)

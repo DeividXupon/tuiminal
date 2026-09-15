@@ -1,127 +1,170 @@
-# Arquitetura atual
+# Current architecture
 
-O Tuiminal é um monólito modular: um aplicativo, uma instalação e módulos internos
-com responsabilidades e dependências verificadas automaticamente. Essa estrutura
-facilita encontrar código, testar regras sem montar uma tela e adicionar ferramentas
-sem transformar o núcleo numa lista de detalhes internos de cada funcionalidade.
+Tuiminal uses a Bun workspaces monorepo: one application and six internal packages
+with automatically checked responsibilities and dependencies. The current release
+still includes every tool in each platform binary. This structure makes code easier
+to find, allows rules to be tested without mounting a screen, and lets tools grow
+without filling the core with feature-specific implementation details.
 
-## Mapa do código
+## Code map
 
 ```text
-bin/tuiminal.ts                 argumentos e diretório da invocação
-src/index.tsx                  entrada estável
-src/app/
-  bootstrap.tsx                inicialização explícita e renderizador
-  App.tsx                      composição, navegação e modais globais
-  tool-catalog.ts              identificadores, aliases e atalhos
-  feature-registry.ts          políticas de teclado e encerramento
-  ui/                          configurações e termos sensíveis
-  tutorial/                    sobreposição e roteiro do tutorial
-src/core/
-  keyboard/                    contrato de posse do teclado
-  lifecycle/                   encerramento de todos os recursos registrados
-  settings/                    tema e persistência das preferências
-src/shared/
-  ui/                          controles reutilizáveis
-  i18n/                        traduções, largura Unicode e runtime JSX
-  security/                    mascaramento de valores sensíveis
-  data/                        normalização de propriedades opcionais
-src/features/
-  runner/                      comandos, processos, logs e projetos
-  database/                    catálogo, SQL, grid, inspeção e conexões
-  git/                         arquivos, commits, grafo e diffs
-  http/                        requisições e respostas
-  terminal/                    sessões PTY livres
-tests/                         lógica e integrações locais
-  tui/                         interação no renderizador OpenTUI
-  fixtures/                    projetos descartáveis de demonstração
-scripts/                       verificações de arquitetura e manutenção
-docs/adr/                      decisões e tradeoffs
+apps/cli/bin/tuiminal.ts        arguments and invocation directory
+apps/cli/src/index.tsx          development entrypoint
+apps/cli/src/
+  bootstrap.tsx                explicit initialization and renderer
+  App.tsx                      composition, navigation, and global modals
+  tool-catalog.ts              identifiers, aliases, and shortcuts
+  feature-registry.ts          keyboard and shutdown policies
+  ui/                          settings and sensitive-data terms
+  tutorial/                    tutorial overlay and steps
+packages/core/src/
+  keyboard/                    keyboard ownership contract
+  lifecycle/                   shutdown of all registered resources
+  settings/                    theme and preference persistence
+  ui/                          reusable controls
+  i18n/                        translations, Unicode width, and JSX runtime
+  security/                    sensitive-value masking
+  data/                        optional-property normalization
+  notifications/               visual events and timers for retained cards
+  storage/                     atomic writes and project-file limits
+packages/feature-runner/src/    commands, processes, logs, and projects
+packages/feature-database/src/  catalog, SQL, grid, inspection, and connections
+packages/feature-git/src/       files, commits, graph, and diffs
+packages/feature-http/src/      requests and responses
+packages/feature-terminal/src/ free PTY sessions
+tests/                         logic and local integration tests
+  tui/                         interaction with the OpenTUI renderer
+  fixtures/                    disposable demo projects
+scripts/                       architecture and maintainability checks
+docs/adr/                      decisions and tradeoffs
 ```
 
-Cada ferramenta expõe somente a API usada pelo aplicativo em `index.ts`. Nem toda
-ferramenta precisa de todas as subpastas: crie-as quando houver uma responsabilidade
-concreta. Não adicione arquivos vazios apenas para satisfazer o desenho.
+Each tool exposes only the API needed by the application through `index.ts`. Not
+every tool needs every subdirectory: create one for a concrete responsibility,
+not an empty file to satisfy a diagram.
 
-## Dependências permitidas
+Each workspace owns its manifest, exports, and dependencies. Versioning, build,
+and installation contracts are documented in
+[Internal workspaces](./design/internal-workspaces.md) and
+[Official feature installation](./design/official-feature-installation.md). The former `src/core` and
+`src/shared` directories were combined into `packages/core/src`.
 
-- `app` compõe as APIs públicas das features e utiliza `core`/`shared`.
-- Features não importam outras features nem `app`. Runner solicita abrir uma URL
-  via callback; a aplicação decide encaminhá-la ao HTTP.
-- `core` e `shared` não conhecem features nem `app`; podem se comunicar sem ciclos.
-- `model` contém regras e tipos, sem React, OpenTUI, IO ou imports de serviços,
-  storage e renderização, inclusive imports usados somente como tipos.
-- Serviços e persistência podem utilizar o modelo. UI utiliza modelo e serviços;
-  detalhes de renderização ficam fora do domínio.
-- Não há ciclos, imports locais não resolvidos ou acesso da aplicação aos internos
-  das ferramentas. `.dependency-cruiser.cjs` verifica essas regras e descobre novas
-  features automaticamente. O wrapper também falha se qualquer fonte for ignorado.
+## Allowed dependencies
 
-O `services/runner.ts` ainda é uma fachada interna de compatibilidade para os
-consumidores da própria ferramenta; não é o SDK público de plugins.
+- `apps/cli` composes feature exports and uses `packages/core`.
+- Features do not import other features or the application. Runner requests URL
+  opening through a callback; the application decides whether to pass it to HTTP.
+- `core` knows nothing about features or `apps/cli`.
+- `model` contains rules and types without React, OpenTUI, I/O, or service,
+  storage, and rendering imports, including type-only imports.
+- Services and persistence may use the model. UI uses models and services;
+  rendering details remain outside the domain.
+- Cycles, unresolved local imports, and application access to feature internals
+  are forbidden. `.dependency-cruiser.cjs` checks these rules and discovers new
+  features automatically. Its wrapper also fails if any source file is skipped.
 
-## Separações já aplicadas
+`services/runner.ts` remains an internal compatibility facade for consumers within
+Runner; it is not a public API or a stable external extension boundary.
 
-Runner tem módulos distintos para descoberta de projetos, detectores por família
-de linguagem, comandos de shell, processos, PTY, registro de processos, portas,
-health checks e abertura de URLs. O painel múltiplo, a apresentação dos status,
-os tipos e as preferências dos logs saíram do workspace. Filtro, stream e horários
-usam um reducer puro com transições testadas.
+## Existing separations
 
-Banco separa workspace principal, workspace SQL, inspetor de linha e demonstração
-do tutorial. Tipos, seleção, staging e análise léxica SQL ficam no modelo; exportar
-seleção para disco fica em storage. Realçar um editor OpenTUI utiliza o lexer,
-mas o autocomplete não depende do renderizador.
+Runner has separate modules for project discovery, language-family detectors,
+shell commands, processes, PTYs, the process registry, ports, health checks, and
+URL opening. The multi-process panel, status presentation, types, and log preferences
+have been extracted from the workspace. Filtering, streaming, and timestamps use
+a pure reducer with tested transitions.
 
-Git separa árvore de arquivos, grafo de commits, diff/intraline, tipos e apresentação.
+The circular log buffer belongs to the model. A dedicated hook publishes bounded
+snapshots in batches and closes the buffer with the execution. Project discovery
+refills bounded read batches and deduplicates resolved paths. Each PTY owns an
+incremental UTF-8 decoder without holding prompts until a newline. Single and Multi
+share the native log document without translating stdout/stderr data. Port polling
+chains probes without overlap; every helper has bounded capture and cancellation
+tied to its owning context.
 
-Ainda há controladores grandes de Banco e Runner. A separação de pastas não os
-torna pequenos automaticamente: o [ADR](./adr/0001-modular-monolith.md) registra os
-próximos cortes, e o baseline impede crescimento silencioso.
+Database separates the main workspace, SQL workspace, row inspector, and tutorial
+demo. Types, selection, staging, and SQL lexing belong to the model; selection export
+to disk belongs to storage. OpenTUI editor highlighting uses the lexer, but
+autocomplete does not depend on the renderer.
 
-## Inicialização, teclado e encerramento
+Batch staging indexes changes by connection, table, and primary key once per
+operation, preserving original snapshots and transactional review. History filters
+and batch writes resolve the connection target outside the record loop, avoiding
+repeated configuration snapshot clones. Export previews serialize only a bounded
+prefix; explicit actions generate the complete file. Temporary test clients close
+on query and MCP discovery failures as well as on success. The SQL editor retains
+its native renderable while panes hide or maximize; layout changes do not recreate
+its ancestors. SQL executions and approved batches acquire a synchronous guard
+before dispatch, independent of React loading state. Row/cell and suggestion colors
+live in `query-presentation.ts`, with tests for precedence and palette updates.
 
-O catálogo define Runner como ferramenta inicial, tanto no CLI quanto no modo de
-desenvolvimento. O lançamento resolve a ferramenta uma vez por montagem: um modo
-isolado válido tem prioridade; identificadores desconhecidos voltam ao padrão.
+Git separates the file tree, commit graph, diff/intraline handling, types, and
+presentation. PR and Issues share only the detail-loading lifecycle in
+`useGitRemoteDetails`: debounce, request ownership, pagination, and stale-response
+disposal. Models and sessions retain their own merge and cache rules. Each session
+checks the active request before caching a result; stale callbacks cannot release
+a replacement controller.
 
-A cor de marca está em `shared/ui/brand.ts`: `#4B75FF`. `ShortcutText` traduz e
-estiliza somente os trechos `[atalho]` em um único nó nativo de texto, preservando
-largura, quebra de linha e cores herdadas do rótulo. O componente é explícito:
-o runtime JSX não recolore colchetes de logs/SQL/dados. `InlineButton` o utiliza
-automaticamente; textos mistos de ajuda/dados podem desativar o destaque.
+Database and Runner still have large controllers. Moving files alone does not make
+them smaller: the [ADR](./adr/0001-modular-monolith.md) records planned extractions,
+and the baseline prevents unnoticed growth.
 
-Na adoção desse componente em 2026-09-04, os limites de linhas de 12 telas foram
-ajustados somente pelos imports, opt-outs de dados e quebras do formatter
-(1–8 linhas por arquivo). Os limites de complexidade permaneceram inalterados;
-essa revisão não abre margem para aumentar a lógica dos controladores.
+## Initialization, keyboard, and shutdown
 
-Importar o tema não lê preferências nem altera idioma/mascaramento globais.
-`initializeUiSettings()` é chamado explicitamente pelo CLI e bootstrap. As features
-são importadas depois da inicialização do tema, pois estilos SQL/diff capturam cores.
-Configurações continuam no mesmo local; não há migração dos dados do usuário.
+The catalog selects Runner by default in both CLI and development mode. Launch
+resolves the tool once per mount: a valid isolated mode takes priority, and unknown
+identifiers fall back to the default.
 
-As políticas de teclado ficam em `features/<nome>/keyboard.ts`. Inputs e pickers
-focados retêm os atalhos; os modais consomem o evento localmente. `[Esc]` primeiro
-desfoca o input e só depois fecha o modal. O Banco mantém o tratamento adiado de
-Escape, e PTYs retêm Ctrl+C. Não foi introduzido um event bus nem substituído o
-sistema de foco nativo do OpenTUI.
+The brand color lives in `packages/core/src/ui/brand.ts`: `#4B75FF`. `ShortcutText`
+translates and styles only `[shortcut]` segments in one native text node, preserving
+width, wrapping, and inherited label colors. This is an explicit component: the
+JSX runtime does not recolor brackets in logs, SQL, or data. `InlineButton` uses it
+automatically; mixed help/data content can disable highlighting.
 
-O encerramento usa os disposers das ferramentas montadas. Uma falha não impede os
-outros disposers de executar. Cada módulo continua responsável por encerrar somente
-os processos/conexões que criou; encerrar ferramentas não autoriza matar processos
-descobertos por varredura de portas.
+When this component was adopted on 2026-09-04, line budgets for 12 screens changed
+only for imports, data opt-outs, and formatter wrapping (1–8 lines per file).
+Complexity budgets did not change; that adjustment does not permit controller growth.
 
-## Adicionar uma ferramenta
+Importing the theme neither reads preferences nor changes global language/masking.
+The CLI and bootstrap explicitly call `initializeUiSettings()`. Features load after
+theme initialization because SQL/diff styles capture colors. Configuration locations
+remain unchanged; no user-data migration is required.
 
-1. Crie `features/<nome>` com componente e modelos testáveis.
-2. Exporte a superfície mínima por `index.ts`.
-3. Registre identificador, aliases, rótulo e atalho em `app/tool-catalog.ts`.
-4. Declare a política de teclado e, se necessário, um disposer na composição
-   `app/feature-registry.ts`. Não inclua IDs internos diretamente em `App`.
-5. Adicione o painel em `App`, respeitando `active`, abas visitadas e modo isolado.
-   Montar apenas a ferramenta escolhida não implica carregamento dinâmico de código
-   por ferramenta: essa otimização ainda não foi implementada.
-6. Acrescente traduções, testes unitários e de TUI, documentação e tutorial aplicável.
-7. Execute o gate completo. Não use `@ts-ignore`, `any` ou relaxamento de regras
-   como substituto da modelagem de estados e opcionais.
+Full and isolated modes reuse the same global modal composition in `App`; the
+application continues to own state and mounting boundaries.
+
+Batched notifications schedule timers only for the three retained cards. Replacement,
+dismissal, and unmount cancel the corresponding timers without renewing other cards'
+deadlines. Unicode truncation measures total width, then walks only the graphemes
+needed for the prefix. Plasma computes repeated waves once per frame, row, or column,
+with character and color regressions.
+
+The unused `DatabaseWriteModal` and its baseline exception were removed. Active
+writes still use staging and transactional review; no maintainability budget grew.
+
+Keyboard policies live in `packages/feature-<name>/src/keyboard.ts`. Focused inputs
+and pickers retain their shortcuts; modals consume events locally. `[Esc]` first
+unfocuses an input and then closes its modal. Database retains deferred Escape
+handling, and PTYs retain Ctrl+C. No event bus was introduced, and OpenTUI's native
+focus system was preserved.
+
+Shutdown invokes disposers for mounted tools. One failure does not prevent the
+others from running. Each module stops only processes/connections it created;
+shutting down a tool does not authorize killing processes found through port scans.
+
+## Adding a tool
+
+1. Create `packages/feature-<name>` with a manifest and `src` for the component and
+   testable models.
+2. Expose the smallest required surface through `src/index.ts` and manifest `exports`;
+   declare dependencies and add the package to the `apps/cli` manifest.
+3. Register its identifier, aliases, label, and shortcut in `apps/cli/src/tool-catalog.ts`.
+4. Declare keyboard policy and, if needed, a disposer in
+   `apps/cli/src/feature-registry.ts`. Do not put internal IDs directly in `App`.
+5. Add its panel to `App`, respecting `active`, visited tabs, and isolated mode.
+   Mounting only the selected tool does not imply dynamic loading of its code;
+   that optimization is not implemented yet.
+6. Add translations, unit/TUI tests, documentation, and an appropriate tutorial.
+7. Run the full gate. Do not substitute `@ts-ignore`, `any`, or relaxed rules for
+   correctly modeled state and optional values.

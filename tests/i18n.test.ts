@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
+import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
+import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
+import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
+import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
 import {
   displayWidth,
   formatUiDateTime,
@@ -8,11 +13,97 @@ import {
   setLanguage,
   translateUi,
   truncateDisplay,
-} from "../src/shared/i18n/index"
+} from "../packages/core/src/i18n/index"
 
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test.each([
+    ["pt-BR", "Não foi possível gravar o download completo."],
+    ["en", "Could not write the complete download."],
+    ["es", "No se pudo escribir la descarga completa."],
+    ["ja", "ダウンロード全体を書き込めませんでした。"],
+    ["zh-CN", "无法写入完整下载内容。"],
+    ["ko", "전체 다운로드를 기록할 수 없습니다."],
+  ] as const)("translates an incomplete HTTP download write into %s", (language, expected) => {
+    expect(translateUi("Não foi possível gravar o download completo.", language)).toBe(expected)
+  })
+  test.each([
+    ["pt-BR", "Feche as aspas na query do GitHub."],
+    ["en", "Close the quoted text in the GitHub query."],
+    ["es", "Cierra las comillas en la consulta de GitHub."],
+    ["ja", "GitHub クエリの引用符を閉じてください。"],
+    ["zh-CN", "请闭合 GitHub 查询中的引号。"],
+    ["ko", "GitHub 쿼리의 따옴표를 닫으세요."],
+  ] as const)("translates incomplete GitHub query feedback into %s", (language, expected) => {
+    expect(translateUi("Feche as aspas na query do GitHub.", language)).toBe(expected)
+  })
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates incomplete GitHub CLI input into %s",
+    (language) => {
+      const message = "O GitHub CLI encerrou antes de receber toda a entrada."
+      const catalog = GIT_PR_MESSAGES.find(([key]) => key === message)
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      const expected = catalog?.[index]
+      if (!expected) throw new Error(`Missing GitHub input translation for ${language}`)
+      expect(translateUi(message, language)).toBe(expected)
+    },
+  )
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates the HTTP body policy and preparation failure into %s",
+    (language) => {
+      const messages = HTTP_WORKSPACE_SETTINGS_MESSAGES.filter(
+        ([message]) =>
+          message.startsWith("Com segredos conhecidos,") ||
+          message.startsWith("Não foi possível preparar a requisição"),
+      )
+      expect(messages).toHaveLength(2)
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of messages) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing HTTP privacy translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every database privacy message into %s",
+    (language) => {
+      for (const [message] of DATABASE_PRIVACY_MESSAGES)
+        expect(translateUi(message, language)).not.toBe(message)
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git Diffs command message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of GIT_DIFFS_MESSAGES) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing Git Diffs translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git Compare tutorial message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of GIT_COMPARE_TUTORIAL_MESSAGES) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing Git Compare tutorial translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates the conservative SQL safety explanation into %s",
+    (language) => {
+      const message =
+        "Esta conexão está em somente leitura. Comandos com efeitos, SELECT INTO e rotinas não reconhecidas exigem escrita habilitada."
+      expect(translateUi(message, language)).not.toBe(message)
+      expect(translateUi(message, language)).toContain("SELECT INTO")
+    },
+  )
   test("validates and changes supported languages", () => {
     expect(isLanguage("zh-CN")).toBe(true)
     expect(isLanguage("fr")).toBe(false)
@@ -78,8 +169,14 @@ describe("internationalization", () => {
     expect(translateUi("16 CMD  ·  6 ATIV", "en")).toBe("16 CMD  ·  6 ACT")
     expect(translateUi("6 ATIVOS  ·  2–4/6", "es")).toBe("6 ACTIVOS  ·  2–4/6")
     expect(translateUi("Escolher outra pasta", "en")).toBe("Choose another folder")
-    expect(translateUi("[+] EXECUTAR EM OUTRO PROJETO…", "en")).toBe("[+] RUN IN ANOTHER PROJECT…")
-    expect(translateUi("[+] Escolher projeto", "es")).toBe("[+] Elegir proyecto")
+    expect(translateUi("[N] EXECUTAR EM OUTRO PROJETO…", "en")).toBe("[N] RUN IN ANOTHER PROJECT…")
+    expect(translateUi("[N] Escolher projeto", "es")).toBe("[N] Elegir proyecto")
+    expect(translateUi("O download foi recusado pelo servidor com status HTTP 404.", "en")).toBe(
+      "The server refused the download with HTTP status 404.",
+    )
+    expect(translateUi("O download excede o limite de 256 MB.", "ja")).toBe(
+      "ダウンロードが256 MBの上限を超えています。",
+    )
     expect(translateUi("Pressione [M] para voltar ao modo único.", "en")).toBe(
       "Press [M] to return to single view.",
     )
@@ -153,7 +250,7 @@ describe("internationalization", () => {
     expect(translateUi("Dataset não encontrado: cases.json.", "ko")).toBe(
       "데이터셋을 찾을 수 없습니다: cases.json.",
     )
-    expect(translateUi("[2] Assertions", "zh-CN")).toBe("[2] 断言")
+    expect(translateUi("Assertions", "zh-CN")).toBe("断言")
     expect(translateUi("CHAINING DO REQUEST", "ja")).toBe("リクエストチェーン")
     expect(translateUi("Nenhuma extração configurada.", "en")).toBe("No extractions configured.")
     expect(translateUi("Assertion inválida: expect magic.", "es")).toBe(
@@ -168,7 +265,7 @@ describe("internationalization", () => {
       "The 250 ms timeout was exceeded.",
     )
     expect(translateUi("[L] Histórico: não registrar", "en")).toBe("[L] History: do not record")
-    expect(translateUi("[4] Preview", "zh-CN")).toBe("[4] 预览")
+    expect(translateUi("Preview", "zh-CN")).toBe("预览")
     expect(translateUi("REQUISIÇÃO PREPARADA", "ja")).toBe("準備済みリクエスト")
     expect(translateUi("Valores privados permanecem mascarados neste preview.", "ko")).toBe(
       "비공개 값은 이 미리보기에서도 가려집니다.",
@@ -224,6 +321,10 @@ describe("internationalization", () => {
       "saved for this project",
     )
     expect(translateUi("right", "ja")).toBe("右")
+    expect(translateUi("Responder comentário", "en")).toBe("Reply to comment")
+    expect(translateUi("[E] Reagir", "ko")).toBe("[E] 반응")
+    expect(translateUi("[E] Nova reação", "en")).toBe("[E] New reaction")
+    expect(translateUi("ESCOLHA UMA REAÇÃO", "zh-CN")).toBe("选择回应")
   })
 
   test("translates GitHub Issues layout, actions and safety reasons", () => {
@@ -234,7 +335,7 @@ describe("internationalization", () => {
     expect(translateUi("cannot-update-issue", "ko")).toContain("업데이트")
     expect(
       translateUi(
-        "[J/K] Navegar  [H/L] Foco  [</>] Seção  [[]/[]] Aba  [P] Prévia  [?] Ações",
+        "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações",
         "en",
       ),
     ).toContain("[P] Preview")
@@ -244,6 +345,38 @@ describe("internationalization", () => {
     expect(displayWidth("数据")).toBe(4)
     expect(truncateDisplay("数据表", 5)).toBe("数据…")
     expect(displayWidth(padDisplayEnd("数据", 6))).toBe(6)
+  })
+
+  test("truncates long text without materializing the unused grapheme suffix", () => {
+    const value = "👩🏽‍💻e\u0301界".repeat(2_000)
+    const original = Intl.Segmenter.prototype.segment
+    const passes: Array<{ visited: number }> = []
+    const spy = spyOn(Intl.Segmenter.prototype, "segment").mockImplementation(function (
+      this: Intl.Segmenter,
+      input: string,
+    ) {
+      const segments = original.call(this, input)
+      if (input !== value) return segments
+      const pass = { visited: 0 }
+      passes.push(pass)
+      return {
+        containing: segments.containing.bind(segments),
+        *[Symbol.iterator]() {
+          for (const part of segments) {
+            pass.visited += 1
+            yield part
+          }
+          return undefined
+        },
+      }
+    })
+    try {
+      expect(truncateDisplay(value, 10)).toBe("👩🏽‍💻e\u0301界👩🏽‍💻e\u0301…")
+      expect(passes.length).toBeGreaterThanOrEqual(2)
+      expect(passes.at(-1)?.visited ?? Infinity).toBeLessThanOrEqual(10)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test("formats dates with the configured UI locale", () => {

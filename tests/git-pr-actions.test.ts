@@ -6,11 +6,11 @@ import {
   preparePullRequestAction,
   pullRequestActionAvailability,
   pullRequestMutationWasReconciled,
-} from "../src/features/git/model/pr/actions"
-import { demoPullRequestDetails } from "../src/features/git/model/pr/detail-fixtures"
-import { DEMO_PULL_REQUESTS } from "../src/features/git/model/pr/fixtures"
-import { executePullRequestMutation } from "../src/features/git/services/github/mutations"
-import { PullRequestActionCoordinator } from "../src/features/git/services/pr-actions"
+} from "../packages/feature-git/src/model/pr/actions"
+import { demoPullRequestDetails } from "../packages/feature-git/src/model/pr/detail-fixtures"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import { executePullRequestMutation } from "../packages/feature-git/src/services/github/mutations"
+import { PullRequestActionCoordinator } from "../packages/feature-git/src/services/pr-actions"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-pr-actions-"))
 const executable = join(directory, "gh")
@@ -33,13 +33,35 @@ beforeAll(() => {
     `#!/usr/bin/env bun
 import { appendFileSync, existsSync, writeFileSync } from "node:fs"
 const args = process.argv.slice(2)
+if (process.env.FAKE_IGNORE_INPUT === "1") {
+  appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args }) + "\\n")
+  process.exit(0)
+}
 const stdin = await Bun.stdin.text()
 appendFileSync(process.env.FAKE_LOG, JSON.stringify({ args, stdin, cwd: process.cwd() }) + "\\n")
 if (process.env.FAKE_COORDINATOR === "1") {
   if (args[0] === "api" && args.at(-1) === "user") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
+    const request = JSON.parse(stdin)
+    if (request.query.includes("TuiminalReactionTarget")) {
+      const reacted = existsSync(process.env.FAKE_STATE)
+      console.log(JSON.stringify({ data: { node: {
+        __typename: "PullRequest", id: "${item.identity.nodeId}", url: "${item.identity.url}",
+        reactionGroups: reacted ? [{ content: "HEART", viewerHasReacted: true, users: { totalCount: 1 } }] : []
+      } } }))
+      process.exit(0)
+    }
+    if (request.query.includes("TuiminalAddReaction")) {
+      writeFileSync(process.env.FAKE_STATE, "reaction")
+      console.log(JSON.stringify({ data: { addReaction: { subject: { id: "${item.identity.nodeId}" } } } }))
+      process.exit(0)
+    }
     const commented = existsSync(process.env.FAKE_STATE)
+    if (commented && process.env.FAKE_INVALID_RECONCILIATION === "1") {
+      console.log("not-json")
+      process.exit(0)
+    }
     const connection = (nodes) => ({ totalCount: nodes.length, pageInfo: { hasNextPage: false, endCursor: null }, nodes })
     console.log(JSON.stringify({ data: { repository: {
       viewerPermission: "WRITE", mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true,
@@ -53,7 +75,7 @@ if (process.env.FAKE_COORDINATOR === "1") {
       }
     } } }))
   } else if (args[0] === "pr" && args[1] === "comment") {
-    writeFileSync(process.env.FAKE_STATE, "commented")
+    if (process.env.FAKE_NO_RECONCILE !== "1") writeFileSync(process.env.FAKE_STATE, "commented")
     console.log("accepted")
   } else {
     console.error("unexpected coordinator command")
@@ -130,6 +152,21 @@ describe("pull request action eligibility and reconciliation", () => {
     ).toBe(true)
     expect(
       pullRequestMutationWasReconciled({
+        action: prepared("reaction", {
+          subjectId: item.identity.nodeId,
+          subjectKind: "item",
+          reaction: "HEART",
+        }),
+        before,
+        after: {
+          ...before,
+          reactionGroups: [{ content: "HEART", count: 2, viewerHasReacted: true }],
+        },
+        viewerLogin: auth.viewerLogin,
+      }),
+    ).toBe(true)
+    expect(
+      pullRequestMutationWasReconciled({
         action: prepared("merge", { mergeQueue: true }),
         before,
         after: {
@@ -186,6 +223,36 @@ describe("pull request mutation transport", () => {
     expect(commands().filter((command) => command.args[1] === "graphql")).toHaveLength(2)
   })
 
+  test("validates a reaction target, writes once and re-reads that reactable", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "coordinator-reaction-state")
+    rmSync(statePath, { force: true })
+    const preparedState = preparePullRequestAction({
+      actionId: "integrated-reaction",
+      kind: "reaction",
+      target: item.identity,
+      expectedHeadSha: item.headSha,
+      auth,
+      payload: {
+        subjectId: item.identity.nodeId,
+        subjectKind: "item",
+        reaction: "HEART",
+      },
+    })
+    const result = await new PullRequestActionCoordinator({
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_COORDINATOR: "1", FAKE_STATE: statePath },
+    }).execute(preparedState)
+    expect(result).toMatchObject({ status: "confirmed", message: "reaction-reconciled" })
+    const graphql = commands().filter((command) => command.args[1] === "graphql")
+    expect(graphql.filter((command) => command.stdin.includes("TuiminalAddReaction"))).toHaveLength(
+      1,
+    )
+    expect(
+      graphql.filter((command) => command.stdin.includes("TuiminalReactionTarget")),
+    ).toHaveLength(2)
+  })
+
   test("uses explicit targets and stdin for user-authored content", async () => {
     writeFileSync(logPath, "")
     expect(
@@ -210,6 +277,39 @@ describe("pull request mutation transport", () => {
       event: "APPROVE",
       commit_id: item.headSha,
       body: "Aprovado",
+    })
+  })
+
+  test("adds reactions through GraphQL and replies with a safe link to the selected comment", async () => {
+    writeFileSync(logPath, "")
+    const commentUrl = `${item.identity.url}#issuecomment-55`
+    await executePullRequestMutation(
+      prepared("reaction", {
+        subjectId: "IC_selected",
+        subjectKind: "comment",
+        commentUrl,
+        reaction: "EYES",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    await executePullRequestMutation(
+      prepared("reply", {
+        commentId: "IC_selected",
+        commentUrl,
+        commentAuthor: "ana",
+        body: "Vou ajustar.",
+      }),
+      { executable, env: { FAKE_LOG: logPath } },
+    )
+    const [reaction, reply] = commands()
+    expect(reaction?.args).toEqual(["api", "graphql", "--hostname", "github.com", "--input", "-"])
+    expect(JSON.parse(reaction?.stdin ?? "{}").variables).toEqual({
+      subjectId: "IC_selected",
+      content: "EYES",
+    })
+    expect(reply).toMatchObject({
+      args: ["pr", "comment", "142", "--repo", "equipe/api", "--body-file", "-"],
+      stdin: `↳ ${commentUrl}\n\n@ana Vou ajustar.`,
     })
   })
 
@@ -268,5 +368,59 @@ describe("pull request mutation transport", () => {
     })
     expect(result).toEqual({ status: "uncertain", reason: "timeout" })
     expect(commands()).toHaveLength(1)
+  })
+
+  test("classifies excessive output after dispatch as uncertain and does not retry", async () => {
+    writeFileSync(logPath, "")
+    const result = await executePullRequestMutation(prepared("comment", { body: "once" }), {
+      executable,
+      maxOutputBytes: 4,
+      env: { FAKE_LOG: logPath },
+    })
+    expect(result).toEqual({ status: "uncertain", reason: "output-limit" })
+    expect(commands()).toHaveLength(1)
+  })
+
+  test("keeps incomplete input uncertain without retrying the dispatched write", async () => {
+    writeFileSync(logPath, "")
+    const result = await executePullRequestMutation(
+      prepared("comment", { body: "x".repeat(512 * 1024) }),
+      {
+        executable,
+        env: { FAKE_LOG: logPath, FAKE_IGNORE_INPUT: "1" },
+      },
+    )
+    expect(result).toEqual({ status: "uncertain", reason: "input-failed" })
+    expect(commands()).toHaveLength(1)
+  })
+
+  test("keeps a dispatched write uncertain when its direct reconciliation is invalid", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "invalid-reconciliation-state")
+    rmSync(statePath, { force: true })
+    const preparedState = preparePullRequestAction({
+      actionId: "invalid-reconciliation",
+      kind: "comment",
+      target: item.identity,
+      expectedHeadSha: item.headSha,
+      auth,
+      payload: { body: "integrated" },
+    })
+    const result = await new PullRequestActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_INVALID_RECONCILIATION: "1",
+      },
+    }).execute(preparedState)
+    expect(result).toMatchObject({
+      status: "uncertain",
+      reason: "accepted-reconciliation-failed",
+    })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "pr comment"),
+    ).toHaveLength(1)
   })
 })

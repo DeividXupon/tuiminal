@@ -1,0 +1,5 @@
+### Scratch copy
+# @name scratch-copy
+# @auth {"kind":"api-key","placement":"header","name":"X-API-Key","value":""}
+GET http://127.0.0.1:8000/lps/landing-pages/home
+Accept: application/json

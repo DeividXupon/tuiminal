@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { DatabaseConnectionDraft, DatabaseTable } from "../src/features/database/model/types"
+import type {
+  DatabaseConnectionDraft,
+  DatabaseTable,
+} from "../packages/feature-database/src/model/types"
+import { nativeReadOnlyQuery } from "../packages/feature-database/src/services/read-only-query"
 
 const enabled = process.env.TUIMINAL_DATABASE_INTEGRATION === "1"
 const suite = describe.skipIf(!enabled)
@@ -12,7 +16,7 @@ const mysqlContainer = `tuiminal-db-mysql-${suffix}`
 const mariadbContainer = `tuiminal-db-mariadb-${suffix}`
 const postgresContainer = `tuiminal-db-postgres-${suffix}`
 
-type DatabaseApi = typeof import("../src/features/database/services/database")
+type DatabaseApi = typeof import("../packages/feature-database/src/services/database")
 type DriverFixture = {
   connectionId: string
   driver: "mysql" | "postgres"
@@ -78,6 +82,7 @@ async function seedDatabase(fixture: DriverFixture) {
     `CREATE TABLE orders (` +
       `id ${identity}, user_id INTEGER NOT NULL, total DECIMAL(12,2) NOT NULL, ` +
       `CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`,
+    `CREATE TABLE exact_amounts (id INTEGER PRIMARY KEY, amount DECIMAL(38,18) NOT NULL)`,
     `INSERT INTO teams (name) VALUES ('Platform'), ('Risk')`,
     `INSERT INTO users (team_id, name, email, status) VALUES ` +
       `(1, 'Alice', 'alice@example.test', 'active'), ` +
@@ -145,7 +150,7 @@ suite("database driver integration", () => {
       docker("port", mariadbContainer, "3306/tcp").then(mappedPort),
       docker("port", postgresContainer, "5432/tcp").then(mappedPort),
     ])
-    api = await import("../src/features/database/services/database")
+    api = await import("../packages/feature-database/src/services/database")
     const drafts: DatabaseConnectionDraft[] = [
       {
         name: "Integration MySQL",
@@ -258,11 +263,13 @@ suite("database driver integration", () => {
             table: fixture.usersTable,
             columns,
             mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Should rollback" } },
+            originalRow: { id: 1, name: "Alice" },
           },
           {
             table: fixture.usersTable,
             columns,
             mutation: { kind: "insert", values: { name: "Missing email" } },
+            originalRow: null,
           },
         ]),
       ).rejects.toThrow()
@@ -278,6 +285,7 @@ suite("database driver integration", () => {
           table: fixture.usersTable,
           columns,
           mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Alice Updated" } },
+          originalRow: { id: 1, name: "Alice" },
         },
       ])
       const committed = await api.executeDatabaseQuery(
@@ -286,6 +294,40 @@ suite("database driver integration", () => {
         true,
       )
       expect(committed.rows[0]).toEqual({ name: "Alice Updated" })
+    }
+  })
+
+  test("writes exact decimal edits without losing precision on native drivers", async () => {
+    for (const fixture of fixtures) {
+      const table = { ...fixture.usersTable, name: "exact_amounts" }
+      const columns = await api.loadDatabaseTableColumns(fixture.connectionId, table)
+      const amountColumn = columns.find((column) => column.field === "amount")
+      if (!amountColumn) throw new Error("Missing decimal fixture column")
+      const expected = "9007199254740993.010000000000000001"
+      await api.applyTableMutations(fixture.connectionId, [
+        {
+          table,
+          columns,
+          mutation: {
+            kind: "insert",
+            values: {
+              id: 1,
+              amount: api.coerceDatabaseCellValue(
+                amountColumn,
+                "9.007199254740993010000000000000001e15",
+              ),
+            },
+          },
+          originalRow: null,
+        },
+      ])
+      const castType = fixture.driver === "mysql" ? "CHAR" : "TEXT"
+      const result = await api.executeDatabaseQuery(
+        fixture.connectionId,
+        `SELECT CAST(amount AS ${castType}) AS amount FROM exact_amounts WHERE id = 1`,
+        true,
+      )
+      expect(result.rows).toEqual([{ amount: expected }])
     }
   })
 
@@ -308,4 +350,138 @@ suite("database driver integration", () => {
       expect(Number(followUp.rows[0]?.answer)).toBe(42)
     }
   }, 20_000)
+
+  test("enforces read-only natively with writable credentials on every driver", async () => {
+    for (const fixture of fixtures) {
+      const original = api.connectionProfile(fixture.connectionId)
+      const { profile } = await api.addDatabaseConnection(
+        { ...original, name: "Read-only fixture", writeEnabled: false },
+        "",
+        false,
+      )
+      try {
+        const before = await api.executeDatabaseQuery(
+          profile.id,
+          "SELECT id, name FROM users ORDER BY id",
+          true,
+        )
+        for (const sql of [
+          "UPDATE users SET name = 'forbidden'",
+          "DELETE FROM users",
+          "DROP TABLE users",
+          "CREATE TABLE forbidden (id INTEGER)",
+          "SELECT tuiminal_unknown_effect()",
+          "EXPLAIN ANALYZE DELETE FROM users",
+          "SET TRANSACTION READ WRITE",
+          "SELECT 1 /*! INTO OUTFILE '/tmp/tuiminal-forbidden' */",
+        ]) {
+          expect(() => api.previewDatabaseQuery(profile.id, sql)).toThrow("somente leitura")
+          expect(api.previewDatabaseQuery(fixture.connectionId, sql).mutating).toBe(true)
+          await expect(api.executeDatabaseQuery(profile.id, sql, true)).rejects.toThrow(
+            "somente leitura",
+          )
+        }
+        // Exercise the native boundary independently of the lexical guard, using
+        // the original RW credential. Concurrent requests must each pin their mode.
+        const client = await api.getNativeClient(original)
+        const attempts = await Promise.allSettled([
+          nativeReadOnlyQuery(client, "UPDATE users SET name = 'forbidden'", fixture.driver),
+          nativeReadOnlyQuery(client, "DELETE FROM users", fixture.driver),
+          nativeReadOnlyQuery(client, "CREATE TABLE forbidden (id INTEGER)", fixture.driver),
+        ])
+        expect(attempts.map((attempt) => attempt.status)).toEqual([
+          "rejected",
+          "rejected",
+          "rejected",
+        ])
+        const after = await api.executeDatabaseQuery(
+          profile.id,
+          "SELECT id, name FROM users ORDER BY id",
+          true,
+        )
+        expect(after.rows).toEqual(before.rows)
+        // The same pooled connections must remain usable for explicit RW work.
+        await Promise.all(
+          Array.from({ length: 3 }, () =>
+            client.begin(async (transaction) => {
+              await transaction.unsafe("UPDATE users SET name = name WHERE id = 1")
+            }),
+          ),
+        )
+        await api.executeDatabaseQuery(
+          fixture.connectionId,
+          "CREATE TABLE approved (id INTEGER)",
+          true,
+        )
+        await api.executeDatabaseQuery(fixture.connectionId, "DROP TABLE approved", true)
+        expect(
+          (await api.listDatabaseTables(profile.id)).tables.some(
+            (table) => table.name === "forbidden",
+          ),
+        ).toBe(false)
+        if (fixture.driver === "postgres") {
+          expect(
+            (await api.executeDatabaseQuery(profile.id, "SHOW transaction_read_only", true))
+              .rows[0],
+          ).toEqual({ transaction_read_only: "on" })
+        }
+      } finally {
+        await api.removeDatabaseConnection(profile.id)
+      }
+    }
+  })
+
+  test("PostgreSQL reads cannot mutate through sequence calls or a view's function", async () => {
+    const fixture = fixtures.find((item) => item.driver === "postgres")
+    if (!fixture) throw new Error("Missing PostgreSQL fixture")
+    await api.executeDatabaseQuery(
+      fixture.connectionId,
+      "CREATE SEQUENCE readonly_sequence START 1",
+      true,
+    )
+    await api.executeDatabaseQuery(
+      fixture.connectionId,
+      "CREATE FUNCTION readonly_effect() RETURNS INTEGER LANGUAGE plpgsql AS $$ BEGIN UPDATE users SET name = 'forbidden'; RETURN 1; END $$",
+      true,
+    )
+    await api.executeDatabaseQuery(
+      fixture.connectionId,
+      "CREATE VIEW readonly_effect_view AS SELECT readonly_effect() AS result",
+      true,
+    )
+    const original = api.connectionProfile(fixture.connectionId)
+    const client = await api.getNativeClient(original)
+    const before = await api.executeDatabaseQuery(
+      fixture.connectionId,
+      "SELECT id, name FROM users ORDER BY id",
+      true,
+    )
+    for (const sql of [
+      "SELECT setval('readonly_sequence', 100)",
+      "SELECT nextval('readonly_sequence')",
+      "SELECT * FROM readonly_effect_view",
+    ]) {
+      await expect(Promise.resolve(nativeReadOnlyQuery(client, sql))).rejects.toThrow()
+    }
+    // A plain SELECT can hide a function behind a view. The normal editor path
+    // must still use the native read-only transaction, even with an RW profile.
+    await expect(
+      api.executeDatabaseQuery(fixture.connectionId, "SELECT * FROM readonly_effect_view", true),
+    ).rejects.toThrow()
+    const after = await api.executeDatabaseQuery(
+      fixture.connectionId,
+      "SELECT id, name FROM users ORDER BY id",
+      true,
+    )
+    expect(after.rows).toEqual(before.rows)
+    expect(
+      (
+        await api.executeDatabaseQuery(
+          fixture.connectionId,
+          "SELECT last_value, is_called FROM readonly_sequence",
+          true,
+        )
+      ).rows[0],
+    ).toEqual({ last_value: "1", is_called: false })
+  })
 })

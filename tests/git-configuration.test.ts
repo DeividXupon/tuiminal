@@ -14,34 +14,43 @@ import { join } from "node:path"
 import {
   gitComparePickerKeyboardAction,
   gitComparisonKeyboardAction,
-} from "../src/features/git/model/branch-comparison"
+} from "../packages/feature-git/src/model/branch-comparison"
 import {
   gitConfigurationAction,
   repositorySelectionLabel,
   toggleRepositorySelection,
   unifiedRepositorySelection,
-} from "../src/features/git/model/git-configuration"
-import { DEFAULT_ISSUE_CONFIG, issueProfileForRoot } from "../src/features/git/model/issue/config"
-import { gitDiffsTargetForScope, parseGitDiffsConfig } from "../src/features/git/model/local-target"
+} from "../packages/feature-git/src/model/git-configuration"
+import {
+  DEFAULT_ISSUE_CONFIG,
+  issueProfileForRoot,
+} from "../packages/feature-git/src/model/issue/config"
+import {
+  gitDiffsTargetForScope,
+  parseGitDiffsConfig,
+} from "../packages/feature-git/src/model/local-target"
 import {
   DEFAULT_PULL_REQUEST_CONFIG,
   pullRequestProfileForRoot,
-} from "../src/features/git/model/pr/config"
-import { parseGitHubRemote } from "../src/features/git/model/repository"
-import { createPathTreeOptions } from "../src/features/git/rendering/file-tree"
+} from "../packages/feature-git/src/model/pr/config"
+import { parseGitHubRemote } from "../packages/feature-git/src/model/repository"
+import { createPathTreeOptions } from "../packages/feature-git/src/rendering/file-tree"
 import {
   loadGitBranchComparison,
   loadGitComparisonContext,
-} from "../src/features/git/services/branch-comparison"
-import { resolveGitProjectContext } from "../src/features/git/services/git"
-import { loadGitHubRepositoryCatalog } from "../src/features/git/services/github/repository-catalog"
+} from "../packages/feature-git/src/services/branch-comparison"
+import { resolveGitProjectContext } from "../packages/feature-git/src/services/git"
+import { loadGitHubRepositoryCatalog } from "../packages/feature-git/src/services/github/repository-catalog"
 import {
   discoverLocalGitProjects,
   loadLocalGitTarget,
   switchLocalGitBranch,
-} from "../src/features/git/services/local-target"
-import { loadGitDiffsConfig, updateGitDiffsTarget } from "../src/features/git/storage/local/config"
-import { comparisonSelectorArrangement } from "../src/features/git/ui/base/GitComparisonSelector"
+} from "../packages/feature-git/src/services/local-target"
+import {
+  loadGitDiffsConfig,
+  updateGitDiffsTarget,
+} from "../packages/feature-git/src/storage/local/config"
+import { comparisonSelectorArrangement } from "../packages/feature-git/src/ui/base/GitComparisonSelector"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-configuration-"))
 
@@ -174,14 +183,10 @@ describe("local Diffs target", () => {
 
   test("groups compared paths in a collapsible file tree", () => {
     const expanded = createPathTreeOptions(["README.md", "src/api/client.ts"], new Set())
-    expect(expanded.map((option) => option.name)).toEqual([
-      "▾ src/",
-      "  ▾ api/",
-      "    client.ts",
-      "README.md",
-    ])
+    expect(expanded.map((option) => option.name)).toEqual(["▾ src/", "  client.ts", "README.md"])
+    expect(expanded[0]?.folderChain).toEqual(["src", "api"])
     expect(
-      createPathTreeOptions(["README.md", "src/api/client.ts"], new Set(["src"])).map(
+      createPathTreeOptions(["README.md", "src/api/client.ts"], new Set(["src/api"])).map(
         (option) => option.name,
       ),
     ).toEqual(["▸ src/", "README.md"])

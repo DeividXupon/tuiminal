@@ -2,34 +2,47 @@ import { describe, expect, test } from "bun:test"
 import {
   createFreeTerminalCommand,
   createShellTerminalCommand,
-} from "../src/features/terminal/services/terminal"
+  startFreeTerminalProcess,
+  stopAllFreeTerminalProcesses,
+} from "../packages/feature-terminal/src/services/terminal"
 import { tmpdir } from "node:os"
+import { spawn } from "node:child_process"
 import {
   createShellRunnerCommand,
   startRunnerProcess,
-} from "../src/features/runner/services/runner"
+} from "../packages/feature-runner/src/services/runner"
 
 describe("terminal and runner commands", () => {
   test("creates the login shell terminal command", () => {
-    const shell = process.env.SHELL || "/bin/zsh"
+    const shell =
+      process.platform === "win32"
+        ? process.env.COMSPEC?.trim() || "cmd.exe"
+        : process.env.SHELL?.trim() || "/bin/sh"
 
     expect(createShellTerminalCommand()).toMatchObject({
       kind: "shell",
       label: "Terminal",
-      displayCommand: `${shell} -l`,
-      command: [shell, "-l"],
+      displayCommand: `${shell} ${process.platform === "win32" ? "/d" : "-l"}`,
+      command: [shell, process.platform === "win32" ? "/d" : "-l"],
     })
   })
 
   test("normalizes a custom terminal command", () => {
-    const shell = process.env.SHELL || "/bin/zsh"
+    const shell =
+      process.platform === "win32"
+        ? process.env.COMSPEC?.trim() || "cmd.exe"
+        : process.env.SHELL?.trim() || "/bin/sh"
 
     expect(createFreeTerminalCommand("  /usr/local/bin/codex --help  ")).toMatchObject({
       kind: "custom",
       label: "codex",
       shortLabel: "COD",
       displayCommand: "/usr/local/bin/codex --help",
-      command: [shell, "-lc", "exec /usr/local/bin/codex --help"],
+      command: [
+        shell,
+        ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-lc"]),
+        "/usr/local/bin/codex --help",
+      ],
     })
   })
 
@@ -77,7 +90,7 @@ describe("terminal and runner commands", () => {
       (resolve, reject) => {
         let handle: ReturnType<typeof startRunnerProcess> | undefined
         const timeout = setTimeout(() => {
-          handle?.stop()
+          void handle?.stop().catch(() => undefined)
           reject(new Error("runner ignored both graceful and forced stop"))
         }, 5_000)
         handle = startRunnerProcess(
@@ -86,7 +99,7 @@ describe("terminal and runner commands", () => {
           {
             onLine: (line) => {
               lines.push(line)
-              if (line === "ready") handle?.stop()
+              if (line === "ready") void handle?.stop().catch(reject)
             },
             onExit: (exit) => {
               clearTimeout(timeout)
@@ -100,5 +113,61 @@ describe("terminal and runner commands", () => {
     expect(lines).toContain("ready")
     expect(result.stopped).toBe(true)
     expect(result.signal).toBe("SIGKILL")
+  })
+
+  test("waits for an owned terminal tree to exit and preserves an unrelated process", async () => {
+    if (process.platform === "win32") return
+    const unrelated = spawn("/bin/sh", ["-c", "while :; do sleep 1; done"], {
+      detached: true,
+      stdio: "ignore",
+    })
+    let target: ReturnType<typeof startFreeTerminalProcess> | undefined
+    try {
+      let output = ""
+      let firstStop: Promise<void> | undefined
+      const exit = new Promise<{ signal: string | null; stopped: boolean }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          void target?.stop().catch(() => undefined)
+          reject(new Error("terminal tree did not exit"))
+        }, 6_000)
+        target = startFreeTerminalProcess(
+          [
+            "/bin/sh",
+            "-c",
+            "trap '' INT TERM HUP; sh -c 'trap \"\" INT TERM HUP; while :; do sleep 1; done' & echo ready:$!; while :; do sleep 1; done",
+          ],
+          {
+            cwd: tmpdir(),
+            onData(data) {
+              output += new TextDecoder().decode(data)
+              if (!firstStop && output.includes("ready:")) {
+                firstStop = target?.stop()
+                expect(target?.stop()).toBe(firstStop)
+              }
+            },
+            onExit(result) {
+              clearTimeout(timeout)
+              resolve(result)
+            },
+          },
+        )
+      })
+
+      const result = await exit
+      await firstStop
+      expect(result.stopped).toBe(true)
+      expect(result.signal).toBe("SIGKILL")
+      expect(unrelated.exitCode).toBeNull()
+      expect(unrelated.pid && process.kill(unrelated.pid, 0)).toBe(true)
+    } finally {
+      await stopAllFreeTerminalProcesses().catch(() => undefined)
+      if (unrelated.pid) {
+        try {
+          process.kill(-unrelated.pid, "SIGKILL")
+        } catch {
+          unrelated.kill("SIGKILL")
+        }
+      }
+    }
   })
 })

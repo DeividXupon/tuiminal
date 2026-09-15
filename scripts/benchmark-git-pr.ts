@@ -1,8 +1,8 @@
-import { pullRequestMarkdownLines } from "../src/features/git/model/pr/content"
-import { movePullRequestIndex } from "../src/features/git/model/pr/navigation"
-import type { PullRequestSummary } from "../src/features/git/model/pr/types"
-import { parseDiffDocuments } from "../src/features/git/rendering/diff"
-import { mergePullRequestItems } from "../src/features/git/services/pr-session"
+import { pullRequestMarkdownLines } from "../packages/feature-git/src/model/pr/content"
+import { movePullRequestIndex } from "../packages/feature-git/src/model/pr/navigation"
+import type { PullRequestSummary } from "../packages/feature-git/src/model/pr/types"
+import { parseDiffDocuments } from "../packages/feature-git/src/rendering/diff"
+import { mergePullRequestItems } from "../packages/feature-git/src/services/pr-session"
 
 type Measurement = {
   name: string

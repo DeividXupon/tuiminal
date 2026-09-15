@@ -1,69 +1,77 @@
-# ADR 0001 — Monólito modular antes do SDK de plugins
+# ADR 0001 — Modular monolith of internal features
 
-Status: aceito e aplicado como primeira etapa em 2026-09-04.
+Status: accepted on 2026-09-04; revised on 2026-09-14.
 
-## Contexto
+## Context
 
-A análise encontrou 41 arquivos de fonte com aproximadamente 27,7 mil linhas.
-Banco reunia 5.720 linhas de interface, Runner 3.036 e Git 2.142. O entrypoint
-misturava uma ferramenta, aplicação e bootstrap. Modelos importavam tipos de serviços,
-e o guard global conhecia dezenas de IDs internos de inputs e modais.
+The initial analysis found 41 source files with roughly 27,700 lines. Database
+combined 5,720 UI lines, Runner 3,036, and Git 2,142. The entrypoint mixed a tool,
+application composition, and bootstrap. Models imported service types, and the
+global guard knew dozens of internal input and modal IDs.
 
-Mudar diretamente para vários pacotes publicáveis adicionaria versionamento,
-builds e compatibilidade de SDK antes de haver limites estáveis entre módulos.
+Moving directly to independently distributed packages would have introduced
+versioning, builds, and compatibility concerns before module boundaries were stable.
 
-## Decisão
+## Decision
 
-Organizar `app`, `core`, `shared` e features independentes; extrair responsabilidades
-coesivas; verificar dependências, tipos e interações antes de criar workspaces/plugins.
-Usar reducers pequenos quando os estados pertencem à mesma regra; preservar refs,
-identidade dos componentes, processos e sessões durante a migração.
+Organize independent application, core, shared, and feature modules; extract cohesive
+responsibilities; check dependencies, types, and interactions before considering
+optional distribution of official components. Use small reducers for related state,
+and preserve refs, component identity, processes, and sessions during migration.
 
-Padronizar Bun 1.3.14, formatter Biome, TypeScript estrito e CI em Linux/macOS.
-Ativar `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitReturns`
-e `noFallthroughCasesInSwitch`. Valores ausentes são omitidos em fronteiras de
-normalização; drafts que permitem limpar campos declaram isso explicitamente.
+The 2026-09-14 revision implements these boundaries as workspaces: `apps/cli`,
+`packages/core` (including the former shared directory), and five `packages/feature-*`
+packages. The product remains integrated with synchronized versions, now using
+individual manifests and verifiable npm artifacts. Contracts and boundaries are
+recorded in [Internal workspaces](../design/internal-workspaces.md). This revision
+does not implement optional downloading.
 
-O dependency-cruiser 18 precisa da API AST do TypeScript anterior à versão 7.
-Manter o compilador nativo 7 sob alias e a API 6 como dependência exclusivamente de
-desenvolvimento evita aceitar um relatório vazio de “zero violações”. O wrapper
-exige que todos os arquivos sejam efetivamente analisados. Revisitar essa solução
-quando houver suporte à API nativa, sem mudar o runtime de produção.
+Standardize on Bun 1.3.14, Biome formatting, strict TypeScript, and Linux/macOS CI.
+Enable `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitReturns`,
+and `noFallthroughCasesInSwitch`. Omit absent values at normalization boundaries;
+drafts that allow clearing fields declare that explicitly.
 
-## Consequências e limites
+Dependency-cruiser 18 requires the pre-TypeScript-7 AST API. Keeping the native 7
+compiler under an alias and API 6 as a development-only dependency prevents an
+empty report from being accepted as “zero violations.” The wrapper requires every
+source file to be analyzed. Revisit this arrangement when native API support exists,
+without changing the production runtime.
 
-- Mais arquivos, mas cada responsabilidade tem um local identificável.
-- Não muda atalhos, layout, dados salvos ou formato da configuração do usuário.
-- O custo principal da mudança é revisão de imports e formatação, não nova lógica.
-- Testes nativos de TUI cobrem Runner, modal de salvar e composição com App;
-  não representam cobertura visual completa de todas as ferramentas.
-- Permanecem funções e controladores grandes. Os avisos existentes ficam visíveis
-  e o baseline limita tamanho e complexidade por arquivo. Não foi “zerada” a dívida.
-- Não foi feita medição comparativa de desempenho nesta etapa; organização melhor
-  não é evidência de redução de latência.
-- Não há monorepo, SDK, marketplace, carregador de plugins nem sandbox implementados.
+## Consequences and limitations
 
-## Validação
+- More files, with an identifiable home for each responsibility.
+- Shortcuts, layout, saved data, and user configuration formats remain unchanged.
+- Import review and formatting account for most of the change, rather than new logic.
+- Native TUI tests from the initial extraction cover Runner, the save modal, and
+  composition with App; they do not provide complete visual coverage of every tool.
+- Large functions and controllers remain. Existing warnings stay visible, and the
+  baseline caps file size and complexity; technical debt has not been eliminated.
+- No comparative performance measurement was made during this step. Better
+  organization is not evidence of reduced latency.
+- A public SDK, marketplace, and community plugin loader are not planned. Features
+  remain official internal parts of Tuiminal.
 
-Validação local desta etapa: `bun install --frozen-lockfile`, `bun run check`,
-`bun test` e `git diff --check` passaram. São 127 testes aprovados (124 de lógica/
-integração local e 3 de TUI), 6 itens da matriz Docker opt-in ignorados e nenhuma
-falha. O grafo analisou 96 módulos de fonte e 417 dependências, sem violações.
-Os 60 avisos de complexidade existentes estão no baseline, sem regressões no gate.
-O Runner também foi aberto pelo CLI com configuração temporária para conferir
-modo múltiplo, digitação e modal de salvar. O CI foi configurado, mas não executado
-remotamente nesta alteração.
+## Initial extraction validation (2026-09-04)
 
-## Próximas extrações, em ordem
+Local validation passed: `bun install --frozen-lockfile`, `bun run check`, `bun test`,
+and `git diff --check`. There were 127 passing tests (124 logic/local integration
+and 3 TUI), 6 skipped opt-in Docker cases, and no failures. The graph covered 96
+source modules and 417 dependencies without violations. The 60 existing complexity
+warnings remained in the baseline, with no gate regressions. Runner was also opened
+through the CLI with temporary configuration to check multi mode, typing, and the
+save modal. CI was configured but not run remotely for that change.
 
-1. Runner: lifecycle das execuções/restarts/health e sessões; separar painel de
-   comandos, picker, histórico e log com contratos menores e testes de navegação.
-2. Banco: separar persistência de conexões/histórico, adaptadores MySQL/Postgres/SQLite
-   e execução/cancelamento; decompor controladores de grid e SQL por transações de estado.
-3. Git: reduzir controle de navegação e ampliar testes de grafo/diff/renderização.
-4. Expandir testes TUI para Banco, PTYs, redimensionamento, mouse e todos os idiomas.
-5. Prototipar uma ferramenta usando somente um contrato candidato a SDK. Só então
-   avaliar workspaces, publicação, permissões e isolamento descritos no plano de plugins.
+## Next extractions, in order
 
-Cada corte deve preservar comportamento e reduzir o baseline. Não mover todo um
-controlador para `useWorkspace.ts` apenas para diminuir o arquivo visível.
+1. Runner: execution/restart/health and session lifecycles; smaller command-panel,
+   picker, history, and log contracts with navigation tests.
+2. Database: connection/history persistence, MySQL/Postgres/SQLite adapters, and
+   execution/cancellation; decompose grid and SQL controllers by state transactions.
+3. Git: reduce navigation control and expand graph/diff/rendering tests.
+4. Expand TUI tests for Database, PTYs, resize, mouse, and all languages.
+5. If minimal installation is adopted, prototype one official feature as an optional
+   payload with a private contract versioned with the core before changing packaging
+   for other tools.
+
+Each extraction must preserve behavior and reduce the baseline. Do not move an
+entire controller into `useWorkspace.ts` merely to shrink the visible file.

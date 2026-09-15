@@ -8,6 +8,11 @@ export type ReleaseTarget = {
   helperExecutable: string
 }
 
+const REPOSITORY = {
+  type: "git",
+  url: "git+https://github.com/DeividXupon/tuiminal.git",
+} as const
+
 export const RELEASE_TARGETS: readonly ReleaseTarget[] = [
   {
     id: "darwin-arm64",
@@ -73,11 +78,12 @@ export function platformPackageJson(target: ReleaseTarget, version: string) {
   return {
     name: target.npmPackage,
     version,
-    description: "Tuiminal standalone executable for " + target.os + " " + target.cpu,
+    description: `Tuiminal standalone executable for ${target.os} ${target.cpu}`,
     license: "Apache-2.0",
+    repository: { ...REPOSITORY, directory: "apps/cli" },
     os: [target.os],
     cpu: [target.cpu],
-    files: ["bin"],
+    files: ["bin", "THIRD_PARTY_NOTICES.md"],
     publishConfig: { access: "public" },
   }
 }
@@ -88,10 +94,11 @@ export function mainPackageJson(version: string) {
     version,
     description: "An integrated terminal workspace for databases, Git, processes, HTTP, and PTYs",
     license: "Apache-2.0",
+    repository: { ...REPOSITORY, directory: "apps/cli" },
     type: "module",
     bin: { tuiminal: "bin/tuiminal.js" },
-    files: ["bin"],
-    engines: { node: ">=18" },
+    files: ["bin", "THIRD_PARTY_NOTICES.md"],
+    engines: { node: ">=22" },
     optionalDependencies: Object.fromEntries(
       RELEASE_TARGETS.map((target) => [target.npmPackage, version]),
     ),
@@ -101,7 +108,7 @@ export function mainPackageJson(version: string) {
 
 export function npmLauncherSource() {
   const packages = Object.fromEntries(
-    RELEASE_TARGETS.map((target) => [target.os + "-" + target.cpu, target.npmPackage]),
+    RELEASE_TARGETS.map((target) => [`${target.os}-${target.cpu}`, target.npmPackage]),
   )
   return [
     "#!/usr/bin/env node",
@@ -109,7 +116,7 @@ export function npmLauncherSource() {
     'import { dirname, join } from "node:path"',
     'import { createRequire } from "node:module"',
     "",
-    "const packages = " + JSON.stringify(packages, null, 2),
+    `const packages = ${JSON.stringify(packages, null, 2)}`,
     'const key = process.platform + "-" + process.arch',
     "const packageName = packages[key]",
     "",

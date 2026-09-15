@@ -1,14 +1,16 @@
 import "./setup"
 import { afterEach, describe, expect, test } from "bun:test"
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { Runner } from "../../src/features/runner/RunnerWorkspace"
-import { RunnerSaveCommandModal } from "../../src/features/runner/ui/RunnerSaveCommandModal"
-import { App } from "../../src/app/App"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
-import { BRAND_COLOR } from "../../src/shared/ui/brand"
+import { Runner } from "../../packages/feature-runner/src/RunnerWorkspace"
+import { RunnerSaveCommandModal } from "../../packages/feature-runner/src/ui/RunnerSaveCommandModal"
+import { App } from "../../apps/cli/src/App"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -63,8 +65,8 @@ describe("Runner TUI behavior", () => {
       for (const shortcut of ["[Alt+1]", "[Alt+2]", "[Alt+4]", "[Alt+5]"]) {
         expect(frame).toContain(shortcut)
       }
-      expect(frame).toContain("[+] EXECUTAR EM OUTRO PROJETO…")
-      expect(colorOf("[+]")).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+      expect(frame).toContain("[N] EXECUTAR EM OUTRO PROJETO…")
+      expect(colorOf("[N]")).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
       expect(frame).not.toMatch(/pomodoro/i)
       expect(frame).not.toContain("[!]")
       expect(frame).not.toContain("MODO ISOLADO")
@@ -125,12 +127,12 @@ describe("Runner TUI behavior", () => {
     expect(closes).toBe(1)
   })
 
-  test("plus opens projects, remains text in inputs, and multi view preserves commands", async () => {
+  test("N opens projects, plus remains text in inputs, and multi view preserves commands", async () => {
     tui = await testRender(<Runner active />, { width: 140, height: 36 })
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
     expect(tui.captureCharFrame()).toContain("LOG DO PROCESSO")
     expect(tui.captureCharFrame()).not.toContain("▣ MULTI")
-    await key("+")
+    await key("n")
     await settle(() => tui?.captureCharFrame().includes("PROCURAR NOS ARQUIVOS") ?? false)
     expect(tui.captureCharFrame()).toContain("PROJETOS")
     await key("ESCAPE")
@@ -146,7 +148,7 @@ describe("Runner TUI behavior", () => {
     await key("m")
     expect(tui.captureCharFrame()).toContain("MULTI")
     expect(tui.captureCharFrame()).toContain("COMANDOS")
-    await key("+")
+    await key("n")
     await settle(() => tui?.captureCharFrame().includes("PROCURAR NOS ARQUIVOS") ?? false)
     expect(tui.captureCharFrame()).toContain("PROJETOS")
   })
@@ -170,5 +172,49 @@ describe("Runner TUI behavior", () => {
     const meta = tui.renderer.root.findDescendantById("runner-command-detail-meta")
     if (detail && meta) expect(meta.screenY).toBe(detail.screenY + 1)
     expect(tui.captureCharFrame()).not.toMatch(/Scan│/)
+  })
+
+  test("does not autostart before trust and asks again after a material change", async () => {
+    const root = process.env.TUIMINAL_WORKDIR
+    if (!root) throw new Error("Runner fixture root is unavailable")
+    const configDirectory = join(root, ".tuiminal")
+    const configPath = join(configDirectory, "runner.yaml")
+    const firstSentinel = join(root, "autostart-first.txt")
+    const secondSentinel = join(root, "autostart-second.txt")
+    mkdirSync(configDirectory, { recursive: true })
+    writeFileSync(
+      configPath,
+      "commands:\n  trust-fixture:\n    command: bun -e \"await Bun.write('autostart-first.txt', 'started')\"\n    autostart: true\n",
+    )
+
+    try {
+      tui = await testRender(<Runner active />, { width: 140, height: 36 })
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "runner-autostart-trust-modal",
+      )
+      expect(existsSync(firstSentinel)).toBe(false)
+      expect(tui.captureCharFrame()).toContain("AUTOSTART DO RUNNER")
+      expect(tui.captureCharFrame()).toContain("bun -e")
+
+      await key("y")
+      await settle(() => existsSync(firstSentinel))
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+
+      writeFileSync(
+        configPath,
+        "commands:\n  trust-fixture:\n    command: bun -e \"await Bun.write('autostart-second.txt', 'started')\"\n    autostart: true\n",
+      )
+      await key("d")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "runner-autostart-trust-modal",
+      )
+      expect(existsSync(secondSentinel)).toBe(false)
+      await key("RETURN")
+      await settle(() => existsSync(secondSentinel))
+    } finally {
+      rmSync(configDirectory, { recursive: true, force: true })
+      rmSync(firstSentinel, { force: true })
+      rmSync(secondSentinel, { force: true })
+    }
   })
 })

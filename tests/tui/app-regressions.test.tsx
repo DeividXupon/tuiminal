@@ -3,8 +3,8 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { App } from "../../src/app/App"
-import { getUiSettings, updateUiSettings } from "../../src/core/settings/theme"
+import { App } from "../../apps/cli/src/App"
+import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -176,7 +176,7 @@ test("global shortcuts leave Database after closing the connection form", async 
   await key("ESCAPE")
   await key("ESCAPE")
   await key("3", { meta: true })
-  await settle(() => tui?.captureCharFrame().includes("LOG DO PROCESSO") ?? false)
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 })
 
 test("global shortcuts leave HTTP after its URL input releases focus", async () => {
@@ -185,7 +185,7 @@ test("global shortcuts leave HTTP after its URL input releases focus", async () 
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
   await key("ESCAPE")
   await key("3", { meta: true })
-  await settle(() => tui?.captureCharFrame().includes("LOG DO PROCESSO") ?? false)
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 })
 
 test("keeps global listener counts bounded after visiting multiple tools", async () => {

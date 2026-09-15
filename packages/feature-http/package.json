@@ -1,0 +1,42 @@
+{
+  "name": "@xupon/tuiminal-feature-http",
+  "version": "0.2.0-alpha.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeividXupon/tuiminal.git",
+    "directory": "packages/feature-http"
+  },
+  "type": "module",
+  "engines": {
+    "bun": "1.4.2"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli/run": "./src/cli/run.ts",
+    "./cli/import": "./src/cli/import.ts"
+  },
+  "peerDependencies": {
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "react": "^19.2.8",
+    "@xupon/tuiminal-core": "0.2.0-alpha.0"
+  },
+  "dependencies": {
+    "@tuiparts/core": "^0.0.6",
+    "tldts": "7.4.12",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@xupon/tuiminal-core": "workspace:*"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": true
+}
