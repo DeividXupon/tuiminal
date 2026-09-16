@@ -3,6 +3,8 @@ import type { HttpDocumentState } from "./types"
 
 export const HTTP_JSON_TREE_CHARACTER_LIMIT = 50_000
 const HTTP_JSON_TREE_NODE_LIMIT = 2_000
+const treeCache = new WeakMap<Uint8Array, Map<string, HttpJsonTree>>()
+const MAX_CACHED_SHAPES = 8
 
 export type HttpJsonTokenKind =
   | "plain"
@@ -182,23 +184,33 @@ export function httpJsonTreeForDocument(document: HttpDocumentState): HttpJsonTr
   ) {
     return null
   }
-  const source = responseBodyText(
-    document.execution.response,
-    false,
-    HTTP_JSON_TREE_CHARACTER_LIMIT,
-  )
+  const response = document.execution.response
+  const collapsedPaths = document.responsePresentation.jsonCollapsedPaths
+  const shapeKey = JSON.stringify([response.encoding, collapsedPaths])
+  const cachedShapes = treeCache.get(response.body)
+  const cached = cachedShapes?.get(shapeKey)
+  if (cached) return selectJsonTreeNode(cached, document.responsePresentation.jsonSelectedPath)
+  const source = responseBodyText(response, false, HTTP_JSON_TREE_CHARACTER_LIMIT)
   if (source.length > HTTP_JSON_TREE_CHARACTER_LIMIT) return null
   try {
     const value: unknown = JSON.parse(source)
     if (value === null || typeof value !== "object") return null
-    return buildJsonTree(
-      value,
-      document.responsePresentation.jsonSelectedPath,
-      document.responsePresentation.jsonCollapsedPaths,
-    )
+    const tree = buildJsonTree(value, null, collapsedPaths)
+    if (!tree) return null
+    const shapes = cachedShapes ?? new Map<string, HttpJsonTree>()
+    if (shapes.size >= MAX_CACHED_SHAPES) shapes.delete(shapes.keys().next().value ?? "")
+    shapes.set(shapeKey, tree)
+    if (!cachedShapes) treeCache.set(response.body, shapes)
+    return selectJsonTreeNode(tree, document.responsePresentation.jsonSelectedPath)
   } catch {
     return null
   }
+}
+
+function selectJsonTreeNode(tree: HttpJsonTree, selectedPath: string | null) {
+  const node = tree.nodes.find((candidate) => candidate.path === selectedPath) ?? tree.nodes[0]
+  if (!node || node.path === tree.selectedPath) return tree
+  return { ...tree, selectedPath: node.path, selectedLine: node.line }
 }
 
 function withoutPath(paths: readonly string[], path: string) {
@@ -278,11 +290,12 @@ const JSON_TREE_UPDATES = {
 export function updateHttpJsonTree(
   document: HttpDocumentState,
   action: HttpJsonTreeAction,
+  visibleTree?: HttpJsonTree | null,
 ): Pick<
   HttpDocumentState["responsePresentation"],
   "jsonSelectedPath" | "jsonCollapsedPaths"
 > | null {
-  const tree = httpJsonTreeForDocument(document)
+  const tree = visibleTree === undefined ? httpJsonTreeForDocument(document) : visibleTree
   if (!tree) return null
   const currentIndex = tree.nodes.findIndex((node) => node.path === tree.selectedPath)
   const current = tree.nodes[Math.max(0, currentIndex)]

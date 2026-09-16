@@ -952,6 +952,19 @@ describe("HTTP TUI", () => {
           response.end('{"user":{"profile":{"name":"Ada"}},"tags":["one","two"]}')
           return
         }
+        if (request.url === "/large-json") {
+          response.writeHead(200, { "content-type": "application/json" })
+          response.end(
+            JSON.stringify({
+              items: Array.from({ length: 700 }, (_, index) => ({
+                id: index,
+                name: `item-${index}`,
+                active: true,
+              })),
+            }),
+          )
+          return
+        }
         response.writeHead(200, { "content-type": "application/json" })
         response.end('{"answer":42}')
       })
@@ -1010,7 +1023,17 @@ describe("HTTP TUI", () => {
       )
       expect(tui.captureCharFrame()).toContain('"name": "Ada"')
 
+      const jsonDocument = tui.renderer.root.findDescendantById("http-response-json-http-scratch-1")
+      const initialContent = (jsonDocument as { content?: unknown } | undefined)?.content
+
       await key("ARROW_DOWN")
+      expect(
+        (
+          tui.renderer.root.findDescendantById("http-response-json-http-scratch-1") as
+            | { content?: unknown }
+            | undefined
+        )?.content,
+      ).toBe(initialContent)
       await key("ARROW_LEFT")
       await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
       expect(tui.captureCharFrame()).not.toContain('"name": "Ada"')
@@ -1019,6 +1042,35 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.captureCharFrame().includes('"name": "Ada"') ?? false)
       await key("RETURN")
       await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
+    })
+
+    test("keeps the large JSON document mounted while navigating structural rows", async () => {
+      const largeUrl = `${new URL(url).origin}/large-json`
+      tui = await testRender(<HttpClient active initialUrlRequest={{ id: 1, url: largeUrl }} />, {
+        width: 120,
+        height: 32,
+      })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      act(() => tui?.mockInput.pressEnter())
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-response-json-http-scratch-1")),
+      )
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-response-scroll-http-scratch-1",
+      )
+      const rendered = tui.renderer.root.findDescendantById(
+        "http-response-json-http-scratch-1",
+      ) as { content?: unknown }
+      const originalContent = rendered.content
+      for (let index = 0; index < 12; index += 1) await key("ARROW_DOWN")
+      expect(tui.captureCharFrame()).toMatch(/JSON \d+\/702  \/items\/\d+/)
+      expect(
+        (
+          tui.renderer.root.findDescendantById("http-response-json-http-scratch-1") as {
+            content?: unknown
+          }
+        ).content,
+      ).toBe(originalContent)
     })
 
     test("submits the freshly pasted URL when Enter follows in the same input batch", async () => {

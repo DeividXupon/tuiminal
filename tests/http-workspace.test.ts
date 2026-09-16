@@ -89,6 +89,10 @@ describe("HTTP workspace state", () => {
       ...document,
       responsePresentation: { ...document.responsePresentation, ...selected },
     }
+    const movedTree = httpJsonTreeForDocument(document)
+    expect(movedTree?.selectedPath).toBe("/user")
+    expect(movedTree?.lines).toBe(tree?.lines)
+    expect(movedTree?.nodes).toBe(tree?.nodes)
     const collapsed = updateHttpJsonTree(document, "collapse")
     expect(collapsed?.jsonCollapsedPaths).toEqual(["/user"])
     document = {

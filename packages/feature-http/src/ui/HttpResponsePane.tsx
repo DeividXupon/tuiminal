@@ -1,7 +1,7 @@
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useMemo, useRef } from "react"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
 import {
   httpJsonPathAtLine,
@@ -29,14 +29,12 @@ function HttpResponseDocument({
   wrap,
   jsonTree,
   lineNumbers,
-  focused,
 }: {
   content: string
   response: HttpResponseSnapshot
   wrap: boolean
   jsonTree: HttpJsonTree | null
   lineNumbers: boolean
-  focused: boolean
 }) {
   const paletteKey = [
     COLORS.canvas,
@@ -49,15 +47,25 @@ function HttpResponseDocument({
     COLORS.success,
     COLORS.warning,
   ].join("\u0000")
+  const jsonLines = jsonTree?.lines
   const jsonDocument = useMemo(() => {
     void paletteKey
-    return jsonTree
-      ? buildHttpJsonDocument(jsonTree, { palette: COLORS, lineNumbers, focused })
+    return jsonLines
+      ? buildHttpJsonDocument(
+          { lines: jsonLines, selectedPath: "" },
+          {
+            palette: COLORS,
+            lineNumbers,
+            focused: false,
+            highlightSelection: false,
+          },
+        )
       : null
-  }, [focused, jsonTree, lineNumbers, paletteKey])
+  }, [jsonLines, lineNumbers, paletteKey])
   if (jsonDocument && jsonTree) {
     return (
       <text
+        id={`http-response-json-${response.requestId}`}
         content={jsonDocument}
         wrapMode={wrap ? "word" : "none"}
         style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
@@ -126,7 +134,7 @@ export function HttpResponsePane({
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const response = document.execution.status === "success" ? document.execution.response : null
   const presentation = document.responsePresentation
-  const content = useMemo(() => httpResponseContent(document, cookies), [cookies, document])
+  const content = httpResponseContent(document, cookies)
   const jsonTree = useMemo(() => httpJsonTreeForDocument(document), [document])
   const matches = useMemo(
     () => findHttpTextMatches(content, presentation.searchQuery),
@@ -152,8 +160,16 @@ export function HttpResponsePane({
 
   useEffect(() => {
     if (!focused || !jsonTree) return
-    scrollRef.current?.focus()
-    scrollRef.current?.scrollTo(Math.max(0, jsonTree.selectedLine - 1))
+    const scroll = scrollRef.current
+    if (!scroll) return
+    scroll.focus()
+    const top = scroll.scrollTop
+    const rows = Math.max(1, scroll.viewport.height)
+    if (jsonTree.selectedLine < top) {
+      scroll.scrollTo(Math.max(0, jsonTree.selectedLine - 1))
+    } else if (jsonTree.selectedLine >= top + rows) {
+      scroll.scrollTo(Math.max(0, jsonTree.selectedLine - rows + 1))
+    }
   }, [focused, jsonTree])
 
   const cycleSearch = () => {
@@ -171,7 +187,7 @@ export function HttpResponsePane({
     if (!action) return
     event.preventDefault()
     event.stopPropagation()
-    const patch = updateHttpJsonTree(document, action)
+    const patch = updateHttpJsonTree(document, action, jsonTree)
     if (patch) onPresentationChange(patch)
   }
 
@@ -212,6 +228,15 @@ export function HttpResponsePane({
         downloading={downloading}
         active={visible && focused}
       />
+      {jsonTree ? (
+        <text
+          content={truncateDisplay(
+            `JSON ${jsonTree.nodes.findIndex((node) => node.path === jsonTree.selectedPath) + 1}/${jsonTree.nodes.length}  ${jsonTree.selectedPath || "/"}`,
+            Math.max(1, position.width - 4),
+          )}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.http, bg: COLORS.panelRaised }}
+        />
+      ) : null}
       {response ? (
         // biome-ignore lint/a11y/noStaticElementInteractions: the OpenTUI scrollbox is the focusable response viewport and owns structural JSON keyboard/mouse navigation.
         <scrollbox
@@ -243,7 +268,6 @@ export function HttpResponsePane({
             wrap={presentation.wrap}
             jsonTree={jsonTree}
             lineNumbers={presentation.lineNumbers}
-            focused={focused}
           />
           {stale ? (
             <text
