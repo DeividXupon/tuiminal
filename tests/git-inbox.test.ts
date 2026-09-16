@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test"
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -23,6 +23,9 @@ import {
   openNotificationInBrowser,
   unsubscribeNotification,
 } from "../packages/feature-git/src/services/github/notifications"
+import { loadInboxSubjectStates } from "../packages/feature-git/src/services/github/notification-subject-state"
+import * as subjectReader from "../packages/feature-git/src/services/github/notification-subject-state"
+import { InboxSession } from "../packages/feature-git/src/services/inbox-session"
 import {
   loadInboxSavedIds,
   saveInboxSavedIds,
@@ -44,6 +47,14 @@ if (args.includes("notifications?all=true&participating=false&per_page=2&page=1"
     { id: "1", unread: true, reason: "review_requested", updated_at: "2026-09-08T10:00:00Z", last_read_at: null, subject: { title: "Review\\u001b]52;unsafe", url: "https://api.github.com/repos/team/api/pulls/7", type: "PullRequest" }, repository: { full_name: "team/api", html_url: "https://github.com/team/api" }, url: "https://api.github.com/notifications/threads/1", subscription_url: "https://api.github.com/notifications/threads/1/subscription" },
     { id: "2", unread: false, reason: "mention", updated_at: "2026-09-07T10:00:00Z", last_read_at: "2026-09-07T11:00:00Z", subject: { title: "Issue fixture", url: "https://api.github.com/repos/team/web/issues/9", type: "Issue" }, repository: { full_name: "team/web", html_url: "https://github.com/team/web" }, url: "https://api.github.com/notifications/threads/2", subscription_url: "https://api.github.com/notifications/threads/2/subscription" }
   ]))
+} else if (args.includes("repos/team/api/pulls/7")) {
+  console.log(JSON.stringify({ state: "closed", draft: false, merged_at: "2026-09-08T11:00:00Z" }))
+} else if (args.includes("repos/team/api/pulls/8")) {
+  console.log(JSON.stringify({ state: "open", draft: true, merged_at: null }))
+} else if (args.includes("repos/team/api/pulls/10")) {
+  console.log(JSON.stringify({ state: "closed", draft: false, merged_at: null }))
+} else if (args.includes("repos/team/web/issues/9")) {
+  console.log(JSON.stringify({ state: "closed" }))
 } else if (args[0] === "api" || args[0] === "pr" || args[0] === "issue" || args[0] === "browse") {
   console.log("{}")
 }
@@ -120,6 +131,76 @@ describe("GitHub query autocomplete", () => {
 })
 
 describe("GitHub notification transport", () => {
+  test("a retired Inbox subject read cannot publish over its replacement", async () => {
+    const pending: Array<{
+      signal: AbortSignal | undefined
+      finish: (states: Map<string, "open" | "closed">) => void
+    }> = []
+    const reader = spyOn(subjectReader, "loadInboxSubjectStates").mockImplementation(
+      (_items, _host, options) =>
+        new Promise((resolve) => pending.push({ signal: options.signal, finish: resolve })),
+    )
+    const session = new InboxSession()
+    try {
+      const old = session.loadSubjectStates(DEMO_INBOX_NOTIFICATIONS, "github.com")
+      const fresh = session.loadSubjectStates(DEMO_INBOX_NOTIFICATIONS, "github.com")
+      expect(pending[0]?.signal?.aborted).toBe(true)
+      pending[1]?.finish(new Map([["demo-101", "closed"]]))
+      expect(await fresh).toEqual(new Map([["demo-101", "closed"]]))
+      pending[0]?.finish(new Map([["demo-101", "open"]]))
+      expect(await old).toBeNull()
+    } finally {
+      session.dispose()
+      reader.mockRestore()
+    }
+  })
+
+  test("resolves PR and Issue colors from exact subject reads without following untrusted URLs", async () => {
+    const options = { executable: fakeGh, env: { FAKE_GH_LOG: callLog } }
+    const page = await loadNotificationsPage({ host: "github.com", page: 1, perPage: 2, options })
+    const pr = page.items[0]
+    const issue = page.items[1]
+    if (!pr || !issue) throw new Error("Missing notification fixtures")
+    const items = [
+      pr,
+      { ...pr, id: "draft", subjectApiUrl: "https://api.github.com/repos/team/api/pulls/8" },
+      { ...pr, id: "closed", subjectApiUrl: "https://api.github.com/repos/team/api/pulls/10" },
+      issue,
+      { ...pr, id: "other-host", subjectApiUrl: "https://example.test/repos/team/api/pulls/7" },
+      { ...pr, id: "other-repo", subjectApiUrl: "https://api.github.com/repos/other/api/pulls/7" },
+    ]
+    const cache = new Map()
+    const states = await loadInboxSubjectStates(items, "github.com", options, cache)
+    expect([...states]).toEqual([
+      [pr.id, "merged"],
+      ["draft", "draft"],
+      ["closed", "closed"],
+      [issue.id, "closed"],
+    ])
+    const beforeCache = readFileSync(callLog, "utf8").split("\n").length
+    await loadInboxSubjectStates(items, "github.com", options, cache)
+    expect(readFileSync(callLog, "utf8").split("\n").length).toBe(beforeCache)
+    const calls = readFileSync(callLog, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+    expect(calls).toContainEqual([
+      "api",
+      "--hostname",
+      "github.com",
+      "--method",
+      "GET",
+      "-H",
+      "Accept: application/vnd.github+json",
+      "repos/team/api/pulls/7",
+    ])
+    expect(
+      calls.some(
+        (args) => args.includes("example.test") || args.includes("repos/other/api/pulls/7"),
+      ),
+    ).toBe(false)
+  })
+
   test("loads a bounded page, sanitizes display text and uses explicit mutation targets", async () => {
     const options = { executable: fakeGh, env: { FAKE_GH_LOG: callLog } }
     const page = await loadNotificationsPage({ host: "github.com", page: 1, perPage: 2, options })

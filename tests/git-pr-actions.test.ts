@@ -81,6 +81,9 @@ if (process.env.FAKE_COORDINATOR === "1") {
     console.error("unexpected coordinator command")
     process.exit(2)
   }
+} else if (process.env.FAKE_NETWORK === "1") {
+  console.error('Post "https://api.github.com/graphql": read tcp: connection reset by peer')
+  process.exit(1)
 } else if (process.env.FAKE_TIMEOUT === "1") await Bun.sleep(500)
 else console.log("accepted")
 `,
@@ -367,6 +370,16 @@ describe("pull request mutation transport", () => {
       env: { FAKE_LOG: logPath, FAKE_TIMEOUT: "1" },
     })
     expect(result).toEqual({ status: "uncertain", reason: "timeout" })
+    expect(commands()).toHaveLength(1)
+  })
+
+  test("keeps a dispatched PR write uncertain after a connection failure", async () => {
+    writeFileSync(logPath, "")
+    const result = await executePullRequestMutation(prepared("comment", { body: "once" }), {
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_NETWORK: "1" },
+    })
+    expect(result).toEqual({ status: "uncertain", reason: "network" })
     expect(commands()).toHaveLength(1)
   })
 

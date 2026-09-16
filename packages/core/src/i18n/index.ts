@@ -6,6 +6,7 @@ import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
+import { GIT_CREATE_MESSAGES } from "./git-create-catalog"
 import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
 import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
@@ -4976,6 +4977,7 @@ const MESSAGES: readonly Message[] = [
   ...APPEARANCE_MESSAGES,
   // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
+  ...GIT_CREATE_MESSAGES,
   ...GIT_ISSUE_MESSAGES,
   ...GIT_INBOX_MESSAGES,
   ...GIT_CONFIGURATION_MESSAGES,

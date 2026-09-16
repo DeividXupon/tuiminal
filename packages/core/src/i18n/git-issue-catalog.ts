@@ -293,5 +293,21 @@ export const GIT_ISSUE_MESSAGES = [
     "远程结果不确定。重试前请检查 Issue。",
     "원격 결과가 불확실합니다. 다시 시도하기 전에 Issue를 확인하세요.",
   ],
+  [
+    "Não foi possível verificar a issue no GitHub. A ação não foi enviada.",
+    "Could not verify the issue on GitHub. The action was not sent.",
+    "No se pudo verificar la issue en GitHub. La acción no se envió.",
+    "GitHub で Issue を確認できませんでした。操作は送信されていません。",
+    "无法在 GitHub 上验证 Issue。操作未发送。",
+    "GitHub에서 Issue를 확인할 수 없습니다. 작업이 전송되지 않았습니다.",
+  ],
+  [
+    "Não foi possível atualizar dados do GitHub. Verifique a conexão e atualize novamente.",
+    "Could not refresh GitHub data. Check the connection and refresh again.",
+    "No se pudieron actualizar los datos de GitHub. Comprueba la conexión y actualiza de nuevo.",
+    "GitHub のデータを更新できませんでした。接続を確認して再度更新してください。",
+    "无法更新 GitHub 数据。请检查连接后重试刷新。",
+    "GitHub 데이터를 새로 고칠 수 없습니다. 연결을 확인한 뒤 다시 새로 고치세요.",
+  ],
   ...GIT_ISSUE_CONFIG_MESSAGES,
 ] as const

@@ -71,6 +71,14 @@ if (args[0] === "--version") {
   if (args[0] === "api" && args.at(-1) === "user") {
     console.log(JSON.stringify({ login: "deivid", node_id: "viewer-node" }))
   } else if (args[0] === "api" && args[1] === "graphql") {
+    if (process.env.FAKE_NETWORK_PREFLIGHT === "1" && !existsSync(process.env.FAKE_STATE)) {
+      console.error('Post "https://api.github.com/graphql": read tcp: connection reset by peer')
+      process.exit(1)
+    }
+    if (process.env.FAKE_NETWORK_RECONCILE === "1" && existsSync(process.env.FAKE_STATE)) {
+      console.error('Post "https://api.github.com/graphql": read tcp: connection reset by peer')
+      process.exit(1)
+    }
     const request = JSON.parse(stdin)
     if (request.query.includes("TuiminalReactionTarget")) {
       const reacted = existsSync(process.env.FAKE_STATE)
@@ -86,12 +94,13 @@ if (args[0] === "--version") {
       process.exit(0)
     }
     const commented = existsSync(process.env.FAKE_STATE)
+    const closed = process.env.FAKE_CLOSE_STATE === "1" && commented
     const nodes = commented ? [{ id: "new-comment", body: "integrated", createdAt: "2026-09-07T12:00:00Z", updatedAt: "2026-09-07T12:00:00Z", url: "${item.identity.url}#issuecomment-new", author: { login: "deivid" }, reactionGroups: [] }] : []
     console.log(JSON.stringify({ data: { repository: {
       viewerPermission: "WRITE",
       issue: {
         id: "${item.identity.nodeId}", number: ${item.identity.number}, url: "${item.identity.url}",
-        title: ${JSON.stringify(item.title)}, body: "fixture", state: "OPEN",
+        title: ${JSON.stringify(item.title)}, body: "fixture", state: closed ? "CLOSED" : "OPEN",
         createdAt: "${item.createdAt}", updatedAt: "${item.updatedAt}", closedAt: null,
         viewerCanClose: true, viewerCanReopen: false, viewerCanUpdate: true,
         author: { login: "deivid" }, assignees: { nodes: [{ login: "ana" }] },
@@ -101,6 +110,13 @@ if (args[0] === "--version") {
     } } }))
   } else if (args[0] === "issue" && args[1] === "comment") {
     if (process.env.FAKE_NO_RECONCILE !== "1") writeFileSync(process.env.FAKE_STATE, "commented")
+    console.log("accepted")
+  } else if (args[0] === "issue" && args[1] === "close") {
+    writeFileSync(process.env.FAKE_STATE, "closed")
+    if (process.env.FAKE_NETWORK_MUTATION === "1") {
+      console.error('Post "https://api.github.com/graphql": read tcp: connection reset by peer')
+      process.exit(1)
+    }
     console.log("accepted")
   } else {
     console.error("unexpected coordinator command")
@@ -424,6 +440,125 @@ describe("Issue mutation transport", () => {
     })
     expect(
       commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue comment"),
+    ).toHaveLength(1)
+  })
+
+  test("does not send close when the GraphQL preflight loses its connection", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "issue-network-preflight-state")
+    rmSync(statePath, { force: true })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_NETWORK_PREFLIGHT: "1",
+      },
+    }).execute(
+      prepareIssueAction({
+        actionId: "network-preflight-close",
+        kind: "close",
+        target: item.identity,
+        expectedUpdatedAt: item.updatedAt,
+        expectedState: item.state,
+        auth,
+        payload: {},
+      }),
+    )
+    expect(result).toMatchObject({
+      status: "rejected",
+      reason: expect.stringContaining("não foi enviada"),
+    })
+    expect(commands().filter((command) => command.args[0] === "issue")).toHaveLength(0)
+  })
+
+  test("keeps a close uncertain after a network failure in the dispatched gh command", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "issue-network-mutation-state")
+    rmSync(statePath, { force: true })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_NETWORK_MUTATION: "1",
+      },
+    }).execute(
+      prepareIssueAction({
+        actionId: "network-mutation-close",
+        kind: "close",
+        target: item.identity,
+        expectedUpdatedAt: item.updatedAt,
+        expectedState: item.state,
+        auth,
+        payload: {},
+      }),
+    )
+    expect(result).toMatchObject({ status: "uncertain", reason: "network" })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue close"),
+    ).toHaveLength(1)
+  })
+
+  test("confirms a close by read only when the network returns after the write error", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "issue-network-recovered-state")
+    rmSync(statePath, { force: true })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_CLOSE_STATE: "1",
+        FAKE_NETWORK_MUTATION: "1",
+      },
+    }).execute(
+      prepareIssueAction({
+        actionId: "network-recovered-close",
+        kind: "close",
+        target: item.identity,
+        expectedUpdatedAt: item.updatedAt,
+        expectedState: item.state,
+        auth,
+        payload: {},
+      }),
+    )
+    expect(result).toMatchObject({ status: "confirmed", message: "close-reconciled" })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue close"),
+    ).toHaveLength(1)
+  })
+
+  test("keeps a close uncertain when reconciliation cannot reach GraphQL", async () => {
+    writeFileSync(logPath, "")
+    const statePath = join(directory, "issue-network-reconcile-state")
+    rmSync(statePath, { force: true })
+    const result = await new IssueActionCoordinator({
+      executable,
+      env: {
+        FAKE_LOG: logPath,
+        FAKE_COORDINATOR: "1",
+        FAKE_STATE: statePath,
+        FAKE_CLOSE_STATE: "1",
+        FAKE_NETWORK_RECONCILE: "1",
+      },
+    }).execute(
+      prepareIssueAction({
+        actionId: "network-reconcile-close",
+        kind: "close",
+        target: item.identity,
+        expectedUpdatedAt: item.updatedAt,
+        expectedState: item.state,
+        auth,
+        payload: {},
+      }),
+    )
+    expect(result).toMatchObject({ status: "uncertain", reason: "accepted-reconciliation-failed" })
+    expect(
+      commands().filter((command) => command.args.slice(0, 2).join(" ") === "issue close"),
     ).toHaveLength(1)
   })
 })

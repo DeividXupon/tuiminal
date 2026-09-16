@@ -223,8 +223,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[2] PR`
 
+- `[Ctrl+N]` abre o formulário de criação com repositório, branches remotas base/head, título, descrição em Markdown e opção draft. O Tuiminal verifica as duas branches remotas antes de um único envio à API do GitHub; ele não faz push da branch local.
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
+- O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
 - Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
@@ -234,8 +236,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` abre o formulário de criação com repositório, título e descrição em Markdown. Os dois formulários preservam o rascunho em memória até o envio e exigem `[Ctrl+S]` para criar.
 - Começa com **My Issues**, **All**, **Open** e **Closed**; os três últimos mostram todas as issues não arquivadas, somente as abertas ou somente as fechadas dentro do escopo atual.
 - Combina uma lista densa de duas linhas com visão geral e atividade da issue.
+- O símbolo do estado fica verde para aberta e vermelho para fechada.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` reage com 👍 ❤️ 🎉 😄 ou 👀 e `[Enter]` responde; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage à própria issue.
 - Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
 - A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
@@ -243,10 +247,13 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 ### `[4] Inbox`
 
 - Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
+- As bolinhas preenchida e vazia continuam indicando não lida e lida. Em PRs e issues, elas também recebem a cor do estado, mostrado em texto; outros assuntos ou estados indisponíveis ficam neutros.
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
 PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
+
+Com a aba PR ou Issues ativa, a lista visível e os detalhes selecionados são atualizados aproximadamente a cada 30 segundos. Assim, issues e comentários criados no GitHub aparecem sem reabrir a aba. `[R]` consulta ambos imediatamente. O intervalo configurado mais longo continua atualizando todas as seções até a profundidade de páginas já carregada.
 
 As chamadas automáticas ao `gh` têm limite de tempo e aguardam o encerramento do
 processo ao cancelar. Se uma escrita em PR/Issue ficar sem confirmação — por
@@ -290,6 +297,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
+| Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
 | Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
 | Descartar arquivo/pasta com confirmação | `[D]` |

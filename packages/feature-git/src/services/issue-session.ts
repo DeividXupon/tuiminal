@@ -9,6 +9,7 @@ import { searchIssuesPage } from "./github/issue-search"
 import type { GhTransportOptions } from "./github/transport"
 import { cachedSectionPageDepth } from "./page-depth"
 import { resolveGitProjectContext } from "./git"
+import { mapWithConcurrency } from "./map-concurrently"
 
 const issueResourceDisposers = new Set<() => void | Promise<void>>()
 const ISSUE_SECTION_CACHE_LIMIT = 64
@@ -50,25 +51,6 @@ type IssueCacheEntry = Extract<IssueSessionResult, { status: "ready" }> & {
   sources: IssueSourceCursor[]
   dataErrors: boolean
   pageDepth: number
-}
-
-async function mapWithConcurrency<T, R>(
-  values: readonly T[],
-  concurrency: number,
-  operation: (value: T) => Promise<R>,
-) {
-  const results = new Array<R>(values.length)
-  let cursor = 0
-  async function worker() {
-    while (cursor < values.length) {
-      const index = cursor
-      cursor += 1
-      const value = values[index]
-      if (value !== undefined) results[index] = await operation(value)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()))
-  return results
 }
 
 function aggregatePages(pages: Awaited<ReturnType<typeof searchIssuesPage>>[]) {
@@ -306,6 +288,7 @@ export class IssueSession {
     sectionIds: readonly string[],
     activeSectionId: string | undefined,
     queryOverride: string | null,
+    refreshAccountScope = true,
   ): Promise<IssueSessionResult> {
     let activeResult: IssueSessionResult | null = null
     const sectionDepths = new Map(
@@ -318,7 +301,13 @@ export class IssueSession {
       ? cachedSectionPageDepth(this.cache.values(), root, activeSectionId, queryOverride)
       : 1
     for (const [index, sectionId] of sectionIds.entries()) {
-      let result = await this.loadSection(root, sectionId, null, true, index === 0)
+      let result = await this.loadSection(
+        root,
+        sectionId,
+        null,
+        true,
+        refreshAccountScope && index === 0,
+      )
       for (
         let page = 1;
         page < (sectionDepths.get(sectionId) ?? 1) &&
@@ -342,7 +331,14 @@ export class IssueSession {
       return result
     }
     return (
-      activeResult ?? this.loadSection(root, activeSectionId, null, true, sectionIds.length === 0)
+      activeResult ??
+      this.loadSection(
+        root,
+        activeSectionId,
+        null,
+        true,
+        refreshAccountScope && sectionIds.length === 0,
+      )
     )
   }
 

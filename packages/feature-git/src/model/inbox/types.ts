@@ -7,6 +7,8 @@ export type InboxSubjectType =
   | "RepositoryVulnerabilityAlert"
   | string
 
+export type InboxSubjectState = "open" | "draft" | "merged" | "closed"
+
 export type InboxNotification = {
   id: string
   unread: boolean
@@ -15,6 +17,7 @@ export type InboxNotification = {
   lastReadAt: string | null
   title: string
   subjectType: InboxSubjectType
+  subjectState: InboxSubjectState | null
   repository: string
   repositoryUrl: string
   subjectApiUrl: string | null

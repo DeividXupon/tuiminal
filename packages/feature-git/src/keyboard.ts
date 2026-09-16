@@ -8,6 +8,7 @@ export const gitKeyboardScope = {
     "git-issue-action-menu",
     "git-issue-action-modal",
     "git-issue-action-input",
+    "git-create-modal",
     "git-inbox-action-modal",
     "git-discard-changes-modal",
     "git-command-input",
@@ -19,6 +20,11 @@ export const gitKeyboardScope = {
     "git-compare-branch-list",
     "git-compare-branch-search",
   ],
-  prefixes: ["git-pr-section-editor-", "git-issue-section-editor-", "git-gh-guidance-"],
+  prefixes: [
+    "git-pr-section-editor-",
+    "git-issue-section-editor-",
+    "git-gh-guidance-",
+    "git-create-field-",
+  ],
   deferEscape: true,
 } as const satisfies KeyboardScope

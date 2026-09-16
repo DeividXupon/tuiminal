@@ -233,8 +233,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[2] PR`
 
+- `[Ctrl+N]` opens a creation form with an explicit repository, remote base/head branches, title, Markdown description, and draft option. Tuiminal checks both remote branches before one GitHub API submission; it does not push a local branch.
 - Starts with **My PRs**, **Review requested**, **All**, **Open**, and **Closed**. The last three select non-archived PRs by state within the current scope.
 - Lists state, repository, review, CI, author, assignees, comments, labels, and diff size.
+- State marks are green for open, purple for merged, gray for draft, and red for closed.
 - Preview tabs show overview, checks, activity, commits, and files.
 - Stopping CI watch or closing its screen cancels the active request; old responses neither notify nor interrupt a new watch.
 - In Activity, `[J/K]` selects comments, `[E]` opens five quick reactions (👍 ❤️ 🎉 😄 👀), and `[Enter]` replies with a reference to the original comment. Replies group under their parent; a comment with reactions offers a new reaction. `[Shift+E]` reacts to the PR itself.
@@ -244,8 +246,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` opens a creation form for repository, title, and Markdown description. Both creation forms keep the draft in memory until submission and require `[Ctrl+S]` to create.
 - Starts with **My Issues**, **All**, **Open**, and **Closed**, selecting non-archived issues by state within the current scope.
 - Combines a dense two-line list with overview and activity previews.
+- Its state mark is green for open and red for closed.
 - In Activity, `[J/K]` selects comments, `[E]` reacts with 👍 ❤️ 🎉 😄 or 👀, and `[Enter]` replies. Replies group under the parent; existing reactions do not hide the new-reaction control. `[Shift+E]` reacts to the issue itself.
 - Supports comments, assignment/unassignment, label edits, branch creation with checkout, closing, and reopening.
 - Searches remain scoped to non-archived issues and never accidentally become GitHub-wide searches.
@@ -253,10 +257,13 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 ### `[4] Inbox`
 
 - Combines Inbox, review requests, assignments, mentions, and locally saved items.
+- Filled and hollow marks still distinguish unread and read. PR and Issue marks also take the subject's state color, with a text label; other subjects or unavailable states stay neutral.
 - Marking read is explicit; completing and unsubscribing require confirmation.
 - Automatic refresh preserves visible data when the network fails.
 
 PR and Issues use the `origin` repository when recognized. Outside a repository, the default is the authenticated account, explicitly including organizations and external repositories rather than searching all of GitHub. Remote views require [GitHub CLI](https://cli.github.com/) 2.40.0 or later.
+
+While a PR or Issues tab is active, its visible list and selected details refresh about every 30 seconds, so issues and comments added in GitHub appear without reopening the tab. `[R]` checks both immediately. The configured longer interval still refreshes every section to its loaded page depth.
 
 When `gh` is missing or outdated, PR, Issues, and Inbox explain it, display the detected official command, provide `[C]` to copy, and offer a mini terminal focused with `[Enter]` or mouse. Tuiminal starts only the shell: you paste and execute the command, and version detection updates automatically. `[Enter]` reopens an exited shell. Missing authentication uses the same guidance for `gh auth login --hostname <host> --web`; `gh`/GitHub own login and tokens, and the view reloads when the account is detected.
 
@@ -285,6 +292,7 @@ Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phr
 | Change internal preview tab | `[Z←]` / `[V→]` |
 | Open remote diff | `[D]` |
 | Open remote actions | `[?]` |
+| Create a PR or issue in its tab | `[Ctrl+N]`, then `[Ctrl+S]` |
 | Stage file/folder or all files | `[Space]` / `[A]` |
 | Stage hunks or lines in the focused diff | `[S]`, then `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]`, and `[Enter]` |
 | Discard file/folder with confirmation | `[D]` |
