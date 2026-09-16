@@ -236,7 +236,7 @@ export function HttpWorkspaceBody({
             <HttpRequestPane
               document={document}
               visible={requestVisible}
-              focused={active && state.activePane === "request"}
+              focused={active && state.overlay === null && state.activePane === "request"}
               position={maximizedPane === "request" ? maximizedPosition : layout.request}
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
@@ -273,7 +273,7 @@ export function HttpWorkspaceBody({
             <HttpResponsePane
               document={document}
               visible={responseVisible}
-              focused={active && state.activePane === "response"}
+              focused={active && state.overlay === null && state.activePane === "response"}
               position={maximizedPane === "response" ? maximizedPosition : layout.response}
               registerScroll={(scroll) => registerScroll(document.request.id, scroll)}
               registerSearchInput={(input) => registerResponseSearch(document.request.id, input)}
@@ -296,7 +296,7 @@ export function HttpWorkspaceBody({
       <HttpNavigationPane
         state={state}
         visible={navigationVisible}
-        focused={state.activePane === "navigation"}
+        focused={state.overlay === null && state.activePane === "navigation"}
         overlay={!layout.navigationFixed}
         position={layout.navigation}
         onViewChange={onNavigationView}

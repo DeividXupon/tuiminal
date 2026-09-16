@@ -1,5 +1,6 @@
 import { serializeHttpRequestBody } from "./http-file-body"
 import type { HttpKeyValue, HttpRequestDefinition } from "./types"
+import { urlQueryEntryPrefix } from "./url-query"
 
 function safeRequestName(name: string) {
   return name.replace(/[\r\n]+/g, " ").trim() || "Request"
@@ -11,6 +12,7 @@ function stableRequestName(name: string) {
 
 function serializedUrl(request: HttpRequestDefinition) {
   const query = request.query
+    .filter((entry) => !entry.id.startsWith(urlQueryEntryPrefix(request.id)))
     .filter((entry) => entry.enabled && entry.name.trim())
     .map((entry) => {
       const value = /\{\{[^{}]+\}\}/.test(entry.value)

@@ -77,10 +77,8 @@ export function resolveSpecialHttpOverlayCommand(
   if (overlay === "collection-runner") return collectionRunnerCommand(key, focusedId)
   if (overlay === "external-conflict") return externalConflictCommand(key)
   if (overlay === "environment-manager") {
-    return inputOwningOverlayCommand(key, focusedId, "http-environment-create-")
-  }
-  if (overlay === "workspace-settings") {
-    return inputOwningOverlayCommand(key, focusedId, "http-key-value-")
+    // The modal owns its list, chooser and table modes, including layered Escape.
+    return { kind: "ignore" }
   }
   return null
 }

@@ -22,7 +22,6 @@ export type HttpWorkspaceOverlay =
   | "discard-document"
   | "external-conflict"
   | "environment-manager"
-  | "workspace-settings"
   | "insecure-tls-confirmation"
   | null
 export type HttpJumpTarget = "url" | "response" | "collection" | "history"

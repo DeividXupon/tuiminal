@@ -27,7 +27,6 @@ export type CreatePrivateHttpEnvironmentInput = {
   variableName: string
   value: string
   addToGitignore: boolean
-  storeInKeychain: boolean
 }
 
 export type CreatePrivateHttpEnvironmentResult = {
@@ -79,29 +78,37 @@ async function readEnvironmentFile(path: string): Promise<EnvironmentFile> {
   }
 }
 
-async function readPrivateEnvironmentSource(directory: string) {
-  const path = resolve(directory, PRIVATE_HTTP_ENVIRONMENT_FILE)
+export async function readHttpEnvironmentSource(
+  directory: string,
+  fileName = PRIVATE_HTTP_ENVIRONMENT_FILE,
+) {
+  const path = resolve(directory, fileName)
   await assertRegularOrMissing(path)
   try {
     const source = await readFile(path, "utf8")
     if (Buffer.byteLength(source) > PRIVATE_ENVIRONMENT_LIMIT) {
-      throw new HttpEnvironmentConflictError("O arquivo de ambiente privado ultrapassa 1 MB.")
+      throw new HttpEnvironmentConflictError("O arquivo de ambiente ultrapassa 1 MB.")
     }
     const parsed = JSON.parse(source) as unknown
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new HttpEnvironmentConflictError("O arquivo de ambiente privado contém JSON inválido.")
+      throw new HttpEnvironmentConflictError("O arquivo de ambiente contém JSON inválido.")
     }
     return { path, source, file: parsed as EnvironmentFile }
   } catch (error) {
     if (missing(error)) return { path, source: null, file: {} as EnvironmentFile }
     if (error instanceof SyntaxError) {
-      throw new HttpEnvironmentConflictError("O arquivo de ambiente privado contém JSON inválido.")
+      throw new HttpEnvironmentConflictError("O arquivo de ambiente contém JSON inválido.")
     }
     throw error
   }
 }
 
-async function writeAtomic(path: string, content: string, mode: number, expected: string | null) {
+export async function writeAtomic(
+  path: string,
+  content: string,
+  mode: number,
+  expected: string | null,
+) {
   const temporary = `${path}.tuiminal-${process.pid}-${Date.now()}.tmp`
   const handle = await open(temporary, "wx", mode)
   try {
@@ -125,7 +132,7 @@ async function writeAtomic(path: string, content: string, mode: number, expected
   }
 }
 
-function validatesEnvironmentName(value: string) {
+export function validatesEnvironmentName(value: string) {
   return (
     value.length <= 80 &&
     [...value].every((character) => {
@@ -135,7 +142,7 @@ function validatesEnvironmentName(value: string) {
   )
 }
 
-function validatesVariableName(value: string) {
+export function validatesVariableName(value: string) {
   return /^[A-Za-z_$][\w$.-]*$/u.test(value) && value.length <= 120
 }
 
@@ -213,7 +220,7 @@ export async function createPrivateHttpEnvironment(
     throw new HttpEnvironmentConflictError("Informe um nome de variável válido.")
   }
   if (!input.value) throw new HttpEnvironmentConflictError("Informe o valor privado.")
-  if (input.storeInKeychain && !credentialStore) {
+  if (!credentialStore) {
     throw new HttpEnvironmentConflictError("O gerenciador de credenciais não está disponível.")
   }
   const projectRoot = await realpath(root)
@@ -230,7 +237,7 @@ export async function createPrivateHttpEnvironment(
   const privatePath = portablePath(
     relative(projectRoot, resolve(scope, PRIVATE_HTTP_ENVIRONMENT_FILE)),
   )
-  const current = await readPrivateEnvironmentSource(scope)
+  const current = await readHttpEnvironmentSource(scope)
   const values = current.file[environmentName]
   if (values && Object.hasOwn(values, variableName)) {
     throw new HttpEnvironmentConflictError(
@@ -238,7 +245,7 @@ export async function createPrivateHttpEnvironment(
     )
   }
   const reference = `$tuiminal.keychain.${crypto.randomUUID()}`
-  const storedValue = input.storeInKeychain ? `{{${reference}}}` : input.value
+  const storedValue = `{{${reference}}}`
   const next = {
     ...current.file,
     [environmentName]: { ...values, [variableName]: storedValue },
@@ -246,21 +253,17 @@ export async function createPrivateHttpEnvironment(
   const gitignoreUpdated = input.addToGitignore
     ? await addPrivateEnvironmentToGitignore(projectRoot, privatePath)
     : false
-  if (input.storeInKeychain) {
-    await credentialStore?.set({
-      service: HTTP_SECRET_SERVICE,
-      name: reference,
-      value: input.value,
-    })
-  }
+  await credentialStore.set({
+    service: HTTP_SECRET_SERVICE,
+    name: reference,
+    value: input.value,
+  })
   try {
     await writeAtomic(current.path, `${JSON.stringify(next, null, 2)}\n`, 0o600, current.source)
   } catch (error) {
-    if (input.storeInKeychain) {
-      await credentialStore
-        ?.delete({ service: HTTP_SECRET_SERVICE, name: reference })
-        .catch(() => false)
-    }
+    await credentialStore
+      .delete({ service: HTTP_SECRET_SERVICE, name: reference })
+      .catch(() => false)
     throw error
   }
   return {
@@ -268,7 +271,7 @@ export async function createPrivateHttpEnvironment(
     variableName,
     gitignoreUpdated,
     gitignoreProtected: await gitIgnoresPrivateEnvironment(projectRoot, privatePath),
-    keychainStored: input.storeInKeychain,
+    keychainStored: true,
   }
 }
 
@@ -280,7 +283,7 @@ function stringValues(source: Record<string, unknown> | undefined) {
   )
 }
 
-function runtimeCredentialStore(): HttpCredentialStore | undefined {
+export function runtimeCredentialStore(): HttpCredentialStore | undefined {
   return (
     globalThis as typeof globalThis & {
       Bun?: { secrets?: HttpCredentialStore }

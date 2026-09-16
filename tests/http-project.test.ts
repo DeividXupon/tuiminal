@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
@@ -51,10 +51,35 @@ import {
   loadHttpEnvironmentCatalog,
   loadHttpEnvironments,
 } from "../packages/feature-http/src/storage/environments"
+import {
+  createGlobalHttpEnvironment,
+  replaceGlobalHttpEnvironment,
+  deleteGlobalHttpEnvironment,
+  saveGlobalHttpVariables,
+} from "../packages/feature-http/src/storage/global-environments"
 import { saveCapturedHttpResponse } from "../packages/feature-http/src/storage/responses"
+import { httpWorkspaceDirectory } from "../packages/feature-http/src/services/context"
 
 const temporaryDirectories: string[] = []
 const httpFixtureRoot = resolve(import.meta.dir, "fixtures/http")
+const originalSecrets = Bun.secrets
+let savedSecrets = new Map<string, string>()
+const testCredentials: HttpCredentialStore = {
+  async get({ name }) {
+    return savedSecrets.get(name) ?? null
+  },
+  async set({ name, value }) {
+    savedSecrets.set(name, value)
+  },
+  async delete({ name }) {
+    return savedSecrets.delete(name)
+  },
+}
+
+beforeEach(() => {
+  savedSecrets = new Map()
+  Object.assign(Bun, { secrets: testCredentials })
+})
 
 function readHttpFixture(name: string) {
   return readFile(resolve(httpFixtureRoot, name), "utf8")
@@ -67,6 +92,7 @@ async function temporaryProject() {
 }
 
 afterEach(async () => {
+  Object.assign(Bun, { secrets: originalSecrets })
   await Promise.all(
     temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),
   )
@@ -641,7 +667,6 @@ describe("HTTP variables and environments", () => {
       variableName: "apiToken",
       value: "fixture-token",
       addToGitignore: true,
-      storeInKeychain: false,
     })
     expect(result).toMatchObject({
       environmentName: "local",
@@ -665,11 +690,173 @@ describe("HTTP variables and environments", () => {
         variableName: "apiToken",
         value: "replacement",
         addToGitignore: true,
-        storeInKeychain: false,
       }),
     ).rejects.toBeInstanceOf(HttpEnvironmentConflictError)
-    expect(await readFile(privatePath, "utf8")).toContain("fixture-token")
+    expect(await readFile(privatePath, "utf8")).not.toContain("fixture-token")
+    expect(await readFile(privatePath, "utf8")).toContain("{{$tuiminal.keychain.")
     expect(await readFile(privatePath, "utf8")).not.toContain("replacement")
+  })
+
+  test("creates global environments with multiple variables only in the protected private file", async () => {
+    const root = await temporaryProject()
+    await createGlobalHttpEnvironment(root, {
+      environmentName: "shared",
+      variables: [
+        { name: "host", value: "https://example.test" },
+        { name: "tenant", value: "demo" },
+      ],
+    })
+    const path = resolve(root, "http-client.private.env.json")
+    const saved = JSON.parse(await readFile(path, "utf8")) as {
+      shared: { host: string; tenant: string }
+    }
+    expect(saved.shared.host.startsWith("{{$tuiminal.keychain.")).toBe(true)
+    expect(saved.shared.tenant.startsWith("{{$tuiminal.keychain.")).toBe(true)
+    expect(savedSecrets.size).toBe(2)
+    expect((await loadHttpEnvironments(root))[0]?.values).toEqual({
+      host: "https://example.test",
+      tenant: "demo",
+    })
+    expect((await stat(path)).mode & 0o777).toBe(0o600)
+    await expect(readFile(resolve(root, "http-client.env.json"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    })
+    await expect(
+      createGlobalHttpEnvironment(root, {
+        environmentName: "shared",
+        variables: [{ name: "changed", value: "no" }],
+      }),
+    ).rejects.toThrow("já existe")
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual(saved)
+  })
+
+  test("keeps the interactive HTTP home independent of the opened project", () => {
+    const dataHome = resolve(import.meta.dir, "fixtures", "http-data-home")
+    expect(httpWorkspaceDirectory({ XDG_DATA_HOME: dataHome, TUIMINAL_WORKDIR: "/one" })).toBe(
+      resolve(dataHome, "tuiminal/http"),
+    )
+    expect(httpWorkspaceDirectory({ XDG_DATA_HOME: dataHome, TUIMINAL_WORKDIR: "/two" })).toBe(
+      resolve(dataHome, "tuiminal/http"),
+    )
+  })
+
+  test("always keeps global private values in the credential store", async () => {
+    const root = await temporaryProject()
+    const saved = new Map<string, string>()
+    const credentials: HttpCredentialStore = {
+      async get({ name }) {
+        return saved.get(name) ?? null
+      },
+      async set({ name, value }) {
+        saved.set(name, value)
+      },
+      async delete({ name }) {
+        return saved.delete(name)
+      },
+    }
+    await createGlobalHttpEnvironment(
+      root,
+      {
+        environmentName: "production",
+        variables: [
+          { name: "token", value: "fixture-token" },
+          { name: "tenant", value: "fixture-tenant" },
+        ],
+      },
+      credentials,
+    )
+    const path = resolve(root, "http-client.private.env.json")
+    const source = await readFile(path, "utf8")
+    expect(source).not.toContain("fixture-token")
+    expect(source).not.toContain("fixture-tenant")
+    expect(saved.size).toBe(2)
+    await expect(
+      replaceGlobalHttpEnvironment(
+        root,
+        "production",
+        {
+          environmentName: "production",
+          variables: [
+            {
+              name: "token",
+              value: (JSON.parse(source) as { production: { token: string } }).production.token,
+            },
+          ],
+        },
+        credentials,
+      ),
+    ).rejects.toThrow("gerenciador de credenciais")
+    expect(await readFile(path, "utf8")).toBe(source)
+    expect((await loadHttpEnvironments(root, credentials))[0]?.values).toEqual({
+      token: "fixture-token",
+      tenant: "fixture-tenant",
+    })
+  })
+
+  test("refuses to save plaintext when the system credential store is unavailable", async () => {
+    const root = await temporaryProject()
+    Object.assign(Bun, { secrets: undefined })
+    try {
+      await expect(
+        createGlobalHttpEnvironment(root, {
+          environmentName: "dev",
+          variables: [{ name: "token", value: "fixture-token" }],
+        }),
+      ).rejects.toThrow("gerenciador de credenciais")
+      expect(await Bun.file(resolve(root, "http-client.private.env.json")).exists()).toBe(false)
+    } finally {
+      Object.assign(Bun, { secrets: testCredentials })
+    }
+  })
+
+  test("keeps Globals active and supports environment rename, edit, and deletion", async () => {
+    const root = await temporaryProject()
+    await writeFile(
+      resolve(root, "http-client.env.json"),
+      JSON.stringify({ dev: { manga: "public" } }),
+    )
+    await saveGlobalHttpVariables(root, [{ name: "manga", value: "global-secret" }])
+    let loaded = await loadHttpEnvironments(root)
+    const globals = loaded.find((environment) => environment.name === "Globals")
+    expect(globals?.privateNames.has("manga")).toBe(true)
+    expect(environmentVariableContext(undefined, {}, {}, globals).get("manga")).toMatchObject({
+      value: "global-secret",
+      secret: true,
+    })
+    expect(
+      environmentVariableContext(
+        loaded.find((environment) => environment.name === "dev"),
+        {},
+        {},
+        globals,
+      ).get("manga")?.value,
+    ).toBe("public")
+    await replaceGlobalHttpEnvironment(root, "dev", {
+      environmentName: "local",
+      variables: [{ name: "manga", value: "local-secret" }],
+    })
+    loaded = await loadHttpEnvironments(root)
+    expect(loaded.map((environment) => environment.name)).toEqual(["Globals", "local"])
+    expect(
+      environmentVariableContext(
+        loaded.find((environment) => environment.name === "local"),
+        {},
+        {},
+        globals,
+      ).get("manga")?.value,
+    ).toBe("local-secret")
+    expect(JSON.parse(await readFile(resolve(root, "http-client.env.json"), "utf8"))).toEqual({})
+    await deleteGlobalHttpEnvironment(root, "local")
+    expect((await loadHttpEnvironments(root)).map((environment) => environment.name)).toEqual([
+      "Globals",
+    ])
+    await expect(deleteGlobalHttpEnvironment(root, "Globals")).rejects.toThrow("Globals")
+    await expect(
+      createGlobalHttpEnvironment(root, {
+        environmentName: "Globals",
+        variables: [],
+      }),
+    ).rejects.toThrow("reservado")
   })
 
   test("does not follow a private-environment symlink or add .gitignore without consent", async () => {
@@ -684,7 +871,6 @@ describe("HTTP variables and environments", () => {
         variableName: "token",
         value: "fixture-token",
         addToGitignore: false,
-        storeInKeychain: false,
       }),
     ).rejects.toBeInstanceOf(HttpEnvironmentConflictError)
     expect(await readFile(outsideFile, "utf8")).toBe('{"untouched":true}\n')
@@ -702,7 +888,6 @@ describe("HTTP variables and environments", () => {
         variableName: "token",
         value: "nested-secret",
         addToGitignore: true,
-        storeInKeychain: false,
       },
       undefined,
       "services/api",
@@ -710,7 +895,8 @@ describe("HTTP variables and environments", () => {
     const nestedPath = resolve(root, "services/api/http-client.private.env.json")
     expect(result).toMatchObject({ gitignoreUpdated: true, gitignoreProtected: true })
     expect((await stat(nestedPath)).mode & 0o777).toBe(0o600)
-    expect(await readFile(nestedPath, "utf8")).toContain("nested-secret")
+    expect(await readFile(nestedPath, "utf8")).not.toContain("nested-secret")
+    expect(await readFile(nestedPath, "utf8")).toContain("{{$tuiminal.keychain.")
     expect(await Bun.file(resolve(root, "http-client.private.env.json")).exists()).toBe(false)
     expect(await readFile(resolve(root, ".gitignore"), "utf8")).toBe(
       "http-client.private.env.json\n",
@@ -724,7 +910,6 @@ describe("HTTP variables and environments", () => {
           variableName: "escaped",
           value: "blocked",
           addToGitignore: false,
-          storeInKeychain: false,
         },
         undefined,
         "../outside",
@@ -740,7 +925,6 @@ describe("HTTP variables and environments", () => {
           variableName: "symlinked",
           value: "blocked",
           addToGitignore: false,
-          storeInKeychain: false,
         },
         undefined,
         "escaped-directory",
@@ -772,7 +956,6 @@ describe("HTTP variables and environments", () => {
         variableName: "apiToken",
         value: "fixture-keychain-secret",
         addToGitignore: false,
-        storeInKeychain: true,
       },
       credentialStore,
     )

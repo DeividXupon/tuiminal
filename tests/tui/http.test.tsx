@@ -1,7 +1,7 @@
 import "./setup"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
-import { RGBA, type BoxRenderable } from "@opentui/core"
+import { RGBA, type BoxRenderable, type InputRenderable } from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
@@ -25,6 +25,24 @@ import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
+const originalSecrets = Bun.secrets
+const storedSecrets = new Map<string, string>()
+const testSecrets = {
+  async get({ name }: { name: string }) {
+    return storedSecrets.get(name) ?? null
+  },
+  async set({ name, value }: { name: string; value: string }) {
+    storedSecrets.set(name, value)
+  },
+  async delete({ name }: { name: string }) {
+    return storedSecrets.delete(name)
+  },
+}
+
+beforeEach(() => {
+  storedSecrets.clear()
+  Object.assign(Bun, { secrets: testSecrets })
+})
 
 async function settle(until: () => boolean) {
   if (!tui) throw new Error("TUI HTTP não montada")
@@ -82,6 +100,7 @@ async function focus(id: string) {
 }
 
 afterEach(() => {
+  Object.assign(Bun, { secrets: originalSecrets })
   act(() => tui?.renderer.destroy())
   tui = undefined
   updateUiSettings(initialSettings)
@@ -335,14 +354,10 @@ describe("HTTP TUI", () => {
     }
   })
 
-  test("creates and selects a masked private environment from the empty state", async () => {
+  test("creates and selects a global private environment with keyboard table editing", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
     const privatePath = resolve(root, "http-client.private.env.json")
-    const gitignorePath = resolve(root, ".gitignore")
-    await Promise.all([
-      unlink(privatePath).catch(() => undefined),
-      unlink(gitignorePath).catch(() => undefined),
-    ])
+    await unlink(privatePath).catch(() => undefined)
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -350,52 +365,163 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
       )
-      await press("http-environment-new-private")
+      await press("http-environment-new")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
+      )
+      expect(tui.renderer.root.findDescendantById("http-environment-private")).toBeUndefined()
+      await key("/")
+      await settle(() => tui?.captureCharFrame().includes("[Enter] Tabela") ?? false)
+      const nameRail = tui.renderer.root.findDescendantById(
+        "http-environment-name-rail",
+      ) as BoxRenderable
+      const tableRail = tui.renderer.root.findDescendantById(
+        "http-environment-table-rail",
+      ) as BoxRenderable
+      const nameInput = tui.renderer.root.findDescendantById(
+        "http-environment-create-name",
+      ) as InputRenderable
+      expect(nameRail.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+      expect(tableRail.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
+      expect(nameRail.height).toBe(1)
+      expect(tableRail.height).toBeGreaterThan(1)
+      expect(nameInput.backgroundColor.equals(RGBA.fromHex(COLORS.canvas))).toBe(true)
+      await key("RETURN")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-name",
       )
-      await press("http-environment-keychain")
-      await settle(() => tui?.captureCharFrame().includes("referência opaca ao keychain") ?? false)
-      await press("http-environment-keychain")
-      await settle(() => tui?.captureCharFrame().includes("arquivo privado protegido") ?? false)
       await act(async () => tui?.mockInput.typeText("local"))
-      await focus("http-environment-create-variable")
+      await key("ESCAPE")
+      await key("/")
+      await key("ARROW_DOWN")
+      expect(nameRail.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
+      expect(tableRail.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+      await key("RETURN")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
+      )
       await act(async () => tui?.mockInput.typeText("apiToken"))
-      await focus("http-environment-create-secret")
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
+      )
       await act(async () => {
         tui?.mockInput.typeText("fixture-secret")
         await tui?.renderOnce()
       })
-      expect(tui.captureCharFrame()).not.toContain("fixture-secret")
+      expect(tui.captureCharFrame()).toContain("fixture-secret")
+      expect(tui.renderer.root.findDescendantById("http-environment-keychain")).toBeUndefined()
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-1",
+      )
+      await act(async () => tui?.mockInput.typeText("tenant"))
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-1",
+      )
+      await act(async () => tui?.mockInput.typeText("fixture-tenant"))
+      await key("ESCAPE")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
+      )
+      await key("ESCAPE")
+      await key("/")
+      await key("RETURN")
+      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-environment-manager-modal")
+      const firstRow = tui.renderer.root.findDescendantById(
+        "http-environment-row-0",
+      ) as BoxRenderable
+      const secondRow = tui.renderer.root.findDescendantById(
+        "http-environment-row-1",
+      ) as BoxRenderable
+      const firstVariable = tui.renderer.root.findDescendantById(
+        "http-environment-create-variable-0",
+      ) as InputRenderable
+      const firstValue = tui.renderer.root.findDescendantById(
+        "http-environment-create-value-0",
+      ) as InputRenderable
+      expect(firstRow.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
+      expect(secondRow.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
+      expect(firstVariable.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+      expect(firstValue.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
+      await key("ARROW_UP")
+      await key("ARROW_RIGHT")
+      expect(firstVariable.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
+      expect(firstValue.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+      await key("RETURN")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
+      )
+      await key("ESCAPE")
+      await key("ESCAPE")
+      expect(tui.renderer.root.findDescendantById("http-environment-create-save")).toBeDefined()
       await press("http-environment-create-save")
       await settle(
         () =>
           !(tui?.captureCharFrame().includes("AMBIENTES HTTP") ?? true) &&
           (tui?.captureCharFrame().includes("[E] local") ?? false),
       )
-      expect(JSON.parse(await readFile(privatePath, "utf8"))).toEqual({
-        local: { apiToken: "fixture-secret" },
-      })
+      const saved = await readFile(privatePath, "utf8")
+      expect(saved).not.toContain("fixture-secret")
+      expect(saved).not.toContain("fixture-tenant")
+      expect(JSON.parse(saved).local.apiToken.startsWith("{{$tuiminal.keychain.")).toBe(true)
+      expect([...storedSecrets.values()]).toEqual(["fixture-secret", "fixture-tenant"])
       expect((await stat(privatePath)).mode & 0o777).toBe(0o600)
-      expect(await readFile(gitignorePath, "utf8")).toContain("http-client.private.env.json")
     } finally {
-      await Promise.all([
-        unlink(privatePath).catch(() => undefined),
-        unlink(gitignorePath).catch(() => undefined),
-      ])
+      await unlink(privatePath).catch(() => undefined)
     }
   })
 
-  test("scopes environments and private creation to the active request directory", async () => {
+  test.each(["framed", "compact"] as const)(
+    "keeps the bordered environment modal as the only focused area in %s layout",
+    async (layout) => {
+      updateUiSettings({ layout, language: "pt-BR" })
+      tui = await testRender(<HttpClient active />, { width: 120, height: 40 })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await press("http-environment-button")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
+      )
+      const modal = tui.renderer.root.findDescendantById(
+        "http-environment-manager-modal",
+      ) as BoxRenderable
+      const urlPane = tui.renderer.root.findDescendantById("http-url-pane") as BoxRenderable
+      expect(modal.border).toBe(true)
+      expect(modal.borderStyle).toBe("rounded")
+      expect(tui.captureCharFrame().split("\n")[modal.screenY]?.[modal.screenX]).toBe("╭")
+      expect(urlPane.border).toBe(false)
+      await click("http-url-input")
+      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-environment-choice-none")
+      await key("n")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
+      )
+      expect(tui.renderer.root.findDescendantById("http-environment-create-name")).toBeDefined()
+      await key("ESCAPE")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
+      )
+      await key("ESCAPE")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      expect(tui.renderer.root.findDescendantById("http-environment-manager-modal")).toBeUndefined()
+      expect(urlPane.border).toEqual(["left"])
+    },
+  )
+
+  test("uses the same global environments while browsing a collection", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
+    const globalPath = resolve(root, "http-client.env.json")
+    const privatePath = resolve(root, "http-client.private.env.json")
     const scopeRoot = resolve(root, "scoped-environment")
     const requestDirectory = resolve(scopeRoot, "api")
     const siblingDirectory = resolve(scopeRoot, "sibling")
     const requestPath = resolve(requestDirectory, "requests.http")
-    const privatePath = resolve(requestDirectory, "http-client.private.env.json")
     await mkdir(requestDirectory, { recursive: true })
     await mkdir(siblingDirectory, { recursive: true })
     await writeFile(requestPath, "### Scoped\n# @name scoped\nGET https://example.test/scoped\n")
+    await writeFile(globalPath, JSON.stringify({ shared: { host: "global" } }))
+    await unlink(privatePath).catch(() => undefined)
     await writeFile(
       resolve(requestDirectory, "http-client.env.json"),
       JSON.stringify({ dev: { host: "local" } }),
@@ -421,50 +547,64 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-environment-button")
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-choice-dev")),
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-choice-shared")),
       )
       const listFrame = tui.captureCharFrame()
-      expect(listFrame).toContain("dev")
-      expect(listFrame).toContain("scoped-environment/api")
-      expect(listFrame).toContain("parent-only")
+      expect(listFrame).toContain("shared")
+      expect(listFrame).not.toContain("dev")
+      expect(listFrame).not.toContain("parent-only")
       expect(listFrame).not.toContain("sibling-only")
 
-      await press("http-environment-new-private")
+      await press("http-environment-new")
+      await key("/")
+      await key("RETURN")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-name",
       )
-      expect(tui.captureCharFrame()).toContain(
-        "ARQUIVO  scoped-environment/api/http-client.private.env.json",
-      )
-      await press("http-environment-gitignore")
       await act(async () => tui?.mockInput.typeText("created-local"))
-      await focus("http-environment-create-variable")
+      await key("ESCAPE")
+      await key("/")
+      await key("ARROW_DOWN")
+      await key("RETURN")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
+      )
       await act(async () => tui?.mockInput.typeText("apiToken"))
-      await focus("http-environment-create-secret")
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
+      )
       await act(async () => {
-        tui?.mockInput.typeText("nested-ui-secret")
+        tui?.mockInput.typeText("global-ui-value")
         await tui?.renderOnce()
       })
-      expect(tui.captureCharFrame()).not.toContain("nested-ui-secret")
       await press("http-environment-create-save")
       await settle(
         () =>
           !(tui?.captureCharFrame().includes("AMBIENTES HTTP") ?? true) &&
           (tui?.captureCharFrame().includes("[E] created-local") ?? false),
       )
-      expect(JSON.parse(await readFile(privatePath, "utf8"))).toEqual({
-        "created-local": { apiToken: "nested-ui-secret" },
-      })
+      expect(JSON.parse(await readFile(globalPath, "utf8"))).toEqual({ shared: { host: "global" } })
+      const saved = await readFile(privatePath, "utf8")
+      expect(saved).not.toContain("global-ui-value")
+      expect(JSON.parse(saved)["created-local"].apiToken.startsWith("{{$tuiminal.keychain.")).toBe(
+        true,
+      )
+      expect([...storedSecrets.values()]).toContain("global-ui-value")
       expect((await stat(privatePath)).mode & 0o777).toBe(0o600)
     } finally {
       await rm(scopeRoot, { recursive: true, force: true })
+      await unlink(globalPath).catch(() => undefined)
+      await unlink(privatePath).catch(() => undefined)
     }
   })
 
-  test("edits and persists non-secret HTTP workspace defaults", async () => {
+  test("edits always-active Globals and omits workspace defaults", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
     const configPath = resolve(root, ".tuiminal/http/config.json")
-    await unlink(configPath).catch(() => undefined)
+    const privatePath = resolve(root, "http-client.private.env.json")
+    const original = await readFile(privatePath).catch(() => null)
+    await unlink(privatePath).catch(() => undefined)
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -472,29 +612,109 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
       )
-      await press("http-environment-workspace-settings")
+      await press("http-environment-globals")
       await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-workspace-settings-modal",
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
       )
-      expect(tui.captureCharFrame()).toContain("DEFAULTS DO WORKSPACE HTTP")
-      expect(tui.captureCharFrame()).toContain("Nenhum item definido.")
-      await key("n")
-      await settle(() => !(tui?.captureCharFrame().includes("Nenhum item definido.") ?? true))
-      await press("http-workspace-default-timeout")
-      await settle(() => tui?.captureCharFrame().includes("[T] Timeout: 5s") ?? false)
-      await press("http-workspace-history-metadata")
-      await settle(() => tui?.captureCharFrame().includes("[M] ◆ Histórico persistente") ?? false)
-      await press("http-workspace-settings-save")
-      await settle(() => !(tui?.captureCharFrame().includes("DEFAULTS DO WORKSPACE HTTP") ?? true))
-      expect(JSON.parse(await readFile(configPath, "utf8"))).toEqual({
-        version: 1,
-        headers: {},
-        options: { timeoutMs: 5_000 },
-        history: { persistMetadata: true, persistBodies: false },
-      })
-      expect((await stat(configPath)).mode & 0o777).toBe(0o600)
+      expect(tui.captureCharFrame()).toContain("Globals")
+      expect(tui.captureCharFrame()).not.toContain("DEFAULTS DO WORKSPACE HTTP")
+      await key("/")
+      await key("RETURN")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
+      )
+      await act(async () => tui?.mockInput.typeText("manga"))
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
+      )
+      await act(async () => tui?.mockInput.typeText("2"))
+      await press("http-environment-create-save")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-globals")))
+      const saved = JSON.parse(await readFile(privatePath, "utf8")) as {
+        Globals: { manga: string }
+      }
+      expect(saved.Globals.manga.startsWith("{{$tuiminal.keychain.")).toBe(true)
+      expect([...storedSecrets.values()]).toContain("2")
+      expect((await stat(privatePath)).mode & 0o777).toBe(0o600)
+      expect(await readFile(configPath, "utf8").catch(() => "")).not.toContain("Globals")
     } finally {
-      await unlink(configPath).catch(() => undefined)
+      if (original) await writeFile(privatePath, original)
+      else await unlink(privatePath).catch(() => undefined)
+    }
+  })
+
+  test("completes URL variables and mirrors URL query parameters into Params", async () => {
+    const root = process.env.TUIMINAL_WORKDIR ?? ""
+    const privatePath = resolve(root, "http-client.private.env.json")
+    const original = await readFile(privatePath).catch(() => null)
+    await writeFile(privatePath, JSON.stringify({ Globals: { manga: "secret-fixture" } }))
+    try {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-button")))
+      await act(async () => Bun.sleep(100))
+      await act(async () => tui?.mockInput.typeText("https://example.test/{"))
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
+      expect(tui.captureCharFrame()).not.toContain("secret-fixture")
+      await key("TAB")
+      await settle(
+        () =>
+          (tui?.renderer.root.findDescendantById("http-url-input") as InputRenderable)?.value ===
+          "https://example.test/{{manga}}",
+      )
+      await act(async () => tui?.mockInput.typeText("?manga=2"))
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById("http-key-value-name-http-scratch-1-url-query-0"),
+        ),
+      )
+      const value = tui.renderer.root.findDescendantById(
+        "http-key-value-value-http-scratch-1-url-query-0",
+      ) as InputRenderable
+      expect(value.value).toBe("2")
+    } finally {
+      if (original) await writeFile(privatePath, original)
+      else await unlink(privatePath).catch(() => undefined)
+    }
+  })
+
+  test("edits and deletes a saved environment from the manager", async () => {
+    const root = process.env.TUIMINAL_WORKDIR ?? ""
+    const privatePath = resolve(root, "http-client.private.env.json")
+    const original = await readFile(privatePath).catch(() => null)
+    await writeFile(privatePath, JSON.stringify({ local: { manga: "private-fixture" } }))
+    try {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await press("http-environment-button")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-edit-local")),
+      )
+      await press("http-environment-edit-local")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-create-name")),
+      )
+      const nameInput = tui.renderer.root.findDescendantById(
+        "http-environment-create-name",
+      ) as InputRenderable
+      expect(nameInput.value).toBe("local")
+      expect(tui.captureCharFrame()).toContain("private-fixture")
+      await press("http-environment-create-save")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-delete-local")),
+      )
+      await press("http-environment-delete-local")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-delete-confirm")),
+      )
+      expect(tui.captureCharFrame()).toContain("local")
+      await press("http-environment-delete-confirm")
+      await settle(() => !tui?.renderer.root.findDescendantById("http-environment-choice-local"))
+      expect(JSON.parse(await readFile(privatePath, "utf8"))).toEqual({})
+    } finally {
+      if (original) await writeFile(privatePath, original)
+      else await unlink(privatePath).catch(() => undefined)
     }
   })
 

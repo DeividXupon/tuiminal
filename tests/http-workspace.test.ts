@@ -692,24 +692,14 @@ describe("HTTP keyboard ownership", () => {
     })
   })
 
-  test("keeps environment creation inputs isolated inside their overlay", () => {
+  test("lets the environment modal own its layered navigation", () => {
     expect(
-      command({ name: "escape" }, "http-environment-create-secret", false, "environment-manager"),
-    ).toEqual({ kind: "blur-editor" })
+      command({ name: "escape" }, "http-environment-create-value-0", false, "environment-manager"),
+    ).toEqual({ kind: "ignore" })
     expect(command({ name: "escape" }, "", false, "environment-manager")).toEqual({
-      kind: "close-overlay",
+      kind: "ignore",
     })
     expect(command({ name: "n" }, "", false, "environment-manager")).toEqual({ kind: "ignore" })
-  })
-
-  test("keeps workspace header editing isolated inside the settings overlay", () => {
-    expect(
-      command({ name: "escape" }, "http-key-value-name-workspace-0", false, "workspace-settings"),
-    ).toEqual({ kind: "blur-editor" })
-    expect(command({ name: "escape" }, "", false, "workspace-settings")).toEqual({
-      kind: "close-overlay",
-    })
-    expect(command({ name: "t" }, "", false, "workspace-settings")).toEqual({ kind: "ignore" })
   })
 
   test("maps every external conflict resolution and keeps Escape non-destructive", () => {

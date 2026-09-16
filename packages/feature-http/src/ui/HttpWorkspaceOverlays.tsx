@@ -13,12 +13,8 @@ import type {
   HttpExternalConflictPreview,
   HttpExternalConflictResolution,
 } from "../storage/conflicts"
-import type {
-  CreatePrivateHttpEnvironmentInput,
-  CreatePrivateHttpEnvironmentResult,
-  HttpEnvironment,
-} from "../storage/environments"
-import type { HttpWorkspaceConfig } from "../storage/config"
+import type { HttpEnvironment } from "../storage/environments"
+import type { CreateGlobalHttpEnvironmentInput } from "../storage/global-environments"
 import { HttpCollectionImportModal } from "./HttpCollectionImportModal"
 import { HttpCollectionRunnerModal } from "./HttpCollectionRunnerModal"
 import { HttpDiscardDocumentModal } from "./HttpDiscardDocumentModal"
@@ -28,7 +24,6 @@ import { HttpEnvironmentManagerModal } from "./HttpEnvironmentManagerModal"
 import { HttpHistoryDiffModal } from "./HttpHistoryDiffModal"
 import { HttpRequestFileModal } from "./HttpRequestFileModal"
 import { HttpWorkspaceOverlay } from "./HttpWorkspaceOverlay"
-import { HttpWorkspaceSettingsModal } from "./HttpWorkspaceSettingsModal"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 export function HttpWorkspaceOverlays({
@@ -51,7 +46,6 @@ export function HttpWorkspaceOverlays({
   collectionImport,
   collectionRunner,
   environment,
-  onOpenWorkspaceSettings,
   externalConflict,
   pendingCloseName,
   onConfirmCloseDocument,
@@ -103,21 +97,21 @@ export function HttpWorkspaceOverlays({
   }
   environment: {
     environments: HttpEnvironment[]
+    globals: HttpEnvironment | undefined
     activeEnvironmentName: string | null
-    privateEnvironmentPath: string
     selectEnvironment: (name: string | null) => void
-    createPrivateEnvironment: (
-      input: CreatePrivateHttpEnvironmentInput,
-    ) => Promise<CreatePrivateHttpEnvironmentResult>
-    workspaceConfig: HttpWorkspaceConfig
-    workspaceConfigSourceHash: string | null
-    workspaceConfigError: string
-    saveWorkspaceConfig: (
-      config: HttpWorkspaceConfig,
-      expectedHash: string | null,
-    ) => Promise<unknown>
+    createEnvironment: (
+      input: CreateGlobalHttpEnvironmentInput,
+    ) => Promise<{ environmentName: string }>
+    replaceEnvironment: (
+      originalName: string,
+      input: CreateGlobalHttpEnvironmentInput,
+    ) => Promise<{ environmentName: string }>
+    deleteEnvironment: (name: string) => Promise<{ environmentName: string }>
+    saveGlobals: (
+      input: Omit<CreateGlobalHttpEnvironmentInput, "environmentName">,
+    ) => Promise<{ environmentName: string }>
   }
-  onOpenWorkspaceSettings: () => void
   externalConflict: {
     externalConflict: HttpExternalConflictPreview | null
     resolvingExternalConflict: boolean
@@ -220,25 +214,15 @@ export function HttpWorkspaceOverlays({
       {overlay === "environment-manager" ? (
         <HttpEnvironmentManagerModal
           environments={environment.environments}
+          globals={environment.globals}
           activeName={environment.activeEnvironmentName}
-          privateEnvironmentPath={environment.privateEnvironmentPath}
           terminalWidth={terminalWidth}
           terminalHeight={terminalHeight}
           onSelect={environment.selectEnvironment}
-          onCreate={environment.createPrivateEnvironment}
-          onOpenWorkspaceSettings={onOpenWorkspaceSettings}
-          onClose={onClose}
-        />
-      ) : null}
-      {overlay === "workspace-settings" ? (
-        <HttpWorkspaceSettingsModal
-          config={environment.workspaceConfig}
-          sourceHash={environment.workspaceConfigSourceHash}
-          sourceError={environment.workspaceConfigError}
-          environments={environment.environments}
-          terminalWidth={terminalWidth}
-          terminalHeight={terminalHeight}
-          onSave={environment.saveWorkspaceConfig}
+          onCreate={environment.createEnvironment}
+          onReplace={environment.replaceEnvironment}
+          onDelete={environment.deleteEnvironment}
+          onSaveGlobals={environment.saveGlobals}
           onClose={onClose}
         />
       ) : null}

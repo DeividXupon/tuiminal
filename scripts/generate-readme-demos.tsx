@@ -39,6 +39,7 @@ const PROJECT_ROOT = join(CAPTURE_ROOT, "workspace")
 process.env.XDG_CONFIG_HOME = join(CAPTURE_ROOT, "config")
 process.env.XDG_DATA_HOME = join(CAPTURE_ROOT, "data")
 process.env.TUIMINAL_WORKDIR = PROJECT_ROOT
+process.env.TUIMINAL_HTTP_HOME = PROJECT_ROOT
 process.env.TUIMINAL_PROJECT_ROOTS = CAPTURE_ROOT
 process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
 process.env.TUIMINAL_TEST_SKIP_STARTUP = "1"
