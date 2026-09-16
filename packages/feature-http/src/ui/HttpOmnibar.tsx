@@ -102,20 +102,25 @@ export function HttpOmnibar({
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const completionRef = useRef(completion)
   const suggestionIndexRef = useRef(suggestionIndex)
-  const completionRequestId = useRef(request.id)
+  const completionContextRef = useRef({ focused: false, requestId: "" })
   useEffect(() => {
-    if (completionRequestId.current !== request.id) {
-      completionRequestId.current = request.id
-      completionRef.current = null
-      setCompletion(null)
-    }
-  }, [request.id])
-  useEffect(() => {
+    const previous = completionContextRef.current
+    completionContextRef.current = { focused, requestId: request.id }
     if (!focused) {
       completionRef.current = null
       setCompletion(null)
+      return
     }
-  }, [focused])
+    if (previous.focused && previous.requestId === request.id) return
+    const value = urlRef.current?.value ?? request.url
+    const nextCompletion =
+      urlVariableCompletion(value, urlRef.current?.cursorOffset ?? value.length, variableNames) ??
+      urlVariableCompletion(value, value.length, variableNames)
+    completionRef.current = nextCompletion
+    suggestionIndexRef.current = 0
+    setSuggestionIndex(0)
+    setCompletion(nextCompletion)
+  })
   const complete = (index: number) => {
     const candidate = completionRef.current
     if (!candidate) return
