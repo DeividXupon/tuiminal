@@ -7,6 +7,7 @@ import type {
 import { Fragment, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { HttpLayout } from "../model/layout"
+import type { HttpRequestTableKey } from "../hooks/use-http-request-tables"
 import type {
   HttpAssertionDefinition,
   HttpBodyKind,
@@ -38,6 +39,7 @@ type HttpWorkspaceBodyProps = {
   registerScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
   registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
   registerCollectionSearch: (input: InputRenderable | null) => void
+  requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
   onSelectDocument: (documentId: string) => void
   onNavigationView: (view: HttpNavigationView) => void
   onCloseNavigation: () => void
@@ -139,6 +141,7 @@ export function HttpWorkspaceBody({
   registerScroll,
   registerResponseSearch,
   registerCollectionSearch,
+  requestTableKeyRef,
   onSelectDocument,
   onNavigationView,
   onCloseNavigation,
@@ -235,6 +238,7 @@ export function HttpWorkspaceBody({
           <Fragment key={document.request.id}>
             <HttpRequestPane
               document={document}
+              requestTableKeyRef={requestTableKeyRef}
               visible={requestVisible}
               focused={active && state.overlay === null && state.activePane === "request"}
               position={maximizedPane === "request" ? maximizedPosition : layout.request}

@@ -22,6 +22,7 @@ import { HttpExternalConflictModal } from "../../packages/feature-http/src/ui/Ht
 import { resolveHttpWorkspaceLayout } from "../../packages/feature-http/src/model/layout"
 import { HTTP_RENDERER_LISTENER_BUDGET } from "../../packages/feature-http/src/model/renderer-listener-budget"
 import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -58,6 +59,14 @@ async function key(name: string, ctrl = false, shift = false) {
   await act(async () => {
     tui?.mockInput.pressKey(name, { ctrl, shift })
     await Bun.sleep(name === "ESCAPE" || name.startsWith("F") ? 60 : 5)
+    await tui?.renderOnce()
+  })
+}
+
+async function enter() {
+  await act(async () => {
+    tui?.mockInput.pressEnter()
+    await Bun.sleep(5)
     await tui?.renderOnce()
   })
 }
@@ -195,36 +204,67 @@ describe("HTTP TUI", () => {
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
   })
 
-  test("navigates Params vertically, adds only to the focused subpanel, and cycles nested strips", async () => {
+  test("enters empty request tables and creates rows while typing", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("TAB")
     await key("TAB")
 
     expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query")),
-    ).toBe(true)
+      tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query"),
+    ).toBeDefined()
     expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
-    ).toBe(false)
+      tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path"),
+    ).toBeUndefined()
 
     await key("j")
     await settle(
       () =>
-        !tui?.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query") &&
-        Boolean(tui?.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
+        !tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query") &&
+        Boolean(tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
     )
     expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-query")),
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query")),
     ).toBe(false)
     expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-add-http-scratch-1-path")),
+      Boolean(tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
     ).toBe(true)
     expect(tui.captureCharFrame().match(/Nenhum item definido\./g)?.length).toBe(2)
 
-    await key("n")
-    await settle(() => tui?.captureCharFrame().match(/Nenhum item definido\./g)?.length === 1)
+    await enter()
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-path-",
+      ),
+    )
+    await act(async () => tui?.mockInput.typeText("id"))
+    await key("TAB")
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-value-http-scratch-1-path-",
+      ),
+    )
+    await act(async () => tui?.mockInput.typeText("42"))
+    await key("TAB")
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id?.startsWith(
+          "http-key-value-name-http-scratch-1-path-",
+        ) ?? false,
+    )
+    expect((tui.renderer.currentFocusedRenderable as InputRenderable).value).toBe("")
     expect(tui.captureCharFrame().match(/Nenhum item definido\./g)?.length).toBe(1)
+    await key("ESCAPE")
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id === "http-key-value-section-http-scratch-1-path",
+    )
+    await key("ESCAPE")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
+    )
+    await key("n")
+    expect(tui.captureCharFrame().match(/\[●\] id/g)).toHaveLength(1)
 
     await key("f")
     await key("f")
@@ -249,6 +289,207 @@ describe("HTTP TUI", () => {
     expect(tui.renderer.root.findDescendantById("http-assertion-add")).toBeDefined()
     await key("l")
     await settle(() => !tui?.renderer.root.findDescendantById("http-assertion-add"))
+  })
+
+  test("navigates populated request tables before editing a selected cell", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await act(async () => tui?.mockInput.typeText("https://example.test/search?manga=2&lang=pt"))
+    await key("TAB")
+    await key("TAB")
+    await enter()
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-section-http-scratch-1-query",
+    )
+    const firstName = tui.renderer.root.findDescendantById(
+      "http-key-value-name-http-scratch-1-url-query-0",
+    ) as InputRenderable
+    expect(firstName.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+    await key("j")
+    await key("l")
+    const secondValue = tui.renderer.root.findDescendantById(
+      "http-key-value-value-http-scratch-1-url-query-1",
+    ) as InputRenderable
+    expect(firstName.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
+    expect(secondValue.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
+    await enter()
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-value-http-scratch-1-url-query-1",
+    )
+    await act(async () => tui?.mockInput.typeText("x"))
+    await settle(
+      () =>
+        (
+          tui?.renderer.root.findDescendantById("http-url-input") as InputRenderable
+        )?.value.includes("lang=ptx") ?? false,
+    )
+    await key("ESCAPE")
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-section-http-scratch-1-query",
+    )
+    await key("ESCAPE")
+    await key("j")
+    expect(
+      tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path"),
+    ).toBeDefined()
+  })
+
+  test("selects an inactive request block and enters its table with the mouse", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await key("TAB")
+    await key("TAB")
+    await click("http-key-value-heading-http-scratch-1-path")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
+    )
+    await press("http-key-value-enter-http-scratch-1-path")
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-path-",
+      ),
+    )
+  })
+
+  test("toggles and deletes a selected request row in table mode", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await key("TAB")
+    await key("TAB")
+    await press("http-request-view-headers")
+    await enter()
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-section-http-scratch-1-header",
+    )
+    await key(" ")
+    await settle(() => tui?.captureCharFrame().includes("[○] Accept") ?? false)
+    await key("h")
+    await enter()
+    await settle(() => tui?.captureCharFrame().includes("[●] Accept") ?? false)
+    await key("d")
+    await settle(() => !(tui?.captureCharFrame().includes("Accept") ?? true))
+    await key("ESCAPE")
+    await settle(() => tui?.captureCharFrame().includes("Nenhum item definido.") ?? false)
+  })
+
+  test("navigates to row actions and deletes query parameters with Enter", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await act(async () => tui?.mockInput.typeText("https://example.test/search?manga=2&lang=pt"))
+    await key("TAB")
+    await key("TAB")
+    await enter()
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-section-http-scratch-1-query",
+    )
+    expect(tui.captureCharFrame()).toContain("[Space] Ativar/desativar")
+    await key("l")
+    await key("l")
+    await settle(() => tui?.captureCharFrame().includes("[Enter] Excluir linha") ?? false)
+    expect(
+      tui.renderer.root.findDescendantById("http-key-value-delete-http-scratch-1-url-query-0"),
+    ).toBeDefined()
+    await enter()
+    await settle(
+      () =>
+        (tui?.renderer.root.findDescendantById("http-url-input") as InputRenderable)?.value ===
+        "https://example.test/search?lang=pt",
+    )
+    await enter()
+    await settle(
+      () =>
+        (tui?.renderer.root.findDescendantById("http-url-input") as InputRenderable)?.value ===
+        "https://example.test/search",
+    )
+    await enter()
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-query-",
+      ),
+    )
+  })
+
+  test("uses the same enter and draft-row flow for Headers, Form, and Multipart", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await key("TAB")
+    await key("TAB")
+    await press("http-request-view-headers")
+    expect(tui.captureCharFrame()).not.toContain("[N] Adicionar")
+    await enter()
+    await settle(
+      () =>
+        tui?.renderer.currentFocusedRenderable?.id ===
+        "http-key-value-section-http-scratch-1-header",
+    )
+    await key("j")
+    await enter()
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-header-",
+      ),
+    )
+    await key("TAB")
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-value-http-scratch-1-header-",
+      ),
+    )
+    await key("TAB", false, true)
+    await act(async () => tui?.mockInput.typeText("X-Test"))
+    await key("TAB")
+    await act(async () => tui?.mockInput.typeText("yes"))
+    await key("ESCAPE")
+    await key("ESCAPE")
+
+    await press("http-request-view-body")
+    for (let index = 0; index < 4; index += 1) await key("v")
+    await settle(() => tui?.captureCharFrame().includes("FORM URL ENCODED") ?? false)
+    await enter()
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-form-",
+      ),
+    )
+    await act(async () => tui?.mockInput.typeText("tag"))
+    await key("ESCAPE")
+    await key("ESCAPE")
+
+    await key("v")
+    await settle(() => tui?.captureCharFrame().includes("MULTIPART") ?? false)
+    await enter()
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-name-http-scratch-1-part-",
+      ),
+    )
+    await act(async () => tui?.mockInput.typeText("upload"))
+    await key("TAB")
+    await settle(() =>
+      (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith(
+        "http-key-value-value-http-scratch-1-part-",
+      ),
+    )
+    await key("ESCAPE")
+    await key("h")
+    await key("h")
+    await enter()
+    await settle(() => tui?.captureCharFrame().includes("[F] upload") ?? false)
+    await key("l")
+    await key("l")
+    await key("l")
+    await enter()
+    await settle(() => !(tui?.captureCharFrame().includes("upload") ?? true))
   })
 
   test("opens opaque .http blocks as exact read-only raw content", async () => {
@@ -351,6 +592,32 @@ describe("HTTP TUI", () => {
       expect(tui.captureCharFrame()).toContain("example.test/external")
     } finally {
       await unlink(path).catch(() => undefined)
+    }
+  })
+
+  test.each([120, 52])("keeps environment list actions on one row at %i columns", async (width) => {
+    updateUiSettings({ language: "pt-BR" })
+    tui = await testRender(<HttpClient active />, { width, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await press("http-environment-button")
+    await settle(
+      () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
+    )
+    const hints = tui.renderer.root.findDescendantById("http-environment-list-hints") as {
+      screenY: number
+    }
+    const create = tui.renderer.root.findDescendantById("http-environment-new") as {
+      screenY: number
+    }
+    expect(hints.screenY).toBe(create.screenY)
+    const line = tui.captureCharFrame().split("\n")[hints.screenY] ?? ""
+    expect(line).toContain("[↑/↓] Navegar")
+    expect(line).toContain("[N] Novo ambiente")
+    if (width === 120) expect(line).toContain("[D] Excluir")
+    const spans = tui.captureSpans().lines[hints.screenY]?.spans ?? []
+    for (const shortcut of ["[↑/↓]", "[N]"]) {
+      const span = spans.find((candidate) => candidate.text.includes(shortcut))
+      expect(span?.fg.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
     }
   })
 
@@ -497,6 +764,16 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
       )
+      expect(tui.renderer.root.findDescendantById("http-environment-create-name")).toBeDefined()
+      expect(tui.renderer.root.findDescendantById("http-environment-back")).toBeUndefined()
+      const formHints = tui.renderer.root.findDescendantById("http-environment-form-hints") as {
+        screenY: number
+      }
+      const slash = tui
+        .captureSpans()
+        .lines[formHints.screenY]?.spans.find((span) => span.text.includes("[/]"))
+      expect(slash?.fg.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+      await key("b")
       expect(tui.renderer.root.findDescendantById("http-environment-create-name")).toBeDefined()
       await key("ESCAPE")
       await settle(
@@ -679,6 +956,81 @@ describe("HTTP TUI", () => {
     }
   })
 
+  test("reopens URL variable suggestions after a failed request", async () => {
+    const root = process.env.TUIMINAL_WORKDIR ?? ""
+    const privatePath = resolve(root, "http-client.private.env.json")
+    const original = await readFile(privatePath).catch(() => null)
+    await writeFile(privatePath, JSON.stringify({ Globals: { manga: "secret-fixture" } }))
+    try {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-button")))
+      await act(async () => Bun.sleep(100))
+      await act(async () => tui?.mockInput.typeText("http://{"))
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
+
+      await act(async () => {
+        tui?.mockInput.pressEnter()
+        await Bun.sleep(10)
+        await tui?.renderOnce()
+      })
+      await settle(() => !tui?.renderer.root.findDescendantById("http-url-variable-manga"))
+      await click("http-url-input")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
+      await key("ESCAPE")
+      await settle(() => !tui?.renderer.root.findDescendantById("http-url-variable-manga"))
+      await key("ESCAPE")
+      await key("/")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
+      await key("TAB")
+      await settle(
+        () =>
+          (tui?.renderer.root.findDescendantById("http-url-input") as InputRenderable)?.value ===
+          "http://{{manga}}",
+      )
+    } finally {
+      if (original) await writeFile(privatePath, original)
+      else await unlink(privatePath).catch(() => undefined)
+    }
+  })
+
+  test("keeps a query parameter name unfinished while typing in the URL", async () => {
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await act(async () => tui?.mockInput.typeText("https://example.test/search?"))
+    for (const [index, letter] of [..."manga"].entries()) {
+      await act(async () => {
+        tui?.mockInput.typeText(letter)
+        await tui?.renderOnce()
+      })
+      const input = tui.renderer.root.findDescendantById("http-url-input") as InputRenderable
+      expect(input.value).toBe(`https://example.test/search?${"manga".slice(0, index + 1)}`)
+    }
+    await settle(() =>
+      Boolean(
+        tui?.renderer.root.findDescendantById("http-key-value-name-http-scratch-1-url-query-0"),
+      ),
+    )
+    await act(async () => {
+      tui?.mockInput.typeText("=2")
+      await tui?.renderOnce()
+    })
+    const input = tui.renderer.root.findDescendantById("http-url-input") as InputRenderable
+    expect(input.value).toBe("https://example.test/search?manga=2")
+    const value = tui.renderer.root.findDescendantById(
+      "http-key-value-value-http-scratch-1-url-query-0",
+    ) as InputRenderable
+    expect(value.value).toBe("2")
+    await focus("http-key-value-value-http-scratch-1-url-query-0")
+    value.cursorOffset = value.value.length
+    await act(async () => {
+      tui?.mockInput.typeText("3")
+      await tui?.renderOnce()
+    })
+    await settle(() => input.value === "https://example.test/search?manga=23")
+  })
+
   test("edits and deletes a saved environment from the manager", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
     const privatePath = resolve(root, "http-client.private.env.json")
@@ -782,6 +1134,8 @@ describe("HTTP TUI", () => {
       expect(tui.captureCharFrame().match(/GET Scratch/g)).toHaveLength(4)
       await key("ESCAPE")
       await press("http-request-view-headers")
+      await settle(() => tui?.captureCharFrame().includes("[Enter] Tabela") ?? false)
+      await enter()
       await settle(() =>
         (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith("http-key-value-name-"),
       )

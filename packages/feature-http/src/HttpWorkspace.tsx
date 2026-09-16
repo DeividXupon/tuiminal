@@ -8,6 +8,7 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
+import type { HttpRequestTableKey } from "./hooks/use-http-request-tables"
 import { httpJsonTreeForDocument } from "./model/json-tree"
 import { applyHttpViewKeyboardCommand } from "./model/workspace-keyboard-actions"
 import type {
@@ -95,6 +96,7 @@ function HttpInteractiveClient({
   }, [])
   const urlRef = useRef<InputRenderable | null>(null)
   const urlCompletionKeyRef = useRef<((key: HttpCompletionKey) => boolean) | null>(null)
+  const requestTableKeyRef = useRef<((key: HttpRequestTableKey) => boolean) | null>(null)
   const collectionSearchRef = useRef<InputRenderable | null>(null)
   const { documentRefs, refsFor, blurDocumentControls } = useHttpDocumentRefs(urlRef)
   const abortControllers = useRef(new Map<string, AbortController>())
@@ -300,6 +302,12 @@ function HttpInteractiveClient({
     if (!currentDocument) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (focusedId === "http-url-input" && urlCompletionKeyRef.current?.(key)) return
+    if (
+      currentState.overlay === null &&
+      currentState.activePane === "request" &&
+      requestTableKeyRef.current?.(key)
+    )
+      return
     const documentId = currentDocument.request.id
     const currentJsonTree = httpJsonTreeForDocument(currentDocument)
     const command = resolveHttpKeyboardCommand({
@@ -533,17 +541,12 @@ function HttpInteractiveClient({
       <box style={{ height: panelSpacing, flexShrink: 0 }} />
       <HttpWorkspaceBody
         state={state}
+        requestTableKeyRef={requestTableKeyRef}
         layout={layout}
         height={bodyHeight}
-        registerHeaderInput={(documentId, input) => {
-          refsFor(documentId).headers = input
-        }}
-        registerBodyEditor={(documentId, editor) => {
-          refsFor(documentId).body = editor
-        }}
-        registerRawScroll={(documentId, scroll) => {
-          refsFor(documentId).raw = scroll
-        }}
+        registerHeaderInput={(documentId, input) => (refsFor(documentId).headers = input)}
+        registerBodyEditor={(documentId, editor) => (refsFor(documentId).body = editor)}
+        registerRawScroll={(documentId, scroll) => (refsFor(documentId).raw = scroll)}
         registerScroll={(documentId, scroll) => {
           refsFor(documentId).response = scroll
         }}
