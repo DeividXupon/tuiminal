@@ -273,7 +273,7 @@ export function HttpEnvironmentManagerModal({
           handleChooseKey(event.name)
           return
         case "overview":
-          if (!handleFormCommonKey(event) && event.name === "b") setScreen("list")
+          handleFormCommonKey(event)
           return
         case "table":
           if (!handleFormCommonKey(event)) handleTableKey(event.name)
@@ -357,7 +357,6 @@ export function HttpEnvironmentManagerModal({
           onRowChange={updateRow}
           onChooseName={() => enterTarget("name")}
           onChooseTable={() => enterTarget("table")}
-          onBack={() => setScreen("list")}
           onSave={() => void save()}
           onFocusName={() => setMode("name")}
           onFocusCell={(index, cell) => {

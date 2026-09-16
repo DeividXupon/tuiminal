@@ -1,9 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { HttpEnvironment } from "../storage/environments"
 import {
   HttpEnvironmentTableRow,
@@ -61,6 +61,18 @@ export function HttpEnvironmentList({
     null,
     ...environments.map((environment) => environment.name),
   ]
+  const createLabel = "[N] Novo ambiente"
+  const hintsWidth = Math.max(1, contentWidth - displayWidth(translateUi(createLabel)) - 2)
+  const hintSegments = translateUi("[↑/↓] Navegar · [Enter] Usar · [E] Editar · [D] Excluir").split(
+    " · ",
+  )
+  let visibleHints = ""
+  for (const segment of hintSegments) {
+    const next = visibleHints ? `${visibleHints} · ${segment}` : segment
+    if (displayWidth(next) > hintsWidth) break
+    visibleHints = next
+  }
+  if (!visibleHints) visibleHints = truncateDisplay(hintSegments[0] ?? "", hintsWidth)
   useEffect(() => {
     scrollRef.current?.scrollTo(Math.max(0, selection - 2))
   }, [selection])
@@ -117,16 +129,22 @@ export function HttpEnvironmentList({
           )
         })}
       </scrollbox>
-      <text
-        content={translateUi("[↑/↓] Navegar · [Enter] Usar · [E] Editar · [D] Excluir")}
-        style={{ fg: COLORS.muted }}
-      />
-      <InlineButton
-        id="http-environment-new"
-        label="[N] Novo ambiente"
-        accent={COLORS.http}
-        onPress={onCreate}
-      />
+      <box
+        id="http-environment-list-footer"
+        style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}
+      >
+        <ShortcutText
+          id="http-environment-list-hints"
+          content={visibleHints}
+          style={{ width: hintsWidth, flexShrink: 0, overflow: "hidden", fg: COLORS.muted }}
+        />
+        <InlineButton
+          id="http-environment-new"
+          label={createLabel}
+          accent={COLORS.http}
+          onPress={onCreate}
+        />
+      </box>
     </>
   )
 }
@@ -145,7 +163,6 @@ export function HttpEnvironmentCreateForm({
   onRowChange,
   onChooseName,
   onChooseTable,
-  onBack,
   onSave,
   onFocusName,
   onFocusCell,
@@ -163,7 +180,6 @@ export function HttpEnvironmentCreateForm({
   onRowChange: (index: number, column: 0 | 1, value: string) => void
   onChooseName: () => void
   onChooseTable: () => void
-  onBack: () => void
   onSave: () => void
   onFocusName: () => void
   onFocusCell: (index: number, column: 0 | 1) => void
@@ -277,28 +293,24 @@ export function HttpEnvironmentCreateForm({
         </box>
       </box>
       {mode === "choose" ? (
-        <text
-          content={translateUi("[↑/↓] Nome/Tabela · [Enter] Editar · [Esc] Voltar")}
+        <ShortcutText
+          id="http-environment-form-hints"
+          content="[↑/↓] Nome/Tabela · [Enter] Editar · [Esc] Voltar"
           style={{ fg: COLORS.muted }}
         />
       ) : (
-        <text
-          content={translateUi(
+        <ShortcutText
+          id="http-environment-form-hints"
+          content={
             formKind === "globals"
               ? "[/] Tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
-              : "[/] Nome ou tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar",
-          )}
+              : "[/] Nome ou tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
+          }
           style={{ fg: COLORS.muted }}
         />
       )}
       {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        <InlineButton
-          id="http-environment-back"
-          label="[B] Ambientes"
-          accent={COLORS.http}
-          onPress={onBack}
-        />
         <InlineButton
           id="http-environment-create-save"
           label={

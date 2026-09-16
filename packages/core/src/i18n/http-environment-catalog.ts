@@ -197,7 +197,6 @@ export const HTTP_ENVIRONMENT_MESSAGES = [
     "注意：私密文件可能会被提交。",
     "주의: 비공개 파일이 커밋에 포함될 수 있습니다.",
   ],
-  ["[B] Ambientes", "[B] Environments", "[B] Ambientes", "[B] 環境一覧", "[B] 环境", "[B] 환경"],
   ["SALVANDO…", "SAVING…", "GUARDANDO…", "保存中…", "正在保存…", "저장 중…"],
   [
     "[Ctrl+S] Criar privado",

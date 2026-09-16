@@ -38,7 +38,6 @@ function SecretForm({
       onRowChange={(_index, _column, value) => setSecret(value)}
       onChooseName={noop}
       onChooseTable={noop}
-      onBack={noop}
       onSave={noop}
       onFocusName={noop}
       onFocusCell={noop}

@@ -66,7 +66,7 @@ export function environmentKeyIsHandled(
   if (name === "escape" || (event.ctrl && name === "s")) return true
   if (mode === "name" || mode === "cell") return name === "tab"
   if (name === "/") return true
-  if (mode === "overview") return name === "b"
+  if (mode === "overview") return false
   if (mode === "choose") return CHOOSE_KEYS.has(name)
   return mode === "table" && TABLE_KEYS.has(name)
 }
