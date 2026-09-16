@@ -165,7 +165,10 @@ This file records durable project conventions, architectural decisions, and recu
 
 ## HTTP client
 
-- HTTP project watching reloads collections/configuration/environments only for `.http`, `.rest`, the two supported environment files, and `.tuiminal/http/config.json`; unrelated project edits must not trigger a full scan. Coalesce refresh requests while a scan is active and never apply a result after its workspace/root was disposed. Use bounded per-directory watchers and serialize reconciliation after renames: Bun 1.3.14 recursive watches can miss newly created descendants on macOS. Directory additions/removals trigger discovery so files created before watcher attachment are still found; unrelated file edits do not.
+- The interactive HTTP workspace has one global home under `$XDG_DATA_HOME/tuiminal/http` (falling back to `~/.local/share/tuiminal/http`) and ignores the opened project's path. `TUIMINAL_HTTP_HOME` is only an explicit fixture/embedding override. Collections, settings, history, and global environments live there. Headless `.http` commands still use their explicit input/output paths and roots.
+- The environment manager lists global names, including the no-environment choice. `[N]` opens a form with a distinct-background name input and alternating-background variable/value rows. `[/]` first selects between vertically arranged name and table blocks: `[↑/↓]` moves a left focus rail, and `[Enter]` enters the chosen block. An empty table focuses its first cell; a populated table enters arrow or `[H/J/K/L]` navigation with a distinct background on the selected cell. `[Enter]` edits a cell, `[Tab]` advances through inputs and adds a blank row as needed, and layered `[Esc]` returns from input to table navigation, then to the form. Environment values are visible in the editing table and every new or edited value goes to the operating system credential store; the private global file (atomic, mode `0600`) holds only opaque references for those values. The public file remains readable for existing environments but is never a creation target. If the credential store is unavailable, saving fails rather than writing plaintext. The modal keeps a complete rounded border in both layouts, takes focus from the workspace, suppresses underlying focus rails, and blocks pointer access to the workspace until it closes.
+- Pretty JSON navigation reuses the parsed response and collapsed tree shape across selection changes. Keep the styled response document stable while selection moves; display the selected pointer in compact response chrome and scroll it into view. Rebuild only when the response, collapse state, or appearance changes.
+- HTTP home watching reloads collections/configuration/environments only for `.http`, `.rest`, the two supported environment files, and `.tuiminal/http/config.json`; unrelated edits must not trigger a full scan. Coalesce refresh requests while a scan is active and never apply a result after its workspace/root was disposed. Use bounded per-directory watchers and serialize reconciliation after renames: Bun 1.3.14 recursive watches can miss newly created descendants on macOS. Directory additions/removals trigger discovery so files created before watcher attachment are still found; unrelated file edits do not.
 - Schedule one cancellable refresh after HTTP watcher attachment. `fs.watch` returning does not guarantee that native event delivery is ready, so initial file changes must also be reconciled without relying on a watch event; do not add polling or a registration sleep.
 - `HTTP_CLIENT_PLAN.md` records the mutable future direction for the HTTP workspace.
   It is not a description of current behavior; update it when implementation or
@@ -209,7 +212,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Request Options exposes `[C]` to include or ignore the cookie jar per request.
   Ignoring it must suppress both cookie reads and `Set-Cookie` writes, appear in
   Preview, and round-trip through the interoperable `# @no-cookie-jar` directive.
-- The in-memory HTTP cookie jar validates ICANN and private domains with a maintained Public Suffix List, normalizes IDNs/IPs, enforces secure-prefix/lifetime/size/count/header budgets, and is isolated by project request directory plus selected environment. Collection dependencies may share cookies only inside that same scope; sibling scopes with the same environment name remain isolated.
+- The in-memory HTTP cookie jar validates ICANN and private domains with a maintained Public Suffix List, normalizes IDNs/IPs, enforces secure-prefix/lifetime/size/count/header budgets, and is isolated by request directory inside the global HTTP home plus selected environment. Collection dependencies may share cookies only inside that same scope.
 - Request Options accepts an explicit HTTP/HTTPS proxy and uses `[Shift+V]` for TLS
   verification. Proxy credentials must come from private variables and remain
   redacted in previews, conflicts, cURL, reports, and transport errors. Insecure
@@ -217,23 +220,23 @@ This file records durable project conventions, architectural decisions, and recu
   scoped to target, selected environment, and the current session; every new
   HTTPS redirect target requires its own approval. Headless runs require the
   explicit `--allow-insecure-tls` flag.
-- `[E]` opens the HTTP environment manager; it no longer cycles environments
-  blindly. Creating a private value writes `http-client.private.env.json`
-  atomically with mode `0600`, offers an explicit `.gitignore` rule, rejects
-  symlinks/external races, and masks the input. Optional `[Ctrl+K]` persistence
-  stores only an opaque `$tuiminal.keychain.*` reference in JSON and resolves the
-  real value through Bun's system credential manager.
-- Resolve the selected HTTP environment name independently for each saved request,
-  from its `.http` directory toward the project root. The nearest directory that
-  defines the name wins as a whole; private values override public values only
-  within that same directory, and sibling-only environments never leak across
-  services. Scratch uses the root scope. Create private values beside the active
-  `.http` file and show that destination before saving.
-- The environment manager exposes `[W]` workspace defaults even when no environment
-  exists. Non-secret environment, timeout, redirect, header, and history defaults
-  persist atomically in `.tuiminal/http/config.json` with mode `0600`. An explicit
-  request option always wins; request timeout and redirect controls cycle back to
-  inherited state instead of silently baking workspace values into the request.
+- `[E]` opens the HTTP environment manager. Interactive environment selection
+  applies globally, including requests in collections; the manager writes only root
+  `http-client.private.env.json` inside the global HTTP home, while still reading
+  existing public environments. Existing per-directory resolution remains available
+  to explicit headless `.http` runs. The older project-private writer retains its
+  safety checks for those explicit file workflows.
+- Interactive HTTP uses one global home regardless of the opened project. The
+  environment manager lists selectable environments, supports create/edit/rename/
+  delete, and has an always-active `Globals` variable form whose name cannot change.
+  New and edited variable values remain visible in the form, live in the operating
+  system credential store, and leave only opaque references in the private file. The old workspace-defaults
+  screen and its persisted default environment, headers, timeout, redirects, and
+  history preferences are not applied by the interactive client; history is in-session.
+  Request-specific timeout and redirect controls remain available.
+- Typing `{` in the HTTP URL shows available variable names without their values;
+  `[Tab]` completes the selected name as `{{name}}`. Query pairs typed in the URL
+  appear in Params, remain editable there, and are sent only once.
 - `.http` compatibility follows JetBrains units and common syntax: a bare
   `@timeout` value means seconds, serialized values include `ms`, and `//`
   directives, `# @name =`, short GET, and indented multiline URLs are accepted.

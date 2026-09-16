@@ -35,7 +35,7 @@ API workspace. The direction combines:
 - post-tui's onboarding clarity, while addressing its editing, responsiveness,
   cancellation, security, and testing limitations.
 
-The product direction is **Posting-inspired interaction, project-owned data,
+The product direction is **Posting-inspired interaction, one global interactive HTTP home,
 bounded and cancellable execution with protective defaults, and a coherent part
 of Tuiminal**.
 
@@ -59,19 +59,19 @@ OpenAPI, scripts, and WebSocket do not come first.
   layouts at all six dimensions, resize during editing, `[Esc]` sequences, actual
   divider drag, and Japanese CJK alignment in WezTerm/WSL2 and tmux.
 - **Phase 2 — complete within current scope:** scanner/watcher, `.http` parser and
-  serializer, files, project public/private environments, cURL, multipart, and file
+  serializer, files, global interactive environments, cURL, multipart, and file
   bodies exist. External conflicts show a redacted diff with explicit reload,
   overwrite-with-local, or save-copy choices. The environment manager writes private
-  values to `0600` files, offers a `.gitignore` rule, and can store only an opaque
-  keychain reference. Visual nonsecret defaults persist in `.tuiminal/http/config.json`
-  with explicit-request > workspace precedence. The initial audit fixed JetBrains
+  values in the operating system credential store and writes only opaque references
+  to `0600` files. Interactive HTTP ignores the former workspace-defaults file;
+  request-specific options remain available. The initial audit fixed JetBrains
   `@timeout` units, `//` directives, `# @name =`, abbreviated GET, and multiline URLs.
   Versioned fixtures cover editable requests/bodies and opaque directives, scripts,
   output redirects, HTTP versions, and unimplemented protocols. Opaque blocks open
   as exact raw content with builder/omnibar editing disabled; execution, save, move,
-  and duplication are blocked. Named environments resolve per request from the
-  `.http` directory toward the root, without merging the winning scope with parents
-  or siblings; new private values are written beside the active file.
+  and duplication are blocked. The interactive client keeps one environment catalog
+  and collection across projects; explicit headless file runs retain directory-based
+  environment resolution.
 - **Phase 3 — complete within current scope:** search, folding, JSONPath, copy/save,
   binary responses, redirects, cookies, timing, opt-in history, diff, and full download.
   `[C]` controls cookie reads/writes per request, appears in preview, and round-trips
@@ -106,7 +106,8 @@ until supported by demand and security evidence.
 ### Goals
 
 1. Make frequent requests fast with keyboard and mouse.
-2. Keep collections, environments, and examples beside the project in text files.
+2. Keep interactive collections, environments, and examples in one global HTTP home
+   as interoperable text files.
 3. Give responses most usable space and real debugging tools.
 4. Preserve cancellation, timeout, capture limits, multilingual UI, and Runner-port
    integration as requirements of the rebuild.
@@ -333,8 +334,9 @@ and accessible headless execution. Additional protocols come later.
 
 ### Principles
 
-1. **Project first:** CLI directory determines collections, environments, and opt-in
-   history. Session restoration cannot change that root.
+1. **Global interactive home:** collections, environments, and opt-in history in the
+   interactive HTTP tab use one data directory, independent of the CLI project directory.
+   Explicit headless file commands retain their input/output paths.
 2. **Immediate scratch:** paste a URL and send without creating files.
 3. **Adapted visual design:** Posting hierarchy with Tuiminal palettes, framed/compact
    layouts, controls, i18n, and conventions.
@@ -666,7 +668,7 @@ preserved content, and the layer closed by `[Esc]`.
 
 ### Collections and `.http` format
 
-- Discover `.http`/`.rest` under the project root, ignoring `.git`, `node_modules`,
+- Discover `.http`/`.rest` under the global interactive HTTP home, ignoring `.git`, `node_modules`,
   build trees, and symlinks escaping the root.
 - Suggest `.tuiminal/http/` for new requests without making it the only scanned path.
 - Support multiple requests separated by `###`, named with `# @name`.
@@ -698,25 +700,29 @@ Authorization: Bearer {{apiToken}}
 
 ### Environments and secrets
 
-- Use `http-client.env.json` for public values and `http-client.private.env.json`
-  for private overrides, following IDE conventions.
-- When creating private files, check `.gitignore` and offer explicit inclusion;
-  do not assume an IDE handles it.
-- Private storage uses `0700` directories, atomic `0600` files; higher-value secrets
-  may live in the keychain with only references in files.
-- Variable precedence: request > file > private environment > public environment >
-  dynamic built-in. Identify the winning source for duplicates.
-- For a saved request, find the selected environment name from its `.http` directory
-  through parents to the project root. The first directory defining it wins entirely;
-  do not merge matching parent variables after finding a closer scope. Within that
-  directory, private overrides public.
-- Scratch uses root only. Sibling-only environments neither appear nor apply. Selection
-  is an environment name; each collection request resolves it against its own ancestry.
-- Creating a private environment with `[N]` writes beside the active file or at root
-  for scratch, showing the destination before confirmation. Switching to a document
-  without the selected name explicitly returns to no environment.
+- Read existing public values from `http-client.env.json`, but write every new
+  interactive environment to `http-client.private.env.json` in the global HTTP home.
+  The form shows values while editing and has no public/private storage toggle.
+- New and edited values always go to the operating system credential store. Private
+  storage uses `0700` directories and atomic `0600` files containing opaque references.
+- Variable precedence: request > file > selected environment (private or public) >
+  always-active Globals > dynamic built-in. Identify the winning
+  source for duplicates.
+- The interactive environment selection applies to every request and collection.
+  Explicit headless `.http` file runs still resolve an environment from the file's
+  directory through its parents to the supplied root.
+- `[E]` lists selectable environments. `[N]` creates, `[E]` edits/renames, `[D]`
+  deletes after confirmation, and `[G]` edits always-active `Globals` with a fixed
+  name. The form contains a name plus variable/value table.
+  `[/]` chooses name or table; empty tables focus the first input, while populated
+  tables use arrows or `[H/J/K/L]`, `[Enter]` to edit, `[Tab]` to advance, and layered
+  `[Esc]` to leave input and table navigation. The bordered modal owns keyboard and
+  pointer focus until closed; underlying workspace focus rails are suppressed.
+- The URL suggests variable names after `{` without showing secret values, and `[Tab]`
+  completes `{{name}}`. URL query pairs appear in Params; editing them updates the
+  URL and preparation sends them only once.
 - Header/options/auth precedence: explicit request > nearest collection defaults >
-  workspace defaults > automatic client values. Preview exposes provenance/conflicts;
+  automatic client values. Preview exposes provenance/conflicts;
   inherited auth must not be indicated by color alone.
 - Host environment is blocked by default and requires explicit enablement.
 - Mask secrets in preview, autocomplete, logs, history, copy, and errors.
@@ -742,16 +748,11 @@ Authorization: Bearer {{apiToken}}
 
 - Keep up to 30 session metadata records with a separate global body budget;
   evict older bodies before metadata.
-- Persistent history is opt-in per project, storing only metadata/redacted preview
-  by default in `0600` files.
-- Full body storage requires separate opt-in plus per-item/global limits.
-- Even with opt-in, known-private executions never persist bodies. Private context
-  follows every hop, sent/received cookie, and extraction before history recording,
-  without serializing secret-value lists. Metadata, errors, and assertions also mask
-  common percent-encoded, double-encoded, form, and JSON representations. The active
-  snapshot stays exact and volatile; manual export is separate. Do not promise complete
-  sanitization of arbitrary bodies or retroactive cleanup of old files/backups.
-- Requests may declare `@no-log`; literal auth suggests disabling persistence.
+- Interactive history stays in memory for the current session. The old persisted
+  history and workspace-defaults controls are not exposed or applied. Known-private
+  values remain masked in metadata, errors, and assertions; active response snapshots
+  stay exact and volatile, while manual export is separate.
+- Requests may declare `@no-log` to omit a session history entry.
 - Group by stable request identity, supporting reopen and two-response comparison.
 - Rerun uses the current environment and normal preparation/confirmation, never old
   serialized secrets.
@@ -769,7 +770,8 @@ Implementation order:
 6. Declarative assertions and headless execution.
 7. Additional codegen after cURL and `.http` are correct.
 
-Target CLI, preserving `tuiminal http [directory]`:
+Target CLI, preserving the accepted `tuiminal http [directory]` spelling while
+the interactive HTTP home ignores that directory:
 
 ```text
 tuiminal http [directory]
@@ -778,8 +780,8 @@ tuiminal http import curl <command> [--output <directory>]
 tuiminal http import postman|openapi <file> [--output <directory>]
 ```
 
-`run` and `import` are reserved only after `http`; project-directory invocation
-continues to work. TUI/headless share parser, resolver, transport, assertions, and
+`run` and `import` are reserved only after `http`; explicit file paths for those
+commands retain their own roots. TUI/headless share parser, resolver, transport, assertions, and
 redaction. This target sketch must be read alongside implemented scope above.
 
 ## Proposed architecture
@@ -1023,18 +1025,19 @@ Deliverables:
 
 - `.http`/`.rest` scanner, tree, search, watcher, and lossless multi-request parser/serializer.
 - Save, duplicate, rename, move, and delete requests.
-- Public/private environments, variable preview/autocomplete, optional keychain.
+- Private environment creation with public-file read compatibility, variable
+  preview/autocomplete, and system credential storage.
 - Prototyped, versioned `.tuiminal/http/config.json` schema for nonsecret workspace/
   collection defaults.
 - cURL preview import/export with quoting and masking.
 - Multipart/file bodies with constrained paths.
 - Scratch-to-file migration without data loss.
-- Compatibility with `tuiminal http [directory]`.
+- Compatibility with `tuiminal http [directory]` while using the global interactive home.
 
 Exit criteria:
 
 - `.http` fixture round-trips do not change bytes outside the edited block.
-- A new project never restores the previous project's collection/environment.
+- Changing the opened project preserves the interactive HTTP collection/environment.
 - Private secrets do not appear in public files, exposed snapshots, or history.
 - External conflicts are never silently overwritten.
 
@@ -1136,7 +1139,7 @@ Use an isolated ephemeral HTTP server for:
 
 ### CLI and gate
 
-- Preserve `tuiminal http [directory]`.
+- Preserve parsing of `tuiminal http [directory]`; the interactive data remains global.
 - Test `run`, reports, and exit codes without external network access.
 - Import into temporary directories.
 - Run `bun run check` and `git diff --check` for every delivery.
@@ -1176,8 +1179,8 @@ Use an isolated ephemeral HTTP server for:
 - **Chosen:** state independent of color/animation; accessible/reduced-motion target
   and linear headless output.
 - **Chosen:** canonical versionable `.http`, with UI state stored separately.
-- **Chosen:** current project root takes priority over restored sessions.
-- **Chosen:** session history by default; redacted persistence only by opt-in.
+- **Chosen:** the interactive HTTP home remains the same when the opened project changes.
+- **Chosen:** interactive history remains in memory for the current session.
 - **Chosen:** no implicit host-environment loading.
 - **Chosen:** up to six mounted requests, matching SQL workspace limits.
 - **Chosen:** label partial timing honestly; do not simulate DNS/TLS measurements.
@@ -1195,7 +1198,7 @@ items against recorded progress, not as automatic new tasks.
 
 The plan is implemented, beyond a new-looking screen, when:
 
-1. Scratch, project `.http`, environments, secrets, and history have clear boundaries.
+1. Scratch, global interactive `.http`, environments, secrets, and history have clear boundaries.
 2. Request/response workflows support keyboard and mouse in both layouts.
 3. `.http` round-trips losslessly and runs in TUI and headless mode.
 4. Response inspection, search, copy/save, truncation, and errors are accurate.
