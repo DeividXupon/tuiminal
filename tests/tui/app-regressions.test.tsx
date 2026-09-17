@@ -79,6 +79,8 @@ test("switches from framed to compact without registering duplicate global tabs"
   expect(getUiSettings().layout).toBe("compact")
   expect(tui.renderer.root.findDescendantById("configuration-section-layout")).toBeDefined()
   expect(tui.renderer.root.findDescendantById("tutorial-app-header")).toBeDefined()
+  await act(async () => tui?.mockMouse.click(0, 0))
+  await settle(() => !tui?.renderer.root.findDescendantById("configuration-modal"))
 })
 
 test("switches from the default Dark mode to Light in global settings", async () => {
@@ -167,6 +169,9 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
   await settle(() => !tui?.captureCharFrame().includes("CARREGANDO CONFIGURAÇÃO GIT…"))
   await click("git-configuration-tab-repositories")
   expect(tui.captureCharFrame()).toContain("TODOS")
+  expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeDefined()
+  await act(async () => tui?.mockMouse.click(119, 0))
+  await settle(() => !tui?.renderer.root.findDescendantById("git-configuration-modal"))
 })
 
 test("global shortcuts leave Database after closing the connection form", async () => {

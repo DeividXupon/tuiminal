@@ -1,10 +1,10 @@
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import { validGitHubBranch } from "../../model/create-item"
@@ -192,154 +192,119 @@ export function GitHubCreateBranchPicker({
   const width = Math.max(38, Math.min(76, terminal.width - 4))
   const height = Math.max(12, Math.min(25, terminal.height - 2))
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={984}
-        backgroundColor="#030509"
-        opacity={0.94}
-      />
+    <ModalSurface
+      id="git-create-branch-picker"
+      dialogRef={dialogRef}
+      width={width}
+      height={height}
+      zIndex={984}
+      borderColor={COLORS.git}
+      backdropOpacity={0.94}
+      onBackdropPress={onClose}
+    >
       <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={985}
-        alignItems="center"
-        justifyContent="center"
+        style={{
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
+        }}
       >
-        <box
-          ref={dialogRef}
-          id="git-create-branch-picker"
-          focusable
-          style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text
-              content={translateUi(
-                side === "base" ? "ESCOLHER BRANCH BASE" : "ESCOLHER BRANCH COMPARADA",
-              )}
-              style={{ fg: COLORS.git }}
-            />
-            <InlineButton
-              label={translateUi("[Esc] Voltar")}
-              accent={COLORS.git}
-              onPress={onClose}
-            />
-          </box>
-          <text content={`${host} · ${repository}`} style={{ fg: COLORS.muted }} />
-          <input
-            ref={searchRef}
-            id="git-create-branch-search"
-            value={query}
-            placeholder={translateUi("⌕ Filtrar branch…")}
-            onInput={setQuery}
-            onSubmit={() => listRef.current?.focus()}
-            onMouseDown={() => searchRef.current?.focus()}
-            width={width - 4}
-            style={{
-              marginTop: 1,
-              marginBottom: 1,
-              backgroundColor: COLORS.panelRaised,
-              focusedBackgroundColor: COLORS.panelRaised,
-              textColor: COLORS.text,
-              focusedTextColor: COLORS.text,
-              cursorColor: COLORS.git,
-            }}
-          />
-          {options.length ? (
-            <select
-              ref={listRef}
-              id="git-create-branch-list"
-              options={options}
-              selectedIndex={selectedIndex}
-              onChange={setSelectedIndex}
-              onSelect={(_index, option) => {
-                if (typeof option?.value !== "string") return
-                onSelect(option.value)
-                onClose()
-              }}
-              onMouseDown={(event) =>
-                handleSelectMouseDown(event, listRef.current, {
-                  optionCount: options.length,
-                  showDescription: true,
-                  activateOnClick: true,
-                })
-              }
-              onMouseScroll={(event) => handleSelectMouseScroll(event, listRef.current)}
-              showDescription
-              showScrollIndicator
-              wrapSelection
-              style={{
-                flexGrow: 1,
-                backgroundColor: COLORS.panel,
-                focusedBackgroundColor: COLORS.panel,
-                textColor: COLORS.muted,
-                focusedTextColor: COLORS.text,
-                selectedBackgroundColor: COLORS.panelRaised,
-                selectedTextColor: COLORS.git,
-                descriptionColor: COLORS.muted,
-                selectedDescriptionColor: COLORS.text,
-              }}
-            />
-          ) : (
-            <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-              <text
-                content={translateUi(
-                  loading ? "Carregando branches…" : "Nenhuma branch encontrada.",
-                )}
-                style={{ fg: COLORS.muted }}
-              />
-            </box>
+        <text
+          content={translateUi(
+            side === "base" ? "ESCOLHER BRANCH BASE" : "ESCOLHER BRANCH COMPARADA",
           )}
-          {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row", gap: 2 }}>
-            {nextPage ? (
-              <InlineButton
-                label={translateUi("[M] Mais branches")}
-                accent={COLORS.git}
-                disabled={loading}
-                onPress={() => void loadPage(nextPage)}
-              />
-            ) : null}
-            {error ? (
-              <InlineButton
-                label={translateUi("[R] Tentar novamente")}
-                accent={COLORS.git}
-                onPress={() => void loadPage(branches.length ? (nextPage ?? 1) : 1)}
-              />
-            ) : null}
-          </box>
-          <ShortcutText
-            content={translateUi("[/] Filtrar  [↑/↓] Navegar  [Enter] Selecionar")}
-            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+          style={{ fg: COLORS.git }}
+        />
+        <InlineButton label={translateUi("[Esc] Voltar")} accent={COLORS.git} onPress={onClose} />
+      </box>
+      <text content={`${host} · ${repository}`} style={{ fg: COLORS.muted }} />
+      <input
+        ref={searchRef}
+        id="git-create-branch-search"
+        value={query}
+        placeholder={translateUi("⌕ Filtrar branch…")}
+        onInput={setQuery}
+        onSubmit={() => listRef.current?.focus()}
+        onMouseDown={() => searchRef.current?.focus()}
+        width={width - 4}
+        style={{
+          marginTop: 1,
+          marginBottom: 1,
+          backgroundColor: COLORS.panelRaised,
+          focusedBackgroundColor: COLORS.panelRaised,
+          textColor: COLORS.text,
+          focusedTextColor: COLORS.text,
+          cursorColor: COLORS.git,
+        }}
+      />
+      {options.length ? (
+        <select
+          ref={listRef}
+          id="git-create-branch-list"
+          options={options}
+          selectedIndex={selectedIndex}
+          onChange={setSelectedIndex}
+          onSelect={(_index, option) => {
+            if (typeof option?.value !== "string") return
+            onSelect(option.value)
+            onClose()
+          }}
+          onMouseDown={(event) =>
+            handleSelectMouseDown(event, listRef.current, {
+              optionCount: options.length,
+              showDescription: true,
+              activateOnClick: true,
+            })
+          }
+          onMouseScroll={(event) => handleSelectMouseScroll(event, listRef.current)}
+          showDescription
+          showScrollIndicator
+          wrapSelection
+          style={{
+            flexGrow: 1,
+            backgroundColor: COLORS.panel,
+            focusedBackgroundColor: COLORS.panel,
+            textColor: COLORS.muted,
+            focusedTextColor: COLORS.text,
+            selectedBackgroundColor: COLORS.panelRaised,
+            selectedTextColor: COLORS.git,
+            descriptionColor: COLORS.muted,
+            selectedDescriptionColor: COLORS.text,
+          }}
+        />
+      ) : (
+        <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
+          <text
+            content={translateUi(loading ? "Carregando branches…" : "Nenhuma branch encontrada.")}
+            style={{ fg: COLORS.muted }}
           />
         </box>
+      )}
+      {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", gap: 2 }}>
+        {nextPage ? (
+          <InlineButton
+            label={translateUi("[M] Mais branches")}
+            accent={COLORS.git}
+            disabled={loading}
+            onPress={() => void loadPage(nextPage)}
+          />
+        ) : null}
+        {error ? (
+          <InlineButton
+            label={translateUi("[R] Tentar novamente")}
+            accent={COLORS.git}
+            onPress={() => void loadPage(branches.length ? (nextPage ?? 1) : 1)}
+          />
+        ) : null}
       </box>
-    </>
+      <ShortcutText
+        content={translateUi("[/] Filtrar  [↑/↓] Navegar  [Enter] Selecionar")}
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+      />
+    </ModalSurface>
   )
 }

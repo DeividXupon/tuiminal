@@ -10,6 +10,8 @@ import type { GhTransportOptions } from "./github/transport"
 import { cachedSectionPageDepth } from "./page-depth"
 import { resolveGitProjectContext } from "./git"
 import { mapWithConcurrency } from "./map-concurrently"
+import { rememberRemoteCacheEntry } from "./remote-cache"
+import { aggregateRemotePages, mergeRemoteItems } from "./remote-session-items"
 
 const issueResourceDisposers = new Set<() => void | Promise<void>>()
 const ISSUE_SECTION_CACHE_LIMIT = 64
@@ -54,21 +56,7 @@ type IssueCacheEntry = Extract<IssueSessionResult, { status: "ready" }> & {
 }
 
 function aggregatePages(pages: Awaited<ReturnType<typeof searchIssuesPage>>[]) {
-  const items = new Map<string, IssueSummary>()
-  let totalCount = 0
-  let totalKnown = true
-  let partial = false
-  for (const page of pages) {
-    partial ||= page.partial || page.hasNextPage
-    if (page.totalCount === null) totalKnown = false
-    else totalCount += page.totalCount
-    for (const item of page.items) items.set(issueIdentityKey(item.identity), item)
-  }
-  return {
-    items: [...items.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    totalCount: totalKnown ? totalCount : null,
-    partial,
-  }
+  return aggregateRemotePages(pages, (item) => issueIdentityKey(item.identity))
 }
 
 function cacheKey(
@@ -92,9 +80,7 @@ function publicCacheEntry(entry: IssueCacheEntry, fromCache: boolean) {
 }
 
 function mergeIssueItems(current: readonly IssueSummary[], additions: readonly IssueSummary[]) {
-  const items = new Map(current.map((item) => [issueIdentityKey(item.identity), item]))
-  for (const item of additions) items.set(issueIdentityKey(item.identity), item)
-  return [...items.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  return mergeRemoteItems(current, additions, (item) => issueIdentityKey(item.identity))
 }
 
 export class IssueSession {
@@ -112,13 +98,7 @@ export class IssueSession {
   }
 
   private remember(key: string, entry: IssueCacheEntry) {
-    this.cache.delete(key)
-    this.cache.set(key, entry)
-    while (this.cache.size > ISSUE_SECTION_CACHE_LIMIT) {
-      const oldest = this.cache.keys().next().value
-      if (typeof oldest !== "string") break
-      this.cache.delete(oldest)
-    }
+    rememberRemoteCacheEntry(this.cache, key, entry, ISSUE_SECTION_CACHE_LIMIT)
   }
 
   async loadSection(

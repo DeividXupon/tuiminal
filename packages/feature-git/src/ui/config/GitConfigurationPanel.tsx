@@ -1,9 +1,9 @@
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { Button } from "@tuiparts/react/button"
 import type { RefObject } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { GitConfigurationTab } from "../../model/git-configuration"
@@ -227,119 +227,85 @@ export function GitConfigurationPanel({
         ? `${translateUi("REPOSITÓRIO ATUAL")}: ${context.remote.repository}`
         : translateUi("FORA DE UM REPOSITÓRIO · ESCOPO PADRÃO: TODOS")
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={970}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
+    <ModalSurface
+      id="git-configuration-modal"
+      dialogRef={dialogRef}
+      width={width}
+      height={height}
+      zIndex={970}
+      borderColor={COLORS.git}
+      positionRelative
+      onBackdropPress={onClose}
+    >
       <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={971}
-        alignItems="center"
-        justifyContent="center"
+        style={{
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
+        }}
       >
-        <box
-          ref={dialogRef}
-          id="git-configuration-modal"
-          focusable
-          style={{
-            position: "relative",
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text content={translateUi("◆ CONFIGURAÇÕES DO GIT")} style={{ fg: COLORS.git }} />
-            <InlineButton
-              label={translateUi("[Esc] Fechar")}
-              accent={COLORS.git}
-              onPress={onClose}
-            />
-          </box>
-          <GitConfigurationTabs active={tab} compact={width < 82} onSelect={onSelectTab} />
-          {ready ? (
-            <text
-              content={tab === "diffs" ? contextLabel : `${contextLabel} · ${ready.host}`}
-              style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-            />
-          ) : null}
-          {ready?.scopeMismatch && tab !== "diffs" ? (
-            <text
-              content={translateUi(
-                "PR e Issues usam escopos antigos diferentes; uma seleção em Repositórios sincroniza os dois.",
-              )}
-              style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
-            />
-          ) : null}
-          <scrollbox
-            ref={listRef}
-            scrollY
-            style={{ flexGrow: 1, marginTop: 1 }}
-            verticalScrollbarOptions={{
-              trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
-            }}
-          >
-            <GitConfigurationList
-              state={state}
-              ready={ready}
-              tab={tab}
-              sections={sections}
-              selectedIndex={selectedIndex}
-              selectedRepositories={selectedRepositories}
-              width={width}
-              onSelect={onSelect}
-              onToggleRepository={onToggleRepository}
-              onConfigureLocal={onConfigureLocal}
-            />
-          </scrollbox>
-          <GitConfigurationFooter
-            state={state}
-            tab={tab}
-            selected={selected}
-            canDelete={selected && sections.length > 1}
-            pendingDelete={pendingDelete}
-            onReload={onReload}
-            onCreate={onCreate}
-            onEdit={onEdit}
-            onMutate={onMutate}
-          />
-          {notice ? (
-            <text content={notice} style={{ height: 1, flexShrink: 0, fg: COLORS.warning }} />
-          ) : null}
-          <PlasmaLoadingOverlay
-            active={state.status === "loading"}
-            label="CARREGANDO CONFIGURAÇÃO GIT…"
-            accent={COLORS.git}
-            background={COLORS.canvas}
-          />
-        </box>
+        <text content={translateUi("◆ CONFIGURAÇÕES DO GIT")} style={{ fg: COLORS.git }} />
+        <InlineButton label={translateUi("[Esc] Fechar")} accent={COLORS.git} onPress={onClose} />
       </box>
-    </>
+      <GitConfigurationTabs active={tab} compact={width < 82} onSelect={onSelectTab} />
+      {ready ? (
+        <text
+          content={tab === "diffs" ? contextLabel : `${contextLabel} · ${ready.host}`}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+      ) : null}
+      {ready?.scopeMismatch && tab !== "diffs" ? (
+        <text
+          content={translateUi(
+            "PR e Issues usam escopos antigos diferentes; uma seleção em Repositórios sincroniza os dois.",
+          )}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
+        />
+      ) : null}
+      <scrollbox
+        ref={listRef}
+        scrollY
+        style={{ flexGrow: 1, marginTop: 1 }}
+        verticalScrollbarOptions={{
+          trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
+        }}
+      >
+        <GitConfigurationList
+          state={state}
+          ready={ready}
+          tab={tab}
+          sections={sections}
+          selectedIndex={selectedIndex}
+          selectedRepositories={selectedRepositories}
+          width={width}
+          onSelect={onSelect}
+          onToggleRepository={onToggleRepository}
+          onConfigureLocal={onConfigureLocal}
+        />
+      </scrollbox>
+      <GitConfigurationFooter
+        state={state}
+        tab={tab}
+        selected={selected}
+        canDelete={selected && sections.length > 1}
+        pendingDelete={pendingDelete}
+        onReload={onReload}
+        onCreate={onCreate}
+        onEdit={onEdit}
+        onMutate={onMutate}
+      />
+      {notice ? (
+        <text content={notice} style={{ height: 1, flexShrink: 0, fg: COLORS.warning }} />
+      ) : null}
+      <PlasmaLoadingOverlay
+        active={state.status === "loading"}
+        label="CARREGANDO CONFIGURAÇÃO GIT…"
+        accent={COLORS.git}
+        background={COLORS.canvas}
+      />
+    </ModalSurface>
   )
 }

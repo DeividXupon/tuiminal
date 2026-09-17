@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { GitHubCreateDraft } from "../../model/create-item"
 import { validateGitHubCreateDraft } from "../../model/create-item"
@@ -208,149 +209,117 @@ export function GitHubCreateModal({
   const invalid = validateGitHubCreateDraft(draft)
   return (
     <>
-      <Button
-        onPress={() => {
+      <ModalSurface
+        id="git-create-modal"
+        dialogRef={dialogRef}
+        width={width}
+        height={height}
+        zIndex={982}
+        borderColor={COLORS.git}
+        onBackdropPress={() => {
           if (!busy) onClose()
         }}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={982}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
-      <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={983}
-        alignItems="center"
-        justifyContent="center"
       >
         <box
-          ref={dialogRef}
-          id="git-create-modal"
-          focusable
           style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
+            height: 2,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            border: ["bottom"],
+            borderColor: COLORS.border,
           }}
         >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text
-              content={translateUi(draft.kind === "pr" ? "CRIAR PR" : "CRIAR ISSUE")}
-              style={{ fg: COLORS.git }}
-            />
-            <InlineButton
-              label={translateUi("[Esc] Cancelar")}
-              accent={COLORS.git}
-              disabled={busy}
-              onPress={onClose}
-            />
-          </box>
-          <text content={`${host} · @${viewer}`} style={{ fg: COLORS.muted }} />
-          <scrollbox scrollY style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
-            <box style={{ gap: 1 }}>
-              {choiceField(
-                "repository",
-                "Repositório (owner/repository)",
-                "Selecionar repositório…",
-              )}
-              {draft.kind === "pr" ? (
-                <>
-                  {choiceField("base", "Branch base (remota)", "Selecionar branch…")}
-                  {choiceField(
-                    "head",
-                    "Branch comparada (remota, mesmo repositório)",
-                    "Selecionar branch…",
-                  )}
-                </>
-              ) : null}
-              {titleField()}
-              <box>
-                <text content={translateUi("Descrição (Markdown)")} style={{ fg: COLORS.muted }} />
-                <textarea
-                  ref={bodyRef}
-                  id="git-create-field-body"
-                  initialValue={draft.body}
-                  onMouseDown={() => bodyRef.current?.focus()}
-                  onContentChange={() => onChange({ body: bodyRef.current?.plainText ?? "" })}
-                  style={{
-                    height: 4,
-                    flexShrink: 0,
-                    wrapMode: "word",
-                    backgroundColor: COLORS.panelRaised,
-                    focusedBackgroundColor: COLORS.panelRaised,
-                    textColor: COLORS.text,
-                    focusedTextColor: COLORS.text,
-                    cursorColor: COLORS.git,
-                  }}
-                />
-              </box>
-              {draft.kind === "pr" ? (
-                <InlineButton
-                  label={translateUi(draft.draft ? "[D] Draft: sim" : "[D] Draft: não")}
-                  accent={COLORS.git}
-                  onPress={() => onChange({ draft: !draft.draft })}
-                />
-              ) : null}
-            </box>
-          </scrollbox>
           <text
-            content={translateUi("Revise os dados antes de criar no GitHub.")}
-            style={{ fg: COLORS.warning }}
+            content={translateUi(draft.kind === "pr" ? "CRIAR PR" : "CRIAR ISSUE")}
+            style={{ fg: COLORS.git }}
           />
-          <text
-            content={error || (invalid ? translateUi(invalid) : "")}
-            style={{ fg: COLORS.danger }}
+          <InlineButton
+            label={translateUi("[Esc] Cancelar")}
+            accent={COLORS.git}
+            disabled={busy}
+            onPress={onClose}
           />
-          {uncertain ? (
-            <InlineButton
-              label={translateUi("[V] Verifiquei no GitHub; permitir nova tentativa")}
-              accent={COLORS.git}
-              onPress={onAcknowledge}
-            />
-          ) : null}
-          <box
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
-          >
-            <ShortcutText
-              content={translateUi("[Tab] Próximo campo  [Esc] Desfocar/cancelar")}
-              style={{ fg: COLORS.muted }}
-            />
-            <InlineButton
-              label={translateUi(busy ? "[Ctrl+S] Criando…" : "[Ctrl+S] Criar")}
-              accent={COLORS.git}
-              disabled={busy || uncertain || Boolean(invalid)}
-              onPress={onSubmit}
-            />
-          </box>
         </box>
-      </box>
+        <text content={`${host} · @${viewer}`} style={{ fg: COLORS.muted }} />
+        <scrollbox scrollY style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
+          <box style={{ gap: 1 }}>
+            {choiceField("repository", "Repositório (owner/repository)", "Selecionar repositório…")}
+            {draft.kind === "pr" ? (
+              <>
+                {choiceField("base", "Branch base (remota)", "Selecionar branch…")}
+                {choiceField(
+                  "head",
+                  "Branch comparada (remota, mesmo repositório)",
+                  "Selecionar branch…",
+                )}
+              </>
+            ) : null}
+            {titleField()}
+            <box>
+              <text content={translateUi("Descrição (Markdown)")} style={{ fg: COLORS.muted }} />
+              <textarea
+                ref={bodyRef}
+                id="git-create-field-body"
+                initialValue={draft.body}
+                onMouseDown={() => bodyRef.current?.focus()}
+                onContentChange={() => onChange({ body: bodyRef.current?.plainText ?? "" })}
+                style={{
+                  height: 4,
+                  flexShrink: 0,
+                  wrapMode: "word",
+                  backgroundColor: COLORS.panelRaised,
+                  focusedBackgroundColor: COLORS.panelRaised,
+                  textColor: COLORS.text,
+                  focusedTextColor: COLORS.text,
+                  cursorColor: COLORS.git,
+                }}
+              />
+            </box>
+            {draft.kind === "pr" ? (
+              <InlineButton
+                label={translateUi(draft.draft ? "[D] Draft: sim" : "[D] Draft: não")}
+                accent={COLORS.git}
+                onPress={() => onChange({ draft: !draft.draft })}
+              />
+            ) : null}
+          </box>
+        </scrollbox>
+        <text
+          content={translateUi("Revise os dados antes de criar no GitHub.")}
+          style={{ fg: COLORS.warning }}
+        />
+        <text
+          content={error || (invalid ? translateUi(invalid) : "")}
+          style={{ fg: COLORS.danger }}
+        />
+        {uncertain ? (
+          <InlineButton
+            label={translateUi("[V] Verifiquei no GitHub; permitir nova tentativa")}
+            accent={COLORS.git}
+            onPress={onAcknowledge}
+          />
+        ) : null}
+        <box
+          style={{
+            height: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
+          }}
+        >
+          <ShortcutText
+            content={translateUi("[Tab] Próximo campo  [Esc] Desfocar/cancelar")}
+            style={{ fg: COLORS.muted }}
+          />
+          <InlineButton
+            label={translateUi(busy ? "[Ctrl+S] Criando…" : "[Ctrl+S] Criar")}
+            accent={COLORS.git}
+            disabled={busy || uncertain || Boolean(invalid)}
+            onPress={onSubmit}
+          />
+        </box>
+      </ModalSurface>
       {picker === "repository" ? (
         <GitHubCreateRepositoryPicker
           host={host}

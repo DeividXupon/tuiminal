@@ -106,6 +106,9 @@ test("PR creation opens by mouse and Ctrl+N, preserving the modal Escape focus s
   await key("escape")
   expect(Boolean(tui.renderer.root.findDescendantById("git-create-repository-picker"))).toBe(false)
   expect(Boolean(tui.renderer.root.findDescendantById("git-create-modal"))).toBe(true)
+  await act(async () => tui?.mockMouse.click(139, 0))
+  await render()
+  expect(Boolean(tui.renderer.root.findDescendantById("git-create-modal"))).toBe(false)
 })
 
 test("Issue creation is available without selecting an item and has a mouse control", async () => {

@@ -1,10 +1,10 @@
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { IssueActionKind } from "../../model/issue/actions"
 import { GITHUB_REACTION_CHOICES, type GitHubReactionContent } from "../../model/reactions"
@@ -177,141 +177,107 @@ export function IssueActionModal({
     !labelPayload(value, currentLabels).addLabels.length &&
     !labelPayload(value, currentLabels).removeLabels.length
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={982}
-        backgroundColor="#030509"
-        opacity={0.92}
+    <ModalSurface
+      id="git-issue-action-modal"
+      dialogRef={dialogRef}
+      width={width}
+      height={kind === "checkout" || kind === "reaction" ? 18 : 16}
+      zIndex={982}
+      borderColor={COLORS.git}
+      onBackdropPress={onClose}
+    >
+      <box
+        style={{
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
+        }}
+      >
+        <text
+          content={`◆ ${translateUi(targetComment && kind === "reaction" ? "Reagir no comentário" : LABELS[kind]).toUpperCase()}`}
+          style={{ fg: COLORS.git }}
+        />
+        <InlineButton label={translateUi("[Esc] Cancelar")} accent={COLORS.git} onPress={onClose} />
+      </box>
+      <text
+        content={`${item.identity.host} · ${item.identity.owner}/${item.identity.repository} #${item.identity.number}`}
+        style={{ fg: COLORS.text }}
+      />
+      <text
+        content={`${item.title} · ${translateUi(item.state === "open" ? "ABERTA" : "FECHADA")}`}
+        style={{ fg: COLORS.muted }}
+      />
+      {targetComment ? (
+        <text
+          content={`↳ @${targetComment.author.login}: ${truncateDisplay(targetComment.body.replace(/\s+/g, " "), width - 8)}`}
+          style={{ fg: COLORS.git }}
+        />
+      ) : null}
+      {input ? (
+        <input
+          ref={inputRef}
+          id="git-issue-action-input"
+          value={value}
+          placeholder={translateUi(placeholder(kind))}
+          maxLength={kind === "comment" || kind === "reply" ? 65_000 : 2_048}
+          onMouseDown={() => inputRef.current?.focus()}
+          onInput={(next) => {
+            valueRef.current = next
+            setValue(next)
+            onValueChange(next)
+          }}
+          style={{
+            marginTop: 1,
+            backgroundColor: COLORS.panelRaised,
+            focusedBackgroundColor: COLORS.panelRaised,
+            textColor: COLORS.text,
+            focusedTextColor: COLORS.text,
+            cursorColor: COLORS.git,
+            placeholderColor: COLORS.muted,
+          }}
+        />
+      ) : null}
+      <IssueActionOptions
+        kind={kind}
+        value={value}
+        reaction={reaction}
+        reactionGroups={reactionGroups ?? []}
+        currentAssignees={currentAssignees}
+        checkoutPaths={checkoutPaths}
+        onValue={(next) => {
+          valueRef.current = next
+          setValue(next)
+          onValueChange(next)
+        }}
+        onReaction={setReaction}
+      />
+      <text
+        content={error || translateUi("Nada será executado até a confirmação abaixo.")}
+        style={{ marginTop: 1, fg: error ? COLORS.danger : COLORS.warning }}
       />
       <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={983}
-        alignItems="center"
-        justifyContent="center"
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 1,
+        }}
       >
-        <box
-          ref={dialogRef}
-          id="git-issue-action-modal"
-          focusable
-          style={{
-            width,
-            height: kind === "checkout" || kind === "reaction" ? 18 : 16,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text
-              content={`◆ ${translateUi(targetComment && kind === "reaction" ? "Reagir no comentário" : LABELS[kind]).toUpperCase()}`}
-              style={{ fg: COLORS.git }}
-            />
-            <InlineButton
-              label={translateUi("[Esc] Cancelar")}
-              accent={COLORS.git}
-              onPress={onClose}
-            />
-          </box>
-          <text
-            content={`${item.identity.host} · ${item.identity.owner}/${item.identity.repository} #${item.identity.number}`}
-            style={{ fg: COLORS.text }}
-          />
-          <text
-            content={`${item.title} · ${translateUi(item.state === "open" ? "ABERTA" : "FECHADA")}`}
-            style={{ fg: COLORS.muted }}
-          />
-          {targetComment ? (
-            <text
-              content={`↳ @${targetComment.author.login}: ${truncateDisplay(targetComment.body.replace(/\s+/g, " "), width - 8)}`}
-              style={{ fg: COLORS.git }}
-            />
-          ) : null}
-          {input ? (
-            <input
-              ref={inputRef}
-              id="git-issue-action-input"
-              value={value}
-              placeholder={translateUi(placeholder(kind))}
-              maxLength={kind === "comment" || kind === "reply" ? 65_000 : 2_048}
-              onMouseDown={() => inputRef.current?.focus()}
-              onInput={(next) => {
-                valueRef.current = next
-                setValue(next)
-                onValueChange(next)
-              }}
-              style={{
-                marginTop: 1,
-                backgroundColor: COLORS.panelRaised,
-                focusedBackgroundColor: COLORS.panelRaised,
-                textColor: COLORS.text,
-                focusedTextColor: COLORS.text,
-                cursorColor: COLORS.git,
-                placeholderColor: COLORS.muted,
-              }}
-            />
-          ) : null}
-          <IssueActionOptions
-            kind={kind}
-            value={value}
-            reaction={reaction}
-            reactionGroups={reactionGroups ?? []}
-            currentAssignees={currentAssignees}
-            checkoutPaths={checkoutPaths}
-            onValue={(next) => {
-              valueRef.current = next
-              setValue(next)
-              onValueChange(next)
-            }}
-            onReaction={setReaction}
-          />
-          <text
-            content={error || translateUi("Nada será executado até a confirmação abaixo.")}
-            style={{ marginTop: 1, fg: error ? COLORS.danger : COLORS.warning }}
-          />
-          <box
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 1,
-            }}
-          >
-            <ShortcutText
-              content={translateUi("[Esc] desfocar/cancelar")}
-              style={{ fg: COLORS.muted }}
-            />
-            <InlineButton
-              label={translateUi(busy ? "[Ctrl+S] Executando…" : "[Ctrl+S] Confirmar")}
-              accent={COLORS.git}
-              disabled={busy || (input && kind !== "labels" && !value.trim()) || noLabelChange}
-              onPress={submit}
-            />
-          </box>
-        </box>
+        <ShortcutText
+          content={translateUi("[Esc] desfocar/cancelar")}
+          style={{ fg: COLORS.muted }}
+        />
+        <InlineButton
+          label={translateUi(busy ? "[Ctrl+S] Executando…" : "[Ctrl+S] Confirmar")}
+          accent={COLORS.git}
+          disabled={busy || (input && kind !== "labels" && !value.trim()) || noLabelChange}
+          onPress={submit}
+        />
       </box>
-    </>
+    </ModalSurface>
   )
 }
