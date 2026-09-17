@@ -105,6 +105,7 @@ function buildJsonTree(
       lines.push({
         path: null,
         tokens: [
+          { text: "  ", kind: "plain" },
           indent,
           ...propertyTokens(key),
           valueToken(current),
@@ -126,8 +127,8 @@ function buildJsonTree(
     })
     const marker = details.entries.length ? (isCollapsed ? "▸ " : "▾ ") : "  "
     const opening: HttpJsonTreeToken[] = [
-      indent,
       { text: marker, kind: "marker" },
+      indent,
       ...propertyTokens(key),
       { text: details.open, kind: "punctuation" },
     ]
@@ -155,6 +156,7 @@ function buildJsonTree(
     lines.push({
       path: null,
       tokens: [
+        { text: "  ", kind: "plain" },
         { text: "  ".repeat(depth), kind: "plain" },
         { text: `${details.close}${comma ? "," : ""}`, kind: "punctuation" },
       ],

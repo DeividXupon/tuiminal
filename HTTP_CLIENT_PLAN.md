@@ -86,7 +86,7 @@ OpenAPI, scripts, and WebSocket do not come first.
 - **Phase 4 — complete within current scope:** Postman/OpenAPI preview imports,
   assertions, chaining, volatile secret extraction, TUI dataset/concurrency runner,
   and text/JSON/JUnit CLI reports. Individual sends use the same engine and resolve
-  dependencies topologically. Versioned Postman v2.1, OpenAPI 3.0 JSON, and 3.1 YAML
+  dependencies topologically. Versioned Postman v2.0/v2.1, OpenAPI 3.0 JSON, and 3.1 YAML
   fixtures cover inheritance, secrets, bodies, local `$ref`, `allOf`, servers,
   overrides, and explicit losses. CLI/TUI import, preview, and protected writes
   are exercised without leaking literals.
@@ -230,7 +230,7 @@ truncation, redirects, binary/error handling, ownership, and security.
 | Comparable history | Session, 30 | Not identified | Response can accompany request | Per-request persistent + diff | Persistent, 100 |
 | Response search | No | Planned | Not identified | Yes | Yes |
 | cURL | No | Import/export | Import/export + other languages | Import/export + codegen | Export |
-| Postman/OpenAPI import | No | Both experimental | Both | Postman, Insomnia, Bruno, OpenAPI | Postman v2.1 |
+| Postman/OpenAPI import | No | Both experimental | Both | Postman, Insomnia, Bruno, OpenAPI | Postman v2.0/v2.1 |
 | Assertions/headless | No | Tests planned | Broad CLI; assertion framework not identified | Yes | No |
 | Explicit cancellation | Yes | Async worker; clear cancel action not identified | `CancellationToken` | Not identified in TUI | Planned |
 | Explicit body limit | 1.5 MB | Not identified | Not identified | No; full read | No; full read |
@@ -764,8 +764,10 @@ Implementation order:
 1. Copy/export cURL with correct quoting and default redaction.
 2. Import cURL with preview before replacing drafts.
 3. Read, edit, and execute `.http`.
-4. Import Postman v2.1/OpenAPI 3.x into a selected directory with supported/ignored/
-   conflicting item reports.
+4. Detect Postman v2.0/v2.1/OpenAPI 3.x from an absolute or `~/` source at preview
+   time and import into the global HTTP home's fixed `imported/` directory in the
+   interactive client, with supported/ignored/conflicting item reports.
+   Headless import keeps its explicit source and output paths.
 5. Consider Bruno/Insomnia only with demonstrated demand.
 6. Declarative assertions and headless execution.
 7. Additional codegen after cURL and `.http` are correct.
@@ -1063,7 +1065,7 @@ Exit criteria:
 
 Deliverables:
 
-- Postman v2.1/OpenAPI 3.x imports with compatibility reports.
+- Postman v2.0/v2.1/OpenAPI 3.x imports with compatibility reports.
 - Declarative `.http` assertions and a results tab.
 - Chaining without serializing extracted secrets.
 - `tuiminal http run` with text/JSON/JUnit reports and documented exit codes.

@@ -80,7 +80,7 @@ describe("HTTP workspace state", () => {
     let tree = httpJsonTreeForDocument(document)
     expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/user/profile", "/tags"])
     expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
-      '      "name": "Ada"',
+      '        "name": "Ada"',
     )
 
     const selected = updateHttpJsonTree(document, "next")
@@ -102,7 +102,7 @@ describe("HTTP workspace state", () => {
     tree = httpJsonTreeForDocument(document)
     expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/tags"])
     expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
-      '  ▸ "user": {… 1},',
+      '▸   "user": {… 1},',
     )
     expect(
       new TextDecoder().decode(
@@ -886,7 +886,7 @@ describe("HTTP keyboard ownership", () => {
       kind: "apply-overlay",
     })
     expect(command({ name: "f" }, "", false, "collection-import")).toEqual({
-      kind: "toggle-import-format",
+      kind: "ignore",
     })
     expect(command({ name: "b" }, "", false, "collection-import")).toEqual({
       kind: "back-import-preview",

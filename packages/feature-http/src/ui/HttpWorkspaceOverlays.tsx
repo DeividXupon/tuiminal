@@ -5,10 +5,7 @@ import type {
   HttpPane,
   HttpWorkspaceOverlay as HttpWorkspaceOverlayKind,
 } from "../model/types"
-import type {
-  HttpCollectionImportFormat,
-  HttpCollectionImportPreview,
-} from "../services/collection-import"
+import type { HttpCollectionImportPreview } from "../services/collection-import"
 import type {
   HttpExternalConflictPreview,
   HttpExternalConflictResolution,
@@ -68,15 +65,11 @@ export function HttpWorkspaceOverlays({
   onMoveTargetChange: (path: string) => void
   onApplyRequestFileAction: () => void
   collectionImport: {
-    format: HttpCollectionImportFormat
     sourcePath: string
-    outputDirectory: string
     preview: HttpCollectionImportPreview | null
     busy: boolean
     error: string
-    setFormat: (format: HttpCollectionImportFormat) => void
     setSourcePath: (path: string) => void
-    setOutputDirectory: (path: string) => void
     apply: () => Promise<void>
     back: () => void
   }
@@ -174,9 +167,7 @@ export function HttpWorkspaceOverlays({
           {...collectionImport}
           terminalWidth={terminalWidth}
           terminalHeight={terminalHeight}
-          onFormatChange={collectionImport.setFormat}
           onSourcePathChange={collectionImport.setSourcePath}
-          onOutputDirectoryChange={collectionImport.setOutputDirectory}
           onApply={() => void collectionImport.apply()}
           onBack={collectionImport.back}
           onClose={onClose}

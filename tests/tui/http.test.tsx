@@ -1,12 +1,19 @@
 import "./setup"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
-import { RGBA, type BoxRenderable, type InputRenderable } from "@opentui/core"
+import {
+  RGBA,
+  type BoxRenderable,
+  type InputRenderable,
+  type ScrollBoxRenderable,
+} from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 import { act } from "react"
 import {
   COLORS,
@@ -1334,10 +1341,32 @@ describe("HTTP TUI", () => {
     }
   })
 
+  test.each(["framed", "compact"] as const)(
+    "keeps the import modal border visible in %s layout",
+    async (layout) => {
+      updateUiSettings({ layout, language: "pt-BR" })
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
+      )
+      await press("http-collection-import-button")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
+      )
+      const modal = tui.renderer.root.findDescendantById(
+        "http-collection-import-modal",
+      ) as BoxRenderable
+      expect(modal.border).toBe(true)
+      expect(modal.borderStyle).toBe("rounded")
+      expect(tui.captureCharFrame().split("\n")[modal.screenY]?.[modal.screenX]).toBe("╭")
+    },
+  )
+
   test("previews and applies a versioned Postman import through the collection UI", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
-    const sourcePath = resolve(root, "postman-import-fixture.json")
-    const outputDirectory = resolve(root, ".tuiminal/http/imported")
+    const sourceDirectory = await mkdtemp(resolve(tmpdir(), "tuiminal-http-ui-source-"))
+    const sourcePath = resolve(sourceDirectory, "postman-import-fixture.json")
+    const outputDirectory = resolve(root, "imported")
     const fixture = await readFile(
       resolve(import.meta.dir, "../fixtures/http/import/postman-v2.1.json"),
       "utf8",
@@ -1352,13 +1381,31 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
       )
+      expect(tui.captureCharFrame()).toContain("SOLTE UM ARQUIVO AQUI")
+      const dropZone = tui.renderer.root.findDescendantById("http-collection-import-drop-zone")
+      expect(dropZone?.height).toBeGreaterThanOrEqual(10)
+      expect(tui.renderer.root.findDescendantById("http-collection-import-format")).toBeUndefined()
+      expect(tui.renderer.root.findDescendantById("http-collection-import-output")).toBeUndefined()
       await act(async () => {
-        tui?.mockInput.typeText("postman-import-fixture.json")
+        tui?.mockInput.typeText(sourcePath.slice(0, -5))
         await tui?.renderOnce()
       })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-suggestion-0")),
+      )
+      await key("TAB")
+      await settle(
+        () =>
+          (
+            tui?.renderer.root.findDescendantById(
+              "http-collection-import-source",
+            ) as InputRenderable
+          )?.value === sourcePath,
+      )
       await click("http-collection-import-apply")
       await settle(() => tui?.captureCharFrame().includes("IMPORTADOS 8") ?? false)
       const preview = tui.captureCharFrame()
+      expect(preview).toContain("FORMATO DETECTADO  POSTMAN")
       expect(preview).toContain("IGNORADOS 2")
       expect(preview).toContain("postman-import-fixture.http")
       expect(preview).not.toContain("literal-password")
@@ -1376,8 +1423,82 @@ describe("HTTP TUI", () => {
       expect(output).toContain("{{postman_1_users_get_structured_basic_password}}")
       expect(output).not.toContain("literal-password")
     } finally {
-      await unlink(sourcePath).catch(() => undefined)
+      await rm(sourceDirectory, { recursive: true, force: true })
       await rm(outputDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test("detects OpenAPI YAML without selecting an import format", async () => {
+    const sourceDirectory = await mkdtemp(resolve(tmpdir(), "tuiminal-http-openapi-source-"))
+    const sourcePath = resolve(sourceDirectory, "schema.yaml")
+    await writeFile(
+      sourcePath,
+      'openapi: 3.0.0\ninfo:\n  title: API\n  version: 1.0.0\npaths:\n  /ping:\n    get:\n      operationId: ping\n      responses:\n        "200":\n          description: OK\n',
+    )
+    try {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
+      )
+      await press("http-collection-import-button")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText(sourcePath)
+        await tui?.renderOnce()
+      })
+      await press("http-collection-import-apply")
+      await settle(() => tui?.captureCharFrame().includes("FORMATO DETECTADO  OPENAPI") ?? false)
+      expect(tui.captureCharFrame()).toContain("IMPORTADOS 1")
+    } finally {
+      await rm(sourceDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test("keeps the import path, drop area and action visible in a short terminal", async () => {
+    tui = await testRender(<HttpClient active />, { width: 56, height: 18 })
+    await press("http-navigation-collection")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-pane-collection")))
+    await click("http-collection-import-button")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-collection-import-modal")),
+    )
+    const modal = tui.renderer.root.findDescendantById("http-collection-import-modal")
+    const source = tui.renderer.root.findDescendantById("http-collection-import-source")
+    const dropZone = tui.renderer.root.findDescendantById("http-collection-import-drop-zone")
+    const apply = tui.renderer.root.findDescendantById("http-collection-import-apply")
+    if (!modal || !source || !dropZone || !apply) throw new Error("Import modal is incomplete")
+    expect(dropZone.height).toBeGreaterThanOrEqual(4)
+    expect(dropZone.screenY + dropZone.height).toBeLessThanOrEqual(apply.screenY)
+    expect(apply.screenY).toBeLessThan(modal.screenY + modal.height)
+  })
+
+  test("fills the import source when a file path is dropped into the terminal", async () => {
+    const sourceDirectory = await mkdtemp(resolve(tmpdir(), "tuiminal-http-drop-source-"))
+    const sourcePath = resolve(sourceDirectory, "collection with spaces.json")
+    await writeFile(sourcePath, "{}")
+    try {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
+      )
+      await click("http-collection-import-button")
+      await click("http-collection-import-drop-zone")
+      await act(async () => {
+        await tui?.mockInput.pasteBracketedText(pathToFileURL(sourcePath).href)
+        await tui?.renderOnce()
+      })
+      await settle(
+        () =>
+          (
+            tui?.renderer.root.findDescendantById(
+              "http-collection-import-source",
+            ) as InputRenderable
+          )?.value === sourcePath,
+      )
+    } finally {
+      await rm(sourceDirectory, { recursive: true, force: true })
     }
   })
 
@@ -1591,16 +1712,33 @@ describe("HTTP TUI", () => {
       })
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       act(() => tui?.mockInput.pressEnter())
-      await settle(() => tui?.captureCharFrame().includes('▾ "user": {') ?? false)
+      await settle(() => tui?.captureCharFrame().includes('▾   "user": {') ?? false)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-response-scroll-http-scratch-1",
       )
       expect(tui.captureCharFrame()).toContain('"name": "Ada"')
+      expect(tui.captureCharFrame()).not.toContain("  Wrap  ")
 
       const jsonDocument = tui.renderer.root.findDescendantById("http-response-json-http-scratch-1")
       const initialContent = (jsonDocument as { content?: unknown } | undefined)?.content
 
       await key("ARROW_DOWN")
+      await settle(() => tui?.captureCharFrame().includes("JSON 2/4") ?? false)
+      const selection = tui.renderer.root.findDescendantById(
+        "http-response-json-selection-http-scratch-1",
+      )
+      if (!selection) throw new Error("JSON selection is not visible")
+      const selectedSpan = tui
+        .captureSpans()
+        .lines[selection.screenY]?.spans.find((span) => span.text.includes('"user"'))
+      expect(selectedSpan?.bg.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
+      await act(async () => {
+        await tui?.mockMouse.click(selection.screenX + 8, selection.screenY + 1)
+        await tui?.renderOnce()
+      })
+      await settle(() => tui?.captureCharFrame().includes("JSON 3/4  /user/profile") ?? false)
+      await key("ARROW_UP")
+      await settle(() => tui?.captureCharFrame().includes("JSON 2/4  /user") ?? false)
       expect(
         (
           tui.renderer.root.findDescendantById("http-response-json-http-scratch-1") as
@@ -1609,13 +1747,13 @@ describe("HTTP TUI", () => {
         )?.content,
       ).toBe(initialContent)
       await key("ARROW_LEFT")
-      await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
+      await settle(() => tui?.captureCharFrame().includes('▸   "user": {… 1},') ?? false)
       expect(tui.captureCharFrame()).not.toContain('"name": "Ada"')
 
       await key("ARROW_RIGHT")
       await settle(() => tui?.captureCharFrame().includes('"name": "Ada"') ?? false)
       await key("RETURN")
-      await settle(() => tui?.captureCharFrame().includes('▸ "user": {… 1},') ?? false)
+      await settle(() => tui?.captureCharFrame().includes('▸   "user": {… 1},') ?? false)
     })
 
     test("keeps the large JSON document mounted while navigating structural rows", async () => {
@@ -1637,7 +1775,25 @@ describe("HTTP TUI", () => {
       ) as { content?: unknown }
       const originalContent = rendered.content
       for (let index = 0; index < 12; index += 1) await key("ARROW_DOWN")
-      expect(tui.captureCharFrame()).toMatch(/JSON \d+\/702  \/items\/\d+/)
+      await settle(() => /JSON 13\/702  \/items\/\d+/.test(tui?.captureCharFrame() ?? ""))
+      const selection = tui.renderer.root.findDescendantById(
+        "http-response-json-selection-http-scratch-1",
+      )
+      const scroll = tui.renderer.root.findDescendantById(
+        "http-response-scroll-http-scratch-1",
+      ) as ScrollBoxRenderable
+      if (!selection) throw new Error("JSON selection is not visible")
+      expect(selection.screenY).toBeGreaterThanOrEqual(scroll.viewport.screenY)
+      expect(selection.screenY).toBeLessThan(scroll.viewport.screenY + scroll.viewport.height)
+      expect(
+        tui
+          .captureSpans()
+          .lines[selection.screenY]?.spans.some(
+            (span) =>
+              JSON.stringify(span.bg.toInts()) ===
+              JSON.stringify(RGBA.fromHex(COLORS.http).toInts()),
+          ),
+      ).toBe(true)
       expect(
         (
           tui.renderer.root.findDescendantById("http-response-json-http-scratch-1") as {

@@ -453,9 +453,6 @@ function HttpInteractiveClient({
           closeOverlay()
         } else void requestFiles.apply(currentState.overlay)
         return
-      case "toggle-import-format":
-        collectionImport.cycleFormat()
-        return
       case "back-import-preview":
         collectionImport.back()
         return

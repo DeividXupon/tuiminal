@@ -32,7 +32,6 @@ export type HttpKeyboardCommand =
         | "focus-collection-search"
         | "blur-navigation-control"
         | "duplicate-document"
-        | "toggle-import-format"
         | "back-import-preview"
         | "cycle-runner-target"
         | "cycle-runner-concurrency"

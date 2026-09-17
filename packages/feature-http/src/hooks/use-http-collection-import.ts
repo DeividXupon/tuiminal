@@ -2,23 +2,18 @@ import { useCallback, useState } from "react"
 import {
   applyHttpCollectionImport,
   previewHttpCollectionImport,
-  type HttpCollectionImportFormat,
   type HttpCollectionImportPreview,
 } from "../services/collection-import"
 
 type ImportState = {
-  format: HttpCollectionImportFormat
   sourcePath: string
-  outputDirectory: string
   preview: HttpCollectionImportPreview | null
   busy: boolean
   error: string
 }
 
 const INITIAL_STATE: ImportState = {
-  format: "postman",
   sourcePath: "",
-  outputDirectory: ".tuiminal/http/imported",
   preview: null,
   busy: false,
   error: "",
@@ -38,22 +33,8 @@ export function useHttpCollectionImport({
   const [state, setState] = useState<ImportState>(INITIAL_STATE)
 
   const open = useCallback(() => setState(INITIAL_STATE), [])
-  const setFormat = useCallback((format: HttpCollectionImportFormat) => {
-    setState((current) => ({ ...current, format, preview: null, error: "" }))
-  }, [])
-  const cycleFormat = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      format: current.format === "postman" ? "openapi" : "postman",
-      preview: null,
-      error: "",
-    }))
-  }, [])
   const setSourcePath = useCallback((sourcePath: string) => {
     setState((current) => ({ ...current, sourcePath, preview: null, error: "" }))
-  }, [])
-  const setOutputDirectory = useCallback((outputDirectory: string) => {
-    setState((current) => ({ ...current, outputDirectory, preview: null, error: "" }))
   }, [])
   const back = useCallback(() => {
     setState((current) => ({ ...current, preview: null, error: "" }))
@@ -64,12 +45,7 @@ export function useHttpCollectionImport({
     setState((current) => ({ ...current, busy: true, error: "" }))
     try {
       if (!state.preview) {
-        const preview = await previewHttpCollectionImport(
-          root,
-          state.format,
-          state.sourcePath,
-          state.outputDirectory,
-        )
+        const preview = await previewHttpCollectionImport(root, state.sourcePath)
         setState((current) => ({ ...current, preview, busy: false }))
         return
       }
@@ -90,10 +66,7 @@ export function useHttpCollectionImport({
   return {
     ...state,
     open,
-    setFormat,
-    cycleFormat,
     setSourcePath,
-    setOutputDirectory,
     back,
     apply,
   }

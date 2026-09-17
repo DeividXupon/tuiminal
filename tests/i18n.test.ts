@@ -237,7 +237,7 @@ describe("internationalization", () => {
       translateUi("O arquivo api.http mudou fora do Tuiminal; revise antes de salvar.", "ko"),
     ).toBe("api.http 파일이 Tuiminal 외부에서 변경되었습니다. 저장하기 전에 검토하세요.")
     expect(translateUi("IMPORTAR COLEÇÃO", "en")).toBe("IMPORT COLLECTION")
-    expect(translateUi("[F] Formato: OPENAPI", "ja")).toBe("[F] 形式: OPENAPI")
+    expect(translateUi("FORMATO DETECTADO", "ja")).toBe("検出した形式")
     expect(translateUi("IMPORTADOS 4 · IGNORADOS 1 · AVISOS 2 · CONFLITOS 0", "zh-CN")).toBe(
       "已导入 4 · 已忽略 1 · 警告 2 · 冲突 0",
     )

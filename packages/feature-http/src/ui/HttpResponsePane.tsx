@@ -29,12 +29,14 @@ function HttpResponseDocument({
   wrap,
   jsonTree,
   lineNumbers,
+  focused,
 }: {
   content: string
   response: HttpResponseSnapshot
   wrap: boolean
   jsonTree: HttpJsonTree | null
   lineNumbers: boolean
+  focused: boolean
 }) {
   const paletteKey = [
     COLORS.canvas,
@@ -63,13 +65,41 @@ function HttpResponseDocument({
       : null
   }, [jsonLines, lineNumbers, paletteKey])
   if (jsonDocument && jsonTree) {
+    const selectedLine = jsonTree.lines[jsonTree.selectedLine]
+    const selectedContent = `${
+      lineNumbers
+        ? `${String(jsonTree.selectedLine + 1).padStart(String(jsonTree.lines.length).length)} │ `
+        : ""
+    }${selectedLine?.tokens.map((token) => token.text).join("") ?? ""}`
     return (
-      <text
-        id={`http-response-json-${response.requestId}`}
-        content={jsonDocument}
-        wrapMode={wrap ? "word" : "none"}
-        style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
-      />
+      <box style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), flexShrink: 0 }}>
+        <text
+          id={`http-response-json-${response.requestId}`}
+          content={jsonDocument}
+          wrapMode={wrap ? "word" : "none"}
+          style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
+        />
+        {focused ? (
+          <box
+            id={`http-response-json-selection-${response.requestId}`}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: jsonTree.selectedLine,
+              width: "100%",
+              height: 1,
+              zIndex: 1,
+              backgroundColor: COLORS.http,
+            }}
+          >
+            <text
+              content={selectedContent}
+              wrapMode="none"
+              style={{ width: "100%", height: 1, bg: COLORS.http, fg: COLORS.canvas }}
+            />
+          </box>
+        ) : null}
+      </box>
     )
   }
   const filetype = responseFiletype(response)
@@ -209,6 +239,7 @@ export function HttpResponsePane({
       <HttpResponseToolbar
         document={document}
         response={response}
+        jsonTreeActive={jsonTree !== null}
         cookies={cookies}
         matches={matches.length}
         registerSearchInput={registerSearchInput}
@@ -246,7 +277,7 @@ export function HttpResponsePane({
           }}
           id={`http-response-scroll-${document.request.id}`}
           scrollY
-          scrollX={!presentation.wrap}
+          scrollX={jsonTree !== null || !presentation.wrap}
           viewportCulling
           onKeyDown={handleJsonTreeKey}
           onMouseDown={(event) => {
@@ -265,9 +296,10 @@ export function HttpResponsePane({
           <HttpResponseDocument
             content={content}
             response={response}
-            wrap={presentation.wrap}
+            wrap={jsonTree ? false : presentation.wrap}
             jsonTree={jsonTree}
             lineNumbers={presentation.lineNumbers}
+            focused={focused}
           />
           {stale ? (
             <text
