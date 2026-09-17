@@ -31,7 +31,7 @@ export class PasswordInputRenderable extends InputRenderable {
       this.screenX,
       this.screenY,
       parseColor(COLORS.text),
-      parseColor(COLORS.panelRaised),
+      this.backgroundColor.a === 0 ? parseColor(COLORS.panelRaised) : this.backgroundColor,
     )
   }
 }

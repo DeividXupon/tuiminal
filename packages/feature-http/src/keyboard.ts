@@ -19,7 +19,6 @@ export const httpKeyboardScope = {
     "http-request-proxy-",
     "http-response-search-",
     "http-response-jsonpath-",
-    "http-workspace-settings-",
     "http-overlay",
     "http-environment-",
     "http-collection-runner-",

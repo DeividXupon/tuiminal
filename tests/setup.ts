@@ -18,6 +18,7 @@ process.env.XDG_DATA_HOME = join(testRoot, "data")
 process.env.TUIMINAL_SOURCE_FEATURES = "1"
 process.env.XDG_CONFIG_HOME = join(testRoot, "config")
 process.env.TUIMINAL_WORKDIR = projectRoot
+process.env.TUIMINAL_HTTP_HOME = projectRoot
 process.env.TUIMINAL_PROJECT_ROOTS = testRoot
 process.env.TUIMINAL_ONLY_TAB = "runner"
 for (const name of ["DATABASE_URL", "MYSQL_URL", "POSTGRES_URL", "TUIMINAL_MYSQL_MCP_COMMAND"]) {

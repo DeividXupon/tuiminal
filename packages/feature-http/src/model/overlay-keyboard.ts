@@ -6,7 +6,6 @@ type OverlayCommand =
   | { kind: "apply-overlay" | "close-overlay" | "ignore" | "blur-editor" }
   | {
       kind:
-        | "toggle-import-format"
         | "back-import-preview"
         | "cycle-runner-target"
         | "cycle-runner-concurrency"
@@ -28,7 +27,6 @@ function collectionImportCommand(key: OverlayKey, focusedId: string): OverlayCom
   if (focusedId.startsWith("http-collection-import-")) {
     return key.name === "escape" ? { kind: "blur-editor" } : { kind: "ignore" }
   }
-  if (key.name === "f") return { kind: "toggle-import-format" }
   if (key.name === "b") return { kind: "back-import-preview" }
   return closesOverlay(key) ? { kind: "close-overlay" } : { kind: "ignore" }
 }
@@ -77,10 +75,8 @@ export function resolveSpecialHttpOverlayCommand(
   if (overlay === "collection-runner") return collectionRunnerCommand(key, focusedId)
   if (overlay === "external-conflict") return externalConflictCommand(key)
   if (overlay === "environment-manager") {
-    return inputOwningOverlayCommand(key, focusedId, "http-environment-create-")
-  }
-  if (overlay === "workspace-settings") {
-    return inputOwningOverlayCommand(key, focusedId, "http-key-value-")
+    // The modal owns its list, chooser and table modes, including layered Escape.
+    return { kind: "ignore" }
   }
   return null
 }

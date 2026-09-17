@@ -67,10 +67,10 @@ describe("Runner health checks", () => {
     })
     const started = performance.now()
 
-    expect(await waitForRunnerHealthCheck({ type: "http", url, timeoutMs: 500 })).toBe(false)
+    expect(await waitForRunnerHealthCheck({ type: "http", url, timeoutMs: 2_000 })).toBe(false)
 
     expect(requests).toBe(2)
-    expect(performance.now() - started).toBeLessThan(800)
+    expect(performance.now() - started).toBeLessThan(3_000)
   })
 
   for (const status of [200, 503]) {

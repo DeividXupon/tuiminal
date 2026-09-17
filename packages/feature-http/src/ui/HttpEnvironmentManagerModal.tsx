@@ -1,89 +1,52 @@
-import type { BoxRenderable } from "@opentui/core"
-import { useRenderer } from "@opentui/react"
-import { useCallback, useMemo, useRef, useState } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type {
-  CreatePrivateHttpEnvironmentInput,
-  CreatePrivateHttpEnvironmentResult,
-  HttpEnvironment,
-} from "../storage/environments"
-import { HttpEnvironmentList, HttpPrivateEnvironmentForm } from "./HttpEnvironmentManagerContent"
-
-type EnvironmentManagerProps = {
-  environments: HttpEnvironment[]
-  activeName: string | null
-  privateEnvironmentPath: string
-  terminalWidth: number
-  terminalHeight: number
-  onSelect: (name: string | null) => void
-  onCreate: (
-    input: CreatePrivateHttpEnvironmentInput,
-  ) => Promise<CreatePrivateHttpEnvironmentResult>
-  onOpenWorkspaceSettings: () => void
-  onClose: () => void
-}
-
-type EnvironmentKeyEvent = {
-  name: string
-  ctrl?: boolean
-  shift?: boolean
-  preventDefault(): void
-  stopPropagation(): void
-}
-
-function consume(event: EnvironmentKeyEvent) {
-  event.preventDefault()
-  event.stopPropagation()
-}
-
-type EnvironmentCreateCommand =
-  | "back"
-  | "blur-input"
-  | "close"
-  | "ignore"
-  | "save"
-  | "toggle-gitignore"
-  | "toggle-keychain"
-
-function resolveEnvironmentCreateCommand(
-  event: EnvironmentKeyEvent,
-  focusedId: string,
-): EnvironmentCreateCommand {
-  if (event.ctrl && event.name === "k") return "toggle-keychain"
-  if (focusedId.startsWith("http-environment-create-")) {
-    if (event.name === "escape") return "blur-input"
-    return event.ctrl && event.name === "s" ? "save" : "ignore"
-  }
-  if (event.name === "escape") return "close"
-  if (event.name === "g") return "toggle-gitignore"
-  if (event.ctrl && event.name === "s") return "save"
-  return event.name === "b" ? "back" : "ignore"
-}
+import { useKeyboard, useRenderer } from "@opentui/react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  HttpEnvironmentCreateForm,
+  HttpEnvironmentList,
+  environmentFormRows,
+  type HttpEnvironmentFormMode,
+  type HttpEnvironmentRow,
+} from "./HttpEnvironmentManagerContent"
+import {
+  environmentFocusId,
+  environmentKeyIsHandled,
+  consumeEnvironmentKey,
+  type EnvironmentManagerProps,
+  type EnvironmentKeyEvent,
+  type EnvironmentScreen,
+} from "./http-environment-manager-keyboard"
+import {
+  HttpEnvironmentDeleteConfirm,
+  HttpEnvironmentManagerShell,
+} from "./HttpEnvironmentManagerShell"
 
 export function HttpEnvironmentManagerModal({
   environments,
+  globals,
   activeName,
-  privateEnvironmentPath,
   terminalWidth,
   terminalHeight,
   onSelect,
   onCreate,
-  onOpenWorkspaceSettings,
+  onReplace,
+  onDelete,
+  onSaveGlobals,
   onClose,
 }: EnvironmentManagerProps) {
   const renderer = useRenderer()
-  const modalRef = useRef<BoxRenderable | null>(null)
-  const [screen, setScreen] = useState<"list" | "create">("list")
+  const [screen, setScreen] = useState<EnvironmentScreen>("list")
+  const [originalName, setOriginalName] = useState<string | null>(null)
   const [selection, setSelection] = useState(() =>
     Math.max(0, environments.findIndex((environment) => environment.name === activeName) + 1),
   )
-  const [environmentName, setEnvironmentName] = useState("")
-  const [variableName, setVariableName] = useState("")
-  const [secret, setSecret] = useState("")
-  const [addToGitignore, setAddToGitignore] = useState(true)
-  const [storeInKeychain, setStoreInKeychain] = useState(false)
+  const [name, setName] = useState("")
+  const [rows, setRows] = useState<HttpEnvironmentRow[]>(() => [
+    { id: crypto.randomUUID(), name: "", value: "" },
+  ])
+  const [mode, setMode] = useState<HttpEnvironmentFormMode>("overview")
+  const [target, setTarget] = useState<"name" | "table">("name")
+  const [rowIndex, setRowIndex] = useState(0)
+  const [column, setColumn] = useState<0 | 1>(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const width = Math.max(46, Math.min(86, terminalWidth - 4))
@@ -93,157 +56,316 @@ export function HttpEnvironmentManagerModal({
     [environments],
   )
 
-  const create = useCallback(async () => {
+  useEffect(() => {
+    const id = environmentFocusId(screen, mode, choices[selection], rowIndex, column)
+    const timer = setTimeout(() => renderer.root.findDescendantById(id)?.focus(), 0)
+    return () => clearTimeout(timer)
+  }, [choices, column, mode, renderer, rowIndex, screen, selection])
+
+  const beginCreate = useCallback(() => {
+    setOriginalName(null)
+    setName("")
+    setRows([{ id: crypto.randomUUID(), name: "", value: "" }])
+    setMode("overview")
+    setTarget("name")
+    setRowIndex(0)
+    setColumn(0)
+    setError("")
+    setScreen("create")
+  }, [])
+
+  const beginEdit = useCallback(
+    (environmentName: string) => {
+      const environment = environments.find((item) => item.name === environmentName)
+      if (!environment) return
+      setOriginalName(environmentName)
+      setName(environmentName)
+      setRows(environmentFormRows(environment))
+      setMode("overview")
+      setTarget("name")
+      setRowIndex(0)
+      setColumn(0)
+      setError("")
+      setScreen("edit")
+    },
+    [environments],
+  )
+
+  const beginGlobals = useCallback(() => {
+    setOriginalName(null)
+    setName("Globals")
+    setRows(environmentFormRows(globals))
+    setMode("overview")
+    setTarget("table")
+    setRowIndex(0)
+    setColumn(0)
+    setError("")
+    setScreen("globals")
+  }, [globals])
+
+  const beginDelete = useCallback((environmentName: string) => {
+    setOriginalName(environmentName)
+    setError("")
+    setScreen("delete")
+  }, [])
+
+  const updateRow = useCallback((index: number, cell: 0 | 1, value: string) => {
+    setRows((current) => {
+      const next = current.map((row, rowNumber) =>
+        rowNumber === index ? { ...row, [cell === 0 ? "name" : "value"]: value } : row,
+      )
+      if (index === next.length - 1 && value && next.length <= 100) {
+        next.push({ id: crypto.randomUUID(), name: "", value: "" })
+      }
+      return next
+    })
+  }, [])
+
+  const save = useCallback(async () => {
     if (busy) return
     setBusy(true)
     setError("")
     try {
-      await onCreate({
-        environmentName,
-        variableName,
-        value: secret,
-        addToGitignore,
-        storeInKeychain,
-      })
-      onClose()
+      const input = {
+        environmentName: name,
+        variables: rows
+          .filter((row) => row.name || row.value)
+          .map(({ name: variableName, value }) => ({ name: variableName, value })),
+      }
+      if (screen === "globals") await onSaveGlobals(input)
+      else if (screen === "edit" && originalName) await onReplace(originalName, input)
+      else await onCreate(input)
+      if (screen === "create") onClose()
+      else setScreen("list")
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setBusy(false)
     }
-  }, [
-    addToGitignore,
-    busy,
-    environmentName,
-    onClose,
-    onCreate,
-    secret,
-    storeInKeychain,
-    variableName,
-  ])
+  }, [busy, name, onClose, onCreate, onReplace, onSaveGlobals, originalName, rows, screen])
+
+  const confirmDelete = useCallback(async () => {
+    if (busy || !originalName) return
+    setBusy(true)
+    setError("")
+    try {
+      await onDelete(originalName)
+      setSelection(0)
+      setScreen("list")
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, onDelete, originalName])
 
   const select = useCallback(
-    (name: string | null) => {
-      onSelect(name)
+    (selected: string | null) => {
+      onSelect(selected)
       onClose()
     },
     [onClose, onSelect],
   )
 
-  const handleCreateKey = useCallback(
-    (event: EnvironmentKeyEvent) => {
-      const focused = renderer.currentFocusedRenderable?.id ?? ""
-      switch (resolveEnvironmentCreateCommand(event, focused)) {
-        case "toggle-keychain":
-          consume(event)
-          setStoreInKeychain((current) => !current)
-          break
-        case "blur-input":
-          consume(event)
-          renderer.currentFocusedRenderable?.blur()
-          modalRef.current?.focus()
-          break
-        case "save":
-          consume(event)
-          void create()
-          break
-        case "close":
-          onClose()
-          break
-        case "toggle-gitignore":
-          setAddToGitignore((current) => !current)
-          break
-        case "back":
-          setScreen("list")
-          break
+  const enterTarget = useCallback(
+    (selected: "name" | "table") => {
+      setTarget(selected)
+      if (selected === "name") {
+        if (screen !== "globals") setMode("name")
+      } else {
+        setMode(rows.every((row) => !row.name && !row.value) ? "cell" : "table")
+        setRowIndex(0)
+        setColumn(0)
       }
     },
-    [create, onClose, renderer],
+    [rows, screen],
+  )
+
+  const nextCell = useCallback(
+    (backwards: boolean) => {
+      if (backwards && rowIndex === 0 && column === 0) {
+        if (screen !== "globals") setMode("name")
+        return
+      }
+      const nextColumn = column === 0 ? 1 : 0
+      const nextIndex = rowIndex + (backwards ? (column === 0 ? -1 : 0) : column === 1 ? 1 : 0)
+      if (!backwards && nextIndex >= rows.length && rows.length <= 100) {
+        setRows((current) => [...current, { id: crypto.randomUUID(), name: "", value: "" }])
+      }
+      setRowIndex(Math.max(0, Math.min(nextIndex, 100)))
+      setColumn(nextColumn)
+    },
+    [column, rowIndex, rows.length, screen],
   )
 
   const handleListKey = useCallback(
     (event: EnvironmentKeyEvent) => {
-      if (event.name === "escape") return onClose()
-      if (event.name === "n") return setScreen("create")
-      if (event.name === "w") return onOpenWorkspaceSettings()
-      if (event.name === "up" || event.name === "k") {
-        return setSelection((current) => (current - 1 + choices.length) % choices.length)
+      switch (event.name) {
+        case "escape":
+          return onClose()
+        case "n":
+          return beginCreate()
+        case "g":
+          return beginGlobals()
+        case "e":
+          return choices[selection] ? beginEdit(choices[selection]) : undefined
+        case "d":
+          return choices[selection] ? beginDelete(choices[selection]) : undefined
+        case "up":
+        case "k":
+          return setSelection((current) => (current - 1 + choices.length) % choices.length)
+        case "down":
+        case "j":
+          return setSelection((current) => (current + 1) % choices.length)
+        case "enter":
+        case "return":
+          return select(choices[selection] ?? null)
       }
-      if (event.name === "down" || event.name === "j") {
-        return setSelection((current) => (current + 1) % choices.length)
-      }
-      if (event.name === "enter" || event.name === "return") select(choices[selection] ?? null)
     },
-    [choices, onClose, onOpenWorkspaceSettings, select, selection],
+    [beginCreate, beginDelete, beginEdit, beginGlobals, choices, onClose, select, selection],
+  )
+
+  const leaveCreateMode = useCallback(() => {
+    if (mode === "cell") setMode("table")
+    else if (mode === "overview") setScreen("list")
+    else setMode("overview")
+  }, [mode])
+
+  const handleChooseKey = useCallback(
+    (name: string) => {
+      if ((name === "up" || name === "k") && screen !== "globals") setTarget("name")
+      else if (name === "down" || name === "j") setTarget("table")
+      else if (name === "enter" || name === "return") enterTarget(target)
+    },
+    [enterTarget, screen, target],
+  )
+
+  const handleTableKey = useCallback(
+    (name: string) => {
+      if (name === "up" || name === "k") setRowIndex((current) => Math.max(0, current - 1))
+      else if (name === "down" || name === "j") {
+        setRowIndex((current) => Math.min(rows.length - 1, current + 1))
+      } else if (name === "left" || name === "h") setColumn(0)
+      else if (name === "right" || name === "l") setColumn(1)
+      else if (name === "enter" || name === "return") setMode("cell")
+    },
+    [rows.length],
+  )
+
+  const handleFormCommonKey = useCallback((event: EnvironmentKeyEvent) => {
+    if (event.name === "/") setMode("choose")
+    else return false
+    return true
+  }, [])
+
+  const handleCreateKey = useCallback(
+    (event: EnvironmentKeyEvent) => {
+      if (event.ctrl && event.name === "s") return void save()
+      if (event.name === "escape") return leaveCreateMode()
+      switch (mode) {
+        case "name":
+          if (event.name === "tab") enterTarget("table")
+          return
+        case "cell":
+          if (event.name === "tab") nextCell(Boolean(event.shift))
+          return
+        case "choose":
+          handleChooseKey(event.name)
+          return
+        case "overview":
+          handleFormCommonKey(event)
+          return
+        case "table":
+          if (!handleFormCommonKey(event)) handleTableKey(event.name)
+          return
+      }
+    },
+    [
+      save,
+      enterTarget,
+      handleChooseKey,
+      handleFormCommonKey,
+      handleTableKey,
+      leaveCreateMode,
+      mode,
+      nextCell,
+    ],
   )
 
   const handleKey = useCallback(
     (event: EnvironmentKeyEvent) => {
-      if (screen === "create") handleCreateKey(event)
-      else handleListKey(event)
+      if (!environmentKeyIsHandled(screen, mode, event)) return
+      consumeEnvironmentKey(event)
+      if (screen === "list") handleListKey(event)
+      else if (screen === "delete") {
+        if (event.name === "escape") setScreen("list")
+        else if (event.name === "y") void confirmDelete()
+      } else handleCreateKey(event)
     },
-    [handleCreateKey, handleListKey, screen],
+    [confirmDelete, handleCreateKey, handleListKey, mode, screen],
   )
 
+  useKeyboard(handleKey)
+
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI has no dialog role and this focusable box owns modal keyboard input.
-    <box
-      ref={modalRef}
-      id="http-environment-manager-modal"
-      focusable
-      onKeyDown={handleKey}
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
-        width,
-        height,
-        zIndex: 125,
-        ...panelBorder(COLORS.http),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+    <HttpEnvironmentManagerShell
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      width={width}
+      height={height}
+      onClose={
+        screen === "list"
+          ? onClose
+          : screen === "delete"
+            ? () => setScreen("list")
+            : leaveCreateMode
+      }
+      closeLabel={screen === "list" ? "[Esc] Fechar" : "[Esc] Voltar"}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text content={translateUi("AMBIENTES HTTP")} style={{ fg: COLORS.http }} />
-        <InlineButton
-          id="http-environment-close"
-          label="[Esc] Fechar"
-          accent={COLORS.http}
-          onPress={onClose}
-        />
-      </box>
       {screen === "list" ? (
         <HttpEnvironmentList
           environments={environments}
           activeName={activeName}
           selection={selection}
+          contentWidth={width - 4}
           onSelect={select}
-          onCreate={() => setScreen("create")}
-          onOpenWorkspaceSettings={onOpenWorkspaceSettings}
+          onCreate={beginCreate}
+          onOpenGlobals={beginGlobals}
+          onEdit={beginEdit}
+          onDelete={beginDelete}
+        />
+      ) : screen === "delete" ? (
+        <HttpEnvironmentDeleteConfirm
+          name={originalName ?? ""}
+          error={error}
+          busy={busy}
+          onCancel={() => setScreen("list")}
+          onConfirm={() => void confirmDelete()}
         />
       ) : (
-        <HttpPrivateEnvironmentForm
-          environmentName={environmentName}
-          variableName={variableName}
-          secret={secret}
-          addToGitignore={addToGitignore}
-          storeInKeychain={storeInKeychain}
+        <HttpEnvironmentCreateForm
+          formKind={screen}
+          name={name}
+          rows={rows}
+          mode={mode}
+          target={target}
+          rowIndex={rowIndex}
+          column={column}
           busy={busy}
           error={error}
-          privateEnvironmentPath={privateEnvironmentPath}
-          onEnvironmentNameChange={setEnvironmentName}
-          onVariableNameChange={setVariableName}
-          onSecretChange={setSecret}
-          onToggleGitignore={() => setAddToGitignore((current) => !current)}
-          onToggleKeychain={() => setStoreInKeychain((current) => !current)}
-          onBack={() => setScreen("list")}
-          onSave={() => void create()}
+          onNameChange={setName}
+          onRowChange={updateRow}
+          onChooseName={() => enterTarget("name")}
+          onChooseTable={() => enterTarget("table")}
+          onSave={() => void save()}
+          onFocusName={() => setMode("name")}
+          onFocusCell={(index, cell) => {
+            setRowIndex(index)
+            setColumn(cell)
+            setMode("cell")
+          }}
         />
       )}
-    </box>
+    </HttpEnvironmentManagerShell>
   )
 }

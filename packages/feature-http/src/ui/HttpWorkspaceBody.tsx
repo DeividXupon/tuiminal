@@ -7,6 +7,7 @@ import type {
 import { Fragment, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { HttpLayout } from "../model/layout"
+import type { HttpRequestTableKey } from "../hooks/use-http-request-tables"
 import type {
   HttpAssertionDefinition,
   HttpBodyKind,
@@ -38,6 +39,7 @@ type HttpWorkspaceBodyProps = {
   registerScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
   registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
   registerCollectionSearch: (input: InputRenderable | null) => void
+  requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
   onSelectDocument: (documentId: string) => void
   onNavigationView: (view: HttpNavigationView) => void
   onCloseNavigation: () => void
@@ -139,6 +141,7 @@ export function HttpWorkspaceBody({
   registerScroll,
   registerResponseSearch,
   registerCollectionSearch,
+  requestTableKeyRef,
   onSelectDocument,
   onNavigationView,
   onCloseNavigation,
@@ -235,8 +238,9 @@ export function HttpWorkspaceBody({
           <Fragment key={document.request.id}>
             <HttpRequestPane
               document={document}
+              requestTableKeyRef={requestTableKeyRef}
               visible={requestVisible}
-              focused={active && state.activePane === "request"}
+              focused={active && state.overlay === null && state.activePane === "request"}
               position={maximizedPane === "request" ? maximizedPosition : layout.request}
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
@@ -273,7 +277,7 @@ export function HttpWorkspaceBody({
             <HttpResponsePane
               document={document}
               visible={responseVisible}
-              focused={active && state.activePane === "response"}
+              focused={active && state.overlay === null && state.activePane === "response"}
               position={maximizedPane === "response" ? maximizedPosition : layout.response}
               registerScroll={(scroll) => registerScroll(document.request.id, scroll)}
               registerSearchInput={(input) => registerResponseSearch(document.request.id, input)}
@@ -296,7 +300,7 @@ export function HttpWorkspaceBody({
       <HttpNavigationPane
         state={state}
         visible={navigationVisible}
-        focused={state.activePane === "navigation"}
+        focused={state.overlay === null && state.activePane === "navigation"}
         overlay={!layout.navigationFixed}
         position={layout.navigation}
         onViewChange={onNavigationView}

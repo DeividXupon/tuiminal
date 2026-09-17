@@ -8,6 +8,7 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
+import type { HttpRequestTableKey } from "./hooks/use-http-request-tables"
 import { httpJsonTreeForDocument } from "./model/json-tree"
 import { applyHttpViewKeyboardCommand } from "./model/workspace-keyboard-actions"
 import type {
@@ -24,11 +25,12 @@ import {
   httpWorkspaceReducer,
   type HttpWorkspaceAction,
 } from "./model/workspace"
-import { httpRequestFilePath, isOpaqueHttpRequest } from "./model/request-capabilities"
+import { isOpaqueHttpRequest } from "./model/request-capabilities"
 import { HTTP_WORKING_DIRECTORY } from "./services/context"
 import { useHttpProject } from "./hooks/use-http-project"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "./storage/config"
 import { HttpDocumentBar } from "./ui/HttpDocumentBar"
-import { HttpOmnibar } from "./ui/HttpOmnibar"
+import { HttpOmnibar, type HttpCompletionKey } from "./ui/HttpOmnibar"
 import { HttpPaneSelector } from "./ui/HttpPaneSelector"
 import { HttpWorkspaceBody } from "./ui/HttpWorkspaceBody"
 import { HttpClientFooter } from "./ui/HttpClientFooter"
@@ -59,6 +61,7 @@ import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/ind
 import { useHttpExecutionNotifications } from "./hooks/use-http-execution-notifications"
 import { ensureHttpRendererListenerBudget } from "./model/renderer-listener-budget"
 import { useHttpJsonTree } from "./hooks/use-http-json-tree"
+import { applyHttpUrlQueryEdit, syncHttpUrlQuery } from "./model/url-query"
 
 type HttpClientProps = {
   active: boolean
@@ -92,6 +95,8 @@ function HttpInteractiveClient({
     reactDispatch(action)
   }, [])
   const urlRef = useRef<InputRenderable | null>(null)
+  const urlCompletionKeyRef = useRef<((key: HttpCompletionKey) => boolean) | null>(null)
+  const requestTableKeyRef = useRef<((key: HttpRequestTableKey) => boolean) | null>(null)
   const collectionSearchRef = useRef<InputRenderable | null>(null)
   const { documentRefs, refsFor, blurDocumentControls } = useHttpDocumentRefs(urlRef)
   const abortControllers = useRef(new Map<string, AbortController>())
@@ -105,16 +110,16 @@ function HttpInteractiveClient({
   const activeJsonTree = useHttpJsonTree(activeDocument)
   useNotificationFromValue(notice, { source: "HTTP" })
   useHttpExecutionNotifications(state.documents)
-  const httpProject = useHttpProject(httpRequestFilePath(activeDocument?.request))
+  const httpProject = useHttpProject()
   const {
     project,
     projectRequests,
     activeEnvironment,
     activeEnvironmentName,
-    workspaceConfig,
     refresh: refreshProject,
     variablesForRequest,
   } = httpProject
+  const workspaceConfig = DEFAULT_HTTP_WORKSPACE_CONFIG
   const historyTools = useHttpHistory({
     config: workspaceConfig,
     dispatch,
@@ -231,8 +236,9 @@ function HttpInteractiveClient({
   })
   const openEnvironmentManager = useCallback(() => {
     blurDocumentControls()
+    renderer.currentFocusedRenderable?.blur()
     dispatch({ type: "open-overlay", overlay: "environment-manager" })
-  }, [blurDocumentControls, dispatch])
+  }, [blurDocumentControls, dispatch, renderer])
   const openProjectRequest = useCallback(
     (item: HttpProjectRequestItem) => {
       blurDocumentControls()
@@ -295,6 +301,13 @@ function HttpInteractiveClient({
       ) ?? currentState.documents[0]
     if (!currentDocument) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
+    if (focusedId === "http-url-input" && urlCompletionKeyRef.current?.(key)) return
+    if (
+      currentState.overlay === null &&
+      currentState.activePane === "request" &&
+      requestTableKeyRef.current?.(key)
+    )
+      return
     const documentId = currentDocument.request.id
     const currentJsonTree = httpJsonTreeForDocument(currentDocument)
     const command = resolveHttpKeyboardCommand({
@@ -440,9 +453,6 @@ function HttpInteractiveClient({
           closeOverlay()
         } else void requestFiles.apply(currentState.overlay)
         return
-      case "toggle-import-format":
-        collectionImport.cycleFormat()
-        return
       case "back-import-preview":
         collectionImport.back()
         return
@@ -492,17 +502,22 @@ function HttpInteractiveClient({
       />
       <HttpOmnibar
         request={activeDocument.request}
-        focused={state.activePane === "url"}
+        focused={state.overlay === null && state.activePane === "url"}
         twoRows={layout.omnibarRows === 2}
         running={running}
         readOnly={isOpaqueHttpRequest(activeDocument.request)}
         urlRef={urlRef}
+        completionKeyRef={urlCompletionKeyRef}
         onFocus={() => dispatch({ type: "select-pane", pane: "url" })}
+        variableNames={[...httpProject.variablesForRequest(activeDocument.request).keys()]}
         onUrlChange={(url) =>
           dispatch({
             type: "update-request",
             documentId: activeDocument.request.id,
-            patch: { url },
+            patch: {
+              url,
+              query: syncHttpUrlQuery(url, activeDocument.request.query, activeDocument.request.id),
+            },
           })
         }
         onCycleMethod={requestEditing.cycleMethod}
@@ -523,17 +538,12 @@ function HttpInteractiveClient({
       <box style={{ height: panelSpacing, flexShrink: 0 }} />
       <HttpWorkspaceBody
         state={state}
+        requestTableKeyRef={requestTableKeyRef}
         layout={layout}
         height={bodyHeight}
-        registerHeaderInput={(documentId, input) => {
-          refsFor(documentId).headers = input
-        }}
-        registerBodyEditor={(documentId, editor) => {
-          refsFor(documentId).body = editor
-        }}
-        registerRawScroll={(documentId, scroll) => {
-          refsFor(documentId).raw = scroll
-        }}
+        registerHeaderInput={(documentId, input) => (refsFor(documentId).headers = input)}
+        registerBodyEditor={(documentId, editor) => (refsFor(documentId).body = editor)}
+        registerRawScroll={(documentId, scroll) => (refsFor(documentId).raw = scroll)}
         registerScroll={(documentId, scroll) => {
           refsFor(documentId).response = scroll
         }}
@@ -556,9 +566,15 @@ function HttpInteractiveClient({
         onResponsePresentationChange={(documentId, patch) =>
           dispatch({ type: "update-response-presentation", documentId, patch })
         }
-        onQueryChange={(documentId, query) =>
-          dispatch({ type: "update-request", documentId, patch: { query } })
-        }
+        onQueryChange={(documentId, query) => {
+          const document = stateRef.current.documents.find((item) => item.request.id === documentId)
+          if (!document) return
+          dispatch({
+            type: "update-request",
+            documentId,
+            patch: applyHttpUrlQueryEdit(document.request.url, query, documentId),
+          })
+        }}
         onPathChange={(documentId, path) =>
           dispatch({ type: "update-request", documentId, patch: { path } })
         }
@@ -692,9 +708,6 @@ function HttpInteractiveClient({
         collectionImport={collectionImport}
         collectionRunner={collectionRunner}
         environment={httpProject}
-        onOpenWorkspaceSettings={() =>
-          dispatch({ type: "open-overlay", overlay: "workspace-settings" })
-        }
         externalConflict={requestPersistence}
         pendingCloseName={pendingCloseDocument?.request.name ?? ""}
         onConfirmCloseDocument={() => {

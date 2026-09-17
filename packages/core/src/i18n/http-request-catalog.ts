@@ -47,6 +47,22 @@ export const HTTP_REQUEST_MESSAGES = [
   ["API Key", "API Key", "API Key", "APIキー", "API Key", "API Key"],
   ["MULTIPART", "MULTIPART", "MULTIPART", "マルチパート", "多部分表单", "멀티파트"],
   [
+    "[Space] Ativar/desativar · [←/→] Selecionar [×]",
+    "[Space] Enable/disable · [←/→] Select [×]",
+    "[Space] Activar/desactivar · [←/→] Seleccionar [×]",
+    "[Space] 有効/無効 · [←/→] [×]を選択",
+    "[Space] 启用/停用 · [←/→] 选择 [×]",
+    "[Space] 활성화/비활성화 · [←/→] [×] 선택",
+  ],
+  [
+    "[Enter] Excluir linha · [Space] Ativar/desativar",
+    "[Enter] Delete row · [Space] Enable/disable",
+    "[Enter] Eliminar fila · [Space] Activar/desactivar",
+    "[Enter] 行を削除 · [Space] 有効/無効",
+    "[Enter] 删除行 · [Space] 启用/停用",
+    "[Enter] 행 삭제 · [Space] 활성화/비활성화",
+  ],
+  [
     "Nenhuma parte definida.",
     "No parts defined.",
     "No hay partes definidas.",

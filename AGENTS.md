@@ -168,7 +168,13 @@ This file records durable project conventions, architectural decisions, and recu
 
 ## HTTP client
 
-- HTTP project watching reloads collections/configuration/environments only for `.http`, `.rest`, the two supported environment files, and `.tuiminal/http/config.json`; unrelated project edits must not trigger a full scan. Coalesce refresh requests while a scan is active and never apply a result after its workspace/root was disposed. Use bounded per-directory watchers and serialize reconciliation after renames: Bun 1.3.14 recursive watches can miss newly created descendants on macOS. Directory additions/removals trigger discovery so files created before watcher attachment are still found; unrelated file edits do not.
+- The interactive HTTP workspace has one global home under `$XDG_DATA_HOME/tuiminal/http` (falling back to `~/.local/share/tuiminal/http`) and ignores the opened project's path. `TUIMINAL_HTTP_HOME` is only an explicit fixture/embedding override. Collections, settings, history, and global environments live there. Headless `.http` commands still use their explicit input/output paths and roots.
+- Interactive Postman/OpenAPI import accepts one absolute source path or `~/` path from anywhere on the machine, offers bounded filesystem suggestions with `[↑/↓]` and `[Tab]`, and accepts the path pasted by a terminal when a file is dropped onto the import box. Detect Postman v2.0/v2.1 or OpenAPI 3.x from parsed content at preview time, show the detected format there, and do not require a manual format selector or filter autocomplete by the selected format. Keep the drop box as the large flexible center of the import modal, with the path and suggestions grouped above it and the action below it; preserve a usable drop target in short terminals. The import modal keeps its rounded border in both layouts; `panelBorder` removes borders in compact mode and must not be used for this dialog. Terminal mouse-drop events carry no file payload, so do not claim raw file transfer; support pasted absolute, shell-escaped, quoted, and `file://` paths. The source is read-only, and preview/confirmation writes a new `.http` only under the fixed `imported/` directory of the global HTTP home, never the opened project. Keep source digest/path and destination revalidation before write, the 8 MB source limit, no-overwrite creation, and the external-symlink guard on the destination. Headless import retains its explicit input/output paths.
+- The environment manager lists global names, including the no-environment choice. Keep its navigation hints and mouse-accessible `[N]` creation button on one footer row, with shortcut tokens in the fixed brand blue; narrow terminals may omit trailing hints without splitting a shortcut. `[N]` opens a form with a distinct-background name input and alternating-background variable/value rows. `[/]` first selects between vertically arranged name and table blocks: `[↑/↓]` moves a left focus rail, and `[Enter]` enters the chosen block. An empty table focuses its first cell; a populated table enters arrow or `[H/J/K/L]` navigation with a distinct background on the selected cell. `[Enter]` edits a cell, `[Tab]` advances through inputs and adds a blank row as needed, and layered `[Esc]` returns from input to table navigation, then to the form. Do not add a separate back-to-environments shortcut or button in that form; the modal's `[Esc]` control owns the layered return. Environment values are visible in the editing table and every new or edited value goes to the operating system credential store; the private global file (atomic, mode `0600`) holds only opaque references for those values. The public file remains readable for existing environments but is never a creation target. If the credential store is unavailable, saving fails rather than writing plaintext. The modal keeps a complete rounded border in both layouts, takes focus from the workspace, suppresses underlying focus rails, and blocks pointer access to the workspace until it closes.
+- Pretty JSON navigation reuses the parsed response and collapsed tree shape across selection changes. Keep the styled response document stable while selection moves; show a full-row accent highlight with a separate fixed tree-marker gutter, display the selected pointer in compact response chrome, and scroll the highlighted row into view. Rebuild only when the response, collapse state, or appearance changes. Navigable Pretty JSON stays unwrapped so logical lines, mouse selection, and the highlight align; offer Wrap in Raw or other response views instead.
+- URL variable suggestions must be recomputed when focus returns to an unfinished URL after sending or visiting another pane; dismissing suggestions with `[Esc]` must still keep them closed until focus leaves or the text changes. OpenTUI emits `onInput` when React assigns a controlled input value, so URL-derived query cells must ignore these prop-synchronization events using the current entries; otherwise typing a partial name such as `?ma` rewrites it as `?ma=` before the user finishes.
+- HTTP request key/value blocks (Query Params, Path Params, Headers, form URL encoded, and Multipart) use one layered table interaction. `[↑/↓]` or `[J/K]` selects the Query/Path block while Params is focused; `[Enter]` enters an empty block directly in its first name cell, or opens row/cell navigation when entries exist. In table mode arrows or `[H/J/K/L]` select rows and every visible control, including the enabled dot, Multipart text/file switch, name/value cells, and `[×]`. `[Enter]` activates the selected control (including deletion on `[×]`), `[Space]` toggles the row's enabled dot from any column, and `[D]` also deletes it; show a contextual `[Space]` hint. Multipart also uses `[T/F]` for text/file. `[Tab]` advances through editable cells, with one draft row after the saved entries that becomes real only when typed; draft rows do not expose action columns. `[Esc]` returns from cell to table, then block. Do not show or bind contextual `[N]` for adding these table entries; keep mouse access and alternating row backgrounds with a distinct selected-cell fill. Opening an empty table must not dirty the request before typing.
+- HTTP home watching reloads collections/configuration/environments only for `.http`, `.rest`, the two supported environment files, and `.tuiminal/http/config.json`; unrelated edits must not trigger a full scan. Coalesce refresh requests while a scan is active and never apply a result after its workspace/root was disposed. Use bounded per-directory watchers and serialize reconciliation after renames: Bun 1.3.14 recursive watches can miss newly created descendants on macOS. Directory additions/removals trigger discovery so files created before watcher attachment are still found; unrelated file edits do not.
 - Schedule one cancellable refresh after HTTP watcher attachment. `fs.watch` returning does not guarantee that native event delivery is ready, so initial file changes must also be reconciled without relying on a watch event; do not add polling or a registration sleep.
 - `HTTP_CLIENT_PLAN.md` records the mutable future direction for the HTTP workspace.
   It is not a description of current behavior; update it when implementation or
@@ -212,7 +218,7 @@ This file records durable project conventions, architectural decisions, and recu
 - Request Options exposes `[C]` to include or ignore the cookie jar per request.
   Ignoring it must suppress both cookie reads and `Set-Cookie` writes, appear in
   Preview, and round-trip through the interoperable `# @no-cookie-jar` directive.
-- The in-memory HTTP cookie jar validates ICANN and private domains with a maintained Public Suffix List, normalizes IDNs/IPs, enforces secure-prefix/lifetime/size/count/header budgets, and is isolated by project request directory plus selected environment. Collection dependencies may share cookies only inside that same scope; sibling scopes with the same environment name remain isolated.
+- The in-memory HTTP cookie jar validates ICANN and private domains with a maintained Public Suffix List, normalizes IDNs/IPs, enforces secure-prefix/lifetime/size/count/header budgets, and is isolated by request directory inside the global HTTP home plus selected environment. Collection dependencies may share cookies only inside that same scope.
 - Request Options accepts an explicit HTTP/HTTPS proxy and uses `[Shift+V]` for TLS
   verification. Proxy credentials must come from private variables and remain
   redacted in previews, conflicts, cURL, reports, and transport errors. Insecure
@@ -220,23 +226,23 @@ This file records durable project conventions, architectural decisions, and recu
   scoped to target, selected environment, and the current session; every new
   HTTPS redirect target requires its own approval. Headless runs require the
   explicit `--allow-insecure-tls` flag.
-- `[E]` opens the HTTP environment manager; it no longer cycles environments
-  blindly. Creating a private value writes `http-client.private.env.json`
-  atomically with mode `0600`, offers an explicit `.gitignore` rule, rejects
-  symlinks/external races, and masks the input. Optional `[Ctrl+K]` persistence
-  stores only an opaque `$tuiminal.keychain.*` reference in JSON and resolves the
-  real value through Bun's system credential manager.
-- Resolve the selected HTTP environment name independently for each saved request,
-  from its `.http` directory toward the project root. The nearest directory that
-  defines the name wins as a whole; private values override public values only
-  within that same directory, and sibling-only environments never leak across
-  services. Scratch uses the root scope. Create private values beside the active
-  `.http` file and show that destination before saving.
-- The environment manager exposes `[W]` workspace defaults even when no environment
-  exists. Non-secret environment, timeout, redirect, header, and history defaults
-  persist atomically in `.tuiminal/http/config.json` with mode `0600`. An explicit
-  request option always wins; request timeout and redirect controls cycle back to
-  inherited state instead of silently baking workspace values into the request.
+- `[E]` opens the HTTP environment manager. Interactive environment selection
+  applies globally, including requests in collections; the manager writes only root
+  `http-client.private.env.json` inside the global HTTP home, while still reading
+  existing public environments. Existing per-directory resolution remains available
+  to explicit headless `.http` runs. The older project-private writer retains its
+  safety checks for those explicit file workflows.
+- Interactive HTTP uses one global home regardless of the opened project. The
+  environment manager lists selectable environments, supports create/edit/rename/
+  delete, and has an always-active `Globals` variable form whose name cannot change.
+  New and edited variable values remain visible in the form, live in the operating
+  system credential store, and leave only opaque references in the private file. The old workspace-defaults
+  screen and its persisted default environment, headers, timeout, redirects, and
+  history preferences are not applied by the interactive client; history is in-session.
+  Request-specific timeout and redirect controls remain available.
+- Typing `{` in the HTTP URL shows available variable names without their values;
+  `[Tab]` completes the selected name as `{{name}}`. Query pairs typed in the URL
+  appear in Params, remain editable there, and are sent only once.
 - `.http` compatibility follows JetBrains units and common syntax: a bare
   `@timeout` value means seconds, serialized values include `ms`, and `//`
   directives, `# @name =`, short GET, and indented multiline URLs are accepted.
@@ -274,7 +280,7 @@ This file records durable project conventions, architectural decisions, and recu
   project scan or network access. Keep stable targets for documents, omnibar,
   collection, request builder, automation/security, and response inspection, and
   cover every target and translation in regression tests.
-- Postman v2.1 and OpenAPI 3.0/3.1 import compatibility is recorded under
+- Postman v2.0/v2.1 and OpenAPI 3.0/3.1 import compatibility is recorded under
   `tests/fixtures/http/import/`. OpenAPI local `$ref`, parameter overrides, and
   root/path/operation servers are supported; external refs and lossy constructs
   must be reported without exposing their URLs or contents. Imported literal

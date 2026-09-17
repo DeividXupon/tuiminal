@@ -290,7 +290,9 @@ export function importPostmanCollection(value: unknown): HttpImportReport {
   const collection = record(value)
   if (!collection || !Array.isArray(collection.item)) throw new Error("Coleção Postman inválida.")
   const schema = text(record(collection.info)?.schema)
-  if (schema && !schema.includes("/v2.1.0/")) throw new Error("Coleção Postman v2.1 inválida.")
+  if (schema && !/\/v2\.(?:0|1)\.0\//.test(schema)) {
+    throw new Error("Versão da coleção Postman não suportada. Use v2.0 ou v2.1.")
+  }
   const requests: HttpImportReport["requests"] = []
   const ignored: string[] = []
   const warnings: string[] = []

@@ -1,44 +1,8 @@
-import type { InputRenderable } from "@opentui/core"
-import { useEffect, useRef, type RefObject } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type {
-  HttpCollectionImportFormat,
-  HttpCollectionImportPreview,
-} from "../services/collection-import"
-
-function ImportInput({
-  id,
-  value,
-  placeholder,
-  inputRef,
-  onChange,
-  onSubmit,
-}: {
-  id: string
-  value: string
-  placeholder: string
-  inputRef?: RefObject<InputRenderable | null>
-  onChange: (value: string) => void
-  onSubmit: () => void
-}) {
-  return (
-    <input
-      {...(inputRef ? { ref: inputRef } : {})}
-      id={id}
-      value={value}
-      placeholder={translateUi(placeholder)}
-      onInput={onChange}
-      onSubmit={onSubmit}
-      onMouseDown={() => inputRef?.current?.focus()}
-      style={{
-        backgroundColor: COLORS.canvas,
-        focusedBackgroundColor: COLORS.panelRaised,
-      }}
-    />
-  )
-}
+import type { HttpCollectionImportPreview } from "../services/collection-import"
+import { HttpImportSourcePicker } from "./HttpImportSourcePicker"
 
 function ImportPreview({
   preview,
@@ -74,6 +38,10 @@ function ImportPreview({
     <>
       <text content={translateUi(summary)} style={{ height: 1, flexShrink: 0, fg: COLORS.http }} />
       <text
+        content={`${translateUi("FORMATO DETECTADO")}  ${preview.format.toUpperCase()}`}
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+      />
+      <text
         content={`${translateUi("DESTINO")}  ${truncateDisplay(preview.plannedPath, contentWidth - 9)}`}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
@@ -99,46 +67,35 @@ function ImportPreview({
 }
 
 export function HttpCollectionImportModal({
-  format,
   sourcePath,
-  outputDirectory,
   preview,
   busy,
   error,
   terminalWidth,
   terminalHeight,
-  onFormatChange,
   onSourcePathChange,
-  onOutputDirectoryChange,
   onApply,
   onBack,
   onClose,
 }: {
-  format: HttpCollectionImportFormat
   sourcePath: string
-  outputDirectory: string
   preview: HttpCollectionImportPreview | null
   busy: boolean
   error: string
   terminalWidth: number
   terminalHeight: number
-  onFormatChange: (format: HttpCollectionImportFormat) => void
   onSourcePathChange: (path: string) => void
-  onOutputDirectoryChange: (path: string) => void
   onApply: () => void
   onBack: () => void
   onClose: () => void
 }) {
-  const sourceRef = useRef<InputRenderable | null>(null)
-  const outputRef = useRef<InputRenderable | null>(null)
   const width = Math.min(82, Math.max(42, terminalWidth - 4))
-  const height = Math.min(22, Math.max(12, terminalHeight - 4))
+  const height = preview
+    ? Math.min(22, Math.max(12, terminalHeight - 4))
+    : Math.min(27, Math.max(12, terminalHeight - 2))
+  const compact = terminalHeight < 26
+  const tiny = terminalHeight < 18
   const contentWidth = width - 4
-  useEffect(() => {
-    if (preview) return
-    const timer = setTimeout(() => sourceRef.current?.focus(), 0)
-    return () => clearTimeout(timer)
-  }, [preview])
 
   return (
     <box
@@ -146,11 +103,13 @@ export function HttpCollectionImportModal({
       style={{
         position: "absolute",
         left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2) - 1),
+        top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
         width,
         height,
         zIndex: 110,
-        ...panelBorder(COLORS.http),
+        border: true,
+        borderStyle: "rounded",
+        borderColor: COLORS.http,
         backgroundColor: COLORS.panelRaised,
         paddingLeft: 1,
         paddingRight: 1,
@@ -165,35 +124,21 @@ export function HttpCollectionImportModal({
       {preview ? (
         <ImportPreview preview={preview} contentWidth={contentWidth} />
       ) : (
-        <box style={{ flexGrow: 1, gap: 1 }}>
-          <InlineButton
-            id="http-collection-import-format"
-            label={`[F] Formato: ${format === "postman" ? "POSTMAN" : "OPENAPI"}`}
-            accent={COLORS.http}
-            active
-            onPress={() => onFormatChange(format === "postman" ? "openapi" : "postman")}
-          />
-          <text content={translateUi("ARQUIVO NO PROJETO")} style={{ fg: COLORS.muted }} />
-          <ImportInput
-            id="http-collection-import-source"
-            value={sourcePath}
-            placeholder={format === "postman" ? "collection.json" : "openapi.yaml"}
-            inputRef={sourceRef}
-            onChange={onSourcePathChange}
+        <box
+          style={{
+            flexGrow: 1,
+            overflow: "hidden",
+            gap: tiny ? 0 : 1,
+            paddingTop: tiny ? 0 : 1,
+            paddingBottom: tiny ? 0 : 1,
+          }}
+        >
+          <HttpImportSourcePicker
+            sourcePath={sourcePath}
+            compact={compact}
+            tiny={tiny}
+            onSourcePathChange={onSourcePathChange}
             onSubmit={onApply}
-          />
-          <text content={translateUi("PASTA DE DESTINO NO PROJETO")} style={{ fg: COLORS.muted }} />
-          <ImportInput
-            id="http-collection-import-output"
-            value={outputDirectory}
-            placeholder=".tuiminal/http/imported"
-            inputRef={outputRef}
-            onChange={onOutputDirectoryChange}
-            onSubmit={onApply}
-          />
-          <text
-            content={translateUi("A prévia analisa compatibilidade e não grava arquivos.")}
-            style={{ fg: COLORS.muted }}
           />
         </box>
       )}

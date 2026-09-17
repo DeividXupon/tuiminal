@@ -1,98 +1,101 @@
-import type { InputRenderable } from "@opentui/core"
-import { useRef } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import type { ScrollBoxRenderable } from "@opentui/core"
+import { useEffect, useRef } from "react"
+import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { createHttpMultipartPart } from "../model/key-value"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import type { HttpRequestTableNavigation } from "../hooks/use-http-request-tables"
 import type { HttpMultipartPart } from "../model/types"
+import { HttpMultipartRow } from "./HttpMultipartRow"
 
 export function HttpMultipartEditor({
   requestId,
   parts,
   onChange,
-  active,
+  navigation,
 }: {
   requestId: string
   parts: HttpMultipartPart[]
   onChange: (parts: HttpMultipartPart[]) => void
-  active: boolean
+  navigation: HttpRequestTableNavigation<HttpMultipartPart>
 }) {
-  const inputs = useRef(new Map<string, InputRenderable>())
-  const patchPart = (id: string, patch: Partial<HttpMultipartPart>) =>
+  const rows =
+    navigation.active && navigation.mode !== "block" ? [...parts, navigation.draft] : parts
+  const scrollRef = useRef<ScrollBoxRenderable | null>(null)
+  const currentRows = useRef(rows)
+  currentRows.current = rows
+  useEffect(() => {
+    if (navigation.active && navigation.mode !== "block") {
+      scrollRef.current?.scrollTo(Math.max(0, navigation.row - 2))
+    }
+  }, [navigation.active, navigation.mode, navigation.row])
+  const patchPart = (id: string, patch: Partial<HttpMultipartPart>) => {
+    if (id === navigation.draft.id) {
+      if (patch.name !== undefined) navigation.onDraftInput("name", patch.name)
+      else if (patch.value !== undefined) navigation.onDraftInput("value", patch.value)
+      return
+    }
     onChange(parts.map((part) => (part.id === id ? { ...part, ...patch } : part)))
-  const addPart = () => onChange([...parts, createHttpMultipartPart(requestId)])
+  }
 
   return (
-    <box style={{ flexGrow: 1 }}>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("MULTIPART")} style={{ flexGrow: 1, fg: COLORS.muted }} />
-        {active ? (
-          <InlineButton label="[N] Adicionar" accent={COLORS.http} onPress={addPart} />
+    <box
+      id={`http-key-value-section-${requestId}-multipart`}
+      focusable
+      style={{ ...focusedPanelBorder(navigation.active, COLORS.http), flexGrow: 1 }}
+    >
+      <box
+        {...(navigation.active ? {} : { onMouseDown: navigation.onFocusBlock })}
+        style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
+      >
+        <text
+          content={translateUi("MULTIPART")}
+          style={{ flexGrow: 1, fg: navigation.active ? COLORS.http : COLORS.muted }}
+        />
+        {navigation.active && navigation.mode === "block" ? (
+          <InlineButton label="[Enter] Tabela" accent={COLORS.http} onPress={navigation.onEnter} />
         ) : null}
       </box>
-      <scrollbox scrollY viewportCulling style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
-        {parts.length ? (
-          parts.map((part) => (
-            <box key={part.id} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-              <InlineButton
-                label={part.enabled ? "[●]" : "[○]"}
-                accent={COLORS.http}
-                active={part.enabled}
-                onPress={() => patchPart(part.id, { enabled: !part.enabled })}
-              />
-              <InlineButton
-                label={part.kind === "file" ? "[F]" : "[T]"}
-                accent={COLORS.http}
-                active={part.kind === "file"}
-                onPress={() => patchPart(part.id, { kind: part.kind === "file" ? "text" : "file" })}
-              />
-              <input
-                ref={(input) => {
-                  if (input) inputs.current.set(`${part.id}-name`, input)
-                  else inputs.current.delete(`${part.id}-name`)
-                }}
-                id={`http-key-value-name-${part.id}`}
-                value={part.name}
-                placeholder={translateUi("NOME")}
-                width="28%"
-                onInput={(name) => patchPart(part.id, { name })}
-                onMouseDown={() => inputs.current.get(`${part.id}-name`)?.focus()}
-                style={{
-                  backgroundColor: COLORS.canvas,
-                  focusedBackgroundColor: COLORS.panelRaised,
-                }}
-              />
-              <input
-                ref={(input) => {
-                  if (input) inputs.current.set(`${part.id}-value`, input)
-                  else inputs.current.delete(`${part.id}-value`)
-                }}
-                id={`http-key-value-value-${part.id}`}
-                value={part.value}
-                placeholder={translateUi(part.kind === "file" ? "CAMINHO DO ARQUIVO" : "VALOR")}
-                width="42%"
-                onInput={(value) => patchPart(part.id, { value })}
-                onMouseDown={() => inputs.current.get(`${part.id}-value`)?.focus()}
-                style={{
-                  backgroundColor: COLORS.canvas,
-                  focusedBackgroundColor: COLORS.panelRaised,
-                }}
-              />
-              <InlineButton
-                label="[×]"
-                accent={COLORS.danger}
-                onPress={() => onChange(parts.filter((candidate) => candidate.id !== part.id))}
-              />
-            </box>
+      <scrollbox
+        ref={scrollRef}
+        scrollY
+        viewportCulling
+        style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
+      >
+        {rows.length ? (
+          rows.map((part, index) => (
+            <HttpMultipartRow
+              key={part.id}
+              part={part}
+              index={index}
+              draft={part.id === navigation.draft.id}
+              navigation={navigation}
+              currentRows={currentRows}
+              onPatch={patchPart}
+              onDelete={(id) => onChange(parts.filter((candidate) => candidate.id !== id))}
+            />
           ))
         ) : (
           <text content={translateUi("Nenhuma parte definida.")} style={{ fg: COLORS.muted }} />
         )}
       </scrollbox>
-      <text
-        content={translateUi("[T] texto · [F] arquivo relativo ao projeto")}
-        style={{ fg: COLORS.muted }}
-      />
+      {navigation.active && navigation.mode === "table" ? (
+        <box style={{ height: 1, flexShrink: 0, overflow: "hidden" }}>
+          <ShortcutText
+            content={
+              navigation.column === 2
+                ? "[Enter] Excluir linha · [Space] Ativar/desativar"
+                : "[Space] Ativar/desativar · [←/→] Selecionar [×]"
+            }
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+      ) : (
+        <text
+          content={translateUi("[T] texto · [F] arquivo relativo ao projeto")}
+          style={{ fg: COLORS.muted }}
+        />
+      )}
     </box>
   )
 }

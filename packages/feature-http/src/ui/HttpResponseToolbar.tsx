@@ -64,6 +64,7 @@ function ResponseInput({
 function ResponseActions({
   document,
   response,
+  jsonTreeActive,
   searchRef,
   jsonPathRef,
   onChange,
@@ -77,6 +78,7 @@ function ResponseActions({
 }: {
   document: HttpDocumentState
   response: HttpResponseSnapshot
+  jsonTreeActive: boolean
   searchRef: RefObject<InputRenderable | null>
   jsonPathRef: RefObject<InputRenderable | null>
   onChange: (patch: Partial<HttpDocumentState["responsePresentation"]>) => void
@@ -102,12 +104,14 @@ function ResponseActions({
           setTimeout(() => searchRef.current?.focus(), 0)
         }}
       />
-      <InlineButton
-        label="Wrap"
-        accent={COLORS.http}
-        active={presentation.wrap}
-        onPress={() => onChange({ wrap: !presentation.wrap })}
-      />
+      {jsonTreeActive ? null : (
+        <InlineButton
+          label="Wrap"
+          accent={COLORS.http}
+          active={presentation.wrap}
+          onPress={() => onChange({ wrap: !presentation.wrap })}
+        />
+      )}
       <InlineButton
         label="Linhas"
         accent={COLORS.http}
@@ -242,6 +246,7 @@ function JsonPathRow({
 export function HttpResponseToolbar({
   document,
   response,
+  jsonTreeActive,
   cookies,
   matches,
   registerSearchInput,
@@ -260,6 +265,7 @@ export function HttpResponseToolbar({
 }: {
   document: HttpDocumentState
   response: HttpResponseSnapshot | null
+  jsonTreeActive: boolean
   cookies: HttpCookie[]
   matches: number
   registerSearchInput: (input: InputRenderable | null) => void
@@ -358,6 +364,7 @@ export function HttpResponseToolbar({
         <ResponseActions
           document={document}
           response={response}
+          jsonTreeActive={jsonTreeActive}
           searchRef={searchRef}
           jsonPathRef={jsonPathRef}
           onChange={onChange}

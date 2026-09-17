@@ -83,7 +83,7 @@ tuiminal ../meu-projeto
 tuiminal banco ./meu-projeto
 tuiminal git ./meu-projeto
 tuiminal runner ./meu-projeto
-tuiminal http ./meu-projeto
+tuiminal http
 tuiminal terminal ./meu-projeto
 ```
 
@@ -390,18 +390,20 @@ Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. L
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
 </p>
 
-Um cliente de API compacto com documentos, coleção, builder, resposta e automação. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
+Um cliente de API compacto com documentos, coleção, builder, resposta e automação. Os dados da interface HTTP ficam em um único diretório global (`$XDG_DATA_HOME/tuiminal/http` ou `~/.local/share/tuiminal/http`), independentemente do projeto aberto. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
 
 ### O que você pode fazer
 
 - **Montar requests:** método, URL, query params, headers, JSON/texto/XML, form URL encoded, multipart, arquivo e autenticação Bearer, Basic ou API Key.
-- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores; no response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual.
+- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores, com controles da árvore em uma coluna separada e destaque na linha inteira do bloco selecionado. No response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual. O Pretty JSON navegável mantém uma linha por entrada para posicionar a seleção corretamente; Wrap continua disponível em Raw e nas outras visualizações da resposta.
 - **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
-- **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
-- **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
+- **Salvar coleções:** importar e salvar `.http`/`.rest` interoperáveis no diretório global do HTTP sem regravar silenciosamente blocos que o Tuiminal não entende.
+- **Importar:** informe um caminho completo ou iniciado por `~/` para um arquivo Postman v2.0/v2.1 ou OpenAPI 3.0/3.1, use `[↑/↓]` e `[Tab]` para completá-lo, ou solte um arquivo na área de importação quando o terminal colar seu caminho. O Tuiminal identifica o formato pelo conteúdo e o mostra na prévia com os avisos de conversão; o `.http` resultante só é salvo na biblioteca global do HTTP após a confirmação, independentemente do projeto aberto.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit. Selecionar um request funciona também quando há nomes iguais. Reabrir o executor ou mudar seu alvo cancela a execução anterior; resultados atrasados não substituem a nova execução.
-- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema. O campo de valor privado mantém a máscara durante edição e redimensionamento, inclusive com ideogramas e emojis.
+- **Trabalhar com ambientes:** `[E]` lista os ambientes selecionáveis; `[N]` cria um, `[E]` edita ou renomeia o selecionado, e `[D]` o exclui após confirmação. `[G]` abre `Globals`, sempre ativo e com nome fixo. Cada formulário tem nome e tabela de variável/valor; `[/]` escolhe um bloco, `[↑/↓]` move a barra de foco e `[Enter]` abre o bloco. As linhas alternam o fundo, e a célula selecionada tem destaque próprio. `[Tab]` avança pelos campos; tabelas preenchidas aceitam setas ou `[H/J/K/L]`, `[Enter]` para editar e `[Esc]` em camadas para sair. Os valores ficam visíveis durante a edição e são sempre salvos no gerenciador de credenciais do sistema; o arquivo privado de ambientes contém somente referências opacas para valores novos ou editados. O modal com borda assume o foco enquanto está aberto. Os defaults do workspace não são mais aplicados.
+- **Editar tabelas da requisição:** em Query/Path Params, `[J/K]` ou `[↑/↓]` escolhe o bloco. `[Enter]` abre a primeira célula de uma tabela vazia ou a navegação pelas linhas existentes. Setas ou `[H/J/K/L]` alcançam a bolinha de ativação, os campos Nome/Valor e o `[×]`; `[Enter]` aciona o controle selecionado, inclusive excluindo pelo `[×]`. `[Space]` ativa ou desativa a linha, e `[Tab]` avança pelos inputs até uma linha de rascunho, criada de fato quando você digita. `[Esc]` volta do input para a tabela e depois para o bloco. Headers, form URL encoded e Multipart seguem o mesmo fluxo; Multipart também permite selecionar o controle texto/arquivo. `[N]` não adiciona mais linhas nessas tabelas.
+- **Escrever URLs rapidamente:** digite `{` na URL para ver os nomes das variáveis disponíveis e use `[Tab]` para completar `{{nome}}`. Pares de query como `?manga=2` aparecem em Params e podem ser editados ali sem envio duplicado.
 - **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. O jar valida domínios pela Public Suffix List, impõe limites e fica isolado por ambiente e diretório da coleção; `[C]` pode desativar tanto leitura quanto escrita de cookies por request. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 - **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
 - **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas. Acionamentos repetidos não duplicam o download; fechar o documento que o iniciou cancela a operação. O arquivo só é publicado depois da gravação completa, sem substituir um destino existente.
@@ -416,7 +418,9 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 | Ciclar Params, headers, body, auth e mais com a requisição focada | `[A←]` / `[F→]` |
 | Ciclar opções internas de Body, Auth ou Mais | `[Z←]` / `[V→]` |
 | Alternar Query Params / Path Params | `[J/K]` ou `[↑/↓]` |
-| Adicionar item ao subpainel focado | `[N]` |
+| Entrar numa tabela da requisição / editar a célula selecionada | `[Enter]` |
+| Percorrer controles / inputs da tabela | `[H/J/K/L]` ou setas / `[Tab]` |
+| Ativar/desativar a linha / excluir pelo `[×]` selecionado | `[Space]` / `[Enter]` |
 | Navegar / recolher / expandir JSON | `[↑/↓]` ou `[J/K]` / `[←/→]` / `[Enter]` |
 | Abrir ambientes | `[E]` |
 | Alternar visualização principal / aba interna da resposta | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
@@ -462,7 +466,7 @@ requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sess�
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. A captura libera o leitor ao terminar ou falhar e só marca truncamento quando encontra bytes além do limite. A busca acompanha linhas e colunas sem reprocessar todo o texto anterior a cada ocorrência. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
-O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
+O histórico HTTP fica somente na sessão atual e não persiste corpos de requests ou responses. A resposta original continua disponível na memória para inspeção e exportação explícita. Preview, cURL, relatórios e erros mascaram segredos conhecidos; arquivos exportados explicitamente e arquivos antigos de versões anteriores ficam separados do histórico da sessão.
 
 Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
 
