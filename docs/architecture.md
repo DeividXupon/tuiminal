@@ -1,8 +1,9 @@
 # Current architecture
 
 Tuiminal uses a Bun workspaces monorepo: one application and six internal packages
-with automatically checked responsibilities and dependencies. The current release
-still includes every tool in each platform binary. This structure makes code easier
+with automatically checked responsibilities and dependencies. The minimal release
+host downloads version-matched official feature payloads on demand. This structure
+makes code easier
 to find, allows rules to be tested without mounting a screen, and lets tools grow
 without filling the core with feature-specific implementation details.
 
@@ -38,6 +39,7 @@ tests/                         logic and local integration tests
   fixtures/                    disposable demo projects
 scripts/                       architecture and maintainability checks
 docs/adr/                      decisions and tradeoffs
+docs/ai/                       task-specific agent guidance
 ```
 
 Each tool exposes only the API needed by the application through `index.ts`. Not
@@ -49,6 +51,11 @@ and installation contracts are documented in
 [Internal workspaces](./design/internal-workspaces.md) and
 [Official feature installation](./design/official-feature-installation.md). The former `src/core` and
 `src/shared` directories were combined into `packages/core/src`.
+
+The root [agent guide](../AGENTS.md) is a short entry point; the
+[agent guidance map](./ai/index.md) routes task-specific constraints. The current
+[shared control contract](./design/ui-controls.md) defines when to reuse
+`InlineButton` and `ModalSurface` without centralizing feature keyboard policy.
 
 ## Allowed dependencies
 
@@ -100,11 +107,26 @@ before dispatch, independent of React loading state. Row/cell and suggestion col
 live in `query-presentation.ts`, with tests for precedence and palette updates.
 
 Git separates the file tree, commit graph, diff/intraline handling, types, and
-presentation. PR and Issues share only the detail-loading lifecycle in
-`useGitRemoteDetails`: debounce, request ownership, pagination, and stale-response
-disposal. Models and sessions retain their own merge and cache rules. Each session
-checks the active request before caching a result; stale callbacks cannot release
-a replacement controller.
+presentation. PR and Issues share the detail-loading lifecycle in
+`useGitRemoteDetails` and the dashboard load/refresh/pagination lifecycle in
+`useGitRemoteDashboard`. Their sessions and data models remain separate, sharing
+only pure aggregation, selector transitions, configuration parsing, and bounded
+LRU insertion. Each session checks the active request before caching a result;
+stale callbacks cannot release a replacement controller.
+
+The code-consistency audit compared exact ten-line source windows across the CLI
+and all feature/core packages, then inspected the highest-overlap pairs. Shared
+behavior with matching ownership now has narrow homes: `ModalSurface` and
+`InlineButton` in core; the Git PR/Issue editor, action-menu, and dashboard
+lifecycle in Git UI; their pure configuration, selector, page-merge, and LRU
+helpers in Git model/services; and Database result-metadata normalization in its
+model. Remaining similar-looking Git session and mutation code is deliberately
+separate: PR and Issue requests have different payloads, reconciliation, and
+write uncertainty rules. Their branch and repository pickers share a modal shell
+but retain different pagination/catalog lifecycles. Database history and saved
+queries likewise share a shell but not privacy/rerun versus save/delete behavior.
+When one of these boundaries changes, share only the newly identical contract,
+with cancellation, write, and mouse/focus regressions for both owners.
 
 Database and Runner still have large controllers. Moving files alone does not make
 them smaller: the [ADR](./adr/0001-modular-monolith.md) records planned extractions,
