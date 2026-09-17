@@ -128,7 +128,6 @@ export function PullRequestsWorkspace({
       selected?.identity ?? null,
       profileTarget?.profile.repositories ?? [],
     ),
-    defaultBase: selected?.baseBranch ?? "",
     onNotice: setNotice,
     onRefresh: () => void refresh(),
   })

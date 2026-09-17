@@ -223,7 +223,7 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[2] PR`
 
-- `[Ctrl+N]` abre o formulário de criação com seletores pesquisáveis de repositório e das branches remotas base e comparada, título, descrição em Markdown e opção draft. O título começa com a primeira linha do último commit da branch comparada e continua editável. O Tuiminal verifica as duas branches escolhidas antes de um único envio à API do GitHub; ele não faz push da branch local.
+- `[Ctrl+N]` abre o formulário de criação com seletores pesquisáveis de repositório e das branches remotas base e comparada, título, descrição em Markdown e opção draft. A base começa com a branch padrão do repositório selecionado e pode ser trocada. O título começa com a primeira linha do último commit da branch comparada e continua editável. O Tuiminal verifica as duas branches escolhidas antes de um único envio à API do GitHub; ele não faz push da branch local.
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
 - O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.

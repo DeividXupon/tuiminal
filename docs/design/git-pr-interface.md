@@ -198,8 +198,13 @@ It renders at most 100 matching rows at once and lets search reach the rest.
 Closing it cancels the catalog request. Both branch
 controls open a searchable list from the selected repository's remote branches,
 loaded in bounded pages on demand. Changing the repository clears both selections;
-closing the picker cancels its read. Selecting the compare branch reads the latest
-remote commit subject and suggests it as the PR title. A changed repository or
+the form then reads that repository's `default_branch` and suggests it as base.
+This read is cancelled on close or repository change, and a late response cannot
+replace a manually selected base. If the read fails, the base picker remains
+available. The base is never inferred from a selected PR, whose base may differ
+from the repository default. Closing the picker cancels its read. Selecting the
+compare branch reads the latest remote commit subject and suggests it as the PR
+title. A changed repository or
 compare branch retires the previous read; late results cannot replace a newer
 selection or a manually edited title. Failure leaves the title editable and does
 not block creation. The compare selection maps to GitHub's `head` field on

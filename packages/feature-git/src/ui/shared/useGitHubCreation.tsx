@@ -4,6 +4,7 @@ import { type GitHubCreateDraft, validateGitHubCreateDraft } from "../../model/c
 import type { PullRequestAuthContext } from "../../model/pr/types"
 import { createGitHubItem, type GitHubCreateResult } from "../../services/github/create-item"
 import { GitHubCreateModal } from "./GitHubCreateModal"
+import { useGitHubCreateDefaultBase } from "./useGitHubCreateDefaultBase"
 import { useGitHubCreateTitleSuggestion } from "./useGitHubCreateTitleSuggestion"
 
 async function dispatchGitHubCreation(draft: GitHubCreateDraft, auth: PullRequestAuthContext) {
@@ -25,14 +26,12 @@ export function useGitHubCreation({
   kind,
   auth,
   defaultRepository,
-  defaultBase,
   onNotice,
   onRefresh,
 }: {
   kind: "pr" | "issue"
   auth: PullRequestAuthContext | null
   defaultRepository: string
-  defaultBase?: string
   onNotice: (message: string) => void
   onRefresh: () => void
 }) {
@@ -57,19 +56,16 @@ export function useGitHubCreation({
     auth?.host,
     process.env.TUIMINAL_GIT_PR_DEMO === "1",
   )
+  const baseSuggestion = useGitHubCreateDefaultBase(
+    draft,
+    setDraft,
+    open,
+    auth?.host,
+    process.env.TUIMINAL_GIT_PR_DEMO === "1",
+  )
   const openModal = () => {
     if (!auth) return
-    setDraft((current) => {
-      const repository = current.repository || defaultRepository
-      return {
-        ...current,
-        repository,
-        base:
-          current.base ||
-          (repository.toLowerCase() === defaultRepository.toLowerCase() ? defaultBase : "") ||
-          "",
-      }
-    })
+    setDraft((current) => ({ ...current, repository: current.repository || defaultRepository }))
     if (!uncertain) setError("")
     setOpen(true)
   }
@@ -87,13 +83,14 @@ export function useGitHubCreation({
       const { demo, result } = await dispatchGitHubCreation(draft, auth)
       if (result.status === "confirmed") {
         titleSuggestion.reset()
+        baseSuggestion.reset()
         setOpen(false)
         setDraft({
           kind,
           repository: draft.repository,
           title: "",
           body: "",
-          base: draft.base ?? "",
+          base: "",
           head: "",
           draft: false,
         })
@@ -128,7 +125,10 @@ export function useGitHubCreation({
             setUncertain(false)
             setError("")
           }}
-          onChange={titleSuggestion.changeDraft}
+          onChange={(patch) => {
+            baseSuggestion.noteChange(patch)
+            titleSuggestion.changeDraft(patch)
+          }}
           onClose={() => setOpen(false)}
           onSubmit={() => void submit()}
         />

@@ -21,6 +21,11 @@ function titleValue() {
   return (tui?.renderer.root.findDescendantById("git-create-field-title") as InputRenderable)?.value
 }
 
+function baseValue() {
+  const field = tui?.renderer.root.findDescendantById("git-create-field-base")
+  return field ? tui?.captureCharFrame().split("\n")[field.screenY] : undefined
+}
+
 async function key(name: string, options: { ctrl?: boolean; shift?: boolean } = {}) {
   act(() => {
     if (name === "escape") tui?.mockInput.pressEscape(options)
@@ -140,6 +145,7 @@ test("PR creation selects base and compare branches from the remote-branch picke
   await click("git-pr-create")
   await act(async () => Bun.sleep(10))
   await render()
+  expect(baseValue()).toContain("main")
   await click("git-create-field-base")
   expect(Boolean(tui.renderer.root.findDescendantById("git-create-branch-picker"))).toBe(true)
   expect(tui.captureCharFrame()).toContain("ESCOLHER BRANCH BASE")
@@ -164,6 +170,7 @@ test("PR creation selects base and compare branches from the remote-branch picke
   expect(tui.captureCharFrame()).toContain("equipe/web")
   expect(tui.captureCharFrame()).not.toContain("fix/cache")
   expect(titleValue()).toBe("")
+  expect(baseValue()).toContain("main")
   await click("git-create-field-head")
   await act(async () => Bun.sleep(10))
   await render()

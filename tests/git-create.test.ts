@@ -11,6 +11,7 @@ import {
   commitSubject,
   readGitHubBranchCommitTitle,
 } from "../packages/feature-git/src/services/github/branch-commit-title"
+import { readGitHubRepositoryDefaultBranch } from "../packages/feature-git/src/services/github/repository-default-branch"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-git-create-"))
 const executable = join(directory, "gh")
@@ -34,7 +35,11 @@ const endpoint = args.find((part) => part.startsWith("repos/")) ?? ""
 if (args.at(-1) === "user") {
   console.log(JSON.stringify({ login: "deivid", node_id: process.env.FAKE_OTHER_VIEWER === "1" ? "other" : "viewer-node" }))
 } else if (endpoint === "repos/team/api" && !args.includes("POST")) {
-  console.log(JSON.stringify({ full_name: "team/api", has_issues: process.env.FAKE_ISSUES_DISABLED !== "1" }))
+  console.log(JSON.stringify({
+    full_name: process.env.FAKE_REPO_WRONG_NAME === "1" ? "other/api" : "team/api",
+    has_issues: process.env.FAKE_ISSUES_DISABLED !== "1",
+    default_branch: process.env.FAKE_DEFAULT_BRANCH ?? "main",
+  }))
 } else if (endpoint.startsWith("repos/team/api/branches?")) {
   if (process.env.FAKE_BRANCH_BAD_SHAPE === "1") console.log(JSON.stringify({ unexpected: true }))
   else if (endpoint.endsWith("&page=1")) console.log(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ name: index === 0 ? "main" : "feature/" + index }))))
@@ -172,6 +177,35 @@ test("PR title suggestion reads the selected remote branch tip and uses its comm
       env: { FAKE_LOG: logPath, FAKE_BRANCH_WRONG_NAME: "1" },
     }),
   ).rejects.toThrow("Título do último commit indisponível.")
+})
+
+test("PR base suggestion reads the selected repository's default branch", async () => {
+  resetLog()
+  const options = {
+    executable,
+    env: { FAKE_LOG: logPath, FAKE_DEFAULT_BRANCH: "release/v2" },
+  }
+  expect(await readGitHubRepositoryDefaultBranch("github.com", "team/api", options)).toBe(
+    "release/v2",
+  )
+  expect(commands().map((call) => call.args.at(-1))).toEqual(["repos/team/api"])
+  resetLog()
+  await expect(readGitHubRepositoryDefaultBranch("github.com", "invalid", options)).rejects.toThrow(
+    "Repositório GitHub inválido.",
+  )
+  expect(commands()).toHaveLength(0)
+  await expect(
+    readGitHubRepositoryDefaultBranch("github.com", "team/api", {
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_REPO_WRONG_NAME: "1" },
+    }),
+  ).rejects.toThrow("Branch padrão do repositório indisponível.")
+  await expect(
+    readGitHubRepositoryDefaultBranch("github.com", "team/api", {
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_DEFAULT_BRANCH: "bad branch" },
+    }),
+  ).rejects.toThrow("Branch padrão do repositório indisponível.")
 })
 
 test("issue creation posts exact JSON once after authenticating and checking repository", async () => {
