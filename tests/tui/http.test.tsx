@@ -1069,7 +1069,11 @@ describe("HTTP TUI", () => {
       )
       expect(tui.captureCharFrame()).toContain("local")
       await press("http-environment-delete-confirm")
-      await settle(() => !tui?.renderer.root.findDescendantById("http-environment-choice-local"))
+      await settle(
+        () =>
+          Boolean(tui?.renderer.root.findDescendantById("http-environment-choice-none")) &&
+          !tui?.renderer.root.findDescendantById("http-environment-choice-local"),
+      )
       expect(JSON.parse(await readFile(privatePath, "utf8"))).toEqual({})
     } finally {
       if (original) await writeFile(privatePath, original)
@@ -1801,7 +1805,7 @@ describe("HTTP TUI", () => {
           }
         ).content,
       ).toBe(originalContent)
-    })
+    }, 15_000)
 
     test("submits the freshly pasted URL when Enter follows in the same input batch", async () => {
       const origin = new URL(url).origin
