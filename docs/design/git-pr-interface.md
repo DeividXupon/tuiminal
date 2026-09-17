@@ -190,8 +190,20 @@ in remote diffs.
 ### 4.6. Forms and confirmations
 
 PR creation opens from `[Ctrl+N]` or its mouse control, independently of list
-selection. The form takes an explicit `owner/repository`, remote base and head
-branches in that repository, title, Markdown body, and draft flag. It never pushes
+selection. The form chooses an explicit `owner/repository` from the searchable
+authenticated repository catalog, then remote base and compare branches in that
+repository, title, Markdown body, and draft flag. The repository picker retains
+the current valid selection while the catalog loads and can retry a failed read.
+It renders at most 100 matching rows at once and lets search reach the rest.
+Closing it cancels the catalog request. Both branch
+controls open a searchable list from the selected repository's remote branches,
+loaded in bounded pages on demand. Changing the repository clears both selections;
+closing the picker cancels its read. Selecting the compare branch reads the latest
+remote commit subject and suggests it as the PR title. A changed repository or
+compare branch retires the previous read; late results cannot replace a newer
+selection or a manually edited title. Failure leaves the title editable and does
+not block creation. The compare selection maps to GitHub's `head` field on
+submission. It never pushes
 or checks out a local branch. `[Ctrl+S]` validates the form, rereads authentication,
 repository identity, and both branches, then sends one JSON request through `gh api`.
 Only a response with the matching host, repository, PR path, and number confirms

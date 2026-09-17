@@ -33,7 +33,7 @@ export function validateGitHubCreateDraft(draft: GitHubCreateDraft): string | nu
   if (draft.body.length > 65_000) return "A descrição é longa demais."
   if (draft.kind === "issue") return null
   if (!validGitHubBranch(draft.base?.trim() ?? "")) return "Informe uma branch base válida."
-  if (!validGitHubBranch(draft.head?.trim() ?? "")) return "Informe uma branch head válida."
-  if (draft.base?.trim() === draft.head?.trim()) return "Base e head precisam ser diferentes."
+  if (!validGitHubBranch(draft.head?.trim() ?? "")) return "Informe uma branch comparada válida."
+  if (draft.base?.trim() === draft.head?.trim()) return "Base e comparada precisam ser diferentes."
   return null
 }

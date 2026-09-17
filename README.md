@@ -233,7 +233,7 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[2] PR`
 
-- `[Ctrl+N]` opens a creation form with an explicit repository, remote base/head branches, title, Markdown description, and draft option. Tuiminal checks both remote branches before one GitHub API submission; it does not push a local branch.
+- `[Ctrl+N]` opens a creation form with searchable repository, remote base, and compare branch pickers, plus title, Markdown description, and a draft option. The title starts with the latest commit subject from the compare branch and remains editable. Tuiminal checks both selected branches before one GitHub API submission; it does not push a local branch.
 - Starts with **My PRs**, **Review requested**, **All**, **Open**, and **Closed**. The last three select non-archived PRs by state within the current scope.
 - Lists state, repository, review, CI, author, assignees, comments, labels, and diff size.
 - State marks are green for open, purple for merged, gray for draft, and red for closed.
@@ -246,7 +246,7 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[3] Issues`
 
-- `[Ctrl+N]` opens a creation form for repository, title, and Markdown description. Both creation forms keep the draft in memory until submission and require `[Ctrl+S]` to create.
+- `[Ctrl+N]` opens a creation form with a searchable repository picker, title, and Markdown description. Both creation forms keep the draft in memory until submission and require `[Ctrl+S]` to create.
 - Starts with **My Issues**, **All**, **Open**, and **Closed**, selecting non-archived issues by state within the current scope.
 - Combines a dense two-line list with overview and activity previews.
 - Its state mark is green for open and red for closed.

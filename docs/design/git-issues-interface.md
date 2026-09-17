@@ -102,7 +102,8 @@ whole list; colors and click handlers remain current.
 ## Persistence, scope, and action safety
 
 Issue creation opens from `[Ctrl+N]` or its mouse control even when the list is
-empty. The form takes an explicit `owner/repository`, title, and Markdown body;
+empty. The form chooses an explicit `owner/repository` through the same searchable,
+cancellable repository catalog picker as PR creation, plus title and Markdown body;
 `[Ctrl+S]` checks the authenticated account and repository before one `gh api`
 submission. Only a matching host, repository, issue path, and number confirms it.
 Any error after dispatch is uncertain and requires a GitHub check before another

@@ -1,7 +1,7 @@
 import type { BoxRenderable, InputRenderable, TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -9,8 +9,44 @@ import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { GitHubCreateDraft } from "../../model/create-item"
 import { validateGitHubCreateDraft } from "../../model/create-item"
 import { useBlurModalFocusOnUnmount } from "../useBlurModalFocusOnUnmount"
+import { GitHubCreateBranchPicker } from "./GitHubCreateBranchPicker"
+import { GitHubCreateRepositoryPicker } from "./GitHubCreateRepositoryPicker"
 
 type CreateField = "repository" | "base" | "head" | "title" | "body"
+
+function createModalKeyAction(
+  name: string,
+  focusedId: string | undefined,
+  ctrl: boolean,
+  kind: GitHubCreateDraft["kind"],
+  uncertain: boolean,
+) {
+  if (
+    kind === "pr" &&
+    ["return", "enter", "linefeed"].includes(name) &&
+    (focusedId === "git-create-field-repository" ||
+      focusedId === "git-create-field-base" ||
+      focusedId === "git-create-field-head")
+  )
+    return focusedId === "git-create-field-repository"
+      ? "repository"
+      : focusedId === "git-create-field-base"
+        ? "base"
+        : "head"
+  if (
+    kind === "issue" &&
+    ["return", "enter", "linefeed"].includes(name) &&
+    focusedId === "git-create-field-repository"
+  )
+    return "repository"
+  if (name === "escape") return "escape"
+  if (ctrl && name === "s") return "submit"
+  if (name === "tab") return "tab"
+  if (focusedId?.startsWith("git-create-field-")) return null
+  if (uncertain && name === "v") return "acknowledge"
+  if (kind === "pr" && name === "d") return "draft"
+  return null
+}
 
 export function GitHubCreateModal({
   draft,
@@ -19,6 +55,7 @@ export function GitHubCreateModal({
   busy,
   uncertain,
   error,
+  titleSuggestionStatus,
   onChange,
   onClose,
   onAcknowledge,
@@ -30,6 +67,7 @@ export function GitHubCreateModal({
   busy: boolean
   uncertain: boolean
   error: string
+  titleSuggestionStatus: "idle" | "loading" | "error"
   onChange: (patch: Partial<GitHubCreateDraft>) => void
   onClose: () => void
   onAcknowledge: () => void
@@ -38,26 +76,20 @@ export function GitHubCreateModal({
   const terminal = useTerminalDimensions()
   const renderer = useRenderer()
   const dialogRef = useRef<BoxRenderable | null>(null)
-  const repositoryRef = useRef<InputRenderable | null>(null)
-  const baseRef = useRef<InputRenderable | null>(null)
-  const headRef = useRef<InputRenderable | null>(null)
   const titleRef = useRef<InputRenderable | null>(null)
   const bodyRef = useRef<TextareaRenderable | null>(null)
+  const [picker, setPicker] = useState<"repository" | "base" | "head" | null>(null)
   const fields: CreateField[] =
     draft.kind === "pr"
       ? ["repository", "base", "head", "title", "body"]
       : ["repository", "title", "body"]
-  const refs = {
-    repository: repositoryRef,
-    base: baseRef,
-    head: headRef,
-    title: titleRef,
-    body: bodyRef,
-  }
   useBlurModalFocusOnUnmount(dialogRef)
   useEffect(() => {
     renderer.currentFocusedRenderable?.blur()
-    const timeout = setTimeout(() => repositoryRef.current?.focus(), 0)
+    const timeout = setTimeout(
+      () => renderer.root.findDescendantById("git-create-field-repository")?.focus(),
+      0,
+    )
     return () => clearTimeout(timeout)
   }, [renderer])
 
@@ -70,62 +102,56 @@ export function GitHubCreateModal({
   }
   const focusNextField = (backward: boolean) => {
     const current = fields.findIndex(
-      (field) => refs[field].current?.id === renderer.currentFocusedRenderable?.id,
+      (field) => `git-create-field-${field}` === renderer.currentFocusedRenderable?.id,
     )
     const next = (current + (backward ? fields.length - 1 : 1)) % fields.length
-    refs[fields[next] ?? "repository"].current?.focus()
+    renderer.root.findDescendantById(`git-create-field-${fields[next] ?? "repository"}`)?.focus()
   }
 
   useKeyboard((key) => {
-    const name = key.name.toLowerCase()
-    if (name === "escape") {
-      key.preventDefault()
-      key.stopPropagation()
-      if (!busy) dismissFocusedField()
-      return
+    if (picker) return
+    const action = createModalKeyAction(
+      key.name.toLowerCase(),
+      renderer.currentFocusedRenderable?.id,
+      Boolean(key.ctrl),
+      draft.kind,
+      uncertain,
+    )
+    if (!action) return
+    key.preventDefault()
+    key.stopPropagation()
+    const handlers = {
+      repository: () => {
+        if (!busy) setPicker("repository")
+      },
+      base: () => {
+        if (!busy) setPicker("base")
+      },
+      head: () => {
+        if (!busy) setPicker("head")
+      },
+      escape: () => {
+        if (!busy) dismissFocusedField()
+      },
+      submit: () => {
+        if (!busy && !uncertain) onSubmit()
+      },
+      tab: () => focusNextField(Boolean(key.shift)),
+      acknowledge: onAcknowledge,
+      draft: () => onChange({ draft: !draft.draft }),
     }
-    if (key.ctrl && name === "s") {
-      key.preventDefault()
-      key.stopPropagation()
-      if (!busy && !uncertain) onSubmit()
-      return
-    }
-    if (name === "tab") {
-      key.preventDefault()
-      key.stopPropagation()
-      focusNextField(Boolean(key.shift))
-      return
-    }
-    if (
-      uncertain &&
-      name === "v" &&
-      !renderer.currentFocusedRenderable?.id?.startsWith("git-create-field-")
-    ) {
-      key.preventDefault()
-      key.stopPropagation()
-      onAcknowledge()
-      return
-    }
-    if (
-      draft.kind === "pr" &&
-      !renderer.currentFocusedRenderable?.id?.startsWith("git-create-field-") &&
-      name === "d"
-    ) {
-      key.preventDefault()
-      key.stopPropagation()
-      onChange({ draft: !draft.draft })
-    }
+    handlers[action]()
   })
 
-  const field = (name: Exclude<CreateField, "body">, label: string, value: string) => (
+  const titleField = () => (
     <box style={{ flexShrink: 0, gap: 0 }}>
-      <text content={translateUi(label)} style={{ fg: COLORS.muted }} />
+      <text content={translateUi("Título")} style={{ fg: COLORS.muted }} />
       <input
-        ref={refs[name]}
-        id={`git-create-field-${name}`}
-        value={value}
-        onMouseDown={() => refs[name].current?.focus()}
-        onInput={(next) => onChange({ [name]: next })}
+        ref={titleRef}
+        id="git-create-field-title"
+        value={draft.title}
+        onMouseDown={() => titleRef.current?.focus()}
+        onInput={(next) => onChange({ title: next })}
         style={{
           backgroundColor: COLORS.panelRaised,
           focusedBackgroundColor: COLORS.panelRaised,
@@ -134,6 +160,47 @@ export function GitHubCreateModal({
           cursorColor: COLORS.git,
         }}
       />
+      {draft.kind === "pr" && titleSuggestionStatus !== "idle" ? (
+        <text
+          content={translateUi(
+            titleSuggestionStatus === "loading"
+              ? "Buscando título do último commit…"
+              : "Não foi possível sugerir o título; digite-o manualmente.",
+          )}
+          style={{ fg: titleSuggestionStatus === "error" ? COLORS.warning : COLORS.muted }}
+        />
+      ) : null}
+    </box>
+  )
+  const choiceField = (
+    name: "repository" | "base" | "head",
+    label: string,
+    placeholder: string,
+  ) => (
+    <box style={{ flexShrink: 0, gap: 0 }}>
+      <text content={translateUi(label)} style={{ fg: COLORS.muted }} />
+      <Button
+        id={`git-create-field-${name}`}
+        height={1}
+        onPress={() => {
+          if (!busy) setPicker(name)
+        }}
+      >
+        {(state) => (
+          <box
+            style={{
+              width: "100%",
+              height: 1,
+              backgroundColor: state.focused ? COLORS.diffModifiedBg : COLORS.panelRaised,
+            }}
+          >
+            <text
+              content={`${draft[name] || translateUi(placeholder)}  ▾`}
+              style={{ fg: state.focused ? COLORS.git : COLORS.text }}
+            />
+          </box>
+        )}
+      </Button>
     </box>
   )
   const width = Math.min(88, Math.max(30, terminal.width - 4))
@@ -203,14 +270,22 @@ export function GitHubCreateModal({
           <text content={`${host} · @${viewer}`} style={{ fg: COLORS.muted }} />
           <scrollbox scrollY style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
             <box style={{ gap: 1 }}>
-              {field("repository", "Repositório (owner/repository)", draft.repository)}
+              {choiceField(
+                "repository",
+                "Repositório (owner/repository)",
+                "Selecionar repositório…",
+              )}
               {draft.kind === "pr" ? (
                 <>
-                  {field("base", "Branch base (remota)", draft.base ?? "")}
-                  {field("head", "Branch head (remota, mesmo repositório)", draft.head ?? "")}
+                  {choiceField("base", "Branch base (remota)", "Selecionar branch…")}
+                  {choiceField(
+                    "head",
+                    "Branch comparada (remota, mesmo repositório)",
+                    "Selecionar branch…",
+                  )}
                 </>
               ) : null}
-              {field("title", "Título", draft.title)}
+              {titleField()}
               <box>
                 <text content={translateUi("Descrição (Markdown)")} style={{ fg: COLORS.muted }} />
                 <textarea
@@ -276,6 +351,42 @@ export function GitHubCreateModal({
           </box>
         </box>
       </box>
+      {picker === "repository" ? (
+        <GitHubCreateRepositoryPicker
+          host={host}
+          selected={draft.repository}
+          demo={
+            process.env[
+              draft.kind === "pr" ? "TUIMINAL_GIT_PR_DEMO" : "TUIMINAL_GIT_ISSUES_DEMO"
+            ] === "1"
+          }
+          onSelect={(repository) => onChange({ repository })}
+          onClose={() => {
+            setPicker(null)
+            setTimeout(
+              () => renderer.root.findDescendantById("git-create-field-repository")?.focus(),
+              0,
+            )
+          }}
+        />
+      ) : picker ? (
+        <GitHubCreateBranchPicker
+          side={picker}
+          host={host}
+          repository={draft.repository.trim()}
+          selected={draft[picker] ?? ""}
+          demo={process.env.TUIMINAL_GIT_PR_DEMO === "1"}
+          onSelect={(branch) => onChange({ [picker]: branch })}
+          onClose={() => {
+            const field = picker
+            setPicker(null)
+            setTimeout(
+              () => renderer.root.findDescendantById(`git-create-field-${field}`)?.focus(),
+              0,
+            )
+          }}
+        />
+      ) : null}
     </>
   )
 }

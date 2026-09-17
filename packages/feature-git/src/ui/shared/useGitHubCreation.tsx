@@ -4,6 +4,7 @@ import { type GitHubCreateDraft, validateGitHubCreateDraft } from "../../model/c
 import type { PullRequestAuthContext } from "../../model/pr/types"
 import { createGitHubItem, type GitHubCreateResult } from "../../services/github/create-item"
 import { GitHubCreateModal } from "./GitHubCreateModal"
+import { useGitHubCreateTitleSuggestion } from "./useGitHubCreateTitleSuggestion"
 
 async function dispatchGitHubCreation(draft: GitHubCreateDraft, auth: PullRequestAuthContext) {
   const demo =
@@ -49,13 +50,26 @@ export function useGitHubCreation({
   const busyRef = useRef(false)
   const [uncertain, setUncertain] = useState(false)
   const [error, setError] = useState("")
+  const titleSuggestion = useGitHubCreateTitleSuggestion(
+    draft,
+    setDraft,
+    open,
+    auth?.host,
+    process.env.TUIMINAL_GIT_PR_DEMO === "1",
+  )
   const openModal = () => {
     if (!auth) return
-    setDraft((current) => ({
-      ...current,
-      repository: current.repository || defaultRepository,
-      base: current.base || defaultBase || "",
-    }))
+    setDraft((current) => {
+      const repository = current.repository || defaultRepository
+      return {
+        ...current,
+        repository,
+        base:
+          current.base ||
+          (repository.toLowerCase() === defaultRepository.toLowerCase() ? defaultBase : "") ||
+          "",
+      }
+    })
     if (!uncertain) setError("")
     setOpen(true)
   }
@@ -72,6 +86,7 @@ export function useGitHubCreation({
     try {
       const { demo, result } = await dispatchGitHubCreation(draft, auth)
       if (result.status === "confirmed") {
+        titleSuggestion.reset()
         setOpen(false)
         setDraft({
           kind,
@@ -108,11 +123,12 @@ export function useGitHubCreation({
           busy={busy}
           uncertain={uncertain}
           error={error}
+          titleSuggestionStatus={titleSuggestion.status}
           onAcknowledge={() => {
             setUncertain(false)
             setError("")
           }}
-          onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+          onChange={titleSuggestion.changeDraft}
           onClose={() => setOpen(false)}
           onSubmit={() => void submit()}
         />

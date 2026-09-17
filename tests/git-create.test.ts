@@ -6,6 +6,11 @@ import { validateGitHubCreateDraft } from "../packages/feature-git/src/model/cre
 import { issueWorkspaceAction } from "../packages/feature-git/src/model/issue/navigation"
 import { pullRequestWorkspaceAction } from "../packages/feature-git/src/model/pr/navigation"
 import { createGitHubItem } from "../packages/feature-git/src/services/github/create-item"
+import { listGitHubRepositoryBranches } from "../packages/feature-git/src/services/github/branch-list"
+import {
+  commitSubject,
+  readGitHubBranchCommitTitle,
+} from "../packages/feature-git/src/services/github/branch-commit-title"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-git-create-"))
 const executable = join(directory, "gh")
@@ -30,9 +35,16 @@ if (args.at(-1) === "user") {
   console.log(JSON.stringify({ login: "deivid", node_id: process.env.FAKE_OTHER_VIEWER === "1" ? "other" : "viewer-node" }))
 } else if (endpoint === "repos/team/api" && !args.includes("POST")) {
   console.log(JSON.stringify({ full_name: "team/api", has_issues: process.env.FAKE_ISSUES_DISABLED !== "1" }))
+} else if (endpoint.startsWith("repos/team/api/branches?")) {
+  if (process.env.FAKE_BRANCH_BAD_SHAPE === "1") console.log(JSON.stringify({ unexpected: true }))
+  else if (endpoint.endsWith("&page=1")) console.log(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ name: index === 0 ? "main" : "feature/" + index }))))
+  else console.log(JSON.stringify([{ name: "fix/cache" }, { name: "bad branch" }]))
 } else if (endpoint.includes("/branches/")) {
   if (process.env.FAKE_MISSING_BRANCH === "1") process.exit(2)
-  console.log(JSON.stringify({ name: decodeURIComponent(endpoint.split("/").at(-1) ?? "") }))
+  console.log(JSON.stringify({
+    name: process.env.FAKE_BRANCH_WRONG_NAME === "1" ? "other" : decodeURIComponent(endpoint.split("/").at(-1) ?? ""),
+    commit: { commit: { message: process.env.FAKE_COMMIT_MESSAGE ?? "Fix cache\\n\\nDetails" } },
+  }))
 } else if (args.includes("POST")) {
   if (process.env.FAKE_POST_FAILURE === "1") process.exit(2)
   const kind = endpoint.endsWith("pulls") ? "pull" : "issues"
@@ -80,10 +92,10 @@ const pr = {
 test("creation validates before any GitHub request and keeps Ctrl+N available with empty lists", async () => {
   resetLog()
   expect(validateGitHubCreateDraft({ ...pr, head: "main" })).toBe(
-    "Base e head precisam ser diferentes.",
+    "Base e comparada precisam ser diferentes.",
   )
   expect(validateGitHubCreateDraft({ ...pr, head: "bad branch" })).toBe(
-    "Informe uma branch head válida.",
+    "Informe uma branch comparada válida.",
   )
   expect(
     await createGitHubItem({ ...issue, repository: "invalid" }, auth, {
@@ -110,6 +122,56 @@ test("creation validates before any GitHub request and keeps Ctrl+N available wi
       canLoadMore: false,
     }),
   ).toEqual({ type: "create-pr" })
+})
+
+test("PR branch picker reads bounded remote pages and validates the selected repository", async () => {
+  resetLog()
+  const options = { executable, env: { FAKE_LOG: logPath } }
+  await expect(listGitHubRepositoryBranches("github.com", "invalid", 1, options)).rejects.toThrow()
+  expect(commands()).toHaveLength(0)
+  const first = await listGitHubRepositoryBranches("github.com", "team/api", 1, options)
+  expect(first.branches).toHaveLength(100)
+  expect(first.branches[0]).toBe("main")
+  expect(first.nextPage).toBe(2)
+  const second = await listGitHubRepositoryBranches("github.com", "team/api", 2, options)
+  expect(second).toEqual({ branches: ["fix/cache"], nextPage: null })
+  expect(commands().map((call) => call.args.at(-1))).toEqual([
+    "repos/team/api/branches?per_page=100&page=1",
+    "repos/team/api/branches?per_page=100&page=2",
+  ])
+  await expect(
+    listGitHubRepositoryBranches("github.com", "team/api", 1, {
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_BRANCH_BAD_SHAPE: "1" },
+    }),
+  ).rejects.toThrow("Resposta de branches inválida.")
+})
+
+test("PR title suggestion reads the selected remote branch tip and uses its commit subject", async () => {
+  resetLog()
+  const options = {
+    executable,
+    env: { FAKE_LOG: logPath, FAKE_COMMIT_MESSAGE: "Corrigir cache ✓\n\nDetalhes" },
+  }
+  expect(await readGitHubBranchCommitTitle("github.com", "team/api", "feat/demo", options)).toBe(
+    "Corrigir cache ✓",
+  )
+  expect(commands().map((call) => call.args.at(-1))).toEqual([
+    "repos/team/api/branches/feat%2Fdemo",
+  ])
+  expect(commitSubject(`  ${"👍".repeat(200)}\nbody`)).toHaveLength(256)
+  expect(commitSubject(`${"x".repeat(254)}👩‍💻`)).toBe("x".repeat(254))
+  resetLog()
+  await expect(
+    readGitHubBranchCommitTitle("github.com", "team/api", "bad branch", options),
+  ).rejects.toThrow("Branch remota inválida.")
+  expect(commands()).toHaveLength(0)
+  await expect(
+    readGitHubBranchCommitTitle("github.com", "team/api", "feat/demo", {
+      executable,
+      env: { FAKE_LOG: logPath, FAKE_BRANCH_WRONG_NAME: "1" },
+    }),
+  ).rejects.toThrow("Título do último commit indisponível.")
 })
 
 test("issue creation posts exact JSON once after authenticating and checking repository", async () => {
