@@ -398,6 +398,7 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 - **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores, com controles da árvore em uma coluna separada e destaque na linha inteira do bloco selecionado. No response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual. O Pretty JSON navegável mantém uma linha por entrada para posicionar a seleção corretamente; Wrap continua disponível em Raw e nas outras visualizações da resposta.
 - **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
 - **Salvar coleções:** importar e salvar `.http`/`.rest` interoperáveis no diretório global do HTTP sem regravar silenciosamente blocos que o Tuiminal não entende.
+- **Organizar coleções com teclado ou mouse:** percorrer a árvore com `[↑/↓]` ou `[J/K]`, recolher e expandir com `[←/→]` e abrir requests com `[Enter]`. Criar pastas, coleções `.http` e requests; renomear ou excluir os itens selecionados. Pastas e coleções vazias continuam visíveis. A exclusão exige confirmação; requests abertos com alterações ou em execução precisam ser resolvidos antes.
 - **Importar:** informe um caminho completo ou iniciado por `~/` para um arquivo Postman v2.0/v2.1 ou OpenAPI 3.0/3.1, use `[↑/↓]` e `[Tab]` para completá-lo, ou solte um arquivo na área de importação quando o terminal colar seu caminho. O Tuiminal identifica o formato pelo conteúdo e o mostra na prévia com os avisos de conversão; o `.http` resultante só é salvo na biblioteca global do HTTP após a confirmação, independentemente do projeto aberto.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit. Selecionar um request funciona também quando há nomes iguais. Reabrir o executor ou mudar seu alvo cancela a execução anterior; resultados atrasados não substituem a nova execução.
@@ -425,6 +426,10 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 | Abrir ambientes | `[E]` |
 | Alternar visualização principal / aba interna da resposta | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Abrir coleção / histórico | `[C]` / `[Y]` |
+| Navegar entre itens da coleção / primeiro ou último | `[↑/↓]` ou `[J/K]` / `[Home/End]` |
+| Recolher ou expandir / abrir request selecionado | `[←/→]` / `[Enter]` |
+| Novo request / coleção / pasta no painel da coleção | `[N]` / `[Shift+N]` / `[P]` |
+| Renomear / excluir item selecionado | `[E]` / `[D]`, depois `[Enter]` para confirmar a exclusão |
 | Nova tab / fechar tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Alternar documentos | `[Alt+←/→]` |
 | Salvar `.http` | `[Ctrl+S]` |

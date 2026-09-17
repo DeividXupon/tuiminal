@@ -26,6 +26,9 @@ import type {
 import type { HttpCookie } from "../services/cookies"
 import type { HttpPreparedRequestPreview } from "../services/request-preview"
 import { HttpNavigationPane } from "./HttpNavigationPane"
+import type { HttpCollectionTreeRow } from "../model/collection-tree"
+import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
+import type { HttpKey } from "../model/keyboard-types"
 import { HttpRequestPane } from "./HttpRequestPane"
 import { HttpResponsePane } from "./HttpResponsePane"
 
@@ -40,6 +43,7 @@ type HttpWorkspaceBodyProps = {
   registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
   registerCollectionSearch: (input: InputRenderable | null) => void
   requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
+  collectionTreeKeyRef: { current: ((key: HttpKey) => boolean) | null }
   onSelectDocument: (documentId: string) => void
   onNavigationView: (view: HttpNavigationView) => void
   onCloseNavigation: () => void
@@ -62,10 +66,17 @@ type HttpWorkspaceBodyProps = {
   onBodyFileChange: (documentId: string, path: string) => void
   onSend: (documentId: string) => void
   projectRequests: HttpProjectRequestItem[]
+  projectDirectories: string[]
+  projectFiles: string[]
   projectErrors: number
   onOpenProjectRequest: (item: HttpProjectRequestItem) => void
   onImportCollection: () => void
   onRunCollection: () => void
+  onManageCollection: (
+    action: HttpCollectionAction,
+    row: HttpCollectionTreeRow | null,
+    name?: string,
+  ) => Promise<boolean>
   onNameChange: (documentId: string, name: string) => void
   onMethodChange: (documentId: string, method: string) => void
   onOptionsChange: (
@@ -142,6 +153,7 @@ export function HttpWorkspaceBody({
   registerResponseSearch,
   registerCollectionSearch,
   requestTableKeyRef,
+  collectionTreeKeyRef,
   onSelectDocument,
   onNavigationView,
   onCloseNavigation,
@@ -161,10 +173,13 @@ export function HttpWorkspaceBody({
   onBodyFileChange,
   onSend,
   projectRequests,
+  projectDirectories,
+  projectFiles,
   projectErrors,
   onOpenProjectRequest,
   onImportCollection,
   onRunCollection,
+  onManageCollection,
   onNameChange,
   onMethodChange,
   onOptionsChange,
@@ -308,11 +323,15 @@ export function HttpWorkspaceBody({
         onClose={onCloseNavigation}
         onFocus={() => onSelectPane("navigation")}
         projectRequests={projectRequests}
+        projectDirectories={projectDirectories}
+        projectFiles={projectFiles}
         projectErrors={projectErrors}
         onOpenProjectRequest={onOpenProjectRequest}
         onImportCollection={onImportCollection}
         onRunCollection={onRunCollection}
+        onManageCollection={onManageCollection}
         registerCollectionSearch={registerCollectionSearch}
+        collectionTreeKeyRef={collectionTreeKeyRef}
         onToggleHistory={onToggleHistory}
         onCompareHistory={onCompareHistory}
         onOpenHistory={onOpenHistory}

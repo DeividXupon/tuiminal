@@ -50,10 +50,8 @@ function createDirectory(path: string): CollectionDirectory {
   return { path, directories: new Map(), files: new Map() }
 }
 
-function addFile(root: CollectionDirectory, filePath: string, items: HttpProjectRequestItem[]) {
-  const parts = filePath.split(/[\\/]+/).filter(Boolean)
-  const fileName = parts.pop()
-  if (!fileName) return
+function addDirectory(root: CollectionDirectory, path: string) {
+  const parts = path.split(/[\\/]+/).filter(Boolean)
   let directory = root
   for (const part of parts) {
     const path = directory.path ? `${directory.path}/${part}` : part
@@ -61,6 +59,14 @@ function addFile(root: CollectionDirectory, filePath: string, items: HttpProject
     directory.directories.set(part, child)
     directory = child
   }
+  return directory
+}
+
+function addFile(root: CollectionDirectory, filePath: string, items: HttpProjectRequestItem[]) {
+  const parts = filePath.split(/[\\/]+/).filter(Boolean)
+  const fileName = parts.pop()
+  if (!fileName) return
+  const directory = addDirectory(root, parts.join("/"))
   directory.files.set(filePath, items)
 }
 
@@ -128,6 +134,8 @@ export function buildHttpCollectionTree(
   items: HttpProjectRequestItem[],
   collapsed: ReadonlySet<string> = new Set(),
   query = "",
+  directories: readonly string[] = [],
+  files: readonly string[] = [],
 ) {
   const requests = filteredRequests(items, query)
   const byFile = new Map<string, HttpProjectRequestItem[]>()
@@ -137,6 +145,10 @@ export function buildHttpCollectionTree(
     byFile.set(item.filePath, group)
   }
   const root = createDirectory("")
+  if (!query.trim()) {
+    for (const path of directories) addDirectory(root, path)
+    for (const path of files) byFile.set(path, byFile.get(path) ?? [])
+  }
   for (const [filePath, fileRequests] of byFile) addFile(root, filePath, fileRequests)
   return flattenDirectory(root, 0, collapsed, Boolean(query.trim()))
 }

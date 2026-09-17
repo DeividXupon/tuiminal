@@ -793,6 +793,394 @@ describe("HTTP TUI", () => {
     },
   )
 
+  test("manages folders, collections and requests through mouse controls", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const folder = `mouse-tree-${Date.now()}`
+    const folderPath = resolve(root, folder)
+    const renamedFolder = `${folder}-renamed`
+    const renamedFolderPath = resolve(root, renamedFolder)
+    const typeName = async (value: string) => {
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText(value)
+        await tui?.renderOnce()
+      })
+      await click("http-collection-action-apply")
+    }
+    try {
+      tui = await testRender(<HttpClient active />, { width: 160, height: 42 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-folder-create")))
+      await click("http-folder-create")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText(folder)
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}`)),
+      )
+
+      await click(`http-collection-directory-${folder}`)
+      await click("http-collection-create")
+      await typeName("Service")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+        ),
+      )
+      await click(`http-collection-file-${folder}/Service.http`)
+      await click("http-request-create")
+      await typeName("Listar")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#listar`,
+          ),
+        ),
+      )
+      expect(await readFile(resolve(folderPath, "Service.http"), "utf8")).toContain("### Listar")
+
+      await click(`http-navigation-project-${folder}/Service.http#listar`)
+      await click("http-collection-rename")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById("http-collection-name-input") as
+          | InputRenderable
+          | undefined
+        expect(input).toBeDefined()
+        input?.selectAll()
+        tui?.mockInput.typeText("Consultar")
+      })
+      await click("http-collection-action-apply")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#consultar`,
+          ),
+        ),
+      )
+
+      await click(`http-navigation-project-${folder}/Service.http#consultar`)
+      await click("http-collection-delete")
+      expect(await readFile(resolve(folderPath, "Service.http"), "utf8")).toContain("Consultar")
+      await click("http-collection-action-apply")
+      await settle(
+        () =>
+          !tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#consultar`,
+          ),
+      )
+      expect(await Bun.file(resolve(folderPath, "Service.http")).exists()).toBe(false)
+
+      await click(`http-collection-directory-${folder}`)
+      await click("http-collection-create")
+      await typeName("Users")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Users.http`)),
+      )
+      await click(`http-collection-file-${folder}/Users.http`)
+      await click("http-collection-rename")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById("http-collection-name-input") as
+          | InputRenderable
+          | undefined
+        input?.selectAll()
+        tui?.mockInput.typeText("Accounts")
+      })
+      await click("http-collection-action-apply")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Accounts.http`),
+        ),
+      )
+      await click(`http-collection-file-${folder}/Accounts.http`)
+      await click("http-collection-delete")
+      await click("http-collection-action-apply")
+      await settle(
+        () =>
+          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Accounts.http`),
+      )
+
+      await click(`http-collection-directory-${folder}`)
+      await click("http-collection-rename")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById("http-collection-name-input") as
+          | InputRenderable
+          | undefined
+        input?.selectAll()
+        tui?.mockInput.typeText(renamedFolder)
+      })
+      await click("http-collection-action-apply")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${renamedFolder}`),
+        ),
+      )
+      await click(`http-collection-directory-${renamedFolder}`)
+      await click("http-collection-delete")
+      await click("http-collection-action-apply")
+      await settle(
+        () => !tui?.renderer.root.findDescendantById(`http-collection-directory-${renamedFolder}`),
+      )
+    } finally {
+      await rm(folderPath, { recursive: true, force: true })
+      await rm(renamedFolderPath, { recursive: true, force: true })
+    }
+  })
+
+  test("navigates and manages the collection tree entirely by keyboard", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const folder = `keyboard-tree-${Date.now()}`
+    const folderPath = resolve(root, folder)
+    const collectionPath = resolve(folderPath, "Service.http")
+    try {
+      await mkdir(folderPath, { recursive: true })
+      for (let index = 0; index < 28; index += 1) {
+        await writeFile(
+          resolve(folderPath, `Seed${String(index).padStart(2, "0")}.http`),
+          "### Seed\nGET https://example.test\n",
+        )
+      }
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}`)),
+      )
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
+      )
+      await key("f")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-collection-search")
+      await act(async () => {
+        tui?.mockInput.typeText(folder)
+        await tui?.renderOnce()
+      })
+      await key("ESCAPE")
+      await key("ARROW_DOWN")
+      await key("END")
+      const scroll = tui.renderer.root.findDescendantById(
+        "http-collection-scroll",
+      ) as ScrollBoxRenderable
+      expect(scroll.scrollTop).toBeGreaterThan(0)
+      await key("HOME")
+      await key("f")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-collection-search")
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById(
+          "http-collection-search",
+        ) as InputRenderable
+        input.selectAll()
+        tui?.mockInput.pressKey("BACKSPACE")
+        await tui?.renderOnce()
+      })
+      await key("ESCAPE")
+      await key("N", false, true)
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("Service")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+        ),
+      )
+      expect(await Bun.file(collectionPath).exists()).toBe(true)
+      await key("e")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById(
+          "http-collection-name-input",
+        ) as InputRenderable
+        input.selectAll()
+        tui?.mockInput.typeText("Api")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Api.http`)),
+      )
+      await key("e")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById(
+          "http-collection-name-input",
+        ) as InputRenderable
+        input.selectAll()
+        tui?.mockInput.typeText("Service")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+        ),
+      )
+      await key("n")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("Listar")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#listar`,
+          ),
+        ),
+      )
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
+      )
+      await key("ARROW_DOWN")
+      await key("e")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById(
+          "http-collection-name-input",
+        ) as InputRenderable
+        input.selectAll()
+        tui?.mockInput.typeText("Consultar")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#consultar`,
+          ),
+        ),
+      )
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await key("TAB")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
+      )
+      await key("d")
+      expect(tui.renderer.root.findDescendantById("http-collection-action-form")).toBeDefined()
+      await key("ESCAPE")
+      expect(await readFile(collectionPath, "utf8")).toContain("Consultar")
+      await key("d")
+      await enter()
+      await settle(
+        () =>
+          !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
+          !tui?.renderer.root.findDescendantById(
+            `http-navigation-project-${folder}/Service.http#consultar`,
+          ),
+      )
+      await key("N", false, true)
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("ToDelete")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+        ),
+      )
+      await key("d")
+      await enter()
+      await settle(
+        () =>
+          !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
+          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+      )
+      await key("p")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("Nested")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Nested`),
+        ),
+      )
+      await key("e")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        const input = tui?.renderer.root.findDescendantById(
+          "http-collection-name-input",
+        ) as InputRenderable
+        input.selectAll()
+        tui?.mockInput.typeText("Renamed")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+        ),
+      )
+      await key("d")
+      await enter()
+      await settle(
+        () =>
+          !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
+          !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+      )
+      await key("y")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-history")
+      await key("c")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
+      )
+      await key("p")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("AfterHistory")
+        tui?.mockInput.pressEnter()
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/AfterHistory`),
+        ),
+      )
+    } finally {
+      await rm(folderPath, { recursive: true, force: true })
+    }
+  })
+
   test("uses the same global environments while browsing a collection", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
     const globalPath = resolve(root, "http-client.env.json")

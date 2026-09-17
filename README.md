@@ -399,6 +399,7 @@ A compact API client with documents, collection, request builder, response inspe
 - **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors, with tree controls in a separate gutter and a full-row highlight on the selected block. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block. Navigable Pretty JSON keeps one row per line for accurate selection; Wrap remains available in Raw and other response views.
 - **Control space:** request/response starts at `50/50`; `[Ctrl+↑/↓]` and the drag handle share a per-document ratio limited to 25–70%.
 - **Save collections:** import and save interoperable `.http`/`.rest` files in the global HTTP home without silently rewriting unsupported blocks.
+- **Organize collections with keyboard or mouse:** move through the collection tree with `[↑/↓]` or `[J/K]`, collapse and expand with `[←/→]`, and open requests with `[Enter]`. Create folders, `.http` collections, and requests; rename or delete selected items. Empty folders and collections remain visible. Deletion requires confirmation; changed or running open requests must be handled first.
 - **Import:** enter a full path or `~/` path to a Postman v2.0/v2.1 or OpenAPI 3.0/3.1 file, use `[↑/↓]` and `[Tab]` to complete it, or drop a file into the import box when the terminal pastes its path. Tuiminal detects the format from the file contents and shows it in the conversion preview with loss warnings; the resulting `.http` is saved in the global HTTP library only after confirmation, independent of the opened project.
 - **Automate:** status/header/body/JSONPath assertions, request dependencies, and public or volatile variable extraction.
 - **Run collections:** resolve dependencies topologically, use JSON/CSV datasets, limit concurrency, and emit text, JSON, or JUnit reports. Selection works with duplicate request names. Reopening the runner or changing its target cancels the previous run; stale results cannot replace the new one.
@@ -428,6 +429,10 @@ A compact API client with documents, collection, request builder, response inspe
 | Open environments | `[E]` |
 | Switch main response view / internal tab | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Open collection / history | `[C]` / `[Y]` |
+| Navigate collection rows / first or last row | `[↑/↓]` or `[J/K]` / `[Home/End]` |
+| Collapse or expand / open selected request | `[←/→]` / `[Enter]` |
+| New request / collection / folder in collection pane | `[N]` / `[Shift+N]` / `[P]` |
+| Rename / delete selected collection item | `[E]` / `[D]`, then `[Enter]` to confirm deletion |
 | New / close tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Switch documents | `[Alt+←/→]` |
 | Save `.http` | `[Ctrl+S]` |

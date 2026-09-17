@@ -24,7 +24,12 @@ import {
 } from "../storage/global-environments"
 
 export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
-  const [project, setProject] = useState<HttpProjectCollection>({ root, files: [], errors: [] })
+  const [project, setProject] = useState<HttpProjectCollection>({
+    root,
+    files: [],
+    directories: [],
+    errors: [],
+  })
   const [environmentCatalog, setEnvironmentCatalog] = useState<HttpEnvironmentCatalog>({
     scopes: [],
   })

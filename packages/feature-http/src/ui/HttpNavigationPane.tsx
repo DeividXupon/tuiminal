@@ -1,12 +1,15 @@
-import type { InputRenderable } from "@opentui/core"
+import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpNavigationView, HttpProjectRequestItem, HttpWorkspaceState } from "../model/types"
 import type { HttpHistoryEntry } from "../model/types"
 import { HttpCollectionTree } from "./HttpCollectionTree"
+import type { HttpCollectionTreeRow } from "../model/collection-tree"
+import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
+import type { HttpKey } from "../model/keyboard-types"
 import { HttpHistoryList } from "./HttpHistoryList"
 
 export function HttpNavigationPane({
@@ -20,11 +23,15 @@ export function HttpNavigationPane({
   onClose,
   onFocus,
   projectRequests,
+  projectDirectories,
+  projectFiles,
   projectErrors,
   onOpenProjectRequest,
   onImportCollection,
   onRunCollection,
+  onManageCollection,
   registerCollectionSearch,
+  collectionTreeKeyRef,
   onToggleHistory,
   onCompareHistory,
   onOpenHistory,
@@ -39,11 +46,19 @@ export function HttpNavigationPane({
   onClose: () => void
   onFocus: () => void
   projectRequests: HttpProjectRequestItem[]
+  projectDirectories: string[]
+  projectFiles: string[]
   projectErrors: number
   onOpenProjectRequest: (request: HttpProjectRequestItem) => void
   onImportCollection: () => void
   onRunCollection: () => void
+  onManageCollection: (
+    action: HttpCollectionAction,
+    row: HttpCollectionTreeRow | null,
+    name?: string,
+  ) => Promise<boolean>
   registerCollectionSearch: (input: InputRenderable | null) => void
+  collectionTreeKeyRef: { current: ((key: HttpKey) => boolean) | null }
   onToggleHistory: (entryId: string) => void
   onCompareHistory: () => void
   onOpenHistory: (entry: HttpHistoryEntry) => void
@@ -52,6 +67,8 @@ export function HttpNavigationPane({
   const compactTabs = contentWidth < 28
   const collectionRef = useRef<ButtonRenderable | null>(null)
   const historyRef = useRef<ButtonRenderable | null>(null)
+  const scrollRef = useRef<ScrollBoxRenderable | null>(null)
+  const [collectionSelection, setCollectionSelection] = useState<string | null>(null)
   useEffect(() => {
     if (!visible || !focused || state.overlay) return
     const timer = setTimeout(() =>
@@ -105,7 +122,13 @@ export function HttpNavigationPane({
           }}
         />
       </box>
-      <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
+      <scrollbox
+        id="http-collection-scroll"
+        ref={scrollRef}
+        scrollY
+        viewportCulling
+        style={{ flexGrow: 1, paddingTop: 1 }}
+      >
         {state.navigationView === "collection" ? (
           <>
             <text content={translateUi("PROJETO")} style={{ fg: COLORS.muted }} />
@@ -113,12 +136,19 @@ export function HttpNavigationPane({
               state={state}
               contentWidth={contentWidth}
               projectRequests={projectRequests}
+              projectDirectories={projectDirectories}
+              projectFiles={projectFiles}
               projectErrors={projectErrors}
+              selection={collectionSelection}
+              setSelection={setCollectionSelection}
               registerSearchInput={registerCollectionSearch}
+              keyRef={collectionTreeKeyRef}
+              scrollRef={scrollRef}
               onFocus={onFocus}
               onOpen={onOpenProjectRequest}
               onImport={onImportCollection}
               onRun={onRunCollection}
+              onManage={onManageCollection}
             />
             <text content={translateUi("SCRATCH")} style={{ fg: COLORS.muted }} />
             {state.documents

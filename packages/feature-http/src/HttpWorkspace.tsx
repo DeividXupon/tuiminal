@@ -8,6 +8,7 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
+import type { HttpKey } from "./model/keyboard-types"
 import type { HttpRequestTableKey } from "./hooks/use-http-request-tables"
 import { httpJsonTreeForDocument } from "./model/json-tree"
 import { applyHttpViewKeyboardCommand } from "./model/workspace-keyboard-actions"
@@ -17,7 +18,6 @@ import type {
   HttpClientUrlRequest,
   HttpKeyValue,
   HttpMultipartPart,
-  HttpProjectRequestItem,
 } from "./model/types"
 import { httpBodyFor } from "./runtime"
 import {
@@ -33,6 +33,7 @@ import { HttpDocumentBar } from "./ui/HttpDocumentBar"
 import { HttpOmnibar, type HttpCompletionKey } from "./ui/HttpOmnibar"
 import { HttpPaneSelector } from "./ui/HttpPaneSelector"
 import { HttpWorkspaceBody } from "./ui/HttpWorkspaceBody"
+import { handleHttpCollectionTreeKey } from "./ui/handle-collection-tree-key"
 import { HttpClientFooter } from "./ui/HttpClientFooter"
 import { HttpWorkspaceOverlays } from "./ui/HttpWorkspaceOverlays"
 import { useHttpCurl } from "./hooks/use-http-curl"
@@ -42,6 +43,7 @@ import { useHttpResponseFocus } from "./hooks/use-http-response-focus"
 import { selectedHttpHistoryEntries } from "./model/history"
 import { useHttpWorkspaceLifecycle } from "./hooks/use-http-workspace-lifecycle"
 import { useHttpRequestFiles } from "./hooks/use-http-request-files"
+import { useHttpCollectionManagement } from "./hooks/use-http-collection-management"
 import { useHttpDocuments } from "./hooks/use-http-documents"
 import { useHttpCollectionImport } from "./hooks/use-http-collection-import"
 import { useHttpNavigation } from "./hooks/use-http-navigation"
@@ -97,6 +99,7 @@ function HttpInteractiveClient({
   const urlRef = useRef<InputRenderable | null>(null)
   const urlCompletionKeyRef = useRef<((key: HttpCompletionKey) => boolean) | null>(null)
   const requestTableKeyRef = useRef<((key: HttpRequestTableKey) => boolean) | null>(null)
+  const collectionTreeKeyRef = useRef<((key: HttpKey) => boolean) | null>(null)
   const collectionSearchRef = useRef<InputRenderable | null>(null)
   const { documentRefs, refsFor, blurDocumentControls } = useHttpDocumentRefs(urlRef)
   const abortControllers = useRef(new Map<string, AbortController>())
@@ -184,6 +187,7 @@ function HttpInteractiveClient({
   })
   const {
     selectDocument,
+    openProjectRequest,
     addDocument,
     cancelDocument,
     closeDocument,
@@ -197,6 +201,7 @@ function HttpInteractiveClient({
     abortControllers,
     documentCounter,
     urlRef,
+    refsFor,
     blurDocumentControls,
     dispatch,
   })
@@ -239,22 +244,15 @@ function HttpInteractiveClient({
     renderer.currentFocusedRenderable?.blur()
     dispatch({ type: "open-overlay", overlay: "environment-manager" })
   }, [blurDocumentControls, dispatch, renderer])
-  const openProjectRequest = useCallback(
-    (item: HttpProjectRequestItem) => {
-      blurDocumentControls()
-      dispatch({ type: "add-document", request: item.request })
-      setTimeout(() => {
-        if (isOpaqueHttpRequest(item.request)) {
-          dispatch({ type: "select-pane", pane: "request" })
-          refsFor(item.request.id).raw?.focus()
-        } else {
-          dispatch({ type: "select-pane", pane: "url" })
-          urlRef.current?.focus()
-        }
-      }, 0)
-    },
-    [blurDocumentControls, dispatch, refsFor],
-  )
+  const manageCollection = useHttpCollectionManagement({
+    root: HTTP_WORKING_DIRECTORY,
+    files: project.files,
+    getDocuments: () => stateRef.current.documents,
+    dispatch,
+    refreshProject,
+    openRequest: openProjectRequest,
+    setNotice,
+  })
 
   const requestEditing = useHttpRequestEditing({
     documents: state.documents,
@@ -302,6 +300,7 @@ function HttpInteractiveClient({
     if (!currentDocument) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (focusedId === "http-url-input" && urlCompletionKeyRef.current?.(key)) return
+    if (handleHttpCollectionTreeKey(key, currentState, focusedId, collectionTreeKeyRef)) return
     if (
       currentState.overlay === null &&
       currentState.activePane === "request" &&
@@ -539,6 +538,7 @@ function HttpInteractiveClient({
       <HttpWorkspaceBody
         state={state}
         requestTableKeyRef={requestTableKeyRef}
+        collectionTreeKeyRef={collectionTreeKeyRef}
         layout={layout}
         height={bodyHeight}
         registerHeaderInput={(documentId, input) => (refsFor(documentId).headers = input)}
@@ -621,6 +621,8 @@ function HttpInteractiveClient({
         }
         onSend={(documentId) => void sendDocument(documentId)}
         projectRequests={projectRequests}
+        projectDirectories={project.directories}
+        projectFiles={project.files.map((file) => file.path)}
         projectErrors={project.errors.length}
         onOpenProjectRequest={openProjectRequest}
         onImportCollection={() => {
@@ -631,6 +633,7 @@ function HttpInteractiveClient({
           collectionRunner.open()
           dispatch({ type: "open-overlay", overlay: "collection-runner" })
         }}
+        onManageCollection={manageCollection}
         onNameChange={requestEditing.changeName}
         onMethodChange={requestEditing.changeMethod}
         onOptionsChange={requestEditing.changeOptions}

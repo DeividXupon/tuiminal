@@ -117,6 +117,7 @@ function focusedCommand(
   key: HttpKey,
   responseJsonTree: boolean,
 ): HttpKeyboardCommand | null {
+  if (focusedId === "http-collection-name-input") return { kind: "ignore" }
   if (key.name === "tab") return { kind: "cycle-pane", direction: key.shift ? -1 : 1 }
   if (
     responseJsonTree &&

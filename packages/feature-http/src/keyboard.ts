@@ -4,6 +4,7 @@ export const httpKeyboardScope = {
   ids: [
     "http-url-input",
     "http-collection-search",
+    "http-collection-name-input",
     "http-curl-import-editor",
     "http-discard-document-modal",
     "http-request-file-modal",
