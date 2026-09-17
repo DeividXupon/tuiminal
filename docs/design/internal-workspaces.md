@@ -16,7 +16,7 @@ same product and follow the root version; cross-package contracts are internal.
 ## Development and dependencies
 
 `bun install --frozen-lockfile` at the root installs and links every workspace.
-`bun run dev` still launches the complete application; the source CLI entrypoint
+`bun run dev` builds local official payloads and launches the installation flow; the source CLI entrypoint
 is `apps/cli/bin/tuiminal.ts`. The working directory remains the user's selected
 project, independent of the installation location.
 
@@ -46,8 +46,9 @@ This command does not publish anything. Emitted components require the host's Bu
 runtime; npm installation does not make them plain Node libraries. Database includes
 its JavaScript SQLite helper for subprocess execution.
 
-`bun run build:release <platform>` still generates the `tuiminal` npm launcher and
-complete binaries under `dist/npm`, including the adjacent SQLite helper executable.
+`bun run build:release <platform>` generates the `tuiminal` npm launcher and
+minimal binaries under `dist/npm`, plus version-matched official downloads.
+The downloaded SQLite worker runs through the host executable over IPC.
 End users do not need Bun for this distribution. Source, internal packages, and
 executables must share one version before a release is built.
 
@@ -73,10 +74,10 @@ consumer, and standalone build/tests passed on macOS x64. The graph covers 535
 source files without violations, and baseline budgets were preserved. This evidence
 does not cover native execution on other platforms or npm publication.
 
-## Scope of this step
+## Official installation
 
-All features remain internal and available in the application. This structure does
-not implement a catalog, on-demand downloads, component updates, or minimal
-installation. Future optional distribution may use the versioned packages in
-Tuiminal-owned storage, without installing into the opened project. There is no
-public SDK or community plugin loader.
+The workspaces now supply the [official feature installation](official-feature-installation.md)
+flow. A minimal CLI installs exact-version payloads in its own data directory, then
+loads only the selected tools. The npm workspace tarballs remain internal packaging
+artifacts; the user-facing installer consumes the verified payload archives, not npm
+commands. No public SDK or community plugin loader exists.

@@ -1,6 +1,6 @@
 {
   "name": "@xupon/tuiminal-core",
-  "version": "0.2.0-pre-alpha.0",
+  "version": "0.2.0-alpha.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -9,7 +9,7 @@
   },
   "type": "module",
   "engines": {
-    "bun": "1.3.14"
+    "bun": "1.4.2"
   },
   "exports": {
     "./data/defined-properties": "./src/data/defined-properties.ts",
@@ -33,7 +33,8 @@
     "./ui/brand": "./src/ui/brand.ts",
     "./ui/directional-shortcut": "./src/ui/directional-shortcut.ts",
     "./ui/selectMouse": "./src/ui/selectMouse.ts",
-    "./ui/syntax-style": "./src/ui/syntax-style.ts"
+    "./ui/syntax-style": "./src/ui/syntax-style.ts",
+    "./runtime/feature-host": "./src/runtime/feature-host.ts"
   },
   "peerDependencies": {
     "@opentui/core": "^0.5.9",

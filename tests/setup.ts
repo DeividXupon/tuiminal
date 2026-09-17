@@ -14,6 +14,8 @@ writeFileSync(
     scripts: { test: "echo fixture" },
   }),
 )
+process.env.XDG_DATA_HOME = join(testRoot, "data")
+process.env.TUIMINAL_SOURCE_FEATURES = "1"
 process.env.XDG_CONFIG_HOME = join(testRoot, "config")
 process.env.TUIMINAL_WORKDIR = projectRoot
 process.env.TUIMINAL_PROJECT_ROOTS = testRoot

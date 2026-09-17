@@ -30,7 +30,10 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
   Selection and visible data remain stable during the request.
 - The header shows refresh state only while a request is active, without permanent
   explanatory copy for automatic behavior that cannot be disabled.
-- Unread items use `●`, read items `○`, and saved items `★`; meaning is not color-only.
+- Unread items use `●`, read items `○`, and saved items `★`. PR/Issue marks take
+  the subject state color: open green, merged purple, draft gray, closed red.
+  A localized text label repeats the state. Other subjects or unavailable states
+  stay neutral, while filled/hollow shapes keep read status distinct.
 - Rows reuse formatting while notification, width, language, and saved state remain
   unchanged. Navigation, loader animation, and palette changes do not recompute
   dates/truncation; styling and controls remain current.
@@ -66,6 +69,11 @@ responses, and `[Enter]` reopens an exited shell.
 
 - Reads use REST `notifications?all=true` on the authenticated PR-profile host.
   Inbox does not reuse PR/Issue search filters as thread scope.
+- Notification pages do not contain PR/Issue state. After rendering the page,
+  Inbox resolves only validated subject URLs through repository-pinned read-only
+  `gh api` calls with bounded concurrency. These reads have separate cancellation,
+  a 128-entry short-lived cache, and generation checks; failures keep the list
+  usable with a neutral mark and never request a URL supplied by the payload.
 - `[M]` uses `PATCH notifications/threads/{id}`; `[D]` uses `DELETE` on that resource;
   `[U]` uses `DELETE notifications/threads/{id}/subscription`. Pin host and thread
   ID in confirmation. Execute once: timeout/cancellation after dispatch produces

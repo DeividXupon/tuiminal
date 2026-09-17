@@ -9,8 +9,9 @@ export type ConfigurationSection =
   | "sensitive"
   | "history"
   | "tutorial"
+  | "features"
 
-export type ConfigurationContext = "database" | "git" | "global"
+export type ConfigurationContext = "database" | "git" | "global" | "installer"
 
 const GLOBAL_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
   "colorMode",
@@ -18,6 +19,7 @@ const GLOBAL_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
   "layout",
   "language",
   "tutorial",
+  "features",
 ]
 
 const DATABASE_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
@@ -33,6 +35,8 @@ export function configurationContextForTool(tool: ToolId): ConfigurationContext 
 }
 
 export function configurationSectionsForContext(context: ConfigurationContext) {
+  if (context === "installer")
+    return GLOBAL_CONFIGURATION_SECTIONS.filter((section) => section !== "tutorial")
   if (context === "database") return [...DATABASE_CONFIGURATION_SECTIONS]
   if (context === "git") return ["git" as const, ...GLOBAL_CONFIGURATION_SECTIONS]
   return [...GLOBAL_CONFIGURATION_SECTIONS]
@@ -49,6 +53,7 @@ export function normalizeConfigurationSectionForContext(
 export function activateConfigurationSection(
   section: ConfigurationSection,
   actions: {
+    openFeatures: () => void
     startTutorial: () => void
     openHistory: () => void
     openSensitive: () => void
@@ -56,6 +61,7 @@ export function activateConfigurationSection(
     close: () => void
   },
 ) {
+  if (section === "features") return actions.openFeatures()
   if (section === "tutorial") return actions.startTutorial()
   if (section === "history") return actions.openHistory()
   if (section === "sensitive") return actions.openSensitive()

@@ -18,7 +18,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 </div>
 
 > [!WARNING]
-> O Tuiminal está em **pré-alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
+> O Tuiminal está em **alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
 
 O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de alternar entre um cliente de banco, uma interface Git, vários terminais e um cliente HTTP, você abre o projeto uma vez e troca de ferramenta com `[Alt+1–5]`.
 
@@ -31,19 +31,44 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 
 ## Instalação
 
-Instale a pré-alfa pelo npm:
+Instale a alfa pelo npm:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 tuiminal
 ```
 
 Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 22 ou superior é usado pelo pequeno launcher do pacote.
 
+Uma instalação nova abre **Instalar ferramentas oficiais**. Escolha Database, Git,
+Runner, HTTP ou Free Terminal com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
+para instalar e novamente para abrir. Use `[Space]` e `[I]` para instalar várias.
+Reabra a tela em `[,]` → **Ferramentas oficiais → Gerenciar ferramentas** ou com
+`tuiminal features`. Só as ferramentas instaladas aparecem nas abas; Runner é o
+padrão quando disponível. Os downloads têm versão e integridade verificadas e ficam
+na pasta de dados do Tuiminal, fora dos seus projetos.
+
+Ferramentas instaladas têm o botão **[D] Desinstalar**. Confirme com `[Y]` ou cancele
+com `[Esc]`. A desinstalação encerra as sessões da ferramenta e descarta trabalho
+não salvo, preservando projetos e configurações salvas. Você pode instalá-la novamente na mesma tela.
+
+Para automatizar: `tuiminal features install git runner` ou `tuiminal features install all`.
+
+Cada ferramenta tem uma descrição detalhada. Passe o mouse sobre uma linha ou
+navegue com `[↑/↓/J/K]` para ver um ícone animado da ferramenta. Database preenche
+um cilindro com dados; Runner inicia, avança e conclui uma execução; HTTP envia
+uma requisição e recebe a resposta entre cliente e servidor. Git mostra uma
+ramificação e Free Terminal exibe uma janela com cursor piscando. Os ícones se
+adaptam a terminais menores. Durante o download, o fundo da linha se preenche
+da esquerda para a direita conforme o progresso real.
+
+![Instalação de ferramentas oficiais](./docs/media/installation.gif)
+
+
 Para atualizar ou remover:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 npm uninstall --global tuiminal
 ```
 
@@ -198,8 +223,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[2] PR`
 
+- `[Ctrl+N]` abre o formulário de criação com seletores pesquisáveis de repositório e das branches remotas base e comparada, título, descrição em Markdown e opção draft. A base começa com a branch padrão do repositório selecionado e pode ser trocada. O título começa com a primeira linha do último commit da branch comparada e continua editável. O Tuiminal verifica as duas branches escolhidas antes de um único envio à API do GitHub; ele não faz push da branch local.
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
+- O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
 - Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
@@ -209,8 +236,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` abre o formulário de criação com seletor pesquisável de repositório, título e descrição em Markdown. Os dois formulários preservam o rascunho em memória até o envio e exigem `[Ctrl+S]` para criar.
 - Começa com **My Issues**, **All**, **Open** e **Closed**; os três últimos mostram todas as issues não arquivadas, somente as abertas ou somente as fechadas dentro do escopo atual.
 - Combina uma lista densa de duas linhas com visão geral e atividade da issue.
+- O símbolo do estado fica verde para aberta e vermelho para fechada.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` reage com 👍 ❤️ 🎉 😄 ou 👀 e `[Enter]` responde; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage à própria issue.
 - Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
 - A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
@@ -218,10 +247,13 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 ### `[4] Inbox`
 
 - Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
+- As bolinhas preenchida e vazia continuam indicando não lida e lida. Em PRs e issues, elas também recebem a cor do estado, mostrado em texto; outros assuntos ou estados indisponíveis ficam neutros.
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
 PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
+
+Com a aba PR ou Issues ativa, a lista visível e os detalhes selecionados são atualizados aproximadamente a cada 30 segundos. Assim, issues e comentários criados no GitHub aparecem sem reabrir a aba. `[R]` consulta ambos imediatamente. O intervalo configurado mais longo continua atualizando todas as seções até a profundidade de páginas já carregada.
 
 As chamadas automáticas ao `gh` têm limite de tempo e aguardam o encerramento do
 processo ao cancelar. Se uma escrita em PR/Issue ficar sem confirmação — por
@@ -265,6 +297,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
+| Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
 | Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
 | Descartar arquivo/pasta com confirmação | `[D]` |
@@ -499,7 +532,7 @@ A tradução de mensagens com prefixos repetidos de erro ou aviso não corta o t
 
 ## Desenvolvimento
 
-O pacote npm não exige Bun do usuário final. O checkout de desenvolvimento usa **Bun 1.3.14**, registrado em `.bun-version` e `package.json`:
+O pacote npm não exige Bun do usuário final. O checkout de desenvolvimento usa **Bun 1.4.2**, registrado em `.bun-version` e `package.json`:
 
 ```bash
 git clone https://github.com/DeividXupon/tuiminal.git
@@ -508,11 +541,18 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+O desenvolvimento usa o mesmo instalador, com pacotes gerados localmente e cache
+separado. Após editar uma ferramenta, reinicie `bun run dev` e instale o novo pacote.
+Se gerar os pacotes separadamente com `bun run build:features`, reinicie a aplicação
+antes de instalar. Não precisa publicar no npm.
+Veja o [contrato de instalação](./docs/design/official-feature-installation.md).
+
 Comandos principais:
 
 | Comando | Finalidade |
 | --- | --- |
-| `bun run dev` | Executar com reload durante o desenvolvimento |
+| `bun run dev` | Gerar pacotes locais e abrir o fluxo de instalação |
+| `bun run build:features` | Gerar os cinco pacotes oficiais instaláveis |
 | `bun run test:unit` | Testar regras e integrações locais |
 | `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
@@ -520,7 +560,7 @@ Comandos principais:
 | `bun run build:packages` | Gerar JavaScript, tipos e manifests dos seis módulos internos |
 | `bun run test:packages` | Empacotar e instalar os módulos em um projeto temporário |
 | `bun run check:licenses` | Conferir o inventário reproduzível de licenças de produção |
-| `bun run docs:demos` | Recriar os cinco GIFs deste README a partir da UI real |
+| `bun run docs:demos` | Recriar os GIFs do instalador e das cinco ferramentas |
 | `bun run build:release` | Gerar os pacotes de distribuição por plataforma |
 | `bun run test:release` | Validar hashes, tarballs e a instalação final sem Bun no `PATH` |
 
@@ -549,13 +589,14 @@ Os seis módulos gerados por `bun run build:packages` ficam em `dist/packages` e
 apontam para suas respectivas pastas neste mesmo repositório. Seus contratos são
 internos e suas versões acompanham o CLI. Os manifests de fonte permanecem privados;
 o empacotamento prepara os artefatos, sem publicá-los. A distribuição atual pelo npm
-continua sendo o launcher `tuiminal` com o binário completo por plataforma.
+usa o launcher `tuiminal` com um binário mínimo por plataforma e cinco ferramentas
+oficiais instaladas separadamente.
 
 O [checklist de prontidão para alfa](./ALPHA_READINESS_PLAN.md) resume o hardening
 local e os aceites que ainda bloqueiam uma alfa. Ele não representa aprovação de
 release nem uma nova versão publicada no npm.
 
-Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. Uma futura instalação mínima poderá baixar componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
+Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
 
 O [plano do cliente HTTP](./HTTP_CLIENT_PLAN.md) registra os próximos passos dessa ferramenta.
 

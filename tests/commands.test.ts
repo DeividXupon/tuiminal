@@ -14,25 +14,35 @@ import {
 
 describe("terminal and runner commands", () => {
   test("creates the login shell terminal command", () => {
-    const shell = process.env.SHELL || "/bin/zsh"
+    const shell =
+      process.platform === "win32"
+        ? process.env.COMSPEC?.trim() || "cmd.exe"
+        : process.env.SHELL?.trim() || "/bin/sh"
 
     expect(createShellTerminalCommand()).toMatchObject({
       kind: "shell",
       label: "Terminal",
-      displayCommand: `${shell} -l`,
-      command: [shell, "-l"],
+      displayCommand: `${shell} ${process.platform === "win32" ? "/d" : "-l"}`,
+      command: [shell, process.platform === "win32" ? "/d" : "-l"],
     })
   })
 
   test("normalizes a custom terminal command", () => {
-    const shell = process.env.SHELL || "/bin/zsh"
+    const shell =
+      process.platform === "win32"
+        ? process.env.COMSPEC?.trim() || "cmd.exe"
+        : process.env.SHELL?.trim() || "/bin/sh"
 
     expect(createFreeTerminalCommand("  /usr/local/bin/codex --help  ")).toMatchObject({
       kind: "custom",
       label: "codex",
       shortLabel: "COD",
       displayCommand: "/usr/local/bin/codex --help",
-      command: [shell, "-lc", "/usr/local/bin/codex --help"],
+      command: [
+        shell,
+        ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-lc"]),
+        "/usr/local/bin/codex --help",
+      ],
     })
   })
 

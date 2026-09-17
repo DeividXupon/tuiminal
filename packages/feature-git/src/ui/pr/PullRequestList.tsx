@@ -11,6 +11,7 @@ import {
 } from "@xupon/tuiminal-core/i18n/index"
 import { PULL_REQUEST_COLUMNS } from "../../model/pr/config"
 import type { PullRequestColumn, PullRequestSummary } from "../../model/pr/types"
+import { githubListStateColor } from "../shared/github-list-state"
 
 const REVIEW_MARK: Record<PullRequestSummary["reviewState"], string> = {
   approved: "✓",
@@ -114,6 +115,8 @@ function PullRequestRow({
     }),
     [item, width, columns, language],
   )
+  const stateVisible =
+    hasColumn(columns, "state") && lines.primary.startsWith(STATE_MARK[item.state])
   return (
     <box
       id={`git-pr-row-${index}`}
@@ -126,10 +129,13 @@ function PullRequestRow({
       }}
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
-        <text
-          content={`${selected ? "▶" : " "} ${lines.primary}`}
-          style={{ fg: selected && focused ? COLORS.git : COLORS.text }}
-        />
+        <text style={{ fg: selected && focused ? COLORS.git : COLORS.text }}>
+          <span>{`${selected ? "▶" : " "} `}</span>
+          {stateVisible ? (
+            <span fg={githubListStateColor(item.state)}>{STATE_MARK[item.state]}</span>
+          ) : null}
+          <span>{stateVisible ? lines.primary.slice(1) : lines.primary}</span>
+        </text>
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text

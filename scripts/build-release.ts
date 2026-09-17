@@ -1,3 +1,4 @@
+import { releaseFeatures } from "./release-features"
 import { createHash } from "node:crypto"
 import {
   chmodSync,
@@ -38,7 +39,7 @@ if (!targets.length) {
 }
 
 const distRoot = join(root, "dist")
-if (requestedTarget === "all") rmSync(distRoot, { recursive: true, force: true })
+if (requestedTarget === "all") rmSync(join(distRoot, "npm"), { recursive: true, force: true })
 mkdirSync(distRoot, { recursive: true })
 
 function writeJson(path: string, value: unknown) {
@@ -68,6 +69,8 @@ async function installTargetDependencies(target: ReleaseTarget) {
   }
 }
 
+const { catalog } = await releaseFeatures(packageMetadata.version)
+
 async function compile(entrypoint: string, outfile: string, target: ReleaseTarget) {
   const result = await Bun.build({
     entrypoints: [entrypoint],
@@ -77,7 +80,27 @@ async function compile(entrypoint: string, outfile: string, target: ReleaseTarge
       autoloadDotenv: false,
       autoloadBunfig: false,
     },
+    plugins: [
+      {
+        name: "official-features-only",
+        setup(build) {
+          build.onLoad({ filter: /[/\\]features[/\\]release-catalog\.ts$/ }, () => ({
+            contents: `export const RELEASE_FEATURE_CATALOG = ${JSON.stringify(catalog)}`,
+            loader: "ts",
+          }))
+          build.onLoad({ filter: /[/\\]features[/\\]source-loader\.ts$/ }, () => ({
+            contents:
+              'export function loadSourceFeature() { throw new Error("Source features are unavailable in a release") }; export const sourceHttpCommand = loadSourceFeature;',
+            loader: "ts",
+          }))
+          build.onLoad({ filter: /[/\\]packages[/\\]feature-[^/\\]+[/\\]src[/\\]/ }, (args) => {
+            throw new Error(`Feature implementation entered the minimal binary: ${args.path}`)
+          })
+        },
+      },
+    ],
     define: {
+      TUIMINAL_MINIMAL_BUILD: "true",
       "process.env.NODE_ENV": JSON.stringify("production"),
       ...(target.os === "linux" ? { "process.env.OPENTUI_LIBC": JSON.stringify("glibc") } : {}),
     },
@@ -100,11 +123,6 @@ for (const target of targets) {
   await compile(
     join(root, "apps", "cli", "bin", "tuiminal.ts"),
     join(binRoot, target.executable),
-    target,
-  )
-  await compile(
-    join(root, "packages", "feature-database", "src", "drivers", "sqlite-query-process.ts"),
-    join(binRoot, target.helperExecutable),
     target,
   )
   writeJson(join(packageRoot, "package.json"), platformPackageJson(target, packageMetadata.version))
@@ -130,10 +148,10 @@ writeFileSync(
   [
     "# Tuiminal",
     "",
-    "Install the pre-alpha without installing Bun:",
+    "Install the alpha without installing Bun:",
     "",
     "```sh",
-    "npm install --global tuiminal@pre-alpha",
+    "npm install --global tuiminal@alpha",
     "tuiminal",
     "```",
     "",
@@ -143,7 +161,6 @@ writeFileSync(
 const checksumFiles = [
   ...targets.flatMap((target) => [
     `${target.id}/bin/${target.executable}`,
-    `${target.id}/bin/${target.helperExecutable}`,
     `${target.id}/package.json`,
   ]),
   "tuiminal/bin/tuiminal.js",

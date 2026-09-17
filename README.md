@@ -20,7 +20,7 @@ Databases, GitHub, processes, APIs, and real terminals in one fast, responsive i
 </div>
 
 > [!WARNING]
-> Tuiminal is in **pre-alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
+> Tuiminal is in **alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
 
 Tuiminal keeps your workflow in one place. Open a project once and switch between its database client, Git interface, processes, HTTP client, and terminals with `[Alt+1–5]`.
 
@@ -35,19 +35,43 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 
 ## Installation
 
-Install the pre-alpha from npm:
+Install the alpha from npm:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 tuiminal
 ```
 
 You **do not need to install Bun** to use the published package. npm downloads the binary for macOS, Linux glibc, or Windows on x64 and ARM64. The small package launcher requires Node.js 22 or later.
 
+A fresh installation opens **Install official features**. Choose Database, Git, Runner,
+HTTP, or Free Terminal with `[↑/↓]` / `[J/K]` or the mouse, then press `[Enter]` to
+install and again to open. Use `[Space]` and `[I]` to install several tools. Reopen
+this screen through `[,]` → **Official features → Manage features** or
+`tuiminal features`. Only installed tools appear in the tabs; Runner is the default
+when available. Downloads are version-matched and verified, and live in Tuiminal's
+own data directory, outside your projects.
+
+Installed tools have a **[D] Uninstall** button. Confirm with `[Y]` or cancel with
+`[Esc]`. Uninstalling closes that tool's sessions and discards unsaved work while
+preserving projects and saved settings. You can install it again from the same screen.
+
+For scripted setup: `tuiminal features install git runner` or `tuiminal features install all`.
+
+Each tool includes a detailed description. Hover over a row or navigate with
+`[↑/↓/J/K]` to see an animated icon for the tool. Database fills a storage cylinder;
+Runner plays, progresses and completes; HTTP sends a request and receives a response
+between a client and server. Git shows a branch, and Free Terminal shows a window
+with a blinking cursor. Icons adapt to smaller terminals.
+During a download, the tool's row fills from left to right with its actual progress.
+
+![Official feature installation](./docs/media/installation.gif)
+
+
 To update or uninstall:
 
 ```bash
-npm install --global tuiminal@pre-alpha
+npm install --global tuiminal@alpha
 npm uninstall --global tuiminal
 ```
 
@@ -209,8 +233,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[2] PR`
 
+- `[Ctrl+N]` opens a creation form with searchable repository, remote base, and compare branch pickers, plus title, Markdown description, and a draft option. The base starts with the selected repository's default branch and remains selectable. The title starts with the latest commit subject from the compare branch and remains editable. Tuiminal checks both selected branches before one GitHub API submission; it does not push a local branch.
 - Starts with **My PRs**, **Review requested**, **All**, **Open**, and **Closed**. The last three select non-archived PRs by state within the current scope.
 - Lists state, repository, review, CI, author, assignees, comments, labels, and diff size.
+- State marks are green for open, purple for merged, gray for draft, and red for closed.
 - Preview tabs show overview, checks, activity, commits, and files.
 - Stopping CI watch or closing its screen cancels the active request; old responses neither notify nor interrupt a new watch.
 - In Activity, `[J/K]` selects comments, `[E]` opens five quick reactions (👍 ❤️ 🎉 😄 👀), and `[Enter]` replies with a reference to the original comment. Replies group under their parent; a comment with reactions offers a new reaction. `[Shift+E]` reacts to the PR itself.
@@ -220,8 +246,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` opens a creation form with a searchable repository picker, title, and Markdown description. Both creation forms keep the draft in memory until submission and require `[Ctrl+S]` to create.
 - Starts with **My Issues**, **All**, **Open**, and **Closed**, selecting non-archived issues by state within the current scope.
 - Combines a dense two-line list with overview and activity previews.
+- Its state mark is green for open and red for closed.
 - In Activity, `[J/K]` selects comments, `[E]` reacts with 👍 ❤️ 🎉 😄 or 👀, and `[Enter]` replies. Replies group under the parent; existing reactions do not hide the new-reaction control. `[Shift+E]` reacts to the issue itself.
 - Supports comments, assignment/unassignment, label edits, branch creation with checkout, closing, and reopening.
 - Searches remain scoped to non-archived issues and never accidentally become GitHub-wide searches.
@@ -229,10 +257,13 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 ### `[4] Inbox`
 
 - Combines Inbox, review requests, assignments, mentions, and locally saved items.
+- Filled and hollow marks still distinguish unread and read. PR and Issue marks also take the subject's state color, with a text label; other subjects or unavailable states stay neutral.
 - Marking read is explicit; completing and unsubscribing require confirmation.
 - Automatic refresh preserves visible data when the network fails.
 
 PR and Issues use the `origin` repository when recognized. Outside a repository, the default is the authenticated account, explicitly including organizations and external repositories rather than searching all of GitHub. Remote views require [GitHub CLI](https://cli.github.com/) 2.40.0 or later.
+
+While a PR or Issues tab is active, its visible list and selected details refresh about every 30 seconds, so issues and comments added in GitHub appear without reopening the tab. `[R]` checks both immediately. The configured longer interval still refreshes every section to its loaded page depth.
 
 When `gh` is missing or outdated, PR, Issues, and Inbox explain it, display the detected official command, provide `[C]` to copy, and offer a mini terminal focused with `[Enter]` or mouse. Tuiminal starts only the shell: you paste and execute the command, and version detection updates automatically. `[Enter]` reopens an exited shell. Missing authentication uses the same guidance for `gh auth login --hostname <host> --web`; `gh`/GitHub own login and tokens, and the view reloads when the account is detected.
 
@@ -261,6 +292,7 @@ Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phr
 | Change internal preview tab | `[Z←]` / `[V→]` |
 | Open remote diff | `[D]` |
 | Open remote actions | `[?]` |
+| Create a PR or issue in its tab | `[Ctrl+N]`, then `[Ctrl+S]` |
 | Stage file/folder or all files | `[Space]` / `[A]` |
 | Stage hunks or lines in the focused diff | `[S]`, then `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]`, and `[Enter]` |
 | Discard file/folder with confirmation | `[D]` |
@@ -496,7 +528,7 @@ Preferences live in `~/.config/tuiminal/settings.json`. An invalid palette name 
 
 ## Development
 
-The npm distribution does not require Bun for end users. The development checkout uses **Bun 1.3.14**, recorded in `.bun-version` and `package.json`:
+The npm distribution does not require Bun for end users. The development checkout uses **Bun 1.4.2**, recorded in `.bun-version` and `package.json`:
 
 ```bash
 git clone https://github.com/DeividXupon/tuiminal.git
@@ -505,11 +537,18 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+Development uses the same installer with locally generated payloads and a separate
+cache. After editing a feature, restart `bun run dev` and install its new snapshot.
+If you rebuild separately with `bun run build:features`, restart the application
+before installing. No npm publication is needed. See the
+[installation contract](./docs/design/official-feature-installation.md).
+
 Main commands:
 
 | Command | Purpose |
 | --- | --- |
-| `bun run dev` | Run with development reload |
+| `bun run dev` | Build local feature payloads and launch the installation flow |
+| `bun run build:features` | Rebuild the five installable official payloads |
 | `bun run test:unit` | Test rules and local integrations |
 | `bun run test:tui` | Test UI with the real OpenTUI renderer |
 | `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |
@@ -517,7 +556,7 @@ Main commands:
 | `bun run build:packages` | Generate JavaScript, types, and manifests for six internal modules |
 | `bun run test:packages` | Pack and install modules in a temporary consumer |
 | `bun run check:licenses` | Check the reproducible production license inventory |
-| `bun run docs:demos` | Recreate all five README GIFs from the real UI |
+| `bun run docs:demos` | Recreate the installer and five tool GIFs from the real UI |
 | `bun run build:release` | Build platform distribution packages |
 | `bun run test:release` | Check hashes, tarballs, and final installation without Bun in `PATH` |
 
@@ -547,7 +586,7 @@ The six modules emitted by `bun run build:packages` live in `dist/packages` and
 point to their directories in this repository. Their contracts are internal and
 versions follow the CLI. Source manifests remain private; packaging prepares
 artifacts without publishing them. Current npm distribution remains the `tuiminal`
-launcher with a complete platform binary.
+launcher with a minimal platform binary and five separately installed official payloads.
 
 The [alpha readiness checklist](./ALPHA_READINESS_PLAN.md) records local hardening
 and outstanding alpha acceptance. It is not release approval or a newly published
@@ -555,7 +594,7 @@ npm version.
 
 Database, Git, Runner, HTTP, and Free Terminal are official internal Tuiminal
 features. A public SDK, marketplace, and community plugin loader are not planned.
-A future minimal installation may download compatible official components on demand,
+The minimal installation downloads compatible official components on demand,
 managed by Tuiminal without modifying the user's opened project.
 
 The [HTTP client plan](./HTTP_CLIENT_PLAN.md) records that tool's next steps.

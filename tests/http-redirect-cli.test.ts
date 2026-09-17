@@ -85,6 +85,7 @@ test("the CLI requires an exact redirect destination and sends each approved hop
       ],
       {
         cwd: root,
+        env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Generated from the installed production dependency graph. The standalone executables also embed Bun 1.3.14; its upstream notice is reproduced below.
+Generated from the installed production dependency graph. The standalone executables also embed Bun 1.4.2; its upstream notice is reproduced below.
 The @opentui/core entry covers its same-version platform-specific native packages selected for each release target.
 
 | Package | Version | Declared license | Repository |
@@ -122,7 +122,7 @@ The @opentui/core entry covers its same-version platform-specific native package
 | zod-to-json-schema | 3.25.2 | ISC | https://github.com/StefanTerdell/zod-to-json-schema |
 | zod | 4.5.1 | MIT | https://github.com/colinhacks/zod.git |
 
-## Bun 1.3.14 runtime notice
+## Bun 1.4.2 runtime notice
 
 Bun itself is MIT-licensed.
 
@@ -134,9 +134,9 @@ Bun statically links JavaScriptCore (and WebKit) which is LGPL-2 licensed. WebCo
 
 You can find the patched version of WebKit used by Bun here: <https://github.com/oven-sh/webkit>. If you would like to relink Bun with changes:
 
-- `git submodule update --init --recursive`
-- `make jsc`
-- `zig build`
+- `git clone https://github.com/oven-sh/WebKit vendor/WebKit`
+- `bun sync-webkit-source` (checks out the version pinned in `WEBKIT_VERSION` in `scripts/build/deps/webkit.ts`)
+- `bun run build:local`
 
 This compiles JavaScriptCore, compiles Bun’s `.cpp` bindings for JavaScriptCore (which are the object files using JavaScriptCore) and outputs a new `bun` binary with your changes.
 
@@ -161,7 +161,7 @@ Bun statically links these libraries:
 | [`uSockets`](https://github.com/uNetworking/uSockets) | Apache 2.0 |
 | [`zlib-ng`](https://github.com/zlib-ng/zlib-ng) | zlib |
 | [`c-ares`](https://github.com/c-ares/c-ares) | MIT licensed |
-| [`libicu`](https://github.com/unicode-org/icu) 72 | [license here](https://github.com/unicode-org/icu/blob/main/icu4c/LICENSE) |
+| [`libicu`](https://github.com/unicode-org/icu) 78 | [license here](https://github.com/unicode-org/icu/blob/main/icu4c/LICENSE) |
 | [`libbase64`](https://github.com/aklomp/base64/blob/master/LICENSE) | BSD 2-Clause |
 | [`libuv`](https://github.com/libuv/libuv) (on Windows) | MIT |
 | [`libdeflate`](https://github.com/ebiggers/libdeflate) | MIT |
@@ -180,6 +180,8 @@ For compatibility reasons, the following packages are embedded into Bun's binary
 
 | Package | License |
 |---------|---------|
+| [`acorn`](https://github.com/acornjs/acorn) | MIT |
+| [`acorn-walk`](https://github.com/acornjs/acorn) | MIT |
 | [`assert`](https://npmjs.com/package/assert) | MIT |
 | [`browserify-zlib`](https://npmjs.com/package/browserify-zlib) | MIT |
 | [`buffer`](https://npmjs.com/package/buffer) | MIT |
@@ -204,7 +206,7 @@ For compatibility reasons, the following packages are embedded into Bun's binary
 
 ## Additional credits
 
-- Bun's JS transpiler, CSS lexer, and Node.js module resolver source code is a Zig port of [@evanw](https://github.com/evanw)’s [esbuild](https://github.com/evanw/esbuild) project.
+- Bun's JS transpiler, CSS lexer, and Node.js module resolver source code is a port of [@evanw](https://github.com/evanw)’s [esbuild](https://github.com/evanw/esbuild) project.
 - Credit to [@kipply](https://github.com/kipply) for the name "Bun"!
 
 ## Installed package license texts

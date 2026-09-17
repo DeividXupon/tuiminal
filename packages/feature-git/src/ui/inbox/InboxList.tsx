@@ -10,6 +10,18 @@ import {
   truncateDisplay,
 } from "@xupon/tuiminal-core/i18n/index"
 import type { InboxNotification } from "../../model/inbox/types"
+import { githubListStateColor } from "../shared/github-list-state"
+
+function subjectStateLabel(item: InboxNotification, language: LanguageId) {
+  if (item.subjectState === null) return ""
+  if (item.subjectType === "Issue") {
+    if (item.subjectState !== "open" && item.subjectState !== "closed") return ""
+    return translateUi(item.subjectState === "open" ? "ABERTA" : "FECHADA", language)
+  }
+  if (item.subjectType !== "PullRequest") return ""
+  const labels = { open: "ABERTO", draft: "RASCUNHO", merged: "MESCLADO", closed: "FECHADO" }
+  return translateUi(labels[item.subjectState], language)
+}
 
 function updated(value: string, language: LanguageId) {
   return formatUiDateTime(
@@ -44,7 +56,14 @@ function InboxRow({
   const marker = item.unread ? "●" : "○"
   const language = getLanguage()
   const lines = useMemo(() => {
-    const suffix = `${item.subjectType} · ${updated(item.updatedAt, language)}${saved ? " · ★" : ""}`
+    const suffix = [
+      item.subjectType,
+      subjectStateLabel(item, language),
+      updated(item.updatedAt, language),
+      saved ? "★" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ")
     return {
       repository: truncateDisplay(item.repository, Math.max(12, width - 7)),
       subject: truncateDisplay(`${item.title} · ${suffix}`, Math.max(8, width - 2)),
@@ -61,11 +80,14 @@ function InboxRow({
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text
-          content={`${selected ? "▶" : " "} ${marker} ${lines.repository}`}
           style={{
             fg: selected && focused ? COLORS.git : item.unread ? COLORS.text : COLORS.muted,
           }}
-        />
+        >
+          <span>{`${selected ? "▶" : " "} `}</span>
+          <span fg={githubListStateColor(item.subjectState)}>{marker}</span>
+          <span>{` ${lines.repository}`}</span>
+        </text>
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text

@@ -14,6 +14,7 @@ export type IssueWorkspaceAction =
   | { type: "move-preview-tab"; delta: -1 | 1 }
   | { type: "scroll-preview"; delta: number }
   | { type: "edit-query" | "refresh" | "load-more" }
+  | { type: "create-issue" }
   | { type: "load-preview-more" | "open-action-menu" | "toggle-description" }
   | { type: "toggle-preview" | "cycle-preview-position" }
   | { type: "open-browser" | "copy-url" | "copy-number" }
@@ -152,6 +153,7 @@ export function issueWorkspaceAction({
   canLoadMore: boolean
   canLoadPreview: boolean
 }): IssueWorkspaceAction | null {
+  if (key.ctrl && key.name === "n") return { type: "create-issue" }
   const configuration = configurationAction(key)
   if (configuration) return configuration
   const loading = loadingAction(key, focus, canLoadMore, canLoadPreview)

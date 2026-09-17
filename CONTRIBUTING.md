@@ -2,7 +2,7 @@
 
 ## Getting started
 
-Use Bun 1.3.14 (`.bun-version`). From the repository root:
+Use Bun 1.4.2 (`.bun-version`). From the repository root:
 
 ```sh
 bun install --frozen-lockfile
@@ -99,3 +99,16 @@ operation**, never an automatic step in the check or CI.
 
 By contributing to Tuiminal, you agree to license your contribution under the
 [Apache License 2.0](./LICENSE), unless a separate written agreement states otherwise.
+
+## Testing official installation
+
+`bun run dev` builds the five official payloads and opens the installer on a fresh
+checkout. Feature code is loaded from the installed snapshot; restart the dev command
+(or rebuild with `bun run build:features` and restart the application) before
+installing the new snapshot after editing a tool.
+`dev-features` storage is separate from release installations. Tests explicitly use
+source workspaces except the download/installation regressions and release smoke,
+which consume real archives in disposable storage. Do not preload every feature in
+the unit-test setup: some suites establish storage fixtures before importing services.
+The [installation contract](docs/design/official-feature-installation.md) describes
+storage, cancellation, integrity and canonical release artifacts.

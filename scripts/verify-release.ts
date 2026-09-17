@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto"
 import { createReadStream, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { delimiter, join, resolve } from "node:path"
+import { delimiter, dirname, join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { Database } from "bun:sqlite"
 import { mainPackageJson, RELEASE_TARGETS } from "./release-model"
+import { verifyPackagedUi } from "./release-ui-smoke"
+import { parseNpmPackResult } from "./npm-pack-model"
 
 const root = resolve(import.meta.dir, "..")
 const distRoot = join(root, "dist", "npm")
@@ -11,6 +13,7 @@ const version = (
   JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }
 ).version
 const requestedTarget = process.argv[2]?.trim()
+const fromRegistry = process.argv.includes("--registry")
 const selectedTargets = requestedTarget
   ? RELEASE_TARGETS.filter((target) => target.id === requestedTarget)
   : RELEASE_TARGETS
@@ -61,11 +64,6 @@ function expectedPackageFiles(targetId: string | null) {
     targetId
       ? `bin/${targetId.startsWith("win32") ? "tuiminal.exe" : "tuiminal"}`
       : "bin/tuiminal.js",
-    ...(targetId
-      ? [
-          `bin/${targetId.startsWith("win32") ? "tuiminal-sqlite-query.exe" : "tuiminal-sqlite-query"}`,
-        ]
-      : []),
   ])
 }
 
@@ -83,10 +81,8 @@ async function pack(packageRoot: string, destination: string, dryRun: boolean) {
       env: { npm_config_cache: join(tmpdir(), "tuiminal-release-npm-cache") },
     },
   )
-  const result = JSON.parse(output) as Array<{ filename: string; files: Array<{ path: string }> }>
-  const first = result[0]
-  if (!first) throw new Error(`npm pack returned no artifact for ${packageRoot}`)
-  return first
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
+  return parseNpmPackResult(output, { name: manifest.name, version })
 }
 
 function assertExactPackageFiles(
@@ -120,7 +116,6 @@ async function verifyChecksums() {
   const expectedPaths = [
     ...selectedTargets.flatMap((target) => [
       `${target.id}/bin/${target.executable}`,
-      `${target.id}/bin/${target.helperExecutable}`,
       `${target.id}/package.json`,
     ]),
     "tuiminal/bin/tuiminal.js",
@@ -136,7 +131,11 @@ async function verifyChecksums() {
   }
 }
 
-async function verifySqliteHelper(executable: string, directory: string) {
+async function verifySqliteHelper(
+  executable: string,
+  directory: string,
+  env: Record<string, string>,
+) {
   const databasePath = join(directory, "helper smoke Ω.sqlite")
   const database = new Database(databasePath, { create: true, strict: true })
   database.run("CREATE TABLE smoke (answer INTEGER NOT NULL)")
@@ -148,7 +147,8 @@ async function verifySqliteHelper(executable: string, directory: string) {
     receive = resolveResponse
   })
   const helper = Bun.spawn({
-    cmd: [executable],
+    cmd: [executable, "--internal-sqlite-worker"],
+    env: { ...process.env, ...env },
     stdin: "ignore",
     stdout: "ignore",
     stderr: "pipe",
@@ -255,14 +255,15 @@ try {
     npmExecutable,
     [
       "install",
-      "--offline",
+      ...(fromRegistry ? [] : ["--offline"]),
       "--ignore-scripts",
       "--no-audit",
       "--no-fund",
       "--prefix",
       installRoot,
-      join(temporaryRoot, hostPack.filename),
-      join(temporaryRoot, mainPack.filename),
+      ...(fromRegistry
+        ? [`tuiminal@${version}`]
+        : [join(temporaryRoot, hostPack.filename), join(temporaryRoot, mainPack.filename)]),
     ],
     { env: { npm_config_cache: join(temporaryRoot, "npm-cache") } },
   )
@@ -273,13 +274,60 @@ try {
     "node_modules",
     hostTarget.npmPackage,
     "bin",
-    hostTarget.helperExecutable,
+    hostTarget.executable,
   )
+  if (
+    (await sha256(helper)) !==
+    (await sha256(join(distRoot, hostTarget.id, "bin", hostTarget.executable)))
+  )
+    throw new Error("Installed binary differs from the qualified candidate")
   const noBunPath = String(process.env.PATH ?? "")
     .split(delimiter)
-    .filter((entry) => !/(?:^|[\\/])\.bun(?:[\\/]|$)|tuiminal-bun-/i.test(entry))
+    .filter(
+      (entry) =>
+        resolve(entry).toLowerCase() !== dirname(process.execPath).toLowerCase() &&
+        !/(?:^|[\\/])\.bun(?:[\\/]|$)|tuiminal-bun-/i.test(entry),
+    )
     .join(delimiter)
-  const releaseEnvironment = { PATH: noBunPath }
+  const releaseEnvironment = {
+    PATH: noBunPath,
+    XDG_DATA_HOME: join(temporaryRoot, "data"),
+    XDG_CONFIG_HOME: join(temporaryRoot, "config"),
+    TUIMINAL_SOURCE_FEATURES: "1",
+  }
+  try {
+    await command(nodeExecutable, [launcher, "http", "run", "not-installed.http"], {
+      cwd: installRoot,
+      env: releaseEnvironment,
+    })
+    throw new Error("A fresh minimal CLI unexpectedly ran HTTP")
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("tuiminal features")) throw error
+  }
+  // Even an inherited source-test flag cannot put feature code into the release.
+  const featureServer = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      const name = new URL(request.url).pathname.slice(1)
+      if (!/^tuiminal-[a-zA-Z0-9.-]+-(database|git|runner|http|terminal)\.json\.gz$/.test(name))
+        return new Response(null, { status: 404 })
+      return new Response(Bun.file(join(root, "dist", "features", version, name)))
+    },
+  })
+  try {
+    await command(nodeExecutable, [launcher, "features", "install", "all"], {
+      cwd: installRoot,
+      env: {
+        ...releaseEnvironment,
+        TUIMINAL_FEATURE_BASE_URL: fromRegistry
+          ? undefined
+          : `http://127.0.0.1:${featureServer.port}/`,
+      },
+    })
+  } finally {
+    featureServer.stop(true)
+  }
   const reportedVersion = (
     await command(nodeExecutable, [launcher, "--version"], {
       cwd: installRoot,
@@ -294,7 +342,8 @@ try {
   for (const tool of ["banco", "git", "runner", "http", "terminal"]) {
     if (!help.includes(tool)) throw new Error(`Installed help is missing ${tool}`)
   }
-  await verifySqliteHelper(helper, installRoot)
+  await verifySqliteHelper(helper, installRoot, releaseEnvironment)
+  await verifyPackagedUi(nodeExecutable, launcher, installRoot, releaseEnvironment)
 
   const server = Bun.serve({
     port: 0,

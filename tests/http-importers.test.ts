@@ -336,7 +336,12 @@ describe("HTTP collection importers", () => {
         "--output",
         "generated",
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        env: { ...globalThis.process.env, TUIMINAL_SOURCE_FEATURES: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     )
     const [exitCode, stdout, stderr] = await Promise.all([
       child.exited,

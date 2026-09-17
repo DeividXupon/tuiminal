@@ -158,3 +158,8 @@ describe("contextual tutorial", () => {
     ).toBeGreaterThanOrEqual(2)
   })
 })
+
+// Tutorial metadata belongs to installed feature modules.
+const { loadSourceFeature } = await import("../apps/cli/src/features/source-loader")
+await loadSourceFeature("git")
+await loadSourceFeature("http")

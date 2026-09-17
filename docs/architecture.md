@@ -46,7 +46,8 @@ not an empty file to satisfy a diagram.
 
 Each workspace owns its manifest, exports, and dependencies. Versioning, build,
 and installation contracts are documented in
-[Internal workspaces](./design/internal-workspaces.md). The former `src/core` and
+[Internal workspaces](./design/internal-workspaces.md) and
+[Official feature installation](./design/official-feature-installation.md). The former `src/core` and
 `src/shared` directories were combined into `packages/core/src`.
 
 ## Allowed dependencies

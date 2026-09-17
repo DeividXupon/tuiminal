@@ -558,6 +558,7 @@ describe("HTTP TUI", () => {
 
       await key("ESCAPE")
       await key("n", true)
+      await settle(() => tui?.captureCharFrame().match(/GET Scratch/g)?.length === 4)
       expect(tui.captureCharFrame().match(/GET Scratch/g)).toHaveLength(4)
       await key("ESCAPE")
       await press("http-request-view-headers")
@@ -919,6 +920,7 @@ describe("HTTP TUI", () => {
     let server: Server
     let url = ""
     let receivedUrl = ""
+    let continuousClosed = false
 
     beforeEach(async () => {
       server = createServer((request, response) => {
@@ -926,8 +928,23 @@ describe("HTTP TUI", () => {
         if (request.url === "/continuous") {
           response.writeHead(200, { "content-type": "text/plain" })
           const chunk = `${"0123456789abcdef".repeat(4)}\n`.repeat(1_000)
-          const timer = setInterval(() => response.write(chunk), 1)
-          response.on("close", () => clearInterval(timer))
+          continuousClosed = false
+          let scheduled: ReturnType<typeof setImmediate> | undefined
+          const send = () => {
+            if (continuousClosed) return
+            if (response.write(chunk)) scheduled = setImmediate(send)
+            else
+              response.once("drain", () => {
+                scheduled = setImmediate(send)
+              })
+          }
+          // Bun 1.3.14 emits socket close when the client cancels, but does not
+          // reliably emit ServerResponse.close. Stop the exact fixture producer.
+          request.socket.once("close", () => {
+            continuousClosed = true
+            clearImmediate(scheduled)
+          })
+          send()
           return
         }
         if (request.url === "/nested") {
@@ -1016,6 +1033,7 @@ describe("HTTP TUI", () => {
 
       await settle(() => receivedUrl === "/pasted")
       expect(receivedUrl).toBe("/pasted")
+      await settle(() => tui?.captureCharFrame().includes("200 OK") ?? false)
       expect(tui.captureCharFrame()).toContain("200 OK")
     })
 
@@ -1028,6 +1046,11 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-send-button")
       await settle(() => tui?.captureCharFrame().includes("TRUNCADO") ?? false)
+      // Socket retirement is an I/O condition. Repainting a 1.5 MB response on
+      // every poll can delay that event and exhaust the TUI test's deadline.
+      const deadline = performance.now() + 2_000
+      while (!continuousClosed && performance.now() < deadline) await Bun.sleep(10)
+      expect(continuousClosed).toBe(true)
       await key("2")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-response-scroll-http-scratch-1",

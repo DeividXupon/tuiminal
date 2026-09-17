@@ -57,6 +57,8 @@ whole list; colors and click handlers remain current.
 - Inputs own letters, numbers, and global shortcuts. `[Esc]` first unfocuses,
   then closes the modal; one event never crosses two layers.
 - Open/closed state uses symbols and text; color is supplementary.
+- The list state mark uses palette-aware green for open and red for closed, with
+  the existing distinct glyphs and text preserved.
 - Remote Markdown is sanitized terminal text: no HTML execution or image downloads.
 - Loading, empty, missing authentication, incompatible `gh`, partial errors,
   insufficient permissions, and uncertain results are distinct states.
@@ -81,6 +83,10 @@ whole list; colors and click handlers remain current.
 - Selecting the last row loads the next page inline. Automatic refresh covers every
   section and the loaded page depth without clearing the list. Queries have GitHub
   autocomplete.
+- While Issues is active, the visible section and selected issue details are read
+  every 30 seconds; activating a stale tab reads them promptly. `[R]` reads both
+  immediately. This foreground cadence does not reset the configured full-section
+  refresh interval. A failed background detail read keeps the usable preview.
 - Initial/detail loading uses full-panel ASCII plasma and readable text, dissolving
   quickly when data arrives. Pagination and refresh stay inline.
 - Missing, outdated, or unauthenticated `gh` shows guidance and a responsive mini
@@ -95,6 +101,14 @@ whole list; colors and click handlers remain current.
 
 ## Persistence, scope, and action safety
 
+Issue creation opens from `[Ctrl+N]` or its mouse control even when the list is
+empty. The form chooses an explicit `owner/repository` through the same searchable,
+cancellable repository catalog picker as PR creation, plus title and Markdown body;
+`[Ctrl+S]` checks the authenticated account and repository before one `gh api`
+submission. Only a matching host, repository, issue path, and number confirms it.
+Any error after dispatch is uncertain and requires a GitHub check before another
+manual attempt. The draft remains in memory and no project file changes.
+
 - Profiles use `$XDG_CONFIG_HOME/tuiminal/git-issues.yaml`, falling back to
   `~/.config/tuiminal/git-issues.yaml`, with atomic `0600` writes and canonical
   project-root keys. Never silently replace invalid configuration.
@@ -106,7 +120,15 @@ whole list; colors and click handlers remain current.
   `gh issue develop --checkout`, closing, and reopening. Prepare host, node ID,
   repository, number, state, `updatedAt`, and authentication generation; reauthenticate,
   reread, execute once, and reconcile. An uncertain result after dispatch does not
-  authorize replaying the mutation.
+  authorize replaying the mutation. A connection failure during preflight rejects
+  before dispatch; TCP resets and HTTP 5xx during the dispatched command leave the
+  result uncertain unless a subsequent read confirms the requested effect. A failed
+  reconciliation read also leaves the result uncertain. Never repeat the write.
+  List and detail read failures show concise connection guidance instead of raw
+  socket output, and background refresh retains the last usable data. Cancellation
+  of a page or detail read superseded by an explicit refresh does not show an error;
+  the retired page cannot replace the refreshed list. Timed and foreground refreshes
+  wait while a page loads.
 - Labels and assignees use complete details, not search summaries. Arguments and
   stdin are explicit. Checkout retains the shared clone/remote/clean-worktree guard
   and never creates a clone automatically.
@@ -117,6 +139,9 @@ whole list; colors and click handlers remain current.
 
 `bun run check` includes `tests/git-issues.test.ts`, `tests/git-issue-config.test.ts`,
 `tests/git-issue-actions.test.ts`, `tests/git-reactions.test.ts`, and real renderer
-coverage in `tests/tui/git-issues.test.tsx`. Reads and mutations use fixtures/fake
-`gh`, never the user's account. Git's tutorial covers Diffs and Compare, not this
-remote workspace.
+coverage in `tests/tui/git-issues.test.tsx` and
+`tests/tui/git-dashboard-cancellation.test.tsx`. Reads and mutations use fixtures/fake
+`gh`, never the user's account. Fake `gh` covers network failures before dispatch,
+during close, and during reconciliation, including read-only confirmation after a
+connection recovers. Git's tutorial covers Diffs and Compare, not this remote
+workspace.

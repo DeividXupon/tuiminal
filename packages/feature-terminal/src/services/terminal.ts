@@ -57,6 +57,7 @@ type BunRuntimeLike = {
         rows: number
         name: string
         data: (terminal: BunTerminalLike, data: Uint8Array) => void
+        exit: (terminal: BunTerminalLike, code: number, signal: string | null) => void
       }
     },
   ): BunSubprocessLike
@@ -70,20 +71,25 @@ export const FREE_TERMINAL_WORKING_DIRECTORY = resolve(
 )
 
 export function createShellTerminalCommand(): FreeTerminalCommand {
-  const shell = process.env.SHELL || "/bin/zsh"
+  const shell =
+    process.platform === "win32"
+      ? process.env.COMSPEC?.trim() || "cmd.exe"
+      : process.env.SHELL?.trim() || "/bin/sh"
+  const args = process.platform === "win32" ? ["/d"] : ["-l"]
   return {
     kind: "shell",
     label: "Terminal",
     shortLabel: "TTY",
-    displayCommand: `${shell} -l`,
-    command: [shell, "-l"],
+    displayCommand: [shell, ...args].join(" "),
+    command: [shell, ...args],
     accent: "#64d8ff",
   }
 }
 
 export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
   const command = value.trim()
-  const shell = process.env.SHELL || "/bin/zsh"
+  const shell = createShellTerminalCommand().command[0]!
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command]
   const firstWord = command.split(/\s+/)[0] || "CLI"
   const label = firstWord.split("/").at(-1) || "CLI"
 
@@ -92,7 +98,7 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     label,
     shortLabel: label.slice(0, 3).toUpperCase(),
     displayCommand: command,
-    command: [shell, "-lc", command],
+    command: [shell, ...args],
     accent: "#f7c873",
   }
 }
@@ -127,6 +133,8 @@ export function startFreeTerminalProcess(
   let stopPromise: Promise<void> | null = null
   let resolveStop: (() => void) | null = null
   let rejectStop: ((error: Error) => void) | null = null
+  const terminalEnded = Promise.withResolvers<void>()
+  const retired = Promise.withResolvers<void>()
   const subprocess = bunRuntime.spawn(command, {
     cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
     env: {
@@ -140,6 +148,9 @@ export function startFreeTerminalProcess(
       name: "xterm-256color",
       data(_terminal, data) {
         options.onData(data)
+      },
+      exit() {
+        terminalEnded.resolve()
       },
     },
   })
@@ -171,7 +182,7 @@ export function startFreeTerminalProcess(
       terminal.resize(Math.max(20, Math.floor(columns)), Math.max(5, Math.floor(rows)))
     },
     stop() {
-      if (exited) return Promise.resolve()
+      if (exited) return retired.promise
       if (stopPromise) return stopPromise
       stopped = true
       stopPromise = new Promise<void>((resolve, reject) => {
@@ -214,20 +225,34 @@ export function startFreeTerminalProcess(
   }
 
   activeProcesses.add(handle)
-  void subprocess.exited.then((code) => {
+  void subprocess.exited.then(async (code) => {
     exited = true
     if (forceStopTimer) clearTimeout(forceStopTimer)
     if (stopDeadlineTimer) clearTimeout(stopDeadlineTimer)
+    // ConPTY can deliver its last output after the child exits. Drain through
+    // terminal EOF before closing it; descendants retaining the stream must not
+    // make retirement wait forever.
+    let drainTimer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      terminalEnded.promise,
+      new Promise<void>((resolveDrain) => {
+        drainTimer = setTimeout(resolveDrain, OWNED_PROCESS_STOP_GRACE_MS)
+      }),
+    ]).finally(() => clearTimeout(drainTimer))
     activeProcesses.delete(handle)
     closeTerminal()
-    options.onExit({
-      code: Number.isFinite(code) ? code : subprocess.exitCode,
-      signal: subprocess.signalCode,
-      stopped,
-    })
-    resolveStop?.()
-    resolveStop = null
-    rejectStop = null
+    try {
+      options.onExit({
+        code: Number.isFinite(code) ? code : subprocess.exitCode,
+        signal: subprocess.signalCode,
+        stopped,
+      })
+    } finally {
+      retired.resolve()
+      resolveStop?.()
+      resolveStop = null
+      rejectStop = null
+    }
   })
 
   return handle

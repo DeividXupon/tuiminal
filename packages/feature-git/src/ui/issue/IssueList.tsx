@@ -12,6 +12,7 @@ import {
 } from "@xupon/tuiminal-core/i18n/index"
 import { ISSUE_COLUMNS } from "../../model/issue/config"
 import type { IssueColumn, IssueSummary } from "../../model/issue/types"
+import { githubListStateColor } from "../shared/github-list-state"
 
 const STATE_MARK: Record<IssueSummary["state"], string> = { open: "◆", closed: "○" }
 
@@ -94,6 +95,8 @@ function IssueRow({
     }),
     [item, width, columns, language],
   )
+  const stateVisible =
+    hasColumn(columns, "state") && lines.primary.startsWith(STATE_MARK[item.state])
   return (
     <box
       id={`git-issue-row-${index}`}
@@ -105,10 +108,13 @@ function IssueRow({
       }}
     >
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
-        <text
-          content={`${selected ? "▶" : " "} ${lines.primary}`}
-          style={{ fg: selected && focused ? COLORS.git : COLORS.text }}
-        />
+        <text style={{ fg: selected && focused ? COLORS.git : COLORS.text }}>
+          <span>{`${selected ? "▶" : " "} `}</span>
+          {stateVisible ? (
+            <span fg={githubListStateColor(item.state)}>{STATE_MARK[item.state]}</span>
+          ) : null}
+          <span>{stateVisible ? lines.primary.slice(1) : lines.primary}</span>
+        </text>
       </Button>
       <Button height={1} width="100%" onPress={() => onSelect(index)}>
         <text

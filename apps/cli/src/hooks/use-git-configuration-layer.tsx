@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react"
-import { GitConfigurationModal, type GitConfigurationTab } from "@xupon/tuiminal-feature-git"
+import type { GitConfigurationTab } from "@xupon/tuiminal-feature-git"
+import { GitConfigurationModal } from "../features/components"
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 
 export function useGitConfigurationLayer() {

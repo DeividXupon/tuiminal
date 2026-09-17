@@ -1,0 +1,108 @@
+name: Publish alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful Release candidate matrix run for the current main SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: publish-alpha
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: npm
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    env:
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Use the pinned npm CLI with OIDC support
+        run: npm install --global npm@12.0.2 --ignore-scripts
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Verify exact candidate and quality runs
+        run: bun scripts/verify-candidate.ts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate-artifacts
+      - name: Verify and pack the qualified bytes without rebuilding
+        run: bun scripts/stage-publication.ts
+      - name: Publish immutable release assets, platforms and launcher
+        run: bun scripts/publish-release.ts
+
+  verify-registry:
+    name: Registry ${{ matrix.target }}
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-x64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: macos-15-intel
+            target: darwin-x64
+          - runner: macos-15
+            target: darwin-arm64
+          - runner: windows-2025
+            target: win32-x64
+          - runner: windows-11-arm
+            target: win32-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Use the publication npm CLI
+        run: npm install --global npm@12.0.2 --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          name: npm-${{ matrix.target }}
+          path: candidate
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          name: official-features
+          path: release-features
+      - name: Restore qualified package bytes
+        run: |
+          bun -e 'import { mkdirSync, cpSync } from "node:fs"; import { version } from "./package.json"; mkdirSync("dist/npm", {recursive:true}); cpSync("release-features", `dist/features/${version}`, {recursive:true})'
+          tar -xzf candidate/npm-${{ matrix.target }}.tar.gz -C dist/npm
+      - name: Install from npm and download the public release features
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run test:release ${{ matrix.target }} --registry

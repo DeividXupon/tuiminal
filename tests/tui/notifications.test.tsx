@@ -128,17 +128,39 @@ test("floating stack presents every severity, caps at three and never steals foc
 })
 
 test("transient notification closes automatically while an error remains", async () => {
-  await renderNotifications([
-    { source: "Git", kind: "success", message: "Salvo", durationMs: 25 },
-    { source: "HTTP", kind: "error", message: "Falha persistente", durationMs: null },
-  ])
-  expect(tui?.captureCharFrame()).toContain("Salvo")
-  expect(tui?.captureCharFrame()).toContain("Falha persistente")
+  const originalSetTimeout = globalThis.setTimeout
+  const expirations: Array<() => void> = []
+  const schedule = spyOn(globalThis, "setTimeout").mockImplementation(
+    new Proxy(originalSetTimeout, {
+      apply(target, receiver, args) {
+        if (Number(args[1]) > 500_000) {
+          expect(Number(args[1])).toBeLessThanOrEqual(1_000_000)
+          expirations.push(() => Reflect.apply(args[0], undefined, args.slice(2)))
+        }
+        return Reflect.apply(target, receiver, args)
+      },
+    }),
+  )
+  try {
+    await renderNotifications([
+      { source: "Git", kind: "success", message: "Salvo", durationMs: 1_000_000 },
+      { source: "HTTP", kind: "error", message: "Falha persistente", durationMs: null },
+    ])
+    expect(tui?.captureCharFrame()).toContain("Salvo")
+    expect(tui?.captureCharFrame()).toContain("Falha persistente")
+    expect(expirations).toHaveLength(1)
 
-  await act(async () => Bun.sleep(50))
-  await tui?.renderOnce()
-  expect(tui?.captureCharFrame()).not.toContain("Salvo")
-  expect(tui?.captureCharFrame()).toContain("Falha persistente")
+    // Deliver the actual scheduled expiration after the first rendered frame,
+    // without making rendering race a 25 ms wall-clock lifetime in CI.
+    act(() => expirations[0]!())
+    await tui?.renderOnce()
+    expect(tui?.captureCharFrame()).not.toContain("Salvo")
+    expect(tui?.captureCharFrame()).toContain("Falha persistente")
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    schedule.mockRestore()
+  }
 })
 
 test("notification bursts schedule timers only for retained cards and release them on unmount", async () => {
