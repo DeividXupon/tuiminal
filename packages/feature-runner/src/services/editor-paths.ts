@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises"
 import { dirname, isAbsolute, join, resolve, sep } from "node:path"
 import type { RunnerConfiguredCommand } from "../model/config"
+import { rankRunnerYamlSuggestions } from "../model/yaml-editor"
 
 export async function runnerDirectorySuggestions(root: string, value: string) {
   const path = resolve(root, value || ".")
@@ -9,12 +10,13 @@ export async function runnerDirectorySuggestions(root: string, value: string) {
     const entries = await readdir(directory, { withFileTypes: true })
     const prefix =
       value.endsWith(sep) || !value ? value : value.slice(0, value.lastIndexOf(sep) + 1)
-    return entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `${prefix}${entry.name}${sep}`)
-      .filter((candidate) => candidate.startsWith(value))
-      .sort()
-      .slice(0, 6)
+    return rankRunnerYamlSuggestions(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => `${prefix}${entry.name}${sep}`)
+        .sort(),
+      value,
+    )
   } catch {
     return []
   }

@@ -1,6 +1,6 @@
 import { RUNNER_HELP_MESSAGES } from "./runner-help-catalog"
 import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
-import { RUNNER_YAML_GUIDE_MESSAGES } from "./runner-yaml-guide-catalog"
+import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
 import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner-validation-catalog"
 import { RUNNER_EDITOR_MESSAGES } from "./runner-editor-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
@@ -108,7 +108,7 @@ const MESSAGES: readonly Message[] = [
   ...RUNNER_TRUST_MESSAGES,
   ...RUNNER_HELP_MESSAGES,
   ...RUNNER_YAML_MESSAGES,
-  ...RUNNER_YAML_GUIDE_MESSAGES,
+  ...RUNNER_YAML_COMPLETION_MESSAGES,
   ...RUNNER_VALIDATION_MESSAGES,
   ...RUNNER_EDITOR_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,

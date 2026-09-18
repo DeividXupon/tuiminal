@@ -98,8 +98,7 @@ export function RunnerConfiguration({
         commands={commands}
         profiles={profiles}
         flows={flows}
-        {...(editor.kind === "configuration" ? { onManage: () => setEditor(null) } : {})}
-        onClose={() => (editor.kind === "configuration" ? onClose() : setEditor(null))}
+        onClose={() => setEditor(null)}
         onSaved={() => {
           setEditor(null)
           onChanged()

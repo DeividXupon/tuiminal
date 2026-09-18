@@ -1,5 +1,5 @@
-import { RunnerYamlGuide } from "./RunnerYamlGuide"
 import { runnerYamlStyle, useYamlHighlighting } from "./use-yaml-highlighting"
+import { RunnerYamlSuggestions } from "./RunnerYamlSuggestions"
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -21,11 +21,13 @@ import {
 } from "../model/configuration-yaml"
 import {
   runnerYamlContext,
+  runnerYamlCompletionCommands,
   runnerYamlHelp,
+  runnerYamlSuggestionDescription,
   runnerYamlSuggestions,
-  runnerYamlSuggestionLine,
   runnerYamlTemplate,
 } from "../model/yaml-editor"
+import { handleRunnerYamlCompletionKey } from "./runner-yaml-keyboard"
 import { runnerDirectorySuggestions, resolveRunnerEditorPaths } from "../services/editor-paths"
 import { readRunnerYaml, saveRunnerYaml } from "../storage/runner-yaml"
 
@@ -41,7 +43,6 @@ type Props = {
   flows?: RunnerFlow[]
   onClose: () => void
   onSaved: () => void
-  onManage?: () => void
 }
 export function RunnerConfigurationEditor({
   root,
@@ -51,7 +52,6 @@ export function RunnerConfigurationEditor({
   flows = [],
   onClose,
   onSaved,
-  onManage,
 }: Props) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -101,26 +101,18 @@ export function RunnerConfigurationEditor({
       return profiles
     }
   })
-  const [guideOpen, setGuideOpen] = useState(false)
   useYamlHighlighting(input, source)
-  const openGuide = () => {
-    setSuggesting(false)
-    input.current?.blur()
-    setGuideOpen(true)
-  }
-  const closeGuide = () => {
-    setGuideOpen(false)
-    input.current?.focus()
-  }
   const [row, setRow] = useState(0)
-  const initialSource = useRef(source)
+  const [column, setColumn] = useState(0)
+  const [anchor, setAnchor] = useState({ row: 0, column: 0 })
   const [suggesting, setSuggesting] = useState(false)
+  const [forcedSuggestions, setForcedSuggestions] = useState(false)
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const [directories, setDirectories] = useState<string[]>([])
   const [saveError, setSaveError] = useState(snapshot.error)
   const [saving, setSaving] = useState(false)
   const live = useRef(true)
-  const context = runnerYamlContext(source, row)
+  const context = runnerYamlContext(source, row, column)
   const validation = useMemo(() => {
     let configuration: RunnerYamlConfiguration | null = null
     try {
@@ -138,25 +130,33 @@ export function RunnerConfigurationEditor({
       }
     }
   }, [source, commands, inheritedProfiles])
+  const completionCommands = runnerYamlCompletionCommands(commands, validation.configuration)
+  const completionProfiles = [...inheritedProfiles, ...(validation.configuration?.profiles ?? [])]
   const suggestions =
     context.key === "cwd"
-      ? directories
-      : runnerYamlSuggestions(
-          context,
-          [
-            ...commands,
-            ...(validation.configuration?.commands ?? [])
-              .filter((command) => !commands.some((item) => item.id === command.id))
-              .map((command) => ({
-                ...command,
-                category: "custom" as const,
-                displayCommand: command.command,
-                program: "",
-                args: [],
-              })),
-          ],
-          [...inheritedProfiles, ...(validation.configuration?.profiles ?? [])],
-        )
+      ? context.block === "command"
+        ? directories
+        : []
+      : runnerYamlSuggestions(context, completionCommands, completionProfiles)
+  const alternatives = suggestions.filter((item) => item !== context.value)
+  const visibleSuggestions = suggesting
+    ? alternatives.length
+      ? alternatives
+      : forcedSuggestions
+        ? suggestions
+        : []
+    : []
+  const visibleItems = visibleSuggestions.map((value) => {
+    const description = runnerYamlSuggestionDescription(
+      context,
+      value,
+      completionCommands,
+      completionProfiles,
+    )
+    return { value, description: description.text, translateDescription: description.translate }
+  })
+  const editorHeight = input.current?.height ?? Math.max(2, terminal.height - 11)
+  const editorWidth = input.current?.width ?? Math.max(1, terminal.width - 4)
   useEffect(() => {
     live.current = true
     renderer.currentFocusedRenderable?.blur()
@@ -184,20 +184,23 @@ export function RunnerConfigurationEditor({
       current = false
     }
   }, [context.key, context.value, root])
+  const syncCursor = () => {
+    const editor = input.current
+    setRow(editor?.logicalCursor.row ?? 0)
+    setColumn(editor?.logicalCursor.col ?? 0)
+    setAnchor({
+      row: editor?.visualCursor.visualRow ?? 0,
+      column: editor?.visualCursor.visualCol ?? 0,
+    })
+  }
   const changed = () => {
-    setSource(input.current?.plainText ?? "")
+    const editor = input.current
+    setSource(editor?.plainText ?? "")
+    syncCursor()
     setSaveError("")
     setSuggestionIndex(0)
-  }
-  const accept = (suggestion: string) => {
-    const editor = input.current
-    if (!editor) return
-    editor.setCursor(row, 0)
-    editor.gotoLineEnd({ select: true })
-    editor.insertText(runnerYamlSuggestionLine(context, suggestion))
-    editor.focus()
-    setSuggesting(false)
-    changed()
+    setSuggesting(true)
+    setForcedSuggestions(false)
   }
   const save = async () => {
     if (!validation.result || saving || snapshot.error) return
@@ -207,7 +210,6 @@ export function RunnerConfigurationEditor({
         await resolveRunnerEditorPaths(root, command)
       if (!live.current) return
       snapshot.hash = saveRunnerYaml(snapshot.path, source, snapshot.hash)
-      initialSource.current = source
       onSaved()
     } catch (error) {
       if (live.current)
@@ -216,24 +218,19 @@ export function RunnerConfigurationEditor({
       if (live.current) setSaving(false)
     }
   }
-  const manage = () => {
-    if (source !== initialSource.current)
-      setSaveError("Salve o YAML antes de abrir comandos e fluxos.")
-    else onManage?.()
-  }
   useKeyboard((key) => {
-    if (guideOpen) return
     const controlActions: Record<string, (() => void) | undefined> = {
       s: () => {
         void save()
       },
-      space: () => setSuggesting((current) => !current),
-      o: onManage ? manage : undefined,
+      space: () => {
+        setSuggesting(true)
+        setForcedSuggestions(true)
+      },
     }
     const actions: Record<string, (() => void) | undefined> = {
-      f1: openGuide,
       escape: () => {
-        if (suggesting) setSuggesting(false)
+        if (visibleSuggestions.length) setSuggesting(false)
         else onClose()
       },
       tab: () => input.current?.insertText("  "),
@@ -245,14 +242,29 @@ export function RunnerConfigurationEditor({
       action()
       return
     }
-    if (!suggesting || !["up", "down", "return", "enter"].includes(key.name)) return
-    key.preventDefault()
-    key.stopPropagation()
-    if (key.name === "up" || key.name === "down")
-      setSuggestionIndex((current) =>
-        Math.max(0, Math.min(suggestions.length - 1, current + (key.name === "up" ? -1 : 1))),
-      )
-    else if (suggestions[suggestionIndex]) accept(suggestions[suggestionIndex]!)
+    const handled = handleRunnerYamlCompletionKey(key, {
+      editor: input.current,
+      focused: renderer.currentFocusedRenderable === input.current,
+      source,
+      row,
+      column,
+      suggestions: visibleSuggestions,
+      moveSelection: (step) =>
+        setSuggestionIndex((current) =>
+          Math.max(0, Math.min(visibleSuggestions.length - 1, current + step)),
+        ),
+    })
+    if (
+      !handled &&
+      ["up", "down", "left", "right", "home", "end", "pageup", "pagedown"].includes(key.name)
+    )
+      queueMicrotask(() => {
+        if (!live.current || renderer.currentFocusedRenderable !== input.current) return
+        syncCursor()
+        setSuggestionIndex(0)
+        setSuggesting(true)
+        setForcedSuggestions(false)
+      })
   })
   return (
     <>
@@ -262,84 +274,69 @@ export function RunnerConfigurationEditor({
         height={Math.max(1, terminal.height - 2)}
         zIndex={975}
         borderColor={COLORS.runner}
-        onBackdropPress={() => {
-          if (!guideOpen) onClose()
-        }}
+        onBackdropPress={onClose}
       >
         <box height={1} flexDirection="row" justifyContent="space-between">
           <text content={translateUi("EDITOR YAML DO RUNNER")} fg={COLORS.runner} />
-          <InlineButton
-            id="runner-config-guide-open"
-            label="[F1] Tutorial YAML"
-            onPress={openGuide}
-            accent={COLORS.runner}
-          />
           <InlineButton label="[Esc] Voltar" onPress={onClose} accent={COLORS.runner} />
         </box>
         <text content={snapshot.path} fg={COLORS.muted} height={1} truncate />
-        <textarea
-          ref={input}
-          id="runner-config-yaml"
-          initialValue={source}
-          syntaxStyle={runnerYamlStyle}
-          onContentChange={changed}
-          onCursorChange={({ line }) => {
-            setRow(line)
-            setSuggestionIndex(0)
-          }}
-          onMouseDown={() => input.current?.focus()}
-          style={{
-            flexGrow: 1,
-            minHeight: 2,
-            backgroundColor: COLORS.panelRaised,
-            focusedBackgroundColor: COLORS.panelRaised,
-            textColor: COLORS.text,
-            focusedTextColor: COLORS.text,
-            cursorColor: COLORS.runner,
-            wrapMode: "none",
-          }}
-        />
+        <box style={{ position: "relative", flexGrow: 1, minHeight: 2 }}>
+          <textarea
+            ref={input}
+            id="runner-config-yaml"
+            initialValue={source}
+            syntaxStyle={runnerYamlStyle}
+            onContentChange={changed}
+            onCursorChange={() => {
+              const editor = input.current
+              queueMicrotask(() => {
+                if (!live.current || input.current !== editor) return
+                syncCursor()
+              })
+              setSuggestionIndex(0)
+              setSuggesting(true)
+              setForcedSuggestions(false)
+            }}
+            onMouseDown={() => {
+              input.current?.focus()
+              queueMicrotask(() => {
+                if (live.current) syncCursor()
+              })
+            }}
+            style={{
+              width: "100%",
+              height: "100%",
+              backgroundColor: COLORS.panelRaised,
+              focusedBackgroundColor: COLORS.panelRaised,
+              textColor: COLORS.text,
+              focusedTextColor: COLORS.text,
+              cursorColor: COLORS.runner,
+              wrapMode: "none",
+            }}
+          />
+          <RunnerYamlSuggestions
+            items={visibleItems}
+            selectedIndex={suggestionIndex}
+            query={context.value}
+            anchor={anchor}
+            editorHeight={editorHeight}
+            editorWidth={editorWidth}
+            onSelect={setSuggestionIndex}
+          />
+        </box>
         <box height={1} flexDirection="row">
           <InlineButton
             id="runner-config-suggest"
             label="[Ctrl+Space] Sugestões"
             onPress={() => {
-              setSuggesting((current) => !current)
+              setSuggesting(true)
+              setForcedSuggestions(true)
               input.current?.focus()
             }}
             accent={COLORS.runner}
           />
-          {onManage ? (
-            <InlineButton
-              id="runner-config-manage"
-              label="[Ctrl+O] Comandos e fluxos"
-              onPress={manage}
-              accent={COLORS.runner}
-            />
-          ) : null}
         </box>
-        {suggesting ? (
-          <box height={Math.min(3, suggestions.length) || 1} flexShrink={0}>
-            {suggestions.length ? (
-              suggestions
-                .slice(Math.max(0, suggestionIndex - 2), Math.max(0, suggestionIndex - 2) + 3)
-                .map((suggestion, index) => (
-                  <box key={suggestion} height={1} flexDirection="row">
-                    <InlineButton
-                      id={`runner-config-suggestion-${index}`}
-                      label="[Enter] Usar"
-                      active={suggestion === suggestions[suggestionIndex]}
-                      onPress={() => accept(suggestion)}
-                      accent={COLORS.runner}
-                    />
-                    <text content={suggestion} fg={COLORS.text} truncate />
-                  </box>
-                ))
-            ) : (
-              <text content={translateUi("Nenhuma sugestão.")} fg={COLORS.muted} />
-            )}
-          </box>
-        ) : null}
         <scrollbox height={terminal.height >= 28 ? 4 : 2} scrollY flexShrink={0}>
           <text content={translateUi(runnerYamlHelp(context.key))} fg={COLORS.text} />
         </scrollbox>
@@ -357,7 +354,6 @@ export function RunnerConfigurationEditor({
           accent={COLORS.runner}
         />
       </ModalSurface>
-      {guideOpen ? <RunnerYamlGuide currentKey={context.key} onClose={closeGuide} /> : null}
     </>
   )
 }

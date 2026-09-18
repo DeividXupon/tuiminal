@@ -13,32 +13,34 @@ The editable file lives at `~/.config/tuiminal/runner/<project-hash>/runner.yaml
 (or the XDG config equivalent); its path appears above the editor. The hash uses
 the canonical project path. Project files remain read-only.
 
-Use ordinary text editing, selection and multiline paste. `[Tab]` inserts two
-spaces. `[Ctrl+Space]` opens suggestions for the current YAML value; `[↑/↓]` and
-`[Enter]`, or mouse controls, choose detected scripts, command IDs, profiles,
-directories and policy values. Documentation follows the current YAML key.
-`[Esc]` closes suggestions first, then closes the editor. Closed editors retain
-no keyboard listeners. Opening a document or accepting a suggestion never runs it.
+Use ordinary text editing, selection and multiline paste. `[Enter]` indents the
+next line according to the current mapping, list or literal command block;
+`[Tab]` inserts two spaces. Read-only recommendations appear below the cursor while typing
+YAML keys and supported values. The list is scoped to the current YAML block,
+with a short description of the selected option beside it. Close typos rank
+likely alternatives from that block; unrelated text closes the list. `[Ctrl+Space]` opens recommendations
+explicitly; `[Ctrl+J/K]` or a mouse click selects a description to inspect.
+Immediately after `flows:` and `[Enter]`, the list shows a flow ID example (`dev:`).
+As the user types another ID, it shows that ID with the required colon; after the
+ID and another `[Enter]`, it suggests flow fields such as `label` and `stages`.
+The same ID guidance applies to `commands`, `profiles`, and environment maps.
+Recommendations never insert text; the user types keys and values. Plain
+arrow keys move the YAML cursor and the panel follows it; `[Enter]` inserts a new indented line even
+while suggestions are visible. Documentation follows the current YAML key.
+`[Esc]` closes suggestions first, then returns to command/flow management. Closed editors retain
+no keyboard listeners. Opening a document or inspecting a recommendation never runs it.
 
 The editor colors YAML keys, strings, numbers, booleans/null, comments and
 punctuation using the existing YAML parser, including incomplete drafts. Literal
 command blocks remain strings. Highlighting uses terminal display columns and the
 shared light/dark syntax palette without replacing the native text buffer.
 
-`[F1]` or the tutorial button opens a contextual guide with field names,
-explanations and complete YAML examples. Topics cover structure/IDs, commands and
-paths, environment/profiles, process policies, dependencies, health checks, flow
-stages and saving/autostart. `[←/→]` changes topics; arrows, Page Up/Down and mouse
-controls scroll the content. `[Esc]` or `[F1]` closes only the guide and restores
-the same editor, draft, selection, cursor and undo history. The guide owns input
-while open; save and management shortcuts cannot act on the editor behind it.
-
 `[Ctrl+S]` validates and saves the exact YAML text, preserving comments and multiline
 commands. Syntax errors, unknown fields, invalid policies, health checks, missing
 references and cycles prevent saving. Working directories are checked before the
 write. Conflicting external edits are preserved and reported instead of overwritten.
-Saving returns to the commands/flows list. `[Ctrl+O]` opens that list from an
-unchanged document; changed text must be saved first. The list retains `[Ctrl+N]`
+Saving returns to the commands/flows list. `[Esc]` returns there without saving,
+so save edits before leaving. The list retains `[Ctrl+N]`
 for a new command, `[Ctrl+F]` for a new flow, `[Enter]` to edit a definition in the
 YAML, and `[Ctrl+Y]` to reopen the entire document. All actions have mouse controls.
 
@@ -122,7 +124,7 @@ starting, started, healthy, success, failure, stopped or blocked. Stop cancels
 queued stages, health probes and automatic restart delays and stops only that
 flow's process instances. Restart waits for owned executions to finish stopping
 before constructing a fresh plan. Opening, editing, saving or accepting a
-suggestion does not run a flow.
+recommendation does not run a flow.
 
 ## Persistence and trust
 
@@ -155,9 +157,9 @@ the existing Runner contract.
 
 ## Verification
 
-`tests/runner-yaml-syntax.test.ts` covers syntax tokens, guide examples and translations;
-`tests/tui/runner-yaml-guide.test.tsx` covers native colors, tutorial navigation,
-focus, selection, resizing and theme changes. `tests/runner-plan.test.ts` covers graph validation and scheduling;
+`tests/runner-yaml-syntax.test.ts` covers syntax tokens;
+`tests/tui/runner-yaml-highlighting.test.tsx` covers native colors, cursor, undo and theme changes.
+`tests/runner-plan.test.ts` covers graph validation and scheduling;
 `tests/runner-yaml.test.ts` covers structured YAML, comments, canonical paths, conflicts,
 legacy state and completion. `tests/runner-editor.test.ts` covers field validation, canonical storage, overrides
 and trust; `tests/tui/runner-configuration.test.tsx` exercises native keyboard,

@@ -1,4 +1,22 @@
 export const RUNNER_YAML_MESSAGES = [
+  ["SUGESTÕES", "SUGGESTIONS", "SUGERENCIAS", "候補", "建议", "제안"],
+  ["RECOMENDAÇÕES", "RECOMMENDATIONS", "RECOMENDACIONES", "おすすめ", "推荐", "추천"],
+  [
+    "Texto opcional que descreve o comando na lista do Runner. Não altera o comando executado.",
+    "Optional text describing the command in the Runner list. It does not change the executed command.",
+    "Texto opcional que describe el comando en la lista de Runner. No modifica el comando ejecutado.",
+    "Runner の一覧に表示するコマンドの説明（任意）。実行するコマンドは変更しません。",
+    "在 Runner 列表中描述命令的可选文本。不会更改所执行的命令。",
+    "Runner 목록에 표시할 명령 설명(선택 사항)입니다. 실행되는 명령은 변경하지 않습니다.",
+  ],
+  [
+    "ID de um perfil definido em profiles ou detectado no projeto. Vazio usa o perfil selecionado no Runner. [Ctrl+Space] mostra os perfis.",
+    "ID of a profile defined in profiles or detected in the project. Empty uses the selected Runner profile. [Ctrl+Space] shows profiles.",
+    "ID de un perfil definido en profiles o detectado en el proyecto. Vacío usa el perfil seleccionado en Runner. [Ctrl+Space] muestra los perfiles.",
+    "profiles で定義した、またはプロジェクトで検出したプロファイルの ID。空欄は Runner で選択中のプロファイルを使用。[Ctrl+Space] で候補を表示。",
+    "profiles 中定义或在项目中检测到的配置 ID。留空使用 Runner 中选定的配置。[Ctrl+Space] 显示配置列表。",
+    "profiles에 정의되었거나 프로젝트에서 감지된 프로필 ID입니다. 비워 두면 Runner에서 선택한 프로필을 사용합니다. [Ctrl+Space]로 프로필을 표시합니다.",
+  ],
   [
     "EDITOR YAML DO RUNNER",
     "RUNNER YAML EDITOR",
@@ -14,14 +32,6 @@ export const RUNNER_YAML_MESSAGES = [
     "[Ctrl+Y] YAML を編集",
     "[Ctrl+Y] 编辑 YAML",
     "[Ctrl+Y] YAML 편집",
-  ],
-  [
-    "[Ctrl+O] Comandos e fluxos",
-    "[Ctrl+O] Commands and flows",
-    "[Ctrl+O] Comandos y flujos",
-    "[Ctrl+O] コマンドとフロー",
-    "[Ctrl+O] 命令与流程",
-    "[Ctrl+O] 명령과 흐름",
   ],
   [
     "Campo YAML desconhecido.",
@@ -48,12 +58,12 @@ export const RUNNER_YAML_MESSAGES = [
     "started 또는 completed를 사용하세요.",
   ],
   [
-    "Edite commands, flows e profiles em YAML. [Tab] insere dois espaços. [Ctrl+Space] sugere valores. [Ctrl+S] valida e salva o arquivo.",
-    "Edit commands, flows and profiles in YAML. [Tab] inserts two spaces. [Ctrl+Space] suggests values. [Ctrl+S] validates and saves the file.",
-    "Edita commands, flows y profiles en YAML. [Tab] inserta dos espacios. [Ctrl+Space] sugiere valores. [Ctrl+S] valida y guarda el archivo.",
-    "commands、flows、profiles を YAML で編集。[Tab] で空白2つ、[Ctrl+Space] で候補、[Ctrl+S] で検証して保存。",
-    "以 YAML 编辑 commands、flows 和 profiles。[Tab] 插入两个空格，[Ctrl+Space] 显示建议，[Ctrl+S] 验证并保存文件。",
-    "YAML로 commands, flows, profiles를 편집하세요. [Tab]은 공백 두 칸, [Ctrl+Space]는 제안, [Ctrl+S]는 검증 및 저장입니다.",
+    "Edite commands, flows e profiles em YAML. [Enter] recua conforme o bloco; [Tab] insere dois espaços. [Ctrl+Space] sugere valores. [Ctrl+S] valida e salva o arquivo.",
+    "Edit commands, flows and profiles in YAML. [Enter] indents for the block; [Tab] inserts two spaces. [Ctrl+Space] suggests values. [Ctrl+S] validates and saves the file.",
+    "Edita commands, flows y profiles en YAML. [Enter] ajusta la sangría al bloque; [Tab] inserta dos espacios. [Ctrl+Space] sugiere valores. [Ctrl+S] valida y guarda el archivo.",
+    "commands、flows、profiles を YAML で編集。[Enter] でブロックに応じて字下げ、[Tab] で空白2つ、[Ctrl+Space] で候補、[Ctrl+S] で検証して保存。",
+    "以 YAML 编辑 commands、flows 和 profiles。[Enter] 根据块自动缩进，[Tab] 插入两个空格，[Ctrl+Space] 显示建议，[Ctrl+S] 验证并保存文件。",
+    "YAML로 commands, flows, profiles를 편집하세요. [Enter]는 블록에 맞춰 들여쓰고 [Tab]은 공백 두 칸, [Ctrl+Space]는 제안, [Ctrl+S]는 검증 및 저장입니다.",
   ],
   [
     "Mapa YAML de variáveis. Os valores do comando sobrescrevem o perfil. Ex.: PORT: '3000'",
@@ -86,13 +96,5 @@ export const RUNNER_YAML_MESSAGES = [
     "stages: 順序付きステージ。commandIds は並列実行。waitFor: completed は成功、started は準備完了を待機。",
     "stages：有序阶段。commandIds 并行执行；waitFor: completed 等待成功，started 等待就绪。",
     "stages: 순서가 있는 단계. commandIds는 병렬 실행. waitFor: completed는 성공, started는 준비 완료를 기다립니다.",
-  ],
-  [
-    "Salve o YAML antes de abrir comandos e fluxos.",
-    "Save the YAML before opening commands and flows.",
-    "Guarda el YAML antes de abrir comandos y flujos.",
-    "コマンドとフローを開く前に YAML を保存してください。",
-    "打开命令与流程前请保存 YAML。",
-    "명령과 흐름을 열기 전에 YAML을 저장하세요.",
   ],
 ] as const

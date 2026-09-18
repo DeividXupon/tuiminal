@@ -123,7 +123,7 @@ async function yamlLine(text: string) {
   await tui!.renderOnce()
 }
 
-test("YAML editor creates without execution, completes commands by keyboard and directories by mouse, and saves the global file", async () => {
+test("YAML editor shows read-only command and directory recommendations and saves manually entered YAML", async () => {
   const root = temporary()
   mkdirSync(join(root, "services"))
   let saved = false
@@ -144,14 +144,25 @@ test("YAML editor creates without execution, completes commands by keyboard and 
     "# keep this comment\ncommands:\n  local:\n    label: Local command\n    command: printf\n    cwd: ser\n",
   )
   await yamlLine("command: printf")
-  await key(" ", true)
+  await key("x")
+  await key("BACKSPACE")
+  const popup = tui.renderer.root.findDescendantById("runner-config-suggestions")
+  expect(popup).toBeDefined()
+  expect(popup!.screenY).toBe(yamlEditor().screenY + yamlEditor().visualCursor.visualRow + 1)
   expect(tui.captureCharFrame()).toContain("detected-script")
-  await key("RETURN")
-  expect(yamlEditor().plainText).toContain('command: "printf detected-script"')
+  const beforeCommand = yamlEditor().plainText
+  await key("y", true)
+  expect(yamlEditor().plainText).toBe(beforeCommand)
   await yamlLine("cwd: ser")
-  await click("runner-config-suggest")
+  await key("x")
+  await key("BACKSPACE")
   await settle(() => tui!.captureCharFrame().includes("services/"))
+  const beforeDirectory = yamlEditor().plainText
   await click("runner-config-suggestion-0")
+  expect(yamlEditor().plainText).toBe(beforeDirectory)
+  await replaceYaml(
+    '# keep this comment\ncommands:\n  local:\n    label: Local command\n    command: "printf detected-script"\n    cwd: services/\n',
+  )
   await key("s", true)
   await settle(() => saved)
   expect(listSavedRunnerCommands(root)[0]).toMatchObject({
@@ -164,6 +175,205 @@ test("YAML editor creates without execution, completes commands by keyboard and 
   })
   expect(readdirSync(root)).toEqual(["services"])
   expect(readFileSync(runnerYamlPath(root), "utf8")).toStartWith("# keep this comment")
+})
+
+test("YAML autocomplete recommendations remain read-only when typed text has no match", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 100, height: 30 },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  await replaceYaml("commands:\n  local:\n    resatrt\n    command: pritnf\n")
+  await yamlLine("resatrt")
+  await key("x")
+  await key("BACKSPACE")
+  expect(tui!.captureCharFrame()).toContain("RECOMENDAÇÕES")
+  expect(tui!.captureCharFrame()).toContain("restart")
+  const beforeKey = yamlEditor().plainText
+  await key("y", true)
+  expect(yamlEditor().plainText).toBe(beforeKey)
+  await yamlLine("command: pritnf")
+  await key("x")
+  await key("BACKSPACE")
+  expect(tui!.captureCharFrame()).toContain("printf detected-script")
+  const beforeScript = yamlEditor().plainText
+  await key("y", true)
+  expect(yamlEditor().plainText).toBe(beforeScript)
+  for (let index = 0; index < "pritnf".length; index++) await key("BACKSPACE")
+  for (const letter of "ldskafjdlfja") await key(letter)
+  expect(yamlEditor().plainText).toContain("command: ldskafjdlfja")
+  expect(tui!.renderer.root.findDescendantById("runner-config-suggestions")).toBeUndefined()
+  expect(
+    tui!.renderer.root.findDescendantById("runner-config-suggestion-description"),
+  ).toBeUndefined()
+  expect(tui!.captureCharFrame()).not.toContain("printf detected-script")
+})
+
+test("YAML autocomplete shows a description beside keys from the current block", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 120, height: 32, kittyKeyboard: true },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  await replaceYaml("flows:\n  dev:\n    sta")
+  await yamlLine("sta")
+  await key("x")
+  await key("BACKSPACE")
+  expect(tui!.captureCharFrame()).toContain("stages")
+  expect(tui!.captureCharFrame()).toContain("Etapas executadas em ordem.")
+  expect(tui!.captureCharFrame()).not.toContain("restart")
+  const draftBeforeNavigation = yamlEditor().plainText
+  await key("j", true)
+  expect(tui!.captureCharFrame()).toContain("Solicita início automático aprovado.")
+  await key("k", true)
+  expect(tui!.captureCharFrame()).toContain("Etapas executadas em ordem.")
+  expect(yamlEditor().plainText).toBe(draftBeforeNavigation)
+  const flowSource = yamlEditor().plainText
+  await click("runner-config-suggestion-0")
+  expect(tui!.captureCharFrame()).toContain("Etapas executadas em ordem.")
+  expect(yamlEditor().plainText).toBe(flowSource)
+  await replaceYaml("commands:\n  local:\n    health:\n      type: log\n      pat")
+  await yamlLine("pat")
+  await key("x")
+  await key("BACKSPACE")
+  expect(tui!.captureCharFrame()).toContain("pattern")
+  expect(tui!.captureCharFrame()).toContain("Padrão procurado nos logs.")
+  expect(tui!.captureCharFrame()).not.toContain("port")
+})
+
+test("flow recommendations appear after Enter and follow the flow ID being typed", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 120, height: 32 },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  await replaceYaml("flows:")
+  await key("RETURN")
+  expect(yamlEditor().plainText).toBe("flows:\n  ")
+  expect(tui!.captureCharFrame()).toContain("dev:")
+  expect(tui!.captureCharFrame()).toContain("ID único do fluxo.")
+  for (const letter of "meu") await key(letter)
+  expect(yamlEditor().plainText).toBe("flows:\n  meu")
+  expect(tui!.captureCharFrame()).toContain("meu:")
+  await key(":")
+  await key("RETURN")
+  expect(yamlEditor().plainText).toBe("flows:\n  meu:\n    ")
+  for (const letter of "sta") await key(letter)
+  expect(tui!.captureCharFrame()).toContain("stages")
+  expect(tui!.captureCharFrame()).toContain("Etapas executadas em ordem.")
+})
+
+test("plain arrows move the YAML cursor and Enter inserts a line while recommendations are open", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 100, height: 30 },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  await replaceYaml("commands:\n  local:\n    resatrt")
+  await key("x")
+  await key("BACKSPACE")
+  expect(tui!.captureCharFrame()).toContain("[Ctrl+J/K]")
+  expect(tui!.captureCharFrame()).not.toContain("[Enter] restart")
+  await key("RETURN")
+  expect(yamlEditor().plainText).toContain("    resatrt\n    ")
+  expect(yamlEditor().plainText).not.toContain("restart:")
+  await key("ARROW_UP")
+  expect(yamlEditor().logicalCursor.row).toBe(2)
+})
+
+test("YAML recommendation box follows the cursor between lines", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 120, height: 32 },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  await replaceYaml("commands:\n  local:\n    restar\n    interactiv")
+  await yamlLine("restar")
+  await key("x")
+  await key("BACKSPACE")
+  const position = () => {
+    const popup = tui!.renderer.root.findDescendantById("runner-config-suggestions")
+    expect(popup).toBeDefined()
+    return popup!.screenY
+  }
+  const initial = position()
+  await key("ARROW_DOWN")
+  expect(yamlEditor().logicalCursor.row).toBe(3)
+  expect(position()).toBe(yamlEditor().screenY + yamlEditor().visualCursor.visualRow + 1)
+  expect(position()).toBe(initial + 1)
+  expect(tui!.captureCharFrame()).toContain("interactive")
+  await key("ARROW_UP")
+  expect(yamlEditor().logicalCursor.row).toBe(2)
+  expect(position()).toBe(initial)
+  expect(tui!.captureCharFrame()).toContain("restart")
+  await key("j")
+  await key("k")
+  expect(yamlEditor().plainText).toContain("restarjk")
+})
+
+test("YAML editor indents the next line for mappings, lists and literal commands", async () => {
+  const root = temporary()
+  tui = await testRender(
+    <RunnerConfigurationEditor
+      root={root}
+      commands={[detected]}
+      profiles={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+    />,
+    { width: 100, height: 30 },
+  )
+  await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+  const cases = [
+    ["commands:", "commands:\n  "],
+    ["commands:\n  local:", "  local:\n    "],
+    ["commands:\n  local:\n    health:", "    health:\n      "],
+    ["commands:\n  local:\n    dependsOn:", "    dependsOn:\n      - "],
+    ["flows:\n  dev:\n    stages:", "    stages:\n      - "],
+    ["flows:\n  dev:\n    stages:\n      - commandIds:", "      - commandIds:\n          - "],
+    ["commands:\n  local:\n    command: |", "    command: |\n      "],
+  ] as const
+  for (const [before, after] of cases) {
+    await replaceYaml(before)
+    if (tui!.renderer.root.findDescendantById("runner-config-suggestions")) await key("ESCAPE")
+    await key("RETURN")
+    expect(yamlEditor().plainText).toContain(after)
+  }
 })
 
 test("YAML editor rejects syntax, cycles, health errors and conflicting writes before saving", async () => {
@@ -221,7 +431,7 @@ test("YAML editor rejects syntax, cycles, health errors and conflicting writes b
   expect(closed).toBe(1)
 })
 
-test("creates and edits YAML flows with contextual dependency completion and stable IDs", async () => {
+test("creates and edits YAML flows with read-only dependency recommendations and stable IDs", async () => {
   const root = temporary()
   const build = createShellRunnerCommand("printf build", { id: "build", label: "build" })
   let saved = false
@@ -243,8 +453,12 @@ test("creates and edits YAML flows with contextual dependency completion and sta
   )
   await yamlLine("commandIds: [package:de]")
   await click("runner-config-suggest")
+  const incomplete = yamlEditor().plainText
   await click("runner-config-suggestion-0")
-  expect(yamlEditor().plainText).toContain('commandIds: ["package:dev"]')
+  expect(yamlEditor().plainText).toBe(incomplete)
+  await replaceYaml(
+    "flows:\n  dev:\n    label: Development\n    stages:\n      - commandIds: [build]\n      - commandIds: [package:dev]\n",
+  )
   await key("s", true)
   await settle(() => saved)
   expect(listRunnerFlows(root)[0]).toMatchObject({
@@ -302,16 +516,28 @@ test("Runner opens YAML directly by keyboard and mouse without executing on open
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
   expect(tui.captureCharFrame()).toContain("EDITOR YAML DO RUNNER")
   expect(yamlEditor().plainText).toContain("commands:")
+  await replaceYaml("commands:\n  local:\n    resatrt")
+  await key("x")
+  await key("BACKSPACE")
+  const sourceBeforeShortcut = yamlEditor().plainText
+  await key("y", true)
+  expect(yamlEditor().plainText).toBe(sourceBeforeShortcut)
+  expect(tui!.renderer.currentFocusedRenderable?.id).toBe("runner-config-yaml")
   await key("o", true)
+  expect(tui!.renderer.currentFocusedRenderable?.id).toBe("runner-config-yaml")
+  await key("ESCAPE")
+  if (tui!.renderer.root.findDescendantById("runner-config-editor")) await key("ESCAPE")
   await settle(() => tui!.captureCharFrame().includes("CONFIGURAÇÃO DO RUNNER"))
   await key("n", true)
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
   expect(yamlEditor().plainText).toContain("command:")
   await key("ESCAPE")
+  if (tui!.renderer.root.findDescendantById("runner-config-editor")) await key("ESCAPE")
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-list")
   await key("y", true)
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
-  await key("o", true)
+  await key("ESCAPE")
+  if (tui!.renderer.root.findDescendantById("runner-config-editor")) await key("ESCAPE")
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-list")
   await key("ESCAPE")
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-command-list")
@@ -344,7 +570,8 @@ async function openFlow(stages: { commandIds: string[]; waitFor: "started" | "co
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-command-list")
   await key("y", true)
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
-  await key("o", true)
+  await key("ESCAPE")
+  if (tui!.renderer.root.findDescendantById("runner-config-editor")) await key("ESCAPE")
   await settle(() => tui!.captureCharFrame().includes("Integration flow"))
 }
 
@@ -535,19 +762,18 @@ test("health timeout blocks dependents and stop cancels a scheduled automatic re
   expect(existsSync(downstream)).toBe(false)
 }, 10000)
 
-test("YAML editing preserves multiline drafts and refuses to discard them when opening management", async () => {
+test("YAML editing preserves multiline drafts across resize and ignores the removed management shortcut", async () => {
   const root = temporary()
-  let managed = 0
+  let closed = 0
   tui = await testRender(
     <RunnerConfigurationEditor
       root={root}
       commands={[detected]}
       profiles={[]}
-      onClose={() => {}}
-      onSaved={() => {}}
-      onManage={() => {
-        managed++
+      onClose={() => {
+        closed++
       }}
+      onSaved={() => {}}
     />,
     { width: 100, height: 30 },
   )
@@ -556,8 +782,8 @@ test("YAML editing preserves multiline drafts and refuses to discard them when o
     "# multiline\ncommands:\n  custom:\n    command: |\n      echo first\n      echo second\n",
   )
   await key("o", true)
-  expect(managed).toBe(0)
-  expect(tui.captureCharFrame()).toContain("Salve o YAML")
+  expect(closed).toBe(0)
+  expect(tui.renderer.root.findDescendantById("runner-config-manage")).toBeUndefined()
   const source = yamlEditor().plainText
   await act(async () => {
     tui!.resize(80, 24)
@@ -568,12 +794,12 @@ test("YAML editing preserves multiline drafts and refuses to discard them when o
   await yamlLine("echo second")
   await key("RETURN")
   await key("TAB")
-  expect(yamlEditor().plainText).toContain("echo second\n  ")
+  expect(yamlEditor().plainText).toContain("echo second\n        ")
   await key("s", true)
   await settle(() => existsSync(runnerYamlPath(root)))
   expect(readFileSync(runnerYamlPath(root), "utf8")).toBe(yamlEditor().plainText)
   await key("o", true)
-  expect(managed).toBe(1)
+  expect(closed).toBe(0)
 })
 
 test("editing a newly detected command adds its stable ID to an existing global YAML", async () => {

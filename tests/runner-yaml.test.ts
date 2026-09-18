@@ -17,9 +17,10 @@ import {
 } from "../packages/feature-runner/src/model/configuration-yaml"
 import {
   runnerYamlContext,
+  runnerYamlSuggestionDescription,
   runnerYamlSuggestions,
-  runnerYamlSuggestionLine,
 } from "../packages/feature-runner/src/model/yaml-editor"
+import { runnerYamlBlock, runnerYamlNewline } from "../packages/feature-runner/src/model/yaml-block"
 import { createShellRunnerCommand } from "../packages/feature-runner/src/services/shell-command"
 import {
   readRunnerYaml,
@@ -35,6 +36,7 @@ import {
   loadRunnerSession,
 } from "../packages/feature-runner/src/storage/runner-settings"
 import { RUNNER_YAML_MESSAGES } from "../packages/core/src/i18n/runner-yaml-catalog"
+import { RUNNER_YAML_COMPLETION_MESSAGES } from "../packages/core/src/i18n/runner-yaml-completion-catalog"
 import { translateUi } from "../packages/core/src/i18n/index"
 const roots: string[] = []
 afterEach(() => {
@@ -112,24 +114,142 @@ test("global YAML preserves comments and legacy sessions, canonical paths and co
   expect(readFileSync(snapshot.path, "utf8")).toBe("commands: [")
   expect(readdirSync(root)).toEqual([])
 })
-test("YAML completion replaces scalar and flow-list values without changing their keys", () => {
-  const command = runnerYamlContext("    command: echo", 0)
+test("YAML recommendations cover scalar and flow-list values without editing source", () => {
+  const command = runnerYamlContext("commands:\n  local:\n    command: echo", 2)
   expect(runnerYamlSuggestions(command, [build], [])).toEqual(["echo build"])
-  expect(runnerYamlSuggestionLine(command, "echo build")).toBe('    command: "echo build"')
-  const stage = runnerYamlContext("      - commandIds: [api, bu", 0)
+  const stage = runnerYamlContext("flows:\n  dev:\n    stages:\n      - commandIds: [api, bu", 3)
   expect(runnerYamlSuggestions(stage, [build], [])).toEqual(["build"])
-  expect(runnerYamlSuggestionLine(stage, "build")).toBe('      - commandIds: [api, "build"]')
   expect(
     runnerYamlSuggestions(
-      runnerYamlContext("commandId: Build", 0),
+      runnerYamlContext("commands:\n  local:\n    dependsOn:\n      - commandId: Build", 3),
       [{ ...build, id: "opaque-id" }],
       [],
     ),
   ).toEqual(["opaque-id"])
-  expect(runnerYamlSuggestionLine(runnerYamlContext("commandIds:", 0), "build")).toBe(
-    'commandIds: ["build"]',
-  )
+  expect(
+    runnerYamlSuggestions(runnerYamlContext("commands:\n  local:\n    restar", 2), [], []),
+  ).toContain("restart")
+  expect(
+    runnerYamlSuggestions(
+      runnerYamlContext("commands:\n  local:\n    restart: on-failur", 2),
+      [],
+      [],
+    ),
+  ).toEqual(["on-failure"])
+  expect(
+    runnerYamlSuggestions(runnerYamlContext("commands:\n  local:\n    restart: alwys", 2), [], []),
+  ).toEqual(["always"])
+  expect(
+    runnerYamlSuggestions(
+      runnerYamlContext("commands:\n  local:\n    command: ldskafjdlfja", 2),
+      [build],
+      [],
+    ),
+  ).toEqual([])
+  expect(
+    runnerYamlSuggestions(runnerYamlContext("commands:\n  local:\n    ldskafjdlfja", 2), [], []),
+  ).toEqual([])
+  expect(
+    runnerYamlSuggestions(
+      runnerYamlContext("commands:\n  local:\n    restart: ldskafjdlfja", 2),
+      [],
+      [],
+    ),
+  ).toEqual([])
+  expect(
+    runnerYamlSuggestions(
+      runnerYamlContext("commands:\n  local:\n    command: |\n      echo", 3),
+      [build],
+      [],
+    ),
+  ).toEqual([])
+  expect(runnerYamlSuggestions(runnerYamlContext("commands:\n  local", 1), [build], [])).toEqual([
+    "local:",
+  ])
   for (const row of RUNNER_YAML_MESSAGES)
     for (const [index, language] of (["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const).entries())
       expect(translateUi(row[0], language)).toBe(row[index]!)
+  for (const row of RUNNER_YAML_COMPLETION_MESSAGES)
+    for (const [index, language] of (["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const).entries())
+      expect(translateUi(row[0], language)).toBe(row[index]!)
+})
+
+test("YAML completion follows the current mapping and health type", () => {
+  const keys = (source: string) => {
+    const row = source.split("\n").length - 1
+    const context = runnerYamlContext(source, row)
+    return runnerYamlSuggestions(context, [build], [])
+  }
+  expect(keys("flo")).toEqual(["flows"])
+  expect(keys("commands:\n  local:\n    resatrt")).toContain("restart")
+  expect(keys("flows:\n  dev:\n    resatrt")).not.toContain("restart")
+  expect(keys("flows:\n  dev:\n    sta")).toContain("stages")
+  expect(keys("profiles:\n  dev:\n    envF")).toEqual(["envFile"])
+  expect(keys("commands:\n  local:\n    health:\n      type: log\n      pat")).toEqual(["pattern"])
+  expect(keys("commands:\n  local:\n    health:\n      type: port\n      por")).toEqual(["port"])
+  expect(keys("commands:\n  local:\n    health:\n      type: http\n      ur")).toEqual(["url"])
+  expect(keys("commands:\n  local:\n    healthCheck:\n      type: http\n      ur")).toEqual(["url"])
+  expect(keys("commands:\n  local:\n    dependsOn:\n      - com")).toEqual(["commandId"])
+  expect(keys("flows:\n  dev:\n    stages:\n      - commandIds: [build]\n        wai")).toEqual([
+    "waitFor",
+  ])
+  expect(keys("commands:\n  local:\n    env:\n      PO")).toEqual(["PO:"])
+  expect(keys("commands:\n  local:\n    command: |\n      echo")).toEqual([])
+  expect(keys("commands:\n  local:\n    ")).toEqual([
+    "label",
+    "description",
+    "command",
+    "cwd",
+    "env",
+    "envFile",
+  ])
+  expect(keys("flows:\n  dev:\n    ")).not.toContain("restart")
+  const context = runnerYamlContext("flows:\n  dev:\n    stages:\n      - wai", 3)
+  expect(runnerYamlSuggestionDescription(context, "waitFor", [build], [])).toEqual({
+    text: "Condição para avançar à próxima etapa.",
+    translate: true,
+  })
+})
+
+test("YAML map entries recommend an ID after Enter and continue while typing", () => {
+  const suggestions = (source: string) => {
+    const row = source.split("\n").length - 1
+    const context = runnerYamlContext(source, row)
+    return { context, values: runnerYamlSuggestions(context, [], []) }
+  }
+  expect(suggestions("flows:\n  ").values).toEqual(["dev:"])
+  const typed = suggestions("flows:\n  meu-fluxo")
+  expect(typed.values).toEqual(["meu-fluxo:"])
+  expect(runnerYamlSuggestionDescription(typed.context, typed.values[0]!, [], [])).toEqual({
+    text: "ID único do fluxo. Abaixo dele, defina label, autostart e stages.",
+    translate: true,
+  })
+  expect(suggestions("flows:\n  meu-fluxo:").values).toEqual([])
+  expect(suggestions("flows:\n  meu-fluxo:\n    sta").values).toContain("stages")
+  expect(suggestions("commands:\n  ").values).toEqual(["build:"])
+  expect(suggestions("profiles:\n  ").values).toEqual(["development:"])
+  expect(suggestions("commands:\n  build:\n    env:\n      ").values).toEqual(["PORT:"])
+})
+
+test("YAML newline indents mappings, list entries and literal blocks", () => {
+  const newline = (source: string) =>
+    runnerYamlNewline(source, source.split("\n").length - 1, source.split("\n").at(-1)!.length)
+  expect(newline("commands:")).toBe("\n  ")
+  expect(newline("commands:\n  local:")).toBe("\n    ")
+  expect(newline("commands:\n  local:\n    health:")).toBe("\n      ")
+  expect(newline("commands:\n  local:\n    dependsOn:")).toBe("\n      - ")
+  expect(newline("commands:\n  local:\n    dependsOn:\n      - commandId: build")).toBe(
+    "\n        ",
+  )
+  expect(newline("flows:\n  dev:\n    stages:")).toBe("\n      - ")
+  expect(newline("flows:\n  dev:\n    stages:\n      - commandIds:")).toBe("\n          - ")
+  expect(newline("flows:\n  dev:\n    stages:\n      - commandIds:\n          - build")).toBe(
+    "\n          - ",
+  )
+  expect(newline("commands:\n  local:\n    command: |")).toBe("\n      ")
+  expect(newline("commands:\n  local:\n    command: |\n      echo hi")).toBe("\n      ")
+  expect(runnerYamlBlock("commands:\n  local:\n    health:\n      type: log\n      ", 4)).toEqual({
+    block: "health",
+    healthType: "log",
+  })
 })

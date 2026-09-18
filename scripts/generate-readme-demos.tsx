@@ -437,14 +437,33 @@ async function runnerFrames() {
         180,
       ),
     )
-    await pressKey(tui, "F1")
-    await settle(tui, () => tui.captureCharFrame().includes("TUTORIAL YAML DO RUNNER"))
-    frames.push(
-      snapshot(tui, "[F1] abre o tutorial com campos e exemplos YAML", "runner-config-guide", 220),
-    )
-    await pressKey(tui, "escape")
-    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
     const editor = tui.renderer.root.findDescendantById("runner-config-yaml") as TextareaRenderable
+    await act(async () => {
+      const lines = editor.plainText.split("\n")
+      const line = lines.findIndex((entry) => entry.includes("restart: never"))
+      editor.setCursor(line, lines[line]!.length)
+      editor.insertText("x")
+      await Bun.sleep(20)
+    })
+    await settle(tui, () => tui.captureCharFrame().includes("RECOMENDAÇÕES"))
+    frames.push(
+      snapshot(tui, "Recomendações de valores durante a digitação", "runner-config-suggestions"),
+    )
+    await pressKey(tui, "BACKSPACE")
+    await settle(tui, () => !editor.plainText.includes("restart: neverx"))
+    const originalSource = editor.plainText
+    await act(async () => {
+      editor.setSelection(0, editor.plainText.length)
+      await tui.mockInput.pasteBracketedText("flows:\n  ")
+    })
+    await settle(tui, () => tui.captureCharFrame().includes("ID único do fluxo."))
+    frames.push(
+      snapshot(tui, "Depois de flows:, recomenda um ID de fluxo", "runner-config-suggestions"),
+    )
+    await act(async () => {
+      editor.setSelection(0, editor.plainText.length)
+      await tui.mockInput.pasteBracketedText(originalSource)
+    })
     const { runnerYamlDocument, setRunnerYamlDefinition } = await import(
       "../packages/feature-runner/src/model/configuration-yaml"
     )
@@ -467,7 +486,7 @@ async function runnerFrames() {
       editor.setCursor(line, 8)
       await Bun.sleep(20)
     })
-    await settle(tui, () => tui.captureCharFrame().includes("stages: lista ordenada"))
+    await settle(tui, () => tui.captureCharFrame().includes("Configuração válida."))
     frames.push(
       snapshot(
         tui,

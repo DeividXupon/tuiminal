@@ -1,14 +1,13 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { RGBA, type ScrollBoxRenderable, type TextareaRenderable } from "@opentui/core"
+import { RGBA, type TextareaRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { RunnerConfigurationEditor } from "../../packages/feature-runner/src/ui/RunnerConfigurationEditor"
-import { runnerYamlPath } from "../../packages/feature-runner/src/storage/runner-yaml"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 
 let tui: TestRendererSetup | undefined
@@ -39,8 +38,8 @@ async function click(id: string) {
   await render()
 }
 async function mount() {
-  root = mkdtempSync(join(tmpdir(), "runner-yaml-guide-"))
-  const calls = { saved: 0, closed: 0, managed: 0 }
+  root = mkdtempSync(join(tmpdir(), "runner-yaml-highlighting-"))
+  const calls = { saved: 0, closed: 0 }
   tui = await testRender(
     <RunnerConfigurationEditor
       root={root}
@@ -51,9 +50,6 @@ async function mount() {
       }}
       onClose={() => {
         calls.closed++
-      }}
-      onManage={() => {
-        calls.managed++
       }}
     />,
     { width: 100, height: 32, kittyKeyboard: true },
@@ -77,69 +73,6 @@ function colorOf(text: string) {
   expect(span).toBeDefined()
   return span!.fg.toInts()
 }
-
-test("F1 tutorial owns input, navigates, and returns the same unsaved YAML selection", async () => {
-  const calls = await mount()
-  const source = "# draft\ncommands:\n  api:\n    command: echo ready\n    interactive: false\n"
-  await paste(source)
-  const original = editor()
-  act(() => original.setSelection(2, 7))
-  const selection = original.getSelection()
-  const cursor = { ...original.logicalCursor }
-  await key("F1")
-  expect(tui!.captureCharFrame()).toContain("TUTORIAL YAML DO RUNNER")
-  expect(tui!.captureCharFrame()).toContain("label muda só o nome exibido")
-  expect(tui!.renderer.currentFocusedRenderable?.id).toBe("runner-config-guide-content")
-  await key("s", true)
-  await key("o", true)
-  await key("e")
-  expect(calls).toEqual({ saved: 0, closed: 0, managed: 0 })
-  expect(existsSync(runnerYamlPath(root))).toBe(false)
-  await key("ARROW_RIGHT")
-  expect(tui!.captureCharFrame()).toContain("Comandos e diretórios")
-  await click("runner-config-guide-next")
-  expect(tui!.captureCharFrame()).toContain("Ambiente e perfis")
-  await key("ESCAPE")
-  expect(calls.closed).toBe(0)
-  expect(editor()).toBe(original)
-  expect(editor().plainText).toBe(source)
-  expect(editor().getSelection()).toEqual(selection)
-  expect(editor().logicalCursor).toEqual(cursor)
-  expect(tui!.renderer.currentFocusedRenderable?.id).toBe("runner-config-yaml")
-  await click("runner-config-guide-open")
-  await click("runner-config-guide-close")
-  expect(calls.closed).toBe(0)
-  await key("ESCAPE")
-  expect(calls.closed).toBe(1)
-})
-
-test("contextual guide scrolls and resizes while keeping the editor draft", async () => {
-  await mount()
-  const source =
-    "commands:\n  api:\n    command: echo ready\n    health:\n      type: port\n      port: 3000\n"
-  await paste(source)
-  act(() => editor().setCursor(3, 4))
-  await render()
-  await key("F1")
-  expect(tui!.captureCharFrame()).toContain("Prontidão dos serviços")
-  await act(async () => {
-    tui!.resize(60, 20)
-  })
-  await render()
-  const scroll = tui!.renderer.root.findDescendantById(
-    "runner-config-guide-content",
-  ) as ScrollBoxRenderable
-  await key("\u001b[6~")
-  expect(scroll.scrollTop).toBeGreaterThan(0)
-  const position = scroll.scrollTop
-  await click("runner-config-guide-up")
-  expect(scroll.scrollTop).toBeLessThan(position)
-  await key("ARROW_LEFT")
-  expect(scroll.scrollTop).toBe(0)
-  await key("F1")
-  expect(editor().plainText).toBe(source)
-  expect(tui!.renderer.currentFocusedRenderable?.id).toBe("runner-config-yaml")
-})
 
 test("native YAML colors update on edits and theme changes without losing cursor or undo", async () => {
   await mount()

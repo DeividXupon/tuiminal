@@ -362,7 +362,7 @@ commands:
 
 <a id="atalhos-essenciais-do-runner"></a>
 
-Edit `commands`, `flows` and `profiles` as YAML with syntax colors, contextual help and autocomplete. Inside the editor, `[F1]` opens a tutorial explaining the fields with YAML examples; `[←/→]` changes topics and `[Esc]` returns to your draft. Dependencies use `dependsOn` entries with `commandId` and `condition`; flow stages use `commandIds` and `waitFor`. `started` waits for the configured health check. `[Ctrl+S]` validates and saves; `[Ctrl+O]` opens command/flow management. See the [Runner specification](docs/design/runner.md) for complete YAML examples.
+Edit `commands`, `flows` and `profiles` as YAML with syntax colors and contextual help. A read-only recommendation list follows the cursor as you type or move with arrows, shows options for the current YAML block, and describes the selected option beside the list. After `flows:` and `[Enter]`, it shows an example flow ID (`dev:`); while you type another ID, it shows the required colon, then offers fields such as `label` and `stages` inside that flow. The same guidance appears for command and profile IDs and environment variable names. Close typos show likely alternatives from that block; unrelated text closes the recommendation list. Use `[Ctrl+J/K]` or a mouse click to inspect options; type the desired key or value yourself. `[Enter]` indents the next line for mappings, list entries and literal command blocks; `[Tab]` inserts two spaces. `[Esc]` dismisses recommendations, then returns to command/flow management. Dependencies use `dependsOn` entries with `commandId` and `condition`; flow stages use `commandIds` and `waitFor`. `started` waits for the configured health check. `[Ctrl+S]` validates and saves. See the [Runner specification](docs/design/runner.md) for complete YAML examples.
 
 ### Essential Runner shortcuts
 
@@ -372,10 +372,10 @@ Edit `commands`, `flows` and `profiles` as YAML with syntax colors, contextual h
 | Start another instance | `[R]` |
 | Focus manual command / save | `[/]` / `[Ctrl+S]` |
 | YAML editor | `[Ctrl+Y]` |
-| YAML tutorial (inside the editor) | `[F1]` |
 | New command / flow (management list) | `[Ctrl+N]` / `[Ctrl+F]` |
 | Run / stop / restart selected flow | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
-| YAML indentation / suggestions / save | `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| YAML newline and indentation / suggestions / save | `[Enter]` and `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Browse YAML recommendations | `[Ctrl+J/K]` |
 | Commands / active processes | `[P]` |
 | Single / Multi view | `[M]` |
 | Previous / next Multi group | `[A←]` / `[F→]` |

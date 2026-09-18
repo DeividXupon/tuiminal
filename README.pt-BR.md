@@ -363,7 +363,7 @@ commands:
       timeoutMs: 30000
 ```
 
-Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe, ajuda contextual e autocomplete. Dentro do editor, `[F1]` abre um tutorial com explicações dos campos e exemplos YAML; `[←/→]` muda o tópico e `[Esc]` volta ao texto em edição. Dependências usam `dependsOn` com `commandId` e `condition`; etapas usam `commandIds` e `waitFor`. `started` aguarda o health check configurado. `[Ctrl+S]` valida e salva; `[Ctrl+O]` abre o gerenciamento de comandos e fluxos. Veja exemplos completos na [especificação do Runner](docs/design/runner.md).
+Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe e ajuda contextual. Uma lista de recomendações somente para consulta acompanha o cursor durante a digitação ou ao usar as setas, mostra opções do bloco YAML atual e descreve a opção selecionada ao lado da lista. Depois de `flows:` e `[Enter]`, ela mostra um exemplo de ID de fluxo (`dev:`); ao digitar outro ID, indica os dois-pontos necessários e, dentro do fluxo, oferece campos como `label` e `stages`. A mesma orientação aparece para IDs de comandos e perfis e nomes de variáveis de ambiente. Erros de digitação próximos mostram alternativas prováveis desse bloco; textos sem relação fecham a lista de recomendações. Use `[Ctrl+J/K]` ou um clique para consultar as opções; digite a chave ou o valor desejado. `[Enter]` recua a próxima linha conforme mapas, listas e blocos literais de comando; `[Tab]` insere dois espaços. `[Esc]` fecha as recomendações e depois volta ao gerenciamento de comandos e fluxos. Dependências usam `dependsOn` com `commandId` e `condition`; etapas usam `commandIds` e `waitFor`. `started` aguarda o health check configurado. `[Ctrl+S]` valida e salva. Veja exemplos completos na [especificação do Runner](docs/design/runner.md).
 
 ### Atalhos essenciais do Runner
 
@@ -373,10 +373,10 @@ Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe, ajuda cont
 | Iniciar outra instância | `[R]` |
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
 | Editor YAML | `[Ctrl+Y]` |
-| Tutorial YAML (dentro do editor) | `[F1]` |
 | Novo comando / fluxo (lista de gerenciamento) | `[Ctrl+N]` / `[Ctrl+F]` |
 | Executar / parar / reiniciar fluxo selecionado | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
-| Indentar YAML / sugestões / salvar | `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Nova linha e recuo YAML / sugestões / salvar | `[Enter]` e `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Consultar recomendações YAML | `[Ctrl+J/K]` |
 | Comandos / processos ativos | `[P]` |
 | Visualização única / múltipla | `[M]` |
 | Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
