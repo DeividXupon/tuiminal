@@ -3,6 +3,12 @@ export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "O
 export type HttpMethod = (typeof HTTP_METHODS)[number] | (string & {})
 export type HttpLayoutMode = "panorama" | "workbench" | "focus" | "minimum"
 export type HttpClientUrlRequest = { id: number; url: string }
+export type HttpClientProps = {
+  active: boolean
+  initialUrlRequest?: HttpClientUrlRequest | null
+  onUnsavedChangesChange?: (dirty: boolean) => void
+  tutorialMode?: boolean
+}
 export type HttpPane = "url" | "navigation" | "request" | "response"
 export type HttpNavigationView = "collection" | "history"
 export type HttpRequestView = "params" | "headers" | "body" | "auth" | "more"
@@ -18,6 +24,7 @@ export type HttpWorkspaceOverlay =
   | "request-move"
   | "request-delete"
   | "collection-import"
+  | "postman-browser"
   | "collection-runner"
   | "discard-document"
   | "external-conflict"

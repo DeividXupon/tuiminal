@@ -26,7 +26,8 @@ module.exports = {
       from: { path: "^apps/cli/" },
       to: {
         path: "^packages/feature-[^/]+/src/",
-        pathNot: "^packages/(feature-[^/]+/src/index\\.ts|feature-http/src/cli/(run|import)\\.ts)$",
+        pathNot:
+          "^packages/(feature-[^/]+/src/index\\.ts|feature-http/src/cli/(run|import|postman)\\.ts)$",
       },
     },
     {

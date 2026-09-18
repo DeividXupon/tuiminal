@@ -31,6 +31,9 @@ import type { HttpCollectionAction } from "../hooks/use-http-collection-manageme
 import type { HttpKey } from "../model/keyboard-types"
 import { HttpRequestPane } from "./HttpRequestPane"
 import { HttpResponsePane } from "./HttpResponsePane"
+import type { HttpSourceMode } from "../model/source-mode"
+import type { PostmanCollectionFolder } from "../postman/sync"
+import type { PostmanWorkspace } from "../postman/api"
 
 type HttpWorkspaceBodyProps = {
   state: HttpWorkspaceState
@@ -68,9 +71,14 @@ type HttpWorkspaceBodyProps = {
   projectRequests: HttpProjectRequestItem[]
   projectDirectories: string[]
   projectFiles: string[]
+  postmanFolders: PostmanCollectionFolder[]
+  postmanWorkspace: PostmanWorkspace | null
+  onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
   projectErrors: number
+  sourceMode: HttpSourceMode
   onOpenProjectRequest: (item: HttpProjectRequestItem) => void
   onImportCollection: () => void
+  onOpenPostman: () => void
   onRunCollection: () => void
   onManageCollection: (
     action: HttpCollectionAction,
@@ -175,9 +183,14 @@ export function HttpWorkspaceBody({
   projectRequests,
   projectDirectories,
   projectFiles,
+  postmanFolders,
+  postmanWorkspace,
+  onPostmanWorkspaceChange,
   projectErrors,
+  sourceMode,
   onOpenProjectRequest,
   onImportCollection,
+  onOpenPostman,
   onRunCollection,
   onManageCollection,
   onNameChange,
@@ -325,9 +338,14 @@ export function HttpWorkspaceBody({
         projectRequests={projectRequests}
         projectDirectories={projectDirectories}
         projectFiles={projectFiles}
+        postmanFolders={postmanFolders}
+        postmanWorkspace={postmanWorkspace}
+        onPostmanWorkspaceChange={onPostmanWorkspaceChange}
         projectErrors={projectErrors}
+        sourceMode={sourceMode}
         onOpenProjectRequest={onOpenProjectRequest}
         onImportCollection={onImportCollection}
+        onOpenPostman={onOpenPostman}
         onRunCollection={onRunCollection}
         onManageCollection={onManageCollection}
         registerCollectionSearch={registerCollectionSearch}

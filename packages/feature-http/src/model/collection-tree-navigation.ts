@@ -9,6 +9,7 @@ export type HttpCollectionTreeCommand =
   | { kind: "open"; row: Extract<HttpCollectionTreeRow, { kind: "request" }> }
   | { kind: "create-folder" | "create-collection" | "create-request" | "rename" | "delete" }
   | { kind: "confirm-delete" | "cancel-delete" }
+  | { kind: "open-postman" }
 
 function cursorCommand(
   key: HttpKey,
@@ -78,6 +79,7 @@ function branchCommand(
 function editCommand(key: HttpKey, selected: boolean): HttpCollectionTreeCommand | null {
   if (key.name === "n") return { kind: key.shift ? "create-collection" : "create-request" }
   if (key.name === "p") return { kind: "create-folder" }
+  if (key.name === "o") return { kind: "open-postman" }
   if (key.name === "e" && selected) return { kind: "rename" }
   if (key.name === "d" && selected) return { kind: "delete" }
   return null
@@ -109,6 +111,7 @@ function fileId(path: string) {
 
 function renamedSelection(row: HttpCollectionTreeRow | null, name: string): string | null {
   if (!row) return null
+  if (row.kind === "folder") return row.id
   if (row.kind === "request") {
     const slug =
       name
@@ -121,21 +124,25 @@ function renamedSelection(row: HttpCollectionTreeRow | null, name: string): stri
   return row.kind === "directory" ? `directory:${path}` : fileId(path)
 }
 
+function selectionAfterDelete(row: HttpCollectionTreeRow | null) {
+  if (!row) return null
+  if (row.kind === "request" || row.kind === "folder") return `file:${row.path}`
+  const parent = dirname(row.path)
+  return parent === "." ? null : `directory:${parent}`
+}
+
 export function httpCollectionSelectionAfterAction(
   action: "create-folder" | "create-collection" | "create-request" | "rename" | "delete",
   row: HttpCollectionTreeRow | null,
   name: string,
 ): string | null {
-  if (action === "delete") {
-    if (!row) return null
-    if (row.kind === "request") return `file:${row.path}`
-    const parent = dirname(row.path)
-    return parent === "." ? null : `directory:${parent}`
-  }
+  if (action === "delete") return selectionAfterDelete(row)
   if (action === "create-request" && row?.kind !== "directory" && row) {
-    return `file:${row.path}`
+    return row.kind === "folder" ? row.id : `file:${row.path}`
   }
   if (action === "rename") return renamedSelection(row, name)
+  if (action === "create-folder" && row?.kind === "folder") return row.id
+  if (action === "create-folder" && row?.kind === "file") return row.id
   const parent = row?.kind === "directory" ? row.path : row ? dirname(row.path) : ""
   const path = join(parent, name.trim())
   if (action === "create-folder") return `directory:${path}`
@@ -147,6 +154,10 @@ export function visibleHttpCollectionSelection(
   selection: string,
 ): string | null {
   if (rows.some((row) => row.id === selection)) return selection
+  if (selection.startsWith("folder:")) {
+    const filePath = selection.slice("folder:".length, selection.lastIndexOf(":"))
+    return rows.some((row) => row.id === `file:${filePath}`) ? `file:${filePath}` : null
+  }
   const path = selection.startsWith("request:")
     ? (selection.slice("request:".length).split("#")[0] ?? "")
     : selection.startsWith("file:")

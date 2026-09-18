@@ -100,6 +100,10 @@ fail closed before installation. HTTPS redirects are bounded; credentials and
 non-loopback HTTP destinations are rejected. The operation has a two-minute deadline
 and owns cancellation. No automatic retries or install scripts run.
 
+The HTTP artifact includes `index.mjs`, `http-run.mjs`, `http-import.mjs`, and
+`http-postman.mjs`. The Postman command uses the same verified HTTP installation as
+the other headless HTTP commands.
+
 Files are written with mode `0600` into private staging directories, then renamed
 into a complete installation. Storage validates directories and rejects symlinked
 entries; concurrent successful publications converge on the same content. Failed or

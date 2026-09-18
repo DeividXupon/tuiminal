@@ -24,6 +24,7 @@ export const httpKeyboardScope = {
     "http-environment-",
     "http-collection-runner-",
     "http-collection-import-",
+    "http-postman-",
     "http-external-conflict-",
     "http-insecure-tls-",
     "http-redirect-approval-",

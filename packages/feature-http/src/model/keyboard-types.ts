@@ -26,6 +26,7 @@ export type HttpKeyboardCommand =
         | "close-document"
         | "close-navigation"
         | "save-document"
+        | "push-postman-document"
         | "open-environment-manager"
         | "open-response-search"
         | "open-response"

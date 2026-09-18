@@ -2,6 +2,8 @@
 
 ## HTTP client
 
+- Postman account access imports an explicit linked local copy through `tuiminal postman` or the Postman source's `[O] Postman` browser. Read [the maintained account contract](../design/postman-account.md) before changing API key storage, remote reads, imported variables, or write behavior. A connected account opens an HTTP source chooser: Local excludes `postman/`, Postman shows only `postman/`; `[Ctrl+G]` returns to the chooser after dirty or running requests are resolved. Keep the API key in the OS credential store, do not pass it as a CLI argument, and never put fetched variable values in a project or `.http` file. A missing Postman Vault value remains unresolved with a warning. `[Ctrl+S]` writes the linked local file and sends the changed request to the API; a scratch request in Postman mode chooses a collection or folder before remote creation. Report local success and remote failure separately. Remote collection, folder, and request mutations require a valid association and reject detected conflicts. Do not present the copy as live or claim the separate read and write calls provide atomic conflict protection.
+
 - The collection tree treats `.http`/`.rest` files as collections and directories as folders in the global HTTP home. Keep it keyboard-first: `[↑/↓]`/`[J/K]` move a visible selection, `[←/→]` collapse/expand or move to parent/child, `[Home/End]` jump, `[Enter]` opens a request or toggles a branch, `[N]` creates a request, `[Shift+N]` a collection, `[P]` a folder, `[E]` renames, and `[D]` starts confirmed deletion. Scope these keys to the focused collection pane, let text fields own their input, and keep the selection visible during scrolling, after mutations, and when returning from history. Show empty folders and files, keep mouse controls for the same actions visible in narrow panes, and confirm deletion. Reject stale file hashes, non-HTTP folder contents, symlinks, and mutations that would discard dirty or running open requests. Do not write to the opened project.
 
 - The interactive HTTP workspace has one global home under `$XDG_DATA_HOME/tuiminal/http` (falling back to `~/.local/share/tuiminal/http`) and ignores the opened project's path. `TUIMINAL_HTTP_HOME` is only an explicit fixture/embedding override. Collections, settings, history, and global environments live there. Headless `.http` commands still use their explicit input/output paths and roots.
@@ -121,3 +123,19 @@
   root/path/operation servers are supported; external refs and lossy constructs
   must be reported without exposing their URLs or contents. Imported literal
   secrets use unique private-variable placeholders per request and field.
+- In Postman source mode, choosing a workspace pulls only its missing linked
+  collections and filters the tree to that workspace's sidecars. Keep the
+  internal `postman/` path for storage but omit its row in navigation; show the
+  workspace name above the list. Do not overwrite an existing linked copy when
+  reopening the workspace. Keep the collection actions under `[?]` and preserve
+  their keyboard shortcuts. Method colors follow Postman's hues with readable
+  variants for light themes; request names use the theme text color and folders
+  use muted gray. Keep collection-tree rows stable when folders toggle. Imported
+  requests may share a display name; their `.http` block IDs and Postman sidecar
+  keys must remain unique so tree rows, saves, and remote writes address the same
+  request. Repair duplicate IDs in previously linked copies when reopening a
+  workspace without changing request names or their remote associations. Start
+  Postman collections and folders collapsed when opening a workspace; preserve
+  local-tree expansion behavior. Set the tree scrollbox's `viewportCulling` to `false`
+  explicitly; OpenTUI defaults it to `true`, which leaves stale rows after
+  collapsing a large tree.

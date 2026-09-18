@@ -1,5 +1,6 @@
 import { basename } from "node:path"
 import type { HttpProjectRequestItem } from "./types"
+import type { PostmanCollectionFolder } from "../postman/sync"
 
 export type HttpCollectionTreeRow =
   | {
@@ -17,6 +18,18 @@ export type HttpCollectionTreeRow =
       path: string
       depth: number
       item: HttpProjectRequestItem
+      folderPath?: string
+    }
+  | {
+      id: string
+      kind: "folder"
+      path: string
+      folderPath: string
+      folderId: string
+      name: string
+      depth: number
+      expanded: boolean
+      requestCount: number
     }
 
 type CollectionDirectory = {
@@ -76,11 +89,82 @@ function requestCount(directory: CollectionDirectory): number {
   return count
 }
 
+function directPostmanFolders(folders: readonly PostmanCollectionFolder[], parentPath: string) {
+  return folders
+    .filter((folder) => {
+      const separator = folder.path.lastIndexOf(" / ")
+      return (separator < 0 ? "" : folder.path.slice(0, separator)) === parentPath
+    })
+    .sort((left, right) => left.path.localeCompare(right.path))
+}
+
+function requestFolderPath(item: HttpProjectRequestItem, folderPaths: readonly string[]) {
+  return folderPaths
+    .filter((candidate) => item.request.name.startsWith(`${candidate} / `))
+    .sort((left, right) => right.length - left.length)[0]
+}
+
+function folderLeafName(path: string) {
+  const separator = path.lastIndexOf(" / ")
+  return separator < 0 ? path : path.slice(separator + 3)
+}
+
+function postmanFileRows(
+  filePath: string,
+  requests: HttpProjectRequestItem[],
+  folders: readonly PostmanCollectionFolder[],
+  depth: number,
+  collapsed: ReadonlySet<string>,
+  searching: boolean,
+): HttpCollectionTreeRow[] {
+  const relevant = folders.filter((folder) => folder.filePath === filePath)
+  const byPath = new Map(relevant.map((folder) => [folder.path, folder]))
+  const rows: HttpCollectionTreeRow[] = []
+  const append = (parentPath: string, currentDepth: number) => {
+    const children = directPostmanFolders(relevant, parentPath)
+    for (const folder of children) {
+      const id = `folder:${filePath}:${folder.id}`
+      const expanded = searching || !collapsed.has(id)
+      const prefix = `${folder.path} / `
+      const count = requests.filter((item) => item.request.name.startsWith(prefix)).length
+      if (!searching || count) {
+        rows.push({
+          id,
+          kind: "folder",
+          path: filePath,
+          folderPath: folder.path,
+          folderId: folder.id,
+          name: folderLeafName(folder.path),
+          depth: currentDepth,
+          expanded,
+          requestCount: count,
+        })
+        if (expanded) append(folder.path, currentDepth + 1)
+      }
+    }
+    for (const item of requests) {
+      const path = requestFolderPath(item, [...byPath.keys()])
+      if ((path ?? "") !== parentPath) continue
+      rows.push({
+        id: `request:${item.request.id}`,
+        kind: "request",
+        path: filePath,
+        depth: currentDepth,
+        item,
+        ...(path ? { folderPath: path } : {}),
+      })
+    }
+  }
+  append("", depth)
+  return rows
+}
+
 function flattenDirectory(
   directory: CollectionDirectory,
   depth: number,
   collapsed: ReadonlySet<string>,
   searching: boolean,
+  folders: readonly PostmanCollectionFolder[],
 ): HttpCollectionTreeRow[] {
   const rows: HttpCollectionTreeRow[] = []
   for (const child of [...directory.directories.values()].sort((left, right) =>
@@ -97,7 +181,7 @@ function flattenDirectory(
       expanded,
       requestCount: requestCount(child),
     })
-    if (expanded) rows.push(...flattenDirectory(child, depth + 1, collapsed, searching))
+    if (expanded) rows.push(...flattenDirectory(child, depth + 1, collapsed, searching, folders))
   }
   for (const [filePath, requests] of [...directory.files].sort(([left], [right]) =>
     left.localeCompare(right),
@@ -114,17 +198,7 @@ function flattenDirectory(
       requestCount: requests.length,
     })
     if (expanded) {
-      rows.push(
-        ...requests.map(
-          (item): HttpCollectionTreeRow => ({
-            id: `request:${item.request.id}`,
-            kind: "request",
-            path: filePath,
-            depth: depth + 1,
-            item,
-          }),
-        ),
-      )
+      rows.push(...postmanFileRows(filePath, requests, folders, depth + 1, collapsed, searching))
     }
   }
   return rows
@@ -136,6 +210,8 @@ export function buildHttpCollectionTree(
   query = "",
   directories: readonly string[] = [],
   files: readonly string[] = [],
+  postmanFolders: readonly PostmanCollectionFolder[] = [],
+  hidePostmanRoot = false,
 ) {
   const requests = filteredRequests(items, query)
   const byFile = new Map<string, HttpProjectRequestItem[]>()
@@ -150,5 +226,11 @@ export function buildHttpCollectionTree(
     for (const path of files) byFile.set(path, byFile.get(path) ?? [])
   }
   for (const [filePath, fileRequests] of byFile) addFile(root, filePath, fileRequests)
-  return flattenDirectory(root, 0, collapsed, Boolean(query.trim()))
+  return flattenDirectory(
+    hidePostmanRoot ? (root.directories.get("postman") ?? createDirectory("postman")) : root,
+    0,
+    collapsed,
+    Boolean(query.trim()),
+    postmanFolders,
+  )
 }

@@ -4,7 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { ScrollBoxRenderable } from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { HttpClient } from "../../packages/feature-http/src/HttpClient"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 
 let tui: TestRendererSetup | undefined
