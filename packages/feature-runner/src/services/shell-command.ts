@@ -8,6 +8,8 @@ export function createShellRunnerCommand(
   options: Partial<
     Pick<
       RunnerCommand,
+      | "dependsOn"
+      | "profile"
       | "id"
       | "label"
       | "description"
@@ -37,6 +39,8 @@ export function createShellRunnerCommand(
     displayCommand: source,
     source: options.source ?? "detected",
     workingDirectory: options.workingDirectory,
+    dependsOn: options.dependsOn,
+    profile: options.profile,
     env: options.env,
     envFile: options.envFile,
     interactive: options.interactive,
@@ -58,6 +62,8 @@ export function configuredRunnerCommand(command: RunnerConfiguredCommand) {
       description: command.description,
       source: command.source,
       workingDirectory: command.cwd,
+      dependsOn: command.dependsOn,
+      profile: command.profile,
       env: command.env,
       envFile: command.envFile,
       interactive: command.interactive,

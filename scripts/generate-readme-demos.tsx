@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import type { TextareaRenderable } from "@opentui/core"
 import type { CapturedFrame } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
@@ -426,6 +427,61 @@ async function runnerFrames() {
       snapshot(tui, "[P] alterna entre comandos e processos ativos", "runner-process-list"),
     )
 
+    await pressKey(tui, "y", { ctrl: true })
+    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+    frames.push(
+      snapshot(
+        tui,
+        "[Ctrl+Y] abre o arquivo YAML com comandos e fluxos",
+        "runner-config-editor",
+        180,
+      ),
+    )
+    await pressKey(tui, "F1")
+    await settle(tui, () => tui.captureCharFrame().includes("TUTORIAL YAML DO RUNNER"))
+    frames.push(
+      snapshot(tui, "[F1] abre o tutorial com campos e exemplos YAML", "runner-config-guide", 220),
+    )
+    await pressKey(tui, "escape")
+    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "runner-config-yaml")
+    const editor = tui.renderer.root.findDescendantById("runner-config-yaml") as TextareaRenderable
+    const { runnerYamlDocument, setRunnerYamlDefinition } = await import(
+      "../packages/feature-runner/src/model/configuration-yaml"
+    )
+    const document = runnerYamlDocument(editor.plainText)
+    setRunnerYamlDefinition(document, "flows", "development", {
+      label: "Ambiente local",
+      autostart: false,
+      stages: [
+        { commandIds: ["test"], waitFor: "completed" },
+        { commandIds: ["dev:api", "dev:web"], waitFor: "started" },
+      ],
+    })
+    await act(async () => {
+      editor.setSelection(0, editor.plainText.length)
+      await tui.mockInput.pasteBracketedText(document.toString({ lineWidth: 0 }))
+    })
+    await act(async () => {
+      const lines = editor.plainText.split("\n")
+      const line = lines.findIndex((line) => line.includes("commandIds:"))
+      editor.setCursor(line, 8)
+      await Bun.sleep(20)
+    })
+    await settle(tui, () => tui.captureCharFrame().includes("stages: lista ordenada"))
+    frames.push(
+      snapshot(
+        tui,
+        "YAML: etapas sequenciais e paralelas, ajuda e validação",
+        "runner-config-editor",
+        220,
+      ),
+    )
+    await pressKey(tui, "s", { ctrl: true })
+    await settle(tui, () => tui.captureCharFrame().includes("CONFIGURAÇÃO DO RUNNER"))
+    frames.push(
+      snapshot(tui, "Fluxos salvos: executar, parar e reiniciar", "runner-config-modal", 180),
+    )
+    await pressKey(tui, "escape")
     await pressKey(tui, "n")
     await settle(tui, () => tui.captureCharFrame().includes("PROCURAR NOS ARQUIVOS"))
     frames.push(
@@ -651,12 +707,19 @@ function renderGif(name: string, title: string, frames: DemoFrame[]) {
 
 try {
   mkdirSync(OUTPUT_ROOT, { recursive: true })
-  renderGif("installation", "Ferramentas oficiais", await installationFrames())
-  renderGif("database", "Banco", await databaseFrames())
-  renderGif("git", "Git", await gitFrames())
-  renderGif("runner", "Runner", await runnerFrames())
-  renderGif("http", "HTTP", await httpFrames())
-  renderGif("terminal", "Free Terminal", await terminalFrames())
+  const demos = [
+    ["installation", "Ferramentas oficiais", installationFrames],
+    ["database", "Banco", databaseFrames],
+    ["git", "Git", gitFrames],
+    ["runner", "Runner", runnerFrames],
+    ["http", "HTTP", httpFrames],
+    ["terminal", "Free Terminal", terminalFrames],
+  ] as const
+  const only = process.argv.find((argument) => argument.startsWith("--only="))?.slice(7)
+  if (only && !demos.some(([id]) => id === only)) throw new Error(`Unknown demo: ${only}`)
+  for (const [id, title, capture] of demos) {
+    if (!only || only === id) renderGif(id, title, await capture())
+  }
 } finally {
   stopAllRunnerProcesses()
   stopAllFreeTerminalProcesses()

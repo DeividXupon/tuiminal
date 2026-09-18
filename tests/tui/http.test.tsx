@@ -998,7 +998,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       expect(await Bun.file(collectionPath).exists()).toBe(true)
@@ -1016,7 +1017,10 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Api.http`)),
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Api.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
+        ),
       )
       await key("e")
       await settle(
@@ -1033,7 +1037,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await key("n")
@@ -1049,7 +1054,7 @@ describe("HTTP TUI", () => {
         Boolean(
           tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#listar`,
-          ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -1075,7 +1080,7 @@ describe("HTTP TUI", () => {
         Boolean(
           tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#consultar`,
-          ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -1094,7 +1099,8 @@ describe("HTTP TUI", () => {
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
           !tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#consultar`,
-          ),
+          ) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("N", false, true)
       await settle(
@@ -1107,7 +1113,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await key("d")
@@ -1115,7 +1122,8 @@ describe("HTTP TUI", () => {
       await settle(
         () =>
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
-          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("p")
       await settle(
@@ -1128,7 +1136,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Nested`),
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Nested`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await key("e")
@@ -1146,7 +1155,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await key("d")
@@ -1154,7 +1164,8 @@ describe("HTTP TUI", () => {
       await settle(
         () =>
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
-          !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+          !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("y")
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-history")

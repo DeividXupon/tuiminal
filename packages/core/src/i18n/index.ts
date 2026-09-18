@@ -1,3 +1,8 @@
+import { RUNNER_HELP_MESSAGES } from "./runner-help-catalog"
+import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
+import { RUNNER_YAML_GUIDE_MESSAGES } from "./runner-yaml-guide-catalog"
+import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner-validation-catalog"
+import { RUNNER_EDITOR_MESSAGES } from "./runner-editor-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
@@ -101,6 +106,11 @@ const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
+  ...RUNNER_HELP_MESSAGES,
+  ...RUNNER_YAML_MESSAGES,
+  ...RUNNER_YAML_GUIDE_MESSAGES,
+  ...RUNNER_VALIDATION_MESSAGES,
+  ...RUNNER_EDITOR_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,
   ...GIT_CLI_GUIDANCE_MESSAGES,
   ...GIT_DISCUSSION_MESSAGES,
@@ -5083,6 +5093,7 @@ for (const message of MESSAGES) {
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
 const PATTERNS: readonly Pattern[] = [
+  ...RUNNER_VALIDATION_PATTERNS,
   ...NOTIFICATION_PATTERNS,
   ...HTTP_WORKSPACE_SETTINGS_PATTERNS,
   [

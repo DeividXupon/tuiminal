@@ -30,6 +30,7 @@ import * as shared26 from "@xupon/tuiminal-core/ui/directional-shortcut"
 import * as shared27 from "@xupon/tuiminal-core/ui/selectMouse"
 import * as shared28 from "@xupon/tuiminal-core/ui/syntax-style"
 import * as shared29 from "@xupon/tuiminal-core/runtime/feature-host"
+import * as shared30 from "@xupon/tuiminal-core/ui/ModalSurface"
 
 export function prepareFeatureHost(version: string, sqliteWorkerCommand: () => string[]) {
   registerFeatureHost({
@@ -66,6 +67,7 @@ export function prepareFeatureHost(version: string, sqliteWorkerCommand: () => s
       "@xupon/tuiminal-core/ui/selectMouse": shared27,
       "@xupon/tuiminal-core/ui/syntax-style": shared28,
       "@xupon/tuiminal-core/runtime/feature-host": shared29,
+      "@xupon/tuiminal-core/ui/ModalSurface": shared30,
     },
   })
 }

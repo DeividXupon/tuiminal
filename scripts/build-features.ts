@@ -17,12 +17,12 @@ const extraEntrypoints: Partial<Record<FeatureId, Record<string, string>>> = {
   http: { "http-run.mjs": "cli/run.ts", "http-import.mjs": "cli/import.ts" },
 }
 
-export async function buildFeaturePayloads() {
+export async function buildFeaturePayloads(outputDirectory?: string) {
   assertWorkspaceVersions()
   const { version } = JSON.parse(readFileSync(join(workspaceRoot, "package.json"), "utf8")) as {
     version: string
   }
-  const destination = join(workspaceRoot, "dist", "features", version)
+  const destination = outputDirectory ?? join(workspaceRoot, "dist", "features", version)
   mkdirSync(destination, { recursive: true })
   const catalog: FeatureCatalog = { schema: 1, version, artifacts: [] }
   for (const id of FEATURE_IDS) {

@@ -22,13 +22,12 @@ import {
   type RunnerDirectoryEntry,
   type RunnerListeningPort,
   type RunnerOutputStream,
-  type RunnerProcessHandle,
   type RunnerProject,
   resolveRunnerProjectContext,
   resolveRunnerSessionScope,
-  startRunnerProcess,
-  waitForRunnerHealthCheck,
 } from "./services/runner"
+import { RunnerConfiguration } from "./ui/RunnerConfiguration"
+import type { RunnerFlow } from "./model/plan"
 import { RunnerLoadingOverlay } from "./ui/RunnerLoadingOverlay"
 import {
   exportRunnerLog,
@@ -39,7 +38,6 @@ import {
   removeSavedRunnerCommand,
   runnerPortUrl,
   saveRunnerCommand,
-  saveRunnerHistoryEntry,
   saveRunnerSession,
 } from "./storage/runner-config"
 import {
@@ -78,16 +76,12 @@ import {
   type RunnerViewMode,
   type RunnerWorkspaceProps,
 } from "./model/workspace"
+import { useRunnerExecution } from "./hooks/use-runner-execution"
+import { useRunnerPlans } from "./hooks/use-runner-plans"
 import { useRunnerAutostart } from "./hooks/use-runner-autostart"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import type { ExecutionLog, RunnerExecution } from "./model/execution"
-import {
-  notifyRunnerExit,
-  notifyRunnerHealth,
-  notifyRunnerStarted,
-  runnerExitPresentation,
-  useRunnerNotifications,
-} from "./hooks/use-runner-notifications"
+import { useRunnerNotifications } from "./hooks/use-runner-notifications"
 import { restoredRunnerExecution } from "./state/restored-execution"
 
 import {
@@ -119,11 +113,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const projectListRef = useRef<SelectRenderable | null>(null)
   const directoryListRef = useRef<SelectRenderable | null>(null)
   const projectSearchRef = useRef<InputRenderable | null>(null)
-  const handlesRef = useRef(new Map<string, RunnerProcessHandle>())
-  const healthControllersRef = useRef(new Map<string, AbortController>())
-  const healthTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  const restartTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
-  const executionSequence = useRef(0)
   const logSequence = useRef(0)
   const discoverySequence = useRef(0)
   const discoveredProjectRootRef = useRef<string | null>(null)
@@ -143,6 +132,8 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       displayPath: path,
     }))
   })
+  const [configurationOpen, setConfigurationOpen] = useState(false)
+  const [flows, setFlows] = useState<RunnerFlow[]>([])
   const [commands, setCommands] = useState<RunnerCommand[]>([])
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null)
   const [executions, setExecutions] = useState<RunnerExecution[]>(() =>
@@ -160,6 +151,8 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
   const [manualCommand, setManualCommand] = useState("")
   const [saveCommandModalOpen, setSaveCommandModalOpen] = useState(false)
+  const focusSuspendedRef = useRef(false)
+  focusSuspendedRef.current = configurationOpen || saveCommandModalOpen
   const [viewMode, setViewMode] = useState<RunnerViewMode>("single")
   const [listMode, setListMode] = useState<RunnerListMode>("commands")
   const [focusPane, setFocusPane] = useState<RunnerFocusPane>("commands")
@@ -204,6 +197,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         discoveredProjectRootRef.current = projectRoot
         setProjectAvailable(false)
         setCommands([])
+        setFlows([])
         setEnvironmentProfiles([])
         setSelectedCommandId(null)
         setDiscoveryError(
@@ -229,6 +223,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         })
       }
       setCommands(context.commands)
+      setFlows(context.flows)
       setEnvironmentProfiles(context.environmentProfiles)
       setSelectedCommandId((current) =>
         context.commands.some((command) => command.id === current)
@@ -251,14 +246,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      for (const controller of healthControllersRef.current.values()) controller.abort()
-      healthControllersRef.current.clear()
-      for (const timer of healthTimersRef.current.values()) clearTimeout(timer)
-      healthTimersRef.current.clear()
-      for (const timer of restartTimersRef.current) clearTimeout(timer)
-      restartTimersRef.current.clear()
-      for (const handle of handlesRef.current.values()) void handle.stop().catch(() => undefined)
-      handlesRef.current.clear()
     }
   }, [])
 
@@ -277,7 +264,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   }, [active, projectRoot, refreshCommands])
 
   useEffect(() => {
-    if (!active) return
+    if (!active || focusSuspendedRef.current) return
     if (pickerMode === "projects") {
       if (projectsLoading) projectSearchRef.current?.focus()
       else projectListRef.current?.focus()
@@ -355,243 +342,33 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     [bufferLog],
   )
 
-  const runCommand = useCallback(
-    (command?: RunnerCommand, options: { projectRoot?: string; restartAttempt?: number } = {}) => {
-      if (!command) return
-      const executionProjectRoot = options.projectRoot ?? projectRoot
-      const restartAttempt = options.restartAttempt ?? 0
-      const executionId = `${Date.now()}:${executionSequence.current}`
-      executionSequence.current += 1
-      const startedAt = Date.now()
-      const initialLog: ExecutionLog = {
-        id: logSequence.current,
-        text: `${restartAttempt ? `reinício ${restartAttempt} · ` : ""}❯ ${command.displayCommand}`,
-        stream: "system",
-        at: startedAt,
-      }
-      const execution: RunnerExecution = {
-        id: executionId,
-        commandId: command.id,
-        commandKey: commandKey(executionProjectRoot, command.id),
-        label: command.label,
-        displayCommand: command.displayCommand,
-        projectRoot: executionProjectRoot,
-        projectName: basename(executionProjectRoot),
-        status: "running",
-        pid: null,
-        startedAt,
-        endedAt: null,
-        exitCode: null,
-        logs: beginLogs(executionId, initialLog),
-        command,
-        restartAttempt,
-        health: command.healthCheck ? "checking" : "none",
-      }
-      logSequence.current += 1
-      setExecutions((current) => {
-        let completedKept = 0
-        return [execution, ...current].filter((item) => {
-          const running = item.status === "running" || item.status === "stopping"
-          if (running) return true
-          completedKept += 1
-          return completedKept <= 20
-        })
-      })
-      setSelectedExecutionId(executionId)
+  const onExecutionStarted = useCallback(
+    (id: string) => {
+      setSelectedExecutionId(id)
       if (narrowRunner) setNarrowPane("log")
-      setNow(startedAt)
-
-      try {
-        let finished = false
-        let healthResolved = false
-        const markHealth = (healthy: boolean, detail: string) => {
-          if (healthResolved || !mountedRef.current) return
-          healthResolved = true
-          const timer = healthTimersRef.current.get(executionId)
-          if (timer) clearTimeout(timer)
-          healthTimersRef.current.delete(executionId)
-          setExecutions((current) =>
-            current.map((item) =>
-              item.id === executionId
-                ? { ...item, health: healthy ? "healthy" : "unhealthy" }
-                : item,
-            ),
-          )
-          appendLog(executionId, detail, "system")
-          notifyRunnerHealth(notify, command.label, healthy, detail)
-        }
-        const selectedProfileId = profileSelections[executionProjectRoot]
-        const profile = environmentProfiles.find((candidate) => candidate.id === selectedProfileId)
-        const handle = startRunnerProcess(
-          executionProjectRoot,
-          command,
-          {
-            onLine: (line, stream) => {
-              appendLog(executionId, line, stream)
-              if (command.healthCheck?.type === "log" && !healthResolved) {
-                let matches = false
-                try {
-                  matches = new RegExp(command.healthCheck.pattern, "i").test(line)
-                } catch {
-                  matches = line
-                    .toLocaleLowerCase()
-                    .includes(command.healthCheck.pattern.toLocaleLowerCase())
-                }
-                if (matches) markHealth(true, "health check confirmado pelo log")
-              }
-            },
-            onExit: ({ code, signal, stopped }) => {
-              finished = true
-              handlesRef.current.delete(executionId)
-              const missedHealth = Boolean(command.healthCheck && !healthResolved)
-              if (missedHealth) {
-                healthResolved = true
-                appendLog(
-                  executionId,
-                  "processo encerrou antes de confirmar o health check",
-                  "system",
-                )
-              }
-              healthControllersRef.current.get(executionId)?.abort()
-              healthControllersRef.current.delete(executionId)
-              const healthTimer = healthTimersRef.current.get(executionId)
-              if (healthTimer) clearTimeout(healthTimer)
-              healthTimersRef.current.delete(executionId)
-              if (!mountedRef.current) return
-              const presentation = runnerExitPresentation({ code, signal, stopped })
-              const { status, detail } = presentation
-              const endedAt = Date.now()
-              appendLog(executionId, detail, "system")
-              const logs = finishLogs(executionId)
-              setExecutions((current) =>
-                current.map((item) =>
-                  item.id === executionId
-                    ? {
-                        ...item,
-                        status,
-                        endedAt,
-                        exitCode: code,
-                        health: missedHealth ? "unhealthy" : item.health,
-                        logs,
-                      }
-                    : item,
-                ),
-              )
-              notifyRunnerExit(notify, command.label, presentation)
-              const persistedLogs = command.persistLogs
-                ? logs.map((log) => ({
-                    text: log.text,
-                    stream: log.stream,
-                    at: log.at,
-                  }))
-                : []
-              saveRunnerHistoryEntry({
-                id: executionId,
-                commandId: command.id,
-                label: command.label,
-                displayCommand: command.displayCommand,
-                projectRoot: executionProjectRoot,
-                projectName: basename(executionProjectRoot),
-                status,
-                pid: null,
-                startedAt,
-                endedAt,
-                exitCode: code,
-                logs: persistedLogs,
-              })
-              const shouldRestart =
-                !stopped &&
-                restartAttempt < (command.maxRestarts ?? 5) &&
-                (command.restartPolicy === "always" ||
-                  (command.restartPolicy === "on-failure" && code !== 0))
-              if (shouldRestart) {
-                const delay = command.restartDelayMs ?? 1_000
-                const timer = setTimeout(() => {
-                  restartTimersRef.current.delete(timer)
-                  if (mountedRef.current) {
-                    runCommand(command, {
-                      projectRoot: executionProjectRoot,
-                      restartAttempt: restartAttempt + 1,
-                    })
-                  }
-                }, delay)
-                restartTimersRef.current.add(timer)
-              }
-            },
-          },
-          profile,
-        )
-        if (!finished) handlesRef.current.set(executionId, handle)
-        setExecutions((current) =>
-          current.map((item) => (item.id === executionId ? { ...item, pid: handle.pid } : item)),
-        )
-        notifyRunnerStarted(notify, command.label, executionProjectRoot)
-        if (command.healthCheck?.type === "log") {
-          const timer = setTimeout(() => {
-            markHealth(false, "health check por log expirou")
-          }, command.healthCheck.timeoutMs)
-          healthTimersRef.current.set(executionId, timer)
-        } else if (command.healthCheck) {
-          const controller = new AbortController()
-          healthControllersRef.current.set(executionId, controller)
-          void waitForRunnerHealthCheck(command.healthCheck, controller.signal).then((healthy) => {
-            healthControllersRef.current.delete(executionId)
-            markHealth(healthy, healthy ? "health check aprovado" : "health check expirou")
-          })
-        }
-      } catch (error) {
-        const endedAt = Date.now()
-        const message =
-          error instanceof Error ? error.message : "Não foi possível iniciar o comando."
-        appendLog(executionId, message, "stderr")
-        const logs = finishLogs(executionId)
-        setExecutions((current) =>
-          current.map((item) =>
-            item.id === executionId
-              ? {
-                  ...item,
-                  status: "failed",
-                  endedAt,
-                  health: command.healthCheck ? "unhealthy" : "none",
-                  logs,
-                }
-              : item,
-          ),
-        )
-        saveRunnerHistoryEntry({
-          id: executionId,
-          commandId: command.id,
-          label: command.label,
-          displayCommand: command.displayCommand,
-          projectRoot: executionProjectRoot,
-          projectName: basename(executionProjectRoot),
-          status: "failed",
-          pid: null,
-          startedAt,
-          endedAt,
-          exitCode: null,
-          logs: command.persistLogs
-            ? logs.map((log) => ({
-                text: log.text,
-                stream: log.stream,
-                at: log.at,
-              }))
-            : [],
-        })
-        notify({ source: "Runner", kind: "error", message })
-      }
     },
-    [
-      appendLog,
-      beginLogs,
-      finishLogs,
-      environmentProfiles,
-      narrowRunner,
-      notify,
-      profileSelections,
-      projectRoot,
-    ],
+    [narrowRunner],
   )
+  const { launchCommand, handlesRef } = useRunnerExecution({
+    projectRoot,
+    environmentProfiles,
+    profileSelections,
+    setExecutions,
+    setNow,
+    appendLog,
+    beginLogs,
+    finishLogs,
+    logSequence,
+    notify,
+    onStarted: onExecutionStarted,
+  })
+  const { runCommand, runTargets, stopTargets, runFlow, stopFlow, restartFlow, flowStates } =
+    useRunnerPlans({
+      projectRoot,
+      commands,
+      launchCommand,
+      notify,
+    })
 
   const runManualCommand = useCallback(
     (value = manualCommand) => {
@@ -632,13 +409,16 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     approve: approveAutostart,
     dismiss: dismissAutostart,
   } = useRunnerAutostart({
-    active,
+    active: active && !configurationOpen && !saveCommandModalOpen,
     loading,
     projectRoot,
     discoveredProjectRoot: discoveredProjectRootRef.current,
     commands,
     selectedProfile,
-    runCommand,
+    flows,
+    profiles: environmentProfiles,
+    runFlow,
+    runTargets,
     notify,
     setRunnerNotice,
     focusCommands: () => commandListRef.current?.focus(),
@@ -813,55 +593,24 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
 
   const runCommandGroup = useCallback(() => {
     const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
-    for (const command of targets) runCommand(command)
-  }, [groupCommands, runCommand, selectedCommand])
+    runTargets(targets)
+  }, [groupCommands, runTargets, selectedCommand])
 
   const stopCommandGroup = useCallback(() => {
-    const keys = new Set(
-      (groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []).map(
-        (command) => commandKey(projectRoot, command.id),
-      ),
+    const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
+    void stopTargets(targets).catch((error) =>
+      notify({ source: "Runner", kind: "error", message: String(error) }),
     )
-    for (const execution of executions) {
-      if (!keys.has(execution.commandKey)) continue
-      const handle = handlesRef.current.get(execution.id)
-      if (!handle) continue
-      void handle.stop().catch((error) => {
-        const message = error instanceof Error ? error.message : "O processo não encerrou."
-        appendLog(execution.id, message, "system")
-        notify({ source: "Runner", kind: "error", message })
-      })
-      appendLog(execution.id, "encerrando processo…", "system")
-    }
-    setExecutions((current) =>
-      current.map((execution) =>
-        keys.has(execution.commandKey) && execution.status === "running"
-          ? { ...execution, status: "stopping" }
-          : execution,
-      ),
-    )
-  }, [appendLog, executions, groupCommands, notify, projectRoot, selectedCommand])
+  }, [groupCommands, notify, selectedCommand, stopTargets])
 
   const restartCommandGroup = useCallback(() => {
     const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
-    const keys = new Set(targets.map((command) => commandKey(projectRoot, command.id)))
-    const stops = executions.flatMap((execution) => {
-      if (!keys.has(execution.commandKey)) return []
-      const handle = handlesRef.current.get(execution.id)
-      return handle ? [handle.stop()] : []
-    })
-    void Promise.allSettled(stops).then((results) => {
-      if (!mountedRef.current) return
-      const failure = results.find((result) => result.status === "rejected")
-      if (failure?.status === "rejected") {
-        const message =
-          failure.reason instanceof Error ? failure.reason.message : "Um processo não encerrou."
-        notify({ source: "Runner", kind: "error", message })
-        return
-      }
-      for (const command of targets) runCommand(command)
-    })
-  }, [executions, groupCommands, notify, projectRoot, runCommand, selectedCommand])
+    void stopTargets(targets)
+      .then(() => {
+        if (mountedRef.current) runTargets(targets)
+      })
+      .catch((error) => notify({ source: "Runner", kind: "error", message: String(error) }))
+  }, [groupCommands, notify, runTargets, selectedCommand, stopTargets])
 
   const deleteSelectedSavedCommand = useCallback(() => {
     if (selectedCommand?.source !== "saved") return
@@ -885,7 +634,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         execution.id === selectedExecution.id ? { ...execution, status: "stopping" } : execution,
       ),
     )
-  }, [appendLog, notify, selectedExecution])
+  }, [appendLog, handlesRef, notify, selectedExecution])
 
   const clearSelectedLogs = useCallback(() => {
     if (!selectedExecution) return
@@ -900,7 +649,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     appendLog(selectedExecution.id, `⌨ ${processInput}`, "system")
     setProcessInput("")
     if (processInputRef.current) processInputRef.current.value = ""
-  }, [appendLog, processInput, selectedExecution])
+  }, [appendLog, handlesRef, processInput, selectedExecution])
 
   const cycleLogStream = useCallback(() => {
     dispatchLogPreferences({ type: "cycle-stream" })
@@ -1108,7 +857,8 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
 
   useKeyboard((key) => {
     if (!active) return
-    if ([saveCommandModalOpen, Boolean(pendingAutostartReview)].includes(true)) return
+    if ([configurationOpen, saveCommandModalOpen, Boolean(pendingAutostartReview)].includes(true))
+      return
     const focusedId = renderer.currentFocusedRenderable?.id
     const editingText =
       focusedId === "runner-command-input" ||
@@ -1150,6 +900,12 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         key.preventDefault()
         projectSearchRef.current?.focus()
       }
+      return
+    }
+    if (key.ctrl && key.name === "y") {
+      key.preventDefault()
+      key.stopPropagation()
+      setConfigurationOpen(true)
       return
     }
     if (runnerProjectPickerShortcut(key)) {
@@ -2662,6 +2418,12 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
               onPress={toggleSelectedCommandGroup}
             />
             <InlineButton
+              id="runner-configuration"
+              label="[Ctrl+Y] Config"
+              accent={COLORS.runner}
+              onPress={() => setConfigurationOpen(true)}
+            />
+            <InlineButton
               label={narrowRunner ? "[A] Mais" : "[A] Mais…"}
               accent={COLORS.runner}
               active={moreActionsOpen}
@@ -2670,6 +2432,23 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
           </>
         )}
       </box>
+      {configurationOpen ? (
+        <RunnerConfiguration
+          root={projectRoot}
+          commands={commands}
+          profiles={environmentProfiles}
+          flows={flows}
+          flowStates={flowStates}
+          runFlow={runFlow}
+          stopFlow={stopFlow}
+          restartFlow={restartFlow}
+          onChanged={() => void refreshCommands()}
+          onClose={() => {
+            setConfigurationOpen(false)
+            setTimeout(() => commandListRef.current?.focus(), 0)
+          }}
+        />
+      ) : null}
       <MountWhen when={saveCommandModalOpen}>
         <RunnerSaveCommandModal
           open

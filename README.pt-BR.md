@@ -326,7 +326,10 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 - **Manter processos vivos:** selecionar um comando já ativo abre a sessão existente. `[R]` é a ação separada para iniciar outra instância.
 - **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
 - **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
-- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
+- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos juntos; grupos simples executam em paralelo.
+- **Ordenar comandos e serviços:** dependências aguardam conclusão com sucesso ou início com health check. Ciclos e referências inexistentes são rejeitados antes de executar; falha ou cancelamento bloqueia dependentes pendentes.
+- **Salvar fluxos por projeto:** `[Ctrl+Y]` abre o arquivo YAML de configuração dentro do terminal. Crie fluxos nomeados com etapas sequenciais e paralelas e execute, pare ou reinicie pela TUI.
+- **Editar comandos localmente:** configure comando literal, diretório, ambiente/perfil, PTY, reinício e health check, inclusive para comandos detectados. O editor mostra documentação, validação e sugestões por teclado e mouse sem alterar arquivos do projeto.
 - **Trocar de projeto:** `[N]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
 - **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
 
@@ -336,7 +339,7 @@ Single e Multi preservam o idioma original da saída dos programas; somente mens
 
 A busca de projetos evita repetir pastas sobrepostas e faz até 16 leituras simultâneas, respeitando o limite de 300 projetos e sete níveis. Os comandos detectados usam os caminhos do projeto selecionado, e arquivos Deno JSONC preservam o texto das tarefas mesmo quando contêm marcadores de comentário.
 
-Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
+Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` explícito na configuração do Tuiminal, incluindo comandos e fluxos salvos localmente, pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
 
 ```yaml
 version: 1
@@ -360,6 +363,8 @@ commands:
       timeoutMs: 30000
 ```
 
+Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe, ajuda contextual e autocomplete. Dentro do editor, `[F1]` abre um tutorial com explicações dos campos e exemplos YAML; `[←/→]` muda o tópico e `[Esc]` volta ao texto em edição. Dependências usam `dependsOn` com `commandId` e `condition`; etapas usam `commandIds` e `waitFor`. `started` aguarda o health check configurado. `[Ctrl+S]` valida e salva; `[Ctrl+O]` abre o gerenciamento de comandos e fluxos. Veja exemplos completos na [especificação do Runner](docs/design/runner.md).
+
 ### Atalhos essenciais do Runner
 
 | Ação | Atalho |
@@ -367,6 +372,11 @@ commands:
 | Executar ou abrir processo existente | `[Enter]` |
 | Iniciar outra instância | `[R]` |
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
+| Editor YAML | `[Ctrl+Y]` |
+| Tutorial YAML (dentro do editor) | `[F1]` |
+| Novo comando / fluxo (lista de gerenciamento) | `[Ctrl+N]` / `[Ctrl+F]` |
+| Executar / parar / reiniciar fluxo selecionado | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
+| Indentar YAML / sugestões / salvar | `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
 | Comandos / processos ativos | `[P]` |
 | Visualização única / múltipla | `[M]` |
 | Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
@@ -380,7 +390,7 @@ commands:
 | Alternar projetos do Runner | `[1]`–`[4]` |
 | Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
 
-Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
+O editor YAML salva em `~/.config/tuiminal/runner/<hash-do-projeto>/runner.yaml`, sem alterar arquivos do projeto. Comandos e fluxos existentes são incluídos no primeiro salvamento. `runner.json` mantém sessões, histórico e definições antigas dos projetos que ainda não têm YAML. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
 
 <a id="http"></a>
 
@@ -563,7 +573,7 @@ Comandos principais:
 | `bun run dev` | Gerar pacotes locais e abrir o fluxo de instalação |
 | `bun run build:features` | Gerar os cinco pacotes oficiais instaláveis |
 | `bun run test:unit` | Testar regras e integrações locais |
-| `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
+| `bun run test:tui` | Testar a interface nativa e o carregamento dos cinco pacotes de ferramentas |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
 | `bun run check:workspaces` | Conferir versões, exports e dependências de cada pacote |
 | `bun run build:packages` | Gerar JavaScript, tipos e manifests dos seis módulos internos |
