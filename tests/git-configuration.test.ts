@@ -4,6 +4,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -16,11 +17,14 @@ import {
   gitComparisonKeyboardAction,
 } from "../packages/feature-git/src/model/branch-comparison"
 import {
+  GIT_CONFIGURATION_TABS,
   gitConfigurationAction,
+  gitConfigurationTabLabel,
   repositorySelectionLabel,
   toggleRepositorySelection,
   unifiedRepositorySelection,
 } from "../packages/feature-git/src/model/git-configuration"
+import { displayWidth, translateUi } from "../packages/core/src/i18n/index"
 import {
   DEFAULT_ISSUE_CONFIG,
   issueProfileForRoot,
@@ -51,6 +55,22 @@ import {
   updateGitDiffsTarget,
 } from "../packages/feature-git/src/storage/local/config"
 import { comparisonSelectorArrangement } from "../packages/feature-git/src/ui/base/GitComparisonSelector"
+import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
+import { DEMO_ISSUES } from "../packages/feature-git/src/model/issue/fixtures"
+import {
+  openPullRequestWithNotice,
+  openWorkflowWithNotice,
+} from "../packages/feature-git/src/ui/pr/workspace-helpers"
+import { openIssueWithNotice } from "../packages/feature-git/src/ui/issue/workspace-helpers"
+import {
+  gitBrowserCommand,
+  openTerminalBrowser,
+  validatedGitBrowserUrl,
+} from "../packages/feature-git/src/services/browser"
+import {
+  loadGitBrowserConfig,
+  saveGitBrowserConfig,
+} from "../packages/feature-git/src/storage/browser/config"
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "tuiminal-git-configuration-"))
 
@@ -170,6 +190,89 @@ describe("Git configuration scope", () => {
         hasSelection: true,
       }),
     ).toEqual({ type: "mutate", mutation: "down" })
+    expect(
+      gitConfigurationAction({ key: { name: "5" }, tab: "issues", hasSelection: true }),
+    ).toEqual({ type: "select-tab", tab: "browser" })
+    expect(
+      gitConfigurationAction({ key: { name: "enter" }, tab: "browser", hasSelection: false }),
+    ).toEqual({ type: "select-browser" })
+  })
+
+  test("keeps five configuration tabs visible at the compact modal width", () => {
+    for (const language of ["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const) {
+      const columns = GIT_CONFIGURATION_TABS.reduce(
+        (total, tab) =>
+          total + displayWidth(translateUi(gitConfigurationTabLabel(tab, true), language)) + 2,
+        0,
+      )
+      expect(columns).toBeLessThanOrEqual(52)
+    }
+  })
+
+  test("persists one Git browser choice and builds exact URL commands", () => {
+    const path = join(temporaryDirectory, "git-browser.json")
+    expect(loadGitBrowserConfig(path)).toEqual({ browser: "system", error: null })
+    saveGitBrowserConfig("browsh", path)
+    expect(loadGitBrowserConfig(path)).toEqual({ browser: "browsh", error: null })
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(gitBrowserCommand("browsh", "https://github.com/team/api/issues/4")).toEqual([
+      "browsh",
+      "--startup-url",
+      "https://github.com/team/api/issues/4",
+    ])
+    expect(gitBrowserCommand("carbonyl", "https://github.com/team/api/pull/3")).toEqual([
+      "carbonyl",
+      "https://github.com/team/api/pull/3",
+    ])
+    expect(gitBrowserCommand("terminal-browser", "https://github.com/team/api/pull/3")).toEqual([
+      "terminal-browser",
+      "open",
+      "https://github.com/team/api/pull/3",
+      "--split",
+      "right",
+    ])
+    expect(validatedGitBrowserUrl("https://github.com/team/api/issues/4", "github.com")).toBe(
+      "https://github.com/team/api/issues/4",
+    )
+    expect(() => validatedGitBrowserUrl("https://evil.example/team/api", "github.com")).toThrow()
+    expect(() => validatedGitBrowserUrl("https://user@github.com/team/api", "github.com")).toThrow()
+    expect(() => validatedGitBrowserUrl("javascript:alert(1)", "github.com")).toThrow()
+    writeFileSync(path, '{"browser":"unknown"}')
+    expect(loadGitBrowserConfig(path).error).not.toBeNull()
+    expect(() => saveGitBrowserConfig("system", path)).toThrow()
+  })
+
+  test("launches terminal-browser with a literal URL argument", async () => {
+    const executable = join(temporaryDirectory, "fake-terminal-browser")
+    const log = join(temporaryDirectory, "browser-args.json")
+    writeFileSync(
+      executable,
+      `#!/usr/bin/env bun\nawait Bun.write(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)))\n`,
+    )
+    chmodSync(executable, 0o755)
+    const url = "https://github.com/team/api/issues/4?label=help%20wanted"
+    await openTerminalBrowser(url, { executable })
+    expect(JSON.parse(readFileSync(log, "utf8"))).toEqual(["open", url, "--split", "right"])
+  })
+
+  test("routes PR, Issue, and workflow links through the same browser opener", async () => {
+    const links: string[] = []
+    const opener = async (url: string, host: string) => {
+      links.push(`${host} ${url}`)
+    }
+    const notice = () => undefined
+    const pr = DEMO_PULL_REQUESTS[0]
+    const issue = DEMO_ISSUES[0]
+    if (!pr || !issue) throw new Error("Missing Git browser fixtures")
+    openPullRequestWithNotice(pr.identity, notice, opener)
+    openIssueWithNotice(issue.identity, notice, opener)
+    openWorkflowWithNotice(pr.identity, 12, notice, opener)
+    await Bun.sleep(0)
+    expect(links).toEqual([
+      `github.com ${pr.identity.url}`,
+      `github.com ${issue.identity.url}`,
+      "github.com https://github.com/equipe/api/actions/runs/12",
+    ])
   })
 })
 

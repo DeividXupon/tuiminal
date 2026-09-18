@@ -9,6 +9,12 @@ import {
   type GitConfigurationTab,
 } from "../../model/git-configuration"
 import type { LocalGitTarget } from "../../services/local-target"
+import {
+  GIT_BROWSER_OPTIONS,
+  gitBrowserDescription,
+  gitBrowserLabel,
+  type GitBrowser,
+} from "../../model/browser"
 
 type Selector = { id: string; title: string; query: string }
 
@@ -63,7 +69,7 @@ export function GitSelectorActions({
         />
       </box>
       <ShortcutText
-        content={translateUi("[J/K] Navegar  [1/2/3/4] Aba  [Esc] Voltar")}
+        content={translateUi("[J/K] Navegar  [1/2/3/4/5] Aba  [Esc] Voltar")}
         style={{ fg: COLORS.muted }}
       />
     </box>
@@ -256,4 +262,52 @@ export function GitRepositoryRows({
       </Button>
     )
   })
+}
+
+export function GitBrowserRows({
+  browser,
+  selectedIndex,
+  width,
+  onSelect,
+  onActivate,
+}: {
+  browser: GitBrowser
+  selectedIndex: number
+  width: number
+  onSelect: (index: number) => void
+  onActivate: (browser: GitBrowser) => void
+}) {
+  return GIT_BROWSER_OPTIONS.map((option, index) => (
+    <Button
+      key={option}
+      id={`git-configuration-browser-${option}`}
+      height={2}
+      flexShrink={0}
+      onPress={() => {
+        onSelect(index)
+        onActivate(option)
+      }}
+    >
+      <box
+        style={{
+          height: 2,
+          paddingLeft: 1,
+          paddingRight: 1,
+          backgroundColor: selectedIndex === index ? COLORS.panelRaised : COLORS.panel,
+        }}
+      >
+        <text
+          content={truncateDisplay(
+            `${selectedIndex === index ? "▶" : " "} ${browser === option ? "●" : "○"} ${translateUi(gitBrowserLabel(option))}`,
+            width - 4,
+          )}
+          style={{ fg: browser === option || selectedIndex === index ? COLORS.git : COLORS.text }}
+        />
+        <text
+          content={truncateDisplay(`  ${translateUi(gitBrowserDescription(option))}`, width - 4)}
+          style={{ fg: COLORS.muted }}
+        />
+      </box>
+    </Button>
+  ))
 }

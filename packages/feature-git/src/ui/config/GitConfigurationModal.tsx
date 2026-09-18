@@ -30,6 +30,7 @@ import { GitConfigurationEditor, type GitConfigurationEditorState } from "./GitC
 import { GitLocalTargetPicker, type GitLocalTargetPickerKind } from "./GitLocalTargetPicker"
 import { GitConfigurationPanel } from "./GitConfigurationPanel"
 import { useGitConfiguration } from "./useGitConfiguration"
+import { GIT_BROWSER_OPTIONS, type GitBrowser } from "../../model/browser"
 
 function mutatePullRequestSections(
   sections: readonly PullRequestSection[],
@@ -61,6 +62,7 @@ function executeConfigurationAction(
     edit: () => void
     configureLocal: (target: "project" | "branch") => void
     toggleRepository: () => void
+    selectBrowser: () => void
     moveSelection: (delta: -1 | 1) => void
   },
 ) {
@@ -71,7 +73,16 @@ function executeConfigurationAction(
   if (action.type === "edit") return handlers.edit()
   if (action.type === "configure-local") return handlers.configureLocal(action.target)
   if (action.type === "toggle-repository") return handlers.toggleRepository()
+  if (action.type === "select-browser") return handlers.selectBrowser()
   handlers.moveSelection(action.delta)
+}
+
+function configurationRowId(tab: GitConfigurationTab, index: number) {
+  if (tab === "diffs") return `git-configuration-local-${index === 1 ? "branch" : "project"}`
+  if (tab === "browser") return `git-configuration-browser-${GIT_BROWSER_OPTIONS[index]}`
+  if (tab === "repositories") return `git-configuration-repository-${index}`
+  if (tab === "issues") return `git-configuration-issue-selector-${index}`
+  return `git-configuration-pr-selector-${index}`
 }
 
 export function GitConfigurationModal({
@@ -104,7 +115,13 @@ export function GitConfigurationModal({
         : []
   const repositoryEntries = ready ? [null, ...ready.availableRepositories] : []
   const itemCount =
-    tab === "diffs" ? 2 : tab === "repositories" ? repositoryEntries.length : sections.length
+    tab === "diffs"
+      ? 2
+      : tab === "repositories"
+        ? repositoryEntries.length
+        : tab === "browser"
+          ? GIT_BROWSER_OPTIONS.length
+          : sections.length
   const selectedSection = sections[selectedIndex]
   const selectedRepository = tab === "repositories" ? repositoryEntries[selectedIndex] : undefined
 
@@ -121,17 +138,7 @@ export function GitConfigurationModal({
 
   useEffect(() => {
     if (!open || editor || localPicker) return
-    const rowId =
-      tab === "diffs"
-        ? `git-configuration-local-${selectedIndex === 1 ? "branch" : "project"}`
-        : tab === "repositories"
-          ? "repository"
-          : tab === "issues"
-            ? "issue-selector"
-            : "pr-selector"
-    listRef.current?.scrollChildIntoView(
-      tab === "diffs" ? rowId : `git-configuration-${rowId}-${selectedIndex}`,
-    )
+    listRef.current?.scrollChildIntoView(configurationRowId(tab, selectedIndex))
   }, [editor, localPicker, open, selectedIndex, tab])
 
   const selectTab = (next: GitConfigurationTab) => {
@@ -140,7 +147,9 @@ export function GitConfigurationModal({
     if (next === "repositories" && ready?.context.remote) {
       const index = ready.availableRepositories.indexOf(ready.context.remote.repository)
       setSelectedIndex(index < 0 ? 0 : index + 1)
-    } else setSelectedIndex(0)
+    } else if (next === "browser")
+      setSelectedIndex(Math.max(0, GIT_BROWSER_OPTIONS.indexOf(ready?.browser ?? "system")))
+    else setSelectedIndex(0)
   }
 
   const savePrEditor = (values: SectionEditorValues) => {
@@ -203,6 +212,8 @@ export function GitConfigurationModal({
     configuration.saveRepositories(toggleRepositorySelection(ready.repositories, repository))
   }
 
+  const selectBrowser = (browser: GitBrowser) => configuration.saveBrowser(browser)
+
   useKeyboard((key) => {
     if (!open || editor || localPicker) return
     const action = gitConfigurationAction({
@@ -222,6 +233,7 @@ export function GitConfigurationModal({
       edit: openEdit,
       configureLocal: setLocalPicker,
       toggleRepository: () => toggleRepository(selectedRepository ?? null),
+      selectBrowser: () => selectBrowser(GIT_BROWSER_OPTIONS[selectedIndex] ?? "system"),
       moveSelection: (delta) =>
         setSelectedIndex((current) =>
           Math.max(0, Math.min(Math.max(0, itemCount - 1), current + delta)),
@@ -282,6 +294,7 @@ export function GitConfigurationModal({
       onSelectTab={selectTab}
       onSelect={setSelectedIndex}
       onToggleRepository={toggleRepository}
+      onSelectBrowser={selectBrowser}
       onConfigureLocal={setLocalPicker}
       onReload={() => void configuration.reload()}
       onCreate={openCreate}

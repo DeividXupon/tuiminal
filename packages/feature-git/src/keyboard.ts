@@ -12,6 +12,8 @@ export const gitKeyboardScope = {
     "git-discard-changes-modal",
     "git-command-input",
     "git-configuration-modal",
+    "git-browser-modal",
+    "git-browser-terminal",
     "git-local-target-picker",
     "git-local-target-list",
     "git-local-target-search",

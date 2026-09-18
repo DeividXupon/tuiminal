@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
 import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
+import { GIT_CONFIGURATION_MESSAGES } from "../packages/core/src/i18n/git-configuration-catalog"
+import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-catalog"
 import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
 import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
@@ -63,6 +65,19 @@ describe("internationalization", () => {
         const expected = catalog[index]
         if (!expected) throw new Error(`Missing HTTP privacy translation for ${language}`)
         expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git configuration message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of [...GIT_CONFIGURATION_MESSAGES, ...GIT_BROWSER_MESSAGES]) {
+        const source = catalog[0]
+        const expected = catalog[index]
+        if (!source || !expected)
+          throw new Error(`Missing Git configuration translation for ${language}`)
+        expect(translateUi(source, language)).toBe(expected)
       }
     },
   )

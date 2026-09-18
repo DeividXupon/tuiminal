@@ -26,6 +26,7 @@ import { usePullRequestWorkflows } from "./ui/pr/usePullRequestWorkflows"
 import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspaceKeyboard"
 import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
 import { useAutoPage } from "./ui/useAutoPagination"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 import {
   dashboardAuth,
   dashboardProfileTarget,
@@ -33,15 +34,16 @@ import {
   openPullRequestWithNotice,
   openWorkflowWithNotice,
 } from "./ui/pr/workspace-helpers"
-
 export function PullRequestsWorkspace({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
+  onOpenBrowser = defaultGitBrowserOpener,
 }: {
   active: boolean
   configurationRevision?: number
   onLocalCheckout?: () => void
+  onOpenBrowser?: GitBrowserOpener
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -177,7 +179,7 @@ export function PullRequestsWorkspace({
       copy(String(selected.identity.number), translateUi("Número do PR copiado."))
     } else if (action.type === "copy-sha") copy(selected.headSha, translateUi("SHA copiado."))
     else if (action.type === "open-browser") {
-      openPullRequestWithNotice(selected.identity, setNotice)
+      openPullRequestWithNotice(selected.identity, setNotice, onOpenBrowser)
     } else return false
     return true
   }
@@ -357,9 +359,9 @@ export function PullRequestsWorkspace({
         onTogglePreview={togglePreview}
         workflows={workflows}
         workflowError={workflowError}
-        onOpenWorkflow={(runId) => {
-          if (selected) openWorkflowWithNotice(selected.identity, runId, setNotice)
-        }}
+        onOpenWorkflow={(runId) =>
+          selected && openWorkflowWithNotice(selected.identity, runId, setNotice, onOpenBrowser)
+        }
         onReactComment={(comment) => pullRequestActions.openCommentAction("reaction", comment)}
         onReplyComment={(comment) => pullRequestActions.openCommentAction("reply", comment)}
         onSelectRow={(index) => {
@@ -389,9 +391,7 @@ export function PullRequestsWorkspace({
         }}
         onOpenActions={pullRequestActions.openMenu}
         watching={watch.isWatching(selected)}
-        onToggleWatch={() => {
-          if (selected) watch.toggle(selected)
-        }}
+        onToggleWatch={() => selected && watch.toggle(selected)}
       />
       {configuration.modals}
       {pullRequestActions.modals}

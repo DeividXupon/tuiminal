@@ -215,8 +215,9 @@ in remote diffs.
 
 ### 4.7. Section editor
 
-In Git, `[,]` opens contextual settings. The GitHub option opens one manager for
-PR selectors, Issue selectors, and repositories. Forms expose name, filters, order,
+In Git, `[,]` opens contextual settings. The Git option opens one manager for
+the local Diffs target, PR selectors, Issue selectors, repositories, and browser choice.
+Forms expose name, filters, order,
 limit, and columns, plus save, rename, duplicate, reorder, and delete. Deleting a
 section never closes PRs or removes local/remote repositories. Only saving promotes
 a temporary query into persisted configuration.
@@ -236,6 +237,18 @@ Queries retain spaces and escapes inside quotes; literal qualifier text cannot
 change scope. Missing closing quotes produce translated guidance without submitting.
 The draft stays editable and focused in the same modal. Both `[Enter]` and `[Ctrl+S]`
 use this validation.
+
+The `[5] Browser` tab saves one Git-wide choice in
+`$XDG_CONFIG_HOME/tuiminal/git-browser.json` (`~/.config/tuiminal/` by default),
+using atomic `0600` writes. The default keeps the existing `gh --web` and
+`gh browse` actions for the system browser.
+Browsh starts as `browsh --startup-url <url>` and Carbonyl as `carbonyl <url>`
+inside an owned PTY modal; `[Ctrl+Q]` closes it and stops its process tree.
+`terminal-browser open <url> --split right` opens beside Tuiminal. These
+executables are optional and must already be on `PATH`; a missing command
+produces visible feedback. Openers receive only validated HTTPS URLs for the
+selected GitHub host and pass arguments without a shell. The same choice applies
+to PRs, Issues, Inbox subjects, and workflow runs.
 
 ## 5. Responsive contract
 
