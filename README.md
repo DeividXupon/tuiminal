@@ -273,6 +273,8 @@ Switching PR/Issue details releases pagination immediately; stale responses cann
 
 Git settings show local projects and remote repositories independently as each discovery finishes. Closing or reloading the modal cancels its old remote request. Query autocomplete processes only enough candidates to fill visible suggestions.
 
+In Git, open `[,]` → Git → `[5] Browser` to choose where `[O]` opens PRs, Issues, Inbox notifications, and workflow runs. The default uses your system browser. Browsh and Carbonyl run in an integrated Git terminal; close that view with `[Ctrl+Q]`. `terminal-browser` opens a separate terminal pane. Install the chosen browser command on your `PATH` before opening a link. This Git-wide choice is saved in `~/.config/tuiminal/git-browser.json`.
+
 Repeated `[Enter]` presses do not repeat an in-flight project/branch selection. Closing a picker with `[Esc]`, its button, or an outside click prevents a late response from closing a replacement picker. Closing does not cancel or undo an already-started Git command.
 
 Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phrase does not remove account scope. Values such as `label:"help wanted"` retain spaces. Unclosed quotes must be completed before submission; applying or saving an incomplete query shows a warning in the same modal while preserving text and focus.
@@ -292,6 +294,7 @@ Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phr
 | Change internal preview tab | `[Z←]` / `[V→]` |
 | Open remote diff | `[D]` |
 | Open remote actions | `[?]` |
+| Open selected PR, Issue, or Inbox notification | `[O]` |
 | Create a PR or issue in its tab | `[Ctrl+N]`, then `[Ctrl+S]` |
 | Stage file/folder or all files | `[Space]` / `[A]` |
 | Stage hunks or lines in the focused diff | `[S]`, then `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]`, and `[Enter]` |
@@ -302,7 +305,7 @@ Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phr
 | Change Diffs project/branch | `[Ctrl+P]` |
 | Edit remote query | `[/]` |
 
-Remote scope is saved in Git profiles. The local Diffs selection is separate in `~/.config/tuiminal/git-diffs.json`; saved Inbox items live in `~/.config/tuiminal/git-inbox.json` with `0600` permissions.
+Remote scope is saved in Git profiles. The local Diffs selection is separate in `~/.config/tuiminal/git-diffs.json`; the browser choice lives in `~/.config/tuiminal/git-browser.json`; saved Inbox items live in `~/.config/tuiminal/git-inbox.json` with `0600` permissions.
 
 <a id="runner"></a>
 

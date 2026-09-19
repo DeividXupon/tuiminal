@@ -17,6 +17,7 @@ import {
 } from "./model/workspace"
 import { PullRequestsWorkspace } from "./PullRequestsWorkspace"
 import { GitTutorialDemo } from "./tutorial/GitTutorialDemo"
+import { useGitBrowser } from "./ui/browser/useGitBrowser"
 
 type GitLocalMode = "diffs" | "compare"
 
@@ -89,6 +90,8 @@ function GitInteractiveWorkspace({
   const [localMode, setLocalMode] = useState<GitLocalMode>("diffs")
   const [baseRefreshRequest, setBaseRefreshRequest] = useState(0)
   const localTargetRoot = useLocalGitTargetRoot(localConfigurationRevision)
+  const browser = useGitBrowser()
+  const workspaceActive = active && !browser.modalOpen
 
   const selectTab = (tab: GitWorkspaceTab) => {
     if (tab === "pr") setPullRequestsMounted(true)
@@ -103,7 +106,7 @@ function GitInteractiveWorkspace({
   }
 
   useKeyboard((key) => {
-    if (!active || key.ctrl || key.meta || key.super) return
+    if (!workspaceActive || key.ctrl || key.meta || key.super) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (ownsKeyboardFocus(gitKeyboardScope, focusedId)) return
     if (activeTab === "base" && localMode === "diffs" && key.name === "c") {
@@ -177,7 +180,7 @@ function GitInteractiveWorkspace({
         }}
       >
         <GitBaseWorkspace
-          active={active && activeTab === "base" && localMode === "diffs"}
+          active={workspaceActive && activeTab === "base" && localMode === "diffs"}
           refreshRequest={baseRefreshRequest}
           targetDirectory={localTargetRoot}
           onOpenLocalConfiguration={onOpenLocalConfiguration}
@@ -188,7 +191,7 @@ function GitInteractiveWorkspace({
         selected={activeTab === "base" && localMode === "compare"}
       >
         <GitCompareWorkspace
-          active={active && activeTab === "base" && localMode === "compare"}
+          active={workspaceActive && activeTab === "base" && localMode === "compare"}
           targetDirectory={localTargetRoot}
           onOpenLocalConfiguration={onOpenLocalConfiguration}
           onExit={() => setLocalMode("diffs")}
@@ -196,24 +199,28 @@ function GitInteractiveWorkspace({
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={pullRequestsMounted} selected={activeTab === "pr"}>
         <PullRequestsWorkspace
-          active={active && activeTab === "pr"}
+          active={workspaceActive && activeTab === "pr"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={issuesMounted} selected={activeTab === "issues"}>
         <IssuesWorkspace
-          active={active && activeTab === "issues"}
+          active={workspaceActive && activeTab === "issues"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={inboxMounted} selected={activeTab === "inbox"}>
         <InboxWorkspace
-          active={active && activeTab === "inbox"}
+          active={workspaceActive && activeTab === "inbox"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
         />
       </MountedGitWorkspace>
+      {browser.modal}
     </box>
   )
 }

@@ -8,7 +8,9 @@ import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverl
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { GitConfigurationTab } from "../../model/git-configuration"
 import type { GitConfigurationReadyState, GitConfigurationState } from "./useGitConfiguration"
+import type { GitBrowser } from "../../model/browser"
 import {
+  GitBrowserRows,
   GitConfigurationTabs,
   GitLocalTargetRows,
   GitRepositoryRows,
@@ -29,6 +31,7 @@ function GitConfigurationList({
   width,
   onSelect,
   onToggleRepository,
+  onSelectBrowser,
   onConfigureLocal,
 }: {
   state: GitConfigurationState
@@ -40,6 +43,7 @@ function GitConfigurationList({
   width: number
   onSelect: (index: number) => void
   onToggleRepository: (repository: string | null) => void
+  onSelectBrowser: (browser: GitBrowser) => void
   onConfigureLocal: (target: "project" | "branch") => void
 }) {
   if (state.status === "loading") {
@@ -64,6 +68,22 @@ function GitConfigurationList({
         ) : null}
         {ready.localProjectError ? (
           <text content={ready.localProjectError} style={{ fg: COLORS.danger }} />
+        ) : null}
+      </>
+    )
+  }
+  if (tab === "browser" && ready) {
+    return (
+      <>
+        <GitBrowserRows
+          browser={ready.browser}
+          selectedIndex={selectedIndex}
+          width={width}
+          onSelect={onSelect}
+          onActivate={onSelectBrowser}
+        />
+        {ready.browserError ? (
+          <text content={ready.browserError} style={{ fg: COLORS.danger }} />
         ) : null}
       </>
     )
@@ -143,7 +163,15 @@ function GitConfigurationFooter({
   if (tab === "repositories") {
     return (
       <ShortcutText
-        content={translateUi("[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4] Aba")}
+        content={translateUi("[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4/5] Aba")}
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+      />
+    )
+  }
+  if (tab === "browser") {
+    return (
+      <ShortcutText
+        content={translateUi("[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4/5] Aba")}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     )
@@ -152,7 +180,7 @@ function GitConfigurationFooter({
     return (
       <ShortcutText
         content={translateUi(
-          "[P] Projeto  [B] Branch  [J/K] Navegar  [Enter] Alterar  [1/2/3/4] Aba",
+          "[P] Projeto  [B] Branch  [J/K] Navegar  [Enter] Alterar  [1/2/3/4/5] Aba",
         )}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
@@ -188,6 +216,7 @@ export function GitConfigurationPanel({
   onSelectTab,
   onSelect,
   onToggleRepository,
+  onSelectBrowser,
   onConfigureLocal,
   onReload,
   onCreate,
@@ -211,6 +240,7 @@ export function GitConfigurationPanel({
   onSelectTab: (tab: GitConfigurationTab) => void
   onSelect: (index: number) => void
   onToggleRepository: (repository: string | null) => void
+  onSelectBrowser: (browser: GitBrowser) => void
   onConfigureLocal: (target: "project" | "branch") => void
   onReload: () => void
   onCreate: () => void
@@ -250,7 +280,7 @@ export function GitConfigurationPanel({
         <text content={translateUi("◆ CONFIGURAÇÕES DO GIT")} style={{ fg: COLORS.git }} />
         <InlineButton label={translateUi("[Esc] Fechar")} accent={COLORS.git} onPress={onClose} />
       </box>
-      <GitConfigurationTabs active={tab} compact={width < 82} onSelect={onSelectTab} />
+      <GitConfigurationTabs active={tab} compact={width < 100} onSelect={onSelectTab} />
       {ready ? (
         <text
           content={tab === "diffs" ? contextLabel : `${contextLabel} · ${ready.host}`}
@@ -283,6 +313,7 @@ export function GitConfigurationPanel({
           width={width}
           onSelect={onSelect}
           onToggleRepository={onToggleRepository}
+          onSelectBrowser={onSelectBrowser}
           onConfigureLocal={onConfigureLocal}
         />
       </scrollbox>

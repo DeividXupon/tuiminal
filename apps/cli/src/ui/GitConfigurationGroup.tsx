@@ -57,14 +57,12 @@ export function GitConfigurationGroup({
               }}
             >
               <text
-                content={`◇ ${translateUi("Diffs locais, PR, Issues e repositórios")}`}
+                content={`◇ ${translateUi("Diffs, PR, Issues e navegador")}`}
                 style={{ fg: selected ? COLORS.git : COLORS.text }}
               />
               {compact ? null : (
                 <text
-                  content={translateUi(
-                    "Escolha o Git local dos Diffs e edite seletores e repositórios remotos.",
-                  )}
+                  content={translateUi("Projeto local, seletores, repositórios e navegador.")}
                   style={{ fg: COLORS.muted }}
                 />
               )}

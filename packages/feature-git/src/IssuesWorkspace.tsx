@@ -22,6 +22,7 @@ import { useIssueDetails } from "./ui/issue/useIssueDetails"
 import { useIssueNotifications } from "./ui/issue/useIssueNotifications"
 import { useIssueWorkspaceKeyboard } from "./ui/issue/useIssueWorkspaceKeyboard"
 import { useAutoPage } from "./ui/useAutoPagination"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
 import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
@@ -34,10 +35,12 @@ export function IssuesWorkspace({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
+  onOpenBrowser = defaultGitBrowserOpener,
 }: {
   active: boolean
   configurationRevision?: number
   onLocalCheckout?: () => void
+  onOpenBrowser?: GitBrowserOpener
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -207,7 +210,8 @@ export function IssuesWorkspace({
       copy(selected.identity.url, translateUi("URL da issue copiada."))
     else if (action.type === "copy-number")
       copy(String(selected.identity.number), translateUi("Número da issue copiado."))
-    else if (action.type === "open-browser") openIssueWithNotice(selected.identity, setNotice)
+    else if (action.type === "open-browser")
+      openIssueWithNotice(selected.identity, setNotice, onOpenBrowser)
     else return false
     return true
   }

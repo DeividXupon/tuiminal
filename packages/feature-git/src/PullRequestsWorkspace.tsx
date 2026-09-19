@@ -24,6 +24,7 @@ import { usePullRequestWorkflows } from "./ui/pr/usePullRequestWorkflows"
 import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspaceKeyboard"
 import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
 import { useAutoPage } from "./ui/useAutoPagination"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
 import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
@@ -36,15 +37,16 @@ import {
   pullRequestKeyboardGuards,
   openWorkflowWithNotice,
 } from "./ui/pr/workspace-helpers"
-
 export function PullRequestsWorkspace({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
+  onOpenBrowser = defaultGitBrowserOpener,
 }: {
   active: boolean
   configurationRevision?: number
   onLocalCheckout?: () => void
+  onOpenBrowser?: GitBrowserOpener
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -182,6 +184,7 @@ export function PullRequestsWorkspace({
       setDescriptionExpanded,
       copy,
       setNotice,
+      onOpenBrowser,
     )
   }
   const selectRow = (index: number) => {
@@ -349,9 +352,9 @@ export function PullRequestsWorkspace({
         onTogglePreview={togglePreview}
         workflows={workflows}
         workflowError={workflowError}
-        onOpenWorkflow={(runId) => {
-          if (selected) openWorkflowWithNotice(selected.identity, runId, setNotice)
-        }}
+        onOpenWorkflow={(runId) =>
+          selected && openWorkflowWithNotice(selected.identity, runId, setNotice, onOpenBrowser)
+        }
         onReactComment={(comment) => pullRequestActions.openCommentAction("reaction", comment)}
         onReplyComment={(comment) => pullRequestActions.openCommentAction("reply", comment)}
         onSelectRow={(index) => {
@@ -383,9 +386,7 @@ export function PullRequestsWorkspace({
         onCreate={creation.openModal}
         canCreate={creation.available}
         watching={watch.isWatching(selected)}
-        onToggleWatch={() => {
-          if (selected) watch.toggle(selected)
-        }}
+        onToggleWatch={() => selected && watch.toggle(selected)}
       />
       {configuration.modals}
       {pullRequestActions.modals}

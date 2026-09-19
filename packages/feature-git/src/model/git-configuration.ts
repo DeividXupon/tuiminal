@@ -1,4 +1,4 @@
-export type GitConfigurationTab = "diffs" | "pull-requests" | "issues" | "repositories"
+export type GitConfigurationTab = "diffs" | "pull-requests" | "issues" | "repositories" | "browser"
 export type GitConfigurationMutation = "duplicate" | "delete" | "up" | "down"
 export type GitConfigurationAction =
   | { type: "close" }
@@ -6,6 +6,7 @@ export type GitConfigurationAction =
   | { type: "edit" }
   | { type: "configure-local"; target: "project" | "branch" }
   | { type: "toggle-repository" }
+  | { type: "select-browser" }
   | { type: "select-tab"; tab: GitConfigurationTab }
   | { type: "move-selection"; delta: -1 | 1 }
   | { type: "mutate"; mutation: GitConfigurationMutation }
@@ -15,6 +16,7 @@ export const GIT_CONFIGURATION_TABS: readonly GitConfigurationTab[] = [
   "pull-requests",
   "issues",
   "repositories",
+  "browser",
 ]
 
 export function gitConfigurationTabLabel(tab: GitConfigurationTab, compact = false) {
@@ -22,11 +24,13 @@ export function gitConfigurationTabLabel(tab: GitConfigurationTab, compact = fal
   if (compact) {
     if (tab === "pull-requests") return "[2] PR"
     if (tab === "issues") return "[3] Issues"
-    return "[4] Repos"
+    if (tab === "repositories") return "[4] Repo"
+    return "[5] Web"
   }
   if (tab === "pull-requests") return "[2] Seletores de PR"
   if (tab === "issues") return "[3] Seletores de Issues"
-  return "[4] Repositórios"
+  if (tab === "repositories") return "[4] Repositórios"
+  return "[5] Navegador"
 }
 
 function tabSelectionAction(keyName: string): GitConfigurationAction | null {
@@ -84,6 +88,10 @@ export function gitConfigurationAction({
     return { type: "toggle-repository" }
   }
   if (tab === "repositories") return null
+  if (tab === "browser" && ["space", "return", "enter"].includes(key.name)) {
+    return { type: "select-browser" }
+  }
+  if (tab === "browser") return null
   return selectorAction(key.name, hasSelection)
 }
 

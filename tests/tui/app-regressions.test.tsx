@@ -5,6 +5,10 @@ import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { App } from "../../apps/cli/src/App"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import {
+  loadGitBrowserConfig,
+  saveGitBrowserConfig,
+} from "../../packages/feature-git/src/storage/browser/config"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -141,7 +145,7 @@ test("Git comparison Escape returns to Diffs without exiting the application", a
   expect(tui.captureCharFrame()).toContain("TUIMINAL")
 })
 
-test("Git settings opens the unified Diffs, PR, Issue, and repository configuration", async () => {
+test("Git settings configures Diffs, PR, Issues, repositories, and browser", async () => {
   selectInitialTool("git")
   updateUiSettings({ layout: "compact", language: "pt-BR" })
   tui = await testRender(<App />, { width: 120, height: 30 })
@@ -149,7 +153,7 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
 
   await click("tutorial-settings-button")
   expect(tui.captureCharFrame()).toContain("CONFIGURAÇÕES DO GIT")
-  expect(tui.captureCharFrame()).toContain("PR, Issues e repositórios")
+  expect(tui.captureCharFrame()).toContain("Diffs, PR, Issues e navegador")
   expect(tui.captureCharFrame()).not.toContain("CONFIGURAÇÕES DO BANCO")
 
   await act(async () => {
@@ -161,6 +165,7 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
   expect(tui.captureCharFrame()).toContain("Seletores de PR")
   expect(tui.captureCharFrame()).toContain("Seletores de Issues")
   expect(tui.captureCharFrame()).toContain("Repositórios")
+  expect(tui.captureCharFrame()).toContain("Navegador")
   expect(tui.captureCharFrame()).toContain("PROJETO LOCAL")
   expect(tui.captureCharFrame()).toContain("BRANCH LOCAL")
   await click("git-configuration-local-project")
@@ -169,6 +174,12 @@ test("Git settings opens the unified Diffs, PR, Issue, and repository configurat
   await settle(() => !tui?.captureCharFrame().includes("CARREGANDO CONFIGURAÇÃO GIT…"))
   await click("git-configuration-tab-repositories")
   expect(tui.captureCharFrame()).toContain("TODOS")
+  await click("git-configuration-tab-browser")
+  expect(tui.captureCharFrame()).toContain("Carbonyl")
+  expect(tui.captureCharFrame()).toContain("terminal-browser")
+  await click("git-configuration-browser-carbonyl")
+  expect(loadGitBrowserConfig().browser).toBe("carbonyl")
+  saveGitBrowserConfig("system")
   expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeDefined()
   await act(async () => tui?.mockMouse.click(119, 0))
   await settle(() => !tui?.renderer.root.findDescendantById("git-configuration-modal"))

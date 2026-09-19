@@ -40,8 +40,10 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
 
 ## Actions and layers
 
-- `[O]` opens PR/Issue subjects with the corresponding `gh` command; other subjects
-  use repository-pinned `gh browse`.
+- `[O]` opens the selected notification through the Git-wide browser choice.
+  The system-browser default uses the corresponding `gh` PR/Issue command or
+  repository-pinned `gh browse`; Browsh, Carbonyl, and terminal-browser receive
+  the validated HTTPS subject URL. See [Git configuration](./git-pr-interface.md).
 - `[M]` marks a thread read and keeps its row.
 - `[B]` toggles local saving without changing the GitHub subscription.
 - `[D]` and `[U]` open a confirmation stating target and consequence. `[Ctrl+S]`

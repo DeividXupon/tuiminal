@@ -273,6 +273,13 @@ cada busca termina, sem esperar a outra. Fechar ou recarregar o modal cancela a
 consulta remota anterior. O autocomplete de queries processa só os candidatos
 necessários para preencher as sugestões visíveis.
 
+No Git, abra `[,]` → Git → `[5] Navegador` para escolher onde `[O]` abre PRs,
+Issues, notificações do Inbox e execuções de workflow. O padrão usa o navegador
+do sistema. Browsh e Carbonyl abrem em um terminal integrado ao Git, que pode
+ser fechado com `[Ctrl+Q]`. `terminal-browser` abre um painel separado do terminal.
+Instale o comando escolhido no `PATH` antes de abrir um link. A escolha vale para
+todo o Git e fica em `~/.config/tuiminal/git-browser.json`.
+
 Nos seletores de projeto e branch local, pressionar `[Enter]` repetidamente não
 repete uma seleção em andamento. Fechar o seletor por `[Esc]`, pelo botão ou fora
 do modal impede que sua resposta atrasada feche outro seletor aberto depois.
@@ -297,6 +304,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
+| Abrir PR, Issue ou notificação selecionada | `[O]` |
 | Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
 | Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
@@ -307,7 +315,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Alterar projeto/branch de Diffs | `[Ctrl+P]` |
 | Editar query remota | `[/]` |
 
-O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separada em `~/.config/tuiminal/git-diffs.json`; itens salvos do Inbox ficam em `~/.config/tuiminal/git-inbox.json` com permissão `0600`.
+O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separada em `~/.config/tuiminal/git-diffs.json`; o navegador fica em `~/.config/tuiminal/git-browser.json`; itens salvos do Inbox ficam em `~/.config/tuiminal/git-inbox.json` com permissão `0600`.
 
 <a id="runner"></a>
 

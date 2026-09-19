@@ -19,6 +19,7 @@ import {
   openWorkflowRunInBrowser,
 } from "../../services/github/read-actions"
 import type { PullRequestDashboardState } from "./usePullRequestDashboard"
+import type { GitBrowserOpener } from "../browser/useGitBrowser"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
 
 const DEMO_AUTH = {
@@ -58,6 +59,7 @@ export function executePullRequestReadAction(
   setDescriptionExpanded: Dispatch<SetStateAction<boolean>>,
   copy: (value: string, success: string) => void,
   setNotice: (message: string) => void,
+  openBrowser: GitBrowserOpener,
 ) {
   if (!action || !selected) return false
   if (action.type === "scroll-preview") {
@@ -75,7 +77,8 @@ export function executePullRequestReadAction(
   else if (action.type === "copy-number") {
     copy(String(selected.identity.number), translateUi("Número do PR copiado."))
   } else if (action.type === "copy-sha") copy(selected.headSha, translateUi("SHA copiado."))
-  else if (action.type === "open-browser") openPullRequestWithNotice(selected.identity, setNotice)
+  else if (action.type === "open-browser")
+    openPullRequestWithNotice(selected.identity, setNotice, openBrowser)
   else return false
   return true
 }
@@ -150,9 +153,12 @@ function browserOptions() {
 export function openPullRequestWithNotice(
   identity: PullRequestIdentity,
   setNotice: (notice: string) => void,
+  openBrowser: GitBrowserOpener,
 ) {
   setNotice(translateUi("Abrindo PR no navegador…"))
-  void openPullRequestInBrowser(identity, browserOptions())
+  void openBrowser(identity.url, identity.host, () =>
+    openPullRequestInBrowser(identity, browserOptions()),
+  )
     .then(() => setNotice(translateUi("PR aberto no navegador.")))
     .catch((error) => setNotice(pullRequestMutationError(error)))
 }
@@ -161,9 +167,23 @@ export function openWorkflowWithNotice(
   identity: PullRequestIdentity,
   runId: number,
   setNotice: (notice: string) => void,
+  openBrowser: GitBrowserOpener,
 ) {
   setNotice(translateUi("Abrindo execução no navegador…"))
-  void openWorkflowRunInBrowser(identity, runId, browserOptions())
+  if (!Number.isSafeInteger(runId) || runId <= 0) {
+    setNotice(translateUi("Identificador da execução inválido."))
+    return
+  }
+  void Promise.resolve()
+    .then(() => {
+      const url = new URL(identity.url)
+      url.pathname = `/${encodeURIComponent(identity.owner)}/${encodeURIComponent(identity.repository)}/actions/runs/${runId}`
+      url.search = ""
+      url.hash = ""
+      return openBrowser(url.href, identity.host, () =>
+        openWorkflowRunInBrowser(identity, runId, browserOptions()),
+      )
+    })
     .then(() => setNotice(translateUi("Execução aberta no navegador.")))
     .catch((error) => setNotice(pullRequestMutationError(error)))
 }

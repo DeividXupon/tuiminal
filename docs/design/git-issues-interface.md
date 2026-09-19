@@ -47,6 +47,9 @@ whole list; colors and click handlers remain current.
 - List: `[J/K]`, arrows, `[G/Home]`, and `[Shift+G/End]`.
 - Sections: `[A←]`/`[F→]`; `[/]` edits the active query. Creation, editing, ordering,
   and repository selection belong to Git configuration opened through `[,]`.
+- `[O]` opens the selected Issue using the Git-wide browser choice in
+  [Git configuration](./git-pr-interface.md); `[5] Browser` selects the system
+  browser, Browsh, Carbonyl, or terminal-browser.
 - Preview: `[Z←]`/`[V→]` switches tabs. In Overview, `[J/K]` scrolls and `[E]`
   expands/collapses the description. In Activity, `[J/K]` selects comments,
   `[E]` reacts, and `[Enter]` replies to the selection.
