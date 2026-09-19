@@ -273,19 +273,27 @@ lists can still open it.
 
 ### 4.7. Section editor
 
-In Git, `[,]` opens contextual settings. The Git option opens one manager for
-the local Diffs target, PR selectors, Issue selectors, repositories, and browser choice.
+In Git, `[,]` opens contextual settings. Its sidebar places the unnumbered local
+Diffs target under `GIT`, with Pull Requests, Issues, Repositories, and Browser under
+`GITHUB`.
+`[J/K]` moves category focus and renders that row's controls in the detail pane
+immediately. Only the focused row shows a blue `[Enter]`; `[Enter]` or `[L]`
+transfers keyboard focus to the detail, and `[Esc]` returns to the category list. A
+blue left rail marks the focused row or detail pane. Diffs uses its focused row and
+`[Enter]` without `[P]`/`[B]` aliases. PR and Issue ordering uses mouse controls
+without `Alt+arrow` shortcuts. Project/branch pickers and section editors replace this detail content
+and return to it instead of opening a second configuration modal.
 Forms expose name, filters, order,
 limit, and columns, plus save, rename, duplicate, reorder, and delete. Deleting a
 section never closes PRs or removes local/remote repositories. Only saving promotes
 a temporary query into persisted configuration.
 
 Local projects and remote repositories publish independently with their own loading
-and error states. Closing/reloading cancels the previous remote read; stale results
+and error states. Leaving/reloading cancels the previous remote read; stale results
 do not affect the current screen. Repeated local picker activations while a selection
-is pending do not dispatch more operations. Closing via `[Esc]`, button, or outside
-click retires that instance: its result cannot close a later picker. Internal controls
-remain clickable. Closing UI does not cancel or undo an already-started Git operation.
+is pending do not dispatch more operations. Leaving via `[Esc]` or the back button
+retires that instance: its result cannot close a later picker. Internal controls
+remain clickable. Leaving the UI does not cancel or undo an already-started Git operation.
 
 New profiles start with `My PRs`, `Review requested`, `All`, `Open`, and `Closed`.
 State filters select non-archived PRs within the current scope; preset names remain
@@ -293,10 +301,10 @@ English across all UI languages.
 
 Queries retain spaces and escapes inside quotes; literal qualifier text cannot
 change scope. Missing closing quotes produce translated guidance without submitting.
-The draft stays editable and focused in the same modal. Both `[Enter]` and `[Ctrl+S]`
+The draft stays editable and focused in the same context pane. Both `[Enter]` and `[Ctrl+S]`
 use this validation.
 
-The `[5] Browser` tab saves one Git-wide choice in
+The Browser context row saves one Git-wide choice in
 `$XDG_CONFIG_HOME/tuiminal/git-browser.json` (`~/.config/tuiminal/` by default),
 using atomic `0600` writes. The default keeps the existing `gh --web` and
 `gh browse` actions for the system browser.
@@ -461,8 +469,8 @@ admin bypass and automatic branch deletion are absent.
 ### Local Diffs and Compare
 
 `[1] [C] Diffs` uses only an available local repository. The header shows
-project/branch and `[Ctrl+P]` selection; the same control is the first tab in Git
-settings opened with `[,]`. Changing this target does not change remote scope,
+project/branch and `[Ctrl+P]` selection; the shortcut opens the first tab of the same
+Git context shown by `[,]`. Changing this target does not change remote scope,
 which may include repositories without a local clone.
 
 `[C]` toggles that tab to Compare. Before results, three centered cards select the

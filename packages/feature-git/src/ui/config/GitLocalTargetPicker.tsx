@@ -1,10 +1,9 @@
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import type { LocalGitProject, LocalGitTarget } from "../../services/local-target"
@@ -12,6 +11,7 @@ import type { LocalGitProject, LocalGitTarget } from "../../services/local-targe
 export type GitLocalTargetPickerKind = "project" | "branch"
 
 export function GitLocalTargetPicker({
+  width,
   kind,
   target,
   projects,
@@ -21,6 +21,7 @@ export function GitLocalTargetPicker({
   onSelectProject,
   onSelectBranch,
 }: {
+  width: number
   kind: GitLocalTargetPickerKind
   target: LocalGitTarget
   projects: readonly LocalGitProject[]
@@ -31,7 +32,6 @@ export function GitLocalTargetPicker({
   onSelectBranch: (branch: string) => Promise<boolean>
 }) {
   const renderer = useRenderer()
-  const terminal = useTerminalDimensions()
   const dialogRef = useRef<BoxRenderable | null>(null)
   const inputRef = useRef<InputRenderable | null>(null)
   const listRef = useRef<SelectRenderable | null>(null)
@@ -127,19 +127,13 @@ export function GitLocalTargetPicker({
     }
   })
 
-  const width = Math.max(48, Math.min(92, terminal.width - 6))
-  const height = Math.max(14, Math.min(28, terminal.height - 4))
   const title = kind === "project" ? "◆ ESCOLHER PROJETO LOCAL" : "◆ ESCOLHER BRANCH LOCAL"
   return (
-    <ModalSurface
+    <box
       id="git-local-target-picker"
-      dialogRef={dialogRef}
-      width={width}
-      height={height}
-      zIndex={980}
-      borderColor={COLORS.git}
-      backdropOpacity={0.94}
-      onBackdropPress={close}
+      ref={dialogRef}
+      focusable
+      style={{ width: "100%", height: "100%", flexGrow: 1, backgroundColor: COLORS.canvas }}
     >
       <box
         style={{
@@ -154,7 +148,7 @@ export function GitLocalTargetPicker({
         <text content={translateUi(title)} style={{ fg: COLORS.git }} />
         <InlineButton
           id="git-local-target-close"
-          label={translateUi("[Esc] Voltar")}
+          label="Voltar"
           accent={COLORS.git}
           onPress={close}
         />
@@ -167,7 +161,7 @@ export function GitLocalTargetPicker({
         onInput={setQuery}
         onSubmit={() => listRef.current?.focus()}
         onMouseDown={() => inputRef.current?.focus()}
-        width={width - 4}
+        width={Math.max(8, width - 4)}
         style={{
           marginTop: 1,
           marginBottom: 1,
@@ -236,6 +230,6 @@ export function GitLocalTargetPicker({
         )}
         style={{ height: 1, flexShrink: 0, fg: busy ? COLORS.git : COLORS.muted }}
       />
-    </ModalSurface>
+    </box>
   )
 }

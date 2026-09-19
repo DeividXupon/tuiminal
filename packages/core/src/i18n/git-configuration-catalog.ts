@@ -128,22 +128,6 @@ export const GIT_CONFIGURATION_MESSAGES = [
   ["[N] Novo", "[N] New", "[N] Nuevo", "[N] 新規", "[N] 新建", "[N] 새로 만들기"],
   ["[X] Confirmar", "[X] Confirm", "[X] Confirmar", "[X] 確認", "[X] 确认", "[X] 확인"],
   [
-    "[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4/5] Aba",
-    "[J/K] Navigate  [Space/Enter] select  [1/2/3/4/5] Tab",
-    "[J/K] Navegar  [Espacio/Enter] seleccionar  [1/2/3/4/5] Pestaña",
-    "[J/K] 移動  [Space/Enter] 選択  [1/2/3/4/5] タブ",
-    "[J/K] 导航  [空格/Enter] 选择  [1/2/3/4/5] 标签页",
-    "[J/K] 탐색  [Space/Enter] 선택  [1/2/3/4/5] 탭",
-  ],
-  [
-    "[J/K] Navegar  [1/2/3/4/5] Aba  [Esc] Voltar",
-    "[J/K] Navigate  [1/2/3/4/5] Tab  [Esc] Back",
-    "[J/K] Navegar  [1/2/3/4/5] Pestaña  [Esc] Volver",
-    "[J/K] 移動  [1/2/3/4/5] タブ  [Esc] 戻る",
-    "[J/K] 导航  [1/2/3/4/5] 标签页  [Esc] 返回",
-    "[J/K] 탐색  [1/2/3/4/5] 탭  [Esc] 뒤로",
-  ],
-  [
     "Configuração Git salva.",
     "Git settings saved.",
     "Configuración de Git guardada.",
@@ -209,14 +193,6 @@ export const GIT_CONFIGURATION_MESSAGES = [
     "先にローカルプロジェクトを選択",
     "请先选择本地项目",
     "먼저 로컬 프로젝트를 선택하세요",
-  ],
-  [
-    "[P] Projeto  [B] Branch  [J/K] Navegar  [Enter] Alterar  [1/2/3/4/5] Aba",
-    "[P] Project  [B] Branch  [J/K] Navigate  [Enter] Change  [1/2/3/4/5] Tab",
-    "[P] Proyecto  [B] Branch  [J/K] Navegar  [Enter] Cambiar  [1/2/3/4/5] Pestaña",
-    "[P] プロジェクト  [B] Branch  [J/K] 移動  [Enter] 変更  [1/2/3/4/5] タブ",
-    "[P] 项目  [B] 分支  [J/K] 导航  [Enter] 更改  [1/2/3/4/5] 标签页",
-    "[P] 프로젝트  [B] 브랜치  [J/K] 탐색  [Enter] 변경  [1/2/3/4/5] 탭",
   ],
   [
     "◆ ESCOLHER PROJETO LOCAL",

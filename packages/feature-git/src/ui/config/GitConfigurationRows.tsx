@@ -2,12 +2,6 @@ import { Button } from "@tuiparts/react/button"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import {
-  GIT_CONFIGURATION_TABS,
-  gitConfigurationTabLabel,
-  type GitConfigurationTab,
-} from "../../model/git-configuration"
 import type { LocalGitTarget } from "../../services/local-target"
 import {
   GIT_BROWSER_OPTIONS,
@@ -34,7 +28,7 @@ export function GitSelectorActions({
   onMutate: (action: "duplicate" | "delete" | "up" | "down") => void
 }) {
   return (
-    <box style={{ height: 2, flexShrink: 0 }}>
+    <box style={{ height: 1, flexShrink: 0 }}>
       <box style={{ height: 1, flexDirection: "row" }}>
         <InlineButton label={translateUi("[N] Novo")} accent={COLORS.git} onPress={onCreate} />
         <InlineButton
@@ -56,22 +50,18 @@ export function GitSelectorActions({
           onPress={() => onMutate("delete")}
         />
         <InlineButton
-          label="[Alt+↑]"
+          label="↑"
           accent={COLORS.git}
           disabled={!selected}
           onPress={() => onMutate("up")}
         />
         <InlineButton
-          label="[Alt+↓]"
+          label="↓"
           accent={COLORS.git}
           disabled={!selected}
           onPress={() => onMutate("down")}
         />
       </box>
-      <ShortcutText
-        content={translateUi("[J/K] Navegar  [1/2/3/4/5] Aba  [Esc] Voltar")}
-        style={{ fg: COLORS.muted }}
-      />
     </box>
   )
 }
@@ -95,7 +85,6 @@ export function GitLocalTargetRows({
       value: target.isRepository ? target.name : translateUi("Nenhum projeto selecionado"),
       description: target.displayPath,
       target: "project" as const,
-      shortcut: "[P]",
     },
     {
       title: translateUi("BRANCH LOCAL"),
@@ -104,69 +93,51 @@ export function GitLocalTargetRows({
         ? translateUi("Somente branches existentes neste repositório")
         : translateUi("Escolha primeiro um projeto local"),
       target: "branch" as const,
-      shortcut: "[B]",
     },
   ]
-  return rows.map((row, index) => (
-    <Button
-      key={row.target}
-      id={`git-configuration-local-${row.target}`}
-      height={3}
-      flexShrink={0}
-      onPress={() => {
-        onSelect(index)
-        onActivate(row.target)
-      }}
-    >
-      <box
-        style={{
-          height: 3,
-          flexShrink: 0,
-          paddingLeft: 1,
-          paddingRight: 1,
-          backgroundColor: selectedIndex === index ? COLORS.panelRaised : COLORS.panel,
-        }}
+  return rows.map((row, index) => {
+    const activate = () => {
+      onSelect(index)
+      onActivate(row.target)
+    }
+    return (
+      <Button
+        key={row.target}
+        id={`git-configuration-local-${row.target}`}
+        height={3}
+        flexShrink={0}
+        onPress={activate}
       >
-        <text
-          content={truncateDisplay(
-            `${selectedIndex === index ? "▶" : " "} ${row.title}  ${row.shortcut}`,
-            width - 4,
-          )}
-          style={{ fg: selectedIndex === index ? COLORS.git : COLORS.text }}
-        />
-        <text content={truncateDisplay(`  ${row.value}`, width - 4)} style={{ fg: COLORS.text }} />
-        <text
-          content={truncateDisplay(`  ${row.description}`, width - 4)}
-          style={{ fg: COLORS.muted }}
-        />
-      </box>
-    </Button>
-  ))
-}
-
-export function GitConfigurationTabs({
-  active,
-  compact = false,
-  onSelect,
-}: {
-  active: GitConfigurationTab
-  compact?: boolean
-  onSelect: (tab: GitConfigurationTab) => void
-}) {
-  return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-      {GIT_CONFIGURATION_TABS.map((tab) => (
-        <InlineButton
-          key={tab}
-          id={`git-configuration-tab-${tab}`}
-          label={translateUi(gitConfigurationTabLabel(tab, compact))}
-          accent={COLORS.git}
-          active={tab === active}
-          onPress={() => onSelect(tab)}
-        />
-      ))}
-    </box>
-  )
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: The visible row forwards mouse activation to its Button action. */}
+        <box
+          onMouseDown={activate}
+          style={{
+            height: 3,
+            flexShrink: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: selectedIndex === index ? COLORS.panelRaised : COLORS.panel,
+          }}
+        >
+          <text
+            content={truncateDisplay(
+              `${selectedIndex === index ? "▶" : " "} ${row.title}`,
+              width - 4,
+            )}
+            style={{ fg: selectedIndex === index ? COLORS.git : COLORS.text }}
+          />
+          <text
+            content={truncateDisplay(`  ${row.value}`, width - 4)}
+            style={{ fg: COLORS.text }}
+          />
+          <text
+            content={truncateDisplay(`  ${row.description}`, width - 4)}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+      </Button>
+    )
+  })
 }
 
 export function GitSelectorRows({
@@ -182,37 +153,42 @@ export function GitSelectorRows({
   width: number
   onSelect: (index: number) => void
 }) {
-  return sections.map((section, index) => (
-    <Button
-      key={section.id}
-      id={`git-configuration-${kind}-selector-${index}`}
-      height={2}
-      flexShrink={0}
-      onPress={() => onSelect(index)}
-    >
-      <box
-        style={{
-          height: 2,
-          flexShrink: 0,
-          paddingLeft: 1,
-          paddingRight: 1,
-          backgroundColor: index === selectedIndex ? COLORS.panelRaised : COLORS.panel,
-        }}
+  return sections.map((section, index) => {
+    const select = () => onSelect(index)
+    return (
+      <Button
+        key={section.id}
+        id={`git-configuration-${kind}-selector-${index}`}
+        height={2}
+        flexShrink={0}
+        onPress={select}
       >
-        <text
-          content={truncateDisplay(
-            `${index === selectedIndex ? "▶" : " "} ${translateUi(section.title)}`,
-            width - 4,
-          )}
-          style={{ fg: index === selectedIndex ? COLORS.git : COLORS.text }}
-        />
-        <text
-          content={truncateDisplay(`  ${section.query}`, width - 4)}
-          style={{ fg: COLORS.muted }}
-        />
-      </box>
-    </Button>
-  ))
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: The visible row forwards mouse activation to its Button action. */}
+        <box
+          onMouseDown={select}
+          style={{
+            height: 2,
+            flexShrink: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: index === selectedIndex ? COLORS.panelRaised : COLORS.panel,
+          }}
+        >
+          <text
+            content={truncateDisplay(
+              `${index === selectedIndex ? "▶" : " "} ${translateUi(section.title)}`,
+              width - 4,
+            )}
+            style={{ fg: index === selectedIndex ? COLORS.git : COLORS.text }}
+          />
+          <text
+            content={truncateDisplay(`  ${section.query}`, width - 4)}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+      </Button>
+    )
+  })
 }
 
 export function GitRepositoryRows({
@@ -277,37 +253,42 @@ export function GitBrowserRows({
   onSelect: (index: number) => void
   onActivate: (browser: GitBrowser) => void
 }) {
-  return GIT_BROWSER_OPTIONS.map((option, index) => (
-    <Button
-      key={option}
-      id={`git-configuration-browser-${option}`}
-      height={2}
-      flexShrink={0}
-      onPress={() => {
-        onSelect(index)
-        onActivate(option)
-      }}
-    >
-      <box
-        style={{
-          height: 2,
-          paddingLeft: 1,
-          paddingRight: 1,
-          backgroundColor: selectedIndex === index ? COLORS.panelRaised : COLORS.panel,
-        }}
+  return GIT_BROWSER_OPTIONS.map((option, index) => {
+    const activate = () => {
+      onSelect(index)
+      onActivate(option)
+    }
+    return (
+      <Button
+        key={option}
+        id={`git-configuration-browser-${option}`}
+        height={2}
+        flexShrink={0}
+        onPress={activate}
       >
-        <text
-          content={truncateDisplay(
-            `${selectedIndex === index ? "▶" : " "} ${browser === option ? "●" : "○"} ${translateUi(gitBrowserLabel(option))}`,
-            width - 4,
-          )}
-          style={{ fg: browser === option || selectedIndex === index ? COLORS.git : COLORS.text }}
-        />
-        <text
-          content={truncateDisplay(`  ${translateUi(gitBrowserDescription(option))}`, width - 4)}
-          style={{ fg: COLORS.muted }}
-        />
-      </box>
-    </Button>
-  ))
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: The visible row forwards mouse activation to its Button action. */}
+        <box
+          onMouseDown={activate}
+          style={{
+            height: 2,
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: selectedIndex === index ? COLORS.panelRaised : COLORS.panel,
+          }}
+        >
+          <text
+            content={truncateDisplay(
+              `${selectedIndex === index ? "▶" : " "} ${browser === option ? "●" : "○"} ${translateUi(gitBrowserLabel(option))}`,
+              width - 4,
+            )}
+            style={{ fg: browser === option || selectedIndex === index ? COLORS.git : COLORS.text }}
+          />
+          <text
+            content={truncateDisplay(`  ${translateUi(gitBrowserDescription(option))}`, width - 4)}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+      </Button>
+    )
+  })
 }

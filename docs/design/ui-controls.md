@@ -46,13 +46,18 @@ previous/next controls replace the sidebar and the detail keeps the available
 width. Database-only and Git-only categories must remain hidden outside their
 own context.
 
-`[J/K]` and `[↑/↓]` move through visible categories. `[H/L]` and
-`[←/→]` change the current value for color mode, palette, layout, and language.
-`[Enter]` opens action categories such as Git, sensitive terms, SQL history,
-tutorial, and official features. Every category and choice remains clickable.
-The selected sidebar row uses the fixed brand rail and a raised background, and
-the detail header shows automatic-save status without turning it into another
-focus target.
+For standard settings, `[J/K]` and `[↑/↓]` select a visible category and render its
+detail immediately; `[H/L]` and `[←/→]` change color mode, palette, layout, or
+language without an intermediate `[Enter]`. Action categories open sensitive
+terms, SQL history, tutorial, or official features when entered.
+
+Only Git's contextual rows use a separate category/detail focus model. Diffs sits
+under `GIT`, while the four GitHub-backed settings sit under `GITHUB`. The focused
+Git row alone shows a trailing blue `[Enter]`; long labels truncate before that
+hint, and `[Enter]` or `[L]` transfers keyboard focus to its rendered detail. A
+fixed blue left rail marks the focused Git row or detail pane. Every category and
+choice remains clickable, and the detail header shows automatic-save status
+without turning it into another focus target.
 
 ## Notifications
 
@@ -78,7 +83,7 @@ is released when its card or provider disappears.
   outer layer dismisses it; clicks inside the dialog do not bubble into dismissal.
   The lower dimmer is paint-only and must not become a second focusable button.
   Use `positionRelative` only when a dialog owns an absolutely positioned child,
-  such as Git configuration's loading overlay. Use `dialogFocusable={false}` when
+  such as a dialog-owned loading overlay. Use `dialogFocusable={false}` when
   an existing modal assigns focus exclusively to its child controls; the feature
   still owns its keyboard scope. `layerId` and `layerFocusable` preserve an
   existing full-screen focus owner when needed, as in the sensitive-terms editor.
@@ -92,7 +97,7 @@ is released when its card or provider disappears.
 
 Current adopters include Git's discard, Inbox, PR and Issue action dialogs, PR and
 Issue section editors, local/compare/remote branch and repository pickers,
-configuration and creation dialogs; Runner's save and autostart trust dialogs;
+creation dialogs; Runner's save and autostart trust dialogs;
 Database's connection, cell editor, write review, table search, batch export,
 favorites, and history dialogs; and CLI global settings and sensitive terms.
 The shared surface intentionally does not
@@ -104,6 +109,10 @@ action model and keyboard selection policy. Their query/section editors share
 `GitRemoteSectionEditor`, including focus stack, autocomplete placement, fields,
 and footer. PR and Issue wrappers still supply their own allowed columns,
 option parsing, query kind, and callbacks.
+
+Git configuration is intentionally embedded in the global settings detail pane.
+Its lists, local-target picker, and PR/Issue section editor replace that pane while
+retaining feature-owned focus and write guards; they are not `ModalSurface` adopters.
 
 The Git tutorial mock dialogs expose step-specific target IDs and paint only a
 simulated state. They keep their own noninteractive dimmers: they are not live

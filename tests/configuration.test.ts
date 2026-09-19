@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
   activateConfigurationSection,
+  configurationSectionForGitTab,
   configurationSectionsForContext,
+  gitConfigurationTabForSection,
   normalizeConfigurationSectionForContext,
 } from "../apps/cli/src/model/configuration-context"
 import { configurationSettingPatch } from "../apps/cli/src/model/configuration-options"
@@ -20,7 +22,11 @@ describe("contextual settings", () => {
       "features",
     ])
     expect(configurationSectionsForContext("git")).toEqual([
-      "git",
+      "gitDiffs",
+      "gitPullRequests",
+      "gitIssues",
+      "gitRepositories",
+      "gitBrowser",
       "colorMode",
       "palette",
       "layout",
@@ -40,9 +46,18 @@ describe("contextual settings", () => {
 
   test("moves focus away from a hidden Database section", () => {
     expect(normalizeConfigurationSectionForContext("history", "global")).toBe("colorMode")
-    expect(normalizeConfigurationSectionForContext("sensitive", "git")).toBe("git")
+    expect(normalizeConfigurationSectionForContext("sensitive", "git")).toBe("gitDiffs")
     expect(normalizeConfigurationSectionForContext("history", "database")).toBe("history")
     expect(normalizeConfigurationSectionForContext("language", "global")).toBe("language")
+  })
+
+  test("maps the five Git context rows to their detail content", () => {
+    expect(configurationSectionForGitTab("diffs")).toBe("gitDiffs")
+    expect(configurationSectionForGitTab("pull-requests")).toBe("gitPullRequests")
+    expect(configurationSectionForGitTab("issues")).toBe("gitIssues")
+    expect(configurationSectionForGitTab("repositories")).toBe("gitRepositories")
+    expect(configurationSectionForGitTab("browser")).toBe("gitBrowser")
+    expect(gitConfigurationTabForSection("gitBrowser")).toBe("browser")
   })
 
   test("cycles the independent color mode while preserving the selected palette", () => {
@@ -62,14 +77,13 @@ describe("contextual settings", () => {
       startTutorial: () => opened.push("tutorial"),
       openHistory: () => opened.push("history"),
       openSensitive: () => opened.push("sensitive"),
-      openGit: () => opened.push("git"),
     }
 
     activateConfigurationSection("palette", actions)
     activateConfigurationSection("layout", actions)
-    activateConfigurationSection("git", actions)
+    activateConfigurationSection("gitDiffs", actions)
     activateConfigurationSection("features", actions)
 
-    expect(opened).toEqual(["git", "features"])
+    expect(opened).toEqual(["features"])
   })
 })

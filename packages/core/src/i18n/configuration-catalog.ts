@@ -34,4 +34,22 @@ export const CONFIGURATION_MESSAGES = [
     "[J/K/↑/↓] 类别 · [H/L/←/→] 选项 · [Enter] 打开",
     "[J/K/↑/↓] 카테고리 · [H/L/←/→] 옵션 · [Enter] 열기",
   ],
+  [
+    "[J/K] · [Enter]",
+    "[J/K] · [Enter]",
+    "[J/K] · [Enter]",
+    "[J/K]・[Enter]",
+    "[J/K] · [Enter]",
+    "[J/K] · [Enter]",
+  ],
+  [
+    "[J/K/↑/↓] foco · [Enter/L] detalhes",
+    "[J/K/↑/↓] focus · [Enter/L] details",
+    "[J/K/↑/↓] foco · [Enter/L] detalles",
+    "[J/K/↑/↓] フォーカス・[Enter/L] 詳細",
+    "[J/K/↑/↓] 焦点 · [Enter/L] 详情",
+    "[J/K/↑/↓] 포커스 · [Enter/L] 세부 정보",
+  ],
+  ["DIFFS", "DIFFS", "DIFFS", "差分", "差异", "DIFFS"],
+  ["NAVEGADOR", "BROWSER", "NAVEGADOR", "ブラウザー", "浏览器", "브라우저"],
 ] as const

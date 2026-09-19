@@ -11,6 +11,8 @@ export type IssueSectionEditorMode = GitRemoteSectionEditorMode
 export type IssueSectionEditorValues = GitRemoteSectionEditorValues<IssueColumn>
 
 export function IssueSectionEditorModal({
+  embedded = false,
+  contentWidth,
   mode,
   initialTitle,
   initialQuery,
@@ -22,6 +24,8 @@ export function IssueSectionEditorModal({
   onApply,
   onSave,
 }: {
+  embedded?: boolean
+  contentWidth?: number
   mode: IssueSectionEditorMode
   initialTitle: string
   initialQuery: string
@@ -37,6 +41,8 @@ export function IssueSectionEditorModal({
     <GitRemoteSectionEditor
       kind="issue"
       open
+      embedded={embedded}
+      {...(contentWidth === undefined ? {} : { contentWidth })}
       mode={mode}
       initialTitle={initialTitle}
       initialQuery={initialQuery}

@@ -314,14 +314,6 @@ export const GIT_PR_MESSAGES = [
   ["[D] Duplicar", "[D] Duplicate", "[D] Duplicar", "[D] 複製", "[D] 复制", "[D] 복제"],
   ["[X] Excluir", "[X] Delete", "[X] Eliminar", "[X] 削除", "[X] 删除", "[X] 삭제"],
   [
-    "[Alt+↑/↓] Reordenar  [J/K] Navegar",
-    "[Alt+↑/↓] Reorder  [J/K] Navigate",
-    "[Alt+↑/↓] Reordenar  [J/K] Navegar",
-    "[Alt+↑/↓] 並べ替え  [J/K] 移動",
-    "[Alt+↑/↓] 排序  [J/K] 导航",
-    "[Alt+↑/↓] 순서 변경  [J/K] 탐색",
-  ],
-  [
     "Não foi possível salvar a configuração.",
     "Could not save the configuration.",
     "No se pudo guardar la configuración.",

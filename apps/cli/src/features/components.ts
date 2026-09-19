@@ -16,10 +16,10 @@ export function GitViewer(props: ComponentProps<FeatureModules["git"]["GitViewer
   const Component = loadedFeature("git")?.GitViewer
   return Component ? createElement(Component, props) : null
 }
-export function GitConfigurationModal(
-  props: ComponentProps<FeatureModules["git"]["GitConfigurationModal"]>,
+export function GitConfigurationView(
+  props: ComponentProps<FeatureModules["git"]["GitConfigurationView"]>,
 ) {
-  const Component = loadedFeature("git")?.GitConfigurationModal
+  const Component = loadedFeature("git")?.GitConfigurationView
   return Component ? createElement(Component, props) : null
 }
 export function Runner(props: ComponentProps<FeatureModules["runner"]["Runner"]>) {

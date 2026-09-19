@@ -53,7 +53,7 @@ test.each(["git-base-diff", "git-file-list-row-0", "git-compare-project"])(
 test.each([
   "git-command-input",
   "git-discard-changes-modal",
-  "git-configuration-modal",
+  "git-configuration-context",
   "git-local-target-search",
   "git-compare-branch-list",
   "git-pr-section-editor-query",

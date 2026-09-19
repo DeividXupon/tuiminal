@@ -3,15 +3,12 @@ import type { RefObject } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { GitConfigurationTab } from "../../model/git-configuration"
 import type { GitConfigurationReadyState, GitConfigurationState } from "./useGitConfiguration"
 import type { GitBrowser } from "../../model/browser"
 import {
   GitBrowserRows,
-  GitConfigurationTabs,
   GitLocalTargetRows,
   GitRepositoryRows,
   GitSelectorActions,
@@ -160,32 +157,7 @@ function GitConfigurationFooter({
       />
     )
   }
-  if (tab === "repositories") {
-    return (
-      <ShortcutText
-        content={translateUi("[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4/5] Aba")}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
-    )
-  }
-  if (tab === "browser") {
-    return (
-      <ShortcutText
-        content={translateUi("[J/K] Navegar  [Espaço/Enter] selecionar  [1/2/3/4/5] Aba")}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
-    )
-  }
-  if (tab === "diffs") {
-    return (
-      <ShortcutText
-        content={translateUi(
-          "[P] Projeto  [B] Branch  [J/K] Navegar  [Enter] Alterar  [1/2/3/4/5] Aba",
-        )}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
-    )
-  }
+  if (tab === "repositories" || tab === "browser" || tab === "diffs") return null
   return (
     <GitSelectorActions
       selected={selected}
@@ -202,7 +174,6 @@ export function GitConfigurationPanel({
   dialogRef,
   listRef,
   width,
-  height,
   state,
   ready,
   notice,
@@ -212,8 +183,6 @@ export function GitConfigurationPanel({
   selectedRepositories,
   selected,
   pendingDelete,
-  onClose,
-  onSelectTab,
   onSelect,
   onToggleRepository,
   onSelectBrowser,
@@ -226,7 +195,6 @@ export function GitConfigurationPanel({
   dialogRef: RefObject<BoxRenderable | null>
   listRef: RefObject<ScrollBoxRenderable | null>
   width: number
-  height: number
   state: GitConfigurationState
   ready: GitConfigurationReadyState | null
   notice: string
@@ -236,8 +204,6 @@ export function GitConfigurationPanel({
   selectedRepositories: ReadonlySet<string>
   selected: boolean
   pendingDelete: boolean
-  onClose: () => void
-  onSelectTab: (tab: GitConfigurationTab) => void
   onSelect: (index: number) => void
   onToggleRepository: (repository: string | null) => void
   onSelectBrowser: (browser: GitBrowser) => void
@@ -257,30 +223,18 @@ export function GitConfigurationPanel({
         ? `${translateUi("REPOSITÓRIO ATUAL")}: ${context.remote.repository}`
         : translateUi("FORA DE UM REPOSITÓRIO · ESCOPO PADRÃO: TODOS")
   return (
-    <ModalSurface
-      id="git-configuration-modal"
-      dialogRef={dialogRef}
-      width={width}
-      height={height}
-      zIndex={970}
-      borderColor={COLORS.git}
-      positionRelative
-      onBackdropPress={onClose}
+    <box
+      ref={dialogRef}
+      id="git-configuration-context"
+      focusable
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        flexGrow: 1,
+        backgroundColor: COLORS.canvas,
+      }}
     >
-      <box
-        style={{
-          height: 2,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          border: ["bottom"],
-          borderColor: COLORS.border,
-        }}
-      >
-        <text content={translateUi("◆ CONFIGURAÇÕES DO GIT")} style={{ fg: COLORS.git }} />
-        <InlineButton label={translateUi("[Esc] Fechar")} accent={COLORS.git} onPress={onClose} />
-      </box>
-      <GitConfigurationTabs active={tab} compact={width < 100} onSelect={onSelectTab} />
       {ready ? (
         <text
           content={tab === "diffs" ? contextLabel : `${contextLabel} · ${ready.host}`}
@@ -337,6 +291,6 @@ export function GitConfigurationPanel({
         accent={COLORS.git}
         background={COLORS.canvas}
       />
-    </ModalSurface>
+    </box>
   )
 }

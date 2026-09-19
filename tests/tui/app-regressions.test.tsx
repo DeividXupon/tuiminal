@@ -1,10 +1,12 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
+import { RGBA, type BoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { App } from "../../apps/cli/src/App"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 import {
   loadGitBrowserConfig,
   saveGitBrowserConfig,
@@ -30,10 +32,11 @@ async function settle(until: () => boolean) {
 
 async function key(name: string, options: { ctrl?: boolean; meta?: boolean } = {}) {
   await act(async () => {
-    tui?.mockInput.pressKey(name, options)
+    if (name === "ENTER" || name === "RETURN") tui?.mockInput.pressEnter()
+    else tui?.mockInput.pressKey(name, options)
     await Bun.sleep(name === "ESCAPE" ? 60 : 5)
-    await tui?.renderOnce()
   })
+  await tui?.renderOnce()
 }
 
 async function click(id: string) {
@@ -45,8 +48,8 @@ async function click(id: string) {
       target.screenX + Math.max(0, Math.floor(target.width / 2)),
       target.screenY + Math.max(0, Math.floor(target.height / 2)),
     )
-    await tui?.renderOnce()
   })
+  await tui.renderOnce()
 }
 
 function selectInitialTool(tool: "database" | "git" | "runner" | "http") {
@@ -104,12 +107,18 @@ test("settings center supports Vim and mouse navigation across categories and op
   expect(tui.captureCharFrame()).toContain("MODO DE COR")
   expect(tui.captureCharFrame()).toContain("DARK")
   expect(tui.captureCharFrame()).toContain("LIGHT")
-  await key("ENTER")
+  expect(
+    tui
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.includes("MODO DE COR") && line.includes("[Enter]")),
+  ).toBe(false)
   expect(tui.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
   await key("l")
 
   expect(getUiSettings().colorMode).toBe("light")
   await key("j")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-palette")).toBeDefined()
   await settle(() => tui?.captureCharFrame().includes("Dracula") ?? false)
   expect(tui.captureCharFrame()).toContain("Catppuccin")
   expect(tui.captureCharFrame()).toContain("Tokyo Night")
@@ -140,6 +149,7 @@ test("narrow settings keeps full-width details and compact category controls", a
   expect(tui.renderer.root.findDescendantById("configuration-navigation")).toBeUndefined()
   expect(tui.renderer.root.findDescendantById("configuration-detail-colorMode")).toBeDefined()
   await click("configuration-category-next")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-palette")).toBeDefined()
   await settle(() => tui?.captureCharFrame().includes("Tokyo Night") ?? false)
   await key("l")
   expect(getUiSettings().palette).toBe("midnight")
@@ -166,6 +176,9 @@ test("Diffs opens the local target configuration directly with Ctrl+P", async ()
 
   await key("p", { ctrl: true })
   await settle(() => tui?.captureCharFrame().includes("PROJETO LOCAL") ?? false)
+  expect(tui.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("git-configuration-context")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeUndefined()
   expect(tui.captureCharFrame()).toContain("PROJETO LOCAL")
   expect(tui.captureCharFrame()).toContain("BRANCH LOCAL")
 })
@@ -194,36 +207,78 @@ test("Git settings configures Diffs, PR, Issues, repositories, and browser", asy
 
   await click("tutorial-settings-button")
   expect(tui.captureCharFrame()).toContain("◆ CONFIGURAÇÕES · GIT")
-  expect(tui.captureCharFrame()).toContain("Diffs, PR, Issues e navegador")
   expect(tui.captureCharFrame()).not.toContain("CONFIGURAÇÕES DO BANCO")
-
-  await act(async () => {
-    tui?.mockInput.pressEnter()
-    await Bun.sleep(5)
-    await tui?.renderOnce()
-  })
-  await settle(() => tui?.captureCharFrame().includes("Seletores de PR") ?? false)
-  expect(tui.captureCharFrame()).toContain("Seletores de PR")
-  expect(tui.captureCharFrame()).toContain("Seletores de Issues")
-  expect(tui.captureCharFrame()).toContain("Repositórios")
-  expect(tui.captureCharFrame()).toContain("Navegador")
+  await settle(() => tui?.captureCharFrame().includes("PROJETO LOCAL") ?? false)
+  expect(tui.renderer.root.findDescendantById("git-configuration-context")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeUndefined()
+  for (const section of [
+    "gitDiffs",
+    "gitPullRequests",
+    "gitIssues",
+    "gitRepositories",
+    "gitBrowser",
+  ]) {
+    expect(tui.renderer.root.findDescendantById(`configuration-section-${section}`)).toBeDefined()
+  }
+  expect(tui.captureCharFrame()).toContain("PULL REQUESTS")
+  expect(tui.captureCharFrame()).toContain("ISSUES")
+  expect(tui.captureCharFrame()).toContain("REPOSITÓRIOS")
+  expect(tui.captureCharFrame()).toContain("NAVEGADOR")
+  expect(tui.captureCharFrame()).toContain("GITHUB")
   expect(tui.captureCharFrame()).toContain("PROJETO LOCAL")
   expect(tui.captureCharFrame()).toContain("BRANCH LOCAL")
+  expect(
+    tui
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.includes("DIFFS") && line.includes("[Enter]")),
+  ).toBe(true)
+  await key("j")
+  expect(
+    tui
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.includes("PULL REQUESTS") && line.includes("[Enter]")),
+  ).toBe(true)
+  expect(tui.captureCharFrame()).not.toContain("PROJETO LOCAL")
+  expect(tui.captureCharFrame()).not.toContain("[Alt+↑]")
+  expect(tui.captureCharFrame()).not.toContain("[Alt+↓]")
+  expect(tui.renderer.root.findDescendantById("git-configuration-context")).toBeDefined()
+  await key("k")
+  expect(tui.captureCharFrame()).toContain("PROJETO LOCAL")
+  await key("ENTER")
+  expect(
+    (
+      tui.renderer.root.findDescendantById("configuration-detail-git") as BoxRenderable
+    ).borderColor.toInts(),
+  ).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   await click("git-configuration-local-project")
   expect(tui.captureCharFrame()).toContain("ESCOLHER PROJETO LOCAL")
+  expect(tui.renderer.root.findDescendantById("git-local-target-picker")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeUndefined()
   await key("ESCAPE")
   await settle(() => !tui?.captureCharFrame().includes("CARREGANDO CONFIGURAÇÃO GIT…"))
-  await click("git-configuration-tab-repositories")
+  await key("ESCAPE")
+  expect(
+    tui
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.includes("DIFFS") && line.includes("[Enter]")),
+  ).toBe(true)
+  expect(tui.captureCharFrame()).not.toContain("[J/K] Navegar")
+  expect(tui.captureCharFrame()).not.toContain("[H] Categorias")
+  await click("configuration-section-gitRepositories")
   expect(tui.captureCharFrame()).toContain("TODOS")
-  await click("git-configuration-tab-browser")
+  await click("configuration-section-gitBrowser")
   expect(tui.captureCharFrame()).toContain("Carbonyl")
   expect(tui.captureCharFrame()).toContain("terminal-browser")
   await click("git-configuration-browser-carbonyl")
   expect(loadGitBrowserConfig().browser).toBe("carbonyl")
   saveGitBrowserConfig("system")
-  expect(tui.renderer.root.findDescendantById("git-configuration-modal")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("git-configuration-context")).toBeDefined()
   await act(async () => tui?.mockMouse.click(119, 0))
-  await settle(() => !tui?.renderer.root.findDescendantById("git-configuration-modal"))
+  await settle(() => !tui?.renderer.root.findDescendantById("configuration-modal"))
 })
 
 test("global shortcuts leave Database after closing the connection form", async () => {

@@ -20,8 +20,8 @@ export const GIT_TUTORIAL_STEPS = [
     group: "DIFFS · PROJETO LOCAL",
     title: "Trocar projeto ou branch",
     description:
-      "[Ctrl+P] abre as configurações do Git diretamente na aba Diffs. Nela você escolhe qualquer repositório Git local e uma branch já existente sem alterar o escopo de PR, Issues ou Inbox.",
-    hint: "[P] escolhe o projeto · [B] escolhe a branch · [J/K] navega · [Enter] altera",
+      "[Ctrl+P] abre as configurações do Git diretamente no item Diffs. Nele você escolhe qualquer repositório Git local e uma branch já existente sem alterar o escopo de PR, Issues ou Inbox.",
+    hint: "[Enter] abre o item focado",
     kind: "action",
   },
   {
@@ -155,7 +155,7 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Trocar projeto ou branch",
     description:
       "[Ctrl+P] abre a configuração local compartilhada com Diffs. Trocar o projeto redefine as refs disponíveis para a comparação sem alterar o escopo remoto de PR, Issues ou Inbox.",
-    hint: "[P] escolhe o projeto · [B] escolhe a branch · [J/K] navega · [Enter] altera",
+    hint: "[Enter] abre o item focado",
     kind: "action",
     stateful: true,
   },

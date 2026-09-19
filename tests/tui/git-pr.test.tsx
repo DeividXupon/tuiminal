@@ -299,9 +299,10 @@ test("Git Compare tutorial opens the simulated local project configuration", asy
   await tui.renderOnce()
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("CONFIGURAÇÕES DO GIT")
-  expect(frame).toContain("PROJETO LOCA")
-  expect(frame).toContain("BRANCH LOCAL")
+  expect(frame).toContain("CONFIGURAÇÕES · GIT")
+  expect(frame).toContain("GITHUB")
+  expect(tui.renderer.root.findDescendantById("tutorial-git-compare-project")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-branch-row")).toBeDefined()
   expect(frame).toContain("Trocar projeto ou branch")
 })
 
@@ -416,11 +417,12 @@ test("Git tutorial opens local project and branch configuration while explaining
   await waitForRenderable("tutorial-git-local-configuration-rows")
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("CONFIGURAÇÕES DO GIT")
-  expect(frame).toContain("PROJETO LOCAL")
-  expect(frame).toContain("BRANCH LOCAL")
-  expect(frame).toContain("[P]")
-  expect(frame).toContain("[B]")
+  expect(frame).toContain("CONFIGURAÇÕES · GIT")
+  expect(frame).toContain("GITHUB")
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-project-row")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-branch-row")).toBeDefined()
+  expect(frame).not.toContain("[P] Projeto")
+  expect(frame).not.toContain("[B] Branch")
 })
 
 test("Git tutorial renders the two-column diff while explaining [V]", async () => {

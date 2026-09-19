@@ -290,12 +290,18 @@ Na aba Checks, execuções e erros de outro PR desaparecem assim que a seleção
 muda; respostas atrasadas não reaparecem no PR atual. PR, Issues e Inbox reutilizam o
 texto das linhas ao navegar, preservando atualizações de idioma, cores e dados.
 
-Nas configurações Git, projetos locais e repositórios remotos aparecem assim que
-cada busca termina, sem esperar a outra. Fechar ou recarregar o modal cancela a
-consulta remota anterior. O autocomplete de queries processa só os candidatos
+As configurações Git aparecem como cinco itens abertos por `[,]`: Diffs fica em
+**GIT**, enquanto Pull Requests, Issues, Repositórios e Navegador ficam em
+**GITHUB**. O item focado é renderizado imediatamente no painel de detalhes, e `[Enter]` leva
+o foco do teclado para esse painel. Projetos locais e repositórios remotos aparecem
+assim que cada busca termina, sem
+esperar a outra. Sair ou recarregar o contexto Git cancela a consulta remota anterior.
+Os seletores de projeto/branch e os editores de seções de PR/Issues substituem o
+conteúdo desse mesmo painel e voltam com `[Esc]`; nenhum segundo modal de
+configuração é aberto. O autocomplete de queries processa só os candidatos
 necessários para preencher as sugestões visíveis.
 
-No Git, abra `[,]` → Git → `[5] Navegador` para escolher onde `[O]` abre PRs,
+No Git, abra `[,]` → Contexto → Navegador para escolher onde `[O]` abre PRs,
 Issues, notificações do Inbox e execuções de workflow. O padrão usa o navegador
 do sistema. Browsh e Carbonyl abrem em um terminal integrado ao Git, que pode
 ser fechado com `[Ctrl+Q]`. `terminal-browser` abre um painel separado do terminal.
@@ -303,15 +309,15 @@ Instale o comando escolhido no `PATH` antes de abrir um link. A escolha vale par
 todo o Git e fica em `~/.config/tuiminal/git-browser.json`.
 
 Nos seletores de projeto e branch local, pressionar `[Enter]` repetidamente não
-repete uma seleção em andamento. Fechar o seletor por `[Esc]`, pelo botão ou fora
-do modal impede que sua resposta atrasada feche outro seletor aberto depois.
-Fechar não cancela nem desfaz um comando Git que já foi iniciado.
+repete uma seleção em andamento. Sair do seletor por `[Esc]` ou pelo botão impede
+que sua resposta atrasada feche outro seletor aberto depois. Sair não cancela nem
+desfaz um comando Git que já foi iniciado.
 
 Na busca de PRs e Issues, texto entre aspas permanece literal: mencionar `repo:`
 ou `author:@me` dentro de uma frase não remove o filtro da conta. Valores como
 `label:"help wanted"` preservam os espaços, e aspas abertas precisam ser fechadas
 antes de enviar a consulta. Aplicar ou salvar uma busca incompleta mostra o aviso
-no próprio modal, mantendo o texto e o foco para você corrigir.
+no próprio painel de contexto, mantendo o texto e o foco para você corrigir.
 
 ### Atalhos essenciais do Git
 
@@ -575,6 +581,16 @@ uma categoria por vez. Use `[J/K]` ou `[↑/↓]` para navegar entre categorias 
 `[H/L]` ou `[←/→]` para alterar a opção atual. As mudanças são salvas
 automaticamente sem desmontar editores, perder foco ou apagar o estado das
 ferramentas.
+
+Quando o Git está ativo, aparecem cinco itens sem prefixos numéricos: Diffs no
+grupo **GIT**, e Pull Requests, Issues, Repositórios e Navegador no grupo
+**GITHUB**. `[J/K]` ou
+`[↑/↓]` move o foco e renderiza imediatamente o detalhe da linha focada. Somente
+essa linha mostra `[Enter]` em azul; `[Enter]` ou `[L]` transfere o foco do teclado
+para o painel de detalhes. Uma linha azul à esquerda indica qual painel está em
+foco. Dentro de um detalhe do Git, `[J/K]` navega nas linhas e `[Esc]` volta à lista
+de categorias. `[Ctrl+P]` em Diffs abre essa mesma central diretamente nos
+controles de projeto e branch local.
 
 - **Modo de cor:** Dark ou Light.
 - **Paletas:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin e Tokyo Night.

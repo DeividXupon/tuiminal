@@ -293,13 +293,13 @@ Automated `gh` calls have time limits and wait for process exit on cancellation.
 
 Switching PR/Issue details releases pagination immediately; stale responses cannot replace a newer refresh. Repeated load-more actions in one event batch issue one request. PR discussion changes invalidate the detail cache even if the head SHA stays the same. PR, Issues, and Inbox reuse row text during navigation while keeping language, colors, and data current.
 
-Git settings show local projects and remote repositories independently as each discovery finishes. Closing or reloading the modal cancels its old remote request. Query autocomplete processes only enough candidates to fill visible suggestions.
+Git settings appear as five rows opened by `[,]`: Diffs under **GIT**, with Pull Requests, Issues, Repositories, and Browser under **GITHUB**. Moving with `[J/K]` or `[↑/↓]` renders the focused row immediately; `[Enter]` or `[L]` moves keyboard focus into its detail pane, and `[Esc]` returns to the rows. A blue left rail marks the focused pane, and the focused row shows a blue `[Enter]`. Local projects and remote repositories appear independently as each discovery finishes. Leaving or reloading the Git context cancels its old remote request. Project/branch pickers and PR/Issue section editors replace the same detail pane and return with `[Esc]`; no second settings modal is opened. Query autocomplete processes only enough candidates to fill visible suggestions.
 
-In Git, open `[,]` → Git → `[5] Browser` to choose where `[O]` opens PRs, Issues, Inbox notifications, and workflow runs. The default uses your system browser. Browsh and Carbonyl run in an integrated Git terminal; close that view with `[Ctrl+Q]`. `terminal-browser` opens a separate terminal pane. Install the chosen browser command on your `PATH` before opening a link. This Git-wide choice is saved in `~/.config/tuiminal/git-browser.json`.
+In Git, open `[,]` → Context → Browser to choose where `[O]` opens PRs, Issues, Inbox notifications, and workflow runs. The default uses your system browser. Browsh and Carbonyl run in an integrated Git terminal; close that view with `[Ctrl+Q]`. `terminal-browser` opens a separate terminal pane. Install the chosen browser command on your `PATH` before opening a link. This Git-wide choice is saved in `~/.config/tuiminal/git-browser.json`.
 
-Repeated `[Enter]` presses do not repeat an in-flight project/branch selection. Closing a picker with `[Esc]`, its button, or an outside click prevents a late response from closing a replacement picker. Closing does not cancel or undo an already-started Git command.
+Repeated `[Enter]` presses do not repeat an in-flight project/branch selection. Leaving a picker with `[Esc]` or its button prevents a late response from closing a replacement picker. Leaving does not cancel or undo an already-started Git command.
 
-Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phrase does not remove account scope. Values such as `label:"help wanted"` retain spaces. Unclosed quotes must be completed before submission; applying or saving an incomplete query shows a warning in the same modal while preserving text and focus.
+Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phrase does not remove account scope. Values such as `label:"help wanted"` retain spaces. Unclosed quotes must be completed before submission; applying or saving an incomplete query shows a warning in the same context pane while preserving text and focus.
 
 <a id="atalhos-essenciais-do-git"></a>
 
@@ -567,6 +567,14 @@ focused detail pane; narrow terminals show one category at a time. Use `[J/K]` o
 `[↑/↓]` to move between categories and `[H/L]` or `[←/→]` to change the current
 option. Changes save automatically without remounting editors, losing focus, or
 clearing tool state.
+
+When Git is active, five entries appear without number prefixes: Diffs under
+**GIT**, and Pull Requests, Issues, Repositories, and Browser under **GITHUB**. `[J/K]`
+or `[↑/↓]` moves the focus and immediately renders that row's detail. Only the
+focused row shows a blue `[Enter]`; `[Enter]` or `[L]` transfers keyboard focus to
+the detail pane. A blue left rail marks the pane with focus. Inside a Git detail,
+`[J/K]` navigates its rows and `[Esc]` returns to the category list. `[Ctrl+P]` in
+Diffs opens this same center directly on the local project and branch controls.
 
 - **Color mode:** Dark or Light.
 - **Palettes:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, and Tokyo Night.

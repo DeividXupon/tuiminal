@@ -6,7 +6,11 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import { configurationSectionsForContext } from "../model/configuration-context"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
+import {
+  configurationSectionsForContext,
+  isGitConfigurationSection,
+} from "../model/configuration-context"
 import { ConfigurationDetail } from "./ConfigurationDetail"
 import { ConfigurationNavigation } from "./ConfigurationNavigation"
 import {
@@ -25,9 +29,13 @@ export function ConfigurationModal({
   open,
   settings,
   section,
+  focusedSection,
+  navigationActive,
   notice,
   onClose,
   onSectionChange,
+  onSectionFocus,
+  onNavigationFocus,
   onPaletteChange,
   onColorModeChange,
   onLayoutChange,
@@ -40,7 +48,7 @@ export function ConfigurationModal({
   queryHistoryCount,
   tutorialLabel,
   context,
-  onOpenGitConfiguration,
+  onGitConfigurationChanged,
 }: ConfigurationModalProps) {
   const terminal = useTerminalDimensions()
   const navigationRef = useRef<ScrollBoxRenderable | null>(null)
@@ -49,10 +57,10 @@ export function ConfigurationModal({
   useEffect(() => {
     if (!open) return
     const timeout = setTimeout(() => {
-      navigationRef.current?.scrollChildIntoView(`configuration-section-${section}`)
+      navigationRef.current?.scrollChildIntoView(`configuration-section-${focusedSection}`)
     }, 0)
     return () => clearTimeout(timeout)
-  }, [open, section])
+  }, [focusedSection, open])
 
   if (!open) return null
 
@@ -61,7 +69,7 @@ export function ConfigurationModal({
   const narrow = width < 68
   const minimal = width < 52
   const detailWidth = Math.max(12, narrow ? width - 5 : width - 38)
-  const currentIndex = Math.max(0, sections.indexOf(section))
+  const currentIndex = Math.max(0, sections.indexOf(focusedSection))
   const previous = sections[(currentIndex - 1 + sections.length) % sections.length]
   const next = sections[(currentIndex + 1) % sections.length]
 
@@ -95,11 +103,7 @@ export function ConfigurationModal({
             style={{ fg: COLORS.muted }}
           />
         </box>
-        <InlineButton
-          label={narrow ? "[Esc]" : "[Esc] Fechar"}
-          accent={COLORS.focus}
-          onPress={onClose}
-        />
+        <InlineButton label="Fechar" accent={COLORS.focus} onPress={onClose} />
       </box>
 
       {narrow ? (
@@ -119,20 +123,27 @@ export function ConfigurationModal({
             id="configuration-category-previous"
             label="[K] ↑"
             accent={COLORS.focus}
-            onPress={() => previous && onSectionChange(previous)}
+            onPress={() => {
+              if (previous) onSectionFocus(previous)
+            }}
           />
-          <text
-            content={truncateDisplay(
-              translateUi(CONFIGURATION_SECTION_LABELS[section]),
-              Math.max(8, width - 22),
-            )}
-            style={{ fg: COLORS.focus }}
+          <InlineButton
+            id="configuration-category-open"
+            label={`${truncateDisplay(
+              translateUi(CONFIGURATION_SECTION_LABELS[focusedSection]),
+              Math.max(8, width - (navigationActive ? 24 : 16)),
+            )}${navigationActive ? " [Enter]" : ""}`}
+            accent={isGitConfigurationSection(focusedSection) ? BRAND_COLOR : COLORS.focus}
+            active={navigationActive}
+            onPress={() => onSectionChange(focusedSection)}
           />
           <InlineButton
             id="configuration-category-next"
             label="[J] ↓"
             accent={COLORS.focus}
-            onPress={() => next && onSectionChange(next)}
+            onPress={() => {
+              if (next) onSectionFocus(next)
+            }}
           />
         </box>
       ) : null}
@@ -142,33 +153,38 @@ export function ConfigurationModal({
           <ConfigurationNavigation
             sections={sections}
             section={section}
+            focusedSection={focusedSection}
+            navigationActive={navigationActive}
             settings={settings}
             queryHistoryCount={queryHistoryCount}
             tutorialLabel={tutorialLabel}
             navigationRef={navigationRef}
             onSectionChange={onSectionChange}
+            onSectionFocus={onSectionFocus}
           />
         )}
-        <scrollbox
-          id="configuration-detail"
-          scrollY
-          style={{
-            flexGrow: 1,
-            height: "100%",
-            paddingLeft: narrow ? 0 : 2,
-          }}
-          verticalScrollbarOptions={{
-            trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
-          }}
-        >
+        {isGitConfigurationSection(section) ? (
+          // biome-ignore lint/a11y/noStaticElementInteractions: Detail clicks transfer settings keyboard ownership.
           <box
-            id={`configuration-detail-${section}`}
-            style={{ width: "100%", flexShrink: 0, paddingTop: 1 }}
+            id="configuration-detail-git"
+            onMouseDown={() => {
+              if (navigationActive) onSectionChange(section)
+            }}
+            style={{
+              flexGrow: 1,
+              height: "100%",
+              border: ["left"],
+              borderColor: navigationActive ? COLORS.canvas : BRAND_COLOR,
+              paddingLeft: narrow ? 0 : 2,
+              paddingTop: 1,
+            }}
           >
             <ConfigurationDetail
               section={section}
               settings={settings}
+              navigationActive={navigationActive}
               notice={notice}
+              onNavigationFocus={onNavigationFocus}
               queryHistoryCount={queryHistoryCount}
               tutorialLabel={tutorialLabel}
               onPaletteChange={onPaletteChange}
@@ -179,12 +195,57 @@ export function ConfigurationModal({
               onOpenQueryHistory={onOpenQueryHistory}
               onOpenFeatures={onOpenFeatures}
               onStartTutorial={onStartTutorial}
-              onOpenGitConfiguration={onOpenGitConfiguration}
+              onGitConfigurationChanged={onGitConfigurationChanged}
               compact={narrow}
               contentWidth={detailWidth}
             />
           </box>
-        </scrollbox>
+        ) : (
+          // biome-ignore lint/a11y/noStaticElementInteractions: Detail clicks transfer settings keyboard ownership.
+          <scrollbox
+            id="configuration-detail"
+            scrollY
+            onMouseDown={() => {
+              if (navigationActive) onSectionChange(section)
+            }}
+            style={{
+              flexGrow: 1,
+              height: "100%",
+              border: ["left"],
+              borderColor: COLORS.border,
+              paddingLeft: narrow ? 0 : 2,
+            }}
+            verticalScrollbarOptions={{
+              trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
+            }}
+          >
+            <box
+              id={`configuration-detail-${section}`}
+              style={{ width: "100%", flexShrink: 0, paddingTop: 1 }}
+            >
+              <ConfigurationDetail
+                section={section}
+                settings={settings}
+                navigationActive={navigationActive}
+                notice={notice}
+                onNavigationFocus={onNavigationFocus}
+                queryHistoryCount={queryHistoryCount}
+                tutorialLabel={tutorialLabel}
+                onPaletteChange={onPaletteChange}
+                onColorModeChange={onColorModeChange}
+                onLayoutChange={onLayoutChange}
+                onLanguageChange={onLanguageChange}
+                onOpenSensitiveTerms={onOpenSensitiveTerms}
+                onOpenQueryHistory={onOpenQueryHistory}
+                onOpenFeatures={onOpenFeatures}
+                onStartTutorial={onStartTutorial}
+                onGitConfigurationChanged={onGitConfigurationChanged}
+                compact={narrow}
+                contentWidth={detailWidth}
+              />
+            </box>
+          </scrollbox>
+        )}
       </box>
 
       <box
@@ -197,19 +258,27 @@ export function ConfigurationModal({
       >
         <ShortcutText
           content={translateUi(
-            minimal
-              ? "[J/K] · [H/L]"
-              : narrow
-                ? "[J/K/↑/↓] categoria · [H/L/←/→] opção"
-                : "[J/K/↑/↓] categoria · [H/L/←/→] opção · [Enter] abrir",
+            navigationActive
+              ? minimal
+                ? "[J/K] · [Enter]"
+                : "[J/K/↑/↓] foco · [Enter/L] detalhes"
+              : isGitConfigurationSection(section)
+                ? ""
+                : minimal
+                  ? "[J/K] · [H/L]"
+                  : narrow
+                    ? "[J/K/↑/↓] categoria · [H/L/←/→] opção"
+                    : "[J/K/↑/↓] categoria · [H/L/←/→] opção",
           )}
           style={{ fg: COLORS.muted }}
         />
-        <InlineButton
-          label={narrow ? "[R]" : "[R] Padrão"}
-          accent={COLORS.focus}
-          onPress={onReset}
-        />
+        {isGitConfigurationSection(section) ? null : (
+          <InlineButton
+            label={narrow ? "[R]" : "[R] Padrão"}
+            accent={COLORS.focus}
+            onPress={onReset}
+          />
+        )}
       </box>
     </ModalSurface>
   )

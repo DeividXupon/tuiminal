@@ -11,9 +11,13 @@ export type ConfigurationModalProps = {
   open: boolean
   settings: UiSettings
   section: ConfigurationSection
+  focusedSection: ConfigurationSection
+  navigationActive: boolean
   notice: string
   onClose: () => void
   onSectionChange: (section: ConfigurationSection) => void
+  onSectionFocus: (section: ConfigurationSection) => void
+  onNavigationFocus: () => void
   onPaletteChange: (palette: PaletteId) => void
   onColorModeChange: (mode: ColorMode) => void
   onLayoutChange: (layout: LayoutMode) => void
@@ -26,11 +30,15 @@ export type ConfigurationModalProps = {
   queryHistoryCount: number
   tutorialLabel: string
   context: ConfigurationContext
-  onOpenGitConfiguration: () => void
+  onGitConfigurationChanged: (change: "local" | "remote") => void
 }
 
 export const CONFIGURATION_SECTION_LABELS: Record<ConfigurationSection, string> = {
-  git: "GIT",
+  gitDiffs: "DIFFS",
+  gitPullRequests: "PULL REQUESTS",
+  gitIssues: "ISSUES",
+  gitRepositories: "REPOSITÓRIOS",
+  gitBrowser: "NAVEGADOR",
   sensitive: "DADOS SENSÍVEIS",
   history: "HISTÓRICO SQL",
   colorMode: "MODO DE COR",

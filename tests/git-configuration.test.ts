@@ -17,14 +17,11 @@ import {
   gitComparisonKeyboardAction,
 } from "../packages/feature-git/src/model/branch-comparison"
 import {
-  GIT_CONFIGURATION_TABS,
   gitConfigurationAction,
-  gitConfigurationTabLabel,
   repositorySelectionLabel,
   toggleRepositorySelection,
   unifiedRepositorySelection,
 } from "../packages/feature-git/src/model/git-configuration"
-import { displayWidth, translateUi } from "../packages/core/src/i18n/index"
 import {
   DEFAULT_ISSUE_CONFIG,
   issueProfileForRoot,
@@ -153,21 +150,21 @@ describe("Git configuration scope", () => {
     )
   })
 
-  test("maps the unified modal keyboard without restoring local dashboard shortcuts", () => {
+  test("maps detail controls without numbered context shortcuts", () => {
     expect(
       gitConfigurationAction({
         key: { name: "4" },
         tab: "pull-requests",
         hasSelection: true,
       }),
-    ).toEqual({ type: "select-tab", tab: "repositories" })
+    ).toBeNull()
     expect(
       gitConfigurationAction({
         key: { name: "1" },
         tab: "pull-requests",
         hasSelection: true,
       }),
-    ).toEqual({ type: "select-tab", tab: "diffs" })
+    ).toBeNull()
     expect(
       gitConfigurationAction({
         key: { name: "enter" },
@@ -189,24 +186,45 @@ describe("Git configuration scope", () => {
         tab: "issues",
         hasSelection: true,
       }),
-    ).toEqual({ type: "mutate", mutation: "down" })
+    ).toBeNull()
     expect(
       gitConfigurationAction({ key: { name: "5" }, tab: "issues", hasSelection: true }),
-    ).toEqual({ type: "select-tab", tab: "browser" })
+    ).toBeNull()
     expect(
       gitConfigurationAction({ key: { name: "enter" }, tab: "browser", hasSelection: false }),
     ).toEqual({ type: "select-browser" })
-  })
-
-  test("keeps five configuration tabs visible at the compact modal width", () => {
-    for (const language of ["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const) {
-      const columns = GIT_CONFIGURATION_TABS.reduce(
-        (total, tab) =>
-          total + displayWidth(translateUi(gitConfigurationTabLabel(tab, true), language)) + 2,
-        0,
-      )
-      expect(columns).toBeLessThanOrEqual(52)
-    }
+    expect(
+      gitConfigurationAction({ key: { name: "l" }, tab: "issues", hasSelection: true }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({ key: { name: "h" }, tab: "diffs", hasSelection: false }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({ key: { name: "left" }, tab: "issues", hasSelection: true }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({ key: { name: "escape" }, tab: "diffs", hasSelection: false }),
+    ).toEqual({ type: "back-to-navigation" })
+    expect(
+      gitConfigurationAction({ key: { name: "p" }, tab: "diffs", hasSelection: false }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({ key: { name: "b" }, tab: "diffs", hasSelection: false }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({
+        key: { name: "up", option: true },
+        tab: "pull-requests",
+        hasSelection: true,
+      }),
+    ).toBeNull()
+    expect(
+      gitConfigurationAction({
+        key: { name: "j", shift: true },
+        tab: "issues",
+        hasSelection: true,
+      }),
+    ).toBeNull()
   })
 
   test("persists one Git browser choice and builds exact URL commands", () => {

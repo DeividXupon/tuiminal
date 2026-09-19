@@ -54,7 +54,7 @@ Compact mode retains its existing four-row header and canvas background.
 - Sections: `[A←]`/`[F→]`; `[/]` edits the active query. Creation, editing, ordering,
   and repository selection belong to Git configuration opened through `[,]`.
 - `[O]` opens the selected Issue using the Git-wide browser choice in
-  [Git configuration](./git-pr-interface.md); `[5] Browser` selects the system
+  [Git configuration](./git-pr-interface.md); the Browser context row selects the system
   browser, Browsh, Carbonyl, or terminal-browser.
 - Preview: `[Z←]`/`[V→]` switches tabs. In Overview, `[J/K]` scrolls and `[E]`
   expands/collapses the description. In Activity, `[J/K]` selects comments,

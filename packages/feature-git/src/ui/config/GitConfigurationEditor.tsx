@@ -11,12 +11,14 @@ export type GitConfigurationEditorState =
   | { kind: "issue"; mode: "create" | "edit"; section: IssueSection | null }
 
 export function GitConfigurationEditor({
+  width,
   editor,
   repositories,
   onClose,
   onSavePullRequest,
   onSaveIssue,
 }: {
+  width: number
   editor: GitConfigurationEditorState
   repositories: readonly string[]
   onClose: () => void
@@ -27,6 +29,8 @@ export function GitConfigurationEditor({
     return (
       <SectionEditorModal
         open
+        embedded
+        contentWidth={width}
         mode={editor.mode}
         initialTitle={editor.section?.title ?? ""}
         initialQuery={editor.section?.query ?? "is:open"}
@@ -42,6 +46,8 @@ export function GitConfigurationEditor({
   }
   return (
     <IssueSectionEditorModal
+      embedded
+      contentWidth={width}
       mode={editor.mode}
       initialTitle={editor.section?.title ?? ""}
       initialQuery={editor.section?.query ?? "is:open"}

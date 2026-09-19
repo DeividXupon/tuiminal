@@ -30,6 +30,8 @@ export type GitRemoteSectionEditorValues<Column extends string> = {
 type Props<Column extends string> = {
   kind: "pr" | "issue"
   open: boolean
+  embedded?: boolean
+  contentWidth?: number
   mode: GitRemoteSectionEditorMode
   initialTitle: string
   initialQuery: string
@@ -109,6 +111,8 @@ function EditorField({
 export function GitRemoteSectionEditor<Column extends string>({
   kind,
   open,
+  embedded = false,
+  contentWidth,
   mode,
   initialTitle,
   initialQuery,
@@ -228,7 +232,9 @@ export function GitRemoteSectionEditor<Column extends string>({
   })
 
   if (!open) return null
-  const width = Math.max(42, Math.min(92, terminal.width - 4))
+  const width = embedded
+    ? Math.max(18, contentWidth ?? terminal.width - 4)
+    : Math.max(42, Math.min(92, terminal.width - 4))
   const suggestions = (
     <GitHubQuerySuggestions
       suggestions={autocomplete.suggestions}
@@ -240,16 +246,8 @@ export function GitRemoteSectionEditor<Column extends string>({
       }}
     />
   )
-  return (
-    <ModalSurface
-      id={`${idPrefix}-modal`}
-      dialogRef={dialogRef}
-      width={width}
-      height={hasTitle ? 25 : 16}
-      zIndex={970}
-      borderColor={COLORS.git}
-      onBackdropPress={onClose}
-    >
+  const content = (
+    <>
       <box
         style={{
           height: 2,
@@ -261,69 +259,75 @@ export function GitRemoteSectionEditor<Column extends string>({
         }}
       >
         <text content={translateUi(editorTitle(kind, mode))} style={{ fg: COLORS.git }} />
-        <InlineButton label="[Esc] Fechar" accent={COLORS.git} onPress={onClose} />
-      </box>
-      {hasTitle ? (
-        <EditorField
-          label="NOME"
-          id={`${idPrefix}-title`}
-          inputRef={titleRef}
-          value={values.title}
-          width={width}
-          placeholder="Equipe"
-          onInput={(value) => update("title", value)}
+        <InlineButton
+          label={embedded ? "Voltar" : translateUi("[Esc] Fechar")}
+          accent={COLORS.git}
+          onPress={onClose}
         />
-      ) : null}
-      <EditorField
-        label="QUERY"
-        id={`${idPrefix}-query`}
-        inputRef={queryRef}
-        value={values.query}
-        width={width}
-        placeholder="is:open author:@me"
-        onInput={(value) => update("query", value)}
-        onSubmit={mode === "query" ? apply : save}
-      />
-      {kind === "pr" ? suggestions : null}
-      {hasTitle ? (
-        <>
+      </box>
+      <scrollbox scrollY style={{ flexGrow: 1 }}>
+        {hasTitle ? (
           <EditorField
-            label="COLUNAS"
-            id={`${idPrefix}-columns`}
-            inputRef={columnsRef}
-            value={values.columns}
+            label="NOME"
+            id={`${idPrefix}-title`}
+            inputRef={titleRef}
+            value={values.title}
             width={width}
-            placeholder={columnPlaceholder}
-            onInput={(value) => update("columns", value)}
+            placeholder="Equipe"
+            onInput={(value) => update("title", value)}
           />
-          <EditorField
-            label="ORDEM"
-            id={`${idPrefix}-sort`}
-            inputRef={sortRef}
-            value={values.sort}
-            width={width}
-            placeholder="updated-desc"
-            onInput={(value) => update("sort", value)}
-          />
-          <EditorField
-            label="LIMITE"
-            id={`${idPrefix}-limit`}
-            inputRef={limitRef}
-            value={values.limit}
-            width={width}
-            placeholder="20"
-            onInput={(value) => update("limit", value)}
-          />
-        </>
-      ) : null}
-      {kind === "issue" ? suggestions : null}
-      <text
-        content={
-          error ||
-          translateUi("Use filtros do GitHub; o escopo de repositórios é aplicado à parte.")
-        }
-        style={{ fg: error ? COLORS.danger : COLORS.muted, marginTop: 1 }}
-      />
+        ) : null}
+        <EditorField
+          label="QUERY"
+          id={`${idPrefix}-query`}
+          inputRef={queryRef}
+          value={values.query}
+          width={width}
+          placeholder="is:open author:@me"
+          onInput={(value) => update("query", value)}
+          onSubmit={mode === "query" ? apply : save}
+        />
+        {kind === "pr" ? suggestions : null}
+        {hasTitle ? (
+          <>
+            <EditorField
+              label="COLUNAS"
+              id={`${idPrefix}-columns`}
+              inputRef={columnsRef}
+              value={values.columns}
+              width={width}
+              placeholder={columnPlaceholder}
+              onInput={(value) => update("columns", value)}
+            />
+            <EditorField
+              label="ORDEM"
+              id={`${idPrefix}-sort`}
+              inputRef={sortRef}
+              value={values.sort}
+              width={width}
+              placeholder="updated-desc"
+              onInput={(value) => update("sort", value)}
+            />
+            <EditorField
+              label="LIMITE"
+              id={`${idPrefix}-limit`}
+              inputRef={limitRef}
+              value={values.limit}
+              width={width}
+              placeholder="20"
+              onInput={(value) => update("limit", value)}
+            />
+          </>
+        ) : null}
+        {kind === "issue" ? suggestions : null}
+        <text
+          content={
+            error ||
+            translateUi("Use filtros do GitHub; o escopo de repositórios é aplicado à parte.")
+          }
+          style={{ fg: error ? COLORS.danger : COLORS.muted, marginTop: 1 }}
+        />
+      </scrollbox>
       <box
         style={{
           height: 1,
@@ -333,7 +337,10 @@ export function GitRemoteSectionEditor<Column extends string>({
           marginTop: 1,
         }}
       >
-        <ShortcutText content="[Esc] desfocar/fechar  [Tab] campo" style={{ fg: COLORS.muted }} />
+        <ShortcutText
+          content={embedded ? "[Tab] campo" : "[Esc] desfocar/fechar  [Tab] campo"}
+          style={{ fg: COLORS.muted }}
+        />
         <box style={{ height: 1, flexDirection: "row" }}>
           {mode === "query" ? (
             <InlineButton label="[Enter] Aplicar" accent={COLORS.git} onPress={apply} />
@@ -341,6 +348,33 @@ export function GitRemoteSectionEditor<Column extends string>({
           <InlineButton label="[Ctrl+S] Salvar" accent={COLORS.git} onPress={save} />
         </box>
       </box>
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <box
+        ref={dialogRef}
+        id={`${idPrefix}-modal`}
+        focusable
+        style={{ width: "100%", height: "100%", flexGrow: 1, backgroundColor: COLORS.canvas }}
+      >
+        {content}
+      </box>
+    )
+  }
+
+  return (
+    <ModalSurface
+      id={`${idPrefix}-modal`}
+      dialogRef={dialogRef}
+      width={width}
+      height={hasTitle ? 25 : 16}
+      zIndex={970}
+      borderColor={COLORS.git}
+      onBackdropPress={onClose}
+    >
+      {content}
     </ModalSurface>
   )
 }

@@ -12,6 +12,8 @@ export type SectionEditorValues = GitRemoteSectionEditorValues<PullRequestColumn
 
 export function SectionEditorModal({
   open,
+  embedded = false,
+  contentWidth,
   mode,
   initialTitle,
   initialQuery,
@@ -24,6 +26,8 @@ export function SectionEditorModal({
   onSave,
 }: {
   open: boolean
+  embedded?: boolean
+  contentWidth?: number
   mode: SectionEditorMode
   initialTitle: string
   initialQuery: string
@@ -40,6 +44,8 @@ export function SectionEditorModal({
     <GitRemoteSectionEditor
       kind="pr"
       open={open}
+      embedded={embedded}
+      {...(contentWidth === undefined ? {} : { contentWidth })}
       mode={mode}
       initialTitle={initialTitle}
       initialQuery={initialQuery}

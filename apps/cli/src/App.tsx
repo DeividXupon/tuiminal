@@ -9,12 +9,7 @@ import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Tabs } from "@tuiparts/react/tabs"
 import { useCallback, useMemo, useRef, useState } from "react"
-import {
-  ConfigurationModal,
-  type ConfigurationSection,
-  configurationSectionsForContext,
-  normalizeConfigurationSectionForContext,
-} from "./ui/ConfigurationModal"
+import { ConfigurationModal, type ConfigurationSection } from "./ui/ConfigurationModal"
 import {
   DatabaseQueryHistoryModal,
   DatabaseViewer,
@@ -28,38 +23,26 @@ import {
 import { withFeatures, useFeatureWorkspace, WorkspaceInstaller } from "./features/workspace"
 import { loadedFeature } from "./features/registry"
 import { useFeatureRetirement } from "./features/use-feature-retirement"
-import { type DatabaseQueryRerunRequest } from "@xupon/tuiminal-feature-database"
-import { type GitConfigurationTab } from "@xupon/tuiminal-feature-git"
-import { type HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
+import type { DatabaseQueryRerunRequest } from "@xupon/tuiminal-feature-database"
+import type { HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
 import type { DatabaseQueryHistoryEntry } from "@xupon/tuiminal-feature-database"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import {
-  COLORS,
-  getUiSettings,
-  LAYOUT,
-  resetUiSettings,
-  separatorBorder,
-  type UiSettings,
-  updateUiSettings,
-} from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
 import { WorkspaceHeader } from "./ui/WorkspaceHeader"
 import { applicationExitLayer } from "./ui/application-exit-layer"
 import { useApplicationExit } from "./hooks/use-application-exit"
+import { useConfigurationLayer } from "./hooks/use-configuration-layer"
 import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
-import {
-  useNotificationFromValue,
-  withNotifications,
-} from "@xupon/tuiminal-core/notifications/index"
+import { withNotifications } from "@xupon/tuiminal-core/notifications/index"
 import { globalApplicationShortcut } from "./global-shortcuts"
 import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
-import { configurationSettingPatch } from "./model/configuration-options"
 import { withStartupAnimation } from "./ui/StartupAnimation"
 import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
 
@@ -82,8 +65,6 @@ export function AppContent() {
     loadedFeature(activeTab)
   )
     visitedTabsRef.current.add(activeTab)
-  const [settings, setSettings] = useState(getUiSettings)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [sensitiveTermsOpen, setSensitiveTermsOpen] = useState(false)
   const [queryHistoryOpen, setQueryHistoryOpen] = useState(false)
   const [queryHistoryEntries, setQueryHistoryEntries] = useState<DatabaseQueryHistoryEntry[]>([])
@@ -92,10 +73,6 @@ export function AppContent() {
   const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialTargetId, setTutorialTargetId] = useState<string | null>(null)
-  const [configurationSection, setConfigurationSection] = useState<ConfigurationSection>("palette")
-  const [settingsNotice, setSettingsNotice] = useState("")
-  useNotificationFromValue(settingsNotice, { source: "Configurações" })
-  const settingsRef = useRef(settings)
   const selectTab = useCallback(
     async (id: AppTab) => {
       if (ONLY_TAB && id !== ONLY_TAB) return
@@ -118,7 +95,6 @@ export function AppContent() {
     },
     [selectTab],
   )
-  const configurationSectionRef = useRef(configurationSection)
   const queryRerunCounterRef = useRef(0)
   const exit = useApplicationExit(renderer, visitedTabsRef)
   const gitConfiguration = useGitConfigurationLayer()
@@ -127,50 +103,38 @@ export function AppContent() {
   const configurationContext = features.showInstaller
     ? "installer"
     : configurationContextForTool(tutorialScreen)
-  const configurationSections = useMemo(
-    () => configurationSectionsForContext(configurationContext),
-    [configurationContext],
-  )
+  const configuration = useConfigurationLayer(configurationContext)
+  const {
+    settings,
+    open: settingsOpen,
+    section: configurationSection,
+    focusedSection: configurationCursor,
+    navigationActive: configurationNavigationActive,
+    notice: settingsNotice,
+    applySettings,
+    close: closeSettings,
+    focusNavigation,
+    selectSection: selectConfigurationSection,
+    focusSection: focusConfigurationSection,
+    reset: restoreDefaultSettings,
+    openSettings: openConfiguration,
+    openGit: openGitConfiguration,
+    handleKey: handleConfigurationKey,
+  } = configuration
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
-  const modalBlocked = settingsOpen || gitConfiguration.open || tutorialOpen || exit.open
+  const modalBlocked = settingsOpen || tutorialOpen || exit.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
-  const applySettings = useCallback((patch: Partial<UiSettings>) => {
-    const result = updateUiSettings(patch)
-    settingsRef.current = result.settings
-    setSettings(result.settings)
-    setSettingsNotice(result.error ?? "Configuração salva")
-  }, [])
-  const selectConfigurationSection = useCallback((section: ConfigurationSection) => {
-    configurationSectionRef.current = section
-    setConfigurationSection(section)
-  }, [])
-  const restoreDefaultSettings = useCallback(() => {
-    const result = resetUiSettings()
-    settingsRef.current = result.settings
-    setSettings(result.settings)
-    setSettingsNotice(result.error ?? "Configuração padrão restaurada")
-  }, [])
   const openSettings = useCallback(() => {
-    setSettingsNotice("")
-    selectConfigurationSection(configurationSections[0] ?? "palette")
+    openConfiguration()
     setQueryHistoryEntries(configurationContext === "database" ? listDatabaseQueryHistory() : [])
     setSensitiveTermsOpen(false)
-    setSettingsOpen(true)
-  }, [configurationContext, configurationSections, selectConfigurationSection])
+  }, [configurationContext, openConfiguration])
   const openQueryHistory = useCallback(() => {
     if (configurationContext !== "database") return
     setQueryHistoryEntries(listDatabaseQueryHistory())
     setQueryHistoryOpen(true)
   }, [configurationContext])
 
-  const openGitConfiguration = useCallback(
-    (tab: GitConfigurationTab = "diffs") => {
-      setSettingsOpen(false)
-      setSettingsNotice("")
-      gitConfiguration.openModal(tab)
-    },
-    [gitConfiguration.openModal],
-  )
   const queryHistoryCanRerun = useCallback(
     (entry: DatabaseQueryHistoryEntry) => {
       return (ONLY_TAB === null || ONLY_TAB === "database") && databaseQueryHistoryCanRerun(entry)
@@ -187,63 +151,35 @@ export function AppContent() {
         sql: entry.sql,
       })
       setQueryHistoryOpen(false)
-      setSettingsOpen(false)
-      setSettingsNotice("")
+      closeSettings()
       if (!ONLY_TAB) setActiveTab("database")
     },
-    [ONLY_TAB, queryHistoryCanRerun],
+    [ONLY_TAB, closeSettings, queryHistoryCanRerun],
   )
   const startTutorial = useCallback(() => {
-    setSettingsOpen(false)
-    setSettingsNotice("")
+    closeSettings()
     setTutorialTargetId(null)
     setTutorialOpen(true)
-  }, [])
+  }, [closeSettings])
   const closeTutorial = useCallback(() => {
     setTutorialOpen(false)
     setTutorialTargetId(null)
   }, [])
-  const cycleConfigurationSection = useCallback(
-    (direction: -1 | 1) => {
-      const currentSection = normalizeConfigurationSectionForContext(
-        configurationSectionRef.current,
-        configurationContext,
-      )
-      const index = configurationSections.indexOf(currentSection)
-      const nextIndex =
-        (index + direction + configurationSections.length) % configurationSections.length
-      const next = configurationSections[nextIndex]
-      if (next) selectConfigurationSection(next)
-    },
-    [configurationContext, configurationSections, selectConfigurationSection],
-  )
-
-  const cycleConfiguration = useCallback(
-    (direction: -1 | 1) => {
-      const currentSettings = settingsRef.current
-      const patch = configurationSettingPatch(
-        configurationSectionRef.current,
-        currentSettings,
-        direction,
-      )
-      if (patch) applySettings(patch)
-    },
-    [applySettings],
-  )
-
   const openFeatures = useCallback(() => {
-    setSettingsOpen(false)
+    closeSettings()
     features.setInstaller(true)
-  }, [features.setInstaller])
-  const activateConfiguration = useCallback(() => {
-    activateConfigurationSection(configurationSectionRef.current, {
-      startTutorial,
-      openFeatures,
-      openHistory: openQueryHistory,
-      openSensitive: () => setSensitiveTermsOpen(true),
-      openGit: openGitConfiguration,
-    })
-  }, [openGitConfiguration, openQueryHistory, startTutorial, openFeatures])
+  }, [closeSettings, features.setInstaller])
+  const activateConfiguration = useCallback(
+    (section: ConfigurationSection) => {
+      activateConfigurationSection(section, {
+        startTutorial,
+        openFeatures,
+        openHistory: openQueryHistory,
+        openSensitive: () => setSensitiveTermsOpen(true),
+      })
+    },
+    [openFeatures, openQueryHistory, startTutorial],
+  )
 
   useKeyboard((key) => {
     exit.guardKey(key)
@@ -262,32 +198,14 @@ export function AppContent() {
 
     if (key.defaultPrevented) return
 
-    if (queryHistoryOpen || sensitiveTermsOpen || gitConfiguration.open) return
+    if (queryHistoryOpen || sensitiveTermsOpen) return
 
     if (tutorialOpen) {
       key.preventDefault()
       return
     }
 
-    if (settingsOpen) {
-      key.preventDefault()
-      if (key.name === "escape" || key.name === "q") {
-        setSettingsOpen(false)
-      } else if (key.name === "enter" || key.name === "return") {
-        activateConfiguration()
-      } else if (key.name === "up" || key.name === "k") {
-        cycleConfigurationSection(-1)
-      } else if (key.name === "down" || key.name === "j" || key.name === "tab") {
-        cycleConfigurationSection(1)
-      } else if (key.name === "left" || key.name === "h") {
-        cycleConfiguration(-1)
-      } else if (key.name === "right" || key.name === "l") {
-        cycleConfiguration(1)
-      } else if (key.name === "r") {
-        restoreDefaultSettings()
-      }
-      return
-    }
+    if (handleConfigurationKey(key, activateConfiguration)) return
 
     if (features.showInstaller && !(key.ctrl && key.name === "c") && key.name !== "q") return
 
@@ -348,9 +266,13 @@ export function AppContent() {
           open
           settings={settings}
           section={configurationSection}
+          focusedSection={configurationCursor}
+          navigationActive={configurationNavigationActive}
           notice={settingsNotice}
-          onClose={() => setSettingsOpen(false)}
+          onClose={closeSettings}
           onSectionChange={selectConfigurationSection}
+          onSectionFocus={focusConfigurationSection}
+          onNavigationFocus={focusNavigation}
           onPaletteChange={(palette) => applySettings({ palette })}
           onColorModeChange={(colorMode) => applySettings({ colorMode })}
           onLayoutChange={(layout) => applySettings({ layout })}
@@ -363,7 +285,7 @@ export function AppContent() {
           queryHistoryCount={queryHistoryEntries.length}
           tutorialLabel={TAB_LABELS[tutorialScreen]}
           context={configurationContext}
-          onOpenGitConfiguration={openGitConfiguration}
+          onGitConfigurationChanged={gitConfiguration.onChanged}
         />
       </MountWhen>
       <MountWhen when={sensitiveTermsOpen}>
@@ -395,7 +317,6 @@ export function AppContent() {
           onStepChange={setTutorialTargetId}
         />
       </MountWhen>
-      {gitConfiguration.modal}
       {exitModal}
     </>
   )

@@ -73,6 +73,7 @@ test.each([
 ] as const)("built %s payload imports using the real host modules", async (id, component) => {
   const module = await loadPayload(id)
   expect(typeof module[component]).toBe("function")
+  if (id === "git") expect(typeof module.GitConfigurationView).toBe("function")
 })
 
 async function settle(until: () => boolean) {

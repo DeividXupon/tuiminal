@@ -1,6 +1,7 @@
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { GIT_BROWSER_OPTIONS, type GitBrowser } from "../../model/browser"
 import {
   gitConfigurationAction,
   type GitConfigurationAction,
@@ -30,7 +31,6 @@ import { GitConfigurationEditor, type GitConfigurationEditorState } from "./GitC
 import { GitLocalTargetPicker, type GitLocalTargetPickerKind } from "./GitLocalTargetPicker"
 import { GitConfigurationPanel } from "./GitConfigurationPanel"
 import { useGitConfiguration } from "./useGitConfiguration"
-import { GIT_BROWSER_OPTIONS, type GitBrowser } from "../../model/browser"
 
 function mutatePullRequestSections(
   sections: readonly PullRequestSection[],
@@ -55,8 +55,7 @@ function mutateIssueSections(
 function executeConfigurationAction(
   action: GitConfigurationAction,
   handlers: {
-    close: () => void
-    selectTab: (tab: GitConfigurationTab) => void
+    backToNavigation: () => void
     mutate: (mutation: GitConfigurationMutation) => void
     create: () => void
     edit: () => void
@@ -66,8 +65,7 @@ function executeConfigurationAction(
     moveSelection: (delta: -1 | 1) => void
   },
 ) {
-  if (action.type === "close") return handlers.close()
-  if (action.type === "select-tab") return handlers.selectTab(action.tab)
+  if (action.type === "back-to-navigation") return handlers.backToNavigation()
   if (action.type === "mutate") return handlers.mutate(action.mutation)
   if (action.type === "create") return handlers.create()
   if (action.type === "edit") return handlers.edit()
@@ -85,27 +83,29 @@ function configurationRowId(tab: GitConfigurationTab, index: number) {
   return `git-configuration-pr-selector-${index}`
 }
 
-export function GitConfigurationModal({
-  open,
-  initialTab = "diffs",
-  onClose,
+export function GitConfigurationView({
+  active,
+  keyboardActive,
+  tab,
+  width,
+  onBackToNavigation,
   onChanged,
 }: {
-  open: boolean
-  initialTab?: GitConfigurationTab
-  onClose: () => void
+  active: boolean
+  keyboardActive: boolean
+  tab: GitConfigurationTab
+  width: number
+  onBackToNavigation: () => void
   onChanged: (change: "local" | "remote") => void
 }) {
   const renderer = useRenderer()
-  const terminal = useTerminalDimensions()
   const dialogRef = useRef<BoxRenderable | null>(null)
   const listRef = useRef<ScrollBoxRenderable | null>(null)
-  const [tab, setTab] = useState<GitConfigurationTab>(initialTab)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [editor, setEditor] = useState<GitConfigurationEditorState | null>(null)
   const [localPicker, setLocalPicker] = useState<GitLocalTargetPickerKind | null>(null)
-  const configuration = useGitConfiguration(open, onChanged)
+  const configuration = useGitConfiguration(active, onChanged)
   const ready = configuration.state.status === "ready" ? configuration.state : null
   const sections =
     tab === "pull-requests"
@@ -126,31 +126,29 @@ export function GitConfigurationModal({
   const selectedRepository = tab === "repositories" ? repositoryEntries[selectedIndex] : undefined
 
   useEffect(() => {
-    if (!open || editor || localPicker) return
+    if (!active || !keyboardActive || editor || localPicker) return
     renderer.currentFocusedRenderable?.blur()
     const timeout = setTimeout(() => dialogRef.current?.focus(), 0)
     return () => clearTimeout(timeout)
-  }, [editor, localPicker, open, renderer])
+  }, [active, editor, keyboardActive, localPicker, renderer])
 
   useEffect(() => {
     setSelectedIndex((current) => Math.min(current, Math.max(0, itemCount - 1)))
   }, [itemCount])
 
   useEffect(() => {
-    if (!open || editor || localPicker) return
+    if (!active || editor || localPicker) return
     listRef.current?.scrollChildIntoView(configurationRowId(tab, selectedIndex))
-  }, [editor, localPicker, open, selectedIndex, tab])
+  }, [active, editor, localPicker, selectedIndex, tab])
 
-  const selectTab = (next: GitConfigurationTab) => {
-    setTab(next)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Changing categories must reset transient state even though tab is not read inside the effect.
+  useEffect(() => {
+    if (!active) return
     setPendingDelete(null)
-    if (next === "repositories" && ready?.context.remote) {
-      const index = ready.availableRepositories.indexOf(ready.context.remote.repository)
-      setSelectedIndex(index < 0 ? 0 : index + 1)
-    } else if (next === "browser")
-      setSelectedIndex(Math.max(0, GIT_BROWSER_OPTIONS.indexOf(ready?.browser ?? "system")))
-    else setSelectedIndex(0)
-  }
+    setSelectedIndex(0)
+    setEditor(null)
+    setLocalPicker(null)
+  }, [active, tab])
 
   const savePrEditor = (values: SectionEditorValues) => {
     if (!ready || editor?.kind !== "pr") return
@@ -215,7 +213,7 @@ export function GitConfigurationModal({
   const selectBrowser = (browser: GitBrowser) => configuration.saveBrowser(browser)
 
   useKeyboard((key) => {
-    if (!open || editor || localPicker) return
+    if (!active || !keyboardActive || editor || localPicker) return
     const action = gitConfigurationAction({
       key,
       tab,
@@ -224,10 +222,9 @@ export function GitConfigurationModal({
     })
     if (!action) return
     key.preventDefault()
-    if (action.type === "close") key.stopPropagation()
+    if (action.type === "back-to-navigation") key.stopPropagation()
     executeConfigurationAction(action, {
-      close: onClose,
-      selectTab,
+      backToNavigation: onBackToNavigation,
       mutate: mutateSelectedSection,
       create: openCreate,
       edit: openEdit,
@@ -241,17 +238,16 @@ export function GitConfigurationModal({
     })
   })
 
-  const width = Math.max(54, Math.min(104, terminal.width - 4))
-  const height = Math.max(16, Math.min(30, terminal.height - 2))
   const selectedRepositories = useMemo(
     () => new Set(ready?.repositories ?? []),
     [ready?.repositories],
   )
 
-  if (!open) return null
+  if (!active) return null
   if (editor) {
     return (
       <GitConfigurationEditor
+        width={width}
         editor={editor}
         repositories={ready?.availableRepositories ?? []}
         onClose={() => setEditor(null)}
@@ -263,6 +259,7 @@ export function GitConfigurationModal({
   if (localPicker && ready) {
     return (
       <GitLocalTargetPicker
+        width={width}
         kind={localPicker}
         target={ready.localTarget}
         projects={ready.availableLocalProjects}
@@ -280,7 +277,6 @@ export function GitConfigurationModal({
       dialogRef={dialogRef}
       listRef={listRef}
       width={width}
-      height={height}
       state={configuration.state}
       ready={ready}
       notice={configuration.notice}
@@ -290,8 +286,6 @@ export function GitConfigurationModal({
       selectedRepositories={selectedRepositories}
       selected={Boolean(selectedSection)}
       pendingDelete={Boolean(pendingDelete)}
-      onClose={onClose}
-      onSelectTab={selectTab}
       onSelect={setSelectedIndex}
       onToggleRepository={toggleRepository}
       onSelectBrowser={selectBrowser}

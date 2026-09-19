@@ -3,6 +3,10 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { ConfigurationSection } from "../model/configuration-context"
 import {
+  gitConfigurationTabForSection,
+  isGitConfigurationSection,
+} from "../model/configuration-context"
+import {
   ColorModeDetail,
   LanguageDetail,
   LayoutDetail,
@@ -10,6 +14,7 @@ import {
 } from "./ConfigurationAppearanceDetails"
 import { ConfigurationDetailHeader } from "./ConfigurationDetailHeader"
 import type { ConfigurationModalProps } from "./configuration-modal-types"
+import { GitConfigurationView } from "../features/components"
 
 function ActionDetail({
   section,
@@ -62,7 +67,9 @@ type ConfigurationDetailProps = Pick<
   ConfigurationModalProps,
   | "settings"
   | "section"
+  | "navigationActive"
   | "notice"
+  | "onNavigationFocus"
   | "onPaletteChange"
   | "onColorModeChange"
   | "onLayoutChange"
@@ -73,13 +80,15 @@ type ConfigurationDetailProps = Pick<
   | "onStartTutorial"
   | "queryHistoryCount"
   | "tutorialLabel"
-  | "onOpenGitConfiguration"
+  | "onGitConfigurationChanged"
 > & { compact: boolean; contentWidth: number }
 
 export function ConfigurationDetail({
   section,
   settings,
+  navigationActive,
   notice,
+  onNavigationFocus,
   queryHistoryCount,
   tutorialLabel,
   onPaletteChange,
@@ -90,7 +99,7 @@ export function ConfigurationDetail({
   onOpenQueryHistory,
   onOpenFeatures,
   onStartTutorial,
-  onOpenGitConfiguration,
+  onGitConfigurationChanged,
   compact,
   contentWidth,
 }: ConfigurationDetailProps) {
@@ -134,19 +143,15 @@ export function ConfigurationDetail({
         contentWidth={contentWidth}
       />
     )
-  if (section === "git")
+  if (isGitConfigurationSection(section))
     return (
-      <ActionDetail
-        section="git"
-        notice={notice}
-        buttonId="configuration-open-git"
-        buttonLabel="[Enter] configurar"
-        primary="Diffs, PR, Issues e navegador"
-        secondary="Projeto local, seletores, repositórios e navegador."
-        accent={COLORS.git}
-        compact={compact}
-        contentWidth={contentWidth}
-        onPress={onOpenGitConfiguration}
+      <GitConfigurationView
+        active
+        keyboardActive={!navigationActive}
+        tab={gitConfigurationTabForSection(section)}
+        width={contentWidth}
+        onBackToNavigation={onNavigationFocus}
+        onChanged={onGitConfigurationChanged}
       />
     )
   if (section === "sensitive")
