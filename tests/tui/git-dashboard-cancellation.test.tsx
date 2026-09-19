@@ -21,6 +21,14 @@ afterEach(() => {
   for (const restore of restoreSpies.splice(0)) restore()
 })
 
+async function waitForFrame(text: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await act(async () => Bun.sleep(10))
+    await tui?.renderOnce()
+    if (tui?.captureCharFrame().includes(text)) return
+  }
+}
+
 test("an Issue refresh suppresses a superseded page cancellation but reports real failures", async () => {
   const item = DEMO_ISSUES[0]
   if (!item) throw new Error("missing issue fixture")
@@ -109,6 +117,6 @@ test("an Issue refresh suppresses a superseded page cancellation but reports rea
 
   refreshSpy.mockRejectedValueOnce(new GitHubTransportError("forbidden", "HTTP 403"))
   await act(async () => dashboard?.refresh())
-  await tui.renderOnce()
+  await waitForFrame("HTTP 403")
   expect(tui.captureCharFrame()).toContain("HTTP 403")
 })
