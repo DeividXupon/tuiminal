@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 
 export type DatabaseChangeReviewItem = {
   id: string
@@ -137,198 +138,167 @@ export function DatabaseChangesModal({
   const kindWidth = compact ? 10 : 13
 
   return (
-    <>
-      <Button
-        onPress={() => {
-          if (!busy) onClose()
-        }}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={960}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
+    <ModalSurface
+      id="database-changes-modal"
+      width={width}
+      height={height}
+      zIndex={960}
+      borderColor={COLORS.warning}
+      dialogFocusable={false}
+      onBackdropPress={() => {
+        if (!busy) onClose()
+      }}
+    >
       <box
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 961,
-          alignItems: "center",
-          justifyContent: "center",
+          height: compact ? 2 : 3,
+          flexShrink: 0,
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
       >
         <box
           style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.warning,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
+            height: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
           }}
         >
-          <box
-            style={{
-              height: compact ? 2 : 3,
-              flexShrink: 0,
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <box
-              style={{
-                height: 1,
-                flexShrink: 0,
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <text content="◆ REVISAR ALTERAÇÕES SQL" style={{ fg: COLORS.warning }} />
-              <text
-                content={`${approvedCount}/${items.length} aprovadas`}
-                style={{ fg: approvedCount ? COLORS.success : COLORS.muted }}
-              />
-            </box>
-            {compact ? null : (
-              <text
-                content="Nenhum comando foi executado. Selecione o que deseja aplicar."
-                style={{ fg: COLORS.muted }}
-              />
-            )}
-          </box>
+          <text content="◆ REVISAR ALTERAÇÕES SQL" style={{ fg: COLORS.warning }} />
+          <text
+            content={`${approvedCount}/${items.length} aprovadas`}
+            style={{ fg: approvedCount ? COLORS.success : COLORS.muted }}
+          />
+        </box>
+        {compact ? null : (
+          <text
+            content="Nenhum comando foi executado. Selecione o que deseja aplicar."
+            style={{ fg: COLORS.muted }}
+          />
+        )}
+      </box>
 
-          <scrollbox
-            ref={listRef}
-            scrollY
-            viewportCulling
-            style={{ flexGrow: 1, width: "100%" }}
-            verticalScrollbarOptions={{
-              trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
+      <scrollbox
+        ref={listRef}
+        scrollY
+        viewportCulling
+        style={{ flexGrow: 1, width: "100%" }}
+        verticalScrollbarOptions={{
+          trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
+        }}
+      >
+        {items.map((item, index) => (
+          <Button
+            ref={(renderable) => {
+              itemRefs.current[index] = renderable
             }}
+            key={item.id}
+            id={`database-changes-item-${index}`}
+            disabled={busy}
+            onPress={() => {
+              setSelectedIndex(index)
+              onToggle(item.id)
+            }}
+            height={5}
+            width="100%"
+            flexShrink={0}
           >
-            {items.map((item, index) => (
-              <Button
-                ref={(renderable) => {
-                  itemRefs.current[index] = renderable
+            {(state) => (
+              <box
+                style={{
+                  height: 5,
+                  flexShrink: 0,
+                  paddingLeft: 1,
+                  backgroundColor:
+                    state.focused || index === selectedIndex
+                      ? COLORS.panelRaised
+                      : index % 2 === 0
+                        ? COLORS.panel
+                        : COLORS.panelAlt,
                 }}
-                key={item.id}
-                id={`database-changes-item-${index}`}
-                disabled={busy}
-                onPress={() => {
-                  setSelectedIndex(index)
-                  onToggle(item.id)
-                }}
-                height={5}
-                width="100%"
-                flexShrink={0}
               >
-                {(state) => (
-                  <box
+                <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+                  <text
+                    content={`${item.approved ? "◆" : "◇"} ${KIND_LABEL[item.kind]}`}
                     style={{
-                      height: 5,
+                      width: kindWidth,
                       flexShrink: 0,
-                      paddingLeft: 1,
-                      backgroundColor:
-                        state.focused || index === selectedIndex
-                          ? COLORS.panelRaised
-                          : index % 2 === 0
-                            ? COLORS.panel
-                            : COLORS.panelAlt,
+                      fg: item.approved ? KIND_COLOR[item.kind] : COLORS.muted,
                     }}
-                  >
-                    <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                      <text
-                        content={`${item.approved ? "◆" : "◇"} ${KIND_LABEL[item.kind]}`}
-                        style={{
-                          width: kindWidth,
-                          flexShrink: 0,
-                          fg: item.approved ? KIND_COLOR[item.kind] : COLORS.muted,
-                        }}
-                      />
-                      <text
-                        content={shorten(item.tableName, Math.max(6, contentWidth - kindWidth))}
-                        style={{ fg: COLORS.text }}
-                      />
-                    </box>
-                    <text
-                      content={`${translateUi("Alteração")}: ${shorten(item.description, Math.max(4, contentWidth - 12))}`}
-                      style={{ fg: COLORS.muted }}
-                    />
-                    <text
-                      content={shorten(item.sql, contentWidth)}
-                      style={{ fg: KIND_COLOR[item.kind] }}
-                    />
-                    <text
-                      content={shorten(parameterText(item.parameters), contentWidth)}
-                      style={{ fg: COLORS.muted }}
-                    />
-                    <text
-                      content={item.approved ? "APROVADO PARA EXECUÇÃO" : "não aprovado"}
-                      style={{ fg: item.approved ? COLORS.success : COLORS.border }}
-                    />
-                  </box>
-                )}
-              </Button>
-            ))}
-          </scrollbox>
+                  />
+                  <text
+                    content={shorten(item.tableName, Math.max(6, contentWidth - kindWidth))}
+                    style={{ fg: COLORS.text }}
+                  />
+                </box>
+                <text
+                  content={`${translateUi("Alteração")}: ${shorten(item.description, Math.max(4, contentWidth - 12))}`}
+                  style={{ fg: COLORS.muted }}
+                />
+                <text
+                  content={shorten(item.sql, contentWidth)}
+                  style={{ fg: KIND_COLOR[item.kind] }}
+                />
+                <text
+                  content={shorten(parameterText(item.parameters), contentWidth)}
+                  style={{ fg: COLORS.muted }}
+                />
+                <text
+                  content={item.approved ? "APROVADO PARA EXECUÇÃO" : "não aprovado"}
+                  style={{ fg: item.approved ? COLORS.success : COLORS.border }}
+                />
+              </box>
+            )}
+          </Button>
+        ))}
+      </scrollbox>
 
-          <box
-            style={{
-              height: 3,
-              flexShrink: 0,
-              flexDirection: "column",
-              border: ["top"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <ShortcutText
-              content={
-                notice ||
-                (compact
-                  ? "[↑↓] navegar · [Enter] aprovar · [Ctrl+S] executar"
-                  : "[↑↓] navegar · [Enter/Space] aprovar · [A] todos · [Ctrl+S] executar")
-              }
-              style={{
-                height: 1,
-                flexShrink: 0,
-                fg: notice.startsWith("Erro") ? COLORS.danger : COLORS.muted,
-              }}
-            />
-            <box
-              style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}
-            >
-              <InlineButton
-                label={
-                  compact ? "[A] Todos" : allApproved ? "[A] Desmarcar todos" : "[A] Aprovar todos"
-                }
-                accent={COLORS.database}
-                disabled={busy}
-                onPress={onToggleAll}
-              />
-              <InlineButton
-                label={
-                  busy
-                    ? "[Ctrl+S] Executando…"
-                    : compact
-                      ? `[Ctrl+S] ${approvedCount}`
-                      : `[Ctrl+S] Executar ${approvedCount}`
-                }
-                accent={COLORS.success}
-                disabled={busy || approvedCount === 0}
-                onPress={onExecute}
-              />
-            </box>
-          </box>
+      <box
+        style={{
+          height: 3,
+          flexShrink: 0,
+          flexDirection: "column",
+          border: ["top"],
+          borderColor: COLORS.border,
+        }}
+      >
+        <ShortcutText
+          content={
+            notice ||
+            (compact
+              ? "[↑↓] navegar · [Enter] aprovar · [Ctrl+S] executar"
+              : "[↑↓] navegar · [Enter/Space] aprovar · [A] todos · [Ctrl+S] executar")
+          }
+          style={{
+            height: 1,
+            flexShrink: 0,
+            fg: notice.startsWith("Erro") ? COLORS.danger : COLORS.muted,
+          }}
+        />
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+          <InlineButton
+            label={
+              compact ? "[A] Todos" : allApproved ? "[A] Desmarcar todos" : "[A] Aprovar todos"
+            }
+            accent={COLORS.database}
+            disabled={busy}
+            onPress={onToggleAll}
+          />
+          <InlineButton
+            label={
+              busy
+                ? "[Ctrl+S] Executando…"
+                : compact
+                  ? `[Ctrl+S] ${approvedCount}`
+                  : `[Ctrl+S] Executar ${approvedCount}`
+            }
+            accent={COLORS.success}
+            disabled={busy || approvedCount === 0}
+            onPress={onExecute}
+          />
         </box>
       </box>
-    </>
+    </ModalSurface>
   )
 }

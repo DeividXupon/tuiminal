@@ -13,6 +13,7 @@ import {
 import { parseFeatureCatalog, preferredInstalledFeature } from "../apps/cli/src/features/model"
 import { FeatureController } from "../apps/cli/src/features/controller"
 import { importVerifiedFeature } from "../apps/cli/src/features/loader"
+import { featureErrorMessage } from "../apps/cli/src/features/errors"
 import { FEATURE_MESSAGES } from "../packages/core/src/i18n/features-catalog"
 import { translateUi } from "../packages/core/src/i18n/index"
 
@@ -28,6 +29,16 @@ async function fixture() {
 const signal = () => new AbortController().signal
 
 describe("official feature installation", () => {
+  test("unexpected runtime failures do not prescribe a development build", () => {
+    const message = featureErrorMessage(new TypeError("Missing shared component"))
+    expect(message).toBe(
+      "Não foi possível carregar a ferramenta. Reinicie o Tuiminal e tente novamente.",
+    )
+    for (const language of ["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const) {
+      expect(translateUi(message, language)).not.toContain("build:features")
+    }
+  })
+
   test("trusts only an exact catalog with complete, bounded, flat payloads", () => {
     const { catalog } = featureFixture()
     expect(parseFeatureCatalog(catalog, "1.2.3")).toEqual(catalog)

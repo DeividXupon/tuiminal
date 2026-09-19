@@ -3,6 +3,24 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+// Tests must never read or change the developer's system credentials.
+const originalSecrets = Bun.secrets
+const testSecrets = new Map<string, string>()
+const secretKey = ({ service, name }: { service: string; name: string }) => `${service}:${name}`
+Object.assign(Bun, {
+  secrets: {
+    async get(options: { service: string; name: string }) {
+      return testSecrets.get(secretKey(options)) ?? null
+    },
+    async set(options: { service: string; name: string; value: string }) {
+      testSecrets.set(secretKey(options), options.value)
+    },
+    async delete(options: { service: string; name: string }) {
+      return testSecrets.delete(secretKey(options))
+    },
+  },
+})
+
 // Applied even by plain `bun test`, before any module can access user settings.
 const testRoot = mkdtempSync(join(tmpdir(), "tuiminal-tests-"))
 const projectRoot = join(testRoot, "project")
@@ -18,9 +36,13 @@ process.env.XDG_DATA_HOME = join(testRoot, "data")
 process.env.TUIMINAL_SOURCE_FEATURES = "1"
 process.env.XDG_CONFIG_HOME = join(testRoot, "config")
 process.env.TUIMINAL_WORKDIR = projectRoot
+process.env.TUIMINAL_HTTP_HOME = projectRoot
 process.env.TUIMINAL_PROJECT_ROOTS = testRoot
 process.env.TUIMINAL_ONLY_TAB = "runner"
 for (const name of ["DATABASE_URL", "MYSQL_URL", "POSTGRES_URL", "TUIMINAL_MYSQL_MCP_COMMAND"]) {
   delete process.env[name]
 }
-afterAll(() => rmSync(testRoot, { recursive: true, force: true }))
+afterAll(() => {
+  Object.assign(Bun, { secrets: originalSecrets })
+  rmSync(testRoot, { recursive: true, force: true })
+})

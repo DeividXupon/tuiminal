@@ -148,6 +148,8 @@ export function IssueDashboardView({
   onCopyUrl,
   onCopyNumber,
   onOpenActions,
+  onCreate,
+  canCreate,
   onLoadMoreDetails,
   onSelectComment,
   onReactComment,
@@ -167,6 +169,8 @@ export function IssueDashboardView({
   refreshing: boolean
   onSelectSection: (index: number) => void
   onEditQuery: () => void
+  onCreate: () => void
+  canCreate: boolean
   onRetry: () => void
   onLoadMore: () => void
   onCyclePreviewPosition: () => void
@@ -201,6 +205,14 @@ export function IssueDashboardView({
         />
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+        {canCreate ? (
+          <InlineButton
+            id="git-issue-create"
+            label={translateUi("[Ctrl+N] Criar issue")}
+            accent={COLORS.git}
+            onPress={onCreate}
+          />
+        ) : null}
         <InlineButton
           id="git-issue-toggle-preview"
           label={`[P] ${translateUi("Prévia")}: ${translateUi(previewVisible ? "visível" : "oculta")}`}

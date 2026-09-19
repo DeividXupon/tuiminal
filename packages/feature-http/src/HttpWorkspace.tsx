@@ -1,6 +1,6 @@
 import type { InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useReducer, useRef, useState } from "react"
+import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import {
   DEFAULT_HTTP_SPLIT_RATIO,
@@ -8,29 +8,24 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { resolveHttpKeyboardCommand } from "./model/keyboard"
+import type { HttpKey } from "./model/keyboard-types"
+import type { HttpRequestTableKey } from "./hooks/use-http-request-tables"
 import { httpJsonTreeForDocument } from "./model/json-tree"
 import { applyHttpViewKeyboardCommand } from "./model/workspace-keyboard-actions"
-import type {
-  HttpAuth,
-  HttpBodyKind,
-  HttpClientUrlRequest,
-  HttpKeyValue,
-  HttpMultipartPart,
-  HttpProjectRequestItem,
-} from "./model/types"
+import type { HttpAuth, HttpBodyKind, HttpKeyValue, HttpMultipartPart } from "./model/types"
 import { httpBodyFor } from "./runtime"
 import {
   createHttpWorkspaceState,
   httpWorkspaceReducer,
   type HttpWorkspaceAction,
 } from "./model/workspace"
-import { httpRequestFilePath, isOpaqueHttpRequest } from "./model/request-capabilities"
 import { HTTP_WORKING_DIRECTORY } from "./services/context"
 import { useHttpProject } from "./hooks/use-http-project"
-import { HttpDocumentBar } from "./ui/HttpDocumentBar"
-import { HttpOmnibar } from "./ui/HttpOmnibar"
-import { HttpPaneSelector } from "./ui/HttpPaneSelector"
+import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "./storage/config"
+import type { HttpCompletionKey } from "./ui/HttpOmnibar"
+import { HttpWorkspaceHeader } from "./ui/HttpWorkspaceHeader"
 import { HttpWorkspaceBody } from "./ui/HttpWorkspaceBody"
+import { handleHttpCollectionTreeKey } from "./ui/handle-collection-tree-key"
 import { HttpClientFooter } from "./ui/HttpClientFooter"
 import { HttpWorkspaceOverlays } from "./ui/HttpWorkspaceOverlays"
 import { useHttpCurl } from "./hooks/use-http-curl"
@@ -40,8 +35,11 @@ import { useHttpResponseFocus } from "./hooks/use-http-response-focus"
 import { selectedHttpHistoryEntries } from "./model/history"
 import { useHttpWorkspaceLifecycle } from "./hooks/use-http-workspace-lifecycle"
 import { useHttpRequestFiles } from "./hooks/use-http-request-files"
+import { useHttpCollectionManagement } from "./hooks/use-http-collection-management"
 import { useHttpDocuments } from "./hooks/use-http-documents"
 import { useHttpCollectionImport } from "./hooks/use-http-collection-import"
+import { useHttpPostman } from "./hooks/use-http-postman"
+import { httpSourceProject } from "./hooks/http-source-project"
 import { useHttpNavigation } from "./hooks/use-http-navigation"
 import { useHttpOverlayNavigation } from "./hooks/use-http-overlay-navigation"
 import { useHttpCollectionRunner } from "./hooks/use-http-collection-runner"
@@ -54,29 +52,20 @@ import { useHttpTlsApprovals } from "./hooks/use-http-tls-approvals"
 import { useHttpSendDocument } from "./hooks/use-http-send-document"
 import { useHttpRedirectApprovals } from "./hooks/use-http-redirect-approvals"
 import { HttpRedirectApprovalModal } from "./ui/HttpRedirectApprovalModal"
-import { HttpTutorialDemo } from "./tutorial/HttpTutorialDemo"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 import { useHttpExecutionNotifications } from "./hooks/use-http-execution-notifications"
 import { ensureHttpRendererListenerBudget } from "./model/renderer-listener-budget"
 import { useHttpJsonTree } from "./hooks/use-http-json-tree"
-
-type HttpClientProps = {
-  active: boolean
-  initialUrlRequest?: HttpClientUrlRequest | null
-  onUnsavedChangesChange?: (dirty: boolean) => void
-  tutorialMode?: boolean
-}
-
-export function HttpClient({ tutorialMode = false, ...props }: HttpClientProps) {
-  if (tutorialMode) return <HttpTutorialDemo />
-  return <HttpInteractiveClient {...props} />
-}
-
-function HttpInteractiveClient({
+import { applyHttpUrlQueryEdit } from "./model/url-query"
+import { httpSourceSwitchBlocker, type HttpSourceMode } from "./model/source-mode"
+import type { HttpClientProps } from "./model/types"
+export function HttpInteractiveClient({
   active,
   initialUrlRequest,
   onUnsavedChangesChange,
-}: HttpClientProps) {
+  sourceMode,
+  onChooseSource,
+}: HttpClientProps & { sourceMode: HttpSourceMode; onChooseSource: () => void }) {
   const renderer = useRenderer()
   ensureHttpRendererListenerBudget(renderer)
   const terminal = useTerminalDimensions()
@@ -92,6 +81,9 @@ function HttpInteractiveClient({
     reactDispatch(action)
   }, [])
   const urlRef = useRef<InputRenderable | null>(null)
+  const urlCompletionKeyRef = useRef<((key: HttpCompletionKey) => boolean) | null>(null)
+  const requestTableKeyRef = useRef<((key: HttpRequestTableKey) => boolean) | null>(null)
+  const collectionTreeKeyRef = useRef<((key: HttpKey) => boolean) | null>(null)
   const collectionSearchRef = useRef<InputRenderable | null>(null)
   const { documentRefs, refsFor, blurDocumentControls } = useHttpDocumentRefs(urlRef)
   const abortControllers = useRef(new Map<string, AbortController>())
@@ -105,16 +97,18 @@ function HttpInteractiveClient({
   const activeJsonTree = useHttpJsonTree(activeDocument)
   useNotificationFromValue(notice, { source: "HTTP" })
   useHttpExecutionNotifications(state.documents)
-  const httpProject = useHttpProject(httpRequestFilePath(activeDocument?.request))
+  const httpProject = useHttpProject()
   const {
     project,
-    projectRequests,
     activeEnvironment,
     activeEnvironmentName,
-    workspaceConfig,
     refresh: refreshProject,
     variablesForRequest,
   } = httpProject
+  const postman = useHttpPostman(httpProject, dispatch, blurDocumentControls, setNotice)
+  const { projectRequests, sourceFiles, sourceDirectories, sourcePostmanFolders } =
+    httpSourceProject(httpProject, sourceMode, postman.workspace?.id)
+  const workspaceConfig = DEFAULT_HTTP_WORKSPACE_CONFIG
   const historyTools = useHttpHistory({
     config: workspaceConfig,
     dispatch,
@@ -179,6 +173,7 @@ function HttpInteractiveClient({
   })
   const {
     selectDocument,
+    openProjectRequest,
     addDocument,
     cancelDocument,
     closeDocument,
@@ -192,6 +187,7 @@ function HttpInteractiveClient({
     abortControllers,
     documentCounter,
     urlRef,
+    refsFor,
     blurDocumentControls,
     dispatch,
   })
@@ -206,6 +202,8 @@ function HttpInteractiveClient({
   })
   const requestPersistence = useHttpRequestPersistence({
     root: HTTP_WORKING_DIRECTORY,
+    sourceMode,
+    collectionFiles: sourceFiles,
     documents: state.documents,
     documentRefs,
     dispatch,
@@ -231,25 +229,19 @@ function HttpInteractiveClient({
   })
   const openEnvironmentManager = useCallback(() => {
     blurDocumentControls()
+    renderer.currentFocusedRenderable?.blur()
     dispatch({ type: "open-overlay", overlay: "environment-manager" })
-  }, [blurDocumentControls, dispatch])
-  const openProjectRequest = useCallback(
-    (item: HttpProjectRequestItem) => {
-      blurDocumentControls()
-      dispatch({ type: "add-document", request: item.request })
-      setTimeout(() => {
-        if (isOpaqueHttpRequest(item.request)) {
-          dispatch({ type: "select-pane", pane: "request" })
-          refsFor(item.request.id).raw?.focus()
-        } else {
-          dispatch({ type: "select-pane", pane: "url" })
-          urlRef.current?.focus()
-        }
-      }, 0)
-    },
-    [blurDocumentControls, dispatch, refsFor],
-  )
-
+  }, [blurDocumentControls, dispatch, renderer])
+  const manageCollection = useHttpCollectionManagement({
+    root: HTTP_WORKING_DIRECTORY,
+    sourceMode,
+    files: project.files,
+    getDocuments: () => stateRef.current.documents,
+    dispatch,
+    refreshProject,
+    openRequest: openProjectRequest,
+    setNotice,
+  })
   const requestEditing = useHttpRequestEditing({
     documents: state.documents,
     activeDocument,
@@ -262,7 +254,6 @@ function HttpInteractiveClient({
     dispatch,
     selectDocument,
   })
-
   const { closeOverlay, jumpTo } = useHttpOverlayNavigation({
     document: activeDocument,
     activePane: state.activePane,
@@ -276,6 +267,9 @@ function HttpInteractiveClient({
     closeOverlay,
     setNotice,
   })
+  useEffect(() => {
+    if (sourceMode === "postman") postman.open()
+  }, [postman.open, sourceMode])
   const collectionRunner = useHttpCollectionRunner({
     root: HTTP_WORKING_DIRECTORY,
     items: projectRequests,
@@ -285,16 +279,40 @@ function HttpInteractiveClient({
     approveInsecureTls: tlsApprovals.approve,
     authorizeRedirect: redirectApprovals.authorize,
   })
-
+  const chooseSource = () => {
+    const blocker = httpSourceSwitchBlocker(stateRef.current.documents)
+    if (blocker) {
+      setNotice(blocker)
+      return
+    }
+    blurDocumentControls()
+    onChooseSource()
+  }
   useKeyboard((key) => {
     if (!active || !activeDocument || redirectApprovals.pending) return
+    if (requestPersistence.pendingPostmanSaveId) return
     const currentState = stateRef.current
+    if (key.ctrl && key.name === "g" && currentState.overlay === null) {
+      key.preventDefault()
+      key.stopPropagation()
+      chooseSource()
+      return
+    }
     const currentDocument =
       currentState.documents.find(
         (document) => document.request.id === currentState.activeDocumentId,
       ) ?? currentState.documents[0]
     if (!currentDocument) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
+    if (focusedId === "http-url-input" && urlCompletionKeyRef.current?.(key)) return
+    if (handleHttpCollectionTreeKey(key, currentState, focusedId, collectionTreeKeyRef)) return
+    if (focusedId === "http-collection-name-input") return
+    if (
+      currentState.overlay === null &&
+      currentState.activePane === "request" &&
+      requestTableKeyRef.current?.(key)
+    )
+      return
     const documentId = currentDocument.request.id
     const currentJsonTree = httpJsonTreeForDocument(currentDocument)
     const command = resolveHttpKeyboardCommand({
@@ -333,7 +351,6 @@ function HttpInteractiveClient({
     ) {
       return
     }
-
     switch (command.kind) {
       case "blur-url":
         urlRef.current?.blur()
@@ -366,6 +383,8 @@ function HttpInteractiveClient({
         return
       case "save-document":
         return void requestPersistence.saveDocument(documentId)
+      case "push-postman-document":
+        return void postman.push(currentDocument)
       case "open-environment-manager":
         openEnvironmentManager()
         return
@@ -379,14 +398,11 @@ function HttpInteractiveClient({
         setTimeout(() => refsFor(documentId).responseSearch?.focus(), 0)
         return
       case "open-response":
-        void responseTools.openResponse(documentId)
-        return
+        return void responseTools.openResponse(documentId)
       case "focus-collection-search":
-        collectionSearchRef.current?.focus()
-        return
+        return void collectionSearchRef.current?.focus()
       case "cycle-document":
-        cycleDocument(command.direction)
-        return
+        return void cycleDocument(command.direction)
       case "cycle-method":
         requestEditing.cycleMethod(command.direction)
         return
@@ -406,6 +422,10 @@ function HttpInteractiveClient({
       case "open-overlay":
         if (command.overlay === "request-move") return requestFiles.openMove()
         if (command.overlay === "request-delete") return requestFiles.openDelete()
+        if (command.overlay === "collection-import" && sourceMode === "postman") {
+          setNotice("Troque para HTTP Local antes de importar um arquivo local.")
+          return
+        }
         if (command.overlay === "collection-import") collectionImport.open()
         if (command.overlay === "collection-runner") collectionRunner.open()
         blurDocumentControls()
@@ -440,9 +460,6 @@ function HttpInteractiveClient({
           closeOverlay()
         } else void requestFiles.apply(currentState.overlay)
         return
-      case "toggle-import-format":
-        collectionImport.cycleFormat()
-        return
       case "back-import-preview":
         collectionImport.back()
         return
@@ -471,7 +488,6 @@ function HttpInteractiveClient({
     }
   })
   if (!activeDocument) return null
-  const running = activeDocument.execution.status === "running"
   const historyDiff = selectedHttpHistoryEntries(state.history, state.historySelection)
   return (
     <box
@@ -482,58 +498,38 @@ function HttpInteractiveClient({
         padding: LAYOUT.outerPadding,
       }}
     >
-      <HttpDocumentBar
-        documents={state.documents}
-        activeDocumentId={state.activeDocumentId}
-        compact={terminal.width < 96}
-        onSelect={selectDocument}
-        onClose={requestCloseDocument}
-        onAdd={addDocument}
-      />
-      <HttpOmnibar
-        request={activeDocument.request}
-        focused={state.activePane === "url"}
-        twoRows={layout.omnibarRows === 2}
-        running={running}
-        readOnly={isOpaqueHttpRequest(activeDocument.request)}
+      <HttpWorkspaceHeader
+        document={activeDocument}
+        state={state}
+        layout={layout}
+        terminalWidth={terminal.width}
+        sourceMode={sourceMode}
+        onChooseSource={chooseSource}
         urlRef={urlRef}
-        onFocus={() => dispatch({ type: "select-pane", pane: "url" })}
-        onUrlChange={(url) =>
-          dispatch({
-            type: "update-request",
-            documentId: activeDocument.request.id,
-            patch: { url },
-          })
-        }
+        completionKeyRef={urlCompletionKeyRef}
+        variableNames={[...httpProject.variablesForRequest(activeDocument.request).keys()]}
+        onSelectDocument={selectDocument}
+        onCloseDocument={requestCloseDocument}
+        onAddDocument={addDocument}
+        dispatch={dispatch}
         onCycleMethod={requestEditing.cycleMethod}
-        onSend={() => void sendDocument(activeDocument.request.id)}
-        onCancel={() => cancelDocument(activeDocument.request.id)}
+        onSend={(id) => void sendDocument(id)}
+        onCancel={cancelDocument}
         environmentName={activeEnvironmentName}
         productionEnvironment={activeEnvironment?.production ?? false}
         onOpenEnvironment={openEnvironmentManager}
-      />
-      <HttpPaneSelector
-        mode={layout.mode}
-        activePane={state.activePane}
-        navigationOpen={state.navigationOpen}
-        navigationView={state.navigationView}
-        onPane={(pane) => dispatch({ type: "select-pane", pane })}
         onNavigation={toggleNavigation}
       />
       <box style={{ height: panelSpacing, flexShrink: 0 }} />
       <HttpWorkspaceBody
         state={state}
+        requestTableKeyRef={requestTableKeyRef}
+        collectionTreeKeyRef={collectionTreeKeyRef}
         layout={layout}
         height={bodyHeight}
-        registerHeaderInput={(documentId, input) => {
-          refsFor(documentId).headers = input
-        }}
-        registerBodyEditor={(documentId, editor) => {
-          refsFor(documentId).body = editor
-        }}
-        registerRawScroll={(documentId, scroll) => {
-          refsFor(documentId).raw = scroll
-        }}
+        registerHeaderInput={(documentId, input) => (refsFor(documentId).headers = input)}
+        registerBodyEditor={(documentId, editor) => (refsFor(documentId).body = editor)}
+        registerRawScroll={(documentId, scroll) => (refsFor(documentId).raw = scroll)}
         registerScroll={(documentId, scroll) => {
           refsFor(documentId).response = scroll
         }}
@@ -556,9 +552,15 @@ function HttpInteractiveClient({
         onResponsePresentationChange={(documentId, patch) =>
           dispatch({ type: "update-response-presentation", documentId, patch })
         }
-        onQueryChange={(documentId, query) =>
-          dispatch({ type: "update-request", documentId, patch: { query } })
-        }
+        onQueryChange={(documentId, query) => {
+          const document = stateRef.current.documents.find((item) => item.request.id === documentId)
+          if (!document) return
+          dispatch({
+            type: "update-request",
+            documentId,
+            patch: applyHttpUrlQueryEdit(document.request.url, query, documentId),
+          })
+        }}
         onPathChange={(documentId, path) =>
           dispatch({ type: "update-request", documentId, patch: { path } })
         }
@@ -605,16 +607,24 @@ function HttpInteractiveClient({
         }
         onSend={(documentId) => void sendDocument(documentId)}
         projectRequests={projectRequests}
+        projectDirectories={sourceDirectories}
+        projectFiles={sourceFiles.map((file) => file.path)}
+        postmanFolders={sourcePostmanFolders}
+        postmanWorkspace={postman.workspace}
+        onPostmanWorkspaceChange={postman.selectWorkspace}
         projectErrors={project.errors.length}
+        sourceMode={sourceMode}
         onOpenProjectRequest={openProjectRequest}
         onImportCollection={() => {
           collectionImport.open()
           dispatch({ type: "open-overlay", overlay: "collection-import" })
         }}
+        onOpenPostman={postman.open}
         onRunCollection={() => {
           collectionRunner.open()
           dispatch({ type: "open-overlay", overlay: "collection-runner" })
         }}
+        onManageCollection={manageCollection}
         onNameChange={requestEditing.changeName}
         onMethodChange={requestEditing.changeMethod}
         onOptionsChange={requestEditing.changeOptions}
@@ -670,6 +680,7 @@ function HttpInteractiveClient({
           dispatch({ type: "open-overlay", overlay: "help" })
         }}
         onSave={() => void requestPersistence.saveDocument(activeDocument.request.id)}
+        onPushPostman={() => void postman.push(activeDocument)}
         notice={notice}
       />
       <HttpWorkspaceOverlays
@@ -690,12 +701,11 @@ function HttpInteractiveClient({
         onMoveTargetChange={requestFiles.setMoveTarget}
         onApplyRequestFileAction={() => void requestFiles.apply(state.overlay)}
         collectionImport={collectionImport}
+        postman={postman}
         collectionRunner={collectionRunner}
         environment={httpProject}
-        onOpenWorkspaceSettings={() =>
-          dispatch({ type: "open-overlay", overlay: "workspace-settings" })
-        }
         externalConflict={requestPersistence}
+        postmanSave={{ files: sourceFiles, folders: sourcePostmanFolders }}
         pendingCloseName={pendingCloseDocument?.request.name ?? ""}
         onConfirmCloseDocument={() => {
           confirmCloseDocument()

@@ -88,7 +88,7 @@ tuiminal ../meu-projeto
 tuiminal banco ./meu-projeto
 tuiminal git ./meu-projeto
 tuiminal runner ./meu-projeto
-tuiminal http ./meu-projeto
+tuiminal http
 tuiminal terminal ./meu-projeto
 ```
 
@@ -233,8 +233,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[2] PR`
 
+- `[Ctrl+N]` opens a creation form with searchable repository, remote base, and compare branch pickers, plus title, Markdown description, and a draft option. The base starts with the selected repository's default branch and remains selectable. The title starts with the latest commit subject from the compare branch and remains editable. Tuiminal checks both selected branches before one GitHub API submission; it does not push a local branch.
 - Starts with **My PRs**, **Review requested**, **All**, **Open**, and **Closed**. The last three select non-archived PRs by state within the current scope.
 - Lists state, repository, review, CI, author, assignees, comments, labels, and diff size.
+- State marks are green for open, purple for merged, gray for draft, and red for closed.
 - Preview tabs show overview, checks, activity, commits, and files.
 - Stopping CI watch or closing its screen cancels the active request; old responses neither notify nor interrupt a new watch.
 - In Activity, `[J/K]` selects comments, `[E]` opens five quick reactions (👍 ❤️ 🎉 😄 👀), and `[Enter]` replies with a reference to the original comment. Replies group under their parent; a comment with reactions offers a new reaction. `[Shift+E]` reacts to the PR itself.
@@ -244,8 +246,10 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` opens a creation form with a searchable repository picker, title, and Markdown description. Both creation forms keep the draft in memory until submission and require `[Ctrl+S]` to create.
 - Starts with **My Issues**, **All**, **Open**, and **Closed**, selecting non-archived issues by state within the current scope.
 - Combines a dense two-line list with overview and activity previews.
+- Its state mark is green for open and red for closed.
 - In Activity, `[J/K]` selects comments, `[E]` reacts with 👍 ❤️ 🎉 😄 or 👀, and `[Enter]` replies. Replies group under the parent; existing reactions do not hide the new-reaction control. `[Shift+E]` reacts to the issue itself.
 - Supports comments, assignment/unassignment, label edits, branch creation with checkout, closing, and reopening.
 - Searches remain scoped to non-archived issues and never accidentally become GitHub-wide searches.
@@ -253,10 +257,13 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 ### `[4] Inbox`
 
 - Combines Inbox, review requests, assignments, mentions, and locally saved items.
+- Filled and hollow marks still distinguish unread and read. PR and Issue marks also take the subject's state color, with a text label; other subjects or unavailable states stay neutral.
 - Marking read is explicit; completing and unsubscribing require confirmation.
 - Automatic refresh preserves visible data when the network fails.
 
 PR and Issues use the `origin` repository when recognized. Outside a repository, the default is the authenticated account, explicitly including organizations and external repositories rather than searching all of GitHub. Remote views require [GitHub CLI](https://cli.github.com/) 2.40.0 or later.
+
+While a PR or Issues tab is active, its visible list and selected details refresh about every 30 seconds, so issues and comments added in GitHub appear without reopening the tab. `[R]` checks both immediately. The configured longer interval still refreshes every section to its loaded page depth.
 
 When `gh` is missing or outdated, PR, Issues, and Inbox explain it, display the detected official command, provide `[C]` to copy, and offer a mini terminal focused with `[Enter]` or mouse. Tuiminal starts only the shell: you paste and execute the command, and version detection updates automatically. `[Enter]` reopens an exited shell. Missing authentication uses the same guidance for `gh auth login --hostname <host> --web`; `gh`/GitHub own login and tokens, and the view reloads when the account is detected.
 
@@ -288,6 +295,7 @@ Quoted query text stays literal: mentioning `repo:` or `author:@me` inside a phr
 | Open remote diff | `[D]` |
 | Open remote actions | `[?]` |
 | Open selected PR, Issue, or Inbox notification | `[O]` |
+| Create a PR or issue in its tab | `[Ctrl+N]`, then `[Ctrl+S]` |
 | Stage file/folder or all files | `[Space]` / `[A]` |
 | Stage hunks or lines in the focused diff | `[S]`, then `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]`, and `[Enter]` |
 | Discard file/folder with confirmation | `[D]` |
@@ -318,7 +326,10 @@ Runner is Tuiminal's initial screen. It discovers project commands, starts short
 - **Keep processes alive:** selecting an active command opens its existing session. `[R]` starts another instance separately.
 - **Follow logs:** switch stdout/stderr, filter, copy, export, show timestamps, and send input to stdin or a PTY.
 - **Watch multiple services:** Multi mode shows up to three logs side by side and navigates additional groups.
-- **Act on groups:** select commands and start, stop, or restart them in parallel; groups are not dependency graphs.
+- **Act on groups:** select commands and start, stop, or restart them together; simple groups run in parallel.
+- **Order commands and services:** dependencies wait for successful completion or startup with health checks. Cycles and missing references are rejected before execution; failure or cancellation blocks pending dependents.
+- **Save project flows:** `[Ctrl+Y]` opens the YAML configuration file inside the terminal. Create named flows with sequential and parallel stages, then run, stop or restart them from the TUI.
+- **Edit commands locally:** configure literal command, directory, environment/profile, PTY, restart policy and health checks, including overrides for detected commands. The editor shows documentation, validation and keyboard/mouse suggestions without changing project files.
 - **Switch projects:** `[N]` opens another repository/directory without interrupting active processes. Up to four projects occupy local tabs `[1]–[4]`.
 - **Use detected ports:** open or copy a URL, or send it directly to the HTTP tab.
 
@@ -328,7 +339,7 @@ Single and Multi retain the original language of program output; only Tuiminal m
 
 Project discovery deduplicates overlapping directories and performs up to 16 concurrent reads, with limits of 300 projects and seven levels. Detected commands use the selected project's paths. Deno JSONC task text is preserved even when it contains comment markers.
 
-Discovery reads `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile`, and other supported formats. Only `autostart: true` in Tuiminal's own file can request automatic startup. The first request shows the project, commands, directories, profile, and variable names for approval. Trust is local, and a material configuration change requires renewed confirmation. `mprocs` and `Procfile` never start implicitly.
+Discovery reads `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile`, and other supported formats. Only explicit `autostart: true` in Tuiminal configuration, including locally saved commands and flows, can request automatic startup. The first request shows the project, commands, directories, profile, and variable names for approval. Trust is local, and a material configuration change requires renewed confirmation. `mprocs` and `Procfile` never start implicitly.
 
 ```yaml
 version: 1
@@ -354,6 +365,8 @@ commands:
 
 <a id="atalhos-essenciais-do-runner"></a>
 
+Edit `commands`, `flows` and `profiles` as YAML with syntax colors and contextual help. A read-only recommendation list follows the cursor as you type or move with arrows, shows options for the current YAML block, and describes the selected option beside the list. After `flows:` and `[Enter]`, it shows an example flow ID (`dev:`); while you type another ID, it shows the required colon, then offers fields such as `label` and `stages` inside that flow. The same guidance appears for command and profile IDs and environment variable names. Close typos show likely alternatives from that block; unrelated text closes the recommendation list. Use `[Ctrl+J/K]` or a mouse click to inspect options; type the desired key or value yourself. `[Enter]` indents the next line for mappings, list entries and literal command blocks; `[Tab]` inserts two spaces. `[Esc]` dismisses recommendations, then returns to command/flow management. Dependencies use `dependsOn` entries with `commandId` and `condition`; flow stages use `commandIds` and `waitFor`. `started` waits for the configured health check. `[Ctrl+S]` validates and saves. See the [Runner specification](docs/design/runner.md) for complete YAML examples.
+
 ### Essential Runner shortcuts
 
 | Action | Shortcut |
@@ -361,6 +374,11 @@ commands:
 | Run or open an existing process | `[Enter]` |
 | Start another instance | `[R]` |
 | Focus manual command / save | `[/]` / `[Ctrl+S]` |
+| YAML editor | `[Ctrl+Y]` |
+| New command / flow (management list) | `[Ctrl+N]` / `[Ctrl+F]` |
+| Run / stop / restart selected flow | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
+| YAML newline and indentation / suggestions / save | `[Enter]` and `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Browse YAML recommendations | `[Ctrl+J/K]` |
 | Commands / active processes | `[P]` |
 | Single / Multi view | `[M]` |
 | Previous / next Multi group | `[A←]` / `[F→]` |
@@ -374,7 +392,7 @@ commands:
 | Switch Runner projects | `[1]`–`[4]` |
 | Close project tab without stopping processes | `[Ctrl+X]` |
 
-Session state and saved commands live in `~/.config/tuiminal/runner.json`. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
+The YAML editor saves `~/.config/tuiminal/runner/<project-hash>/runner.yaml`, without changing project files. Existing saved commands and flows are included on the first save. `runner.json` retains sessions, history and legacy definitions for projects without YAML. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
 
 <a id="http"></a>
 
@@ -384,20 +402,24 @@ Session state and saved commands live in `~/.config/tuiminal/runner.json`. Logs 
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Tuiminal HTTP tab demo" width="100%">
 </p>
 
-A compact API client with documents, collection, request builder, response inspection, and automation. Layout adapts from three columns to split or single-pane views without losing drafts, cursor, response, or focus.
+A compact API client with documents, collection, request builder, response inspection, and automation. Its interactive data lives in one global HTTP home (`$XDG_DATA_HOME/tuiminal/http`, or `~/.local/share/tuiminal/http`) regardless of the opened project. Layout adapts from three columns to split or single-pane views without losing drafts, cursor, response, or focus.
 
 <a id="o-que-você-pode-fazer-2"></a>
 
 ### What you can do
 
 - **Build requests:** method, URL, query parameters, headers, JSON/text/XML, URL-encoded forms, multipart, file bodies, and Bearer, Basic, or API Key authentication.
-- **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block.
+- **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors, with tree controls in a separate gutter and a full-row highlight on the selected block. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block. Navigable Pretty JSON keeps one row per line for accurate selection; Wrap remains available in Raw and other response views.
 - **Control space:** request/response starts at `50/50`; `[Ctrl+↑/↓]` and the drag handle share a per-document ratio limited to 25–70%.
-- **Version collections:** open and save interoperable `.http`/`.rest` files without silently rewriting unsupported blocks.
-- **Import:** Postman v2.1 and OpenAPI 3.0/3.1, with conversion previews, loss warnings, and protection for detected secrets.
+- **Save collections:** import and save interoperable `.http`/`.rest` files in the global HTTP home without silently rewriting unsupported blocks.
+- **Organize collections with keyboard or mouse:** move through the collection tree with `[↑/↓]` or `[J/K]`, collapse and expand with `[←/→]`, and open requests with `[Enter]`. Create folders, `.http` collections, and requests; rename or delete selected items. Empty folders and collections remain visible. Deletion requires confirmation; changed or running open requests must be handled first.
+- **Import:** enter a full path or `~/` path to a Postman v2.0/v2.1 or OpenAPI 3.0/3.1 file, use `[↑/↓]` and `[Tab]` to complete it, or drop a file into the import box when the terminal pastes its path. Tuiminal detects the format from the file contents and shows it in the conversion preview with loss warnings; the resulting `.http` is saved in the global HTTP library only after confirmation, independent of the opened project.
+- **Connect a Postman account:** run `tuiminal postman login` for a prompt that does not echo the API key, or pipe a key to `tuiminal postman login --api-key-stdin`; add `--region eu` for an EU account. When connected, HTTP opens with Local and Postman source cards; `[Ctrl+G]` switches sources. In Postman mode, choose a workspace to load all its collections, initially with every collection and folder collapsed; `[E]` optionally selects an environment. The left tree shows the workspace name above its collections, omits the internal `postman/` folder, and uses Postman method colors. `[?]` reveals collection actions and shortcuts. The key and imported variable values use the system credential store. Tuiminal creates linked `.http` files for new collections under the global HTTP home and private, selectable environments when variables are available; it does not change the opened project. `[Shift+N]` creates a collection in the selected source; Postman uses the active workspace or asks for one before selection. Create, rename, duplicate, and delete linked requests; create, rename, and delete linked collections and nested folders. These actions update Postman and the local copy. `[Ctrl+S]` sends changes to a linked request; for a new request it offers a destination collection or folder and creates it in Postman. `[Ctrl+P] Postman` retries a pending send. Conflicts and failed remote writes are reported. Moving requests between files is not yet available for Postman. Imported environment edits remain local. Vault values unavailable through the API, scripts, saved responses, and unsupported authentication are reported or omitted. See [Postman account access](./docs/design/postman-account.md) for the exact boundaries.
 - **Automate:** status/header/body/JSONPath assertions, request dependencies, and public or volatile variable extraction.
 - **Run collections:** resolve dependencies topologically, use JSON/CSV datasets, limit concurrency, and emit text, JSON, or JUnit reports. Selection works with duplicate request names. Reopening the runner or changing its target cancels the previous run; stale results cannot replace the new one.
-- **Use environments:** per-directory public/private variables, workspace defaults, and opaque references to system credential storage. Private-value fields remain masked during editing and resizing, including ideographs and emoji.
+- **Use environments:** `[E]` lists selectable environments; `[N]` creates one, `[E]` edits or renames the selected one, and `[D]` deletes it after confirmation. `[G]` opens always-active `Globals`, whose name is fixed. Each form has a name and variable/value table; `[/]` chooses a block, `[↑/↓]` moves its focus rail, and `[Enter]` opens it. Alternating row backgrounds and a highlighted cell make table navigation clear. `[Tab]` advances through cells; populated tables support arrows or `[H/J/K/L]`, `[Enter]` to edit, and layered `[Esc]` to leave. Values are visible while editing and always saved in the operating system's credential store; the private environment file contains only opaque references for new or edited values. The bordered modal owns focus while open. Workspace defaults are no longer applied.
+- **Edit request tables:** in Query/Path Params, `[J/K]` or `[↑/↓]` chooses a block. `[Enter]` starts the first cell of an empty table or opens navigation over existing rows. Arrows or `[H/J/K/L]` reach the enabled dot, name/value cells, and `[×]`; `[Enter]` activates the selected control, including deletion on `[×]`. `[Space]` enables or disables the selected row, and `[Tab]` advances through inputs into a draft row that becomes real when typed. `[Esc]` steps back from input to table to block. Headers, form URL encoded, and Multipart use the same flow; Multipart also exposes its text/file switch in table navigation. `[N]` is no longer used to add table rows.
+- **Write URLs quickly:** type `{` in the URL to see available variable names, then `[Tab]` to complete `{{name}}`. Query pairs such as `?manga=2` appear in Params and can be edited there without sending duplicates.
 - **Control transport:** timeout, redirects, cookie jar, HTTP/HTTPS proxy, and TLS. Cookies use Public Suffix List validation and bounded storage isolated by environment and collection directory. `[C]` disables both cookie reads and writes per request. Disabling TLS verification is explicit, visibly red, and requires approval per destination.
 - **Review sensitive redirects:** sending a private body/URL to another origin or downgrading HTTPS to HTTP pauses for authorization. `[Y]` continues that hop; `[Esc]` refuses. The confirmation shows destination and risks with known private values masked. Cancellation cannot undo a request already received by the previous server.
 - **Handle external responses carefully:** `[O]` opens only allowlisted raster images with matching MIME and signatures. SVG, PDF, generic binaries, and disguised content cannot open through the system handler, but can be explicitly saved. Full download resends only GET, caps at 256 MB, and removes partial files on failure. Repeated activation does not duplicate downloads; closing the owning document cancels them. Completed files are published only after all bytes are written, without replacing an existing destination.
@@ -414,11 +436,17 @@ A compact API client with documents, collection, request builder, response inspe
 | Cycle Params, Headers, Body, Auth, and More with request focused | `[A←]` / `[F→]` |
 | Cycle nested Body, Auth, or More options | `[Z←]` / `[V→]` |
 | Switch Query Params / Path Params | `[J/K]` or `[↑/↓]` |
-| Add an item to the focused subpanel | `[N]` |
+| Enter a request table / edit a selected cell | `[Enter]` |
+| Move through request table controls / inputs | `[H/J/K/L]` or arrows / `[Tab]` |
+| Enable/disable a request table row / delete via selected `[×]` | `[Space]` / `[Enter]` |
 | Navigate / collapse / expand JSON | `[↑/↓]` or `[J/K]` / `[←/→]` / `[Enter]` |
 | Open environments | `[E]` |
 | Switch main response view / internal tab | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Open collection / history | `[C]` / `[Y]` |
+| Navigate collection rows / first or last row | `[↑/↓]` or `[J/K]` / `[Home/End]` |
+| Collapse or expand / open selected request | `[←/→]` / `[Enter]` |
+| New request / collection / folder in collection pane | `[N]` / `[Shift+N]` / `[P]` |
+| Rename / delete selected collection item | `[E]` / `[D]`, then `[Enter]` to confirm deletion |
 | New / close tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Switch documents | `[Alt+←/→]` |
 | Save `.http` | `[Ctrl+S]` |
@@ -445,13 +473,18 @@ tuiminal http run api.http#buscar-usuario --env local --report text
 tuiminal http run api.http --data cases.json --concurrency 4 --report junit
 tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
+tuiminal postman workspaces
+tuiminal postman collections <workspace-id>
+tuiminal postman environments <workspace-id>
+tuiminal postman pull <workspace-id> <collection-id> --environment <environment-id>
+tuiminal postman push postman/<file>.http "<request-name>"
 ```
 
 Headless redirects carrying a private body/URL require `--allow-private-redirect-to https://destino.example`; downgrades require `--allow-http-redirect-to http://destino.example`. Each flag accepts an exact origin (scheme, host, and port), can be repeated for additional destinations, and lasts only for that invocation. When both risks apply, both authorizations are required. `--allow-insecure-tls` is separate. Even with approval, private/authentication headers from the original origin are not forwarded. Continuing does not replay the previous request or collection dependencies. Timeout and cancellation dismiss pending confirmations; late approvals send nothing. Insecure TLS in the UI retains `[I]` approval by destination, environment, and session.
 
 Responses are captured up to roughly 1.5 MB and rendered within a bounded preview. Capture releases its reader on completion/failure and reports truncation only after observing bytes beyond the limit. Search tracks lines and columns without repeatedly processing the preceding text. Known secrets are masked in preview, cURL, conflicts, reports, and errors; secret extractions stay in memory.
 
-Persistent history is optional and masks known secrets in URLs, redirects, and metadata. Even with body persistence enabled, executions involving private variables, authentication, or known cookies keep bodies in the session only. Original responses remain in memory for inspection and explicit export. Other bodies may contain private data Tuiminal does not recognize: opting in does not make them safe to share. This protection does not automatically clean older history, exports, or backups.
+HTTP history stays in the current session and does not persist request or response bodies. Original responses remain in memory for inspection and explicit export. Preview, cURL, reports, and errors mask known secrets; explicitly exported files and older files from previous versions remain separate from session history.
 
 Redirects changing host, port, or scheme remove authentication and other sensitive headers, including custom API key names and resolved private values. These headers remain on same-origin redirects.
 
@@ -545,7 +578,7 @@ Main commands:
 | `bun run dev` | Build local feature payloads and launch the installation flow |
 | `bun run build:features` | Rebuild the five installable official payloads |
 | `bun run test:unit` | Test rules and local integrations |
-| `bun run test:tui` | Test UI with the real OpenTUI renderer |
+| `bun run test:tui` | Test native UI and loading of the five built feature payloads |
 | `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |
 | `bun run check:workspaces` | Check package versions, exports, and dependencies |
 | `bun run build:packages` | Generate JavaScript, types, and manifests for six internal modules |

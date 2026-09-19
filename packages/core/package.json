@@ -26,6 +26,7 @@
     "./storage/project-files": "./src/storage/project-files.ts",
     "./ui/DirectionalButton": "./src/ui/DirectionalButton.tsx",
     "./ui/InlineButton": "./src/ui/InlineButton.tsx",
+    "./ui/ModalSurface": "./src/ui/ModalSurface.tsx",
     "./ui/MountWhen": "./src/ui/MountWhen.tsx",
     "./ui/PasswordInput": "./src/ui/PasswordInput.ts",
     "./ui/PlasmaLoadingOverlay": "./src/ui/PlasmaLoadingOverlay.tsx",

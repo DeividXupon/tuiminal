@@ -1,3 +1,8 @@
+import { RUNNER_HELP_MESSAGES } from "./runner-help-catalog"
+import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
+import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
+import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner-validation-catalog"
+import { RUNNER_EDITOR_MESSAGES } from "./runner-editor-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
@@ -7,6 +12,7 @@ import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_BROWSER_MESSAGES } from "./git-browser-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
+import { GIT_CREATE_MESSAGES } from "./git-create-catalog"
 import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
 import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
@@ -21,6 +27,12 @@ import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
 import { HTTP_OVERLAY_MESSAGES } from "./http-overlays"
 import { HTTP_PATTERNS } from "./http-patterns"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
+import { HTTP_POSTMAN_MESSAGES, HTTP_POSTMAN_PATTERNS } from "./http-postman-catalog"
+import { HTTP_POSTMAN_SOURCE_MESSAGES } from "./http-postman-source-catalog"
+import {
+  HTTP_POSTMAN_ERROR_MESSAGES,
+  HTTP_POSTMAN_ERROR_PATTERNS,
+} from "./http-postman-errors-catalog"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
@@ -101,6 +113,11 @@ const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
+  ...RUNNER_HELP_MESSAGES,
+  ...RUNNER_YAML_MESSAGES,
+  ...RUNNER_YAML_COMPLETION_MESSAGES,
+  ...RUNNER_VALIDATION_MESSAGES,
+  ...RUNNER_EDITOR_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,
   ...GIT_CLI_GUIDANCE_MESSAGES,
   ...GIT_DISCUSSION_MESSAGES,
@@ -4965,6 +4982,9 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,
   ...HTTP_IMPORT_MESSAGES,
+  ...HTTP_POSTMAN_MESSAGES,
+  ...HTTP_POSTMAN_SOURCE_MESSAGES,
+  ...HTTP_POSTMAN_ERROR_MESSAGES,
   ...HTTP_OVERLAY_MESSAGES,
   ...HTTP_PROJECT_MESSAGES,
   ...HTTP_REQUEST_MESSAGES,
@@ -4977,6 +4997,7 @@ const MESSAGES: readonly Message[] = [
   ...APPEARANCE_MESSAGES,
   // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
+  ...GIT_CREATE_MESSAGES,
   ...GIT_ISSUE_MESSAGES,
   ...GIT_INBOX_MESSAGES,
   ...GIT_CONFIGURATION_MESSAGES,
@@ -5083,6 +5104,7 @@ for (const message of MESSAGES) {
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
 const PATTERNS: readonly Pattern[] = [
+  ...RUNNER_VALIDATION_PATTERNS,
   ...NOTIFICATION_PATTERNS,
   ...HTTP_WORKSPACE_SETTINGS_PATTERNS,
   [
@@ -5811,6 +5833,8 @@ const PATTERNS: readonly Pattern[] = [
   ...HTTP_PATTERNS,
   ...HTTP_ENVIRONMENT_PATTERNS,
   ...HTTP_IMPORT_PATTERNS,
+  ...HTTP_POSTMAN_PATTERNS,
+  ...HTTP_POSTMAN_ERROR_PATTERNS,
   ...HTTP_PROJECT_PATTERNS,
   ...HTTP_RESPONSE_PATTERNS,
   ...HTTP_RUNNER_PATTERNS,

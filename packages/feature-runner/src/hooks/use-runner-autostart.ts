@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import type { RunnerFlow } from "../model/plan"
 import type { RunnerCommand } from "../services/runner"
 import type { RunnerEnvironmentProfile } from "../storage/runner-config"
 import {
@@ -18,7 +19,10 @@ export function useRunnerAutostart({
   discoveredProjectRoot,
   commands,
   selectedProfile,
-  runCommand,
+  flows,
+  profiles,
+  runFlow,
+  runTargets,
   notify,
   setRunnerNotice,
   focusCommands,
@@ -29,7 +33,10 @@ export function useRunnerAutostart({
   discoveredProjectRoot: string | null
   commands: RunnerCommand[]
   selectedProfile: RunnerEnvironmentProfile | undefined
-  runCommand: (command: RunnerCommand) => void
+  flows: RunnerFlow[]
+  profiles: RunnerEnvironmentProfile[]
+  runFlow: (flow: RunnerFlow) => void
+  runTargets: (commands: RunnerCommand[]) => void
   notify: RunnerNotifier
   setRunnerNotice: (notice: string) => void
   focusCommands: () => void
@@ -38,10 +45,28 @@ export function useRunnerAutostart({
   const dismissedRef = useRef(new Set<string>())
   const [pendingReview, setPendingReview] = useState<RunnerAutostartReview | null>(null)
   const [, setTrustRevision] = useState(0)
-  const review = useMemo(
-    () => createRunnerAutostartReview(projectRoot, commands, selectedProfile),
-    [commands, projectRoot, selectedProfile],
-  )
+  const { review, error } = useMemo(() => {
+    try {
+      return {
+        review: createRunnerAutostartReview(
+          projectRoot,
+          commands,
+          selectedProfile,
+          flows,
+          profiles,
+        ),
+        error: "",
+      }
+    } catch (failure) {
+      return {
+        review: null,
+        error: failure instanceof Error ? failure.message : "Configuração inválida.",
+      }
+    }
+  }, [commands, projectRoot, selectedProfile, flows, profiles])
+  useEffect(() => {
+    if (error && active && !loading) setRunnerNotice(translateUi(error))
+  }, [active, error, loading, setRunnerNotice])
   const trusted = review ? isRunnerAutostartTrusted(review) : false
 
   useEffect(() => {
@@ -58,13 +83,12 @@ export function useRunnerAutostart({
     if (!active || !review || !trusted || pendingReview || discoveredProjectRoot !== projectRoot) {
       return
     }
-    for (const command of commands) {
-      if (!command.autostart) continue
-      const key = `${projectRoot}\n${command.id}\n${review.fingerprint}`
-      if (autostartedRef.current.has(key)) continue
-      autostartedRef.current.add(key)
-      runCommand(command)
-    }
+    const key = `${review.root}
+${review.fingerprint}`
+    if (autostartedRef.current.has(key)) return
+    autostartedRef.current.add(key)
+    runTargets(commands.filter((command) => command.autostart))
+    for (const flow of flows) if (flow.autostart) runFlow(flow)
   }, [
     active,
     commands,
@@ -72,7 +96,9 @@ export function useRunnerAutostart({
     pendingReview,
     projectRoot,
     review,
-    runCommand,
+    runTargets,
+    runFlow,
+    flows,
     trusted,
   ])
 

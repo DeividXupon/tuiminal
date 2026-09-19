@@ -12,6 +12,9 @@ mouse. `[Enter]` installs the selected tool, then opens it after installation.
 `[Space]` selects several tools and `[I]` installs that selection sequentially.
 `[C]` cancels the active download; already completed installations are retained.
 A failed installation stays on screen with an explicit retry action.
+Unexpected loading failures ask the user to restart Tuiminal and retry; they do not
+assume a missing development build. Integrity, catalog, download and storage errors
+retain their specific guidance.
 
 Installed rows expose **[D] Uninstall** beside Open. The focused row accepts `[D]`;
 mouse activation targets that exact row. A confirmation names the tool and explains
@@ -100,6 +103,10 @@ fail closed before installation. HTTPS redirects are bounded; credentials and
 non-loopback HTTP destinations are rejected. The operation has a two-minute deadline
 and owns cancellation. No automatic retries or install scripts run.
 
+The HTTP artifact includes `index.mjs`, `http-run.mjs`, `http-import.mjs`, and
+`http-postman.mjs`. The Postman command uses the same verified HTTP installation as
+the other headless HTTP commands.
+
 Files are written with mode `0600` into private staging directories, then renamed
 into a complete installation. Storage validates directories and rejects symlinked
 entries; concurrent successful publications converge on the same content. Failed or
@@ -156,6 +163,9 @@ existing version. See [release process](../release-process.md).
   installed-only navigation, settings access, retained Runner tree and small terminals;
   uninstall confirmation, shortcut isolation, real Runner process shutdown before file
   removal, last-tool removal, isolated mode, fallback navigation and reinstallation.
+- `tests/tui/feature-payloads.test.tsx`: build all five real payloads in temporary
+  storage, verify and import them using the actual host bindings, then open the
+  installed Runner's configuration and command editor through native input.
 - `tests/feature-uninstallation.test.ts`: exact payload removal, retained settings and
   other versions, symlink boundaries, serialized retirement/removal, failure recovery,
   partial filesystem failures and disposal during retirement.

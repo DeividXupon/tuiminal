@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { applyInboxSubjectStates } from "../../model/inbox/notifications"
 import { resolveGitProjectScope } from "../../services/git"
 import { GitHubAuthenticationRequiredError } from "../../services/github/auth"
 import { InboxSession, type InboxSessionResult } from "../../services/inbox-session"
@@ -40,6 +41,8 @@ export function useInboxDashboard(active: boolean, configurationRevision = 0) {
   const [refreshing, setRefreshing] = useState(false)
   const [backgroundError, setBackgroundError] = useState("")
   const generationRef = useRef(0)
+  const subjectItems = state.status === "ready" ? state.items : null
+  const subjectHost = state.status === "ready" ? state.host : null
   const loadedConfigurationRevisionRef = useRef(configurationRevision)
 
   const load = useCallback(
@@ -130,6 +133,27 @@ export function useInboxDashboard(active: boolean, configurationRevision = 0) {
     const timer = setInterval(() => void refresh(), state.refreshSeconds * 1_000)
     return () => clearInterval(timer)
   }, [active, refresh, state])
+
+  useEffect(() => {
+    if (!active || !subjectItems?.length || !subjectHost) return
+    const generation = generationRef.current
+    let cancelled = false
+    void session
+      .loadSubjectStates(subjectItems, subjectHost)
+      .then((states) => {
+        if (cancelled || !states || generation !== generationRef.current) return
+        setState((current) => {
+          if (current.status !== "ready") return current
+          const items = applyInboxSubjectStates(current.items, subjectItems, states)
+          return items === current.items ? current : { ...current, items }
+        })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      session.cancelSubjectLoad()
+    }
+  }, [active, session, subjectHost, subjectItems])
 
   useEffect(() => () => session.dispose(), [session])
 

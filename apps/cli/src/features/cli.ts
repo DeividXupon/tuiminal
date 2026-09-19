@@ -29,7 +29,7 @@ export async function installFeaturesCli(args: string[]) {
     controller.dispose()
   }
 }
-export async function httpFeatureCli(command: "run" | "import", args: string[]) {
+export async function httpFeatureCli(command: "run" | "import" | "postman", args: string[]) {
   try {
     return await runInstalledHttp(command, args)
   } catch (error) {

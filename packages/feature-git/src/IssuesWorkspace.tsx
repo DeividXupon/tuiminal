@@ -2,6 +2,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { sortedIssueComments } from "./model/issue/activity"
+import { defaultCreateRepository } from "./model/create-item"
 import {
   adjacentIssuePreviewTab,
   moveIssueIndex,
@@ -22,6 +23,8 @@ import { useIssueNotifications } from "./ui/issue/useIssueNotifications"
 import { useIssueWorkspaceKeyboard } from "./ui/issue/useIssueWorkspaceKeyboard"
 import { useAutoPage } from "./ui/useAutoPagination"
 import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
+import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
+import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
   issueDashboardAuth,
   issueDashboardProfileTarget,
@@ -63,7 +66,14 @@ export function IssuesWorkspace({
     queryOverride,
     configurationRevision,
   )
-  const { state: dashboard, refresh, loadMore, loadingMore, refreshing } = dashboardFlow
+  const {
+    state: dashboard,
+    refresh,
+    refreshActive,
+    loadMore,
+    loadingMore,
+    refreshing,
+  } = dashboardFlow
   const basePresentation = issueDashboardPresentation(dashboard, sectionIndex)
   const queryPresentation = queryOverride
     ? { ...basePresentation, section: { ...basePresentation.section, query: queryOverride } }
@@ -82,7 +92,15 @@ export function IssuesWorkspace({
     loadMore: loadMoreDetails,
     loadingMore: loadingMoreDetails,
     reload: reloadDetails,
+    refreshQuietly: refreshDetailsQuietly,
   } = useIssueDetails(active && presentation.showDashboard, selected)
+  useGitForegroundRefresh({
+    active,
+    sectionKey: `${requestedSectionId}:${queryOverride ?? ""}`,
+    dashboard,
+    refreshList: refreshActive,
+    refreshDetails: refreshDetailsQuietly,
+  })
   const profileTarget = issueDashboardProfileTarget(dashboard)
   const configuration = useIssueConfiguration({
     target: profileTarget,
@@ -104,6 +122,16 @@ export function IssuesWorkspace({
     },
     onLocalCheckout,
   })
+  const creation = useGitHubCreation({
+    kind: "issue",
+    auth: issueDashboardAuth(dashboard),
+    defaultRepository: defaultCreateRepository(
+      selected?.identity ?? null,
+      profileTarget?.profile.repositories ?? [],
+    ),
+    onNotice: setNotice,
+    onRefresh: () => void refresh(),
+  })
   const comments =
     details.status === "ready"
       ? sortedIssueComments(details.details.comments, details.details.identity)
@@ -115,7 +143,7 @@ export function IssuesWorkspace({
     configuration.previewPosition,
   )
   const layout = previewVisible ? responsiveLayout : "single"
-  const modalOpen = configuration.modalOpen || issueActions.modalOpen
+  const modalOpen = configuration.modalOpen || issueActions.modalOpen || creation.open
   useIssueNotifications(notice, dashboard, details)
 
   const selectSection = useCallback(
@@ -191,6 +219,9 @@ export function IssuesWorkspace({
   const handleAction = (action: IssueWorkspaceAction) => {
     if (readAction(action)) return
     switch (action.type) {
+      case "create-issue":
+        creation.openModal()
+        break
       case "move-section":
         selectSection(
           (sectionIndex + action.delta + presentation.sections.length) %
@@ -224,6 +255,7 @@ export function IssuesWorkspace({
         break
       case "refresh":
         void refresh()
+        void refreshDetailsQuietly()
         break
       case "load-more":
         void loadMore()
@@ -308,6 +340,8 @@ export function IssuesWorkspace({
         onCopyUrl={() => handleAction({ type: "copy-url" })}
         onCopyNumber={() => handleAction({ type: "copy-number" })}
         onOpenActions={issueActions.openMenu}
+        onCreate={creation.openModal}
+        canCreate={creation.available}
         onSelectComment={(index) => {
           setSelectedCommentIndex(index)
           setFocus("preview")
@@ -327,6 +361,7 @@ export function IssuesWorkspace({
       />
       {configuration.modals}
       {issueActions.modals}
+      {creation.modal}
     </>
   )
 }

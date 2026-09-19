@@ -20,6 +20,16 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test("translates the Postman source chooser and save destination", () => {
+    expect(translateUi("ESCOLHA A ORIGEM HTTP", "en")).toBe("CHOOSE HTTP SOURCE")
+    expect(translateUi("[L] Abrir local", "ja")).toBe("[L] ローカルを開く")
+    expect(translateUi("SALVAR NO POSTMAN", "es")).toBe("GUARDAR EN POSTMAN")
+    expect(translateUi("WORKSPACES POSTMAN", "en")).toBe("POSTMAN WORKSPACES")
+    expect(translateUi("Coleções 2/5…", "en")).toBe("Collections 2/5…")
+    expect(translateUi("2 coleções não puderam ser carregadas.", "en")).toBe(
+      "2 collections could not be loaded.",
+    )
+  })
   test.each([
     ["pt-BR", "Não foi possível gravar o download completo."],
     ["en", "Could not write the complete download."],
@@ -252,7 +262,7 @@ describe("internationalization", () => {
       translateUi("O arquivo api.http mudou fora do Tuiminal; revise antes de salvar.", "ko"),
     ).toBe("api.http 파일이 Tuiminal 외부에서 변경되었습니다. 저장하기 전에 검토하세요.")
     expect(translateUi("IMPORTAR COLEÇÃO", "en")).toBe("IMPORT COLLECTION")
-    expect(translateUi("[F] Formato: OPENAPI", "ja")).toBe("[F] 形式: OPENAPI")
+    expect(translateUi("FORMATO DETECTADO", "ja")).toBe("検出した形式")
     expect(translateUi("IMPORTADOS 4 · IGNORADOS 1 · AVISOS 2 · CONFLITOS 0", "zh-CN")).toBe(
       "已导入 4 · 已忽略 1 · 警告 2 · 冲突 0",
     )

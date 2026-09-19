@@ -1,0 +1,61 @@
+# Shared controls and modal ownership
+
+Tuiminal keeps one visual language without forcing every interaction into one
+component. The common components live in `packages/core/src/ui/`; a feature owns
+its keyboard scope, focus stack, data, and side effects.
+
+## Actions
+
+- Use `InlineButton` for a one-line labeled action. It supplies translation,
+  bracketed shortcut coloring, disabled/active/selected state, and palette-aware
+  compact backgrounds. Do not manually color a shortcut or translate a label only
+  to pass it to `InlineButton`.
+- Use `DirectionalButton` for contextual previous/next controls. Use the native
+  tuiparts `Button` for selectable rows, cards, spatial hit targets, and controls
+  whose interaction or layout is not a one-line action. Paint-only dimmers are
+  plain boxes, not focusable buttons.
+- Every visible keyboard action should have a mouse-accessible control where
+  practical. Do not style logs, code, query results, or user data as shortcuts.
+
+## Modal surfaces
+
+- `ModalSurface` owns only the centered rounded dialog, dimmer, z-order, and an
+  outside-click target. Its caller supplies dimensions, accent, close behavior,
+  content, and optional dialog ref. Only a primary-button press on the hit-tested
+  outer layer dismisses it; clicks inside the dialog do not bubble into dismissal.
+  The lower dimmer is paint-only and must not become a second focusable button.
+  Use `positionRelative` only when a dialog owns an absolutely positioned child,
+  such as Git configuration's loading overlay. Use `dialogFocusable={false}` when
+  an existing modal assigns focus exclusively to its child controls; the feature
+  still owns its keyboard scope. `layerId` and `layerFocusable` preserve an
+  existing full-screen focus owner when needed, as in the sensitive-terms editor.
+- The owning feature must still consume `[Esc]` and action keys in its own keyboard
+  scope, preserve layered input focus, and guard writes against repeated events.
+  Do not put a global `useKeyboard` handler in the surface.
+- Mount a modal only while open. A closed modal must not retain OpenTUI listeners.
+- The shell is appropriate for centered, dimmed dialogs. HTTP's positioned approval
+  layers and other layouts with distinct geometry remain separate until their
+  ownership and focus behavior can be preserved by a shared primitive.
+
+Current adopters include Git's discard, Inbox, PR and Issue action dialogs, PR and
+Issue section editors, local/compare/remote branch and repository pickers,
+configuration and creation dialogs; Runner's save and autostart trust dialogs;
+Database's connection, cell editor, write review, table search, batch export,
+favorites, and history dialogs; and CLI global settings and sensitive terms.
+The shared surface intentionally does not
+standardize their content or keybindings. The Git creation dialog retains its
+feature-owned busy-state close guard, and its child picker uses a higher layer.
+Git PR and Issue action menus additionally share `GitActionMenuView` for their
+identical header, action-row, and footer presentation; each menu keeps its own
+action model and keyboard selection policy. Their query/section editors share
+`GitRemoteSectionEditor`, including focus stack, autocomplete placement, fields,
+and footer. PR and Issue wrappers still supply their own allowed columns,
+option parsing, query kind, and callbacks.
+
+The Git tutorial mock dialogs expose step-specific target IDs and paint only a
+simulated state. They keep their own noninteractive dimmers: they are not live
+modal keyboard/focus owners, and do not justify tutorial-specific branches in
+`ModalSurface`. Feature uninstall is a content-height confirmation with its own
+semi-transparent overlay and synchronous keyboard guard; HTTP and unsaved-exit
+layers are positioned without this fixed centered dimmer. Do not force those
+different geometries or keyboard policies through the shared shell.

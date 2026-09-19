@@ -28,6 +28,9 @@ Observed composition, deliberately omitting sample data:
 - Top strip with section names/counts and an emphasized active section.
 - Query directly above the table, showing the active filters.
 - Rows with PR identity, title, and compact review/CI/change signals.
+- Tuiminal keeps distinct state glyphs, colored green for open, purple for merged,
+  muted gray for draft, and red for closed; the text and shape remain readable
+  without color.
 - Full-width row selection rather than a separate card for each PR.
 - Simple vertical divider; preview shows identity, title, state, and branches.
 - `Overview`, `Checks`, and `Activity` organize details.
@@ -185,6 +188,33 @@ in remote diffs.
 - Incomplete diffs offer browser access to the file/PR rather than implying completeness.
 
 ### 4.6. Forms and confirmations
+
+PR creation opens from `[Ctrl+N]` or its mouse control, independently of list
+selection. The form chooses an explicit `owner/repository` from the searchable
+authenticated repository catalog, then remote base and compare branches in that
+repository, title, Markdown body, and draft flag. The repository picker retains
+the current valid selection while the catalog loads and can retry a failed read.
+It renders at most 100 matching rows at once and lets search reach the rest.
+Closing it cancels the catalog request. Both branch
+controls open a searchable list from the selected repository's remote branches,
+loaded in bounded pages on demand. Changing the repository clears both selections;
+the form then reads that repository's `default_branch` and suggests it as base.
+This read is cancelled on close or repository change, and a late response cannot
+replace a manually selected base. If the read fails, the base picker remains
+available. The base is never inferred from a selected PR, whose base may differ
+from the repository default. Closing the picker cancels its read. Selecting the
+compare branch reads the latest remote commit subject and suggests it as the PR
+title. A changed repository or
+compare branch retires the previous read; late results cannot replace a newer
+selection or a manually edited title. Failure leaves the title editable and does
+not block creation. The compare selection maps to GitHub's `head` field on
+submission. It never pushes
+or checks out a local branch. `[Ctrl+S]` validates the form, rereads authentication,
+repository identity, and both branches, then sends one JSON request through `gh api`.
+Only a response with the matching host, repository, PR path, and number confirms
+creation. An error after dispatch is uncertain and must not trigger automatic replay;
+the form retains its draft until the user verifies GitHub. Empty/account-scoped
+lists can still open it.
 
 ```text
 ┌ Approve PR ──────────────────────────────────────┐
@@ -502,6 +532,14 @@ the configured interval refresh all sections to their loaded depth. Query autoco
 uses `[Ctrl+N/P]` and `[Ctrl+Y]`. See [Inbox](./git-inbox-interface.md) for the sibling
 workspace.
 
+While PR is active, the visible section and selected PR details refresh every 30
+seconds; activating a stale tab refreshes them promptly. `[R]` reads both immediately.
+The configured interval remains a separate full-section sweep, including loaded page
+depth. Failed background detail reads retain the usable preview. Cancellation of a
+superseded list or detail read does not show an error. Explicit refresh can replace
+a pending page without letting that page overwrite the new list; timed and
+foreground refreshes wait while pagination is active.
+
 Full-panel loads use shared ASCII plasma behind foreground status text with a short
 dissolve. Incremental pagination and background refresh remain inline over usable
 content. Local context/remote section LRU caches are capped at 64 entries; session-owned
@@ -531,8 +569,10 @@ and [Inbox](./git-inbox-interface.md) keep separate models, services, and state.
   list also means account scope, never GitHub-wide search.
 - Actions prepare exact host, account, repository, node ID, number, head SHA, and auth
   generation; reauthenticate, reread eligibility, confirm, execute once, and reconcile.
-  Timeout, cancellation, incomplete stdin, or output limits after dispatch do not
-  prove failure: preserve an uncertain result without retry.
+  Timeout, cancellation, incomplete stdin, output limits, or connection failures
+  after dispatch do not prove failure: preserve an uncertain result without retry.
+  Failed list/detail reads show localized connection guidance rather than raw socket
+  output.
 - Automated calls pass explicit arguments/stdin to `gh`, without shell interpolation,
   token reads, or global account switching. The user's guided PTY is a separate transport.
 - Merge uses `--match-head-commit`, never `--admin` or `--delete-branch`, and respects

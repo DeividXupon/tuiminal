@@ -203,33 +203,44 @@ function importedSecretName(request: HttpRequestDefinition, suffix: string) {
   return `{{postman_${requestName}_${suffix}}}`
 }
 
-function sanitizeImportedSecrets(request: HttpRequestDefinition, warnings: string[]) {
+function sanitizeImportedSecrets(
+  request: HttpRequestDefinition,
+  warnings: string[],
+  privateValues?: Map<string, string>,
+) {
+  const replace = (value: string, suffix: string) => {
+    const reference = importedSecretName(request, suffix)
+    privateValues?.set(reference.slice(2, -2), value)
+    return reference
+  }
   request.headers = request.headers.map((header, index) => {
     if (header.sensitivity !== "literal-secret" || SECRET_REFERENCE.test(header.value))
       return header
     warnings.push(`${request.name}: header ${header.name} substituído por variável privada.`)
     return {
       ...header,
-      value: importedSecretName(request, `header_${index + 1}`),
+      value: replace(header.value, `header_${index + 1}`),
       sensitivity: "secret-ref",
     }
   })
   if (request.auth.kind === "bearer" && !SECRET_REFERENCE.test(request.auth.token)) {
-    request.auth = { kind: "bearer", token: importedSecretName(request, "bearer_token") }
+    request.auth = { kind: "bearer", token: replace(request.auth.token, "bearer_token") }
     warnings.push(`${request.name}: bearer token substituído por variável privada.`)
   } else if (request.auth.kind === "basic" && !SECRET_REFERENCE.test(request.auth.password)) {
     request.auth = {
       ...request.auth,
-      password: importedSecretName(request, "basic_password"),
+      password: replace(request.auth.password, "basic_password"),
     }
     warnings.push(`${request.name}: senha Basic substituída por variável privada.`)
   } else if (request.auth.kind === "api-key" && !SECRET_REFERENCE.test(request.auth.value)) {
-    request.auth = { ...request.auth, value: importedSecretName(request, "api_key") }
+    request.auth = { ...request.auth, value: replace(request.auth.value, "api_key") }
     warnings.push(`${request.name}: API key substituída por variável privada.`)
   }
 }
 
-type PostmanImportContext = Pick<HttpImportReport, "requests" | "ignored" | "warnings">
+type PostmanImportContext = Pick<HttpImportReport, "requests" | "ignored" | "warnings"> & {
+  privateValues?: Map<string, string>
+}
 
 function convertPostmanRequest(
   item: Record<string, unknown>,
@@ -251,7 +262,7 @@ function convertPostmanRequest(
     context.warnings,
     request.name,
   )
-  sanitizeImportedSecrets(request, context.warnings)
+  sanitizeImportedSecrets(request, context.warnings, context.privateValues)
   request.body = postmanBody(source.body, id, request.name, context.warnings)
   if (Array.isArray(item.event) || Array.isArray(source.event)) {
     context.warnings.push(`${request.name}: scripts ignorados.`)
@@ -286,11 +297,17 @@ function collectPostmanItems(
   }
 }
 
-export function importPostmanCollection(value: unknown): HttpImportReport {
+function convertPostmanCollection(
+  value: unknown,
+  privateValues?: Map<string, string>,
+  allowEmpty = false,
+): HttpImportReport {
   const collection = record(value)
   if (!collection || !Array.isArray(collection.item)) throw new Error("Coleção Postman inválida.")
   const schema = text(record(collection.info)?.schema)
-  if (schema && !schema.includes("/v2.1.0/")) throw new Error("Coleção Postman v2.1 inválida.")
+  if (schema && !/\/v2\.(?:0|1)\.0\//.test(schema)) {
+    throw new Error("Versão da coleção Postman não suportada. Use v2.0 ou v2.1.")
+  }
   const requests: HttpImportReport["requests"] = []
   const ignored: string[] = []
   const warnings: string[] = []
@@ -300,7 +317,23 @@ export function importPostmanCollection(value: unknown): HttpImportReport {
   if (Array.isArray(collection.variable) && collection.variable.length) {
     ignored.push("Coleção: variáveis")
   }
-  collectPostmanItems(collection.item, collection.auth, [], { requests, ignored, warnings })
-  if (!requests.length) throw new Error("A coleção Postman não contém requests suportados.")
+  collectPostmanItems(collection.item, collection.auth, [], {
+    requests,
+    ignored,
+    warnings,
+    ...(privateValues ? { privateValues } : {}),
+  })
+  if (!requests.length && !allowEmpty)
+    throw new Error("A coleção Postman não contém requests suportados.")
   return { format: "postman", requests, ignored, warnings }
+}
+
+export function importPostmanCollection(value: unknown): HttpImportReport {
+  return convertPostmanCollection(value)
+}
+
+export function importPostmanAccountCollection(value: unknown) {
+  const privateValues = new Map<string, string>()
+  const report = convertPostmanCollection(value, privateValues, true)
+  return { report, privateValues }
 }

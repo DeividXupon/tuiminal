@@ -29,7 +29,7 @@ const FEATURE_FILES: Record<FeatureId, readonly string[]> = {
   database: ["index.mjs", "sqlite-worker.mjs"],
   git: ["index.mjs"],
   runner: ["index.mjs"],
-  http: ["index.mjs", "http-run.mjs", "http-import.mjs"],
+  http: ["index.mjs", "http-run.mjs", "http-import.mjs", "http-postman.mjs"],
   terminal: ["index.mjs"],
 }
 

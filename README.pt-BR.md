@@ -83,7 +83,7 @@ tuiminal ../meu-projeto
 tuiminal banco ./meu-projeto
 tuiminal git ./meu-projeto
 tuiminal runner ./meu-projeto
-tuiminal http ./meu-projeto
+tuiminal http
 tuiminal terminal ./meu-projeto
 ```
 
@@ -223,8 +223,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[2] PR`
 
+- `[Ctrl+N]` abre o formulário de criação com seletores pesquisáveis de repositório e das branches remotas base e comparada, título, descrição em Markdown e opção draft. A base começa com a branch padrão do repositório selecionado e pode ser trocada. O título começa com a primeira linha do último commit da branch comparada e continua editável. O Tuiminal verifica as duas branches escolhidas antes de um único envio à API do GitHub; ele não faz push da branch local.
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
+- O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
 - Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
@@ -234,8 +236,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` abre o formulário de criação com seletor pesquisável de repositório, título e descrição em Markdown. Os dois formulários preservam o rascunho em memória até o envio e exigem `[Ctrl+S]` para criar.
 - Começa com **My Issues**, **All**, **Open** e **Closed**; os três últimos mostram todas as issues não arquivadas, somente as abertas ou somente as fechadas dentro do escopo atual.
 - Combina uma lista densa de duas linhas com visão geral e atividade da issue.
+- O símbolo do estado fica verde para aberta e vermelho para fechada.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` reage com 👍 ❤️ 🎉 😄 ou 👀 e `[Enter]` responde; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage à própria issue.
 - Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
 - A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
@@ -243,10 +247,13 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 ### `[4] Inbox`
 
 - Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
+- As bolinhas preenchida e vazia continuam indicando não lida e lida. Em PRs e issues, elas também recebem a cor do estado, mostrado em texto; outros assuntos ou estados indisponíveis ficam neutros.
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
 PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
+
+Com a aba PR ou Issues ativa, a lista visível e os detalhes selecionados são atualizados aproximadamente a cada 30 segundos. Assim, issues e comentários criados no GitHub aparecem sem reabrir a aba. `[R]` consulta ambos imediatamente. O intervalo configurado mais longo continua atualizando todas as seções até a profundidade de páginas já carregada.
 
 As chamadas automáticas ao `gh` têm limite de tempo e aguardam o encerramento do
 processo ao cancelar. Se uma escrita em PR/Issue ficar sem confirmação — por
@@ -298,6 +305,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
 | Abrir PR, Issue ou notificação selecionada | `[O]` |
+| Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
 | Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
 | Descartar arquivo/pasta com confirmação | `[D]` |
@@ -326,7 +334,10 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 - **Manter processos vivos:** selecionar um comando já ativo abre a sessão existente. `[R]` é a ação separada para iniciar outra instância.
 - **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
 - **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
-- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
+- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos juntos; grupos simples executam em paralelo.
+- **Ordenar comandos e serviços:** dependências aguardam conclusão com sucesso ou início com health check. Ciclos e referências inexistentes são rejeitados antes de executar; falha ou cancelamento bloqueia dependentes pendentes.
+- **Salvar fluxos por projeto:** `[Ctrl+Y]` abre o arquivo YAML de configuração dentro do terminal. Crie fluxos nomeados com etapas sequenciais e paralelas e execute, pare ou reinicie pela TUI.
+- **Editar comandos localmente:** configure comando literal, diretório, ambiente/perfil, PTY, reinício e health check, inclusive para comandos detectados. O editor mostra documentação, validação e sugestões por teclado e mouse sem alterar arquivos do projeto.
 - **Trocar de projeto:** `[N]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
 - **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
 
@@ -336,7 +347,7 @@ Single e Multi preservam o idioma original da saída dos programas; somente mens
 
 A busca de projetos evita repetir pastas sobrepostas e faz até 16 leituras simultâneas, respeitando o limite de 300 projetos e sete níveis. Os comandos detectados usam os caminhos do projeto selecionado, e arquivos Deno JSONC preservam o texto das tarefas mesmo quando contêm marcadores de comentário.
 
-Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
+Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` explícito na configuração do Tuiminal, incluindo comandos e fluxos salvos localmente, pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
 
 ```yaml
 version: 1
@@ -360,6 +371,8 @@ commands:
       timeoutMs: 30000
 ```
 
+Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe e ajuda contextual. Uma lista de recomendações somente para consulta acompanha o cursor durante a digitação ou ao usar as setas, mostra opções do bloco YAML atual e descreve a opção selecionada ao lado da lista. Depois de `flows:` e `[Enter]`, ela mostra um exemplo de ID de fluxo (`dev:`); ao digitar outro ID, indica os dois-pontos necessários e, dentro do fluxo, oferece campos como `label` e `stages`. A mesma orientação aparece para IDs de comandos e perfis e nomes de variáveis de ambiente. Erros de digitação próximos mostram alternativas prováveis desse bloco; textos sem relação fecham a lista de recomendações. Use `[Ctrl+J/K]` ou um clique para consultar as opções; digite a chave ou o valor desejado. `[Enter]` recua a próxima linha conforme mapas, listas e blocos literais de comando; `[Tab]` insere dois espaços. `[Esc]` fecha as recomendações e depois volta ao gerenciamento de comandos e fluxos. Dependências usam `dependsOn` com `commandId` e `condition`; etapas usam `commandIds` e `waitFor`. `started` aguarda o health check configurado. `[Ctrl+S]` valida e salva. Veja exemplos completos na [especificação do Runner](docs/design/runner.md).
+
 ### Atalhos essenciais do Runner
 
 | Ação | Atalho |
@@ -367,6 +380,11 @@ commands:
 | Executar ou abrir processo existente | `[Enter]` |
 | Iniciar outra instância | `[R]` |
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
+| Editor YAML | `[Ctrl+Y]` |
+| Novo comando / fluxo (lista de gerenciamento) | `[Ctrl+N]` / `[Ctrl+F]` |
+| Executar / parar / reiniciar fluxo selecionado | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
+| Nova linha e recuo YAML / sugestões / salvar | `[Enter]` e `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Consultar recomendações YAML | `[Ctrl+J/K]` |
 | Comandos / processos ativos | `[P]` |
 | Visualização única / múltipla | `[M]` |
 | Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
@@ -380,7 +398,7 @@ commands:
 | Alternar projetos do Runner | `[1]`–`[4]` |
 | Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
 
-Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
+O editor YAML salva em `~/.config/tuiminal/runner/<hash-do-projeto>/runner.yaml`, sem alterar arquivos do projeto. Comandos e fluxos existentes são incluídos no primeiro salvamento. `runner.json` mantém sessões, histórico e definições antigas dos projetos que ainda não têm YAML. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
 
 <a id="http"></a>
 
@@ -390,18 +408,22 @@ Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. L
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
 </p>
 
-Um cliente de API compacto com documentos, coleção, builder, resposta e automação. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
+Um cliente de API compacto com documentos, coleção, builder, resposta e automação. Os dados da interface HTTP ficam em um único diretório global (`$XDG_DATA_HOME/tuiminal/http` ou `~/.local/share/tuiminal/http`), independentemente do projeto aberto. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
 
 ### O que você pode fazer
 
 - **Montar requests:** método, URL, query params, headers, JSON/texto/XML, form URL encoded, multipart, arquivo e autenticação Bearer, Basic ou API Key.
-- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores; no response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual.
+- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores, com controles da árvore em uma coluna separada e destaque na linha inteira do bloco selecionado. No response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual. O Pretty JSON navegável mantém uma linha por entrada para posicionar a seleção corretamente; Wrap continua disponível em Raw e nas outras visualizações da resposta.
 - **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
-- **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
-- **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
+- **Salvar coleções:** importar e salvar `.http`/`.rest` interoperáveis no diretório global do HTTP sem regravar silenciosamente blocos que o Tuiminal não entende.
+- **Organizar coleções com teclado ou mouse:** percorrer a árvore com `[↑/↓]` ou `[J/K]`, recolher e expandir com `[←/→]` e abrir requests com `[Enter]`. Criar pastas, coleções `.http` e requests; renomear ou excluir os itens selecionados. Pastas e coleções vazias continuam visíveis. A exclusão exige confirmação; requests abertos com alterações ou em execução precisam ser resolvidos antes.
+- **Importar:** informe um caminho completo ou iniciado por `~/` para um arquivo Postman v2.0/v2.1 ou OpenAPI 3.0/3.1, use `[↑/↓]` e `[Tab]` para completá-lo, ou solte um arquivo na área de importação quando o terminal colar seu caminho. O Tuiminal identifica o formato pelo conteúdo e o mostra na prévia com os avisos de conversão; o `.http` resultante só é salvo na biblioteca global do HTTP após a confirmação, independentemente do projeto aberto.
+- **Conectar uma conta Postman:** execute `tuiminal postman login` para informar a chave de API sem eco no terminal, ou envie a chave para `tuiminal postman login --api-key-stdin`; acrescente `--region eu` para uma conta da região europeia. Com a conta conectada, o HTTP abre com dois cartões, Local e Postman; `[Ctrl+G]` permite trocar de origem. No modo Postman, escolha um workspace para carregar todas as coleções, inicialmente com todas as coleções e pastas fechadas; `[E]` seleciona um ambiente opcional. A árvore à esquerda mostra o nome do workspace sobre as coleções, omite a pasta interna `postman/` e usa as cores dos métodos do Postman. `[?]` mostra as ações e os atalhos da coleção. A chave e os valores das variáveis importadas ficam no gerenciador de credenciais do sistema. O Tuiminal cria arquivos `.http` vinculados para as novas coleções no diretório global do HTTP e ambientes privados selecionáveis quando há variáveis; não altera o projeto aberto. `[Shift+N]` cria uma coleção na origem escolhida; o Postman usa o workspace ativo ou pede um antes da seleção. Criar, renomear, duplicar e excluir requests vinculadas; criar, renomear e excluir coleções e pastas aninhadas; essas ações atualizam o Postman e a cópia local. `[Ctrl+S]` envia alterações de uma request vinculada; para uma request nova, permite escolher coleção ou pasta de destino e a cria no Postman. `[Ctrl+P] Postman` tenta novamente um envio pendente. Conflitos e falhas remotas são informados. Mover requests entre arquivos ainda não está disponível no Postman. Edições dos ambientes importados permanecem locais. Valores do Vault indisponíveis pela API, scripts, respostas salvas e autenticação não suportada são avisados ou omitidos. Veja [acesso à conta Postman](./docs/design/postman-account.md) para os limites exatos.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit. Selecionar um request funciona também quando há nomes iguais. Reabrir o executor ou mudar seu alvo cancela a execução anterior; resultados atrasados não substituem a nova execução.
-- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema. O campo de valor privado mantém a máscara durante edição e redimensionamento, inclusive com ideogramas e emojis.
+- **Trabalhar com ambientes:** `[E]` lista os ambientes selecionáveis; `[N]` cria um, `[E]` edita ou renomeia o selecionado, e `[D]` o exclui após confirmação. `[G]` abre `Globals`, sempre ativo e com nome fixo. Cada formulário tem nome e tabela de variável/valor; `[/]` escolhe um bloco, `[↑/↓]` move a barra de foco e `[Enter]` abre o bloco. As linhas alternam o fundo, e a célula selecionada tem destaque próprio. `[Tab]` avança pelos campos; tabelas preenchidas aceitam setas ou `[H/J/K/L]`, `[Enter]` para editar e `[Esc]` em camadas para sair. Os valores ficam visíveis durante a edição e são sempre salvos no gerenciador de credenciais do sistema; o arquivo privado de ambientes contém somente referências opacas para valores novos ou editados. O modal com borda assume o foco enquanto está aberto. Os defaults do workspace não são mais aplicados.
+- **Editar tabelas da requisição:** em Query/Path Params, `[J/K]` ou `[↑/↓]` escolhe o bloco. `[Enter]` abre a primeira célula de uma tabela vazia ou a navegação pelas linhas existentes. Setas ou `[H/J/K/L]` alcançam a bolinha de ativação, os campos Nome/Valor e o `[×]`; `[Enter]` aciona o controle selecionado, inclusive excluindo pelo `[×]`. `[Space]` ativa ou desativa a linha, e `[Tab]` avança pelos inputs até uma linha de rascunho, criada de fato quando você digita. `[Esc]` volta do input para a tabela e depois para o bloco. Headers, form URL encoded e Multipart seguem o mesmo fluxo; Multipart também permite selecionar o controle texto/arquivo. `[N]` não adiciona mais linhas nessas tabelas.
+- **Escrever URLs rapidamente:** digite `{` na URL para ver os nomes das variáveis disponíveis e use `[Tab]` para completar `{{nome}}`. Pares de query como `?manga=2` aparecem em Params e podem ser editados ali sem envio duplicado.
 - **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. O jar valida domínios pela Public Suffix List, impõe limites e fica isolado por ambiente e diretório da coleção; `[C]` pode desativar tanto leitura quanto escrita de cookies por request. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 - **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
 - **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas. Acionamentos repetidos não duplicam o download; fechar o documento que o iniciou cancela a operação. O arquivo só é publicado depois da gravação completa, sem substituir um destino existente.
@@ -416,11 +438,17 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 | Ciclar Params, headers, body, auth e mais com a requisição focada | `[A←]` / `[F→]` |
 | Ciclar opções internas de Body, Auth ou Mais | `[Z←]` / `[V→]` |
 | Alternar Query Params / Path Params | `[J/K]` ou `[↑/↓]` |
-| Adicionar item ao subpainel focado | `[N]` |
+| Entrar numa tabela da requisição / editar a célula selecionada | `[Enter]` |
+| Percorrer controles / inputs da tabela | `[H/J/K/L]` ou setas / `[Tab]` |
+| Ativar/desativar a linha / excluir pelo `[×]` selecionado | `[Space]` / `[Enter]` |
 | Navegar / recolher / expandir JSON | `[↑/↓]` ou `[J/K]` / `[←/→]` / `[Enter]` |
 | Abrir ambientes | `[E]` |
 | Alternar visualização principal / aba interna da resposta | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Abrir coleção / histórico | `[C]` / `[Y]` |
+| Navegar entre itens da coleção / primeiro ou último | `[↑/↓]` ou `[J/K]` / `[Home/End]` |
+| Recolher ou expandir / abrir request selecionado | `[←/→]` / `[Enter]` |
+| Novo request / coleção / pasta no painel da coleção | `[N]` / `[Shift+N]` / `[P]` |
+| Renomear / excluir item selecionado | `[E]` / `[D]`, depois `[Enter]` para confirmar a exclusão |
 | Nova tab / fechar tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Alternar documentos | `[Alt+←/→]` |
 | Salvar `.http` | `[Ctrl+S]` |
@@ -447,6 +475,11 @@ tuiminal http run api.http#buscar-usuario --env local --report text
 tuiminal http run api.http --data cases.json --concurrency 4 --report junit
 tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
+tuiminal postman workspaces
+tuiminal postman collections <workspace-id>
+tuiminal postman environments <workspace-id>
+tuiminal postman pull <workspace-id> <collection-id> --environment <environment-id>
+tuiminal postman push postman/<file>.http "<nome-da-request>"
 ```
 
 No modo sem interface, redirects que transportam corpo/URL privada exigem
@@ -462,7 +495,7 @@ requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sess�
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. A captura libera o leitor ao terminar ou falhar e só marca truncamento quando encontra bytes além do limite. A busca acompanha linhas e colunas sem reprocessar todo o texto anterior a cada ocorrência. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
-O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
+O histórico HTTP fica somente na sessão atual e não persiste corpos de requests ou responses. A resposta original continua disponível na memória para inspeção e exportação explícita. Preview, cURL, relatórios e erros mascaram segredos conhecidos; arquivos exportados explicitamente e arquivos antigos de versões anteriores ficam separados do histórico da sessão.
 
 Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
 
@@ -554,7 +587,7 @@ Comandos principais:
 | `bun run dev` | Gerar pacotes locais e abrir o fluxo de instalação |
 | `bun run build:features` | Gerar os cinco pacotes oficiais instaláveis |
 | `bun run test:unit` | Testar regras e integrações locais |
-| `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
+| `bun run test:tui` | Testar a interface nativa e o carregamento dos cinco pacotes de ferramentas |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
 | `bun run check:workspaces` | Conferir versões, exports e dependências de cada pacote |
 | `bun run build:packages` | Gerar JavaScript, tipos e manifests dos seis módulos internos |

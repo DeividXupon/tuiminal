@@ -190,6 +190,8 @@ export function PullRequestDashboardView({
   onCopyNumber,
   onOpenDiff,
   onOpenActions,
+  onCreate,
+  canCreate,
   watching,
   onToggleWatch,
   loadingMoreDetails,
@@ -217,6 +219,8 @@ export function PullRequestDashboardView({
   dashboard: PullRequestDashboardState
   onSelectSection: (index: number) => void
   onEditQuery: () => void
+  onCreate: () => void
+  canCreate: boolean
   notice: string
   refreshing: boolean
   onRetry: () => void
@@ -255,6 +259,14 @@ export function PullRequestDashboardView({
         />
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+        {canCreate ? (
+          <InlineButton
+            id="git-pr-create"
+            label={translateUi("[Ctrl+N] Criar PR")}
+            accent={COLORS.git}
+            onPress={onCreate}
+          />
+        ) : null}
         <InlineButton
           id="git-pr-toggle-preview"
           label={`[P] ${translateUi("Prévia")}: ${translateUi(previewVisible ? "visível" : "oculta")}`}

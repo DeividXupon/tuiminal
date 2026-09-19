@@ -129,9 +129,12 @@ export function useHttpRequestEditing({
       dispatch({ type: "select-pane", pane: "request" })
       dispatch({ type: "select-request-view", documentId, view })
       const request = documents.find((document) => document.request.id === documentId)?.request
-      if (focusControl && view === "headers")
-        setTimeout(() => refsFor(documentId).headers?.focus(), 0)
-      if (focusControl && view === "body" && request?.body.kind !== "none") {
+      if (
+        focusControl &&
+        view === "body" &&
+        request &&
+        ["json", "text", "xml"].includes(request.body.kind)
+      ) {
         setTimeout(() => refsFor(documentId).body?.focus(), 0)
       }
     },

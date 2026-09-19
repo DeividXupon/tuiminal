@@ -10,6 +10,7 @@ export type GitHubTransportErrorKind =
   | "cancelled"
   | "output-limit"
   | "input-failed"
+  | "network"
   | "invalid-json"
   | "command-failed"
 
@@ -99,7 +100,28 @@ function classifyCommandFailure(error: {
   if (normalized.includes("forbidden") || normalized.includes("http 403")) {
     return new GitHubTransportError("forbidden", message)
   }
+  if (
+    /\b(?:read|write|dial) tcp\b|connection (?:reset|refused|closed|aborted)|\bi\/o timeout\b|\bno such host\b|\bnetwork is unreachable\b|\btls handshake timeout\b|\bunexpected eof\b|\bcontext deadline exceeded\b|\bhttp 5\d\d\b/.test(
+      normalized,
+    ) ||
+    /\bEOF\b/.test(message)
+  ) {
+    return new GitHubTransportError("network", message, Number(error.code) || null)
+  }
   return new GitHubTransportError("command-failed", message, Number(error.code) || null)
+}
+
+export function githubTransportDisplayMessage(error: unknown) {
+  if (error instanceof GitHubTransportError && error.kind === "network") {
+    return translateUi(
+      "Não foi possível atualizar dados do GitHub. Verifique a conexão e atualize novamente.",
+    )
+  }
+  return error instanceof Error ? error.message : "Unknown GitHub error"
+}
+
+export function isGitHubReadCancellation(error: unknown) {
+  return error instanceof GitHubTransportError && error.kind === "cancelled"
 }
 
 export function runGhCommand(

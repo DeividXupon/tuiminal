@@ -9,6 +9,7 @@ import type { DatabaseSavedQuery } from "../model/types"
 import { formatUiDateTime, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 
 export type DatabaseQueryFavoritesMode = "save" | "list" | null
 
@@ -160,260 +161,228 @@ export function DatabaseQueryFavoritesModal({
   const selectedQuery = queries[selectedIndex] ?? null
 
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={970}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
+    <ModalSurface
+      id="database-saved-query-modal"
+      dialogRef={dialogRef}
+      width={width}
+      height={height}
+      zIndex={970}
+      borderColor={COLORS.database}
+      onBackdropPress={onClose}
+    >
       <box
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 971,
-          alignItems: "center",
-          justifyContent: "center",
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
       >
-        <box
-          ref={dialogRef}
-          id="database-saved-query-modal"
-          focusable
-          style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.database,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
+        <text
+          content={translateUi(mode === "save" ? "★ SALVAR QUERY" : "★ QUERIES FAVORITAS")}
+          style={{ fg: COLORS.database }}
+        />
+        <text
+          content={truncateDisplay(connectionName, Math.max(8, Math.floor(width * 0.42)))}
+          style={{ fg: COLORS.muted }}
+        />
+      </box>
+
+      {mode === "save" ? (
+        <>
+          <text
+            content={translateUi("Esta query ficará disponível somente nesta conexão.")}
+            style={{ fg: COLORS.muted, marginTop: 1 }}
+          />
+          <box style={{ height: 1, flexShrink: 0, flexDirection: "row", marginTop: 1 }}>
+            <text
+              content={translateUi("Nome")}
+              style={{ width: 8, flexShrink: 0, fg: COLORS.muted }}
+            />
+            <input
+              ref={nameRef}
+              id="database-saved-query-name"
+              value={name}
+              placeholder={translateUi("Ex.: usuários ativos")}
+              width={Math.max(4, width - 14)}
+              maxLength={80}
+              onMouseDown={() => nameRef.current?.focus()}
+              onInput={(value) => {
+                nameValueRef.current = value
+                setName(value)
+              }}
+              onSubmit={submitSave}
+              style={{
+                backgroundColor: COLORS.panelRaised,
+                focusedBackgroundColor: COLORS.panelRaised,
+                textColor: COLORS.text,
+                focusedTextColor: COLORS.text,
+                cursorColor: COLORS.database,
+                placeholderColor: COLORS.muted,
+              }}
+            />
+          </box>
           <box
             style={{
-              height: 2,
+              minHeight: 3,
+              flexShrink: 0,
+              marginTop: 1,
+              paddingLeft: 1,
+              paddingRight: 1,
+              backgroundColor: COLORS.panel,
+            }}
+          >
+            <text content="SQL" style={{ fg: COLORS.database }} />
+            <text
+              content={truncateDisplay(queryPreview(sql), previewWidth)}
+              style={{ fg: COLORS.text }}
+            />
+          </box>
+          <box
+            style={{
+              height: 1,
               flexShrink: 0,
               flexDirection: "row",
               justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
+              marginTop: 1,
             }}
           >
-            <text
-              content={translateUi(mode === "save" ? "★ SALVAR QUERY" : "★ QUERIES FAVORITAS")}
-              style={{ fg: COLORS.database }}
-            />
-            <text
-              content={truncateDisplay(connectionName, Math.max(8, Math.floor(width * 0.42)))}
+            <ShortcutText
+              content={translateUi(
+                compact
+                  ? "[Enter] salvar · [Esc] cancelar"
+                  : "[Enter]/[Ctrl+S] salvar · [Esc] cancelar",
+              )}
               style={{ fg: COLORS.muted }}
             />
+            <InlineButton
+              label="[Enter] Salvar"
+              accent={COLORS.database}
+              disabled={!name.trim()}
+              onPress={submitSave}
+            />
           </box>
-
-          {mode === "save" ? (
-            <>
-              <text
-                content={translateUi("Esta query ficará disponível somente nesta conexão.")}
-                style={{ fg: COLORS.muted, marginTop: 1 }}
-              />
-              <box style={{ height: 1, flexShrink: 0, flexDirection: "row", marginTop: 1 }}>
-                <text
-                  content={translateUi("Nome")}
-                  style={{ width: 8, flexShrink: 0, fg: COLORS.muted }}
-                />
-                <input
-                  ref={nameRef}
-                  id="database-saved-query-name"
-                  value={name}
-                  placeholder={translateUi("Ex.: usuários ativos")}
-                  width={Math.max(4, width - 14)}
-                  maxLength={80}
-                  onMouseDown={() => nameRef.current?.focus()}
-                  onInput={(value) => {
-                    nameValueRef.current = value
-                    setName(value)
+        </>
+      ) : queries.length ? (
+        <>
+          <scrollbox
+            ref={listRef}
+            id="database-saved-query-list"
+            scrollY
+            viewportCulling
+            style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
+            verticalScrollbarOptions={{
+              trackOptions: {
+                backgroundColor: COLORS.panel,
+                foregroundColor: COLORS.border,
+              },
+            }}
+          >
+            {queries.map((query, index) => {
+              const selected = index === selectedIndex
+              const confirmingDelete = deleteConfirmationId === query.id
+              return (
+                <Button
+                  key={query.id}
+                  id={`database-saved-query-${index}`}
+                  ref={(button) => {
+                    itemRefs.current[index] = button
                   }}
-                  onSubmit={submitSave}
-                  style={{
-                    backgroundColor: COLORS.panelRaised,
-                    focusedBackgroundColor: COLORS.panelRaised,
-                    textColor: COLORS.text,
-                    focusedTextColor: COLORS.text,
-                    cursorColor: COLORS.database,
-                    placeholderColor: COLORS.muted,
+                  onPress={() => {
+                    setSelectedIndex(index)
+                    onLoad(query)
                   }}
-                />
-              </box>
-              <box
-                style={{
-                  minHeight: 3,
-                  flexShrink: 0,
-                  marginTop: 1,
-                  paddingLeft: 1,
-                  paddingRight: 1,
-                  backgroundColor: COLORS.panel,
-                }}
-              >
-                <text content="SQL" style={{ fg: COLORS.database }} />
-                <text
-                  content={truncateDisplay(queryPreview(sql), previewWidth)}
-                  style={{ fg: COLORS.text }}
-                />
-              </box>
-              <box
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginTop: 1,
-                }}
-              >
-                <ShortcutText
-                  content={translateUi(
-                    compact
-                      ? "[Enter] salvar · [Esc] cancelar"
-                      : "[Enter]/[Ctrl+S] salvar · [Esc] cancelar",
-                  )}
-                  style={{ fg: COLORS.muted }}
-                />
-                <InlineButton
-                  label="[Enter] Salvar"
-                  accent={COLORS.database}
-                  disabled={!name.trim()}
-                  onPress={submitSave}
-                />
-              </box>
-            </>
-          ) : queries.length ? (
-            <>
-              <scrollbox
-                ref={listRef}
-                id="database-saved-query-list"
-                scrollY
-                viewportCulling
-                style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
-                verticalScrollbarOptions={{
-                  trackOptions: {
-                    backgroundColor: COLORS.panel,
-                    foregroundColor: COLORS.border,
-                  },
-                }}
-              >
-                {queries.map((query, index) => {
-                  const selected = index === selectedIndex
-                  const confirmingDelete = deleteConfirmationId === query.id
-                  return (
-                    <Button
-                      key={query.id}
-                      id={`database-saved-query-${index}`}
-                      ref={(button) => {
-                        itemRefs.current[index] = button
+                  width="100%"
+                  height={3}
+                  flexShrink={0}
+                >
+                  {(state) => (
+                    <box
+                      style={{
+                        height: 3,
+                        flexShrink: 0,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                        backgroundColor:
+                          selected || state.focused ? COLORS.panelRaised : COLORS.panel,
+                        border: ["bottom"],
+                        borderColor: COLORS.border,
                       }}
-                      onPress={() => {
-                        setSelectedIndex(index)
-                        onLoad(query)
-                      }}
-                      width="100%"
-                      height={3}
-                      flexShrink={0}
                     >
-                      {(state) => (
-                        <box
-                          style={{
-                            height: 3,
-                            flexShrink: 0,
-                            paddingLeft: 1,
-                            paddingRight: 1,
-                            backgroundColor:
-                              selected || state.focused ? COLORS.panelRaised : COLORS.panel,
-                            border: ["bottom"],
-                            borderColor: COLORS.border,
-                          }}
-                        >
-                          <box
-                            style={{
-                              height: 1,
-                              flexShrink: 0,
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <text
-                              content={`${selected ? "›" : " "} ★ ${truncateDisplay(query.name, Math.max(8, previewWidth - 20))}`}
-                              style={{ fg: confirmingDelete ? COLORS.danger : COLORS.database }}
-                            />
-                            <text content={savedAt(query.updatedAt)} style={{ fg: COLORS.muted }} />
-                          </box>
-                          <ShortcutText
-                            highlight={confirmingDelete}
-                            content={
-                              confirmingDelete
-                                ? translateUi("Pressione [D] novamente para excluir")
-                                : truncateDisplay(queryPreview(query.sql), previewWidth)
-                            }
-                            style={{ fg: confirmingDelete ? COLORS.danger : COLORS.muted }}
-                          />
-                        </box>
-                      )}
-                    </Button>
-                  )
-                })}
-              </scrollbox>
-              <box
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                }}
-              >
-                <ShortcutText
-                  content={translateUi(
-                    compact
-                      ? "[↑↓] · [Enter] abrir"
-                      : "[↑↓] navegar · [Enter] abrir · [D] excluir · [Esc] voltar",
+                      <box
+                        style={{
+                          height: 1,
+                          flexShrink: 0,
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <text
+                          content={`${selected ? "›" : " "} ★ ${truncateDisplay(query.name, Math.max(8, previewWidth - 20))}`}
+                          style={{ fg: confirmingDelete ? COLORS.danger : COLORS.database }}
+                        />
+                        <text content={savedAt(query.updatedAt)} style={{ fg: COLORS.muted }} />
+                      </box>
+                      <ShortcutText
+                        highlight={confirmingDelete}
+                        content={
+                          confirmingDelete
+                            ? translateUi("Pressione [D] novamente para excluir")
+                            : truncateDisplay(queryPreview(query.sql), previewWidth)
+                        }
+                        style={{ fg: confirmingDelete ? COLORS.danger : COLORS.muted }}
+                      />
+                    </box>
                   )}
-                  style={{ fg: COLORS.muted }}
-                />
-                <InlineButton
-                  label={
-                    deleteConfirmationId === selectedQuery?.id
-                      ? compact
-                        ? "[D] Confirmar"
-                        : "[D] Confirmar exclusão"
-                      : "[D] Excluir"
-                  }
-                  accent={COLORS.danger}
-                  disabled={!selectedQuery}
-                  onPress={requestDelete}
-                />
-              </box>
-            </>
-          ) : (
-            <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-              <text
-                content={translateUi("Nenhuma query favorita nesta conexão.")}
-                style={{ fg: COLORS.text }}
-              />
-              <ShortcutText
-                content={translateUi("Use [Ctrl+S] no editor para salvar a primeira.")}
-                style={{ fg: COLORS.muted }}
-              />
-              <InlineButton label="[Esc] Voltar" accent={COLORS.database} onPress={onClose} />
-            </box>
-          )}
+                </Button>
+              )
+            })}
+          </scrollbox>
+          <box
+            style={{
+              height: 1,
+              flexShrink: 0,
+              flexDirection: "row",
+              justifyContent: "space-between",
+            }}
+          >
+            <ShortcutText
+              content={translateUi(
+                compact
+                  ? "[↑↓] · [Enter] abrir"
+                  : "[↑↓] navegar · [Enter] abrir · [D] excluir · [Esc] voltar",
+              )}
+              style={{ fg: COLORS.muted }}
+            />
+            <InlineButton
+              label={
+                deleteConfirmationId === selectedQuery?.id
+                  ? compact
+                    ? "[D] Confirmar"
+                    : "[D] Confirmar exclusão"
+                  : "[D] Excluir"
+              }
+              accent={COLORS.danger}
+              disabled={!selectedQuery}
+              onPress={requestDelete}
+            />
+          </box>
+        </>
+      ) : (
+        <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
+          <text
+            content={translateUi("Nenhuma query favorita nesta conexão.")}
+            style={{ fg: COLORS.text }}
+          />
+          <ShortcutText
+            content={translateUi("Use [Ctrl+S] no editor para salvar a primeira.")}
+            style={{ fg: COLORS.muted }}
+          />
+          <InlineButton label="[Esc] Voltar" accent={COLORS.database} onPress={onClose} />
         </box>
-      </box>
-    </>
+      )}
+    </ModalSurface>
   )
 }

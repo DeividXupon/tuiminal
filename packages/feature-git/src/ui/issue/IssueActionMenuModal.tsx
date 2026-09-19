@@ -1,17 +1,13 @@
 import type { BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import {
   type IssueActionAvailability,
   type IssueActionKind,
   issueActionKindForShortcut,
 } from "../../model/issue/actions"
 import type { IssueSummary } from "../../model/issue/types"
+import { GitActionMenuView } from "../shared/GitActionMenuView"
 
 export type IssueActionMenuItem = {
   kind: IssueActionKind
@@ -66,96 +62,17 @@ export function IssueActionMenuModal({
   })
   const width = Math.max(48, Math.min(84, terminal.width - 4))
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={980}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
-      <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={981}
-        alignItems="center"
-        justifyContent="center"
-      >
-        <box
-          ref={dialogRef}
-          id="git-issue-action-menu"
-          focusable
-          style={{
-            width,
-            height: Math.min(18, actions.length + 7),
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text content={translateUi("◆ AÇÕES DA ISSUE")} style={{ fg: COLORS.git }} />
-            <InlineButton
-              label={translateUi("[Esc] Fechar")}
-              accent={COLORS.git}
-              onPress={onClose}
-            />
-          </box>
-          <text
-            content={`${item.identity.owner}/${item.identity.repository} #${item.identity.number} · ${item.title}`}
-            style={{ fg: COLORS.text }}
-          />
-          {actions.map((action, actionIndex) => {
-            const selected = actionIndex === index
-            const reason = action.availability.reason
-              ? ` · ${translateUi(action.availability.reason)}`
-              : ""
-            return (
-              <Button
-                key={action.kind}
-                height={1}
-                disabled={!action.availability.enabled}
-                onPress={() => onSelect(action.kind)}
-              >
-                <ShortcutText
-                  content={`${selected ? "▶" : " "} ${action.shortcut} ${translateUi(action.label)}${reason}`}
-                  style={{
-                    fg: !action.availability.enabled
-                      ? COLORS.border
-                      : selected
-                        ? COLORS.text
-                        : COLORS.muted,
-                    bg: selected ? COLORS.panelRaised : COLORS.canvas,
-                  }}
-                />
-              </Button>
-            )
-          })}
-          <ShortcutText
-            content={translateUi("[J/K] Navegar  [Enter] Preparar  [Esc] Voltar")}
-            style={{ marginTop: 1, fg: COLORS.muted }}
-          />
-        </box>
-      </box>
-    </>
+    <GitActionMenuView
+      id="git-issue-action-menu"
+      title="◆ AÇÕES DA ISSUE"
+      subject={`${item.identity.owner}/${item.identity.repository} #${item.identity.number} · ${item.title}`}
+      width={width}
+      maxHeight={18}
+      actions={actions}
+      selectedIndex={index}
+      dialogRef={dialogRef}
+      onClose={onClose}
+      onSelect={onSelect}
+    />
   )
 }

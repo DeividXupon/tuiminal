@@ -1,12 +1,10 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { nextPullRequestDetailConnection } from "./model/pr/detail-pagination"
+import { defaultCreateRepository } from "./model/create-item"
 import type { PullRequestDiffTarget } from "./model/pr/diff"
 import { sortedPullRequestComments } from "./model/pr/activity"
 import {
-  adjacentPreviewTab,
-  movePullRequestIndex,
   type PullRequestFocus,
   type pullRequestWorkspaceAction,
   resolvePullRequestLayout,
@@ -27,11 +25,16 @@ import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspace
 import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
 import { useAutoPage } from "./ui/useAutoPagination"
 import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
+import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
+import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
   dashboardAuth,
   dashboardProfileTarget,
   diffTargetForPreview,
-  openPullRequestWithNotice,
+  emptyPullRequestPreviewPositions,
+  executePullRequestReadAction,
+  executePullRequestNavigation,
+  pullRequestKeyboardGuards,
   openWorkflowWithNotice,
 } from "./ui/pr/workspace-helpers"
 export function PullRequestsWorkspace({
@@ -55,28 +58,21 @@ export function PullRequestsWorkspace({
   const [focus, setFocus] = useState<PullRequestFocus>("list")
   const [previewVisible, setPreviewVisible] = useState(true)
   const [previewTab, setPreviewTab] = useState<PullRequestPreviewTab>("overview")
-  const [previewOffsets, setPreviewOffsets] = useState<Record<PullRequestPreviewTab, number>>({
-    overview: 0,
-    checks: 0,
-    activity: 0,
-    commits: 0,
-    files: 0,
-  })
+  const [previewOffsets, setPreviewOffsets] = useState(emptyPullRequestPreviewPositions)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
-  const [previewItemIndices, setPreviewItemIndices] = useState<
-    Record<PullRequestPreviewTab, number>
-  >({ overview: 0, checks: 0, activity: 0, commits: 0, files: 0 })
+  const [previewItemIndices, setPreviewItemIndices] = useState(emptyPullRequestPreviewPositions)
   const [diffTarget, setDiffTarget] = useState<PullRequestDiffTarget | null>(null)
   const [notice, setNotice] = useState("")
   const [sectionCounts, setSectionCounts] = useState<Record<string, number | null>>({})
   const watch = usePullRequestWatch(setNotice)
-  const dashboardFlow = usePullRequestDashboard(
-    active,
-    requestedSectionId,
-    queryOverride,
-    configurationRevision,
-  )
-  const { state: dashboard, refresh, loadMore, loadingMore, refreshing } = dashboardFlow
+  const {
+    state: dashboard,
+    refresh,
+    refreshActive,
+    loadMore,
+    loadingMore,
+    refreshing,
+  } = usePullRequestDashboard(active, requestedSectionId, queryOverride, configurationRevision)
   const basePresentation = pullRequestDashboardPresentation(dashboard, sectionIndex)
   const queryPresentation = queryOverride
     ? {
@@ -100,7 +96,15 @@ export function PullRequestsWorkspace({
     loadMore: loadMoreDetails,
     loadingMore: loadingMoreDetails,
     reload: reloadDetails,
+    refreshQuietly: refreshDetailsQuietly,
   } = usePullRequestDetails(active && presentation.showDashboard, selected)
+  useGitForegroundRefresh({
+    active,
+    sectionKey: `${requestedSectionId}:${queryOverride ?? ""}`,
+    dashboard,
+    refreshList: refreshActive,
+    refreshDetails: refreshDetailsQuietly,
+  })
   const profileTarget = dashboardProfileTarget(dashboard)
   const { runs: workflows, error: workflowError } = usePullRequestWorkflows(
     active && previewTab === "checks" && dashboard.status === "ready",
@@ -119,6 +123,16 @@ export function PullRequestsWorkspace({
     },
     onLocalCheckout,
   })
+  const creation = useGitHubCreation({
+    kind: "pr",
+    auth: dashboardAuth(dashboard),
+    defaultRepository: defaultCreateRepository(
+      selected?.identity ?? null,
+      profileTarget?.profile.repositories ?? [],
+    ),
+    onNotice: setNotice,
+    onRefresh: () => void refresh(),
+  })
   const configuration = usePullRequestConfiguration({
     target: profileTarget,
     currentSection: presentation.section,
@@ -133,7 +147,7 @@ export function PullRequestsWorkspace({
     configuration.previewPosition,
   )
   const layout = previewVisible ? responsiveLayout : "single"
-  const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen
+  const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen || creation.open
   const previewItemIndex = previewItemIndices[previewTab]
   const activityComments =
     details.status === "ready"
@@ -162,26 +176,16 @@ export function PullRequestsWorkspace({
     setPreviewVisible((current) => !current)
   }
   const handleReadAction = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
-    if (!action || !selected) return false
-    if (action.type === "scroll-preview") {
-      setPreviewOffsets((current) => ({
-        ...current,
-        [previewTab]: Math.max(0, current[previewTab] + action.delta),
-      }))
-      return true
-    }
-    if (action.type === "toggle-description") {
-      setDescriptionExpanded((current) => !current)
-      return true
-    }
-    if (action.type === "copy-url") copy(selected.identity.url, translateUi("URL do PR copiada."))
-    else if (action.type === "copy-number") {
-      copy(String(selected.identity.number), translateUi("Número do PR copiado."))
-    } else if (action.type === "copy-sha") copy(selected.headSha, translateUi("SHA copiado."))
-    else if (action.type === "open-browser") {
-      openPullRequestWithNotice(selected.identity, setNotice, onOpenBrowser)
-    } else return false
-    return true
+    return executePullRequestReadAction(
+      action,
+      selected,
+      previewTab,
+      setPreviewOffsets,
+      setDescriptionExpanded,
+      copy,
+      setNotice,
+      onOpenBrowser,
+    )
   }
   const selectRow = (index: number) => {
     setSelectedIndex(index)
@@ -221,23 +225,17 @@ export function PullRequestsWorkspace({
   const hasNextPage = remoteDashboardHasNextPage(dashboard)
   useAutoPage(resolvedSelectedIndex, presentation.items.length, hasNextPage, loadingMore, loadMore)
   const handleNavigation = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
-    if (!action) return
-    if (action.type === "move-section") {
-      selectSection(
-        (sectionIndex + action.delta + presentation.sections.length) % presentation.sections.length,
-      )
-    } else if (action.type === "move-row") {
-      selectRow(
-        movePullRequestIndex(resolvedSelectedIndex, presentation.items.length, action.delta),
-      )
-    } else if (action.type === "select-edge") {
-      selectRow(action.target === "first" ? 0 : Math.max(0, presentation.items.length - 1))
-    } else if (action.type === "focus") {
-      if (action.target === "preview") setPreviewVisible(true)
-      setFocus(action.target)
-    } else if (action.type === "move-preview-tab") {
-      setPreviewTab((current) => adjacentPreviewTab(current, action.delta))
-    }
+    executePullRequestNavigation(action, {
+      sectionIndex,
+      sectionCount: presentation.sections.length,
+      selectedIndex: resolvedSelectedIndex,
+      itemCount: presentation.items.length,
+      selectSection,
+      selectRow,
+      setPreviewVisible,
+      setFocus,
+      setPreviewTab,
+    })
   }
   const handleWorkspaceCommand = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     if (!action) return false
@@ -245,8 +243,12 @@ export function PullRequestsWorkspace({
       case "edit-query":
         configuration.openQuery()
         return true
+      case "create-pr":
+        creation.openModal()
+        return true
       case "refresh":
         void refresh()
+        void refreshDetailsQuietly()
         return true
       case "load-more":
         void loadMore()
@@ -280,19 +282,10 @@ export function PullRequestsWorkspace({
   }
   usePullRequestWorkspaceKeyboard({
     active,
-    blocked:
-      modalOpen ||
-      Boolean(diffTarget) ||
-      dashboard.status === "requirements" ||
-      dashboard.status === "authentication",
+    ...pullRequestKeyboardGuards(modalOpen, Boolean(diffTarget), dashboard, details, previewTab),
     focus,
     hasSelection: Boolean(selected),
-    canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
-    canLoadPreview:
-      details.status === "ready" &&
-      Boolean(nextPullRequestDetailConnection(details.details, previewTab)),
     previewTab,
-    details: details.status === "ready" ? details.details : null,
     previewItemIndex,
     onWorkspaceAction: (action) => {
       if (handleWorkspaceCommand(action)) return
@@ -390,11 +383,14 @@ export function PullRequestsWorkspace({
           }
         }}
         onOpenActions={pullRequestActions.openMenu}
+        onCreate={creation.openModal}
+        canCreate={creation.available}
         watching={watch.isWatching(selected)}
         onToggleWatch={() => selected && watch.toggle(selected)}
       />
       {configuration.modals}
       {pullRequestActions.modals}
+      {creation.modal}
     </>
   )
 }

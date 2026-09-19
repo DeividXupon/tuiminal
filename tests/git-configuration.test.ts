@@ -58,7 +58,7 @@ import { comparisonSelectorArrangement } from "../packages/feature-git/src/ui/ba
 import { DEMO_PULL_REQUESTS } from "../packages/feature-git/src/model/pr/fixtures"
 import { DEMO_ISSUES } from "../packages/feature-git/src/model/issue/fixtures"
 import {
-  openPullRequestWithNotice,
+  executePullRequestReadAction,
   openWorkflowWithNotice,
 } from "../packages/feature-git/src/ui/pr/workspace-helpers"
 import { openIssueWithNotice } from "../packages/feature-git/src/ui/issue/workspace-helpers"
@@ -264,7 +264,18 @@ describe("Git configuration scope", () => {
     const pr = DEMO_PULL_REQUESTS[0]
     const issue = DEMO_ISSUES[0]
     if (!pr || !issue) throw new Error("Missing Git browser fixtures")
-    openPullRequestWithNotice(pr.identity, notice, opener)
+    expect(
+      executePullRequestReadAction(
+        { type: "open-browser" },
+        pr,
+        "overview",
+        () => undefined,
+        () => undefined,
+        () => undefined,
+        notice,
+        opener,
+      ),
+    ).toBe(true)
     openIssueWithNotice(issue.identity, notice, opener)
     openWorkflowWithNotice(pr.identity, 12, notice, opener)
     await Bun.sleep(0)

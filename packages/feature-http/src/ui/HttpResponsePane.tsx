@@ -1,7 +1,7 @@
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useMemo, useRef } from "react"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
 import {
   httpJsonPathAtLine,
@@ -49,19 +49,57 @@ function HttpResponseDocument({
     COLORS.success,
     COLORS.warning,
   ].join("\u0000")
+  const jsonLines = jsonTree?.lines
   const jsonDocument = useMemo(() => {
     void paletteKey
-    return jsonTree
-      ? buildHttpJsonDocument(jsonTree, { palette: COLORS, lineNumbers, focused })
+    return jsonLines
+      ? buildHttpJsonDocument(
+          { lines: jsonLines, selectedPath: "" },
+          {
+            palette: COLORS,
+            lineNumbers,
+            focused: false,
+            highlightSelection: false,
+          },
+        )
       : null
-  }, [focused, jsonTree, lineNumbers, paletteKey])
+  }, [jsonLines, lineNumbers, paletteKey])
   if (jsonDocument && jsonTree) {
+    const selectedLine = jsonTree.lines[jsonTree.selectedLine]
+    const selectedContent = `${
+      lineNumbers
+        ? `${String(jsonTree.selectedLine + 1).padStart(String(jsonTree.lines.length).length)} │ `
+        : ""
+    }${selectedLine?.tokens.map((token) => token.text).join("") ?? ""}`
     return (
-      <text
-        content={jsonDocument}
-        wrapMode={wrap ? "word" : "none"}
-        style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
-      />
+      <box style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), flexShrink: 0 }}>
+        <text
+          id={`http-response-json-${response.requestId}`}
+          content={jsonDocument}
+          wrapMode={wrap ? "word" : "none"}
+          style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
+        />
+        {focused ? (
+          <box
+            id={`http-response-json-selection-${response.requestId}`}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: jsonTree.selectedLine,
+              width: "100%",
+              height: 1,
+              zIndex: 1,
+              backgroundColor: COLORS.http,
+            }}
+          >
+            <text
+              content={selectedContent}
+              wrapMode="none"
+              style={{ width: "100%", height: 1, bg: COLORS.http, fg: COLORS.canvas }}
+            />
+          </box>
+        ) : null}
+      </box>
     )
   }
   const filetype = responseFiletype(response)
@@ -126,7 +164,7 @@ export function HttpResponsePane({
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const response = document.execution.status === "success" ? document.execution.response : null
   const presentation = document.responsePresentation
-  const content = useMemo(() => httpResponseContent(document, cookies), [cookies, document])
+  const content = httpResponseContent(document, cookies)
   const jsonTree = useMemo(() => httpJsonTreeForDocument(document), [document])
   const matches = useMemo(
     () => findHttpTextMatches(content, presentation.searchQuery),
@@ -152,8 +190,16 @@ export function HttpResponsePane({
 
   useEffect(() => {
     if (!focused || !jsonTree) return
-    scrollRef.current?.focus()
-    scrollRef.current?.scrollTo(Math.max(0, jsonTree.selectedLine - 1))
+    const scroll = scrollRef.current
+    if (!scroll) return
+    scroll.focus()
+    const top = scroll.scrollTop
+    const rows = Math.max(1, scroll.viewport.height)
+    if (jsonTree.selectedLine < top) {
+      scroll.scrollTo(Math.max(0, jsonTree.selectedLine - 1))
+    } else if (jsonTree.selectedLine >= top + rows) {
+      scroll.scrollTo(Math.max(0, jsonTree.selectedLine - rows + 1))
+    }
   }, [focused, jsonTree])
 
   const cycleSearch = () => {
@@ -171,7 +217,7 @@ export function HttpResponsePane({
     if (!action) return
     event.preventDefault()
     event.stopPropagation()
-    const patch = updateHttpJsonTree(document, action)
+    const patch = updateHttpJsonTree(document, action, jsonTree)
     if (patch) onPresentationChange(patch)
   }
 
@@ -193,6 +239,7 @@ export function HttpResponsePane({
       <HttpResponseToolbar
         document={document}
         response={response}
+        jsonTreeActive={jsonTree !== null}
         cookies={cookies}
         matches={matches.length}
         registerSearchInput={registerSearchInput}
@@ -212,6 +259,15 @@ export function HttpResponsePane({
         downloading={downloading}
         active={visible && focused}
       />
+      {jsonTree ? (
+        <text
+          content={truncateDisplay(
+            `JSON ${jsonTree.nodes.findIndex((node) => node.path === jsonTree.selectedPath) + 1}/${jsonTree.nodes.length}  ${jsonTree.selectedPath || "/"}`,
+            Math.max(1, position.width - 4),
+          )}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.http, bg: COLORS.panelRaised }}
+        />
+      ) : null}
       {response ? (
         // biome-ignore lint/a11y/noStaticElementInteractions: the OpenTUI scrollbox is the focusable response viewport and owns structural JSON keyboard/mouse navigation.
         <scrollbox
@@ -221,7 +277,7 @@ export function HttpResponsePane({
           }}
           id={`http-response-scroll-${document.request.id}`}
           scrollY
-          scrollX={!presentation.wrap}
+          scrollX={jsonTree !== null || !presentation.wrap}
           viewportCulling
           onKeyDown={handleJsonTreeKey}
           onMouseDown={(event) => {
@@ -240,7 +296,7 @@ export function HttpResponsePane({
           <HttpResponseDocument
             content={content}
             response={response}
-            wrap={presentation.wrap}
+            wrap={jsonTree ? false : presentation.wrap}
             jsonTree={jsonTree}
             lineNumbers={presentation.lineNumbers}
             focused={focused}

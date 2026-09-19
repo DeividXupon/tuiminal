@@ -80,7 +80,7 @@ describe("HTTP workspace state", () => {
     let tree = httpJsonTreeForDocument(document)
     expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/user/profile", "/tags"])
     expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
-      '      "name": "Ada"',
+      '        "name": "Ada"',
     )
 
     const selected = updateHttpJsonTree(document, "next")
@@ -89,6 +89,10 @@ describe("HTTP workspace state", () => {
       ...document,
       responsePresentation: { ...document.responsePresentation, ...selected },
     }
+    const movedTree = httpJsonTreeForDocument(document)
+    expect(movedTree?.selectedPath).toBe("/user")
+    expect(movedTree?.lines).toBe(tree?.lines)
+    expect(movedTree?.nodes).toBe(tree?.nodes)
     const collapsed = updateHttpJsonTree(document, "collapse")
     expect(collapsed?.jsonCollapsedPaths).toEqual(["/user"])
     document = {
@@ -98,7 +102,7 @@ describe("HTTP workspace state", () => {
     tree = httpJsonTreeForDocument(document)
     expect(tree?.nodes.map((node) => node.path)).toEqual(["", "/user", "/tags"])
     expect(tree?.lines.map((line) => line.tokens.map((token) => token.text).join(""))).toContain(
-      '  ▸ "user": {… 1},',
+      '▸   "user": {… 1},',
     )
     expect(
       new TextDecoder().decode(
@@ -688,24 +692,14 @@ describe("HTTP keyboard ownership", () => {
     })
   })
 
-  test("keeps environment creation inputs isolated inside their overlay", () => {
+  test("lets the environment modal own its layered navigation", () => {
     expect(
-      command({ name: "escape" }, "http-environment-create-secret", false, "environment-manager"),
-    ).toEqual({ kind: "blur-editor" })
+      command({ name: "escape" }, "http-environment-create-value-0", false, "environment-manager"),
+    ).toEqual({ kind: "ignore" })
     expect(command({ name: "escape" }, "", false, "environment-manager")).toEqual({
-      kind: "close-overlay",
+      kind: "ignore",
     })
     expect(command({ name: "n" }, "", false, "environment-manager")).toEqual({ kind: "ignore" })
-  })
-
-  test("keeps workspace header editing isolated inside the settings overlay", () => {
-    expect(
-      command({ name: "escape" }, "http-key-value-name-workspace-0", false, "workspace-settings"),
-    ).toEqual({ kind: "blur-editor" })
-    expect(command({ name: "escape" }, "", false, "workspace-settings")).toEqual({
-      kind: "close-overlay",
-    })
-    expect(command({ name: "t" }, "", false, "workspace-settings")).toEqual({ kind: "ignore" })
   })
 
   test("maps every external conflict resolution and keeps Escape non-destructive", () => {
@@ -892,7 +886,7 @@ describe("HTTP keyboard ownership", () => {
       kind: "apply-overlay",
     })
     expect(command({ name: "f" }, "", false, "collection-import")).toEqual({
-      kind: "toggle-import-format",
+      kind: "ignore",
     })
     expect(command({ name: "b" }, "", false, "collection-import")).toEqual({
       kind: "back-import-preview",

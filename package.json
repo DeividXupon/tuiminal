@@ -13,7 +13,8 @@
     "bun": "1.4.2"
   },
   "scripts": {
-    "check": "bun run typecheck && bun run format:check && bun run lint && bun run check:workspaces && bun run check:architecture && bun run check:maintainability && bun run check:licenses && bun run test",
+    "check": "bun run typecheck && bun run format:check && bun run lint && bun run check:ai-docs && bun run check:workspaces && bun run check:architecture && bun run check:maintainability && bun run check:licenses && bun run test",
+    "check:ai-docs": "bun scripts/check-ai-docs.ts",
     "check:architecture": "bun scripts/check-architecture.ts",
     "check:licenses": "bun scripts/generate-third-party-notices.ts --check",
     "check:maintainability": "bun scripts/check-maintainability.ts",
@@ -27,7 +28,7 @@
     "lint:fix": "biome lint --write apps packages tests scripts",
     "start": "bun run build:features && bun apps/cli/src/index.tsx",
     "test": "bun run test:unit && bun run test:tui",
-    "test:unit": "bun test tests/*.test.ts",
+    "test:unit": "bun test --max-concurrency=1 tests/*.test.ts",
     "test:windows": "bun test tests/atomic-file.test.ts tests/cli.test.ts tests/commands.test.ts tests/configuration.test.ts tests/core.test.ts tests/database-cell-value.test.ts tests/database-layout.test.ts tests/database-query-edit.test.ts tests/database-read-policy.test.ts tests/database-sql-tokens.test.ts tests/git-detail-lifecycle.test.ts tests/git-diff-content.test.ts tests/git-issues.test.ts tests/git-pr.test.ts tests/git-query-autocomplete.test.ts tests/git-query-quoting.test.ts tests/git-reactions.test.ts tests/git-resource-disposal.test.ts tests/git-watch-lifecycle.test.ts tests/github-cli-installer.test.ts tests/github-process-lifecycle.test.ts tests/http-assertions.test.ts tests/http-path-parameters.test.ts tests/http-redirect-credentials.test.ts tests/http-redirect-lifecycle.test.ts tests/http-redirect-safety.test.ts tests/http-response-reader.test.ts tests/http-response.test.ts tests/http-runner.test.ts tests/http-workspace.test.ts tests/i18n-prefixes.test.ts tests/i18n.test.ts tests/npm-pack.test.ts tests/runner-health.test.ts tests/runner-log.test.ts tests/runner-ports.test.ts tests/runner-project-discovery.test.ts tests/runner-pty-output.test.ts tests/sql-autocomplete.test.ts tests/sql-highlight.test.ts tests/sql-statements.test.ts tests/terminal-commands.test.ts tests/terminal-native.test.ts tests/terminal-presentation.test.ts",
     "test:tui": "bun test --preload ./tests/tui/setup.ts tests/tui",
     "test:database:drivers": "TUIMINAL_DATABASE_INTEGRATION=1 bun test tests/database-drivers.integration.test.ts --timeout 120000",

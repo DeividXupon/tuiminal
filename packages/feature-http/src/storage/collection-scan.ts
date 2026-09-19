@@ -28,6 +28,7 @@ export type HttpCollectionFile = ParsedHttpFile & { absolutePath: string }
 export type HttpProjectCollection = {
   root: string
   files: HttpCollectionFile[]
+  directories: string[]
   errors: Array<{ path: string; message: string }>
 }
 
@@ -121,6 +122,7 @@ async function scanDirectory(
     return
   }
   budget.directories += 1
+  if (directory !== root) result.directories.push(relative(root, directory))
   let entries: Dirent[]
   try {
     entries = await readdir(directory, { withFileTypes: true })
@@ -133,7 +135,12 @@ async function scanDirectory(
 
 export async function scanHttpProject(root: string): Promise<HttpProjectCollection> {
   const resolvedRoot = await realpath(root)
-  const result: HttpProjectCollection = { root: resolvedRoot, files: [], errors: [] }
+  const result: HttpProjectCollection = {
+    root: resolvedRoot,
+    files: [],
+    directories: [],
+    errors: [],
+  }
   await scanDirectory(resolvedRoot, resolvedRoot, result, {
     directories: 0,
     files: 0,
@@ -141,6 +148,7 @@ export async function scanHttpProject(root: string): Promise<HttpProjectCollecti
     exhausted: false,
   })
   result.files.sort((left, right) => left.path.localeCompare(right.path))
+  result.directories.sort((left, right) => left.localeCompare(right))
   return result
 }
 

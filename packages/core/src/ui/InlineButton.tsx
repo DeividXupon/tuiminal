@@ -11,8 +11,38 @@ export type InlineButtonProps = {
   onPress: () => void
   accent?: string
   active?: boolean
+  selected?: boolean
   disabled?: boolean
   buttonRef?: Ref<ButtonRenderable>
+}
+
+function buttonColors({
+  pressed,
+  selected,
+  focused,
+  active,
+  disabled,
+  accent,
+}: {
+  pressed: boolean
+  selected: boolean
+  focused: boolean
+  active: boolean
+  disabled: boolean
+  accent: string
+}) {
+  if (pressed || selected) return { fg: disabled ? COLORS.border : COLORS.canvas, bg: accent }
+  const highlighted = focused || active
+  return {
+    fg: disabled ? COLORS.border : highlighted ? accent : COLORS.muted,
+    bg: highlighted
+      ? LAYOUT.compact
+        ? COLORS.diffModifiedBg
+        : COLORS.panelRaised
+      : LAYOUT.compact
+        ? "transparent"
+        : COLORS.panel,
+  }
 }
 
 export function InlineButton({
@@ -21,6 +51,7 @@ export function InlineButton({
   onPress,
   accent = COLORS.text,
   active = false,
+  selected = false,
   disabled = false,
   buttonRef,
 }: InlineButtonProps) {
@@ -36,24 +67,15 @@ export function InlineButton({
       {(state) => (
         <ShortcutText
           content={` ${translateUi(label)} `}
-          style={{
-            fg: disabled
-              ? COLORS.border
-              : state.pressed
-                ? COLORS.canvas
-                : state.focused || active
-                  ? accent
-                  : COLORS.muted,
-            bg: state.pressed
-              ? accent
-              : state.focused || active
-                ? LAYOUT.compact
-                  ? COLORS.diffModifiedBg
-                  : COLORS.panelRaised
-                : LAYOUT.compact
-                  ? "transparent"
-                  : COLORS.panel,
-          }}
+          highlight={!selected}
+          style={buttonColors({
+            pressed: state.pressed,
+            selected,
+            focused: state.focused,
+            active,
+            disabled,
+            accent,
+          })}
         />
       )}
     </Button>
