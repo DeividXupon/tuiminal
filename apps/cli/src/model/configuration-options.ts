@@ -3,11 +3,6 @@ import { PALETTE_OPTIONS } from "@xupon/tuiminal-core/settings/theme"
 import { LANGUAGE_OPTIONS } from "@xupon/tuiminal-core/i18n/index"
 import type { ConfigurationSection } from "./configuration-context"
 
-export const PALETTE_ROWS = Array.from(
-  { length: Math.ceil(PALETTE_OPTIONS.length / 2) },
-  (_, index) => PALETTE_OPTIONS.slice(index * 2, index * 2 + 2),
-)
-
 export function configurationSettingPatch(
   section: ConfigurationSection,
   settings: UiSettings,

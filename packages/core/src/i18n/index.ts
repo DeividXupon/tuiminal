@@ -6,6 +6,7 @@ import { RUNNER_EDITOR_MESSAGES } from "./runner-editor-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
+import { CONFIGURATION_MESSAGES } from "./configuration-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
@@ -111,6 +112,7 @@ type Message = readonly [
 
 const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
+  ...CONFIGURATION_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
   ...RUNNER_HELP_MESSAGES,

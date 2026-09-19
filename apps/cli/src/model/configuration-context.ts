@@ -58,7 +58,6 @@ export function activateConfigurationSection(
     openHistory: () => void
     openSensitive: () => void
     openGit: () => void
-    close: () => void
   },
 ) {
   if (section === "features") return actions.openFeatures()
@@ -66,5 +65,4 @@ export function activateConfigurationSection(
   if (section === "history") return actions.openHistory()
   if (section === "sensitive") return actions.openSensitive()
   if (section === "git") return actions.openGit()
-  actions.close()
 }

@@ -1,0 +1,37 @@
+export const CONFIGURATION_MESSAGES = [
+  ["CONTEXTO", "CONTEXT", "CONTEXTO", "コンテキスト", "上下文", "컨텍스트"],
+  ["APARÊNCIA", "APPEARANCE", "APARIENCIA", "外観", "外观", "모양"],
+  ["GERAL", "GENERAL", "GENERAL", "一般", "常规", "일반"],
+  [
+    "SALVAMENTO AUTOMÁTICO",
+    "AUTO-SAVE",
+    "GUARDADO AUTOMÁTICO",
+    "自動保存",
+    "自动保存",
+    "자동 저장",
+  ],
+  [
+    "[H/L/←/→] alterar",
+    "[H/L/←/→] change",
+    "[H/L/←/→] cambiar",
+    "[H/L/←/→] 変更",
+    "[H/L/←/→] 更改",
+    "[H/L/←/→] 변경",
+  ],
+  [
+    "[J/K/↑/↓] categoria · [H/L/←/→] opção",
+    "[J/K/↑/↓] category · [H/L/←/→] option",
+    "[J/K/↑/↓] categoría · [H/L/←/→] opción",
+    "[J/K/↑/↓] カテゴリ・[H/L/←/→] 選択肢",
+    "[J/K/↑/↓] 类别 · [H/L/←/→] 选项",
+    "[J/K/↑/↓] 카테고리 · [H/L/←/→] 옵션",
+  ],
+  [
+    "[J/K/↑/↓] categoria · [H/L/←/→] opção · [Enter] abrir",
+    "[J/K/↑/↓] category · [H/L/←/→] option · [Enter] open",
+    "[J/K/↑/↓] categoría · [H/L/←/→] opción · [Enter] abrir",
+    "[J/K/↑/↓] カテゴリ・[H/L/←/→] 選択肢・[Enter] 開く",
+    "[J/K/↑/↓] 类别 · [H/L/←/→] 选项 · [Enter] 打开",
+    "[J/K/↑/↓] 카테고리 · [H/L/←/→] 옵션 · [Enter] 열기",
+  ],
+] as const
