@@ -2,6 +2,9 @@ import { useCallback, useState } from "react"
 import type { HttpDocumentState, HttpRequestDefinition, HttpWorkspaceOverlay } from "../model/types"
 import { createScratchRequest, type HttpWorkspaceAction } from "../model/workspace"
 import { deleteHttpRequest, moveHttpRequest } from "../storage/collections"
+import { loadPostmanAccount } from "../postman/account"
+import { PostmanApi } from "../postman/api"
+import { deletePostmanRequest, isPostmanPath } from "../postman/mutations"
 
 type RequestFileActionContext = {
   root: string
@@ -17,6 +20,9 @@ async function moveCurrentRequest(context: RequestFileActionContext, moveTarget:
   if (!target || target === source.path) {
     context.setNotice("ESCOLHA OUTRO ARQUIVO DE DESTINO")
     return false
+  }
+  if (isPostmanPath(source.path) || isPostmanPath(target)) {
+    throw new Error("Mover requests vinculadas ao Postman ainda não está disponível.")
   }
   const moved = await moveHttpRequest(context.root, context.request, target)
   context.dispatch({
@@ -35,7 +41,11 @@ async function deleteCurrentRequest(
   documentCount: number,
   closeDocument: (documentId: string) => void,
 ) {
-  await deleteHttpRequest(context.root, context.request)
+  if (context.request.source.kind === "file" && isPostmanPath(context.request.source.path)) {
+    const account = await loadPostmanAccount()
+    if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
+    await deletePostmanRequest(context.root, new PostmanApi(account), context.request)
+  } else await deleteHttpRequest(context.root, context.request)
   if (documentCount === 1) {
     context.dispatch({
       type: "add-document",
@@ -69,6 +79,10 @@ export function useHttpRequestFiles({
     (overlay: "request-move" | "request-delete") => {
       if (!document || document.request.source.kind !== "file") {
         setNotice("SALVE O REQUEST ANTES DE MOVER OU EXCLUIR")
+        return
+      }
+      if (overlay === "request-move" && isPostmanPath(document.request.source.path)) {
+        setNotice("Mover requests vinculadas ao Postman ainda não está disponível.")
         return
       }
       if (

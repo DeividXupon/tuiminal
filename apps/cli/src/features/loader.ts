@@ -62,13 +62,17 @@ export async function loadFeature(id: FeatureId) {
     if (pending.get(id) === load) pending.delete(id)
   }
 }
-export async function runInstalledHttp(command: "run" | "import", args: string[]) {
+export async function runInstalledHttp(command: "run" | "import" | "postman", args: string[]) {
   if (sourceFeaturesEnabled())
     return (await import("./source-loader")).sourceHttpCommand(command, args)
   const module = await loadEntry("http", `http-${command}.mjs`)
-  const run = module[command === "run" ? "runHttpHeadless" : "importHttpCollectionCli"] as (
-    args: string[],
-  ) => Promise<number>
+  const run = module[
+    command === "run"
+      ? "runHttpHeadless"
+      : command === "import"
+        ? "importHttpCollectionCli"
+        : "postmanCli"
+  ] as (args: string[]) => Promise<number>
   return run(args)
 }
 export async function runInstalledSqliteWorker() {

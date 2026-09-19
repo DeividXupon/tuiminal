@@ -102,11 +102,13 @@ function singleLineInputCommand(
   key: HttpKey,
   blurKind: "blur-url" | "blur-control",
 ): HttpKeyboardCommand {
+  if (key.ctrl && key.name === "p") return { kind: "push-postman-document" }
   if (key.ctrl && key.name === "s") return { kind: "save-document" }
   return key.name === "escape" ? { kind: blurKind } : { kind: "ignore" }
 }
 
 function editorCommand(key: HttpKey): HttpKeyboardCommand {
+  if (key.ctrl && key.name === "p") return { kind: "push-postman-document" }
   if (key.ctrl && key.name === "s") return { kind: "save-document" }
   if (key.ctrl && (key.name === "enter" || key.name === "return")) return { kind: "send" }
   return key.name === "escape" ? { kind: "blur-editor" } : { kind: "ignore" }
@@ -157,6 +159,7 @@ function focusedCommand(
 }
 
 function modifiedCommand(key: HttpKey): HttpKeyboardCommand | null {
+  if (key.ctrl && key.name === "p") return { kind: "push-postman-document" }
   const ctrlCommand = key.ctrl ? CTRL_COMMANDS[key.name] : undefined
   if (ctrlCommand) return ctrlCommand
   if (key.ctrl && (key.name === "up" || key.name === "down")) {

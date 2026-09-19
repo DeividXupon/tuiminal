@@ -18,6 +18,16 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test("translates the Postman source chooser and save destination", () => {
+    expect(translateUi("ESCOLHA A ORIGEM HTTP", "en")).toBe("CHOOSE HTTP SOURCE")
+    expect(translateUi("[L] Abrir local", "ja")).toBe("[L] ローカルを開く")
+    expect(translateUi("SALVAR NO POSTMAN", "es")).toBe("GUARDAR EN POSTMAN")
+    expect(translateUi("WORKSPACES POSTMAN", "en")).toBe("POSTMAN WORKSPACES")
+    expect(translateUi("Coleções 2/5…", "en")).toBe("Collections 2/5…")
+    expect(translateUi("2 coleções não puderam ser carregadas.", "en")).toBe(
+      "2 collections could not be loaded.",
+    )
+  })
   test.each([
     ["pt-BR", "Não foi possível gravar o download completo."],
     ["en", "Could not write the complete download."],

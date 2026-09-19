@@ -21,6 +21,9 @@ import { HttpEnvironmentManagerModal } from "./HttpEnvironmentManagerModal"
 import { HttpHistoryDiffModal } from "./HttpHistoryDiffModal"
 import { HttpRequestFileModal } from "./HttpRequestFileModal"
 import { HttpWorkspaceOverlay } from "./HttpWorkspaceOverlay"
+import { HttpPostmanModal } from "./HttpPostmanModal"
+import { HttpPostmanSaveModal } from "./HttpPostmanSaveModal"
+import type { PostmanCollectionFolder } from "../postman/sync"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
 export function HttpWorkspaceOverlays({
@@ -41,9 +44,11 @@ export function HttpWorkspaceOverlays({
   onMoveTargetChange,
   onApplyRequestFileAction,
   collectionImport,
+  postman,
   collectionRunner,
   environment,
   externalConflict,
+  postmanSave,
   pendingCloseName,
   onConfirmCloseDocument,
   onCancelCloseDocument,
@@ -72,6 +77,13 @@ export function HttpWorkspaceOverlays({
     setSourcePath: (path: string) => void
     apply: () => Promise<void>
     back: () => void
+  }
+  postman: {
+    root: string
+    onWorkspaceSelected: (
+      workspace: import("../postman/api").PostmanWorkspace,
+      result: import("../postman/workspace-sync").WorkspaceSyncResult,
+    ) => Promise<void>
   }
   collectionRunner: {
     targetName: string | null
@@ -110,7 +122,14 @@ export function HttpWorkspaceOverlays({
     resolvingExternalConflict: boolean
     resolveExternalConflict: (resolution: HttpExternalConflictResolution) => void
     cancelExternalConflict: () => void
+    pendingPostmanSaveId: string | null
+    cancelPostmanSave: () => void
+    savePostmanDraftInCollection: (
+      path: string,
+      folder?: { id: string; path: string },
+    ) => Promise<void>
   }
+  postmanSave: { files: Array<{ path: string }>; folders: PostmanCollectionFolder[] }
   pendingCloseName: string
   onConfirmCloseDocument: () => void
   onCancelCloseDocument: () => void
@@ -173,6 +192,15 @@ export function HttpWorkspaceOverlays({
           onClose={onClose}
         />
       ) : null}
+      {overlay === "postman-browser" ? (
+        <HttpPostmanModal
+          root={postman.root}
+          terminalWidth={terminalWidth}
+          terminalHeight={terminalHeight}
+          onWorkspaceSelected={postman.onWorkspaceSelected}
+          onClose={onClose}
+        />
+      ) : null}
       {overlay === "collection-runner" ? (
         <HttpCollectionRunnerModal
           {...collectionRunner}
@@ -224,6 +252,19 @@ export function HttpWorkspaceOverlays({
           terminalHeight={terminalHeight}
           onConfirm={onConfirmCloseDocument}
           onClose={onCancelCloseDocument}
+        />
+      ) : null}
+      {externalConflict.pendingPostmanSaveId ? (
+        <HttpPostmanSaveModal
+          files={postmanSave.files}
+          folders={postmanSave.folders}
+          requestName={document.request.name}
+          terminalWidth={terminalWidth}
+          terminalHeight={terminalHeight}
+          onSelect={(path, folder) =>
+            void externalConflict.savePostmanDraftInCollection(path, folder)
+          }
+          onClose={externalConflict.cancelPostmanSave}
         />
       ) : null}
     </>

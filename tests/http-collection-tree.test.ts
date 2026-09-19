@@ -53,6 +53,34 @@ describe("HTTP collection tree", () => {
       "request:create",
     ])
   })
+
+  test("shows Postman collections directly and keeps folder rows stable across toggles", () => {
+    const path = "postman/users.http"
+    const linked = [item(path, "one", "Admin / List"), item(path, "two", "Admin / Create", "POST")]
+    const folders = [{ filePath: path, id: "folder-1", path: "Admin", remoteHash: "hash" }]
+    const open = buildHttpCollectionTree(linked, new Set(), "", ["postman"], [path], folders, true)
+    const folderId = `folder:${path}:folder-1`
+    expect(open.map((row) => [row.kind, row.depth])).toEqual([
+      ["file", 0],
+      ["folder", 1],
+      ["request", 2],
+      ["request", 2],
+    ])
+    expect(open.some((row) => row.id === "directory:postman")).toBe(false)
+    const closed = buildHttpCollectionTree(
+      linked,
+      new Set([folderId]),
+      "",
+      ["postman"],
+      [path],
+      folders,
+      true,
+    )
+    expect(closed.map((row) => row.id)).toEqual([`file:${path}`, folderId])
+    expect(
+      buildHttpCollectionTree(linked, new Set(), "", ["postman"], [path], folders, true),
+    ).toEqual(open)
+  })
 })
 
 describe("HTTP method cycling", () => {

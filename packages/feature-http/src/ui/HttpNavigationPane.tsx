@@ -1,5 +1,6 @@
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
+import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -11,6 +12,10 @@ import type { HttpCollectionTreeRow } from "../model/collection-tree"
 import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
 import type { HttpKey } from "../model/keyboard-types"
 import { HttpHistoryList } from "./HttpHistoryList"
+import type { HttpSourceMode } from "../model/source-mode"
+import type { PostmanCollectionFolder } from "../postman/sync"
+import type { PostmanWorkspace } from "../postman/api"
+import { httpMethodColor } from "./http-method-colors"
 
 export function HttpNavigationPane({
   state,
@@ -25,9 +30,14 @@ export function HttpNavigationPane({
   projectRequests,
   projectDirectories,
   projectFiles,
+  postmanFolders,
+  postmanWorkspace,
+  onPostmanWorkspaceChange,
   projectErrors,
+  sourceMode,
   onOpenProjectRequest,
   onImportCollection,
+  onOpenPostman,
   onRunCollection,
   onManageCollection,
   registerCollectionSearch,
@@ -48,9 +58,14 @@ export function HttpNavigationPane({
   projectRequests: HttpProjectRequestItem[]
   projectDirectories: string[]
   projectFiles: string[]
+  postmanFolders: PostmanCollectionFolder[]
+  postmanWorkspace: PostmanWorkspace | null
+  onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
   projectErrors: number
+  sourceMode: HttpSourceMode
   onOpenProjectRequest: (request: HttpProjectRequestItem) => void
   onImportCollection: () => void
+  onOpenPostman: () => void
   onRunCollection: () => void
   onManageCollection: (
     action: HttpCollectionAction,
@@ -126,18 +141,31 @@ export function HttpNavigationPane({
         id="http-collection-scroll"
         ref={scrollRef}
         scrollY
-        viewportCulling
+        viewportCulling={false}
         style={{ flexGrow: 1, paddingTop: 1 }}
       >
         {state.navigationView === "collection" ? (
           <>
-            <text content={translateUi("PROJETO")} style={{ fg: COLORS.muted }} />
+            <text
+              id="http-collection-workspace-heading"
+              content={truncateDisplay(
+                sourceMode === "postman"
+                  ? (postmanWorkspace?.name ?? translateUi("WORKSPACE POSTMAN"))
+                  : translateUi("PROJETO"),
+                contentWidth,
+              )}
+              style={{ fg: sourceMode === "postman" ? COLORS.text : COLORS.muted }}
+            />
             <HttpCollectionTree
               state={state}
+              sourceMode={sourceMode}
+              postmanWorkspace={postmanWorkspace}
+              onPostmanWorkspaceChange={onPostmanWorkspaceChange}
               contentWidth={contentWidth}
               projectRequests={projectRequests}
               projectDirectories={projectDirectories}
               projectFiles={projectFiles}
+              postmanFolders={postmanFolders}
               projectErrors={projectErrors}
               selection={collectionSelection}
               setSelection={setCollectionSelection}
@@ -147,6 +175,7 @@ export function HttpNavigationPane({
               onFocus={onFocus}
               onOpen={onOpenProjectRequest}
               onImport={onImportCollection}
+              onPostman={onOpenPostman}
               onRun={onRunCollection}
               onManage={onManageCollection}
             />
@@ -154,20 +183,37 @@ export function HttpNavigationPane({
             {state.documents
               .filter((document) => document.request.source.kind === "scratch")
               .map((document) => (
-                <InlineButton
+                <Button
                   key={document.request.id}
                   id={`http-navigation-document-${document.request.id}`}
-                  label={`${document.request.method} ${truncateDisplay(
-                    document.request.name,
-                    Math.max(1, contentWidth - displayWidth(document.request.method) - 3),
-                  )}`}
-                  accent={COLORS.http}
-                  active={document.request.id === state.activeDocumentId}
+                  height={1}
+                  flexShrink={0}
                   onPress={() => {
                     onFocus()
                     onSelectDocument(document.request.id)
                   }}
-                />
+                >
+                  <box
+                    style={{
+                      height: 1,
+                      flexDirection: "row",
+                      backgroundColor:
+                        document.request.id === state.activeDocumentId
+                          ? COLORS.diffModifiedBg
+                          : COLORS.panel,
+                    }}
+                  >
+                    <text content=" " style={{ fg: COLORS.text }} />
+                    <text
+                      content={document.request.method}
+                      style={{ fg: httpMethodColor(document.request.method) }}
+                    />
+                    <text
+                      content={` ${truncateDisplay(document.request.name, Math.max(1, contentWidth - displayWidth(document.request.method) - 3))} `}
+                      style={{ fg: COLORS.text }}
+                    />
+                  </box>
+                </Button>
               ))}
           </>
         ) : state.history.length ? (

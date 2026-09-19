@@ -142,6 +142,7 @@ for (const layout of ["compact", "framed"] as const) {
       current().renderer.root.findDescendantById("http-redirect-approval-modal"),
     ).toBeUndefined()
 
+    await press("http-collection-help")
     await press("http-collection-runner-button")
     await settle(
       () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-dataset",

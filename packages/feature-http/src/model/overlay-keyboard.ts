@@ -74,7 +74,7 @@ export function resolveSpecialHttpOverlayCommand(
   if (overlay === "collection-import") return collectionImportCommand(key, focusedId)
   if (overlay === "collection-runner") return collectionRunnerCommand(key, focusedId)
   if (overlay === "external-conflict") return externalConflictCommand(key)
-  if (overlay === "environment-manager") {
+  if (overlay === "environment-manager" || overlay === "postman-browser") {
     // The modal owns its list, chooser and table modes, including layered Escape.
     return { kind: "ignore" }
   }
