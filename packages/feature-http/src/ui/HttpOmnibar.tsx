@@ -5,6 +5,7 @@ import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpRequestDefinition } from "../model/types"
 import { applyUrlVariableCompletion, urlVariableCompletion } from "../model/url-query"
+import { httpMethodColor } from "./http-method-colors"
 
 type HttpOmnibarProps = {
   request: HttpRequestDefinition
@@ -165,7 +166,7 @@ export function HttpOmnibar({
       <InlineButton
         id="http-method-button"
         label={request.method.padEnd(7)}
-        accent={COLORS.http}
+        accent={httpMethodColor(request.method)}
         active
         disabled={readOnly}
         onPress={() => {

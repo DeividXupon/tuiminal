@@ -3,8 +3,25 @@ import { useCallback } from "react"
 import { projectFileHash } from "@xupon/tuiminal-core/storage/project-files"
 import type { HttpCollectionTreeRow } from "../model/collection-tree"
 import type { HttpDocumentState, HttpProjectRequestItem } from "../model/types"
+import { belongsToHttpSource, type HttpSourceMode } from "../model/source-mode"
 import { createScratchRequest, type HttpWorkspaceAction } from "../model/workspace"
 import { deleteHttpRequest } from "../storage/collections"
+import { loadPostmanAccount } from "../postman/account"
+import { PostmanApi } from "../postman/api"
+import {
+  createPostmanCollection,
+  createPostmanRequest,
+  deletePostmanCollection,
+  deletePostmanRequest,
+  isPostmanPath,
+  renamePostmanCollection,
+  renamePostmanRequest,
+} from "../postman/mutations"
+import {
+  createPostmanFolder,
+  deletePostmanFolder,
+  renamePostmanFolder,
+} from "../postman/folder-mutations"
 import {
   createHttpCollection,
   createHttpFolder,
@@ -22,6 +39,9 @@ export type HttpCollectionAction =
   | "create-request"
   | "rename"
   | "delete"
+export type HttpCollectionDestination =
+  | { kind: "tuiminal" }
+  | { kind: "postman"; workspaceId: string }
 type CollectionFile = { path: string; sourceHash: string }
 type ManagementInput = {
   root: string
@@ -128,7 +148,115 @@ async function deleteItem({ root, files, row }: ManagementInput) {
   else await deleteHttpFolder(root, row.path)
 }
 
-async function performAction(action: HttpCollectionAction, input: ManagementInput) {
+async function connectedPostmanApi() {
+  const account = await loadPostmanAccount()
+  if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
+  return new PostmanApi(account)
+}
+
+async function existingPostmanAction(
+  action: HttpCollectionAction,
+  input: ManagementInput,
+): Promise<HttpProjectRequestItem | null> {
+  const { root, files, row, name } = input
+  if (!row) return null
+  const path = row.path
+  const api = await connectedPostmanApi()
+  if (action === "create-request") {
+    return createLinkedRequest(root, api, files, row, name)
+  }
+  if (action === "create-folder") {
+    await createLinkedFolder(root, api, row, name)
+    return null
+  }
+  if (action === "rename") {
+    if (row?.kind === "request") {
+      const request = await renamePostmanRequest(root, api, row.item.request, name)
+      return { filePath: path, request }
+    }
+    if (row.kind === "folder") {
+      await renamePostmanFolder(root, api, path, row.folderId, name, fileHash(files, path))
+      return null
+    }
+    await renamePostmanCollection(root, api, path, name, fileHash(files, path))
+    return null
+  }
+  if (action === "delete") {
+    if (row?.kind === "request") await deletePostmanRequest(root, api, row.item.request)
+    else if (row.kind === "folder")
+      await deletePostmanFolder(root, api, path, row.folderId, fileHash(files, path))
+    else await deletePostmanCollection(root, api, path, fileHash(files, path))
+  }
+  return null
+}
+
+async function createLinkedRequest(
+  root: string,
+  api: PostmanApi,
+  files: CollectionFile[],
+  row: HttpCollectionTreeRow,
+  name: string,
+) {
+  const path = row.path
+  const request = await createPostmanRequest(
+    root,
+    api,
+    path,
+    row.kind === "folder" ? `${row.folderPath} / ${name}` : name,
+    fileHash(files, path),
+    row.kind === "folder" ? row.folderId : undefined,
+  )
+  return { filePath: path, request }
+}
+
+async function createLinkedFolder(
+  root: string,
+  api: PostmanApi,
+  row: HttpCollectionTreeRow,
+  name: string,
+) {
+  if (row.kind === "request") throw new Error("Selecione a coleção ou pasta Postman.")
+  await createPostmanFolder(
+    root,
+    api,
+    row.path,
+    name,
+    row.kind === "folder" ? row.folderId : undefined,
+  )
+}
+
+async function postmanAction(
+  action: HttpCollectionAction,
+  input: ManagementInput,
+  destination?: HttpCollectionDestination,
+): Promise<HttpProjectRequestItem | null> {
+  const { root, row, name } = input
+  if (action === "create-collection") {
+    if (destination?.kind === "postman") {
+      await createPostmanCollection(
+        root,
+        await connectedPostmanApi(),
+        destination.workspaceId,
+        name,
+      )
+      return null
+    }
+    const inPostmanDirectory =
+      row?.kind === "directory" && (row.path === "postman" || isPostmanPath(row.path))
+    return createItem(inPostmanDirectory ? { ...input, row: null } : input, action)
+  }
+  if (row?.kind === "directory" && (row.path === "postman" || isPostmanPath(row.path))) {
+    if (action === "create-request")
+      throw new Error("Selecione uma coleção Postman para criar a request.")
+    throw new Error("Pastas locais em /postman não representam pastas do Postman.")
+  }
+  if (row?.kind !== "directory" && row && isPostmanPath(row.path)) {
+    return existingPostmanAction(action, input)
+  }
+  return performLocalAction(action, input)
+}
+
+async function performLocalAction(action: HttpCollectionAction, input: ManagementInput) {
   if (action === "delete") {
     await deleteItem(input)
     return null
@@ -137,8 +265,35 @@ async function performAction(action: HttpCollectionAction, input: ManagementInpu
   return createItem(input, action)
 }
 
+function assertSourceAction(
+  sourceMode: HttpSourceMode,
+  action: HttpCollectionAction,
+  row: HttpCollectionTreeRow | null,
+  destination?: HttpCollectionDestination,
+) {
+  if (row && !belongsToHttpSource(row.path, sourceMode)) {
+    throw new Error("O item pertence a outra origem HTTP.")
+  }
+  if (sourceMode === "local") {
+    if (destination?.kind === "postman") {
+      throw new Error("Troque para a origem Postman antes de criar a coleção.")
+    }
+    return
+  }
+  if (action === "create-folder" && (!row || row.kind === "request" || row.kind === "directory")) {
+    throw new Error("Selecione uma coleção ou pasta Postman para criar a pasta.")
+  }
+  if (action === "create-request" && (!row || row.kind === "directory")) {
+    throw new Error("Selecione uma coleção Postman para criar a request.")
+  }
+  if (action === "create-collection" && destination?.kind !== "postman") {
+    throw new Error("Selecione um workspace Postman para criar a coleção.")
+  }
+}
+
 export function useHttpCollectionManagement({
   root,
+  sourceMode,
   files,
   getDocuments,
   dispatch,
@@ -147,6 +302,7 @@ export function useHttpCollectionManagement({
   setNotice,
 }: {
   root: string
+  sourceMode: HttpSourceMode
   files: CollectionFile[]
   getDocuments: () => HttpDocumentState[]
   dispatch: (action: HttpWorkspaceAction) => void
@@ -155,24 +311,31 @@ export function useHttpCollectionManagement({
   setNotice: (notice: string) => void
 }) {
   return useCallback(
-    async (action: HttpCollectionAction, row: HttpCollectionTreeRow | null, name = "") => {
+    async (
+      action: HttpCollectionAction,
+      row: HttpCollectionTreeRow | null,
+      name = "",
+      destination?: HttpCollectionDestination,
+    ) => {
       try {
         if (action !== "delete" && !name.trim()) throw new Error("Informe um nome.")
         if ((action === "rename" || action === "delete") && !row) return false
+        assertSourceAction(sourceMode, action, row, destination)
         const all = getDocuments()
         const affected = affectedDocuments(action, row, all)
         assertReady(affected)
-        const opened = await performAction(action, { root, files, row, name })
+        const opened = await postmanAction(action, { root, files, row, name }, destination)
         closeAffected(dispatch, affected, all)
         if (opened) openRequest(opened)
         await refreshProject()
         setNotice(action === "delete" ? "ITEM EXCLUÍDO DA COLEÇÃO" : "COLEÇÃO ATUALIZADA")
         return true
       } catch (error) {
+        await refreshProject().catch(() => {})
         setNotice(error instanceof Error ? error.message : String(error))
         return false
       }
     },
-    [dispatch, files, getDocuments, openRequest, refreshProject, root, setNotice],
+    [dispatch, files, getDocuments, openRequest, refreshProject, root, setNotice, sourceMode],
   )
 }

@@ -6,8 +6,28 @@ function safeRequestName(name: string) {
   return name.replace(/[\r\n]+/g, " ").trim() || "Request"
 }
 
-function stableRequestName(name: string) {
+export function stableRequestName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "request"
+}
+
+export function uniqueExistingHttpBlockNames(originals: readonly string[]) {
+  const reserved = new Set(originals)
+  const used = new Set<string>()
+  return originals.map((original) => {
+    if (!used.has(original)) {
+      used.add(original)
+      return original
+    }
+    let suffix = 2
+    while (reserved.has(`${original}-${suffix}`) || used.has(`${original}-${suffix}`)) suffix += 1
+    const unique = `${original}-${suffix}`
+    used.add(unique)
+    return unique
+  })
+}
+
+export function uniqueHttpBlockNames(names: readonly string[]) {
+  return uniqueExistingHttpBlockNames(names.map(stableRequestName))
 }
 
 function serializedUrl(request: HttpRequestDefinition) {
@@ -80,11 +100,20 @@ function requestDirectives(request: HttpRequestDefinition) {
   ]
 }
 
-export function serializeHttpRequestBlock(request: HttpRequestDefinition, eol = "\n") {
+export function serializeHttpRequestBlock(
+  request: HttpRequestDefinition,
+  eol = "\n",
+  importedBlockName?: string,
+) {
   const safeName = safeRequestName(request.name)
+  const sourceName =
+    request.source.kind === "file" &&
+    request.source.path.replaceAll("\\", "/").startsWith("postman/")
+      ? request.source.blockId.split("#").at(-1)
+      : undefined
   const lines = [
     `### ${safeName}`,
-    `# @name ${stableRequestName(safeName)}`,
+    `# @name ${sourceName || importedBlockName || stableRequestName(safeName)}`,
     ...requestDirectives(request),
     `${request.method} ${serializedUrl(request)}`,
   ]

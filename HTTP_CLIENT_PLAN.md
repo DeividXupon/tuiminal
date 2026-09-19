@@ -118,7 +118,9 @@ until supported by demand and security evidence.
 ### Immediate non-goals
 
 - Reproducing the entire Postman feature set.
-- Cloud synchronization, accounts, or real-time collaboration.
+- Continuous cloud synchronization and real-time collaboration. Explicit
+  Postman account reads, imports, and linked request/collection writes are documented in
+  [docs/design/postman-account.md](./docs/design/postman-account.md).
 - Running imported scripts without consent and isolation.
 - Implementing GraphQL, gRPC, MQTT, WebSocket, and SSE in the initial sequence.
 - Creating a proprietary format when `.http` serves the core use case.

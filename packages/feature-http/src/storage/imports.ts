@@ -2,6 +2,14 @@ import { chmod, mkdir, open } from "node:fs/promises"
 import { resolve } from "node:path"
 import type { HttpImportReport } from "../importing/shared"
 import { serializeHttpRequestBlock } from "../model/http-file"
+import { uniqueHttpBlockNames } from "../model/http-file-serialization"
+
+export function serializeImportedHttpCollection(report: HttpImportReport) {
+  const names = uniqueHttpBlockNames(report.requests.map((request) => request.name))
+  return report.requests
+    .map((request, index) => serializeHttpRequestBlock(request, "\n", names[index]))
+    .join("\n")
+}
 
 function safeStem(value: string) {
   return (
@@ -32,7 +40,7 @@ async function writeImportHandle(
   handle: Awaited<ReturnType<typeof open>>,
   report: HttpImportReport,
 ) {
-  const content = report.requests.map((request) => serializeHttpRequestBlock(request)).join("\n")
+  const content = serializeImportedHttpCollection(report)
   try {
     await handle.writeFile(content, "utf8")
     await handle.sync()

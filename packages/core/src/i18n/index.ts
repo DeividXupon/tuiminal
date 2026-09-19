@@ -26,6 +26,12 @@ import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
 import { HTTP_OVERLAY_MESSAGES } from "./http-overlays"
 import { HTTP_PATTERNS } from "./http-patterns"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
+import { HTTP_POSTMAN_MESSAGES, HTTP_POSTMAN_PATTERNS } from "./http-postman-catalog"
+import { HTTP_POSTMAN_SOURCE_MESSAGES } from "./http-postman-source-catalog"
+import {
+  HTTP_POSTMAN_ERROR_MESSAGES,
+  HTTP_POSTMAN_ERROR_PATTERNS,
+} from "./http-postman-errors-catalog"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
@@ -4975,6 +4981,9 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,
   ...HTTP_IMPORT_MESSAGES,
+  ...HTTP_POSTMAN_MESSAGES,
+  ...HTTP_POSTMAN_SOURCE_MESSAGES,
+  ...HTTP_POSTMAN_ERROR_MESSAGES,
   ...HTTP_OVERLAY_MESSAGES,
   ...HTTP_PROJECT_MESSAGES,
   ...HTTP_REQUEST_MESSAGES,
@@ -5822,6 +5831,8 @@ const PATTERNS: readonly Pattern[] = [
   ...HTTP_PATTERNS,
   ...HTTP_ENVIRONMENT_PATTERNS,
   ...HTTP_IMPORT_PATTERNS,
+  ...HTTP_POSTMAN_PATTERNS,
+  ...HTTP_POSTMAN_ERROR_PATTERNS,
   ...HTTP_PROJECT_PATTERNS,
   ...HTTP_RESPONSE_PATTERNS,
   ...HTTP_RUNNER_PATTERNS,

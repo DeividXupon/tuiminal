@@ -8,6 +8,12 @@ import {
   type HttpProjectCollection,
 } from "../storage/collections"
 import { GLOBAL_HTTP_ENVIRONMENT_NAME } from "../model/environment-scope"
+import { loadPostmanFolderCatalog } from "../postman/folder-catalog"
+import {
+  loadLinkedPostmanCollections,
+  type LinkedPostmanCollection,
+} from "../postman/collection-catalog"
+import type { PostmanCollectionFolder } from "../postman/sync"
 import {
   environmentVariableContext,
   httpEnvironmentsForRequest,
@@ -33,6 +39,8 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
   const [environmentCatalog, setEnvironmentCatalog] = useState<HttpEnvironmentCatalog>({
     scopes: [],
   })
+  const [postmanFolders, setPostmanFolders] = useState<PostmanCollectionFolder[]>([])
+  const [postmanCollections, setPostmanCollections] = useState<LinkedPostmanCollection[]>([])
   const [activeEnvironmentName, setActiveEnvironmentName] = useState<string | null>(null)
   const refreshStateRef = useRef<{
     root: string
@@ -53,12 +61,28 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
       while (state.queued && !state.disposed) {
         state.queued = false
         await ensureHttpWorkspaceDirectory(root)
-        const [nextProject, nextEnvironmentCatalog] = await Promise.all([
-          scanHttpProject(root),
-          loadHttpEnvironmentCatalog(root, []),
-        ])
+        const [[nextProject, nextPostmanFolders, nextPostmanCollections], nextEnvironmentCatalog] =
+          await Promise.all([
+            scanHttpProject(root).then(
+              async (scanned) =>
+                [
+                  scanned,
+                  await loadPostmanFolderCatalog(
+                    root,
+                    scanned.files.map((file) => file.path),
+                  ),
+                  await loadLinkedPostmanCollections(
+                    root,
+                    scanned.files.map((file) => file.path),
+                  ),
+                ] as const,
+            ),
+            loadHttpEnvironmentCatalog(root, []),
+          ])
         if (state.disposed || refreshStateRef.current !== state) return
         setProject(nextProject)
+        setPostmanFolders(nextPostmanFolders)
+        setPostmanCollections(nextPostmanCollections)
         setEnvironmentCatalog(nextEnvironmentCatalog)
       }
     }
@@ -189,6 +213,8 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
     root,
     project,
     projectRequests,
+    postmanFolders,
+    postmanCollections,
     environments,
     globals,
     activeEnvironment,

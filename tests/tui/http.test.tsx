@@ -21,15 +21,17 @@ import {
   type LayoutMode,
   updateUiSettings,
 } from "../../packages/core/src/settings/theme"
-import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { HttpClient } from "../../packages/feature-http/src/HttpClient"
 import { HTTP_TUTORIAL_STEPS } from "../../packages/feature-http/src"
 import { App } from "../../apps/cli/src/App"
 import { UnsavedChangesExitModal } from "../../apps/cli/src/ui/UnsavedChangesExitModal"
 import { HttpExternalConflictModal } from "../../packages/feature-http/src/ui/HttpExternalConflictModal"
 import { resolveHttpWorkspaceLayout } from "../../packages/feature-http/src/model/layout"
+import { parseHttpFile } from "../../packages/feature-http/src/model/http-file"
 import { HTTP_RENDERER_LISTENER_BUDGET } from "../../packages/feature-http/src/model/renderer-listener-budget"
 import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
 import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
+import { savePostmanAccount } from "../../packages/feature-http/src/postman/account"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
@@ -91,6 +93,11 @@ async function press(id: string) {
   })
 }
 
+async function openCollectionHelp() {
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-help")))
+  await press("http-collection-help")
+}
+
 async function click(id: string) {
   if (!tui) throw new Error("TUI HTTP não montada")
   const target = tui.renderer.root.findDescendantById(id)
@@ -123,6 +130,64 @@ afterEach(() => {
 })
 
 describe("HTTP TUI", () => {
+  test("separates local files and hides unlinked Postman files at the HTTP entrance", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const originalFetch = globalThis.fetch
+    await mkdir(resolve(root, "postman"), { recursive: true })
+    await writeFile(
+      resolve(root, "local-source.http"),
+      "# @name Local only\nGET https://local.test\n",
+    )
+    await writeFile(
+      resolve(root, "postman/remote-source.http"),
+      "# @name Remote only\nGET https://remote.test\n",
+    )
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
+      Response.json({ workspaces: [], meta: {} })) as typeof fetch
+    try {
+      await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
+      await click("http-source-local-card")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-local-source.http")),
+      )
+      expect(
+        tui.renderer.root.findDescendantById("http-collection-directory-postman"),
+      ).toBeUndefined()
+      await click("http-change-source")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
+      await click("http-source-postman-card")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-modal")))
+      await key("ESCAPE")
+      await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
+      expect(
+        tui?.renderer.root.findDescendantById("http-collection-file-postman/remote-source.http"),
+      ).toBeUndefined()
+      expect(
+        tui.renderer.root.findDescendantById("http-collection-file-local-source.http"),
+      ).toBeUndefined()
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(resolve(root, "postman/remote-source.http"), { force: true })
+      await rm(resolve(root, "postman"), { recursive: true, force: true })
+      await rm(resolve(root, "local-source.http"), { force: true })
+    }
+  })
+
+  test("keeps a dirty HTTP draft open when changing source", async () => {
+    await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
+    await key("l")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-input")))
+    await click("http-url-input")
+    await key("x")
+    await click("http-change-source")
+    expect(tui.renderer.root.findDescendantById("http-source-picker")).toBeUndefined()
+    expect(tui.captureCharFrame()).toContain("Salve ou feche os requests alterados")
+  })
+
   test("keeps a fresh Scratch saved when its URL input receives focus", async () => {
     const dirtyStates: boolean[] = []
     tui = await testRender(
@@ -793,6 +858,525 @@ describe("HTTP TUI", () => {
     },
   )
 
+  test("opens every collection in a Postman workspace and imports with an environment", async () => {
+    const root = process.env.TUIMINAL_WORKDIR ?? ""
+    const originalFetch = globalThis.fetch
+    let remoteMethod = "GET"
+    let remoteUrl = "{{baseUrl}}/users"
+    let pushes = 0
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname
+      if (path === "/workspaces")
+        return Response.json({ workspaces: [{ id: "w1", name: "My Workspace" }], meta: {} })
+      if (path === "/environments")
+        return Response.json({ environments: [{ id: "e1", name: "Stage" }] })
+      if (path === "/collections")
+        return Response.json({
+          collections: [
+            { id: "c1", name: "Users" },
+            { id: "c2", name: "Orders" },
+          ],
+          meta: { total: 2 },
+        })
+      if (path === "/collections/c2")
+        return Response.json({
+          collection: {
+            info: {
+              schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            },
+            item: [
+              {
+                id: "f1",
+                name: "Admin",
+                item: [
+                  {
+                    id: "r2",
+                    name: "Create",
+                    request: { method: "POST", url: "https://example.test/orders" },
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      if (path === "/collections/c1")
+        return Response.json({
+          collection: {
+            info: {
+              schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            },
+            item: [{ id: "r1", name: "List", request: { method: remoteMethod, url: remoteUrl } }],
+          },
+        })
+      if (path === "/collections/c1/requests/r1" && init?.method === "PUT") {
+        pushes += 1
+        const changes = JSON.parse(String(init.body)) as { method?: string; url?: string }
+        if (changes.method) remoteMethod = changes.method
+        if (changes.url) remoteUrl = changes.url
+        return Response.json({ data: { id: "r1" } })
+      }
+      if (path === "/environments/e1")
+        return Response.json({
+          environment: {
+            name: "Stage",
+            values: [{ key: "baseUrl", value: "https://stage.example.test" }],
+          },
+        })
+      if (path === "/workspaces/w1/global-variables") return Response.json({ values: [] })
+      return new Response(null, { status: 404 })
+    }) as typeof fetch
+    try {
+      await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await click("http-source-postman-card")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
+      )
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-environment")))
+      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-postman-modal")
+      expect(
+        tui.renderer.root.findDescendantById("http-postman-environment")?.width,
+      ).toBeGreaterThan(0)
+      await key("e")
+      await settle(() => tui?.captureCharFrame().includes("[E] Stage") ?? false)
+      const environmentButton = tui.renderer.root.findDescendantById("http-postman-environment")
+      expect(tui.captureCharFrame().split("\n")[environmentButton?.screenY ?? 0]).toContain("Stage")
+      expect(tui.captureCharFrame()).toContain("[E] Stage")
+      await enter()
+      await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
+      expect(await readFile(resolve(root, "postman/users.http"), "utf8")).toContain(
+        "GET {{baseUrl}}/users",
+      )
+      expect(await readFile(resolve(root, "postman/orders.http"), "utf8")).toContain(
+        "POST https://example.test/orders",
+      )
+      expect(await readFile(resolve(root, "http-client.private.env.json"), "utf8")).not.toContain(
+        "stage.example.test",
+      )
+      await settle(() => tui?.captureCharFrame().includes("[E] Postman · Orders · Stage") ?? false)
+      expect(
+        tui?.renderer.root.findDescendantById("http-collection-directory-postman"),
+      ).toBeUndefined()
+      expect(tui?.captureCharFrame()).toContain("My Workspace")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/orders.http")),
+      )
+      expect(
+        tui?.renderer.root.findDescendantById("http-collection-folder-postman/orders.http:f1"),
+      ).toBeUndefined()
+      await press("http-collection-file-postman/orders.http")
+      const folderId = "http-collection-folder-postman/orders.http:f1"
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(folderId)))
+      const orderRequestId = "http-navigation-project-postman/orders.http#admin-create"
+      expect(tui?.renderer.root.findDescendantById(orderRequestId)).toBeUndefined()
+      await press(folderId)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(orderRequestId)))
+      const coloredMethod = tui
+        .captureSpans()
+        .lines.flatMap((line) => line.spans)
+        .find((span) => span.text.trim() === "POST")
+      expect(coloredMethod?.fg.toInts()).toEqual(RGBA.fromHex("#FFE083").toInts())
+      const requestRow = tui.renderer.root.findDescendantById(orderRequestId)
+      const requestName = tui
+        .captureSpans()
+        .lines[requestRow?.screenY ?? 0]?.spans.find((span) => span.text.includes("Create"))
+      expect(requestName?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.text).toInts())
+      const folderRow = tui.renderer.root.findDescendantById(folderId)
+      const folderName = tui
+        .captureSpans()
+        .lines[folderRow?.screenY ?? 0]?.spans.find((span) => span.text.includes("Admin"))
+      expect(folderName?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+      await press(folderId)
+      expect(tui?.renderer.root.findDescendantById(orderRequestId)).toBeUndefined()
+      await press(folderId)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(orderRequestId)))
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/users.http")),
+      )
+      await click("http-collection-file-postman/users.http")
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById("http-navigation-project-postman/users.http#list"),
+        ),
+      )
+      await click("http-navigation-project-postman/users.http#list")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-push-button")))
+      const urlMethod = tui.renderer.root.findDescendantById("http-method-button")
+      const urlMethodText = tui
+        .captureSpans()
+        .lines[urlMethod?.screenY ?? 0]?.spans.find((span) => span.text.trim() === "GET")
+      expect(urlMethodText?.fg.toInts()).toEqual(RGBA.fromHex("#9DDEB9").toInts())
+      await key("m")
+      await key("s", true)
+      await settle(() => pushes === 1)
+      expect(remoteUrl).toBe("{{baseUrl}}/usersm")
+      await settle(() => tui?.captureCharFrame().includes("REQUEST SALVO NO POSTMAN") ?? false)
+      await click("http-postman-push-button")
+      await settle(() => tui?.captureCharFrame().includes("SEM ALTERAÇÕES PARA ENVIAR") ?? false)
+      await key("p", true)
+      await settle(() => tui?.captureCharFrame().includes("SEM ALTERAÇÕES PARA ENVIAR") ?? false)
+      expect(pushes).toBe(1)
+      remoteUrl = "https://changed-elsewhere.test/users"
+      await click("http-url-input")
+      await key("x")
+      await key("s", true)
+      await settle(() => tui?.captureCharFrame().includes("SALVO LOCALMENTE") ?? false)
+      expect(pushes).toBe(1)
+      expect(await readFile(resolve(root, "postman/users.http"), "utf8")).toContain("usersmx")
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(resolve(root, "postman"), { recursive: true, force: true })
+      await rm(resolve(root, "http-client.private.env.json"), { force: true })
+    }
+  })
+
+  test("hides repeated Postman requests when their folder or collection closes", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname
+      if (path === "/workspaces")
+        return Response.json({ workspaces: [{ id: "w1", name: "Repeated Workspace" }], meta: {} })
+      if (path === "/collections")
+        return Response.json({ collections: [{ id: "c1", name: "Repeated" }], meta: { total: 1 } })
+      if (path === "/collections/c1")
+        return Response.json({
+          collection: {
+            info: {
+              schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            },
+            item: [
+              {
+                id: "f1",
+                name: "Folder",
+                item: [
+                  {
+                    id: "f2",
+                    name: "Nested",
+                    item: Array.from({ length: 20 }, (_, index) => ({
+                      id: `r${index + 1}`,
+                      name: "New Request",
+                      request: { method: "GET", url: `https://example.test/${index + 1}` },
+                    })),
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      if (path === "/workspaces/w1/global-variables") return Response.json({ values: [] })
+      return new Response(null, { status: 404 })
+    }) as typeof fetch
+    try {
+      await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+      tui = await testRender(<HttpClient active />, { width: 100, height: 32 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await click("http-source-postman-card")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
+      )
+      await enter()
+      const fileId = "http-collection-file-postman/repeated.http"
+      const folderId = "http-collection-folder-postman/repeated.http:f1"
+      const nestedId = "http-collection-folder-postman/repeated.http:f2"
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(fileId)))
+      expect(tui?.renderer.root.findDescendantById(folderId)).toBeUndefined()
+      expect(tui.captureCharFrame()).not.toContain("GET New R")
+      await press(fileId)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(folderId)))
+      expect(tui?.renderer.root.findDescendantById(nestedId)).toBeUndefined()
+      await press(folderId)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(nestedId)))
+      expect(tui.captureCharFrame()).not.toContain("GET New R")
+      await press(nestedId)
+      await settle(() => tui?.captureCharFrame().includes("GET New R") ?? false)
+      await press(nestedId)
+      await settle(() => !(tui?.captureCharFrame().includes("GET New R") ?? true))
+      expect(tui.captureCharFrame()).toContain("▸ Nest")
+      await press(nestedId)
+      await settle(() => tui?.captureCharFrame().includes("GET New R") ?? false)
+      await press(fileId)
+      await settle(() => !(tui?.captureCharFrame().includes("GET New R") ?? true))
+      expect(tui.captureCharFrame()).toContain("▸ repeated")
+      await press(fileId)
+      await settle(() => tui?.captureCharFrame().includes("GET New R") ?? false)
+      const file = parseHttpFile(
+        await readFile(resolve(root, "postman/repeated.http"), "utf8"),
+        "postman/repeated.http",
+      )
+      expect(new Set(file.requests.map((block) => block.blockId)).size).toBe(20)
+      await openCollectionHelp()
+      await press("http-postman-open")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-modal")))
+      await enter()
+      await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
+      expect(tui?.renderer.root.findDescendantById(folderId)).toBeUndefined()
+      expect(tui.captureCharFrame()).not.toContain("GET New R")
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(resolve(root, "postman"), { recursive: true, force: true })
+    }
+  })
+
+  test("clears request rows while closing many Postman collections", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const originalFetch = globalThis.fetch
+    const collections = Array.from({ length: 15 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Collection${String(index).padStart(2, "0")}`,
+    }))
+    const requestCounts = [35, 1, 11, 1, 28, 18, 4, 0, 2, 42, 4, 96, 97, 8, 11]
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname
+      if (path === "/workspaces")
+        return Response.json({ workspaces: [{ id: "w1", name: "Many Collections" }], meta: {} })
+      if (path === "/collections")
+        return Response.json({ collections, meta: { total: collections.length } })
+      if (path === "/workspaces/w1/global-variables") return Response.json({ values: [] })
+      const match = path.match(/^\/collections\/c(\d+)$/)
+      if (match) {
+        const index = Number(match[1])
+        return Response.json({
+          collection: {
+            info: {
+              schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            },
+            item: Array.from({ length: requestCounts[index] ?? 0 }, (_, requestIndex) => ({
+              id: `r${index}-${requestIndex}`,
+              name: "New Request",
+              request: { method: "GET", url: `https://example.test/${index}/${requestIndex}` },
+            })),
+          },
+        })
+      }
+      return new Response(null, { status: 404 })
+    }) as typeof fetch
+    try {
+      await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+      tui = await testRender(<HttpClient active />, { width: 100, height: 32 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await click("http-source-postman-card")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
+      )
+      await enter()
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById("http-collection-file-postman/collection14.http"),
+        ),
+      )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
+      const scroll = tui.renderer.root.findDescendantById(
+        "http-collection-scroll",
+      ) as ScrollBoxRenderable
+      expect(scroll.viewportCulling).toBe(false)
+      expect(tui.captureCharFrame()).toContain("▸ collecti")
+      expect(tui.captureCharFrame()).not.toContain("GET New Req")
+      for (const collection of collections) {
+        const id = `http-collection-file-postman/${collection.name.toLowerCase()}.http`
+        await press(id)
+        await press(id)
+      }
+      await settle(() => !(tui?.captureCharFrame().includes("GET New Req") ?? true))
+      expect(tui.captureCharFrame()).toContain("▸ collecti")
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(resolve(root, "postman"), { recursive: true, force: true })
+    }
+  })
+
+  test("chooses a Postman workspace when creating a collection and creates its request remotely", async () => {
+    const root = process.env.TUIMINAL_HTTP_HOME ?? ""
+    const postmanDirectory = resolve(root, "postman")
+    const postmanDirectoryExisted = await stat(postmanDirectory).then(
+      () => true,
+      () => false,
+    )
+    const originalFetch = globalThis.fetch
+    const collectionName = `Remote${Date.now()}`
+    const remote = {
+      info: {
+        name: collectionName,
+        schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      },
+      item: [] as Array<
+        | { id: string; name: string; request: { method: string; url: string } }
+        | {
+            id: string
+            name: string
+            item: Array<{ id: string; name: string; request: { method: string; url: string } }>
+          }
+      >,
+    }
+    const writes: string[] = []
+    let requestIndex = 0
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input))
+      if (url.pathname === "/workspaces")
+        return Response.json({
+          workspaces: [
+            { id: "w1", name: "First" },
+            { id: "w2", name: "Second" },
+          ],
+          meta: {},
+        })
+      if (url.pathname === "/collections" && init?.method === "POST") {
+        writes.push(`collection:${url.searchParams.get("workspace")}`)
+        return Response.json({ collection: { id: "c1" } })
+      }
+      if (url.pathname === "/collections/c1" && init?.method === "GET")
+        return Response.json({ collection: structuredClone(remote) })
+      if (url.pathname === "/collections/c1/folders" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { name: string }
+        writes.push(`folder:${body.name}`)
+        remote.item.push({ id: "f1", name: body.name, item: [] })
+        return Response.json({ data: { id: "f1" } })
+      }
+      if (url.pathname === "/collections/c1/requests" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { name: string; method: string; url: string }
+        const folderId = url.searchParams.get("folder")
+        writes.push(`request:${body.name}:${folderId ?? "root"}`)
+        const target = folderId
+          ? remote.item.find((item) => item.id === folderId && "item" in item)
+          : null
+        const destination = target && "item" in target ? target.item : remote.item
+        const id = `r${++requestIndex}`
+        destination.push({
+          id,
+          name: body.name,
+          request: { method: body.method, url: body.url },
+        })
+        return Response.json({ data: { id } })
+      }
+      if (url.pathname.startsWith("/collections/c1/requests/") && init?.method === "PUT") {
+        const id = url.pathname.split("/").at(-1)
+        const changes = JSON.parse(String(init.body)) as { url?: string; method?: string }
+        const request = remote.item
+          .flatMap((item) => ("item" in item ? item.item : [item]))
+          .find((item) => item.id === id)
+        if (!request) return new Response(null, { status: 404 })
+        Object.assign(request.request, changes)
+        writes.push(`update:${id}`)
+        return Response.json({ data: { id } })
+      }
+      return new Response(null, { status: 404 })
+    }) as typeof fetch
+    try {
+      await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
+      tui = await testRender(<HttpClient active />, { width: 130, height: 36 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await click("http-source-postman-card")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
+      )
+      await key("ESCAPE")
+      await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
+      await openCollectionHelp()
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-create")))
+      await click("http-collection-create")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText(collectionName)
+        await tui?.renderOnce()
+      })
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-workspace-next")),
+      )
+      expect(tui?.renderer.currentFocusedRenderable?.id).toBe("http-collection-name-input")
+      await key("ARROW_DOWN")
+      await settle(() => tui?.captureCharFrame().includes("Second") ?? false)
+      await enter()
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-collection-file-postman/${collectionName}.http`,
+          ),
+        ),
+      )
+      expect(writes).toContain("collection:w2")
+      expect(
+        JSON.parse(
+          await readFile(resolve(root, `postman/${collectionName}.http.postman.json`), "utf8"),
+        ).workspaceId,
+      ).toBe("w2")
+      await click(`http-collection-file-postman/${collectionName}.http`)
+      await click("http-request-create")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("List")
+        await tui?.renderOnce()
+      })
+      await enter()
+      await settle(() =>
+        Boolean(
+          tui?.renderer.root.findDescendantById(
+            `http-navigation-project-postman/${collectionName}.http#list`,
+          ),
+        ),
+      )
+      expect(writes).toContain("request:List:root")
+      await click(`http-collection-file-postman/${collectionName}.http`)
+      await press("http-folder-create")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("People")
+        await tui?.renderOnce()
+      })
+      await enter()
+      const folderRow = `http-collection-folder-postman/${collectionName}.http:f1`
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById(folderRow)))
+      expect(writes).toContain("folder:People")
+      await click(folderRow)
+      await click("http-request-create")
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+      )
+      await act(async () => {
+        tui?.mockInput.typeText("Search")
+        await tui?.renderOnce()
+      })
+      await enter()
+      await settle(() => writes.includes("request:Search:f1"))
+      expect(await readFile(resolve(root, `postman/${collectionName}.http`), "utf8")).toContain(
+        "People / Search",
+      )
+      await key("ESCAPE")
+      await key("n", true)
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await act(async () => {
+        tui?.mockInput.typeText("https://draft.example.test")
+        await tui?.renderOnce()
+      })
+      await key("s", true)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-save-modal")))
+      await key("ARROW_DOWN")
+      await enter()
+      await settle(() => writes.includes("update:r3"))
+      await settle(() => tui?.captureCharFrame().includes("REQUEST SALVO NO POSTMAN") ?? false)
+      expect(writes).toContain("request:Scratch:f1")
+      expect(
+        remote.item
+          .flatMap((item) => ("item" in item ? item.item : [item]))
+          .find((item) => item.id === "r3")?.request.url,
+      ).toBe("https://draft.example.test")
+      expect(await readFile(resolve(root, `postman/${collectionName}.http`), "utf8")).toContain(
+        "https://draft.example.test",
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(resolve(root, `postman/${collectionName}.http`), { force: true })
+      await rm(resolve(root, `postman/${collectionName}.http.postman.json`), { force: true })
+      if (!postmanDirectoryExisted) await rm(postmanDirectory, { recursive: true, force: true })
+    }
+  }, 15_000)
+
   test("manages folders, collections and requests through mouse controls", async () => {
     const root = process.env.TUIMINAL_HTTP_HOME ?? ""
     const folder = `mouse-tree-${Date.now()}`
@@ -811,6 +1395,7 @@ describe("HTTP TUI", () => {
     }
     try {
       tui = await testRender(<HttpClient active />, { width: 160, height: 42 })
+      await openCollectionHelp()
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-folder-create")))
       await click("http-folder-create")
       await settle(
@@ -962,6 +1547,10 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
+      await key("?")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-create")))
+      await key("ESCAPE")
+      expect(tui?.renderer.root.findDescendantById("http-collection-create")).toBeUndefined()
       await key("f")
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-collection-search")
       await act(async () => {
@@ -1002,6 +1591,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       expect(await Bun.file(collectionPath).exists()).toBe(true)
       await key("e")
       await settle(
@@ -1022,6 +1612,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("e")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
@@ -1041,6 +1632,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("n")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
@@ -1088,8 +1680,11 @@ describe("HTTP TUI", () => {
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
+      await key("END")
       await key("d")
-      expect(tui.renderer.root.findDescendantById("http-collection-action-form")).toBeDefined()
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-action-form")),
+      )
       await key("ESCAPE")
       expect(await readFile(collectionPath, "utf8")).toContain("Consultar")
       await key("d")
@@ -1117,6 +1712,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("d")
       await enter()
       await settle(
@@ -1140,6 +1736,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("e")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
@@ -1159,6 +1756,7 @@ describe("HTTP TUI", () => {
             !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
+      await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("d")
       await enter()
       await settle(
@@ -1190,7 +1788,7 @@ describe("HTTP TUI", () => {
     } finally {
       await rm(folderPath, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   test("uses the same global environments while browsing a collection", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
@@ -1656,8 +2254,7 @@ describe("HTTP TUI", () => {
             for (const id of [
               "http-navigation-collection",
               "http-navigation-history",
-              "http-collection-import-button",
-              "http-collection-runner-button",
+              "http-collection-help",
               "http-collection-search-button",
             ]) {
               const target = tui.renderer.root.findDescendantById(id)
@@ -1742,13 +2339,14 @@ describe("HTTP TUI", () => {
     } finally {
       await unlink(matrixPath).catch(() => undefined)
     }
-  })
+  }, 15_000)
 
   test.each(["framed", "compact"] as const)(
     "keeps the import modal border visible in %s layout",
     async (layout) => {
       updateUiSettings({ layout, language: "pt-BR" })
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openCollectionHelp()
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
       )
@@ -1777,6 +2375,7 @@ describe("HTTP TUI", () => {
     await writeFile(sourcePath, fixture)
     try {
       tui = await testRender(<HttpClient active />, { width: 160, height: 40 })
+      await openCollectionHelp()
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
       )
@@ -1840,6 +2439,7 @@ describe("HTTP TUI", () => {
     )
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openCollectionHelp()
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
       )
@@ -1861,9 +2461,11 @@ describe("HTTP TUI", () => {
 
   test("keeps the import path, drop area and action visible in a short terminal", async () => {
     tui = await testRender(<HttpClient active />, { width: 56, height: 18 })
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-navigation-collection")))
     await press("http-navigation-collection")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-pane-collection")))
-    await click("http-collection-import-button")
+    await openCollectionHelp()
+    await press("http-collection-import-button")
     await settle(() =>
       Boolean(tui?.renderer.root.findDescendantById("http-collection-import-modal")),
     )
@@ -1883,6 +2485,7 @@ describe("HTTP TUI", () => {
     await writeFile(sourcePath, "{}")
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openCollectionHelp()
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
       )

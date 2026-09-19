@@ -155,8 +155,10 @@ export async function saveHttpRequest(root: string, request: HttpRequestDefiniti
   const nextSource = replaceHttpRequestBlock(file, block, request)
   await writeAtomic(root, absolutePath, nextSource, requestSource.sourceHash)
   const nextFile = parseHttpFile(nextSource, requestSource.path)
-  const nextBlock = nextFile.requests.find((candidate) => candidate.name === request.name)
-  if (!nextBlock) throw new HttpCollectionConflictError("O request salvo não pôde ser relido.")
+  const nextBlock = nextFile.requests[file.requests.indexOf(block)]
+  if (!nextBlock || nextBlock.name !== request.name) {
+    throw new HttpCollectionConflictError("O request salvo não pôde ser relido.")
+  }
   return requestFromHttpFile(nextFile, nextBlock)
 }
 
@@ -194,10 +196,14 @@ function sourceWithoutBlock(source: string, block: { start: number; end: number 
   return `${source.slice(0, block.start)}${source.slice(block.end)}`.replace(/^\s+$/g, "")
 }
 
-export async function deleteHttpRequest(root: string, request: HttpRequestDefinition) {
+export async function deleteHttpRequest(
+  root: string,
+  request: HttpRequestDefinition,
+  options: { preserveEmpty?: boolean } = {},
+) {
   const current = await currentRequestBlock(root, request)
   const nextSource = sourceWithoutBlock(current.source, current.block)
-  if (nextSource.trim()) {
+  if (nextSource.trim() || options.preserveEmpty) {
     await writeAtomic(root, current.absolutePath, nextSource, current.sourceHash)
   } else {
     await removeSafeProjectFile(

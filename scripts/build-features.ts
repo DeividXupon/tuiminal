@@ -14,7 +14,11 @@ import { assertWorkspaceVersions, workspaceRoot } from "./workspace-model"
 
 const extraEntrypoints: Partial<Record<FeatureId, Record<string, string>>> = {
   database: { "sqlite-worker.mjs": "drivers/sqlite-query-process.ts" },
-  http: { "http-run.mjs": "cli/run.ts", "http-import.mjs": "cli/import.ts" },
+  http: {
+    "http-run.mjs": "cli/run.ts",
+    "http-import.mjs": "cli/import.ts",
+    "http-postman.mjs": "cli/postman.ts",
+  },
 }
 
 export async function buildFeaturePayloads(outputDirectory?: string) {
