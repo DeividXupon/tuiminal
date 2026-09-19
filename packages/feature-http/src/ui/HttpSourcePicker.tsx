@@ -34,7 +34,7 @@ export function HttpSourcePicker({
       id="http-source-picker"
       style={{
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.outerPadding,
         justifyContent: "center",
         alignItems: "center",

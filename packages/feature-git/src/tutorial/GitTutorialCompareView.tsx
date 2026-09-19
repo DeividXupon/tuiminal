@@ -190,7 +190,7 @@ export function GitTutorialCompareView({
       style={{
         position: "relative",
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
       }}

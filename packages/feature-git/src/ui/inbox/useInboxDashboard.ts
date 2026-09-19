@@ -4,6 +4,7 @@ import { resolveGitProjectScope } from "../../services/git"
 import { GitHubAuthenticationRequiredError } from "../../services/github/auth"
 import { InboxSession, type InboxSessionResult } from "../../services/inbox-session"
 import { type GhTransportOptions, GitHubTransportError } from "../../services/github/transport"
+import { useGitHubNavigationReport } from "../GitNavigationContext"
 
 export type InboxDashboardState =
   | { status: "demo" }
@@ -44,6 +45,7 @@ export function useInboxDashboard(active: boolean, configurationRevision = 0) {
   const subjectItems = state.status === "ready" ? state.items : null
   const subjectHost = state.status === "ready" ? state.host : null
   const loadedConfigurationRevisionRef = useRef(configurationRevision)
+  useGitHubNavigationReport("inbox", active, state, configurationRevision)
 
   const load = useCallback(
     async (force = false) => {

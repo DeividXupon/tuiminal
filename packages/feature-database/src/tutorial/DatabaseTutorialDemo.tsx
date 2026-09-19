@@ -87,15 +87,15 @@ export function DatabaseTutorialDemo() {
       ? (["id", "name", "role"] as const)
       : (["id", "name", "email", "role", "active"] as const)
   const noop = () => {}
-
   return (
     <box
+      id="database-workspace"
       style={{
         flexGrow: 1,
         flexDirection: "row",
         padding: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
       }}
     >
       <box

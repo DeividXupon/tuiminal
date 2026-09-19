@@ -17,6 +17,42 @@ its keyboard scope, focus stack, data, and side effects.
 - Every visible keyboard action should have a mouse-accessible control where
   practical. Do not style logs, code, query results, or user data as shortcuts.
 
+## Text selection and clipboard
+
+`SelectionClipboard` wraps the application in both full and isolated modes. Drag
+with the primary mouse button to select native text, then press the secondary
+button to copy the exact selection through the renderer's OSC52 clipboard. Empty
+selections and a drag still in progress do nothing. A successful local write clears
+the selection and shows a notification; a rejected or throwing write keeps it for
+retry. This does not install a keyboard handler or change `[Ctrl+C]` ownership.
+Child controls that consume a mouse event retain ownership, including embedded
+terminal programs using mouse reporting. Password inputs expose only mask characters
+through their native selection API, never their underlying value.
+
+## Workspace surfaces
+
+Top-level application, feature, installer, loading, and tutorial workspaces use
+`LAYOUT.workspaceBackground`. It resolves to `COLORS.panel` in framed mode so outer
+padding and gaps match the bordered panels, and to `COLORS.canvas` in compact mode.
+Internal editor, code, log, input, dimmer, and raised-panel surfaces keep their
+explicit palette colors because those contrasts communicate structure or state.
+
+## Notifications
+
+`NotificationProvider` owns one top-right stack of at most three non-focusable
+cards. Cards always use the compact four-row geometry: a single semantic left rail,
+one header row, two message rows, and a thin `─` countdown line at the bottom. The layout does not
+change between framed and compact workspaces. Information uses `BRAND_COLOR`, while
+success, warning, and error use their palette semantic colors.
+
+Every card has a finite lifetime, with errors lasting longest. The provider retains
+the card during its horizontal entrance and exit animation. Hovering anywhere in
+the visible stack pauses every retained dwell timer and freezes all countdown lines;
+leaving resumes them from their remaining time. The mouse `×` starts the same exit
+animation without taking keyboard focus. Timers are created only for cards retained
+after deduplication and the three-card limit, and every dwell, exit, and frame timer
+is released when its card or provider disappears.
+
 ## Modal surfaces
 
 - `ModalSurface` owns only the centered rounded dialog, dimmer, z-order, and an

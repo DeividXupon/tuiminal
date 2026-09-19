@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { loadPostmanAccount } from "../postman/account"
 import type { HttpSourceMode } from "../model/source-mode"
 import { HttpSourcePicker } from "./HttpSourcePicker"
@@ -47,7 +47,7 @@ export function HttpSourceClient({
       setChecking(false)
     }
   }
-  if (checking) return <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }} />
+  if (checking) return <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }} />
   if (!source && postmanConnected) return <HttpSourcePicker active={active} onSelect={setSource} />
   if (!source) return null
   return children(source, () => void chooseSource())

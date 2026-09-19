@@ -638,9 +638,10 @@ export function FreeTerminal({ active }: { active: boolean }) {
 
   return (
     <box
+      id="terminal-workspace"
       style={{
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
       }}
     >
       <box

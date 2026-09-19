@@ -1,10 +1,5 @@
-import {
-  COLORS,
-  focusedPanelBorder,
-  LAYOUT,
-  panelBorder,
-} from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
@@ -14,9 +9,9 @@ import type { PullRequestComment, PullRequestPreviewTab } from "../../model/pr/t
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { DashboardStatePanel } from "./DashboardStatePanel"
 import { PreviewPane } from "./PreviewPane"
+import { PullRequestDashboardHeader } from "./PullRequestDashboardHeader"
 import { PullRequestList } from "./PullRequestList"
 import type { PullRequestDashboardPresentation } from "./presentation"
-import { SectionStrip } from "./SectionStrip"
 import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
 
@@ -178,6 +173,7 @@ export function PullRequestDashboardView({
   previewTab,
   listWidth,
   previewWidth,
+  terminalWidth,
   details,
   previewScrollOffset,
   descriptionExpanded,
@@ -225,84 +221,38 @@ export function PullRequestDashboardView({
   refreshing: boolean
   onRetry: () => void
   onLoadMore: () => void
+  terminalWidth: number
   previewPosition: PullRequestPreviewConfig["position"]
   previewVisible: boolean
   onCyclePreviewPosition: () => void
   onTogglePreview: () => void
 }) {
+  const background = LAYOUT.workspaceBackground
   return (
     <box
+      id="git-pr-dashboard"
       style={{
         position: "relative",
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: background,
         padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        gap: 0,
       }}
     >
-      <box
-        style={{
-          ...panelBorder(),
-          backgroundColor: COLORS.panel,
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <text content={translateUi(presentation.title)} style={{ fg: COLORS.git }} />
-        <text
-          content={`${translateUi(presentation.meta)}${refreshing ? ` · ${translateUi("ATUALIZANDO TODAS AS SEÇÕES…")}` : ""}`}
-          style={{ fg: dashboard.status === "demo" ? COLORS.warning : COLORS.muted }}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        {canCreate ? (
-          <InlineButton
-            id="git-pr-create"
-            label={translateUi("[Ctrl+N] Criar PR")}
-            accent={COLORS.git}
-            onPress={onCreate}
-          />
-        ) : null}
-        <InlineButton
-          id="git-pr-toggle-preview"
-          label={`[P] ${translateUi("Prévia")}: ${translateUi(previewVisible ? "visível" : "oculta")}`}
-          accent={COLORS.git}
-          onPress={onTogglePreview}
-        />
-        <InlineButton
-          id="git-pr-preview-position"
-          label={`[Shift+P] ${translateUi("Posição")}: ${translateUi(previewPosition)}`}
-          accent={COLORS.git}
-          onPress={onCyclePreviewPosition}
-        />
-      </box>
-      <SectionStrip
-        sections={presentation.sections}
-        activeIndex={presentation.sections.indexOf(presentation.section)}
-        counts={presentation.counts}
-        onSelect={onSelectSection}
+      <PullRequestDashboardHeader
+        presentation={presentation}
+        terminalWidth={terminalWidth}
+        refreshing={refreshing}
+        demo={dashboard.status === "demo"}
+        canCreate={canCreate}
+        previewVisible={previewVisible}
+        previewPosition={previewPosition}
+        onCreate={onCreate}
+        onSelectSection={onSelectSection}
+        onEditQuery={onEditQuery}
+        onTogglePreview={onTogglePreview}
+        onCyclePreviewPosition={onCyclePreviewPosition}
       />
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        <InlineButton
-          id="git-pr-query"
-          label={`[/] ${presentation.section.query}`}
-          accent={COLORS.git}
-          onPress={onEditQuery}
-        />
-        <text content={translateUi(presentation.scope)} style={{ fg: COLORS.muted }} />
-      </box>
       {presentation.showDashboard ? (
         <DashboardPanels
           presentation={presentation}
@@ -344,7 +294,7 @@ export function PullRequestDashboardView({
         active={dashboard.status === "loading" || dashboard.status === "idle"}
         label="CARREGANDO GITHUB…"
         accent={COLORS.git}
-        background={COLORS.canvas}
+        background={background}
       />
       {dashboard.status === "ready" && dashboard.hasNextPage ? (
         <InlineButton

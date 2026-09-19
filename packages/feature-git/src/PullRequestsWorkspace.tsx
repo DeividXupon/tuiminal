@@ -338,6 +338,7 @@ export function PullRequestsWorkspace({
         previewTab={previewTab}
         listWidth={listWidth}
         previewWidth={previewWidth}
+        terminalWidth={terminal.width}
         notice={notice}
         details={details}
         previewScrollOffset={previewOffsets[previewTab]}

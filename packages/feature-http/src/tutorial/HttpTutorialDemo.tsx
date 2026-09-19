@@ -32,7 +32,10 @@ export function HttpTutorialDemo() {
   )
 
   return (
-    <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas, gap: LAYOUT.gap }}>
+    <box
+      id="http-workspace"
+      style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground, gap: LAYOUT.gap }}
+    >
       <box
         id="tutorial-http-documents"
         style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: COLORS.panel }}

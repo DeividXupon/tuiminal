@@ -500,10 +500,11 @@ export function GitBaseWorkspace({
   })
   return (
     <box
+      id="git-diffs-workspace"
       style={{
         position: "relative",
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
       }}

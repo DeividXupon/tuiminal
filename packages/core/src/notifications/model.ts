@@ -13,10 +13,16 @@ export type AppNotification = Required<Pick<NotificationInput, "source" | "messa
   kind: NotificationKind
   title?: string
   createdAt: number
-  durationMs: number | null
+  durationMs: number
 }
 
 export const APP_NOTIFICATION_LIMIT = 3
+export const NOTIFICATION_ANIMATION_TIMING = {
+  enterMs: 180,
+  exitMs: 180,
+  frameMs: 40,
+  slideColumns: 5,
+} as const
 
 const ERROR_TERMS =
   /(^|\W)(erro|error|falha|failed|failure|inválid|invalid|unable|denied|recusad|não foi possível|não pôde|não pode concluir|não conect|not found|não encontrado)(\W|$)/i
@@ -35,10 +41,47 @@ export function inferNotificationKind(message: string): NotificationKind {
 }
 
 export function defaultNotificationDuration(kind: NotificationKind) {
-  if (kind === "error") return null
+  if (kind === "error") return 10_000
   if (kind === "warning") return 7_000
   if (kind === "success") return 4_500
   return 4_000
+}
+
+export function resolveNotificationDuration(
+  kind: NotificationKind,
+  requested: number | null | undefined,
+) {
+  return typeof requested === "number" && Number.isFinite(requested) && requested > 0
+    ? requested
+    : defaultNotificationDuration(kind)
+}
+
+function clamp(value: number) {
+  return Math.max(0, Math.min(1, value))
+}
+
+export function notificationProgress(remainingMs: number, durationMs: number) {
+  return clamp(remainingMs / Math.max(1, durationMs))
+}
+
+export function notificationAnimationFrame(
+  createdAt: number,
+  dismissStartedAt: number | null,
+  now: number,
+) {
+  if (dismissStartedAt !== null) {
+    const progress = clamp((now - dismissStartedAt) / NOTIFICATION_ANIMATION_TIMING.exitMs)
+    return {
+      opacity: 1 - progress,
+      offset: Math.round(progress * NOTIFICATION_ANIMATION_TIMING.slideColumns),
+    }
+  }
+  const progress = clamp((now - createdAt) / NOTIFICATION_ANIMATION_TIMING.enterMs)
+  const eased = 1 - (1 - progress) ** 3
+  return {
+    opacity: eased,
+    offset: Math.round((1 - eased) * NOTIFICATION_ANIMATION_TIMING.slideColumns),
+  }
 }
 
 export function appendNotification(

@@ -1,5 +1,6 @@
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
+import { RGBA, type BoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { createServer } from "node:http"
@@ -11,7 +12,9 @@ import {
   useNotifications,
   type NotificationInput,
 } from "../../packages/core/src/notifications/index"
-import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { NOTIFICATION_ANIMATION_TIMING } from "../../packages/core/src/notifications/model"
+import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 import { App } from "../../apps/cli/src/App"
 import { HttpClient } from "../../packages/feature-http/src"
 import { DatabaseConnectionModal } from "../../packages/feature-database/src/ui/DatabaseConnectionModal"
@@ -61,7 +64,7 @@ async function renderNotifications(
   )
   const input = tui.renderer.root.findDescendantById("notification-focus-owner")
   act(() => input?.focus())
-  await act(async () => Bun.sleep(10))
+  await act(async () => Bun.sleep(NOTIFICATION_ANIMATION_TIMING.enterMs + 40))
   await tui.renderOnce()
 }
 
@@ -109,10 +112,10 @@ afterEach(() => {
 
 test("floating stack presents every severity, caps at three and never steals focus", async () => {
   await renderNotifications([
-    { source: "Banco", kind: "info", message: "Primeira mensagem", durationMs: null },
-    { source: "Git", kind: "success", message: "Operação concluída", durationMs: null },
-    { source: "Runner", kind: "warning", message: "Health check expirou", durationMs: null },
-    { source: "HTTP", kind: "error", message: "Conexão recusada", durationMs: null },
+    { source: "Banco", kind: "info", message: "Primeira mensagem" },
+    { source: "Git", kind: "success", message: "Operação concluída" },
+    { source: "Runner", kind: "warning", message: "Health check expirou" },
+    { source: "HTTP", kind: "error", message: "Conexão recusada" },
   ])
 
   const frame = tui?.captureCharFrame() ?? ""
@@ -123,11 +126,12 @@ test("floating stack presents every severity, caps at three and never steals foc
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("notification-focus-owner")
 
   await click("app-notification-dismiss-1")
-  expect(tui?.captureCharFrame()).not.toContain("Health check expirou")
+  expect(tui?.captureCharFrame()).toContain("Health check expirou")
+  await settle(() => !(tui?.captureCharFrame().includes("Health check expirou") ?? true))
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("notification-focus-owner")
 })
 
-test("transient notification closes automatically while an error remains", async () => {
+test("a notification animates away while a longer error remains", async () => {
   const originalSetTimeout = globalThis.setTimeout
   const expirations: Array<() => void> = []
   const schedule = spyOn(globalThis, "setTimeout").mockImplementation(
@@ -144,23 +148,93 @@ test("transient notification closes automatically while an error remains", async
   try {
     await renderNotifications([
       { source: "Git", kind: "success", message: "Salvo", durationMs: 1_000_000 },
-      { source: "HTTP", kind: "error", message: "Falha persistente", durationMs: null },
+      { source: "HTTP", kind: "error", message: "Falha de conexão" },
     ])
     expect(tui?.captureCharFrame()).toContain("Salvo")
-    expect(tui?.captureCharFrame()).toContain("Falha persistente")
+    expect(tui?.captureCharFrame()).toContain("Falha de conexão")
     expect(expirations).toHaveLength(1)
 
     // Deliver the actual scheduled expiration after the first rendered frame,
     // without making rendering race a 25 ms wall-clock lifetime in CI.
-    act(() => expirations[0]!())
-    await tui?.renderOnce()
+    act(() => expirations[0]?.())
+    await settle(() => !(tui?.captureCharFrame().includes("Salvo") ?? true))
     expect(tui?.captureCharFrame()).not.toContain("Salvo")
-    expect(tui?.captureCharFrame()).toContain("Falha persistente")
+    expect(tui?.captureCharFrame()).toContain("Falha de conexão")
   } finally {
     act(() => tui?.renderer.destroy())
     tui = undefined
     schedule.mockRestore()
   }
+})
+
+for (const layout of ["framed", "compact"] as const) {
+  test(`notification cards keep the compact top layout and semantic colors in ${layout}`, async () => {
+    updateUiSettings({ layout, language: "pt-BR" })
+    await renderNotifications([
+      { source: "Sistema", kind: "info", message: "Informação disponível" },
+      { source: "Git", kind: "success", message: "Operação concluída" },
+      { source: "HTTP", kind: "error", message: "Conexão recusada" },
+    ])
+
+    const stack = tui?.renderer.root.findDescendantById(
+      "app-notification-stack",
+    ) as BoxRenderable | null
+    expect(stack?.screenY).toBe(1)
+    expect(stack?.height).toBe(12)
+    for (let index = 0; index < 3; index += 1) {
+      const card = tui?.renderer.root.findDescendantById(
+        `app-notification-${index}`,
+      ) as BoxRenderable | null
+      expect(card?.height).toBe(4)
+      expect(card?.border).toEqual(["left"])
+      expect(card?.borderStyle).toBe("rounded")
+      expect(card?.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
+      expect(
+        tui?.renderer.root.findDescendantById(`app-notification-progress-${index}`),
+      ).toBeDefined()
+    }
+
+    const spans = tui?.captureSpans().lines.flatMap((line) => line.spans) ?? []
+    const colorOf = (text: string) => spans.find((span) => span.text.includes(text))?.fg.toInts()
+    expect(colorOf("INFORMAÇÃO · Sistema")).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+    expect(colorOf("SUCESSO · Git")).toEqual(RGBA.fromHex(COLORS.success).toInts())
+    expect(colorOf("ERRO · HTTP")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
+  })
+}
+
+test("hovering one card pauses and resumes every countdown and progress bar", async () => {
+  await renderNotifications([
+    { source: "Git", kind: "success", message: "Primeiro timer", durationMs: 700 },
+    { source: "HTTP", kind: "info", message: "Segundo timer", durationMs: 700 },
+  ])
+
+  const card = tui?.renderer.root.findDescendantById("app-notification-0")
+  const progressBefore = [0, 1].map(
+    (index) => tui?.renderer.root.findDescendantById(`app-notification-progress-${index}`)?.width,
+  )
+  await act(async () => {
+    await tui?.mockMouse.moveTo((card?.screenX ?? 0) + 2, (card?.screenY ?? 0) + 1)
+  })
+  await tui?.renderOnce()
+  const progressWhenPaused = [0, 1].map(
+    (index) => tui?.renderer.root.findDescendantById(`app-notification-progress-${index}`)?.width,
+  )
+  expect(progressWhenPaused[0]).toBeLessThanOrEqual(progressBefore[0] ?? 0)
+  expect(progressWhenPaused[1]).toBeLessThanOrEqual(progressBefore[1] ?? 0)
+  await act(async () => Bun.sleep(300))
+  await tui?.renderOnce()
+  const progressWhilePaused = [0, 1].map(
+    (index) => tui?.renderer.root.findDescendantById(`app-notification-progress-${index}`)?.width,
+  )
+  expect(progressWhilePaused).toEqual(progressWhenPaused)
+  expect(tui?.captureCharFrame()).toContain("Primeiro timer")
+  expect(tui?.captureCharFrame()).toContain("Segundo timer")
+
+  await act(async () => {
+    await tui?.mockMouse.moveTo(0, 31)
+  })
+  await settle(() => !(tui?.captureCharFrame().includes("Primeiro timer") ?? true))
+  expect(tui?.captureCharFrame()).not.toContain("Segundo timer")
 })
 
 test("notification bursts schedule timers only for retained cards and release them on unmount", async () => {
@@ -216,7 +290,14 @@ test("notification bursts schedule timers only for retained cards and release th
     expect(scheduled).toBe(6)
     expect(retainedTimers.size).toBe(3)
     expect(firstTimers.every((timer) => !retainedTimers.has(timer))).toBe(true)
+    await act(async () => Bun.sleep(NOTIFICATION_ANIMATION_TIMING.enterMs + 40))
+    await tui?.renderOnce()
     await click("app-notification-dismiss-1")
+    expect(retainedTimers.size).toBe(0)
+    await act(async () => {
+      await tui?.mockMouse.moveTo(0, 31)
+    })
+    await tui?.renderOnce()
     expect(retainedTimers.size).toBe(2)
     act(() => tui?.renderer.destroy())
     tui = undefined
@@ -234,8 +315,8 @@ test("compact narrow viewport shows only the newest card within terminal bounds"
   updateUiSettings({ layout: "compact" })
   await renderNotifications(
     [
-      { source: "Runner", kind: "warning", message: "Aviso anterior", durationMs: null },
-      { source: "Terminal", kind: "error", message: "Erro mais recente", durationMs: null },
+      { source: "Runner", kind: "warning", message: "Aviso anterior" },
+      { source: "Terminal", kind: "error", message: "Erro mais recente" },
     ],
     { width: 40, height: 18 },
   )
@@ -280,7 +361,7 @@ test("Git PR failures reach the global center", async () => {
   process.env.TUIMINAL_GH_EXECUTABLE = "/does/not/exist/gh"
   delete process.env.TUIMINAL_GIT_PR_DEMO
   tui = await testRender(<App />, { width: 120, height: 30 })
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
   act(() => tui?.mockInput.pressKey("2"))
   await settle(() => tui?.captureCharFrame().includes("ERRO · Git · PR") ?? false)
 })

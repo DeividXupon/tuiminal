@@ -1310,9 +1310,10 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
 
   return (
     <box
+      id="runner-workspace"
       style={{
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         paddingTop: LAYOUT.outerPadding,
         paddingLeft: LAYOUT.outerPadding,
         paddingRight: LAYOUT.outerPadding,

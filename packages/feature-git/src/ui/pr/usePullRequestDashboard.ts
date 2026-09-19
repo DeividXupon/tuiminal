@@ -1,4 +1,5 @@
 import { PullRequestSession, type PullRequestSessionResult } from "../../services/pr-session"
+import { useGitHubNavigationReport } from "../GitNavigationContext"
 import {
   gitDashboardTransportFromEnvironment,
   type GitRemoteDashboardState,
@@ -13,7 +14,7 @@ export function usePullRequestDashboard(
   queryOverride: string | null = null,
   configurationRevision = 0,
 ) {
-  return useGitRemoteDashboard<PullRequestSessionResult>({
+  const dashboard = useGitRemoteDashboard<PullRequestSessionResult>({
     active,
     sectionId,
     queryOverride,
@@ -23,4 +24,6 @@ export function usePullRequestDashboard(
     createSession: () =>
       new PullRequestSession({ transport: gitDashboardTransportFromEnvironment() }),
   })
+  useGitHubNavigationReport("pr", active, dashboard.state, configurationRevision)
+  return dashboard
 }

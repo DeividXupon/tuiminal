@@ -84,6 +84,24 @@ receive shortcut styling. Support all six UI languages.
 
 ## 4. Conceptual wireframes
 
+The shared `GitNavigationHeader` has two source groups, each with a context row and
+an action row. `LOCAL · …/project` follows the independently selected local root;
+`GITHUB · @viewer` uses the active PR, Issues, or Inbox dashboard's authenticated
+identity. Non-default GitHub hosts accompany the account when space permits.
+Before a remote dashboard loads, the account is `—`; returning to Local retains
+the last remote identity. Configuration changes invalidate the displayed identity
+until the relevant dashboard reloads, and authentication/errors clear it. No header
+read initializes a remote tool or calls GitHub. The remote repository scope remains
+in its owning dashboard.
+
+Wide layouts separate the groups with a two-row `│`. Group widths reserve the
+translated action labels; long context text truncates by display width. Below that
+combined minimum, groups stack and action rows wrap, preserving mouse targets.
+The tutorial uses the same header with a fixed project/account fixture and its
+existing target IDs. `[1–4]` and local `[C]` keep their existing behavior.
+`tests/tui/git-navigation-header.test.tsx` covers sources, identity lifecycle,
+resizing, six languages, both layout modes, and mouse controls.
+
 These diagrams use fictional data and are not pixel-for-pixel copies of the official
 images. Final dimensions must be checked in the native renderer.
 
@@ -91,7 +109,8 @@ images. Final dimensions must be checked in the native renderer.
 
 ```text
 ◆ TUIMINAL [Alt+1] Database [Alt+2] Git [Alt+3] Runner [Alt+4] HTTP [Alt+5] Terminal [,] Settings
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox       github.com · @viewer
+LOCAL · …/project           │ GITHUB · @viewer
+[1] [C] DIFFS               │ [2] PR [3] Issues [4] Inbox
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me             Scope: all account projects
 ───────────────────────────────────────────┬──────────────────────────────────
@@ -113,6 +132,11 @@ GIT [1] Diffs [2] PR [3] Issues [4] Inbox       github.com · @viewer
 
 Blank list space represents a short result set, not reserved footer height. Longer
 lists fill all usable rows. Search, titles, and tabs must not reserve empty lines.
+In framed mode, title, controls, query, and panels are adjacent. When every translated
+label fits, section navigation and PR actions share one row; narrower framed screens
+stack those controls without spacer rows. Compact mode retains its existing dense
+four-row header. The framed dashboard surface uses the panel background so padding
+and any space between bordered panels do not introduce a second background color.
 
 Local, comparison, and PR diffs share the code viewport. In the focused pane,
 `[Shift+H/L]` or `[Shift+←/→]` scrolls horizontally; clickable controls occupy a
@@ -123,7 +147,8 @@ leaving the diff or changing the file/layout resets it to the left.
 ### 4.2. Medium terminal — preview below
 
 ```text
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox   github.com · @viewer
+LOCAL · …/project       │ GITHUB · @viewer
+[1] [C] DIFFS           │ [2] PR [3] Issues [4] Inbox
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me
    Repo      PR / Title                          Rev CI
@@ -140,7 +165,10 @@ Description…                     Reviewers and code owners…
 ### 4.3. Narrow/short terminal — one pane at a time
 
 ```text
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox
+LOCAL · …/project
+[1] [C] DIFFS
+GITHUB · @viewer
+[2] PR [3] Issues [4] Inbox
 [A←] Review requested · 4 [F→]
 [/] review-requested:@me
 ▶ #142 Fix cache
@@ -432,7 +460,7 @@ admin bypass and automatic branch deletion are absent.
 
 ### Local Diffs and Compare
 
-`[1] [C] Git · Diffs` uses only an available local repository. The header shows
+`[1] [C] Diffs` uses only an available local repository. The header shows
 project/branch and `[Ctrl+P]` selection; the same control is the first tab in Git
 settings opened with `[,]`. Changing this target does not change remote scope,
 which may include repositories without a local clone.
@@ -490,7 +518,7 @@ offer partial staging.
 
 ### Simulated local tutorial
 
-The first tutorial module fully simulates `[1] Git · Diffs`: local tab, repository/
+The first tutorial module fully simulates `[1] Diffs`: local tab, repository/
 branch, files, mini commit graph, diff, contextual actions, terminal, and shortcuts.
 Dedicated steps demonstrate file/folder staging with `[Space]`, navigation/focus,
 project/branch selection `[Ctrl+P]`, layouts `[V]`, full graph `[G]`, detailed Log `[O]`,

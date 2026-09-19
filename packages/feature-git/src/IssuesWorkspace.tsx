@@ -309,6 +309,7 @@ export function IssuesWorkspace({
     <>
       <IssueDashboardView
         active={active}
+        terminalWidth={terminal.width}
         dashboard={dashboard}
         presentation={presentation}
         layout={layout}

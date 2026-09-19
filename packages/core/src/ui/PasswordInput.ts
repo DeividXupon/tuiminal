@@ -20,6 +20,10 @@ export class PasswordInputRenderable extends InputRenderable {
     super(ctx, inputOptions)
   }
 
+  override getSelectedText() {
+    return "*".repeat([...super.getSelectedText()].length)
+  }
+
   protected override renderSelf(buffer: OptimizedBuffer) {
     super.renderSelf(buffer)
     const maskLength = Math.min([...this.plainText].length, this.width)

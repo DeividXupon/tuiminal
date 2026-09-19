@@ -110,7 +110,7 @@ test("global shortcuts leave Git PR after its local controls have focus", async 
   selectInitialTool("git")
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
   tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
   await key("2")
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("git-pr-query")))
   await key("3", { meta: true })
@@ -121,7 +121,7 @@ test("Diffs opens the local target configuration directly with Ctrl+P", async ()
   selectInitialTool("git")
   updateUiSettings({ layout: "compact", language: "pt-BR" })
   tui = await testRender(<App />, { width: 120, height: 30 })
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
 
   await key("p", { ctrl: true })
   await settle(() => tui?.captureCharFrame().includes("PROJETO LOCAL") ?? false)
@@ -133,7 +133,7 @@ test("Git comparison Escape returns to Diffs without exiting the application", a
   selectInitialTool("git")
   updateUiSettings({ layout: "compact", language: "pt-BR" })
   tui = await testRender(<App />, { width: 120, height: 30 })
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
 
   await key("c")
   await settle(() => tui?.captureCharFrame().includes("BRANCH BASE") ?? false)
@@ -141,7 +141,7 @@ test("Git comparison Escape returns to Diffs without exiting the application", a
   expect(tui.captureCharFrame()).toContain("BRANCH COMPARADA")
 
   await key("ESCAPE")
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
   expect(tui.captureCharFrame()).toContain("TUIMINAL")
 })
 
@@ -210,7 +210,7 @@ test("keeps global listener counts bounded after visiting multiple tools", async
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 
   await key("2", { meta: true })
-  await settle(() => tui?.captureCharFrame().includes("GIT · DIFFS") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
   await key("1", { meta: true })
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "db-connection-name")
 

@@ -6,7 +6,8 @@ Tuiminal's focus, safety, and responsive layout rules.
 ## Anatomy
 
 ```text
-┌ [1] [C] GIT · DIFFS  [2] PR  [3] ISSUES  [4] INBOX ──────────────────────┐
+LOCAL · …/project           │ GITHUB · @viewer
+[1] [C] DIFFS               │ [2] PR  [3] ISSUES  [4] INBOX
 │ ISSUES                                      github.com · @viewer         │
 │ [A←] My Issues 12 [F→]                                                   │
 │ [/] is:open author:@me       ALL PROJECTS · 20/42 · UPDATED              │
@@ -32,6 +33,11 @@ text editable and focused in the same modal for both `[Enter]` and `[Ctrl+S]`.
 Rows reuse formatting while data, width, columns, and language remain unchanged.
 Selection and palette changes do not repeat date conversion and truncation for the
 whole list; colors and click handlers remain current.
+
+In framed mode, title, controls, query, and panels are adjacent on one continuous
+panel-colored surface. Section navigation and actions share one row when all
+translated labels fit; narrower framed screens stack them without spacer rows.
+Compact mode retains its existing four-row header and canvas background.
 
 ## Responsive layouts
 

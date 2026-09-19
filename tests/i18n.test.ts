@@ -2,6 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
 import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "../packages/core/src/i18n/git-configuration-catalog"
+import { GIT_COMPARE_MESSAGES } from "../packages/core/src/i18n/git-compare-catalog"
 import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-catalog"
 import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
 import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
@@ -20,6 +21,29 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates grouped Git navigation in %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const message of GIT_COMPARE_MESSAGES.filter(([key]) =>
+        ["LOCAL", "[C] DIFFS", "[C] COMPARAR"].includes(key),
+      )) {
+        const expected = message[index]
+        if (!expected) throw new Error(`Missing Git navigation translation for ${language}`)
+        expect(translateUi(message[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each([
+    ["pt-BR", "Texto selecionado copiado."],
+    ["en", "Selected text copied."],
+    ["es", "Texto seleccionado copiado."],
+    ["ja", "選択したテキストをコピーしました。"],
+    ["zh-CN", "已复制所选文本。"],
+    ["ko", "선택한 텍스트를 복사했습니다."],
+  ] as const)("translates mouse selection copy feedback into %s", (language, expected) => {
+    expect(translateUi("Texto selecionado copiado.", language)).toBe(expected)
+  })
   test("translates the Postman source chooser and save destination", () => {
     expect(translateUi("ESCOLHA A ORIGEM HTTP", "en")).toBe("CHOOSE HTTP SOURCE")
     expect(translateUi("[L] Abrir local", "ja")).toBe("[L] ローカルを開く")

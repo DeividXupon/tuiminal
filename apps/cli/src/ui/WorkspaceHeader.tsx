@@ -29,7 +29,7 @@ export function WorkspaceHeader({
         alignItems: "center",
         justifyContent: "space-between",
         ...separatorBorder(),
-        backgroundColor: LAYOUT.compact ? COLORS.panel : COLORS.canvas,
+        backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,
       }}

@@ -1,9 +1,4 @@
-import {
-  COLORS,
-  focusedPanelBorder,
-  LAYOUT,
-  panelBorder,
-} from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
@@ -14,7 +9,7 @@ import type { IssueComment, IssuePreviewTab } from "../../model/issue/types"
 import { IssueDashboardStatePanel } from "./IssueDashboardStatePanel"
 import { IssueList } from "./IssueList"
 import { IssuePreviewPane } from "./IssuePreviewPane"
-import { IssueSectionStrip } from "./IssueSectionStrip"
+import { IssueDashboardHeader } from "./IssueDashboardHeader"
 import type { IssueDashboardPresentation } from "./presentation"
 import type { IssueDashboardState } from "./useIssueDashboard"
 import type { IssueDetailsState } from "./useIssueDetails"
@@ -61,6 +56,7 @@ function IssuePanels(props: IssuePanelsProps) {
     >
       {showList ? (
         <box
+          id="git-issue-list-panel"
           style={{
             ...focusedPanelBorder(props.focus === "list", COLORS.git),
             backgroundColor: COLORS.panel,
@@ -85,6 +81,7 @@ function IssuePanels(props: IssuePanelsProps) {
       ) : null}
       {showPreview ? (
         <box
+          id="git-issue-preview-panel"
           style={{
             ...focusedPanelBorder(props.focus === "preview", COLORS.git),
             backgroundColor: COLORS.panel,
@@ -141,6 +138,7 @@ export function IssueDashboardView({
   notice,
   loadingMore,
   refreshing,
+  terminalWidth,
   onSelectRow,
   onPreviewTab,
   onToggleDescription,
@@ -167,6 +165,7 @@ export function IssueDashboardView({
   previewVisible: boolean
   notice: string
   refreshing: boolean
+  terminalWidth: number
   onSelectSection: (index: number) => void
   onEditQuery: () => void
   onCreate: () => void
@@ -176,79 +175,32 @@ export function IssueDashboardView({
   onCyclePreviewPosition: () => void
   onTogglePreview: () => void
 }) {
+  const background = LAYOUT.workspaceBackground
   return (
     <box
+      id="git-issue-dashboard"
       style={{
         position: "relative",
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: background,
         padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        gap: 0,
       }}
     >
-      <box
-        style={{
-          ...panelBorder(),
-          backgroundColor: COLORS.panel,
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <text content={translateUi(presentation.title)} style={{ fg: COLORS.git }} />
-        <text
-          content={`${translateUi(presentation.meta)}${refreshing ? ` · ${translateUi("ATUALIZANDO TODAS AS SEÇÕES…")}` : ""}`}
-          style={{ fg: dashboard.status === "demo" ? COLORS.warning : COLORS.muted }}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        {canCreate ? (
-          <InlineButton
-            id="git-issue-create"
-            label={translateUi("[Ctrl+N] Criar issue")}
-            accent={COLORS.git}
-            onPress={onCreate}
-          />
-        ) : null}
-        <InlineButton
-          id="git-issue-toggle-preview"
-          label={`[P] ${translateUi("Prévia")}: ${translateUi(previewVisible ? "visível" : "oculta")}`}
-          accent={COLORS.git}
-          onPress={onTogglePreview}
-        />
-        <InlineButton
-          id="git-issue-preview-position"
-          label={`[Shift+P] ${translateUi("Posição")}: ${translateUi(previewPosition)}`}
-          accent={COLORS.git}
-          onPress={onCyclePreviewPosition}
-        />
-      </box>
-      <IssueSectionStrip
-        sections={presentation.sections}
-        activeIndex={presentation.sections.indexOf(presentation.section)}
-        counts={presentation.counts}
-        onSelect={onSelectSection}
+      <IssueDashboardHeader
+        presentation={presentation}
+        terminalWidth={terminalWidth}
+        refreshing={refreshing}
+        demo={dashboard.status === "demo"}
+        canCreate={canCreate}
+        previewVisible={previewVisible}
+        previewPosition={previewPosition}
+        onCreate={onCreate}
+        onSelectSection={onSelectSection}
+        onEditQuery={onEditQuery}
+        onTogglePreview={onTogglePreview}
+        onCyclePreviewPosition={onCyclePreviewPosition}
       />
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        <InlineButton
-          id="git-issue-query"
-          label={`[/] ${presentation.section.query}`}
-          accent={COLORS.git}
-          onPress={onEditQuery}
-        />
-        <text content={translateUi(presentation.scope)} style={{ fg: COLORS.muted }} />
-      </box>
       {presentation.showDashboard ? (
         <IssuePanels
           presentation={presentation}
@@ -284,7 +236,7 @@ export function IssueDashboardView({
         label="CARREGANDO GITHUB…"
         detail="Buscando issues da sua conta"
         accent={COLORS.git}
-        background={COLORS.canvas}
+        background={background}
       />
       {dashboard.status === "ready" && dashboard.hasNextPage ? (
         <InlineButton

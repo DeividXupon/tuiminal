@@ -491,10 +491,11 @@ export function HttpInteractiveClient({
   const historyDiff = selectedHttpHistoryEntries(state.history, state.historySelection)
   return (
     <box
+      id="http-workspace"
       style={{
         flexGrow: 1,
         position: "relative",
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.outerPadding,
       }}
     >

@@ -30,6 +30,7 @@
     "./ui/MountWhen": "./src/ui/MountWhen.tsx",
     "./ui/PasswordInput": "./src/ui/PasswordInput.ts",
     "./ui/PlasmaLoadingOverlay": "./src/ui/PlasmaLoadingOverlay.tsx",
+    "./ui/SelectionClipboard": "./src/ui/SelectionClipboard.tsx",
     "./ui/ShortcutText": "./src/ui/ShortcutText.tsx",
     "./ui/brand": "./src/ui/brand.ts",
     "./ui/directional-shortcut": "./src/ui/directional-shortcut.ts",

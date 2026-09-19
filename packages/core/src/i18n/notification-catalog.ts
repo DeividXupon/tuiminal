@@ -1,4 +1,12 @@
 export const NOTIFICATION_MESSAGES = [
+  [
+    "Texto selecionado copiado.",
+    "Selected text copied.",
+    "Texto seleccionado copiado.",
+    "選択したテキストをコピーしました。",
+    "已复制所选文本。",
+    "선택한 텍스트를 복사했습니다.",
+  ],
   ["INFORMAÇÃO", "INFORMATION", "INFORMACIÓN", "情報", "信息", "정보"],
   ["SUCESSO", "SUCCESS", "CORRECTO", "成功", "成功", "성공"],
   ["AVISO", "WARNING", "AVISO", "警告", "警告", "경고"],

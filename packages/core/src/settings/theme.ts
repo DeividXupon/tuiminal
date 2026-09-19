@@ -141,6 +141,9 @@ export const LAYOUT = {
   get headerSpacing() {
     return currentSettings.layout === "compact" ? 0 : 1
   },
+  get workspaceBackground() {
+    return currentSettings.layout === "compact" ? COLORS.canvas : COLORS.panel
+  },
   get alternatePanel() {
     return currentSettings.layout === "compact" ? COLORS.panelAlt : COLORS.panel
   },

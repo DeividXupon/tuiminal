@@ -6,7 +6,8 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
 ## Anatomy
 
 ```text
-┌ [1] [C] Diffs  [2] PR  [3] Issues  [4] Inbox ───────────────────────────┐
+LOCAL · …/project           │ GITHUB · @viewer
+[1] [C] DIFFS               │ [2] PR  [3] ISSUES  [4] INBOX
 │ GITHUB INBOX                                                            │
 │ Inbox 12  Review 3  Assigned 2  Mentioned 4  Saved 1                    │
 ├─────────────────────────────────────┬───────────────────────────────────┤
@@ -21,6 +22,9 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
 
 ## Behavior
 
+- In framed mode, title, sections, and panels are adjacent on one continuous
+  panel-colored surface. Compact mode retains its existing geometry and canvas
+  background.
 - Wide (`≥92 × 20`): list and preview side by side. Smaller terminals use one pane,
   with `[L/→/Enter]` for preview and `[H/←]` for the list.
 - `[A←]`/`[F→]` cycles sections; both controls also accept mouse input.

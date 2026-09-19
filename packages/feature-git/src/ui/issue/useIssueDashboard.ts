@@ -1,4 +1,5 @@
 import { IssueSession, type IssueSessionResult } from "../../services/issue-session"
+import { useGitHubNavigationReport } from "../GitNavigationContext"
 import {
   gitDashboardTransportFromEnvironment,
   type GitRemoteDashboardState,
@@ -13,7 +14,7 @@ export function useIssueDashboard(
   queryOverride: string | null = null,
   configurationRevision = 0,
 ) {
-  return useGitRemoteDashboard<IssueSessionResult>({
+  const dashboard = useGitRemoteDashboard<IssueSessionResult>({
     active,
     sectionId,
     queryOverride,
@@ -22,4 +23,6 @@ export function useIssueDashboard(
     source: "Git · Issues",
     createSession: () => new IssueSession({ transport: gitDashboardTransportFromEnvironment() }),
   })
+  useGitHubNavigationReport("issues", active, dashboard.state, configurationRevision)
+  return dashboard
 }

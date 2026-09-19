@@ -54,7 +54,7 @@ test("Git lazy mounts Issues as tab 3 and preserves its section", async () => {
   tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
   await tui.renderOnce()
 
-  expect(tui.captureCharFrame()).toContain("[C] GIT · DIFFS")
+  expect(tui.captureCharFrame()).toContain("[C] DIFFS")
   expect(tui.captureCharFrame()).toContain("[2] PR")
   expect(tui.captureCharFrame()).toContain("[3] ISSUES")
   expect(tui.captureCharFrame()).not.toContain("ISSUES · DEMO")

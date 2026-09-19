@@ -25,7 +25,8 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 - Interface densa construída com Bun, OpenTUI, React e tuiparts.
 - Funciona em qualquer diretório; Git, Runner e terminais usam o projeto informado ao CLI.
 - Teclado e mouse são cidadãos de primeira classe.
-- Layout moldurado ou compacto, sete paletas e seis idiomas.
+- Layout moldurado com uma superfície contínua entre os painéis, ou layout compacto
+  com seu canvas mais denso; sete paletas e seis idiomas.
 - Processos e PTYs permanecem vivos enquanto você troca de tab.
 - Dados sensíveis, escritas e operações remotas recebem proteções explícitas.
 
@@ -107,7 +108,12 @@ Somente esses comandos e aliases são tratados como ferramentas; outros nomes s�
 
 No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combinações, ative **Use Option as Meta key** ou a opção equivalente. Os números sem modificador continuam livres para ações locais das ferramentas.
 
-As ferramentas compartilham notificações flutuantes: no máximo três ficam retidas, sem tirar o foco do teclado. Mensagens temporárias expiram automaticamente; erros permanecem até você fechá-los. Eventos substituídos ou removidos também liberam seus timers, inclusive em rajadas de notificações.
+As ferramentas compartilham notificações compactas no canto superior direito: no máximo três ficam visíveis, sem tirar o foco do teclado. Cada cartão tem uma linha fina e colorida de tempo e uma animação curta para entrar e sair. Informações são azuis, sucessos são verdes e erros são vermelhos e permanecem um pouco mais. Passar o mouse sobre qualquer cartão pausa todas as notificações visíveis; os tempos continuam quando o ponteiro sai.
+
+Para copiar texto, selecione arrastando com o botão esquerdo e clique com o botão
+direito sobre a seleção. Isso também funciona nas ferramentas isoladas e nos modais.
+A cópia usa o suporte OSC52 do terminal; se houver uma falha local, a seleção fica
+disponível para tentar novamente. Campos de senha mascarados copiam apenas a máscara.
 
 ## Cinco ferramentas, um único fluxo
 
@@ -205,6 +211,18 @@ Configurações de conexões e metadados do histórico ficam em `~/.config/tuimi
 
 Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-dash. Diffs funciona offline; PR, Issues e Inbox são carregados separadamente somente quando você os abre.
 
+A navegação separa o projeto local da conta do GitHub:
+
+```text
+LOCAL · …/tuiminal      │ GITHUB · @conta
+[1] [C] DIFFS           │ [2] PR  [3] ISSUES  [4] INBOX
+```
+
+O rótulo local acompanha o projeto selecionado. GitHub mostra a conta já carregada
+pela aba remota ativa, ou `—` enquanto ela não estiver disponível; o cabeçalho não
+faz consultas adicionais ao GitHub. Em terminais estreitos, os grupos ficam um abaixo
+do outro. `[C]` alterna a área local entre Diffs e Comparar.
+
 ### `[1] Diffs`
 
 - Agrupa arquivos modificados em uma árvore real. Cadeias sem ramificações mostram cada pasta em sua própria linha, sem recuo artificial entre elas, mas `[J/K]` trata toda a cadeia como um único bloco navegável.
@@ -219,7 +237,11 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Um terminal Git sob o diff mantém sete linhas visíveis e até 2.000 linhas de histórico, preservando a saída real dos comandos em vez de resumi-la. `[T]` leva o foco a ele para executar comandos manuais, `[↑/↓]` e o mouse rolam a saída, e `[F10]` maximiza/restaura o terminal dentro do painel de preview; o prefixo `git` é fixo e não há composição de comando por shell. Enquanto você digita, o autocomplete sugere comandos, opções, branches locais/remotas já conhecidas, tags, remotes e arquivos alterados; use `[Ctrl+N/P]` para navegar, `[Ctrl+Y]` para aplicar e `[Esc]` para fechar as sugestões.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox. No terminal, a tecla pertence ao autocomplete; em modais ou no stage parcial, ela não abre a configuração por cima do contexto atual.
-- O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Git · Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
+- O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
+
+Os três dashboards remotos removem linhas vazias no modo moldurado. Em telas largas,
+PR e Issues colocam seções e ações na mesma linha; telas menores empilham esses
+controles. O modo compacto mantém sua geometria atual.
 
 ### `[2] PR`
 

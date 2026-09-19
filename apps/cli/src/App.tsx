@@ -61,6 +61,7 @@ import {
 } from "./model/configuration-context"
 import { configurationSettingPatch } from "./model/configuration-options"
 import { withStartupAnimation } from "./ui/StartupAnimation"
+import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
 
 export function AppContent() {
   const features = useFeatureWorkspace()
@@ -401,7 +402,7 @@ export function AppContent() {
   )
   if (ONLY_TAB) {
     return (
-      <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
+      <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
         <box
           id="tutorial-app-header"
           style={{
@@ -411,7 +412,7 @@ export function AppContent() {
             alignItems: "center",
             justifyContent: "space-between",
             ...separatorBorder(),
-            backgroundColor: LAYOUT.compact ? COLORS.panel : COLORS.canvas,
+            backgroundColor: COLORS.panel,
             paddingLeft: 1,
             paddingRight: 1,
           }}
@@ -486,7 +487,7 @@ export function AppContent() {
       value={activeTab}
       onValueChange={(value) => void selectTab(value as AppTab)}
       flexGrow={1}
-      backgroundColor={COLORS.canvas}
+      backgroundColor={LAYOUT.workspaceBackground}
     >
       <WorkspaceHeader
         installed={features.state.installed}
@@ -574,4 +575,6 @@ export function AppContent() {
   )
 }
 
-export const App = withNotifications(withStartupAnimation(withFeatures(AppContent)))
+export const App = withNotifications(
+  withSelectionClipboard(withStartupAnimation(withFeatures(AppContent))),
+)

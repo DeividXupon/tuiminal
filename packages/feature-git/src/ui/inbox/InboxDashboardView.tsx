@@ -49,6 +49,7 @@ function InboxReadyView(props: ReadyViewProps) {
   return (
     <box style={{ flexGrow: 1, flexDirection: props.wide ? "row" : "column", gap: LAYOUT.gap }}>
       <box
+        id="git-inbox-list-panel"
         style={{
           ...focusedPanelBorder(props.focus === "list", COLORS.git),
           width: props.wide ? props.listWidth : "100%",
@@ -74,6 +75,7 @@ function InboxReadyView(props: ReadyViewProps) {
       </box>
       {props.wide || props.focus === "preview" ? (
         <box
+          id="git-inbox-preview-panel"
           style={{
             ...focusedPanelBorder(props.focus === "preview", COLORS.git),
             flexGrow: 1,
@@ -160,17 +162,20 @@ export function InboxDashboardView({
   onRetry: () => void
 }) {
   const ready = state.status === "ready" || state.status === "demo"
+  const background = LAYOUT.workspaceBackground
   return (
     <box
+      id="git-inbox-dashboard"
       style={{
         position: "relative",
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: background,
         padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        gap: 0,
       }}
     >
       <box
+        id="git-inbox-title"
         style={{
           ...panelBorder(),
           height: 1,
@@ -193,7 +198,7 @@ export function InboxDashboardView({
           />
         ) : null}
       </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+      <box id="git-inbox-sections" style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <DirectionalButton
           direction={-1}
           accent={COLORS.git}
@@ -225,7 +230,7 @@ export function InboxDashboardView({
         label="CARREGANDO GITHUB…"
         detail="Buscando suas notificações"
         accent={COLORS.git}
-        background={COLORS.canvas}
+        background={background}
       />
       <ShortcutText
         content="[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar"

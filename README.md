@@ -27,7 +27,8 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 - Dense interface built with Bun, OpenTUI, React, and tuiparts.
 - Works in any directory; Git, Runner, and terminals use the project passed to the CLI.
 - Full keyboard and mouse support.
-- Framed or compact layouts, seven palettes, and six languages.
+- Framed layout with one continuous panel surface, or compact layout with its denser
+  canvas; seven palettes and six languages.
 - Processes and PTYs stay alive when you switch tabs.
 - Explicit protections for sensitive data, writes, and remote operations.
 
@@ -112,7 +113,12 @@ The aliases `database`/`db`, `run`, and `term`/`tty` are also accepted. In isola
 
 On macOS, `Alt` corresponds to `Option`. If your terminal does not send these combinations, enable **Use Option as Meta key** or the equivalent setting. Unmodified numbers remain available for actions within each tool.
 
-All tools share floating notifications: at most three cards are retained, without taking keyboard focus. Temporary messages expire automatically; errors remain until dismissed. Replaced or removed events also release their timers, including during notification bursts.
+All tools share compact notifications at the top right: at most three cards remain visible without taking keyboard focus. Every card has a thin colored countdown line and enters and leaves with a short animation. Information is blue, success is green, and errors are red and remain visible a little longer. Hovering any card pauses every visible notification and resumes all countdowns when the pointer leaves.
+
+To copy text, drag with the left mouse button to select it, then right-click the
+selection. This also works in isolated tools and dialogs. Copying uses the terminal's
+OSC52 clipboard support; if it fails locally, the selection remains available to retry.
+Masked password fields copy only their mask.
 
 <a id="cinco-ferramentas-um-único-fluxo"></a>
 
@@ -215,6 +221,18 @@ Connection settings and history metadata live in `~/.config/tuiminal/databases.j
 
 A lazygit-style local workspace and three remote dashboards inspired by gh-dash. Diffs works offline; PR, Issues, and Inbox load separately when first opened.
 
+Navigation separates the local project from the GitHub account:
+
+```text
+LOCAL · …/tuiminal      │ GITHUB · @account
+[1] [C] DIFFS           │ [2] PR  [3] ISSUES  [4] INBOX
+```
+
+The local label follows the selected project. GitHub shows the account already loaded
+by the active remote tab, or `—` before one is available; the header makes no extra
+GitHub requests. Narrow terminals stack the two groups. `[C]` switches the local
+view between Diffs and Compare.
+
 ### `[1] Diffs`
 
 - Groups changed files into a real tree. Unbranched directory chains show each folder on its own line without artificial indentation; `[J/K]` treats the chain as one navigable block.
@@ -229,7 +247,11 @@ A lazygit-style local workspace and three remote dashboards inspired by gh-dash.
 - A Git terminal below the diff shows seven rows and retains up to 2,000 history lines of actual command output. `[T]` focuses it for manual commands; `[↑/↓]` and mouse scroll output; `[F10]` maximizes/restores it within the preview pane. The `git` prefix is fixed, without shell command composition. Autocomplete suggests commands, options, known local/remote branches, tags, remotes, and changed files: `[Ctrl+N/P]` navigates, `[Ctrl+Y]` applies, and `[Esc]` dismisses.
 - `[C]` switches to **Compare**, comparing two known refs through `base...compared` without checkout or uncommitted changes.
 - `[Ctrl+P]` chooses another local repository/branch without changing PR, Issues, or Inbox scope. In the terminal it belongs to autocomplete; it cannot open settings over a modal or partial staging.
-- The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Git · Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub.
+- The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub.
+
+The three remote dashboards remove blank spacer rows in framed mode. Wide PR and
+Issues screens place sections and actions on one row; narrower screens stack them.
+Compact mode keeps its existing geometry.
 
 ### `[2] PR`
 

@@ -1782,12 +1782,13 @@ export function DatabaseViewer({
 
   return (
     <box
+      id="database-workspace"
       style={{
         flexGrow: 1,
         flexDirection: connections.length ? "row" : "column",
         padding: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         ...(connections.length
           ? {}
           : { alignItems: "center" as const, justifyContent: "center" as const }),

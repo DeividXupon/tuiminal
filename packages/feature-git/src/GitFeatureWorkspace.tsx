@@ -1,9 +1,9 @@
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { useState } from "react"
 import { ownsKeyboardFocus } from "@xupon/tuiminal-core/keyboard/scope"
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
+import { GitNavigationHeader } from "./ui/GitNavigationHeader"
+import { GitNavigationProvider, useGitHubNavigationIdentity } from "./ui/GitNavigationContext"
 import { GitCompareWorkspace } from "./GitCompareWorkspace"
 import { GitBaseWorkspace } from "./GitWorkspace"
 import { useLocalGitTargetRoot } from "./hooks/use-local-git-target-root"
@@ -61,12 +61,14 @@ export function GitViewer({
 }) {
   if (tutorialMode) return <GitTutorialDemo activeTargetId={tutorialTargetId} />
   return (
-    <GitInteractiveWorkspace
-      active={active}
-      configurationRevision={configurationRevision}
-      localConfigurationRevision={localConfigurationRevision}
-      onOpenLocalConfiguration={onOpenLocalConfiguration}
-    />
+    <GitNavigationProvider>
+      <GitInteractiveWorkspace
+        active={active}
+        configurationRevision={configurationRevision}
+        localConfigurationRevision={localConfigurationRevision}
+        onOpenLocalConfiguration={onOpenLocalConfiguration}
+      />
+    </GitNavigationProvider>
   )
 }
 
@@ -92,6 +94,7 @@ function GitInteractiveWorkspace({
   const localTargetRoot = useLocalGitTargetRoot(localConfigurationRevision)
   const browser = useGitBrowser()
   const workspaceActive = active && !browser.modalOpen
+  const identity = useGitHubNavigationIdentity(activeTab, configurationRevision)
 
   const selectTab = (tab: GitWorkspaceTab) => {
     if (tab === "pr") setPullRequestsMounted(true)
@@ -123,55 +126,18 @@ function GitInteractiveWorkspace({
   })
 
   return (
-    <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          backgroundColor: COLORS.panel,
-          paddingLeft: LAYOUT.outerPadding,
+    <box id="git-workspace" style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
+      <GitNavigationHeader
+        localRoot={localTargetRoot}
+        identity={identity}
+        selected={activeTab}
+        localMode={localMode}
+        onSelect={selectTab}
+        onToggleMode={() => {
+          if (activeTab === "base") toggleLocalMode()
+          else selectTab("base")
         }}
-      >
-        <InlineButton
-          id="git-tab-base"
-          label="[1]"
-          accent={COLORS.git}
-          active={activeTab === "base"}
-          onPress={() => selectTab("base")}
-        />
-        <InlineButton
-          id="git-mode-compare"
-          label={translateUi(localMode === "diffs" ? "[C] GIT · DIFFS" : "[C] GIT · COMPARAR")}
-          accent={COLORS.git}
-          active={activeTab === "base"}
-          onPress={() => {
-            if (activeTab === "base") toggleLocalMode()
-            else selectTab("base")
-          }}
-        />
-        <InlineButton
-          id="git-tab-pr"
-          label={translateUi("[2] PR")}
-          accent={COLORS.git}
-          active={activeTab === "pr"}
-          onPress={() => selectTab("pr")}
-        />
-        <InlineButton
-          id="git-tab-issues"
-          label={translateUi("[3] ISSUES")}
-          accent={COLORS.git}
-          active={activeTab === "issues"}
-          onPress={() => selectTab("issues")}
-        />
-        <InlineButton
-          id="git-tab-inbox"
-          label={translateUi("[4] INBOX")}
-          accent={COLORS.git}
-          active={activeTab === "inbox"}
-          onPress={() => selectTab("inbox")}
-        />
-      </box>
+      />
       <box
         style={{
           height: activeTab === "base" && localMode === "diffs" ? "100%" : 0,
