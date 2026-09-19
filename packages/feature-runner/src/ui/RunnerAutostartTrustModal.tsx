@@ -18,6 +18,7 @@ function reviewText(review: RunnerAutostartReview) {
       `${translateUi("ARQUIVO DE AMBIENTE")}  ${review.profile.environmentFile ?? translateUi("nenhuma")}`,
     )
   }
+  for (const flow of review.flows) lines.push(`${flow.label}: ${JSON.stringify(flow.stages)}`)
   for (const [index, command] of review.commands.entries()) {
     lines.push(
       "",
@@ -26,6 +27,9 @@ function reviewText(review: RunnerAutostartReview) {
       `${translateUi("DIRETÓRIO")}  ${command.cwd}`,
       `${translateUi("VARIÁVEIS")}  ${command.environmentNames.join(", ") || translateUi("nenhuma")}`,
       `${translateUi("ARQUIVO DE AMBIENTE")}  ${command.environmentFile ?? translateUi("nenhuma")}`,
+      command.policy,
+      `${translateUi("ARQUIVO DE AMBIENTE")} ${command.profileEnvironmentFile ?? "—"}`,
+      `${translateUi("PERFIL")} ${command.profile ?? "—"}`,
       `${translateUi("PTY interativo")}  ${command.interactive ? "✓" : "—"}`,
     )
   }

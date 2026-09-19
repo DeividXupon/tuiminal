@@ -11,7 +11,7 @@ remain the source of truth when a note has drifted.
 | Cross-tool UX, shortcuts, appearance, i18n, documentation | [Conventions](./conventions.md) | [Architecture](../architecture.md), [Shared controls](../design/ui-controls.md) |
 | Official payload installation and release boundary | [Feature installation](./feature-installation.md) | [Official feature installation](../design/official-feature-installation.md) |
 | Git Diffs, PR, Issues, Inbox | [Git](./git.md) | [PR](../design/git-pr-interface.md), [Issues](../design/git-issues-interface.md), [Inbox](../design/git-inbox-interface.md) |
-| Runner and process ownership | [Runner](./runner.md) | [Architecture](../architecture.md) |
+| Runner and process ownership | [Runner](./runner.md) | [Runner](../design/runner.md), [Architecture](../architecture.md) |
 | HTTP client, Postman account access, and headless execution | [HTTP](./http.md) | [Postman account](../design/postman-account.md); [HTTP_CLIENT_PLAN.md](../../HTTP_CLIENT_PLAN.md) for future-facing work |
 | Free Terminal and PTY | [Terminal](./terminal.md) | [Architecture](../architecture.md) |
 | Database and SQL | [Database](./database.md) | [Architecture](../architecture.md); [future priorities](../plans/database-next.md) |

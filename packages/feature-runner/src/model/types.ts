@@ -1,5 +1,7 @@
 import type { RunnerConfiguredCommand, RunnerHealthCheck, RunnerRestartPolicy } from "./config"
 
+import type { RunnerDependency } from "./config"
+
 export type RunnerCommandCategory =
   | "package"
   | "composer"
@@ -26,6 +28,8 @@ export type RunnerCommand = {
   args: string[]
   displayCommand: string
   source?: RunnerConfiguredCommand["source"] | "detected"
+  dependsOn?: RunnerDependency[]
+  profile?: string
   workingDirectory?: string
   env?: Record<string, string>
   envFile?: string

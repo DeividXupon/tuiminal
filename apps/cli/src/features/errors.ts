@@ -1,7 +1,7 @@
 import { FeatureInstallError } from "./model"
 export function featureErrorMessage(error: unknown) {
   if (!(error instanceof FeatureInstallError))
-    return "Não foi possível preparar a ferramenta. No desenvolvimento, execute bun run build:features."
+    return "Não foi possível carregar a ferramenta. Reinicie o Tuiminal e tente novamente."
   switch (error.kind) {
     case "integrity":
       return "A ferramenta falhou na verificação. Instale-a novamente."

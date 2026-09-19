@@ -1289,12 +1289,13 @@ describe("HTTP TUI", () => {
       await key("ARROW_DOWN")
       await settle(() => tui?.captureCharFrame().includes("Second") ?? false)
       await enter()
-      await settle(() =>
-        Boolean(
-          tui?.renderer.root.findDescendantById(
-            `http-collection-file-postman/${collectionName}.http`,
-          ),
-        ),
+      await settle(
+        () =>
+          Boolean(
+            tui?.renderer.root.findDescendantById(
+              `http-collection-file-postman/${collectionName}.http`,
+            ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       expect(writes).toContain("collection:w2")
       expect(
@@ -1312,12 +1313,13 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await enter()
-      await settle(() =>
-        Boolean(
-          tui?.renderer.root.findDescendantById(
-            `http-navigation-project-postman/${collectionName}.http#list`,
-          ),
-        ),
+      await settle(
+        () =>
+          Boolean(
+            tui?.renderer.root.findDescendantById(
+              `http-navigation-project-postman/${collectionName}.http#list`,
+            ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       expect(writes).toContain("request:List:root")
       await click(`http-collection-file-postman/${collectionName}.http`)
@@ -1331,7 +1333,11 @@ describe("HTTP TUI", () => {
       })
       await enter()
       const folderRow = `http-collection-folder-postman/${collectionName}.http:f1`
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById(folderRow)))
+      await settle(
+        () =>
+          Boolean(tui?.renderer.root.findDescendantById(folderRow)) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
+      )
       expect(writes).toContain("folder:People")
       await click(folderRow)
       await click("http-request-create")
@@ -1343,13 +1349,23 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await enter()
-      await settle(() => writes.includes("request:Search:f1"))
+      await settle(
+        () =>
+          writes.includes("request:Search:f1") &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
+      )
       expect(await readFile(resolve(root, `postman/${collectionName}.http`), "utf8")).toContain(
         "People / Search",
       )
       await key("ESCAPE")
       await key("n", true)
-      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      // The omnibar keeps its native input across documents; focus alone can be stale.
+      await settle(
+        () =>
+          Boolean(tui?.renderer.root.findDescendantById("http-document-http-scratch-2")) &&
+          tui?.renderer.currentFocusedRenderable?.id === "http-url-input" &&
+          (tui.renderer.currentFocusedRenderable as InputRenderable).value === "",
+      )
       await act(async () => {
         tui?.mockInput.typeText("https://draft.example.test")
         await tui?.renderOnce()
@@ -1587,7 +1603,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
@@ -1606,7 +1623,10 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Api.http`)),
+        Boolean(
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Api.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
+        ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       await key("e")
@@ -1624,7 +1644,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Service.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
@@ -1641,7 +1662,7 @@ describe("HTTP TUI", () => {
         Boolean(
           tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#listar`,
-          ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -1667,7 +1688,7 @@ describe("HTTP TUI", () => {
         Boolean(
           tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#consultar`,
-          ),
+          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
@@ -1689,7 +1710,8 @@ describe("HTTP TUI", () => {
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
           !tui?.renderer.root.findDescendantById(
             `http-navigation-project-${folder}/Service.http#consultar`,
-          ),
+          ) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("N", false, true)
       await settle(
@@ -1702,7 +1724,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+          tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
@@ -1711,7 +1734,8 @@ describe("HTTP TUI", () => {
       await settle(
         () =>
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
-          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`),
+          !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("p")
       await settle(
@@ -1724,7 +1748,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Nested`),
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Nested`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
@@ -1743,7 +1768,8 @@ describe("HTTP TUI", () => {
       })
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+          tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`) &&
+            !tui?.renderer.root.findDescendantById("http-collection-action-form"),
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
@@ -1752,7 +1778,8 @@ describe("HTTP TUI", () => {
       await settle(
         () =>
           !tui?.renderer.root.findDescendantById("http-collection-action-form") &&
-          !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`),
+          !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       await key("y")
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-history")
@@ -2518,28 +2545,38 @@ describe("HTTP TUI", () => {
     expect(tui.captureCharFrame()).toContain("SEM RESPOSTA")
   })
 
-  test("resizes the request/response split with a real mouse drag", async () => {
-    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-split-handle")))
-    const request = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")
-    const response = tui.renderer.root.findDescendantById("http-response-pane-http-scratch-1")
-    const handle = tui.renderer.root.findDescendantById("http-split-handle")
-    if (!request || !response || !handle) throw new Error("Split HTTP não renderizado")
-    expect(Math.abs(request.height - response.height)).toBeLessThanOrEqual(1)
-    const initialHeight = request.height
-    await act(async () => {
-      await tui?.mockMouse.drag(
-        handle.screenX + Math.floor(handle.width / 2),
-        handle.screenY,
-        handle.screenX + Math.floor(handle.width / 2),
-        handle.screenY + 3,
+  test.each([0, 10])(
+    "resizes the request/response split with a real mouse drag (%i ms)",
+    async (delayMs) => {
+      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-split-handle")))
+      const request = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")
+      const response = tui.renderer.root.findDescendantById("http-response-pane-http-scratch-1")
+      const handle = tui.renderer.root.findDescendantById("http-split-handle")
+      if (!request || !response || !handle) throw new Error("Split HTTP não renderizado")
+      expect(Math.abs(request.height - response.height)).toBeLessThanOrEqual(1)
+      const initialHeight = request.height
+      await act(async () => {
+        await tui?.mockMouse.drag(
+          handle.screenX + Math.floor(handle.width / 2),
+          handle.screenY,
+          handle.screenX + Math.floor(handle.width / 2),
+          handle.screenY + 3,
+          undefined,
+          { delayMs },
+        )
+        await tui?.renderOnce()
+      })
+      await settle(
+        () =>
+          (tui?.renderer.root.findDescendantById("http-request-pane-http-scratch-1")?.height ?? 0) >
+          initialHeight,
       )
-      await tui?.renderOnce()
-    })
-    expect(
-      tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")?.height,
-    ).toBeGreaterThan(initialHeight)
-  })
+      expect(
+        tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")?.height,
+      ).toBeGreaterThan(initialHeight)
+    },
+  )
 
   test("toggles cookie jar use and exposes it in the prepared preview", async () => {
     tui = await testRender(

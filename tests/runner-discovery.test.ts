@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -72,7 +72,7 @@ describe("runner project detection", () => {
 
     const context = await resolveRunnerProjectContext(nested)
 
-    expect(context?.root).toBe(projectRoot)
+    expect(context?.root).toBe(realpathSync(projectRoot))
     expect(context?.commands.some((command) => command.id === "package:dev")).toBe(true)
     expect(context?.environmentProfiles).toContainEqual(
       expect.objectContaining({ id: "file:.env.local", label: ".env.local" }),
@@ -100,7 +100,9 @@ describe("runner project detection", () => {
       writeFileSync(join(nested, "package.json"), JSON.stringify({ scripts: { dev: "vite" } }))
 
       expect(resolveRunnerSessionScope(nested)).toBe(nested)
-      expect(await resolveRunnerProjectContext(nested)).toMatchObject({ root: nested })
+      expect(await resolveRunnerProjectContext(nested)).toMatchObject({
+        root: realpathSync(nested),
+      })
     } finally {
       rmSync(ancestor, { recursive: true, force: true })
     }

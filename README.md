@@ -323,7 +323,10 @@ Runner is Tuiminal's initial screen. It discovers project commands, starts short
 - **Keep processes alive:** selecting an active command opens its existing session. `[R]` starts another instance separately.
 - **Follow logs:** switch stdout/stderr, filter, copy, export, show timestamps, and send input to stdin or a PTY.
 - **Watch multiple services:** Multi mode shows up to three logs side by side and navigates additional groups.
-- **Act on groups:** select commands and start, stop, or restart them in parallel; groups are not dependency graphs.
+- **Act on groups:** select commands and start, stop, or restart them together; simple groups run in parallel.
+- **Order commands and services:** dependencies wait for successful completion or startup with health checks. Cycles and missing references are rejected before execution; failure or cancellation blocks pending dependents.
+- **Save project flows:** `[Ctrl+Y]` opens the YAML configuration file inside the terminal. Create named flows with sequential and parallel stages, then run, stop or restart them from the TUI.
+- **Edit commands locally:** configure literal command, directory, environment/profile, PTY, restart policy and health checks, including overrides for detected commands. The editor shows documentation, validation and keyboard/mouse suggestions without changing project files.
 - **Switch projects:** `[N]` opens another repository/directory without interrupting active processes. Up to four projects occupy local tabs `[1]–[4]`.
 - **Use detected ports:** open or copy a URL, or send it directly to the HTTP tab.
 
@@ -333,7 +336,7 @@ Single and Multi retain the original language of program output; only Tuiminal m
 
 Project discovery deduplicates overlapping directories and performs up to 16 concurrent reads, with limits of 300 projects and seven levels. Detected commands use the selected project's paths. Deno JSONC task text is preserved even when it contains comment markers.
 
-Discovery reads `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile`, and other supported formats. Only `autostart: true` in Tuiminal's own file can request automatic startup. The first request shows the project, commands, directories, profile, and variable names for approval. Trust is local, and a material configuration change requires renewed confirmation. `mprocs` and `Procfile` never start implicitly.
+Discovery reads `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile`, and other supported formats. Only explicit `autostart: true` in Tuiminal configuration, including locally saved commands and flows, can request automatic startup. The first request shows the project, commands, directories, profile, and variable names for approval. Trust is local, and a material configuration change requires renewed confirmation. `mprocs` and `Procfile` never start implicitly.
 
 ```yaml
 version: 1
@@ -359,6 +362,8 @@ commands:
 
 <a id="atalhos-essenciais-do-runner"></a>
 
+Edit `commands`, `flows` and `profiles` as YAML with syntax colors and contextual help. A read-only recommendation list follows the cursor as you type or move with arrows, shows options for the current YAML block, and describes the selected option beside the list. After `flows:` and `[Enter]`, it shows an example flow ID (`dev:`); while you type another ID, it shows the required colon, then offers fields such as `label` and `stages` inside that flow. The same guidance appears for command and profile IDs and environment variable names. Close typos show likely alternatives from that block; unrelated text closes the recommendation list. Use `[Ctrl+J/K]` or a mouse click to inspect options; type the desired key or value yourself. `[Enter]` indents the next line for mappings, list entries and literal command blocks; `[Tab]` inserts two spaces. `[Esc]` dismisses recommendations, then returns to command/flow management. Dependencies use `dependsOn` entries with `commandId` and `condition`; flow stages use `commandIds` and `waitFor`. `started` waits for the configured health check. `[Ctrl+S]` validates and saves. See the [Runner specification](docs/design/runner.md) for complete YAML examples.
+
 ### Essential Runner shortcuts
 
 | Action | Shortcut |
@@ -366,6 +371,11 @@ commands:
 | Run or open an existing process | `[Enter]` |
 | Start another instance | `[R]` |
 | Focus manual command / save | `[/]` / `[Ctrl+S]` |
+| YAML editor | `[Ctrl+Y]` |
+| New command / flow (management list) | `[Ctrl+N]` / `[Ctrl+F]` |
+| Run / stop / restart selected flow | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
+| YAML newline and indentation / suggestions / save | `[Enter]` and `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Browse YAML recommendations | `[Ctrl+J/K]` |
 | Commands / active processes | `[P]` |
 | Single / Multi view | `[M]` |
 | Previous / next Multi group | `[A←]` / `[F→]` |
@@ -379,7 +389,7 @@ commands:
 | Switch Runner projects | `[1]`–`[4]` |
 | Close project tab without stopping processes | `[Ctrl+X]` |
 
-Session state and saved commands live in `~/.config/tuiminal/runner.json`. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
+The YAML editor saves `~/.config/tuiminal/runner/<project-hash>/runner.yaml`, without changing project files. Existing saved commands and flows are included on the first save. `runner.json` retains sessions, history and legacy definitions for projects without YAML. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
 
 <a id="http"></a>
 
@@ -565,7 +575,7 @@ Main commands:
 | `bun run dev` | Build local feature payloads and launch the installation flow |
 | `bun run build:features` | Rebuild the five installable official payloads |
 | `bun run test:unit` | Test rules and local integrations |
-| `bun run test:tui` | Test UI with the real OpenTUI renderer |
+| `bun run test:tui` | Test native UI and loading of the five built feature payloads |
 | `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |
 | `bun run check:workspaces` | Check package versions, exports, and dependencies |
 | `bun run build:packages` | Generate JavaScript, types, and manifests for six internal modules |
