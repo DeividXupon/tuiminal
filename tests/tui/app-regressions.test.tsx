@@ -87,23 +87,64 @@ test("switches from framed to compact without registering duplicate global tabs"
   await settle(() => !tui?.renderer.root.findDescendantById("configuration-modal"))
 })
 
-test("switches from the default Dark mode to Light in global settings", async () => {
+test("settings center supports Vim and mouse navigation across categories and options", async () => {
   selectInitialTool("runner")
-  updateUiSettings({ colorMode: "dark", language: "pt-BR" })
-  tui = await testRender(<App />, { width: 80, height: 20 })
+  updateUiSettings({
+    colorMode: "dark",
+    palette: "prime",
+    layout: "framed",
+    language: "pt-BR",
+  })
+  tui = await testRender(<App />, { width: 100, height: 28 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
 
   await click("tutorial-settings-button")
+  expect(tui.renderer.root.findDescendantById("configuration-navigation")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("configuration-detail-colorMode")).toBeDefined()
   expect(tui.captureCharFrame()).toContain("MODO DE COR")
   expect(tui.captureCharFrame()).toContain("DARK")
   expect(tui.captureCharFrame()).toContain("LIGHT")
-  expect(tui.captureCharFrame()).toContain("Dracula")
-  expect(tui.captureCharFrame()).toContain("Catppuccin")
-  expect(tui.captureCharFrame()).toContain("Tokyo Night")
-  await key("ARROW_RIGHT")
+  await key("ENTER")
+  expect(tui.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
+  await key("l")
 
   expect(getUiSettings().colorMode).toBe("light")
-  expect(tui.renderer.root.findDescendantById("configuration-section-colorMode")).toBeDefined()
+  await key("j")
+  await settle(() => tui?.captureCharFrame().includes("Dracula") ?? false)
+  expect(tui.captureCharFrame()).toContain("Catppuccin")
+  expect(tui.captureCharFrame()).toContain("Tokyo Night")
+  await key("l")
+  expect(getUiSettings().palette).toBe("midnight")
+  await key("h")
+  expect(getUiSettings().palette).toBe("prime")
+  await key("j")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-layout")).toBeDefined()
+  await key("l")
+  expect(getUiSettings().layout).toBe("compact")
+  await key("k")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-palette")).toBeDefined()
+  await click("configuration-section-language")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-language")).toBeDefined()
+  await click("configuration-language-en")
+  expect(getUiSettings().language).toBe("en")
+})
+
+test("narrow settings keeps full-width details and compact category controls", async () => {
+  selectInitialTool("runner")
+  updateUiSettings({ colorMode: "dark", palette: "prime", language: "pt-BR" })
+  tui = await testRender(<App />, { width: 60, height: 20 })
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
+
+  await click("tutorial-settings-button")
+  expect(tui.renderer.root.findDescendantById("configuration-mobile-navigation")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("configuration-navigation")).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("configuration-detail-colorMode")).toBeDefined()
+  await click("configuration-category-next")
+  await settle(() => tui?.captureCharFrame().includes("Tokyo Night") ?? false)
+  await key("l")
+  expect(getUiSettings().palette).toBe("midnight")
+  await key("j")
+  expect(tui.renderer.root.findDescendantById("configuration-detail-layout")).toBeDefined()
 })
 
 test("global shortcuts leave Git PR after its local controls have focus", async () => {
@@ -152,7 +193,7 @@ test("Git settings configures Diffs, PR, Issues, repositories, and browser", asy
   await settle(() => tui?.captureCharFrame().includes("Nenhum repositório Git encontrado") ?? false)
 
   await click("tutorial-settings-button")
-  expect(tui.captureCharFrame()).toContain("CONFIGURAÇÕES DO GIT")
+  expect(tui.captureCharFrame()).toContain("◆ CONFIGURAÇÕES · GIT")
   expect(tui.captureCharFrame()).toContain("Diffs, PR, Issues e navegador")
   expect(tui.captureCharFrame()).not.toContain("CONFIGURAÇÕES DO BANCO")
 

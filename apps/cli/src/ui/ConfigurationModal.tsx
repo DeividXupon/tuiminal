@@ -1,29 +1,18 @@
-import { TutorialSetting } from "./TutorialSetting"
-import { FeatureSettings } from "../features/FeatureSettings"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef } from "react"
-import {
-  LANGUAGE_OPTIONS,
-  translateUi,
-  truncateDisplay,
-  type LanguageId,
-} from "@xupon/tuiminal-core/i18n/index"
-import {
-  COLORS,
-  type ColorMode,
-  type LayoutMode,
-  type PaletteId,
-  type UiSettings,
-} from "@xupon/tuiminal-core/settings/theme"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
-import type { ConfigurationContext, ConfigurationSection } from "../model/configuration-context"
-import { GitConfigurationGroup } from "./GitConfigurationGroup"
-import { ColorModeConfigurationGroup } from "./ColorModeConfigurationGroup"
-import { PaletteConfigurationGroup } from "./PaletteConfigurationGroup"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { configurationSectionsForContext } from "../model/configuration-context"
+import { ConfigurationDetail } from "./ConfigurationDetail"
+import { ConfigurationNavigation } from "./ConfigurationNavigation"
+import {
+  CONFIGURATION_SECTION_LABELS,
+  type ConfigurationModalProps,
+} from "./configuration-modal-types"
 
 export {
   configurationSectionsForContext,
@@ -31,132 +20,6 @@ export {
   type ConfigurationContext,
   type ConfigurationSection,
 } from "../model/configuration-context"
-
-type ConfigurationModalProps = {
-  open: boolean
-  settings: UiSettings
-  section: ConfigurationSection
-  notice: string
-  onClose: () => void
-  onSectionChange: (section: ConfigurationSection) => void
-  onPaletteChange: (palette: PaletteId) => void
-  onColorModeChange: (mode: ColorMode) => void
-  onLayoutChange: (layout: LayoutMode) => void
-  onLanguageChange: (language: LanguageId) => void
-  onOpenSensitiveTerms: () => void
-  onReset: () => void
-  onOpenQueryHistory: () => void
-  onOpenFeatures: () => void
-  onStartTutorial: () => void
-  queryHistoryCount: number
-  tutorialLabel: string
-  context: ConfigurationContext
-  onOpenGitConfiguration: () => void
-}
-
-function ConfigurationDivider({ label }: { label: string }) {
-  return (
-    <text
-      content={`── ${translateUi(label)} ${"─".repeat(64)}`}
-      style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-    />
-  )
-}
-
-function LanguageChoice({
-  nativeName,
-  shortName,
-  selected,
-  compact = false,
-  onPress,
-}: {
-  id: LanguageId
-  nativeName: string
-  shortName: string
-  selected: boolean
-  compact?: boolean
-  onPress: () => void
-}) {
-  return (
-    <Button onPress={onPress} width="50%" height={1} flexShrink={0}>
-      {(state) => (
-        <box
-          style={{
-            width: "100%",
-            height: 1,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            backgroundColor: selected || state.focused ? COLORS.panelRaised : COLORS.panel,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`${selected ? "◆" : "◇"} ${nativeName}`}
-            style={{ fg: selected ? COLORS.focus : COLORS.text }}
-          />
-          {compact ? null : <text content={shortName} style={{ fg: COLORS.muted }} />}
-        </box>
-      )}
-    </Button>
-  )
-}
-
-const LANGUAGE_ROWS = [
-  { id: "latin-primary", options: LANGUAGE_OPTIONS.slice(0, 2) },
-  { id: "latin-cjk", options: LANGUAGE_OPTIONS.slice(2, 4) },
-  { id: "cjk", options: LANGUAGE_OPTIONS.slice(4, 6) },
-] as const
-
-function LayoutChoice({
-  mode,
-  selected,
-  compact = false,
-  onPress,
-}: {
-  mode: LayoutMode
-  selected: boolean
-  compact?: boolean
-  onPress: () => void
-}) {
-  const framed = mode === "framed"
-  return (
-    <Button onPress={onPress} width="50%" height={compact ? 1 : 4} flexShrink={0}>
-      {(state) => (
-        <box
-          style={{
-            width: "100%",
-            height: compact ? 1 : 4,
-            flexShrink: 0,
-            ...(compact
-              ? { border: false as const }
-              : framed
-                ? {
-                    border: true as const,
-                    borderStyle: "rounded" as const,
-                    borderColor: selected ? COLORS.focus : COLORS.border,
-                  }
-                : { border: false as const }),
-            backgroundColor: framed ? COLORS.panel : COLORS.panelAlt,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`${selected ? "◆" : "◇"} ${framed ? "MOLDURADO" : "COMPACTO"}`}
-            style={{ fg: selected || state.focused ? COLORS.focus : COLORS.text }}
-          />
-          {compact ? null : (
-            <text
-              content={framed ? "gaps e bordas arredondadas" : "sem gaps · fundos alternados"}
-              style={{ fg: COLORS.muted }}
-            />
-          )}
-        </box>
-      )}
-    </Button>
-  )
-}
 
 export function ConfigurationModal({
   open,
@@ -180,21 +43,27 @@ export function ConfigurationModal({
   onOpenGitConfiguration,
 }: ConfigurationModalProps) {
   const terminal = useTerminalDimensions()
-  const contentRef = useRef<ScrollBoxRenderable | null>(null)
+  const navigationRef = useRef<ScrollBoxRenderable | null>(null)
+  const sections = configurationSectionsForContext(context)
 
   useEffect(() => {
     if (!open) return
     const timeout = setTimeout(() => {
-      contentRef.current?.scrollChildIntoView(`configuration-group-${section}`)
+      navigationRef.current?.scrollChildIntoView(`configuration-section-${section}`)
     }, 0)
     return () => clearTimeout(timeout)
   }, [open, section])
 
   if (!open) return null
 
-  const width = Math.max(1, Math.min(86, terminal.width - 2))
-  const height = Math.max(1, Math.min(24, terminal.height))
-  const compact = width < 68 || height < 22
+  const width = Math.max(1, Math.min(96, terminal.width - 2))
+  const height = Math.max(1, Math.min(26, terminal.height))
+  const narrow = width < 68
+  const minimal = width < 52
+  const detailWidth = Math.max(12, narrow ? width - 5 : width - 38)
+  const currentIndex = Math.max(0, sections.indexOf(section))
+  const previous = sections[(currentIndex - 1 + sections.length) % sections.length]
+  const next = sections[(currentIndex + 1) % sections.length]
 
   return (
     <ModalSurface
@@ -204,7 +73,7 @@ export function ConfigurationModal({
       zIndex={900}
       borderColor={COLORS.focus}
       backdropOpacity={0.86}
-      horizontalPadding={compact ? 1 : 2}
+      horizontalPadding={narrow ? 1 : 2}
       dialogFocusable={false}
       onBackdropPress={onClose}
     >
@@ -219,285 +88,104 @@ export function ConfigurationModal({
           borderColor: COLORS.border,
         }}
       >
-        <text content={translateUi("◆ CONFIGURAÇÕES")} style={{ fg: COLORS.focus }} />
+        <box style={{ flexDirection: "row" }}>
+          <text content={translateUi("◆ CONFIGURAÇÕES")} style={{ fg: COLORS.focus }} />
+          <text
+            content={` · ${translateUi(context === "database" ? "BANCO" : context === "git" ? "GIT" : "GERAL")}`}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
         <InlineButton
-          label={compact ? "[Esc]" : "[Esc] Fechar"}
+          label={narrow ? "[Esc]" : "[Esc] Fechar"}
           accent={COLORS.focus}
           onPress={onClose}
         />
       </box>
 
-      <scrollbox
-        ref={contentRef}
-        scrollY
-        style={{ flexGrow: 1, width: "100%" }}
-        verticalScrollbarOptions={{
-          trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
-        }}
-      >
-        <GitConfigurationGroup
-          visible={context === "git"}
-          selected={section === "git"}
-          compact={compact}
-          onSelect={() => onSectionChange("git")}
-          onOpen={onOpenGitConfiguration}
-        />
-
-        {context === "database" ? (
-          <>
-            <ConfigurationDivider label="CONFIGURAÇÕES DO BANCO" />
-
-            <box
-              id="configuration-group-sensitive"
-              style={{ height: compact ? 2 : 3, flexShrink: 0 }}
-            >
-              <box
-                id="configuration-section-sensitive"
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  backgroundColor: section === "sensitive" ? COLORS.panelRaised : COLORS.canvas,
-                }}
-              >
-                <text
-                  content={`${section === "sensitive" ? "◆" : "◇"} ${translateUi("DADOS SENSÍVEIS")}`}
-                  style={{ fg: COLORS.text }}
-                />
-                <ShortcutText
-                  content={translateUi("[Enter] editar")}
-                  style={{ fg: COLORS.muted }}
-                />
-              </box>
-
-              <Button
-                id="configuration-open-sensitive-terms"
-                onPress={() => {
-                  onSectionChange("sensitive")
-                  onOpenSensitiveTerms()
-                }}
-                height={compact ? 1 : 2}
-                flexShrink={0}
-              >
-                {(state) => (
-                  <box
-                    style={{
-                      height: compact ? 1 : 2,
-                      flexShrink: 0,
-                      paddingLeft: 1,
-                      paddingRight: 1,
-                      backgroundColor:
-                        section === "sensitive" || state.focused
-                          ? COLORS.panelRaised
-                          : COLORS.panel,
-                    }}
-                  >
-                    <text
-                      content={`◇ ${translateUi(`${settings.sensitiveTerms.length} termos`)} · ${truncateDisplay(settings.sensitiveTerms.join(", ") || translateUi("desativado"), Math.max(12, width - 24))}`}
-                      style={{ fg: section === "sensitive" ? COLORS.warning : COLORS.text }}
-                    />
-                    {compact ? null : (
-                      <text
-                        content={translateUi(
-                          "Escolha quais fragmentos de nomes de colunas serão mascarados.",
-                        )}
-                        style={{ fg: COLORS.muted }}
-                      />
-                    )}
-                  </box>
-                )}
-              </Button>
-            </box>
-
-            <box style={{ height: 1, flexShrink: 0 }} />
-
-            <box
-              id="configuration-group-history"
-              style={{ height: compact ? 2 : 3, flexShrink: 0 }}
-            >
-              <box
-                id="configuration-section-history"
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  backgroundColor: section === "history" ? COLORS.panelRaised : COLORS.canvas,
-                }}
-              >
-                <text
-                  content={`${section === "history" ? "◆" : "◇"} ${translateUi("HISTÓRICO SQL")}`}
-                  style={{ fg: COLORS.text }}
-                />
-                <ShortcutText content={translateUi("[Enter] abrir")} style={{ fg: COLORS.muted }} />
-              </box>
-
-              <Button
-                id="configuration-open-query-history"
-                onPress={() => {
-                  onSectionChange("history")
-                  onOpenQueryHistory()
-                }}
-                height={compact ? 1 : 2}
-                flexShrink={0}
-              >
-                {(state) => (
-                  <box
-                    style={{
-                      height: compact ? 1 : 2,
-                      flexShrink: 0,
-                      paddingLeft: 1,
-                      paddingRight: 1,
-                      backgroundColor:
-                        section === "history" || state.focused ? COLORS.panelRaised : COLORS.panel,
-                    }}
-                  >
-                    <text
-                      content={`◷ ${translateUi("Consultas executadas")} · ${queryHistoryCount}`}
-                      style={{ fg: section === "history" ? COLORS.database : COLORS.text }}
-                    />
-                    {compact ? null : (
-                      <text
-                        content={translateUi("100 leituras recentes · alterações por 6 meses.")}
-                        style={{ fg: COLORS.muted }}
-                      />
-                    )}
-                  </box>
-                )}
-              </Button>
-            </box>
-
-            <box style={{ height: 1, flexShrink: 0 }} />
-          </>
-        ) : null}
-
-        <ConfigurationDivider label="CONFIGURAÇÕES GLOBAIS" />
-
-        {compact ? null : (
+      {narrow ? (
+        <box
+          id="configuration-mobile-navigation"
+          style={{
+            height: 2,
+            flexShrink: 0,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            border: ["bottom"],
+            borderColor: COLORS.border,
+          }}
+        >
+          <InlineButton
+            id="configuration-category-previous"
+            label="[K] ↑"
+            accent={COLORS.focus}
+            onPress={() => previous && onSectionChange(previous)}
+          />
           <text
-            content="As alterações são aplicadas e salvas automaticamente."
-            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+            content={truncateDisplay(
+              translateUi(CONFIGURATION_SECTION_LABELS[section]),
+              Math.max(8, width - 22),
+            )}
+            style={{ fg: COLORS.focus }}
+          />
+          <InlineButton
+            id="configuration-category-next"
+            label="[J] ↓"
+            accent={COLORS.focus}
+            onPress={() => next && onSectionChange(next)}
+          />
+        </box>
+      ) : null}
+
+      <box style={{ flexGrow: 1, width: "100%", flexDirection: "row" }}>
+        {narrow ? null : (
+          <ConfigurationNavigation
+            sections={sections}
+            section={section}
+            settings={settings}
+            queryHistoryCount={queryHistoryCount}
+            tutorialLabel={tutorialLabel}
+            navigationRef={navigationRef}
+            onSectionChange={onSectionChange}
           />
         )}
-
-        <ColorModeConfigurationGroup
-          selected={section === "colorMode"}
-          mode={settings.colorMode}
-          palette={settings.palette}
-          compact={compact}
-          onSelect={() => onSectionChange("colorMode")}
-          onChange={onColorModeChange}
-        />
-        <box style={{ height: 1, flexShrink: 0 }} />
-        <PaletteConfigurationGroup
-          selected={section === "palette"}
-          palette={settings.palette}
-          colorMode={settings.colorMode}
-          compact={compact}
-          onSelect={() => onSectionChange("palette")}
-          onChange={onPaletteChange}
-        />
-        <box style={{ height: 1, flexShrink: 0 }} />
-
-        <box id="configuration-group-layout" style={{ height: compact ? 2 : 5, flexShrink: 0 }}>
-          <box
-            id="configuration-section-layout"
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              backgroundColor: section === "layout" ? COLORS.panelRaised : COLORS.canvas,
-            }}
-          >
-            <text
-              content={`${section === "layout" ? "◆" : "◇"} ${translateUi("LAYOUT")}`}
-              style={{ fg: COLORS.text }}
-            />
-            <ShortcutText content="[↑/↓] seção" style={{ fg: COLORS.muted }} />
-          </box>
-
-          <box style={{ height: compact ? 1 : 4, flexShrink: 0, flexDirection: "row" }}>
-            <LayoutChoice
-              mode="framed"
-              compact={compact}
-              selected={settings.layout === "framed"}
-              onPress={() => {
-                onSectionChange("layout")
-                onLayoutChange("framed")
-              }}
-            />
-            <LayoutChoice
-              mode="compact"
-              compact={compact}
-              selected={settings.layout === "compact"}
-              onPress={() => {
-                onSectionChange("layout")
-                onLayoutChange("compact")
-              }}
-            />
-          </box>
-        </box>
-
-        <box style={{ height: 1, flexShrink: 0 }} />
-
-        <box id="configuration-group-language" style={{ height: 4, flexShrink: 0 }}>
-          <box
-            id="configuration-section-language"
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              backgroundColor: section === "language" ? COLORS.panelRaised : COLORS.canvas,
-            }}
-          >
-            <text
-              content={`${section === "language" ? "◆" : "◇"} ${translateUi("IDIOMA")}`}
-              style={{ fg: COLORS.text }}
-            />
-            <ShortcutText content="[←/→] alterar" style={{ fg: COLORS.muted }} />
-          </box>
-
-          {LANGUAGE_ROWS.map((row) => (
-            <box key={row.id} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-              {row.options.map((language) => (
-                <LanguageChoice
-                  key={language.id}
-                  {...language}
-                  compact={compact}
-                  selected={settings.language === language.id}
-                  onPress={() => {
-                    onSectionChange("language")
-                    onLanguageChange(language.id)
-                  }}
-                />
-              ))}
-            </box>
-          ))}
-        </box>
-
-        <box style={{ height: 1, flexShrink: 0 }} />
-
-        <TutorialSetting
-          visible={context !== "installer"}
-          active={section === "tutorial"}
-          compact={compact}
-          tutorialLabel={tutorialLabel}
-          onStartTutorial={() => {
-            onSectionChange("tutorial")
-            onStartTutorial()
+        <scrollbox
+          id="configuration-detail"
+          scrollY
+          style={{
+            flexGrow: 1,
+            height: "100%",
+            paddingLeft: narrow ? 0 : 2,
           }}
-        />
-        <FeatureSettings
-          active={section === "features"}
-          onOpen={() => {
-            onSectionChange("features")
-            onOpenFeatures()
+          verticalScrollbarOptions={{
+            trackOptions: { backgroundColor: COLORS.panel, foregroundColor: COLORS.border },
           }}
-        />
-      </scrollbox>
+        >
+          <box
+            id={`configuration-detail-${section}`}
+            style={{ width: "100%", flexShrink: 0, paddingTop: 1 }}
+          >
+            <ConfigurationDetail
+              section={section}
+              settings={settings}
+              notice={notice}
+              queryHistoryCount={queryHistoryCount}
+              tutorialLabel={tutorialLabel}
+              onPaletteChange={onPaletteChange}
+              onColorModeChange={onColorModeChange}
+              onLayoutChange={onLayoutChange}
+              onLanguageChange={onLanguageChange}
+              onOpenSensitiveTerms={onOpenSensitiveTerms}
+              onOpenQueryHistory={onOpenQueryHistory}
+              onOpenFeatures={onOpenFeatures}
+              onStartTutorial={onStartTutorial}
+              onOpenGitConfiguration={onOpenGitConfiguration}
+              compact={narrow}
+              contentWidth={detailWidth}
+            />
+          </box>
+        </scrollbox>
+      </box>
 
       <box
         style={{
@@ -508,14 +196,17 @@ export function ConfigurationModal({
         }}
       >
         <ShortcutText
-          content={
-            notice ||
-            (compact ? "[↑↓] seção · [←→] opção" : "[↑↓] seção · [←→] opção · [Enter] selecionar")
-          }
-          style={{ fg: notice ? COLORS.warning : COLORS.muted }}
+          content={translateUi(
+            minimal
+              ? "[J/K] · [H/L]"
+              : narrow
+                ? "[J/K/↑/↓] categoria · [H/L/←/→] opção"
+                : "[J/K/↑/↓] categoria · [H/L/←/→] opção · [Enter] abrir",
+          )}
+          style={{ fg: COLORS.muted }}
         />
         <InlineButton
-          label={compact ? "[R]" : "[R] Padrão"}
+          label={narrow ? "[R]" : "[R] Padrão"}
           accent={COLORS.focus}
           onPress={onReset}
         />

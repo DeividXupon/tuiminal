@@ -242,7 +242,6 @@ export function AppContent() {
       openHistory: openQueryHistory,
       openSensitive: () => setSensitiveTermsOpen(true),
       openGit: openGitConfiguration,
-      close: () => setSettingsOpen(false),
     })
   }, [openGitConfiguration, openQueryHistory, startTutorial, openFeatures])
 
@@ -276,13 +275,13 @@ export function AppContent() {
         setSettingsOpen(false)
       } else if (key.name === "enter" || key.name === "return") {
         activateConfiguration()
-      } else if (key.name === "up") {
+      } else if (key.name === "up" || key.name === "k") {
         cycleConfigurationSection(-1)
-      } else if (key.name === "down" || key.name === "tab") {
+      } else if (key.name === "down" || key.name === "j" || key.name === "tab") {
         cycleConfigurationSection(1)
-      } else if (key.name === "left") {
+      } else if (key.name === "left" || key.name === "h") {
         cycleConfiguration(-1)
-      } else if (key.name === "right") {
+      } else if (key.name === "right" || key.name === "l") {
         cycleConfiguration(1)
       } else if (key.name === "r") {
         restoreDefaultSettings()

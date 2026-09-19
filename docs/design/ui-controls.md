@@ -37,6 +37,23 @@ padding and gaps match the bordered panels, and to `COLORS.canvas` in compact mo
 Internal editor, code, log, input, dimmer, and raised-panel surfaces keep their
 explicit palette colors because those contrasts communicate structure or state.
 
+## Settings center
+
+The global `[,]` modal uses a category/detail layout. At wide widths, a fixed
+sidebar groups tool context, appearance, and general categories; the right pane
+mounts only the selected category's choices or action. At narrow widths, compact
+previous/next controls replace the sidebar and the detail keeps the available
+width. Database-only and Git-only categories must remain hidden outside their
+own context.
+
+`[J/K]` and `[↑/↓]` move through visible categories. `[H/L]` and
+`[←/→]` change the current value for color mode, palette, layout, and language.
+`[Enter]` opens action categories such as Git, sensitive terms, SQL history,
+tutorial, and official features. Every category and choice remains clickable.
+The selected sidebar row uses the fixed brand rail and a raised background, and
+the detail header shows automatic-save status without turning it into another
+focus target.
+
 ## Notifications
 
 `NotificationProvider` owns one top-right stack of at most three non-focusable

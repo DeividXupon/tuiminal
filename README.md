@@ -562,7 +562,11 @@ The tmux-inspired `[Ctrl+B]` prefix separates multiplexer commands from input se
 
 ## Interface and customization
 
-`[,]` opens contextual settings. Changes apply without remounting editors, losing focus, or clearing tool state.
+`[,]` opens the contextual settings center. Wide terminals use a category sidebar and a
+focused detail pane; narrow terminals show one category at a time. Use `[J/K]` or
+`[↑/↓]` to move between categories and `[H/L]` or `[←/→]` to change the current
+option. Changes save automatically without remounting editors, losing focus, or
+clearing tool state.
 
 - **Color mode:** Dark or Light.
 - **Palettes:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, and Tokyo Night.

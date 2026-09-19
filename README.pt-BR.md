@@ -569,7 +569,12 @@ O campo `CMD` é opcional: vazio abre o shell padrão; preenchido executa o coma
 
 ## Interface e personalização
 
-`[,]` abre configurações contextuais. As mudanças são aplicadas sem desmontar editores, perder foco ou apagar o estado das ferramentas.
+`[,]` abre a central de configurações contextuais. Em terminais largos, ela usa uma
+barra lateral de categorias e um painel de detalhes; em terminais estreitos, mostra
+uma categoria por vez. Use `[J/K]` ou `[↑/↓]` para navegar entre categorias e
+`[H/L]` ou `[←/→]` para alterar a opção atual. As mudanças são salvas
+automaticamente sem desmontar editores, perder foco ou apagar o estado das
+ferramentas.
 
 - **Modo de cor:** Dark ou Light.
 - **Paletas:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin e Tokyo Night.
