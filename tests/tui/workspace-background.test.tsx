@@ -31,7 +31,7 @@ async function expectSurface(element: ReactElement, id: string, expected: string
 }
 
 for (const layout of ["framed", "compact"] as const) {
-  test(`all feature workspaces share the ${layout} background`, async () => {
+  test(`workspaces respect ${layout} while Free Terminal always stays compact`, async () => {
     updateUiSettings({ layout, language: "pt-BR" })
     const expected = layout === "framed" ? COLORS.panel : COLORS.canvas
     await expectSurface(createElement(DatabaseTutorialDemo), "database-workspace", expected)
@@ -41,7 +41,7 @@ for (const layout of ["framed", "compact"] as const) {
     await expectSurface(
       createElement(FreeTerminal, { active: false }),
       "terminal-workspace",
-      expected,
+      COLORS.canvas,
     )
   })
 }

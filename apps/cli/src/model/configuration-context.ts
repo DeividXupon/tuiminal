@@ -7,6 +7,7 @@ export type ConfigurationSection =
   | "gitIssues"
   | "gitRepositories"
   | "gitBrowser"
+  | "terminal"
   | "colorMode"
   | "palette"
   | "layout"
@@ -16,7 +17,7 @@ export type ConfigurationSection =
   | "tutorial"
   | "features"
 
-export type ConfigurationContext = "database" | "git" | "global" | "installer"
+export type ConfigurationContext = "database" | "git" | "global" | "installer" | "terminal"
 
 const GLOBAL_CONFIGURATION_SECTIONS: ConfigurationSection[] = [
   "colorMode",
@@ -71,10 +72,16 @@ export function configurationSectionForGitTab(tab: GitConfigurationTab) {
 export function configurationContextForTool(tool: ToolId): ConfigurationContext {
   if (tool === "database") return "database"
   if (tool === "git") return "git"
+  if (tool === "terminal") return "terminal"
   return "global"
 }
 
 export function configurationSectionsForContext(context: ConfigurationContext) {
+  if (context === "terminal")
+    return [
+      "terminal",
+      ...GLOBAL_CONFIGURATION_SECTIONS.filter((section) => section !== "layout"),
+    ] as ConfigurationSection[]
   if (context === "installer")
     return GLOBAL_CONFIGURATION_SECTIONS.filter((section) => section !== "tutorial")
   if (context === "database") return [...DATABASE_CONFIGURATION_SECTIONS]

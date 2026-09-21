@@ -4,12 +4,14 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import * as terminalService from "../../packages/feature-terminal/src/services/terminal"
 
 let tui: TestRendererSetup | undefined
 type TerminalOptions = Parameters<typeof terminalService.startFreeTerminalProcess>[1]
 const starts: TerminalOptions[] = []
 const inputs: string[][] = []
+let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 let finishStop = () => {}
 let spawnSpy:
   | ReturnType<typeof spyOn<typeof terminalService, "startFreeTerminalProcess">>
@@ -19,11 +21,13 @@ afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
   spawnSpy?.mockRestore()
+  inspectionSpy?.mockRestore()
   starts.length = 0
   inputs.length = 0
 })
 
 async function startFixture(deferStop = false) {
+  inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockResolvedValue([])
   spawnSpy = spyOn(terminalService, "startFreeTerminalProcess").mockImplementation(
     (_command, options) => {
       starts.push(options)
@@ -42,6 +46,7 @@ async function startFixture(deferStop = false) {
     },
   )
   tui = await testRender(<FreeTerminal active />, { width: 100, height: 28 })
+  await leader("/")
   await act(async () => {
     tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
     await tui?.mockInput.typeText("fixture-command")
@@ -93,7 +98,7 @@ test("closing a pane while its shell stops cancels a pending restart", async () 
   await act(async () => finishStop())
   await tui?.renderOnce()
   expect(starts).toHaveLength(1)
-  expect(tui?.captureCharFrame()).toContain("TERMINAIS LIVRES")
+  expect(tui?.captureCharFrame()).toContain("Novo terminal")
 })
 
 test("unmount cancels a replacement waiting for the old shell to stop", async () => {

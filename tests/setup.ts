@@ -39,6 +39,13 @@ process.env.TUIMINAL_WORKDIR = projectRoot
 process.env.TUIMINAL_HTTP_HOME = projectRoot
 process.env.TUIMINAL_PROJECT_ROOTS = testRoot
 process.env.TUIMINAL_ONLY_TAB = "runner"
+// Each tmux test opts into mocked or disposable servers explicitly.
+process.env.TUIMINAL_TERMINAL_BACKEND = "native"
+process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = "0"
+process.env.TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY = "0"
+process.env.TUIMINAL_TERMINAL_RESTORE = "0"
+process.env.TUIMINAL_TERMINAL_PINNED_TMUX = "0"
+process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "0"
 for (const name of ["DATABASE_URL", "MYSQL_URL", "POSTGRES_URL", "TUIMINAL_MYSQL_MCP_COMMAND"]) {
   delete process.env[name]
 }

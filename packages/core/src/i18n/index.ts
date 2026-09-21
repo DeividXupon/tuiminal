@@ -1,3 +1,4 @@
+import { TERMINAL_MESSAGES } from "./terminal-catalog"
 import { RUNNER_HELP_MESSAGES } from "./runner-help-catalog"
 import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
 import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
@@ -113,6 +114,7 @@ type Message = readonly [
 const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...CONFIGURATION_MESSAGES,
+  ...TERMINAL_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
   ...RUNNER_HELP_MESSAGES,

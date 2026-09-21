@@ -24,6 +24,22 @@ function sqliteWorkerCommand() {
       ]
 }
 
+function terminalSidebarCommand(args: string[]) {
+  return MINIMAL_BUILD
+    ? [process.execPath, "--internal-terminal-sidebar", ...args]
+    : [
+        process.execPath,
+        fileURLToPath(new URL("../../bin/tuiminal.ts", import.meta.url)),
+        "--internal-terminal-sidebar",
+        ...args,
+      ]
+}
+
+async function prepareHost() {
+  const { prepareFeatureHost } = await import("./host-modules")
+  prepareFeatureHost(FEATURE_VERSION, sqliteWorkerCommand, terminalSidebarCommand)
+}
+
 async function loadEntry(id: FeatureId, name: string, withHost = true) {
   const environment = await featureEnvironment()
   const artifact = environment.catalog.artifacts.find((entry) => entry.id === id)
@@ -38,8 +54,7 @@ async function loadEntry(id: FeatureId, name: string, withHost = true) {
     )
   }
   if (withHost) {
-    const { prepareFeatureHost } = await import("./host-modules")
-    prepareFeatureHost(FEATURE_VERSION, sqliteWorkerCommand)
+    await prepareHost()
   }
   const bytes = files.get(name)
   if (!bytes) throw new FeatureInstallError("integrity", "Official feature entry is missing")
@@ -51,7 +66,10 @@ export async function loadFeature(id: FeatureId) {
   const current = pending.get(id)
   if (current) return current
   const load = (async () => {
-    if (sourceFeaturesEnabled()) return (await import("./source-loader")).loadSourceFeature(id)
+    if (sourceFeaturesEnabled()) {
+      await prepareHost()
+      return (await import("./source-loader")).loadSourceFeature(id)
+    }
     const module = await loadEntry(id, "index.mjs")
     registerFeature(id, module as FeatureModules[typeof id])
   })()
@@ -78,4 +96,10 @@ export async function runInstalledHttp(command: "run" | "import" | "postman", ar
 export async function runInstalledSqliteWorker() {
   if (typeof process.send !== "function") throw new Error("SQLite worker requires an IPC channel")
   await loadEntry("database", "sqlite-worker.mjs", false)
+}
+
+export async function runInstalledTerminalSidebar(args: string[]) {
+  if (sourceFeaturesEnabled()) return (await import("./source-loader")).sourceTerminalSidebar(args)
+  const module = await loadEntry("terminal", "terminal-sidebar.mjs")
+  return (module.runTerminalSidebarCli as (args: string[]) => Promise<number>)(args)
 }

@@ -32,10 +32,15 @@ import * as shared28 from "@xupon/tuiminal-core/ui/syntax-style"
 import * as shared29 from "@xupon/tuiminal-core/runtime/feature-host"
 import * as shared30 from "@xupon/tuiminal-core/ui/ModalSurface"
 
-export function prepareFeatureHost(version: string, sqliteWorkerCommand: () => string[]) {
+export function prepareFeatureHost(
+  version: string,
+  sqliteWorkerCommand: () => string[],
+  terminalSidebarCommand?: (args: string[]) => string[],
+) {
   registerFeatureHost({
     version,
     sqliteWorkerCommand,
+    ...(terminalSidebarCommand ? { terminalSidebarCommand } : {}),
     modules: {
       react: shared0,
       "react/jsx-runtime": shared1,

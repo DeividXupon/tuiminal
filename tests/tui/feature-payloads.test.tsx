@@ -27,7 +27,11 @@ let settings: Buffer | undefined
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "tuiminal-payload-tui-"))
   build = await buildFeaturePayloads(join(root, "payloads"))
-  prepareFeatureHost(build.catalog.version, () => [process.execPath, "--internal-sqlite-worker"])
+  prepareFeatureHost(
+    build.catalog.version,
+    () => [process.execPath, "--internal-sqlite-worker"],
+    (args) => [process.execPath, "--internal-terminal-sidebar", ...args],
+  )
 }, 30_000)
 
 beforeEach(async () => {
@@ -52,7 +56,7 @@ afterAll(async () => {
   if (root) await rm(root, { recursive: true, force: true })
 })
 
-async function loadPayload(id: FeatureId) {
+async function loadPayload(id: FeatureId, name = "index.mjs") {
   const artifact = build.catalog.artifacts.find((entry) => entry.id === id)!
   const files = decodeFeaturePayload(
     await readFile(join(build.destination, artifact.filename)),
@@ -61,7 +65,7 @@ async function loadPayload(id: FeatureId) {
   const store = new FeatureStore(join(root, "installed"))
   await store.publish(artifact, files, new AbortController().signal)
   const verified = await store.read(artifact)
-  return importVerifiedFeature(verified.get("index.mjs")!)
+  return importVerifiedFeature(verified.get(name)!)
 }
 
 test.each([
@@ -74,6 +78,11 @@ test.each([
   const module = await loadPayload(id)
   expect(typeof module[component]).toBe("function")
   if (id === "git") expect(typeof module.GitConfigurationView).toBe("function")
+})
+
+test("built Terminal payload exposes its verified tmux sidebar helper", async () => {
+  const module = await loadPayload("terminal", "terminal-sidebar.mjs")
+  expect(typeof module.runTerminalSidebarCli).toBe("function")
 })
 
 async function settle(until: () => boolean) {

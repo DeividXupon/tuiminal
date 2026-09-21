@@ -19,6 +19,7 @@ const extraEntrypoints: Partial<Record<FeatureId, Record<string, string>>> = {
     "http-import.mjs": "cli/import.ts",
     "http-postman.mjs": "cli/postman.ts",
   },
+  terminal: { "terminal-sidebar.mjs": "cli/sidebar.tsx" },
 }
 
 export async function buildFeaturePayloads(outputDirectory?: string) {

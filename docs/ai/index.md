@@ -13,7 +13,7 @@ remain the source of truth when a note has drifted.
 | Git Diffs, PR, Issues, Inbox | [Git](./git.md) | [PR](../design/git-pr-interface.md), [Issues](../design/git-issues-interface.md), [Inbox](../design/git-inbox-interface.md) |
 | Runner and process ownership | [Runner](./runner.md) | [Runner](../design/runner.md), [Architecture](../architecture.md) |
 | HTTP client, Postman account access, and headless execution | [HTTP](./http.md) | [Postman account](../design/postman-account.md); [HTTP_CLIENT_PLAN.md](../../HTTP_CLIENT_PLAN.md) for future-facing work |
-| Free Terminal and PTY | [Terminal](./terminal.md) | [Architecture](../architecture.md) |
+| Free Terminal and PTY | [Terminal](./terminal.md) | [Terminal workspace](../design/terminal.md), [Agent activity](../design/terminal-agents.md), [Architecture](../architecture.md) |
 | Database and SQL | [Database](./database.md) | [Architecture](../architecture.md); [future priorities](../plans/database-next.md) |
 | Tests, packaging, CI, releases | [Validation](./validation.md) | [Release process](../release-process.md) |
 

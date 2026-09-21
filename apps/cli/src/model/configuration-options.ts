@@ -1,3 +1,4 @@
+import { TERMINAL_MASTER_KEYS } from "@xupon/tuiminal-core/settings/theme"
 import type { UiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { PALETTE_OPTIONS } from "@xupon/tuiminal-core/settings/theme"
 import { LANGUAGE_OPTIONS } from "@xupon/tuiminal-core/i18n/index"
@@ -8,6 +9,15 @@ export function configurationSettingPatch(
   settings: UiSettings,
   direction: -1 | 1,
 ): Partial<UiSettings> | null {
+  if (section === "terminal") {
+    const index = TERMINAL_MASTER_KEYS.indexOf(settings.terminalMasterKey)
+    return {
+      terminalMasterKey:
+        TERMINAL_MASTER_KEYS[
+          (index + direction + TERMINAL_MASTER_KEYS.length) % TERMINAL_MASTER_KEYS.length
+        ]!,
+    }
+  }
   if (section === "colorMode") {
     return { colorMode: settings.colorMode === "dark" ? "light" : "dark" }
   }

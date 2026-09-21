@@ -1,840 +1,624 @@
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import { basename } from "node:path"
-import type { EmbeddedTerminalRenderable, InputRenderable } from "@opentui/core"
+import type { BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { notifyTerminalExit, useTerminalNotifications } from "./hooks/use-terminal-notifications"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
+import {
+  COLORS,
+  getUiSettings,
+  matchesTerminalMasterKey,
+  terminalMasterKeyBytes,
+} from "@xupon/tuiminal-core/settings/theme"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import {
   FREE_TERMINAL_WORKING_DIRECTORY,
   createFreeTerminalCommand,
   createShellTerminalCommand,
-  startFreeTerminalProcess,
-  type FreeTerminalCommand,
-  type FreeTerminalKind,
-  type FreeTerminalProcessHandle,
 } from "./services/terminal"
-import { stopTerminalBeforeRestart } from "./services/terminal-lifecycle"
-import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { compactTerminalText, terminalFooterLayout } from "./rendering/presentation"
+import { useTerminalSessions } from "./hooks/use-terminal-sessions"
+import { useAgentDetection } from "./hooks/use-agent-detection"
+import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
+import { useExternalTerminals } from "./hooks/use-external-terminals"
+import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
 import {
-  FreeTerminalPane,
-  type FreeTerminalPaneLayout,
-  type FreeTerminalPaneSession,
-} from "./ui/FreeTerminalPane"
+  DEFAULT_FOLDER,
+  DEFAULT_FOLDER_NAME,
+  EXTERNAL_FOLDER,
+  EXTERNAL_FOLDER_NAME,
+  MAX_SESSIONS,
+  MAX_TERMINALS_PER_SECTION,
+  cleanTerminalName,
+  terminalSections,
+  type TerminalFolder,
+  type FreeTerminalCommand,
+} from "./model/sessions"
+import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
+import { TerminalSidebar } from "./ui/TerminalSidebar"
+import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
+import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
+import { TerminalTmuxDialog } from "./ui/TerminalTmuxDialog"
+import { TUIMINAL_TMUX_FOLDER, tmuxPaneKey, type TmuxPaneInfo } from "./model/tmux"
+import {
+  clearTerminalSidebar,
+  publishTerminalSidebar,
+  requestTerminalSidebarFocus,
+  subscribeTerminalSidebar,
+  terminalSidebarFocusRevision,
+  terminalSidebarPinnedSnapshot,
+  terminalSidebarRequestRevision,
+  terminalSidebarSnapshot,
+  toggleTerminalSidebarPinned,
+} from "./model/pinned-sidebar"
+import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { discoverTmuxWorkspace } from "./services/tmux-agents"
+import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
+import {
+  loadTerminalWorkspaceState,
+  saveTerminalWorkspaceState,
+  terminalWorkspaceAssignmentKey,
+  type TerminalWorkspaceState,
+} from "./services/terminal-workspace-state"
 
-type FreeTerminalViewMode = "section" | "single"
-type TerminalRow = 0 | 1
-type TerminalColumn = 0 | 1
-
-type FreeTerminalSession = FreeTerminalPaneSession
-
-type TerminalPlacement = {
-  sectionId: string
-  row: TerminalRow
-  column: TerminalColumn
+const FULL_PANE: FreeTerminalPaneLayout = {
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  borderTop: false,
+  borderLeft: false,
 }
 
-const MAX_SESSIONS = 12
-const MAX_TERMINALS_PER_SECTION = 4
+const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
+  { id: DEFAULT_FOLDER, name: DEFAULT_FOLDER_NAME },
+  { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
+  { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
+]
 
-function comparePanePosition(first: FreeTerminalSession, second: FreeTerminalSession) {
-  return first.row - second.row || first.column - second.column
+function nextTerminalFolderId(folders: readonly TerminalFolder[]) {
+  let number = 1
+  while (folders.some((folder) => folder.id === `folder-${number}`)) number += 1
+  return `folder-${number}`
 }
 
-function normalizeSectionLayout(sessions: FreeTerminalSession[], sectionId: string) {
-  const inSection = sessions.filter((session) => session.sectionId === sectionId)
-  if (!inSection.length) return sessions
-
-  const top = inSection.filter((session) => session.row === 0)
-  const bottom = inSection.filter((session) => session.row === 1)
-  const rows = top.length ? [top, bottom] : [bottom, []]
-  const positions = new Map<string, { row: TerminalRow; column: TerminalColumn }>()
-
-  rows.forEach((rowSessions, row) => {
-    rowSessions.forEach((session, column) => {
-      positions.set(session.id, {
-        row: row as TerminalRow,
-        column: Math.min(column, 1) as TerminalColumn,
-      })
-    })
-  })
-
-  return sessions.map((session) => {
-    const position = positions.get(session.id)
-    return position ? { ...session, ...position } : session
-  })
-}
-
-export function FreeTerminal({ active }: { active: boolean }) {
+export function FreeTerminal({
+  active,
+  externalSidebarHost = false,
+}: {
+  active: boolean
+  externalSidebarHost?: boolean
+}) {
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
-  const customInputRef = useRef<InputRenderable | null>(null)
-  const terminalRefs = useRef(new Map<string, EmbeddedTerminalRenderable>())
-  const processHandles = useRef(new Map<string, FreeTerminalProcessHandle>())
-  const sessionCommands = useRef(new Map<string, FreeTerminalCommand>())
-  const terminalSizes = useRef(new Map<string, { columns: number; rows: number }>())
-  const generations = useRef(new Map<string, number>())
-  const kindSequences = useRef(new Map<FreeTerminalKind, number>())
-  const sessionSequence = useRef(0)
-  const sectionSequence = useRef(0)
-  const activeRef = useRef(active)
-  const activeSessionRef = useRef<string | null>(null)
-  const sessionsRef = useRef<FreeTerminalSession[]>([])
-  const leaderRef = useRef(false)
-  const [sessions, setSessions] = useState<FreeTerminalSession[]>([])
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<FreeTerminalViewMode>("section")
-  const [customCommand, setCustomCommand] = useState("")
-  const [notice, setNotice] = useState(
-    "Crie uma seção; os terminais continuam vivos ao trocar de tab.",
+  const workspaceRef = useRef<BoxRenderable | null>(null)
+  const terminal = useTerminalSessions(active)
+  const {
+    sessions,
+    sessionsRef,
+    dismissedTmuxPanes,
+    activeSessionId,
+    activeSessionRef,
+    terminalRefs,
+    agentOutputs,
+    processHandles,
+    activateSession,
+    focusTerminal,
+    updateSession,
+    launchCommand,
+    closeSession,
+    restartSession,
+    moveSession,
+    terminalReady,
+    terminalGone,
+    terminalInput,
+    terminalResize,
+    setNotice,
+  } = terminal
+  const externalSessions = useExternalTerminals()
+  const sidebarSessions = useMemo(
+    () => [...sessions, ...externalSessions],
+    [externalSessions, sessions],
   )
+  const [initialWorkspaceState] = useState(() =>
+    loadTerminalWorkspaceState(FREE_TERMINAL_WORKING_DIRECTORY),
+  )
+  const workspaceStateRef = useRef<TerminalWorkspaceState>(initialWorkspaceState)
+  const lastWorkspaceStateSignature = useRef(JSON.stringify(initialWorkspaceState))
+  const [folders, setFolders] = useState<TerminalFolder[]>([
+    ...RESERVED_TERMINAL_FOLDERS,
+    ...initialWorkspaceState.folders,
+  ])
+  const foldersRef = useRef(folders)
+  foldersRef.current = folders
+  const [selectedFolder, setSelectedFolder] = useState(DEFAULT_FOLDER)
   const [leaderActive, setLeaderActive] = useState(false)
-  const notify = useTerminalNotifications(notice)
-
-  const sectionIds = useMemo(() => {
-    const ids: string[] = []
-    const seen = new Set<string>()
-    for (const session of sessions) {
-      if (seen.has(session.sectionId)) continue
-      seen.add(session.sectionId)
-      ids.push(session.sectionId)
-    }
-    return ids
-  }, [sessions])
+  const leaderRef = useRef(false)
+  const [dialog, setDialog] = useState<TerminalDialogKind | "tmux" | null>(null)
+  const dialogRef = useRef<TerminalDialogKind | "tmux" | null>(null)
+  const [zoomed, setZoomed] = useState(false)
+  const sequence = useRef(0)
+  const sidebarOwner = useRef({})
+  const runActionRef = useRef<(key: string) => void>(() => undefined)
+  const handledTargetRevision = useRef(0)
+  const sidebarPinned = useSyncExternalStore(
+    subscribeTerminalSidebar,
+    terminalSidebarPinnedSnapshot,
+    terminalSidebarPinnedSnapshot,
+  )
+  const requestedTargetRevision = useSyncExternalStore(
+    subscribeTerminalSidebar,
+    terminalSidebarRequestRevision,
+    terminalSidebarRequestRevision,
+  )
+  const focusRequest = useSyncExternalStore(
+    subscribeTerminalSidebar,
+    terminalSidebarFocusRevision,
+    terminalSidebarFocusRevision,
+  )
+  const masterKey = getUiSettings().terminalMasterKey
+  const sections = terminalSections(sessions)
   const activeSession = sessions.find((session) => session.id === activeSessionId)
-  const currentSectionId = activeSession?.sectionId ?? activeSectionId ?? sectionIds[0] ?? null
-  const currentSectionIndex = currentSectionId ? sectionIds.indexOf(currentSectionId) : -1
-  const currentSectionSessions = useMemo(
-    () =>
-      sessions
-        .filter((session) => session.sectionId === currentSectionId)
-        .sort(comparePanePosition),
-    [currentSectionId, sessions],
+  const section = sections.find((section) => section.id === activeSession?.sectionId)
+  const canSplit = Boolean(
+    section && section.panes.length < MAX_TERMINALS_PER_SECTION && sessions.length < MAX_SESSIONS,
   )
-  const topRowSessions = currentSectionSessions.filter((session) => session.row === 0)
-  const bottomRowSessions = currentSectionSessions.filter((session) => session.row === 1)
-  const visibleSessionIds = useMemo(() => {
-    if (viewMode === "single") {
-      return activeSessionId ? [activeSessionId] : []
-    }
-    return currentSectionSessions.map((session) => session.id)
-  }, [activeSessionId, currentSectionSessions, viewMode])
-  const paneLayouts = useMemo(() => {
-    const layouts = new Map<string, FreeTerminalPaneLayout>()
-    if (viewMode === "single" && activeSessionId) {
-      layouts.set(activeSessionId, {
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        borderTop: false,
-        borderLeft: false,
-      })
-      return layouts
-    }
-
-    const hasBottomRow = bottomRowSessions.length > 0
-    for (const session of currentSectionSessions) {
-      const rowSessions = session.row === 0 ? topRowSessions : bottomRowSessions
-      const columnIndex = rowSessions.findIndex((candidate) => candidate.id === session.id)
-      const splitRow = rowSessions.length === 2
-      layouts.set(session.id, {
-        top: session.row === 1 ? "50%" : 0,
-        left: splitRow && columnIndex === 1 ? "50%" : 0,
-        width: splitRow ? "50%" : "100%",
-        height: hasBottomRow ? "50%" : "100%",
-        borderTop: session.row === 1,
-        borderLeft: splitRow && columnIndex === 1,
-      })
-    }
-    return layouts
-  }, [activeSessionId, bottomRowSessions, currentSectionSessions, topRowSessions, viewMode])
-  const runningCount = sessions.filter((session) => session.status === "running").length
-  const activeRowCount = activeSession
-    ? currentSectionSessions.filter((session) => session.row === activeSession.row).length
-    : 0
-  const canSplitRight = Boolean(
-    activeSession &&
-      currentSectionSessions.length < MAX_TERMINALS_PER_SECTION &&
-      activeRowCount < 2,
+  const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
+  const sidebarHeight =
+    dimensions.height - 1 - (leaderActive ? Math.max(3, Math.floor(dimensions.height / 2)) : 0)
+  const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
+    "\u0000",
   )
-  const canSplitDown = Boolean(
-    activeSession &&
-      activeSession.row === 0 &&
-      currentSectionSessions.length < MAX_TERMINALS_PER_SECTION &&
-      bottomRowSessions.length === 0,
-  )
-  const pageCount = Math.max(1, sectionIds.length)
-  const compact = dimensions.width < 106
-  const footerLayout = terminalFooterLayout(dimensions.width - 2)
-  const paneAppearanceKey = [
-    getLanguage(),
-    LAYOUT.compact,
-    COLORS.border,
-    COLORS.danger,
-    COLORS.muted,
-    COLORS.panel,
-    COLORS.panelRaised,
-    COLORS.terminal,
-  ].join("\u0000")
-
-  activeRef.current = active
-  activeSessionRef.current = activeSessionId
-  sessionsRef.current = sessions
-
-  const updateSession = useCallback((id: string, update: Partial<FreeTerminalSession>) => {
-    setSessions((current) =>
-      current.map((session) => (session.id === id ? { ...session, ...update } : session)),
-    )
-  }, [])
-
-  const focusTerminal = useCallback((id: string | null) => {
-    if (!id || !activeRef.current) return
-    queueMicrotask(() => terminalRefs.current.get(id)?.focus())
-  }, [])
-
-  const activateSession = useCallback(
-    (id: string) => {
-      const session = sessionsRef.current.find((candidate) => candidate.id === id)
-      if (!session) return
-      setActiveSessionId(id)
-      setActiveSectionId(session.sectionId)
-      focusTerminal(id)
-    },
-    [focusTerminal],
-  )
-
-  const startSession = useCallback(
-    async (id: string, clear = false) => {
-      const command = sessionCommands.current.get(id)
-      const embeddedTerminal = terminalRefs.current.get(id)
-      if (!command || !embeddedTerminal) return
-
-      const previous = processHandles.current.get(id)
-      const generation = (generations.current.get(id) ?? 0) + 1
-      generations.current.set(id, generation)
-      const isCurrent = () =>
-        generations.current.get(id) === generation &&
-        terminalRefs.current.get(id) === embeddedTerminal
-      const stopped = await stopTerminalBeforeRestart({
-        handle: previous,
-        write: (data) => {
-          if (isCurrent()) embeddedTerminal.write(data)
-        },
-        onError: (message) => {
-          if (isCurrent()) setNotice(message)
-        },
-      })
-      if (!stopped || !isCurrent()) return
-      processHandles.current.delete(id)
-
-      if (clear) embeddedTerminal.write("\u001bc")
-      embeddedTerminal.write(
-        `\u001b[38;2;130;144;163m◆ ${command.displayCommand}  ·  ${FREE_TERMINAL_WORKING_DIRECTORY}\u001b[0m\r\n`,
-      )
-      updateSession(id, {
-        status: "starting",
-        pid: null,
-        exitCode: null,
-        startedAt: Date.now(),
-      })
-
-      const size = terminalSizes.current.get(id)
-      let handle: FreeTerminalProcessHandle | null = null
-
-      try {
-        handle = startFreeTerminalProcess(command.command, {
-          cwd: FREE_TERMINAL_WORKING_DIRECTORY,
-          columns: size?.columns ?? Math.max(40, dimensions.width - 4),
-          rows: size?.rows ?? Math.max(10, dimensions.height - 6),
-          onData(data) {
-            if (generations.current.get(id) !== generation) return
-            terminalRefs.current.get(id)?.write(data)
-          },
-          onExit(result) {
-            if (processHandles.current.get(id) === handle) {
-              processHandles.current.delete(id)
-            }
-            if (generations.current.get(id) !== generation) return
-            const failed = result.code !== 0 && !result.stopped
-            terminalRefs.current
-              .get(id)
-              ?.write(
-                `\r\n\u001b[${failed ? "38;2;255;107;107" : "38;2;130;144;163"}m` +
-                  `◆ ${translateUi("sessão encerrada")}${result.code === null ? "" : ` · ${translateUi("código")} ${result.code}`}\u001b[0m\r\n`,
-              )
-            updateSession(id, {
-              status: failed ? "failed" : "exited",
-              pid: null,
-              exitCode: result.code,
-            })
-            notifyTerminalExit(notify, command.label, result)
-          },
-        })
-        processHandles.current.set(id, handle)
-        updateSession(id, { status: "running", pid: handle.pid })
-        setNotice(`${command.label} iniciado em ${basename(FREE_TERMINAL_WORKING_DIRECTORY)}.`)
-        if (activeSessionRef.current === id) focusTerminal(id)
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Não foi possível iniciar a sessão."
-        embeddedTerminal.write(`\u001b[38;2;255;107;107m× ${message}\u001b[0m\r\n`)
-        updateSession(id, { status: "failed", pid: null, exitCode: 1 })
-        setNotice(`Erro: ${message}`)
-      }
-    },
-    [dimensions.height, dimensions.width, focusTerminal, notify, updateSession],
-  )
-
-  const terminalReady = useCallback(
-    (id: string, terminal: EmbeddedTerminalRenderable) => {
-      terminalRefs.current.set(id, terminal)
-      terminalSizes.current.set(id, {
-        columns: Math.max(20, terminal.width),
-        rows: Math.max(5, terminal.height),
-      })
-      if (!generations.current.has(id)) void startSession(id)
-      if (activeSessionRef.current === id) focusTerminal(id)
-    },
-    [focusTerminal, startSession],
-  )
-
-  const terminalGone = useCallback((id: string, terminal: EmbeddedTerminalRenderable) => {
-    if (terminalRefs.current.get(id) === terminal) {
-      terminalRefs.current.delete(id)
-    }
-  }, [])
-
-  const terminalInput = useCallback((id: string, data: Uint8Array) => {
-    processHandles.current.get(id)?.write(data)
-  }, [])
-
-  const terminalResize = useCallback((id: string, columns: number, rows: number) => {
-    terminalSizes.current.set(id, { columns, rows })
-    processHandles.current.get(id)?.resize(columns, rows)
-  }, [])
-
-  const launchCommand = useCallback(
-    (command: FreeTerminalCommand, placement: TerminalPlacement) => {
-      const currentSessions = sessionsRef.current
-      if (currentSessions.length >= MAX_SESSIONS) {
-        setNotice(`Limite de ${MAX_SESSIONS} terminais nesta execução.`)
-        return
-      }
-      const sectionSize = currentSessions.filter(
-        (session) => session.sectionId === placement.sectionId,
-      ).length
-      if (sectionSize >= MAX_TERMINALS_PER_SECTION) {
-        setNotice("Esta seção já possui quatro terminais.")
-        return
-      }
-
-      sessionSequence.current += 1
-      const number = (kindSequences.current.get(command.kind) ?? 0) + 1
-      kindSequences.current.set(command.kind, number)
-      const id = `${command.kind}-${Date.now()}-${sessionSequence.current}`
-      const session: FreeTerminalSession = {
-        ...command,
-        ...placement,
-        id,
-        title: `${command.label} ${number}`,
-        status: "starting",
-        pid: null,
-        exitCode: null,
-        startedAt: Date.now(),
-      }
-      sessionCommands.current.set(id, command)
-      const nextSessions = [...currentSessions, session]
-      sessionsRef.current = nextSessions
-      setSessions(nextSessions)
-      setActiveSessionId(id)
-      setActiveSectionId(placement.sectionId)
-      setViewMode("section")
-      setNotice(`Abrindo ${command.displayCommand}…`)
-      focusTerminal(id)
-    },
-    [focusTerminal],
-  )
-
-  const pendingCommand = useCallback(() => {
-    const value = customCommand.trim()
-    return value ? createFreeTerminalCommand(value) : createShellTerminalCommand()
-  }, [customCommand])
-
-  const clearPendingCommand = useCallback(() => {
-    if (customCommand.trim()) setCustomCommand("")
-  }, [customCommand])
-
-  const launchSection = useCallback(() => {
-    if (sessions.length >= MAX_SESSIONS) {
-      setNotice(`Limite de ${MAX_SESSIONS} terminais nesta execução.`)
-      return
-    }
-    sectionSequence.current += 1
-    const sectionId = `section-${Date.now()}-${sectionSequence.current}`
-    launchCommand(pendingCommand(), { sectionId, row: 0, column: 0 })
-    clearPendingCommand()
-  }, [clearPendingCommand, launchCommand, pendingCommand, sessions.length])
-
-  const splitRight = useCallback(() => {
-    if (!activeSession || !canSplitRight) {
-      setNotice("A linha ativa já atingiu o limite de dois terminais.")
-      return
-    }
-    launchCommand(pendingCommand(), {
-      sectionId: activeSession.sectionId,
-      row: activeSession.row,
-      column: 1,
-    })
-    clearPendingCommand()
-  }, [activeSession, canSplitRight, clearPendingCommand, launchCommand, pendingCommand])
-
-  const splitDown = useCallback(() => {
-    if (!activeSession || !canSplitDown) {
-      setNotice("A seção já possui uma divisão horizontal.")
-      return
-    }
-    launchCommand(pendingCommand(), {
-      sectionId: activeSession.sectionId,
-      row: 1,
-      column: 0,
-    })
-    clearPendingCommand()
-  }, [activeSession, canSplitDown, clearPendingCommand, launchCommand, pendingCommand])
-
-  const submitCommand = useCallback(() => {
-    if (!customCommand.trim()) {
-      setNotice("Digite um comando ou use os botões com o shell padrão.")
-      customInputRef.current?.focus()
-      return
-    }
-    launchSection()
-  }, [customCommand, launchSection])
-
-  const closeSession = useCallback(
-    (id: string) => {
-      const currentSessions = sessionsRef.current
-      const index = currentSessions.findIndex((session) => session.id === id)
-      const removed = currentSessions[index]
-      if (!removed) return
-
-      generations.current.delete(id)
-      const handle = processHandles.current.get(id)
-      if (handle) {
-        void handle
-          .stop()
-          .then(() => processHandles.current.delete(id))
-          .catch((error) => {
-            setNotice(error instanceof Error ? error.message : "O terminal não encerrou.")
-          })
-      } else {
-        processHandles.current.delete(id)
-      }
-      sessionCommands.current.delete(id)
-      terminalSizes.current.delete(id)
-
-      const remaining = normalizeSectionLayout(
-        currentSessions.filter((session) => session.id !== id),
-        removed.sectionId,
-      )
-      const currentActive = remaining.find((session) => session.id === activeSessionRef.current)
-      const next = currentActive ?? remaining[Math.min(index, remaining.length - 1)] ?? null
-      sessionsRef.current = remaining
-      setSessions(remaining)
-      setActiveSessionId(next?.id ?? null)
-      setActiveSectionId(next?.sectionId ?? null)
-      setNotice(next ? `Terminal fechado · foco em ${next.title}.` : "Nenhum terminal ativo.")
-      if (next) focusTerminal(next.id)
-    },
-    [focusTerminal],
-  )
-
-  const restartSession = useCallback(
-    (id: string) => {
-      setActiveSessionId(id)
-      void startSession(id, true)
-      focusTerminal(id)
-    },
-    [focusTerminal, startSession],
-  )
-
-  const moveSession = useCallback(
-    (delta: number) => {
-      const currentSessions = sessionsRef.current
-      if (!currentSessions.length) return
-      const activeIndex = currentSessions.findIndex(
-        (session) => session.id === activeSessionRef.current,
-      )
-      const current = Math.max(0, activeIndex)
-      const nextIndex = (current + delta + currentSessions.length) % currentSessions.length
-      const next = currentSessions[nextIndex]
-      if (next) activateSession(next.id)
-    },
-    [activateSession],
-  )
-
-  const changeSection = useCallback(
-    (delta: number) => {
-      if (!sectionIds.length) return
-      const current = Math.max(0, currentSectionIndex)
-      const nextIndex = (current + delta + sectionIds.length) % sectionIds.length
-      const sectionId = sectionIds[nextIndex]
-      if (!sectionId) return
-      const next = sessions
-        .filter((session) => session.sectionId === sectionId)
-        .sort(comparePanePosition)[0]
-      if (!next) return
-      setActiveSectionId(sectionId)
-      setActiveSessionId(next.id)
-      focusTerminal(next.id)
-    },
-    [currentSectionIndex, focusTerminal, sectionIds, sessions],
-  )
-
-  const toggleViewMode = useCallback(() => {
-    setViewMode((current) => (current === "single" ? "section" : "single"))
-    focusTerminal(activeSessionRef.current)
-  }, [focusTerminal])
-
-  const focusVisiblePane = useCallback(
-    (index: number) => {
-      const id = visibleSessionIds[index]
-      if (id) activateSession(id)
-    },
-    [activateSession, visibleSessionIds],
-  )
-
-  useEffect(() => {
-    if (!leaderActive) return
-    const timeout = setTimeout(() => {
-      leaderRef.current = false
-      setLeaderActive(false)
-    }, 5000)
-    return () => clearTimeout(timeout)
-  }, [leaderActive])
-
-  useEffect(() => {
-    if (active) {
-      focusTerminal(activeSessionRef.current)
-      return
-    }
-    for (const terminal of terminalRefs.current.values()) terminal.blur()
-    leaderRef.current = false
-    setLeaderActive(false)
-  }, [active, focusTerminal])
-
-  useKeyboard((key) => {
-    if (!active) return
-    const focusedId = renderer.currentFocusedRenderable?.id
-    const terminalFocused = focusedId?.startsWith("free-terminal-") ?? false
-    const customInputFocused = focusedId === "terminal-command-input"
-
-    if (customInputFocused && key.name === "escape") {
-      key.preventDefault()
-      customInputRef.current?.blur()
-      setNotice("Comando liberado. Pressione / para editar novamente.")
-      return
-    }
-
-    if (key.ctrl && key.name === "b") {
-      key.preventDefault()
-      key.stopPropagation()
-      if (leaderRef.current) {
-        processHandles.current.get(activeSessionRef.current ?? "")?.write("\u0002")
-        leaderRef.current = false
-        setLeaderActive(false)
-      } else {
-        leaderRef.current = true
-        setLeaderActive(true)
-        setNotice("Prefixo: [C] seção · [V] lado · [S] abaixo · [N/P] terminal · [/] seção")
-      }
-      return
-    }
-
-    if (leaderRef.current) {
-      key.preventDefault()
-      key.stopPropagation()
-      leaderRef.current = false
-      setLeaderActive(false)
-      switch (key.name) {
-        case "c":
-          launchSection()
-          break
-        case "v":
-        case "right":
-          splitRight()
-          break
-        case "s":
-        case "down":
-          splitDown()
-          break
-        case "n":
-          moveSession(1)
-          break
-        case "p":
-          moveSession(-1)
-          break
-        case "m":
-        case "f":
-          toggleViewMode()
-          break
-        case "x":
-          if (activeSessionRef.current) closeSession(activeSessionRef.current)
-          break
-        case "r":
-          if (activeSessionRef.current) restartSession(activeSessionRef.current)
-          break
-        case "1":
-        case "2":
-        case "3":
-        case "4":
-          focusVisiblePane(Number(key.name) - 1)
-          break
-        case "[":
-          changeSection(-1)
-          break
-        case "]":
-          changeSection(1)
-          break
-        case "g":
-        case "escape":
-          terminalRefs.current.get(activeSessionRef.current ?? "")?.blur()
-          setNotice(
-            "Terminal liberado: use [Alt+1] [Alt+2] [Alt+3] [Alt+4] [Alt+5] para trocar de ferramenta.",
+  const seenAgents = useRef<ReadonlySet<string>>(new Set())
+  seenAgents.current = new Set(
+    active && !dialog && !leaderActive
+      ? sessions
+          .filter(
+            (session) =>
+              session.sectionId === activeSession?.sectionId &&
+              (!zoomed || session.id === activeSessionId),
           )
-          break
+          .map((session) => session.id)
+      : [],
+  )
+  useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
+  const folderForTmuxPane = useCallback((pane: TmuxPaneInfo) => {
+    const defaultFolder = pane.ownedByTuiminal ? DEFAULT_FOLDER : TUIMINAL_TMUX_FOLDER
+    const savedFolder = workspaceStateRef.current.assignments[terminalWorkspaceAssignmentKey(pane)]
+    return savedFolder && foldersRef.current.some((folder) => folder.id === savedFolder)
+      ? savedFolder
+      : defaultFolder
+  }, [])
+  useAutomaticTmuxMirrors(sessionsRef, dismissedTmuxPanes, launchCommand, folderForTmuxPane)
+  usePinnedTmuxSidebars(sidebarPinned, sidebarWidth, masterKey)
+
+  useEffect(() => {
+    const assignments = { ...workspaceStateRef.current.assignments }
+    for (const session of sessions) {
+      if (session.tmux) assignments[terminalWorkspaceAssignmentKey(session.tmux)] = session.folderId
+    }
+    const next: TerminalWorkspaceState = {
+      folders: folders.filter(
+        (folder) => !RESERVED_TERMINAL_FOLDERS.some((reserved) => reserved.id === folder.id),
+      ),
+      assignments,
+    }
+    const signature = JSON.stringify(next)
+    if (signature === lastWorkspaceStateSignature.current) return
+    try {
+      workspaceStateRef.current = saveTerminalWorkspaceState(FREE_TERMINAL_WORKING_DIRECTORY, next)
+      lastWorkspaceStateSignature.current = signature
+    } catch {
+      // Persistence failure must not interrupt live terminal sessions.
+    }
+  }, [folders, sessions])
+
+  const selectSession = useCallback(
+    (id: string) => {
+      leaderRef.current = false
+      setLeaderActive(false)
+      const external = externalSessions.find((session) => session.id === id)
+      if (external) {
+        setSelectedFolder(EXTERNAL_FOLDER)
+        setNotice(
+          `${translateUi("Terminal externo: use a janela original.")} · ${external.external?.terminalId ?? external.title}`,
+        )
+        return
       }
+      const session = sessionsRef.current.find((session) => session.id === id)
+      if (session) setSelectedFolder(session.folderId)
+      activateSession(id)
+    },
+    [activateSession, externalSessions, sessionsRef, setNotice],
+  )
+  const restoreFocus = useCallback(() => {
+    if (activeSessionRef.current) focusTerminal(activeSessionRef.current)
+    else queueMicrotask(() => workspaceRef.current?.focus())
+  }, [activeSessionRef, focusTerminal])
+  const setLeader = (open: boolean) => {
+    leaderRef.current = open
+    setLeaderActive(open)
+  }
+  const openDialog = (kind: TerminalDialogKind | "tmux") => {
+    dialogRef.current = kind
+    setDialog(kind)
+  }
+  const closeDialog = () => {
+    dialogRef.current = null
+    setDialog(null)
+    restoreFocus()
+  }
+  const launchSection = (
+    command: FreeTerminalCommand = createShellTerminalCommand(),
+    folderId = DEFAULT_FOLDER,
+  ) => {
+    sequence.current += 1
+    launchCommand(command, {
+      sectionId: `section-${sequence.current}`,
+      row: 0,
+      column: 0,
+      folderId,
+    })
+    setSelectedFolder(folderId)
+    setZoomed(false)
+  }
+  const split = (down: boolean) => {
+    if (!activeSession || !canSplit) {
+      setNotice("Esta seção já possui dois terminais.")
       return
     }
-
-    if (terminalFocused || customInputFocused) return
-    switch (key.name) {
-      case "/":
-        customInputRef.current?.focus()
-        break
-      case "m":
-        toggleViewMode()
-        break
+    launchCommand(createShellTerminalCommand(), {
+      sectionId: activeSession.sectionId,
+      folderId: activeSession.folderId,
+      row: down ? 1 : 0,
+      column: down ? 0 : 1,
+    })
+    setZoomed(false)
+  }
+  const mirrorSession = (target: TmuxPaneInfo) => {
+    launchSection(createTmuxMirrorCommand(target), folderForTmuxPane(target))
+    closeDialog()
+  }
+  const changeSection = (delta: number) => {
+    const current = sections.findIndex((candidate) => candidate.id === activeSession?.sectionId)
+    const next = sections[(Math.max(0, current) + delta + sections.length) % sections.length]
+    if (next) activateSession(next.panes[0]!.id)
+  }
+  const disabled = (key: string) => {
+    if (["v", "s"].includes(key)) return !canSplit
+    if (["n", "c", "/", "t"].includes(key)) return sessions.length >= MAX_SESSIONS
+    if (key === "r" && activeSession?.tmux) return true
+    if (["r", "x", "m", "e", "o", "tab", "p", "1", "a", "f"].includes(key)) return !activeSession
+    return key === "2" && section?.panes.length !== 2
+  }
+  const runAction = (key: string) => {
+    if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
+    setLeader(false)
+    if (key === "g") {
+      terminalRefs.current.get(activeSessionRef.current ?? "")?.blur()
+      renderer.currentFocusedRenderable?.blur()
+      return
+    }
+    if (!["/", "d", "e", "l", "o", "t"].includes(key)) restoreFocus()
+    switch (key) {
       case "n":
+      case "c":
+        launchSection()
+        break
+      case "/":
+        openDialog("command")
+        break
+      case "t":
+        openDialog("tmux")
+        break
+      case "v":
+        split(false)
+        break
+      case "s":
+        split(true)
+        break
+      case "tab":
         moveSession(1)
         break
       case "p":
         moveSession(-1)
         break
-      case "[":
+      case "a":
         changeSection(-1)
         break
-      case "]":
+      case "f":
         changeSection(1)
+        break
+      case "1":
+      case "2": {
+        const pane = section?.panes[Number(key) - 1]
+        if (pane) activateSession(pane.id)
+        break
+      }
+      case "m":
+        setZoomed((value) => !value)
+        break
+      case "b":
+        toggleTerminalSidebarPinned()
+        break
+      case "l":
+        requestTerminalSidebarFocus()
+        void focusPinnedTmuxSidebar()
+        break
+      case "d":
+        openDialog("folder")
+        break
+      case "e":
+        openDialog("rename")
+        break
+      case "o":
+        openDialog("move")
         break
       case "r":
         if (activeSessionId) restartSession(activeSessionId)
         break
+      case "x":
+        if (activeSessionId) closeSession(activeSessionId)
+        break
     }
+  }
+  runActionRef.current = runAction
+  const saveDialog = (value: string) => {
+    if (dialog === "command") {
+      launchSection(createFreeTerminalCommand(value))
+      closeDialog()
+      return
+    }
+    if (dialog === "move") {
+      if (!folders.some((folder) => folder.id === value)) return
+      for (const pane of section?.panes ?? []) updateSession(pane.id, { folderId: value })
+      setSelectedFolder(value)
+      closeDialog()
+      return
+    }
+    const name = cleanTerminalName(value)
+    if (!name) return
+    if (dialog === "rename" && activeSessionId) {
+      updateSession(activeSessionId, { title: name, titleMode: "manual" })
+      closeDialog()
+      return
+    }
+    const existing = folders.find(
+      (folder) => folder.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    )
+    const id = existing?.id ?? nextTerminalFolderId(folders)
+    if (!existing) setFolders((current) => [...current, { id, name }])
+    setSelectedFolder(id)
+    closeDialog()
+  }
+
+  useEffect(() => {
+    if (!active) {
+      leaderRef.current = false
+      setLeaderActive(false)
+      dialogRef.current = null
+      setDialog(null)
+    } else if (dialogRef.current || leaderRef.current) return
+    else if (activeSessionId) focusTerminal(activeSessionId)
+    else workspaceRef.current?.focus()
+  }, [active, activeSessionId, focusTerminal])
+
+  useEffect(() => {
+    publishTerminalSidebar(sidebarOwner.current, {
+      sessions: sidebarSessions,
+      folders,
+      selectedFolder,
+      activeSessionId,
+      width: sidebarWidth,
+      height: sidebarHeight,
+      masterKey,
+      onSelectFolder: (id) => {
+        setSelectedFolder(id)
+        workspaceRef.current?.focus()
+      },
+      onActivate: selectSession,
+      onActions: () => {
+        if (leaderRef.current) {
+          setLeader(false)
+          restoreFocus()
+        } else setLeader(true)
+      },
+      onNew: () => runAction("n"),
+      onFolder: () => runAction("d"),
+    })
+  })
+  useEffect(() => () => clearTerminalSidebar(sidebarOwner.current), [])
+
+  useEffect(() => {
+    const target = terminalSidebarSnapshot().requestedTarget
+    if (!target || handledTargetRevision.current === requestedTargetRevision) return
+    if ("action" in target) {
+      handledTargetRevision.current = requestedTargetRevision
+      runActionRef.current(target.action)
+      return
+    }
+    if ("folderId" in target) {
+      if (folders.some((candidate) => candidate.id === target.folderId)) {
+        handledTargetRevision.current = requestedTargetRevision
+        setSelectedFolder(target.folderId)
+      }
+      return
+    }
+    if ("sessionId" in target) {
+      if (sidebarSessions.some((candidate) => candidate.id === target.sessionId)) {
+        handledTargetRevision.current = requestedTargetRevision
+        selectSession(target.sessionId)
+      }
+      return
+    }
+    const session = sessions.find(
+      (candidate) =>
+        candidate.tmux?.socket === target.socket && candidate.tmux.paneId === target.paneId,
+    )
+    if (session) {
+      handledTargetRevision.current = requestedTargetRevision
+      selectSession(session.id)
+      return
+    }
+    const controller = new AbortController()
+    const open = async () => {
+      const result = await discoverTmuxWorkspace(controller.signal)
+      const found = result.panes.find(
+        ({ pane }) => pane.socket === target.socket && pane.paneId === target.paneId,
+      )
+      if (!found || controller.signal.aborted) return
+      handledTargetRevision.current = requestedTargetRevision
+      sequence.current += 1
+      launchCommand(createTmuxMirrorCommand(found.pane, found.agent?.label, false), {
+        sectionId: `pinned-tmux-${sequence.current}`,
+        folderId: folderForTmuxPane(found.pane),
+        row: 0,
+        column: 0,
+      })
+    }
+    void open().catch(() => undefined)
+    return () => controller.abort()
+  }, [
+    requestedTargetRevision,
+    sessions,
+    sidebarSessions,
+    folders,
+    selectSession,
+    launchCommand,
+    folderForTmuxPane,
+  ])
+
+  useKeyboard((key) => {
+    if (!active || dialogRef.current || key.defaultPrevented) return
+    const configuredKey = getUiSettings().terminalMasterKey
+    if (matchesTerminalMasterKey(key, configuredKey)) {
+      key.preventDefault()
+      key.stopPropagation()
+      if (leaderRef.current) {
+        processHandles.current
+          .get(activeSessionRef.current ?? "")
+          ?.write(terminalMasterKeyBytes(configuredKey))
+        setLeader(false)
+        restoreFocus()
+      } else setLeader(true)
+      return
+    }
+    if (!leaderRef.current) return
+    key.preventDefault()
+    key.stopPropagation()
+    // Unknown keys stay in the menu; [Esc] always cancels without reaching the PTY.
+    runAction(key.name)
   })
 
   return (
     <box
       id="terminal-workspace"
-      style={{
-        flexGrow: 1,
-        backgroundColor: LAYOUT.workspaceBackground,
-      }}
+      ref={workspaceRef}
+      focusable
+      style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
     >
-      <box
-        id="terminal-footer"
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 1,
-          paddingRight: 1,
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        <box style={{ flexDirection: "row", alignItems: "center" }}>
-          <text content="❯ FREE TERMINAL" style={{ fg: COLORS.terminal }} />
-          <text
-            content={`  ${basename(FREE_TERMINAL_WORKING_DIRECTORY)}`}
-            style={{ fg: COLORS.text }}
-          />
-          {!compact && (
-            <text
-              content={`  ${runningCount}/${sessions.length} vivas · até 4 por seção`}
-              style={{ fg: runningCount ? COLORS.terminal : COLORS.muted }}
-            />
-          )}
-        </box>
-        <box style={{ flexDirection: "row", alignItems: "center" }}>
-          <InlineButton
-            label={viewMode === "single" ? "▣ Foco" : compact ? "▦ Grade" : "▦ Seção 2×2"}
-            accent={COLORS.terminal}
-            active={viewMode === "single"}
-            disabled={!sessions.length}
-            onPress={toggleViewMode}
-          />
-          <InlineButton
-            label="‹"
-            accent={COLORS.terminal}
-            disabled={sectionIds.length <= 1}
-            onPress={() => changeSection(-1)}
-          />
-          <text
-            content={` ${Math.max(1, currentSectionIndex + 1)}/${pageCount} `}
-            style={{ fg: COLORS.muted }}
-          />
-          <InlineButton
-            label="›"
-            accent={COLORS.terminal}
-            disabled={sectionIds.length <= 1}
-            onPress={() => changeSection(1)}
-          />
-        </box>
-      </box>
-
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 1,
-          paddingRight: 1,
-          gap: 1,
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        <text content="CMD" style={{ fg: COLORS.muted }} />
-        <input
-          ref={customInputRef}
-          id="terminal-command-input"
-          value={customCommand}
-          placeholder="comando opcional · vazio abre seu shell"
-          onInput={setCustomCommand}
-          onMouseDown={() => customInputRef.current?.focus()}
-          onSubmit={submitCommand}
-          width={Math.max(18, Math.min(42, dimensions.width - (compact ? 34 : 58)))}
-          style={{
-            backgroundColor: COLORS.panelRaised,
-            focusedBackgroundColor: COLORS.panelRaised,
-            textColor: COLORS.text,
-            focusedTextColor: COLORS.text,
-            cursorColor: COLORS.terminal,
-          }}
-        />
-        <InlineButton
-          label={compact ? "+ Seção" : "+ Nova seção"}
-          accent={COLORS.terminal}
-          disabled={sessions.length >= MAX_SESSIONS}
-          onPress={launchSection}
-        />
-        <InlineButton
-          label={compact ? "│+" : "│ Split lado"}
-          accent={COLORS.terminal}
-          disabled={!canSplitRight}
-          onPress={splitRight}
-        />
-        <InlineButton
-          label={compact ? "─+" : "─ Split baixo"}
-          accent={COLORS.terminal}
-          disabled={!canSplitDown}
-          onPress={splitDown}
-        />
-      </box>
-
-      <box
-        style={{
-          flexGrow: 1,
-          position: "relative",
-          border: ["top"],
-          borderStyle: "single",
-          borderColor: COLORS.border,
-          overflow: "hidden",
-        }}
-      >
-        {!sessions.length ? (
-          <box
-            style={{
-              flexGrow: 1,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: COLORS.panel,
+      <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
+        {!(externalSidebarHost && sidebarPinned) && (
+          <TerminalSidebar
+            active={active}
+            sessions={sidebarSessions}
+            folders={folders}
+            selectedFolder={selectedFolder}
+            activeSessionId={activeSessionId}
+            width={sidebarWidth}
+            height={sidebarHeight}
+            masterKey={masterKey}
+            focusRequest={focusRequest}
+            onSelectFolder={(id) => {
+              setSelectedFolder(id)
+              workspaceRef.current?.focus()
             }}
-          >
-            <text content="❯_" style={{ fg: COLORS.terminal }} />
-            <text content="TERMINAIS LIVRES EM SEÇÕES 2 × 2" style={{ fg: COLORS.text }} />
-            <text
-              content="+ Nova seção · │+ split ao lado · ─+ split abaixo"
-              style={{ fg: COLORS.muted }}
-            />
-            <text
-              content="digite um comando ou deixe vazio para abrir seu shell"
-              style={{ fg: COLORS.terminal }}
-            />
-          </box>
-        ) : null}
-
-        {sessions.map((session, index) => (
-          <FreeTerminalPane
-            key={session.id}
-            session={session}
-            ordinal={index + 1}
-            active={session.id === activeSessionId}
-            visible={visibleSessionIds.includes(session.id)}
-            appearanceKey={paneAppearanceKey}
-            layout={
-              paneLayouts.get(session.id) ?? {
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                borderTop: false,
-                borderLeft: false,
-              }
-            }
-            onActivate={activateSession}
-            onReady={terminalReady}
-            onGone={terminalGone}
-            onInput={terminalInput}
-            onResize={terminalResize}
-            onRestart={restartSession}
-            onClose={closeSession}
+            onActivate={selectSession}
+            onActions={() => {
+              if (leaderRef.current) {
+                setLeader(false)
+                restoreFocus()
+              } else setLeader(true)
+            }}
+            onNew={() => runAction("n")}
+            onFolder={() => runAction("d")}
           />
-        ))}
-      </box>
-
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          paddingLeft: 1,
-          paddingRight: 1,
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        <text
-          id="terminal-footer-notice"
-          content={compactTerminalText(notice, footerLayout.noticeWidth)}
+        )}
+        <box
+          id="terminal-panes"
           style={{
-            width: footerLayout.noticeWidth,
-            flexShrink: 0,
+            flexGrow: 1,
+            position: "relative",
             overflow: "hidden",
-            fg: leaderActive ? COLORS.warning : COLORS.muted,
+            minWidth: 1,
           }}
-        />
-        <box style={{ width: 1, flexShrink: 0 }} />
-        <ShortcutText
-          id="terminal-footer-help"
-          content={footerLayout.help}
-          style={{ width: footerLayout.helpWidth, flexShrink: 0, fg: COLORS.muted }}
-        />
+        >
+          {!sessions.length && (
+            <box style={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
+              <InlineButton
+                compact
+                label="Novo terminal"
+                accent={COLORS.terminal}
+                onPress={() => launchSection()}
+              />
+            </box>
+          )}
+          {sessions.map((session) => {
+            const visible =
+              session.sectionId === activeSession?.sectionId &&
+              (!zoomed || session.id === activeSessionId)
+            const splitSection = section?.panes.length === 2 && !zoomed
+            const down = section?.panes.some((pane) => pane.row === 1)
+            const layout: FreeTerminalPaneLayout =
+              !splitSection || !visible
+                ? FULL_PANE
+                : {
+                    top: down && session.row === 1 ? "50%" : 0,
+                    left: !down && session.column === 1 ? "50%" : 0,
+                    width: down ? "100%" : "50%",
+                    height: down ? "50%" : "100%",
+                    borderTop: Boolean(down && session.row === 1),
+                    borderLeft: Boolean(!down && session.column === 1),
+                  }
+            return (
+              <FreeTerminalPane
+                key={session.id}
+                session={session}
+                active={session.id === activeSessionId}
+                visible={visible}
+                appearanceKey={appearanceKey}
+                layout={layout}
+                onActivate={selectSession}
+                onReady={terminalReady}
+                onGone={terminalGone}
+                onInput={terminalInput}
+                onResize={terminalResize}
+              />
+            )
+          })}
+        </box>
       </box>
+      {leaderActive && (
+        <TerminalActions
+          width={dimensions.width}
+          height={Math.max(3, Math.floor(dimensions.height / 2))}
+          onAction={runAction}
+          disabled={disabled}
+        />
+      )}
+      {dialog === "tmux" && <TerminalTmuxDialog onSelect={mirrorSession} onClose={closeDialog} />}
+      {dialog && dialog !== "tmux" && (
+        <TerminalDialog
+          kind={dialog}
+          initialValue={dialog === "rename" ? (activeSession?.title ?? "") : ""}
+          folders={
+            dialog === "move"
+              ? folders.filter(
+                  (folder) => folder.id !== TUIMINAL_TMUX_FOLDER && folder.id !== EXTERNAL_FOLDER,
+                )
+              : folders
+          }
+          onSave={saveDialog}
+          onClose={closeDialog}
+        />
+      )}
     </box>
   )
 }

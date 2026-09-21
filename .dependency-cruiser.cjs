@@ -27,7 +27,7 @@ module.exports = {
       to: {
         path: "^packages/feature-[^/]+/src/",
         pathNot:
-          "^packages/(feature-[^/]+/src/index\\.ts|feature-http/src/cli/(run|import|postman)\\.ts)$",
+          "^packages/(feature-[^/]+/src/index\\.ts|feature-http/src/cli/(run|import|postman)\\.ts|feature-terminal/src/cli/sidebar\\.tsx)$",
       },
     },
     {

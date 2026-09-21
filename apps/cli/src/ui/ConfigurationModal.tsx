@@ -36,6 +36,8 @@ export function ConfigurationModal({
   onSectionChange,
   onSectionFocus,
   onNavigationFocus,
+  onTerminalAgentCommandsChange,
+  onTerminalMasterKeyChange,
   onPaletteChange,
   onColorModeChange,
   onLayoutChange,
@@ -99,7 +101,7 @@ export function ConfigurationModal({
         <box style={{ flexDirection: "row" }}>
           <text content={translateUi("◆ CONFIGURAÇÕES")} style={{ fg: COLORS.focus }} />
           <text
-            content={` · ${translateUi(context === "database" ? "BANCO" : context === "git" ? "GIT" : "GERAL")}`}
+            content={` · ${translateUi(context === "database" ? "BANCO" : context === "git" ? "GIT" : context === "terminal" ? "Terminal" : "GERAL")}`}
             style={{ fg: COLORS.muted }}
           />
         </box>
@@ -187,6 +189,8 @@ export function ConfigurationModal({
               onNavigationFocus={onNavigationFocus}
               queryHistoryCount={queryHistoryCount}
               tutorialLabel={tutorialLabel}
+              onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
+              onTerminalMasterKeyChange={onTerminalMasterKeyChange}
               onPaletteChange={onPaletteChange}
               onColorModeChange={onColorModeChange}
               onLayoutChange={onLayoutChange}
@@ -231,6 +235,8 @@ export function ConfigurationModal({
                 onNavigationFocus={onNavigationFocus}
                 queryHistoryCount={queryHistoryCount}
                 tutorialLabel={tutorialLabel}
+                onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
+                onTerminalMasterKeyChange={onTerminalMasterKeyChange}
                 onPaletteChange={onPaletteChange}
                 onColorModeChange={onColorModeChange}
                 onLayoutChange={onLayoutChange}

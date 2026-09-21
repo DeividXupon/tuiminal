@@ -107,6 +107,10 @@ The HTTP artifact includes `index.mjs`, `http-run.mjs`, `http-import.mjs`, and
 `http-postman.mjs`. The Postman command uses the same verified HTTP installation as
 the other headless HTTP commands.
 
+The Terminal artifact includes `index.mjs` and `terminal-sidebar.mjs`. The latter
+is a hidden UI helper launched only for tmux sidebar replicas through the same
+version-matched executable and private feature host; it is not a public CLI command.
+
 Files are written with mode `0600` into private staging directories, then renamed
 into a complete installation. Storage validates directories and rejects symlinked
 entries; concurrent successful publications converge on the same content. Failed or
@@ -164,8 +168,9 @@ existing version. See [release process](../release-process.md).
   uninstall confirmation, shortcut isolation, real Runner process shutdown before file
   removal, last-tool removal, isolated mode, fallback navigation and reinstallation.
 - `tests/tui/feature-payloads.test.tsx`: build all five real payloads in temporary
-  storage, verify and import them using the actual host bindings, then open the
-  installed Runner's configuration and command editor through native input.
+  storage, verify and import them using the actual host bindings, import Terminal's
+  sidebar helper entrypoint, then open the installed Runner's configuration and
+  command editor through native input.
 - `tests/feature-uninstallation.test.ts`: exact payload removal, retained settings and
   other versions, symlink boundaries, serialized retirement/removal, failure recovery,
   partial filesystem failures and disposal during retirement.

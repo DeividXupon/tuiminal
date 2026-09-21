@@ -1,14 +1,15 @@
+import { basename } from "node:path"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import type { TerminalSession } from "../model/sessions"
 
 export type TerminalPresentationStatus = "starting" | "running" | "exited" | "failed"
 
-export function terminalStatusMarker(status: TerminalPresentationStatus) {
+export function terminalStatusMarker(status: TerminalPresentationStatus, busy = false) {
   switch (status) {
     case "starting":
       return "◐"
     case "running":
-      return "●"
+      return busy ? "●" : "○"
     case "exited":
       return "■"
     case "failed":
@@ -18,13 +19,13 @@ export function terminalStatusMarker(status: TerminalPresentationStatus) {
 
 export function terminalStatusColor(session: {
   status: TerminalPresentationStatus
-  accent: string
+  busy?: boolean
 }) {
   switch (session.status) {
     case "starting":
       return COLORS.warning
     case "running":
-      return session.accent
+      return session.busy ? COLORS.terminal : COLORS.muted
     case "exited":
       return COLORS.muted
     case "failed":
@@ -32,27 +33,38 @@ export function terminalStatusColor(session: {
   }
 }
 
-export function compactTerminalText(value: string, width: number) {
-  return truncateDisplay(translateUi(value), width)
+export function terminalStatusLabel(status: TerminalPresentationStatus, busy = false) {
+  switch (status) {
+    case "starting":
+      return "Iniciando"
+    case "running":
+      return busy ? "Executando" : "Ocioso"
+    case "exited":
+      return "Encerrado"
+    case "failed":
+      return "Falhou"
+  }
 }
 
-const TERMINAL_FOOTER_FULL =
-  "[Ctrl+B] · [C] nova · [V] lado · [S] baixo · [1–4] foco · [/] seção · [G] tabs"
-const TERMINAL_FOOTER_COMPACT = "[^B] · [C] seção · [V] │ · [S] ─ · [G] tabs"
-const TERMINAL_FOOTER_MINIMAL = "[^B] · [G]"
-
-export function terminalFooterLayout(width: number, minimumNoticeWidth = 14) {
-  const availableWidth = Math.max(1, width)
-  const candidates = [TERMINAL_FOOTER_FULL, TERMINAL_FOOTER_COMPACT]
-  const help =
-    candidates.find(
-      (candidate) =>
-        displayWidth(translateUi(candidate)) + minimumNoticeWidth + 1 <= availableWidth,
-    ) ?? TERMINAL_FOOTER_MINIMAL
-  const helpWidth = displayWidth(translateUi(help))
-  return {
-    help,
-    helpWidth,
-    noticeWidth: Math.max(1, availableWidth - helpWidth - 1),
+export function terminalSessionDetail(session: TerminalSession) {
+  const backend = session.backend ?? (session.tmux ? "tmux" : "native")
+  if (session.external) {
+    if (!session.workingDirectory) return session.external.terminalId
+    const directory = basename(session.workingDirectory) || session.workingDirectory
+    return `${directory} · ${session.external.terminalId}`
   }
+  if ((session.status === "exited" || session.status === "failed") && session.exitCode !== null) {
+    return `exit ${session.exitCode} · ${backend}`
+  }
+  if (session.tmux) {
+    const directory = session.workingDirectory
+      ? basename(session.workingDirectory) || session.workingDirectory
+      : session.tmux.name
+    return `${directory} · ${backend}`
+  }
+  if (session.kind === "custom") return `${session.displayCommand} · ${backend}`
+  const directory = session.workingDirectory
+    ? basename(session.workingDirectory) || session.workingDirectory
+    : session.displayCommand
+  return `${directory} · ${backend}`
 }

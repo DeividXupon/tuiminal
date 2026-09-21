@@ -130,7 +130,7 @@ Masked password fields copy only their mask.
 | `[Alt+2]` Git | Review local diffs, PRs, Issues, and GitHub notifications. |
 | `[Alt+3]` Runner | Discover commands, run services, and follow multiple logs. |
 | `[Alt+4]` HTTP | Build, save, send, and automate API requests. |
-| `[Alt+5]` Free Terminal | Run shells and any CLI in sections with `2 × 2` splits. |
+| `[Alt+5]` Free Terminal | Run shells and any CLI in compact sections of up to two terminals. |
 
 <a id="banco"></a>
 <a id="database"></a>
@@ -522,41 +522,121 @@ Sensitive Path values receive the same protection, including encoded URLs and di
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Tuiminal Free Terminal tab demo" width="100%">
 </p>
 
-A general-purpose multiplexer. Every pane uses a real PTY and can run shells, REPLs, interactive database clients, Codex, Claude, or any CLI available in `PATH`.
+A general-purpose multiplexer. New terminals use real PTYs and can run shells, REPLs, interactive database clients, Codex, Claude, or any CLI available in `PATH`.
 
 Custom commands accept full shell expressions, including `&&`, `||`, `;`, pipes, variables, and loops. For example, `npm install && npm run dev` runs the second step after the first succeeds.
+
+tmux is optional. New terminals automatically use tmux 3.2+ when available on
+Linux, macOS or WSL; otherwise they use the native terminal, including on Windows.
+Both modes keep terminals inside this tab: switching to Git hides the panes while
+their commands continue running. Nothing is installed automatically. Set
+`TUIMINAL_TERMINAL_BACKEND=native` before starting Tuiminal to always use native
+terminals (`auto` is the default; `tmux` explicitly requires tmux).
+
+When Terminal opens, it restores windows from the persistent `tuiminal` tmux session
+in **Tuiminals** and mirrors ordinary panes from other discovered servers in the
+**tmux** folder. Recognized agents from either source appear exclusively in
+**Agents**, including sibling panes in the same session. New panes are picked up
+without moving your current focus. Closing an external mirror leaves its process running and keeps
+that pane dismissed for this execution. Automatic discovery respects the
+12-terminal limit. Set `TUIMINAL_TERMINAL_AUTO_MIRROR=0` before launching to disable
+external discovery; persistent Tuiminal panes are still restored.
+
+Use the Master Key followed by `[T]` to manually mirror another pane or reopen a
+dismissed mirror on the Tuiminal, default, or inherited tmux server. Choose the row matching
+your agent's session, window, pane
+and command, using the mouse or `[Enter]`. Panes beside Tuiminal in the same tmux
+session are available. The mirror loads the pane's existing screen and keeps
+following that exact pane even when another window is selected in the original
+terminal. Keyboard input is shared; closing the mirror only disconnects Tuiminal.
+Updates accelerate while output changes and refresh immediately after input.
+Unchanged text stays in place, and idle panes reduce their refresh frequency.
+
+External panes cannot be restarted through Tuiminal. Their dimensions temporarily
+follow the space available beside the sidebar, including local splits. The agent
+redraws to that size in both terminals. The original size and layout are restored
+when the last mirror of that window disconnects. When you return to the source
+window, Tuiminal releases its temporary manual size and tmux immediately fits the
+window to the visible client while retaining current splits, including the pinned
+sidebar. After you leave the source window, Tuiminal adopts its latest layout
+before fitting the mirror again. Manual changes are not overwritten.
+Windows containing Tuiminal itself keep their size and use clipping to avoid a
+resize loop. Mirroring refreshes the current application screen;
+it does not import scrollback, tmux copy-mode UI or mouse input. Terminals already
+open outside tmux are listed as read-only metadata in **Others**, but cannot yet be
+mirrored; selecting one identifies its original TTY without replacing the active pane.
+The picker states this limitation.
+Without tmux, create terminals inside Tuiminal to use splits, agent status and
+background execution with the native backend.
 
 <a id="o-que-você-pode-fazer-3"></a>
 
 ### What you can do
 
-- Create independent sections and keep up to 12 terminals running.
-- Arrange each section as up to four panes in a `2 × 2` grid.
-- Split the active pane sideways or add a lower row.
-- Switch between a full section and a maximized terminal.
-- Wait for owned processes to exit on restart, pane close, or application shutdown. After a grace period, termination escalates only to the created process tree, without finding/killing processes by name or port.
-- Resize without losing output or rerunning exited commands. Repeated restart requests create only the newest session; closing a pane cancels a restart still waiting for its predecessor.
-- Preserve colors, cursor, interactive prompts, and fullscreen TUIs.
-- Switch tabs without ending sessions.
-- Focus, split, restart, and close panes by keyboard or mouse.
+- Keep up to 12 terminals, with at most two panes per section, split right or below.
+- **New terminal** always opens a separate section. To split the current section, use the Master Key followed by `[V]` (right) or `[S]` (below).
+- Use a compact workspace inspired by Herdr: numbered two-line sessions above an agent list in the sidebar. An idle shell shows `○ Idle`; `● Running` appears only while a foreground tool or command is active. The second row shows its directory, command or exit code with the `native`/`tmux` backend; read-only external rows show their TTY. The active section has an accent rail. Terminals fill the remaining area to every edge; splits use a single separator.
+- New terminals and custom commands open in **Tuiminals**. Create other folders, rename terminals, and move sections when needed. Custom folders and tmux session placement are saved per project outside the project directory and restored on the next launch. The reserved **tmux** folder contains mirrorable external panes; **Others** lists non-tmux POSIX terminals with their foreground command, state, directory and TTY as read-only references. Recognized external agents appear in **Agents** with unknown activity because Tuiminal cannot inspect their screen. Split sessions keep both two-line terminal items independently clickable beside one vertical separator.
+- Terminal names follow the running tool automatically: `zsh` → `lazygit` → `zsh`. Recognized agents show their CLI name, such as `codex`, even when the runtime reports `MainThread` or `node`. This also works with tmux mirrors. Names chosen manually through the Master Key's `[E]` action remain fixed, including after a restart.
+- Follow recognized agents exclusively in **Agents**, with an animated loader while they work. **Sessions** shows the remaining terminals. The original folders and splits are preserved, and a terminal returns to Sessions when its agent ends.
+- Pin the live sidebar with Master Key then `[B]` so Sessions and Agents stay visible while you move between Tuiminal tools. Use `[L]` from the action menu to focus it, move continuously through Sessions and Agents with `[↑/↓]` or `[J/K]`, and press `[Enter]` to open the highlighted item. Focus is marked by a fast light sweep across the sidebar background. Inside tmux, Tuiminal also keeps a marked left sidebar split in each window of the current server: after selecting that split with normal tmux navigation, its direct navigation works immediately, and it remains clickable while the neighboring terminal has focus. The split beside Tuiminal opens the target in its Terminal workspace, while another window selects its existing tmux pane directly when possible. Its Master Key opens the same actions and can run non-dialog actions without leaving that window. Unpinning removes only those helper splits and restores the previous tmux mouse setting.
+- Preserve colors, cursor, output and processes across resizing, sections and tool switches. Restarts wait for the previous owned process to retire; application shutdown detaches persistent tmux terminals and stops only owned native processes.
 
-The tmux-inspired `[Ctrl+B]` prefix separates multiplexer commands from input sent to the running process:
+In `[,]` → **Terminal**, choose the **Master Key** (default `[Ctrl+B]`). Press it to
+show the action list at the bottom, then press an action key or click its control.
+`[Esc]` cancels and restores terminal focus. Repeating the Master Key sends its
+literal control byte to the process.
 
-| After `[Ctrl+B]` | Action |
+| After the Master Key | Action |
 | --- | --- |
-| `[C]` | Create section |
-| `[V]` | Split sideways |
-| `[S]` | Split downward |
-| `[N]` / `[P]` | Next / previous terminal |
-| `[1]`–`[4]` | Focus visible terminal |
-| `[M]` or `[F]` | Toggle section / focused view |
-| `[[]` / `[]]` | Previous / next section |
-| `[R]` | Restart session |
-| `[X]` | Close session |
-| `[G]` | Release terminal capture for global shortcuts |
-| `[Ctrl+B]` | Send `Ctrl+B` to the running process |
+| `[N]` / `[C]` | New terminal / new section |
+| `[/]` | Custom command in a new section |
+| `[T]` | Mirror an existing tmux pane |
+| `[V]` / `[S]` | Split right / below |
+| `[Tab]` / `[P]` | Next / previous terminal |
+| `[A←]` / `[F→]` | Previous / next section |
+| `[1]` / `[2]` | Focus a pane in the current section |
+| `[M]` | Maximize / restore |
+| `[B]` | Pin / unpin the sidebar |
+| `[L]` | Focus the sidebar |
+| `[E]` | Rename terminal |
+| `[D]` / `[O]` | New folder / move section |
+| `[R]` / `[X]` | Restart / close terminal |
+| `[G]` | Release global shortcuts, including `[,]` |
+| `[Esc]` | Cancel the Master Key |
 
-`CMD` is optional: leave it empty for the default shell or enter a command to run. Tuiminal stops only processes it created when closing.
+Agent status appears in sidebar markers: an animated loader while working,
+`!` needs your input, `✓` done but unseen, `○` idle, and `?` unknown. The separate **Agents** list shows every
+running agent, with its status aligned to the right and task title below, falling
+back to the terminal name when unavailable. Task titles use each palette's focus accent. Short
+layouts use compact rows to keep agents accessible. Click
+a row to focus that terminal. Activity labels include reading, searching, thinking,
+writing or running when the live agent UI provides that signal. Completion
+continues to be tracked in hidden sections; opening the completed pane acknowledges it.
+
+Task titles use the text the agent publishes to the terminal, including existing
+tmux mirrors. Formats cover Codex, Claude Code, OpenCode, Qwen, Pi and Gemini's
+dynamic activity summary, plus any other recognized or configured agent that
+publishes a useful title. Some titles describe the whole session rather than each
+prompt. No hooks, extra model calls or agent configuration changes are needed;
+agents that do not expose a title keep the terminal name as fallback.
+
+The local MVP recognizes screen controls for Codex, Claude Code, Gemini and
+OpenCode, plus supported Codex/Claude terminal titles. It installs no hooks and
+changes no agent configuration. Process identity and activity are heuristic;
+unsupported agents and unrecognized screens can remain unknown. For a private or
+renamed CLI, register its executable/module in **Terminal → Additional agent
+commands** to identify it; this does not add a state profile. See the
+[activity contract and Herdr research](docs/design/terminal-agents.md) for details.
+User-created folders and the folder placement of tmux panes persist per project in
+Tuiminal's user data directory; the opened project is not modified. The Master Key and additional
+recognition rules persist in settings. On systems with tmux, terminals created by
+Tuiminal are persistent windows in the shared session `tuiminal` and return in
+**Tuiminals** after the app reopens. Closing Tuiminal detaches its temporary clients;
+`[X]` closes only the selected window.
+Native terminals stop on application shutdown, while external tmux sessions are
+only disconnected. Agent classification follows each explicitly mirrored pane,
+including panes in windows containing multiple agents.
 
 <a id="interface-e-personalização"></a>
 

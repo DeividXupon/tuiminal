@@ -1,3 +1,4 @@
+import type { TerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
 import type { LanguageId } from "@xupon/tuiminal-core/i18n/index"
 import type {
   ColorMode,
@@ -18,6 +19,8 @@ export type ConfigurationModalProps = {
   onSectionChange: (section: ConfigurationSection) => void
   onSectionFocus: (section: ConfigurationSection) => void
   onNavigationFocus: () => void
+  onTerminalAgentCommandsChange?: ((commands: string[]) => void) | undefined
+  onTerminalMasterKeyChange?: ((key: TerminalMasterKey) => void) | undefined
   onPaletteChange: (palette: PaletteId) => void
   onColorModeChange: (mode: ColorMode) => void
   onLayoutChange: (layout: LayoutMode) => void
@@ -34,6 +37,7 @@ export type ConfigurationModalProps = {
 }
 
 export const CONFIGURATION_SECTION_LABELS: Record<ConfigurationSection, string> = {
+  terminal: "Terminal",
   gitDiffs: "DIFFS",
   gitPullRequests: "PULL REQUESTS",
   gitIssues: "ISSUES",

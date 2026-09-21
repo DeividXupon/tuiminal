@@ -22,7 +22,7 @@ const GROUP_LABELS: Record<NavigationGroup, string> = {
 function navigationGroup(section: ConfigurationSection): NavigationGroup {
   if (section === "gitDiffs") return "git"
   if (isGitConfigurationSection(section)) return "github"
-  if (section === "sensitive" || section === "history") return "context"
+  if (section === "terminal" || section === "sensitive" || section === "history") return "context"
   if (section === "colorMode" || section === "palette" || section === "layout") return "appearance"
   return "general"
 }
@@ -33,6 +33,7 @@ function sectionSummary(
   queryHistoryCount: number,
   tutorialLabel: string,
 ) {
+  if (section === "terminal") return `[${settings.terminalMasterKey}]`
   if (section === "colorMode") return translateUi(settings.colorMode === "dark" ? "DARK" : "LIGHT")
   if (section === "palette")
     return (

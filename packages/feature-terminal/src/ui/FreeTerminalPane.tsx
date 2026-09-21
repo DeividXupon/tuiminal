@@ -1,36 +1,15 @@
 import { EmbeddedTerminalRenderable } from "@opentui/core"
 import { extend } from "@opentui/react"
 import { memo, useEffect, useRef } from "react"
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import {
-  compactTerminalText,
-  terminalStatusColor,
-  terminalStatusMarker,
-  type TerminalPresentationStatus,
-} from "../rendering/presentation"
-import type { FreeTerminalCommand } from "../services/terminal"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import type { TerminalSession } from "../model/sessions"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
-
 declare module "@opentui/react" {
   interface OpenTUIComponents {
     "embedded-terminal": typeof EmbeddedTerminalRenderable
   }
 }
-
-export type FreeTerminalPaneSession = FreeTerminalCommand & {
-  id: string
-  sectionId: string
-  row: 0 | 1
-  column: 0 | 1
-  title: string
-  status: TerminalPresentationStatus
-  pid: number | null
-  exitCode: number | null
-  startedAt: number
-}
-
 export type FreeTerminalPaneLayout = {
   top: 0 | "50%"
   left: 0 | "50%"
@@ -39,10 +18,8 @@ export type FreeTerminalPaneLayout = {
   borderTop: boolean
   borderLeft: boolean
 }
-
-type FreeTerminalPaneProps = {
-  session: FreeTerminalPaneSession
-  ordinal: number
+type PaneProps = {
+  session: TerminalSession
   active: boolean
   visible: boolean
   appearanceKey: string
@@ -52,14 +29,11 @@ type FreeTerminalPaneProps = {
   onGone: (id: string, terminal: EmbeddedTerminalRenderable) => void
   onInput: (id: string, data: Uint8Array) => void
   onResize: (id: string, columns: number, rows: number) => void
-  onRestart: (id: string) => void
-  onClose: (id: string) => void
 }
-
-function samePane(previous: FreeTerminalPaneProps, next: FreeTerminalPaneProps) {
+function samePane(previous: PaneProps, next: PaneProps) {
+  // Names and process/agent status belong to the sidebar; this pane only reads the session ID.
   return (
-    previous.session === next.session &&
-    previous.ordinal === next.ordinal &&
+    previous.session.id === next.session.id &&
     previous.active === next.active &&
     previous.visible === next.visible &&
     previous.appearanceKey === next.appearanceKey &&
@@ -73,15 +47,11 @@ function samePane(previous: FreeTerminalPaneProps, next: FreeTerminalPaneProps) 
     previous.onReady === next.onReady &&
     previous.onGone === next.onGone &&
     previous.onInput === next.onInput &&
-    previous.onResize === next.onResize &&
-    previous.onRestart === next.onRestart &&
-    previous.onClose === next.onClose
+    previous.onResize === next.onResize
   )
 }
-
 export const FreeTerminalPane = memo(function FreeTerminalPane({
   session,
-  ordinal,
   active,
   visible,
   layout,
@@ -90,76 +60,58 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   onGone,
   onInput,
   onResize,
-  onRestart,
-  onClose,
-}: FreeTerminalPaneProps) {
+}: PaneProps) {
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
   const borders: Array<"top" | "left"> = []
-  if (visible && layout.borderTop) borders.push("top")
-  if (visible && layout.borderLeft) borders.push("left")
-  if (visible && active && LAYOUT.compact && !borders.includes("left")) borders.push("left")
-
+  if (layout.borderTop) borders.push("top")
+  if (layout.borderLeft) borders.push("left")
   useEffect(() => {
     const terminal = terminalRef.current
     if (!terminal) return
     onReady(session.id, terminal)
     return () => onGone(session.id, terminal)
   }, [onGone, onReady, session.id])
-
   return (
     <box
       visible={visible}
       style={{
         position: "absolute",
-        top: visible ? layout.top : 0,
-        left: visible ? layout.left : 0,
-        width: visible ? layout.width : 1,
-        height: visible ? layout.height : 1,
-        minWidth: visible ? 18 : 1,
-        minHeight: visible ? 4 : 1,
-        border: borders,
-        borderStyle: "single",
-        borderColor: active && LAYOUT.compact ? COLORS.terminal : COLORS.border,
-        backgroundColor: COLORS.panel,
+        top: layout.top,
+        left: layout.left,
+        width: layout.width,
+        height: layout.height,
+        minWidth: 1,
+        minHeight: 1,
+        backgroundColor: COLORS.canvas,
         overflow: "hidden",
       }}
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes handle terminal mouse activation without ARIA roles. */}
       <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingLeft: 1,
-          backgroundColor: active ? COLORS.panelRaised : COLORS.panel,
-        }}
-      >
-        <text
-          content={`${terminalStatusMarker(session.status)} ${ordinal}:${session.shortLabel} ${compactTerminalText(session.title, 16)}${session.pid ? ` · ${session.pid}` : ""}`}
-          style={{ fg: active ? terminalStatusColor(session) : COLORS.muted }}
-        />
-        <box style={{ flexDirection: "row" }}>
-          <InlineButton label="↻" accent={session.accent} onPress={() => onRestart(session.id)} />
-          <InlineButton label="×" accent={COLORS.danger} onPress={() => onClose(session.id)} />
-        </box>
-      </box>
-      <embedded-terminal
-        ref={terminalRef}
-        id={`free-terminal-${session.id}`}
-        maxScrollback={5_000}
-        selectable
-        onData={(data) => onInput(session.id, data)}
-        onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
+        id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
         style={{
-          width: "100%",
-          height: "auto",
-          minHeight: 1,
           flexGrow: 1,
-          flexShrink: 1,
+          minWidth: 1,
+          minHeight: 1,
+          border: borders,
+          borderStyle: "single",
+          borderColor: active ? COLORS.terminal : COLORS.border,
+          backgroundColor: COLORS.canvas,
+          overflow: "hidden",
         }}
-      />
+      >
+        <embedded-terminal
+          ref={terminalRef}
+          id={`free-terminal-${session.id}`}
+          maxScrollback={5_000}
+          selectable
+          onData={(data) => onInput(session.id, data)}
+          onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
+          onMouseDown={() => onActivate(session.id)}
+          style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
+        />
+      </box>
     </box>
   )
 }, samePane)

@@ -6,8 +6,13 @@ import {
   processStopDeadlineError,
   signalOwnedProcessGroup,
 } from "@xupon/tuiminal-core/process/owned-process"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 
-export type FreeTerminalKind = "shell" | "custom"
+import type { FreeTerminalCommand } from "../model/sessions"
+import type { TmuxPaneTarget } from "../model/tmux"
+import { registerTerminalResource } from "./terminal-resources"
+export { stopAllFreeTerminalProcesses } from "./terminal-resources"
+export type { FreeTerminalCommand, FreeTerminalKind } from "../model/sessions"
 
 export type FreeTerminalExit = {
   code: number | null
@@ -17,18 +22,15 @@ export type FreeTerminalExit = {
 
 export type FreeTerminalProcessHandle = {
   pid: number
+  backend?: "native" | "tmux"
+  tmux?: TmuxPaneTarget
+  /** The tmux client is not the parent of the shell running in its server. */
+  readAgentPid?: (signal?: AbortSignal) => Promise<number | null>
   write: (data: string | Uint8Array) => void
   resize: (columns: number, rows: number) => void
   stop: () => Promise<void>
-}
-
-export type FreeTerminalCommand = {
-  kind: FreeTerminalKind
-  label: string
-  shortLabel: string
-  displayCommand: string
-  command: string[]
-  accent: string
+  /** Explicitly close the backing persistent session; stop only detaches clients. */
+  close?: () => Promise<void>
 }
 
 type BunTerminalLike = {
@@ -64,7 +66,6 @@ type BunRuntimeLike = {
 }
 
 const bunRuntime = (globalThis as typeof globalThis & { Bun?: BunRuntimeLike }).Bun
-const activeProcesses = new Set<FreeTerminalProcessHandle>()
 
 export const FREE_TERMINAL_WORKING_DIRECTORY = resolve(
   process.env.TUIMINAL_WORKDIR ?? process.cwd(),
@@ -82,7 +83,8 @@ export function createShellTerminalCommand(): FreeTerminalCommand {
     shortLabel: "TTY",
     displayCommand: [shell, ...args].join(" "),
     command: [shell, ...args],
-    accent: "#64d8ff",
+    accent: COLORS.terminal,
+    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
   }
 }
 
@@ -99,7 +101,8 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     shortLabel: label.slice(0, 3).toUpperCase(),
     displayCommand: command,
     command: [shell, ...args],
-    accent: "#f7c873",
+    accent: COLORS.warning,
+    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
   }
 }
 
@@ -119,6 +122,9 @@ export function startFreeTerminalProcess(
     rows?: number
     onData: (data: Uint8Array) => void
     onExit: (result: FreeTerminalExit) => void
+    /** Attached clients must detach without sending Ctrl+C to a borrowed session. */
+    interruptOnStop?: boolean
+    env?: Record<string, string>
   },
 ): FreeTerminalProcessHandle {
   if (!bunRuntime) {
@@ -139,6 +145,7 @@ export function startFreeTerminalProcess(
     cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
     env: {
       ...processEnvironment(),
+      ...options.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
     },
@@ -190,7 +197,7 @@ export function startFreeTerminalProcess(
         rejectStop = reject
       })
       try {
-        terminal.write("\u0003")
+        if (options.interruptOnStop !== false) terminal.write("\u0003")
       } catch {
         // A process that already exited no longer accepts input.
       }
@@ -224,7 +231,7 @@ export function startFreeTerminalProcess(
     },
   }
 
-  activeProcesses.add(handle)
+  const release = registerTerminalResource(handle)
   void subprocess.exited.then(async (code) => {
     exited = true
     if (forceStopTimer) clearTimeout(forceStopTimer)
@@ -239,7 +246,7 @@ export function startFreeTerminalProcess(
         drainTimer = setTimeout(resolveDrain, OWNED_PROCESS_STOP_GRACE_MS)
       }),
     ]).finally(() => clearTimeout(drainTimer))
-    activeProcesses.delete(handle)
+    release()
     closeTerminal()
     try {
       options.onExit({
@@ -256,12 +263,4 @@ export function startFreeTerminalProcess(
   })
 
   return handle
-}
-
-export async function stopAllFreeTerminalProcesses() {
-  const results = await Promise.allSettled([...activeProcesses].map((process) => process.stop()))
-  const failures = results.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  )
-  if (failures.length) throw new AggregateError(failures, "Falha ao encerrar terminais próprios.")
 }

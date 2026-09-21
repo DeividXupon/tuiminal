@@ -34,6 +34,12 @@ export function FreeTerminal(props: ComponentProps<FeatureModules["terminal"]["F
   const Component = loadedFeature("terminal")?.FreeTerminal
   return Component ? createElement(Component, props) : null
 }
+export function PinnedTerminalSidebar(
+  props: ComponentProps<FeatureModules["terminal"]["PinnedTerminalSidebar"]>,
+) {
+  const Component = loadedFeature("terminal")?.PinnedTerminalSidebar
+  return Component ? createElement(Component, props) : null
+}
 export const listDatabaseQueryHistory: FeatureModules["database"]["listDatabaseQueryHistory"] = (
   ...args
 ) => requireFeature("database").listDatabaseQueryHistory(...args)

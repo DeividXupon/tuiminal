@@ -1,3 +1,16 @@
+export {
+  TERMINAL_MASTER_KEYS,
+  isTerminalMasterKey,
+  matchesTerminalMasterKey,
+  terminalMasterKeyBytes,
+  type TerminalMasterKey,
+} from "./terminal"
+import {
+  DEFAULT_TERMINAL_MASTER_KEY,
+  isTerminalMasterKey,
+  normalizeTerminalAgentCommands,
+  type TerminalMasterKey,
+} from "./terminal"
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -21,6 +34,8 @@ export type UiSettings = {
   palette: PaletteId
   layout: LayoutMode
   language: LanguageId
+  terminalAgentCommands: string[]
+  terminalMasterKey: TerminalMasterKey
   sensitiveTerms: string[]
 }
 
@@ -45,6 +60,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   palette: "prime",
   layout: "framed",
   language: DEFAULT_LANGUAGE,
+  terminalMasterKey: DEFAULT_TERMINAL_MASTER_KEY,
+  terminalAgentCommands: [],
   sensitiveTerms: [...DEFAULT_SENSITIVE_TERMS],
 }
 
@@ -86,6 +103,10 @@ function loadSettings(): UiSettings {
       palette: isPalette(parsed.palette) ? parsed.palette : DEFAULT_SETTINGS.palette,
       layout: isLayout(parsed.layout) ? parsed.layout : DEFAULT_SETTINGS.layout,
       language: isLanguage(parsed.language) ? parsed.language : DEFAULT_SETTINGS.language,
+      terminalAgentCommands: normalizeTerminalAgentCommands(parsed.terminalAgentCommands),
+      terminalMasterKey: isTerminalMasterKey(parsed.terminalMasterKey)
+        ? parsed.terminalMasterKey
+        : DEFAULT_TERMINAL_MASTER_KEY,
       sensitiveTerms: normalizeSensitiveTerms(parsed.sensitiveTerms),
     }
   } catch (error) {
@@ -188,7 +209,11 @@ export function databaseSelectionColors() {
 }
 
 export function getUiSettings(): UiSettings {
-  return { ...currentSettings, sensitiveTerms: [...currentSettings.sensitiveTerms] }
+  return {
+    ...currentSettings,
+    terminalAgentCommands: [...currentSettings.terminalAgentCommands],
+    sensitiveTerms: [...currentSettings.sensitiveTerms],
+  }
 }
 
 function persistUiSettings(next: UiSettings, allowRecovery: boolean) {
@@ -218,6 +243,13 @@ export function updateUiSettings(
     palette: isPalette(patch.palette) ? patch.palette : currentSettings.palette,
     layout: isLayout(patch.layout) ? patch.layout : currentSettings.layout,
     language: isLanguage(patch.language) ? patch.language : currentSettings.language,
+    terminalAgentCommands:
+      patch.terminalAgentCommands === undefined
+        ? [...currentSettings.terminalAgentCommands]
+        : normalizeTerminalAgentCommands(patch.terminalAgentCommands),
+    terminalMasterKey: isTerminalMasterKey(patch.terminalMasterKey)
+      ? patch.terminalMasterKey
+      : currentSettings.terminalMasterKey,
     sensitiveTerms:
       patch.sensitiveTerms === undefined
         ? [...currentSettings.sensitiveTerms]
@@ -234,13 +266,21 @@ export function updateUiSettings(
   try {
     persistUiSettings(next, Boolean(options.recoverCorrupted))
     return {
-      settings: { ...next, sensitiveTerms: [...next.sensitiveTerms] },
+      settings: {
+        ...next,
+        terminalAgentCommands: [...next.terminalAgentCommands],
+        sensitiveTerms: [...next.sensitiveTerms],
+      },
       error: null,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "erro desconhecido"
     return {
-      settings: { ...next, sensitiveTerms: [...next.sensitiveTerms] },
+      settings: {
+        ...next,
+        terminalAgentCommands: [...next.terminalAgentCommands],
+        sensitiveTerms: [...next.sensitiveTerms],
+      },
       error: `Não foi possível salvar a configuração: ${message}`,
     }
   }

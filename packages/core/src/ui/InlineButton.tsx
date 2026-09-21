@@ -12,6 +12,7 @@ export type InlineButtonProps = {
   accent?: string
   active?: boolean
   selected?: boolean
+  compact?: boolean
   disabled?: boolean
   buttonRef?: Ref<ButtonRenderable>
 }
@@ -23,6 +24,7 @@ function buttonColors({
   active,
   disabled,
   accent,
+  compact,
 }: {
   pressed: boolean
   selected: boolean
@@ -30,16 +32,17 @@ function buttonColors({
   active: boolean
   disabled: boolean
   accent: string
+  compact: boolean
 }) {
   if (pressed || selected) return { fg: disabled ? COLORS.border : COLORS.canvas, bg: accent }
   const highlighted = focused || active
   return {
     fg: disabled ? COLORS.border : highlighted ? accent : COLORS.muted,
     bg: highlighted
-      ? LAYOUT.compact
+      ? compact
         ? COLORS.diffModifiedBg
         : COLORS.panelRaised
-      : LAYOUT.compact
+      : compact
         ? "transparent"
         : COLORS.panel,
   }
@@ -53,6 +56,7 @@ export function InlineButton({
   active = false,
   selected = false,
   disabled = false,
+  compact = LAYOUT.compact,
   buttonRef,
 }: InlineButtonProps) {
   return (
@@ -75,6 +79,7 @@ export function InlineButton({
             active,
             disabled,
             accent,
+            compact,
           })}
         />
       )}

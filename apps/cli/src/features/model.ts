@@ -30,7 +30,7 @@ const FEATURE_FILES: Record<FeatureId, readonly string[]> = {
   git: ["index.mjs"],
   runner: ["index.mjs"],
   http: ["index.mjs", "http-run.mjs", "http-import.mjs", "http-postman.mjs"],
-  terminal: ["index.mjs"],
+  terminal: ["index.mjs", "terminal-sidebar.mjs"],
 }
 
 export class FeatureInstallError extends Error {

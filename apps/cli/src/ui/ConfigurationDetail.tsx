@@ -1,3 +1,4 @@
+import { TerminalSettingsDetail } from "./TerminalSettingsDetail"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -70,6 +71,8 @@ type ConfigurationDetailProps = Pick<
   | "navigationActive"
   | "notice"
   | "onNavigationFocus"
+  | "onTerminalAgentCommandsChange"
+  | "onTerminalMasterKeyChange"
   | "onPaletteChange"
   | "onColorModeChange"
   | "onLayoutChange"
@@ -91,6 +94,8 @@ export function ConfigurationDetail({
   onNavigationFocus,
   queryHistoryCount,
   tutorialLabel,
+  onTerminalAgentCommandsChange,
+  onTerminalMasterKeyChange,
   onPaletteChange,
   onColorModeChange,
   onLayoutChange,
@@ -103,6 +108,17 @@ export function ConfigurationDetail({
   compact,
   contentWidth,
 }: ConfigurationDetailProps) {
+  if (section === "terminal")
+    return (
+      <TerminalSettingsDetail
+        settings={settings}
+        notice={notice}
+        compact={compact}
+        contentWidth={contentWidth}
+        onChange={onTerminalMasterKeyChange}
+        onAgentCommandsChange={onTerminalAgentCommandsChange}
+      />
+    )
   if (section === "colorMode")
     return (
       <ColorModeDetail

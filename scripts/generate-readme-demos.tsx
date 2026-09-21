@@ -1,5 +1,6 @@
 import type { FeatureState } from "../apps/cli/src/features/controller"
 import { demoTextRuns } from "./readme-demo-text"
+import { prepareTerminalMirrorDemo } from "./readme-terminal-mirror"
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -38,6 +39,12 @@ const CAPTURE_ROOT = mkdtempSync(join(tmpdir(), "tuiminal-readme-demos-"))
 const PROJECT_ROOT = join(CAPTURE_ROOT, "workspace")
 
 process.env.XDG_CONFIG_HOME = join(CAPTURE_ROOT, "config")
+process.env.TUIMINAL_TERMINAL_BACKEND = "native"
+process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = "0"
+process.env.TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY = "0"
+process.env.TUIMINAL_TERMINAL_RESTORE = "0"
+process.env.TUIMINAL_TERMINAL_PINNED_TMUX = "0"
+process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "0"
 process.env.XDG_DATA_HOME = join(CAPTURE_ROOT, "data")
 process.env.TUIMINAL_WORKDIR = PROJECT_ROOT
 process.env.TUIMINAL_HTTP_HOME = PROJECT_ROOT
@@ -47,6 +54,15 @@ process.env.TUIMINAL_TEST_SKIP_STARTUP = "1"
 process.env.TUIMINAL_GIT_PR_DEMO = "1"
 process.env.TUIMINAL_GIT_ISSUES_DEMO = "1"
 process.env.TUIMINAL_GIT_INBOX_DEMO = "1"
+if (process.platform !== "win32") {
+  const demoShell = join(CAPTURE_ROOT, "demo-shell")
+  writeFileSync(
+    demoShell,
+    '#!/bin/sh\nif [ "$1" = "-lc" ]; then shift; exec /bin/sh -c "$@"; fi\nif [ "$1" = "-l" ]; then shift; fi\nexec /bin/sh "$@"\n',
+    { mode: 0o755 },
+  )
+  process.env.SHELL = demoShell
+}
 delete process.env.DATABASE_URL
 delete process.env.MYSQL_URL
 delete process.env.POSTGRES_URL
@@ -193,10 +209,15 @@ async function pressKey(
   await tui.renderOnce()
 }
 
-async function typeInto(tui: TestRendererSetup, id: string, value: string) {
-  const input = tui.renderer.root.findDescendantById(id) as { focus?: () => void } | undefined
+async function typeInto(tui: TestRendererSetup, id: string, value: string, replace = false) {
+  const input = tui.renderer.root.findDescendantById(id) as
+    | { focus?: () => void; value?: string }
+    | undefined
   if (!input?.focus) throw new Error(`Campo de demonstração não encontrado: ${id}`)
-  act(() => input.focus?.())
+  act(() => {
+    input.focus?.()
+    if (replace) input.value = ""
+  })
   await act(async () => tui.mockInput.typeText(value))
   await tui.renderOnce()
 }
@@ -541,17 +562,32 @@ async function httpFrames() {
   }
 }
 
-async function terminalFrames() {
+async function nativeTerminalFrames() {
+  const agentPath = join(PROJECT_ROOT, "codex.js")
+  const reviewerPath = join(PROJECT_ROOT, "claude.js")
+  writeFileSync(
+    agentPath,
+    `process.stdout.write(${JSON.stringify("\x1b[2J\x1b[HCodex · simulated session\r\n\r\nReview the API and its tests.\r\n\r\n• Reading src/server.ts (2s • esc to interrupt)\r\n› \r\n? for shortcuts")}); setInterval(() => {}, 1000)\n`,
+  )
+  writeFileSync(
+    reviewerPath,
+    `process.stdout.write(${JSON.stringify("\x1b[2J\x1b[HClaude Code · simulated session\r\n\r\n────────────\r\nDo you want to proceed?\r\n❯ 1. Yes\r\n2. No\r\nEnter to confirm · Esc to cancel")}); setInterval(() => {}, 1000)\n`,
+  )
   const tui = await testRender(createElement(FreeTerminal, { active: true }), {
     width: TERMINAL_COLUMNS,
     height: TERMINAL_ROWS,
   })
+  const prefix = async (key: string) => {
+    await pressKey(tui, "b", { ctrl: true })
+    await pressKey(tui, key)
+  }
   try {
-    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("terminal-command-input")))
-    const frames = [
-      snapshot(tui, "[Alt+5] Free Terminal · PTYs reais em seções 2 × 2", undefined, 160),
-    ]
-
+    await settle(tui)
+    const frames = [snapshot(tui, "Terminal · sessões e agentes na sidebar", undefined, 140)]
+    await prefix("d")
+    await typeInto(tui, "terminal-command-input", "Development")
+    await pressKey(tui, "enter")
+    await prefix("/")
     await typeInto(
       tui,
       "terminal-command-input",
@@ -559,37 +595,80 @@ async function terminalFrames() {
     )
     await pressKey(tui, "enter")
     await settle(tui, () => tui.captureCharFrame().includes("API shell ready"))
-    frames.push(snapshot(tui, "Digite um comando ou abra o shell padrão"))
-
-    await pressKey(tui, "b", { ctrl: true })
-    await pressKey(tui, "g")
-    await typeInto(
+    frames.push(snapshot(tui, "Pastas organizam as seções abertas"))
+    await prefix("v")
+    await settle(
       tui,
-      "terminal-command-input",
-      `node -e "console.log('Web shell ready'); setTimeout(()=>{},30000)"`,
+      () =>
+        (tui.renderer.root.findDescendantById("terminal-panes")?.getChildren().length ?? 0) === 2,
+    )
+    frames.push(snapshot(tui, "[Ctrl+B] [V] · dois terminais por seção"))
+    await pressKey(tui, "b", { ctrl: true })
+    frames.push(
+      snapshot(tui, "Master Key · ações na parte inferior · [Esc] cancela", undefined, 220),
     )
     await pressKey(tui, "escape")
-    await pressKey(tui, "b", { ctrl: true })
-    await pressKey(tui, "v")
-    await settle(tui, () => tui.captureCharFrame().includes("Web shell ready"))
-    frames.push(snapshot(tui, "[Ctrl+B] [V] divide o terminal ativo para o lado"))
-
-    await pressKey(tui, "b", { ctrl: true })
-    await pressKey(tui, "g")
-    await typeInto(
+    await prefix("/")
+    await typeInto(tui, "terminal-command-input", `node "${agentPath}"`)
+    await pressKey(tui, "enter")
+    await prefix("e")
+    await typeInto(tui, "terminal-command-input", "API review", true)
+    await pressKey(tui, "enter")
+    await prefix("v")
+    await prefix("/")
+    await typeInto(tui, "terminal-command-input", `node "${reviewerPath}"`)
+    await pressKey(tui, "enter")
+    await prefix("e")
+    await typeInto(tui, "terminal-command-input", "Tests review", true)
+    await pressKey(tui, "enter")
+    await prefix("a")
+    await prefix("1")
+    await settle(
       tui,
-      "terminal-command-input",
-      `node -e "console.log('Tests passed'); setTimeout(()=>{},30000)"`,
+      () =>
+        tui.captureCharFrame().includes("Lendo") && tui.captureCharFrame().includes("Aguardando"),
+      400,
     )
-    await pressKey(tui, "escape")
-    await pressKey(tui, "b", { ctrl: true })
-    await pressKey(tui, "s")
-    await settle(tui, () => tui.captureCharFrame().includes("Tests passed"))
-    frames.push(snapshot(tui, "[Ctrl+B] [S] cria a linha inferior da seção", undefined, 170))
+    frames.push(
+      snapshot(
+        tui,
+        "Agentes simulados · atividade e pedidos de atenção sempre visíveis",
+        undefined,
+        260,
+      ),
+    )
     return frames
   } finally {
     destroy(tui)
-    stopAllFreeTerminalProcesses()
+    await stopAllFreeTerminalProcesses()
+  }
+}
+
+async function terminalFrames() {
+  const frames = await nativeTerminalFrames()
+  if (process.platform === "win32") return frames
+  const restore = prepareTerminalMirrorDemo(CAPTURE_ROOT)
+  let tui: TestRendererSetup | undefined
+  try {
+    tui = await testRender(createElement(FreeTerminal, { active: true }), {
+      width: TERMINAL_COLUMNS,
+      height: TERMINAL_ROWS,
+    })
+    const capture = tui
+    await settle(capture, () => capture.captureCharFrame().includes("Lendo"), 400)
+    frames.push(
+      snapshot(
+        capture,
+        "Agente já aberto no tmux · espelho automático com a tela existente",
+        undefined,
+        260,
+      ),
+    )
+    return frames
+  } finally {
+    if (tui) destroy(tui)
+    await stopAllFreeTerminalProcesses()
+    restore()
   }
 }
 
@@ -740,7 +819,7 @@ try {
     if (!only || only === id) renderGif(id, title, await capture())
   }
 } finally {
-  stopAllRunnerProcesses()
-  stopAllFreeTerminalProcesses()
+  await stopAllRunnerProcesses()
+  await stopAllFreeTerminalProcesses()
   rmSync(CAPTURE_ROOT, { recursive: true, force: true })
 }

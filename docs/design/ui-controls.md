@@ -8,8 +8,10 @@ its keyboard scope, focus stack, data, and side effects.
 
 - Use `InlineButton` for a one-line labeled action. It supplies translation,
   bracketed shortcut coloring, disabled/active/selected state, and palette-aware
-  compact backgrounds. Do not manually color a shortcut or translate a label only
-  to pass it to `InlineButton`.
+  compact backgrounds. Its optional `compact` override lets always-compact surfaces
+  such as Free Terminal keep their geometry and colors independent of global
+  layout. Do not manually color a shortcut or translate a label only to pass it
+  to `InlineButton`.
 - Use `DirectionalButton` for contextual previous/next controls. Use the native
   tuiparts `Button` for selectable rows, cards, spatial hit targets, and controls
   whose interaction or layout is not a one-line action. Paint-only dimmers are
@@ -34,6 +36,7 @@ through their native selection API, never their underlying value.
 Top-level application, feature, installer, loading, and tutorial workspaces use
 `LAYOUT.workspaceBackground`. It resolves to `COLORS.panel` in framed mode so outer
 padding and gaps match the bordered panels, and to `COLORS.canvas` in compact mode.
+Free Terminal is an always-compact exception and uses `COLORS.canvas` in both modes.
 Internal editor, code, log, input, dimmer, and raised-panel surfaces keep their
 explicit palette colors because those contrasts communicate structure or state.
 
