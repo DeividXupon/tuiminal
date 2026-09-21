@@ -26,7 +26,7 @@ afterEach(() => {
   inputs.length = 0
 })
 
-async function startFixture(deferStop = false) {
+async function startFixture(deferStop = false, shell = false) {
   inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockResolvedValue([])
   spawnSpy = spyOn(terminalService, "startFreeTerminalProcess").mockImplementation(
     (_command, options) => {
@@ -46,15 +46,29 @@ async function startFixture(deferStop = false) {
     },
   )
   tui = await testRender(<FreeTerminal active />, { width: 100, height: 28 })
-  await leader("/")
-  await act(async () => {
-    tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
-    await tui?.mockInput.typeText("fixture-command")
-  })
-  await act(async () => tui?.mockInput.pressEnter())
+  if (shell) await leader("c")
+  else {
+    await leader("/")
+    await act(async () => {
+      tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
+      await tui?.mockInput.typeText("fixture-command")
+    })
+    await act(async () => tui?.mockInput.pressEnter())
+  }
   await tui.renderOnce()
   expect(starts).toHaveLength(1)
 }
+
+test("exiting an interactive shell removes its session and empty folder", async () => {
+  await startFixture(false, true)
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")).toBeDefined()
+
+  act(() => starts[0]?.onExit({ code: 0, signal: null, stopped: false }))
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")).toBeUndefined()
+  expect(tui?.captureCharFrame()).toContain("Novo terminal")
+})
 
 test("resizing a finished terminal preserves its output without rerunning its command", async () => {
   await startFixture()

@@ -1,21 +1,21 @@
 import type { EmbeddedTerminalRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
-import type { FreeTerminalProcessHandle } from "../services/terminal"
-import { destroyOwnedTmuxTarget } from "../services/tmux-terminal"
-import { TerminalLaunches } from "../services/terminal-launches"
-import { AgentMonitor } from "../services/agent-monitor"
-import { tmuxPaneKey } from "../model/tmux"
-import { useTerminalSessionLaunch } from "./use-terminal-session-launch"
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import {
+  type FreeTerminalCommand,
+  type FreeTerminalKind,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   normalizeSectionLayout,
-  type TerminalSession,
   type TerminalPlacement,
-  type FreeTerminalCommand,
-  type FreeTerminalKind,
+  type TerminalSession,
 } from "../model/sessions"
+import { tmuxPaneKey } from "../model/tmux"
+import type { AgentMonitor } from "../services/agent-monitor"
+import type { FreeTerminalProcessHandle } from "../services/terminal"
+import { TerminalLaunches } from "../services/terminal-launches"
+import { destroyOwnedTmuxTarget } from "../services/tmux-terminal"
+import { useTerminalSessionLaunch } from "./use-terminal-session-launch"
 
 function mirroredSession(command: FreeTerminalCommand, sessions: readonly TerminalSession[]) {
   if (!command.tmux) return undefined
@@ -81,6 +81,7 @@ export function useTerminalSessions(active: boolean) {
   const activeSessionRef = useRef<string | null>(null)
   const sessionsRef = useRef<TerminalSession[]>([])
   const dismissedTmuxPanes = useRef(new Set<string>())
+  const closeFinishedShellRef = useRef<(id: string) => void>(() => undefined)
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [notice, setNotice] = useState("")
@@ -89,9 +90,14 @@ export function useTerminalSessions(active: boolean) {
   sessionsRef.current = sessions
 
   const updateSession = useCallback((id: string, update: Partial<TerminalSession>) => {
-    const next = sessionsRef.current.map((session) =>
-      session.id === id ? { ...session, ...update } : session,
-    )
+    const current = sessionsRef.current
+    const index = current.findIndex((session) => session.id === id)
+    const session = current[index]
+    if (!session) return
+    const keys = Object.keys(update) as Array<keyof TerminalSession>
+    if (keys.every((key) => Object.is(session[key], update[key]))) return
+    const next = current.slice()
+    next[index] = { ...session, ...update }
     sessionsRef.current = next
     setSessions(next)
   }, [])
@@ -126,6 +132,7 @@ export function useTerminalSessions(active: boolean) {
     outputs: agentOutputs,
     activeSession: activeSessionRef,
     updateSession,
+    closeFinishedShell: (id) => closeFinishedShellRef.current(id),
     focusTerminal,
     setNotice,
   })
@@ -243,6 +250,7 @@ export function useTerminalSessions(active: boolean) {
     },
     [focusTerminal],
   )
+  closeFinishedShellRef.current = closeSession
 
   const restartSession = useCallback(
     (id: string) => {
@@ -253,21 +261,6 @@ export function useTerminalSessions(active: boolean) {
       focusTerminal(id)
     },
     [focusTerminal, startSession],
-  )
-
-  const moveSession = useCallback(
-    (delta: number) => {
-      const currentSessions = sessionsRef.current
-      if (!currentSessions.length) return
-      const activeIndex = currentSessions.findIndex(
-        (session) => session.id === activeSessionRef.current,
-      )
-      const current = Math.max(0, activeIndex)
-      const nextIndex = (current + delta + currentSessions.length) % currentSessions.length
-      const next = currentSessions[nextIndex]
-      if (next) activateSession(next.id)
-    },
-    [activateSession],
   )
 
   useEffect(() => {
@@ -303,7 +296,6 @@ export function useTerminalSessions(active: boolean) {
     launchCommand,
     closeSession,
     restartSession,
-    moveSession,
     terminalReady,
     terminalGone,
     terminalInput,

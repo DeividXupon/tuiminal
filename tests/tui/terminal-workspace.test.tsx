@@ -1,24 +1,26 @@
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
-import type { EmbeddedTerminalRenderable } from "@opentui/core"
+import { rmSync } from "node:fs"
+import type { DiffRenderable, EmbeddedTerminalRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { rmSync } from "node:fs"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { App } from "../../apps/cli/src/App"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import * as processes from "../../packages/feature-terminal/src/services/terminal"
-import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
-import {
-  saveTerminalWorkspaceState,
-  terminalWorkspaceStatePath,
-} from "../../packages/feature-terminal/src/services/terminal-workspace-state"
 import {
   resetPinnedTerminalSidebarForTests,
   terminalSidebarSnapshot,
 } from "../../packages/feature-terminal/src/model/pinned-sidebar"
+import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
+import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
+import * as processes from "../../packages/feature-terminal/src/services/terminal"
+import {
+  loadTerminalWorkspaceState,
+  saveTerminalWorkspaceState,
+  terminalWorkspaceStatePath,
+} from "../../packages/feature-terminal/src/services/terminal-workspace-state"
+import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 
 const originalSettings = getUiSettings()
 const originalOnlyTab = process.env.TUIMINAL_ONLY_TAB
@@ -26,6 +28,7 @@ const originalWorkspaceState = process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE
 let tui: TestRendererSetup | undefined
 let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
+const liveDiffSpies: Array<{ mockRestore: () => void }> = []
 const inputs: string[][] = []
 const starts: Parameters<typeof processes.startFreeTerminalProcess>[1][] = []
 let snapshot: ProcessIdentity[] = []
@@ -35,6 +38,7 @@ afterEach(() => {
   tui = undefined
   spawnSpy?.mockRestore()
   inspectionSpy?.mockRestore()
+  for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
   inputs.length = 0
   starts.length = 0
   snapshot = []
@@ -81,6 +85,10 @@ async function key(name: string, ctrl = false) {
     else tui?.mockInput.pressKey(name, { ctrl })
     if (name === "escape") await Bun.sleep(70)
   })
+  await tui?.renderOnce()
+}
+async function arrow(direction: "up" | "down" | "left" | "right") {
+  await act(async () => tui?.mockInput.pressArrow(direction))
   await tui?.renderOnce()
 }
 async function leader(action: string) {
@@ -163,6 +171,23 @@ test("returning from the pinned sidebar redraws and keeps the terminal visible",
   expect(invalidate).toHaveBeenCalled()
 })
 
+test("mouse wheel scrolls terminal history without sending input to the shell", async () => {
+  await mount()
+  await leader("c")
+  const terminal = focusedTerminal()
+  const output = Array.from({ length: 80 }, (_, index) => `history-${index}`).join("\r\n")
+  await act(async () => starts[0]?.onData(new TextEncoder().encode(`${output}\r\n`)))
+  await tui?.renderOnce()
+  expect(terminal.screen().text).toContain("history-79")
+
+  await act(async () => {
+    await tui?.mockMouse.scroll(terminal.screenX + 2, terminal.screenY + 2, "up")
+  })
+  await tui?.renderOnce()
+  expect(terminal.screen().text).not.toContain("history-79")
+  expect(inputs[0]).toEqual([])
+})
+
 test("two panes fill one compact section and a third split is refused", async () => {
   await mount()
   await leader("c")
@@ -207,11 +232,9 @@ test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (me
   expect(second.height).toBe(panes.height)
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-2")).toBeDefined()
-  await leader("a")
+  await click(`terminal-sidebar-pane-${first.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(first)
-  expect(first.width).toBe(panes.width)
-  expect(first.height).toBe(panes.height)
-  await leader("f")
+  await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(second)
   await leader("v")
   const third = focusedTerminal()
@@ -224,11 +247,8 @@ test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (me
   expect(inputs).toEqual([[], [], []])
 })
 
-test("folders and paired sidebar rows support mouse selection and moving sections", async () => {
+test("paired sidebar rows support mouse selection", async () => {
   await mount()
-  await click("terminal-sidebar-new-folder")
-  await text("Services")
-  expect(tui?.captureCharFrame()).toContain("Services")
   await click("terminal-sidebar-new")
   const first = focusedTerminal()
   await leader("s")
@@ -243,9 +263,7 @@ test("folders and paired sidebar rows support mouse selection and moving section
   for (let i = 0; i < "Terminal 2".length; i++) await key("backspace")
   await text("API")
   expect(tui?.captureCharFrame()).toContain("API")
-  await leader("o")
-  await click("terminal-dialog-folder-folder-1")
-  const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-folder-1")!
+  const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
   expect(section.parent).toBe(folder.parent)
   const firstId = first.id.replace("free-terminal-", "")
@@ -254,18 +272,60 @@ test("folders and paired sidebar rows support mouse selection and moving section
   expect(starts).toHaveLength(2)
 })
 
-test("custom folders return when the Terminal workspace is mounted again", async () => {
+test("legacy custom folders cannot return to the Terminal workspace", async () => {
   process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "1"
   saveTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY, {
     folders: [{ id: "folder-7", name: "Services" }],
     assignments: {},
+    collapsedFolderIds: [],
   })
 
   await mount()
 
-  const folder = tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")).toBeUndefined()
+  await leader("c")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-new-folder")).toBeUndefined()
+  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY).folders).toEqual([])
+})
+
+test("session folders collapse, persist per project, and omit empty folders", async () => {
+  process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "1"
+  await mount()
+
+  for (const id of ["terminal", "tmux", "others"])
+    expect(tui?.renderer.root.findDescendantById(`terminal-sidebar-folder-${id}`)).toBeUndefined()
+
+  await leader("c")
+  const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   expect(folder).toBeDefined()
-  expect(tui?.captureCharFrame().split("\n")[folder!.screenY]).toContain("Services")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
+  await click("terminal-sidebar-folder-terminal")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1"),
+  ).toBeUndefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+  expect(tui?.captureCharFrame().split("\n")[folder.screenY]).toContain("▸ Tuiminais")
+  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY)).toMatchObject({
+    collapsedFolderIds: ["terminal"],
+  })
+
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY)).toMatchObject({
+    collapsedFolderIds: [],
+  })
+
+  await key("enter")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1"),
+  ).toBeUndefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+
+  await click("terminal-sidebar-folder-terminal")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
 })
 
 test("changing Master Key in contextual settings takes effect and keeps shell input intact", async () => {
@@ -326,7 +386,7 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
   expect(tui!.captureCharFrame().split("\n")[section.screenY]).toContain("sh")
   expect(section.findDescendantById(separatorId)).toBeUndefined()
   expect(section.parent).toBe(folder.parent)
-  expect(section.screenY).toBe(originalY)
+  expect(section.screenY).toBeGreaterThan(originalY)
   expect(focusedTerminal()).toBe(terminal)
   await click(agentId)
   expect(focusedTerminal()).toBe(terminal)
@@ -341,20 +401,220 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
   expect(starts).toHaveLength(2)
 }, 10_000)
 
-test.each(["IA", "AI"])("%s can be created while new terminals stay in Tuiminais", async (name) => {
+test("removed Master Key actions are absent while new terminals stay in Tuiminais", async () => {
   await mount()
+  await key("b", true)
+  for (const action of ["t", "tab", "p", "a", "f", "o"])
+    expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-d")).toBeDefined()
+  await key("escape")
   await leader("d")
-  await text(name)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
-  const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-folder-1")!
-  expect(folder).toBeDefined()
-  expect(tui?.captureCharFrame().split("\n")[folder.screenY]).toContain(`▾ ${name}`)
   await click("terminal-sidebar-new")
   const owned = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
   expect(section.parent).toBe(owned.parent)
   expect(starts).toHaveLength(1)
 })
+
+test("Live Diff polls every 500 ms beside an agent without restarting its terminal", async () => {
+  const root = "/fixture/live-worktree"
+  const fingerprints = new Map<number, string>()
+  const repository = spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root)
+  const worktrees = spyOn(liveDiff, "liveDiffWorktrees").mockResolvedValue([root])
+  const directories = spyOn(liveDiff, "readProcessDirectories").mockResolvedValue([])
+  const read = spyOn(liveDiff, "readLiveDiffRoot").mockImplementation(async () => ({
+    truncated: false,
+    files: Array.from({ length: 20 }, (_, index) => ({
+      root,
+      path: index ? `packages/file-${index}.ts` : "packages/terminal.ts",
+      additions: 2,
+      deletions: 1,
+      fingerprint: fingerprints.get(index) ?? "first",
+      untracked: false,
+      newFile: index === 1,
+      headExists: true,
+    })),
+  }))
+  let patchContent = `diff --git a/packages/terminal.ts b/packages/terminal.ts\n--- a/packages/terminal.ts\n+++ b/packages/terminal.ts\n@@ -1 +1,41 @@\n-old\n+${"long_code_".repeat(20)}\n${Array.from({ length: 40 }, (_, index) => `+added_${index}\n`).join("")}`
+  const patch = spyOn(liveDiff, "readLiveDiffPatch").mockImplementation(async () => patchContent)
+  liveDiffSpies.push(repository, worktrees, directories, read, patch)
+
+  await mount()
+  await leader("c")
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  snapshot = [
+    { pid: 101, parentPid: 1, executable: "sh", command: "sh" },
+    { pid: 103, parentPid: 101, executable: "codex", command: "codex" },
+  ]
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await act(async () => Bun.sleep(50))
+    await tui?.renderOnce()
+    if (tui?.renderer.root.findDescendantById(`terminal-agent-${sessionId}`)) break
+  }
+  expect(Boolean(tui?.renderer.root.findDescendantById(`terminal-agent-${sessionId}`))).toBe(true)
+  await leader("d")
+  expect(Boolean(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`))).toBe(true)
+  expect(focusedTerminal() === terminal).toBe(true)
+  expect(starts).toHaveLength(1)
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await act(async () => Bun.sleep(50))
+    await tui?.renderOnce()
+    if (tui?.captureCharFrame().includes("packages/terminal.ts")) break
+  }
+  expect(tui?.captureCharFrame()).toContain("packages/terminal.ts")
+  expect(tui?.captureCharFrame()).toContain("New")
+  expect(tui?.captureCharFrame()).toContain("Show diff auto: true")
+  await click(`live-diff-file-${sessionId}-0`)
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+  const firstRow = tui!.renderer.root.findDescendantById(`live-diff-file-${sessionId}-0`)!
+  const cells = firstRow.getChildren()
+  for (let index = 1; index < cells.length; index += 1)
+    expect(cells[index]!.screenX).toBe(cells[index - 1]!.screenX + cells[index - 1]!.width)
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await tui?.renderOnce()
+    if (tui?.renderer.root.findDescendantById(`live-diff-code-${sessionId}`)) break
+    await act(async () => Bun.sleep(25))
+  }
+  const nativeDiff = tui!.renderer.root.findDescendantById(`live-diff-code-${sessionId}`)!
+  expect((nativeDiff as DiffRenderable).wrapMode).toBe("char")
+  expect(nativeDiff.height).toBeGreaterThan(8)
+  expect((tui?.captureCharFrame().match(/long_code_/g) ?? []).length).toBeGreaterThan(10)
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-preview-${sessionId}`)
+  expect(tui?.captureCharFrame()).toContain("◆ live-worktree")
+  expect(tui?.captureCharFrame()).toContain("[Esc] Voltar à lista")
+  const preview = tui!.renderer.root.findDescendantById(
+    `live-diff-preview-${sessionId}`,
+  ) as ScrollBoxRenderable
+  await key("j")
+  expect(preview.scrollTop).toBeGreaterThan(0)
+  const afterLine = preview.scrollTop
+  await key("l")
+  expect(preview.scrollTop).toBeGreaterThan(afterLine)
+  const afterHalfPage = preview.scrollTop
+  await arrow("down")
+  expect(preview.scrollTop).toBeGreaterThan(afterHalfPage)
+  await arrow("right")
+  const afterRight = preview.scrollTop
+  await arrow("up")
+  expect(preview.scrollTop).toBeLessThan(afterRight)
+  const beforeLeft = preview.scrollTop
+  await arrow("left")
+  expect(preview.scrollTop).toBeLessThan(beforeLeft)
+  const beforeK = preview.scrollTop
+  await key("k")
+  expect(preview.scrollTop).toBeLessThan(beforeK)
+  const beforeH = preview.scrollTop
+  await key("h")
+  expect(preview.scrollTop).toBeLessThan(beforeH)
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+  expect(tui?.captureCharFrame()).not.toContain("◆ live-worktree")
+  await click(`live-diff-preview-${sessionId}`)
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-preview-${sessionId}`)
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+  await key("j")
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/file-1.ts")
+  expect(tui?.captureCharFrame()).toContain("Show diff auto: false")
+  await key("enter")
+  expect(tui?.captureCharFrame()).toContain("[Esc] Ativar diff auto")
+  await key("j")
+  expect(preview.scrollTop).toBeGreaterThan(0)
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/terminal.ts")
+  expect(tui?.captureCharFrame()).toContain("Show diff auto: true")
+  expect(preview.scrollTop).toBe(0)
+  const twoHunks = (first: string, second: string) =>
+    `diff --git a/packages/terminal.ts b/packages/terminal.ts\n--- a/packages/terminal.ts\n+++ b/packages/terminal.ts\n@@ -1,32 +1,32 @@\n first context\n-old first\n+${first}\n${Array.from({ length: 30 }, (_, index) => ` context_${index}\n`).join("")}@@ -70,3 +70,3 @@\n before\n-old second\n+${second}\n after\n`
+  patchContent = twoHunks("new first", "new second")
+  fingerprints.set(0, "hunk-one")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  const completeDiff = tui!.renderer.root.findDescendantById(
+    `live-diff-code-${sessionId}`,
+  ) as DiffRenderable
+  expect(completeDiff.getHunkRowOffsets()).toHaveLength(2)
+  expect(preview.scrollTop).toBeGreaterThan(0)
+  expect(tui?.captureCharFrame()).toContain("new second")
+  patchContent = twoHunks("newer first", "new second")
+  fingerprints.set(0, "hunk-two")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(preview.scrollTop).toBe(0)
+  expect(tui?.captureCharFrame()).toContain("newer first")
+  patchContent = twoHunks("newer first", "newer second")
+  fingerprints.set(0, "hunk-three")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(preview.scrollTop).toBeGreaterThan(0)
+  expect(tui?.captureCharFrame()).toContain("newer second")
+  fingerprints.set(19, "second")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/file-19.ts")
+  const reorderedList = tui!.renderer.root.findDescendantById(`live-diff-files-${sessionId}`)!
+  const newestRow = tui!.renderer.root.findDescendantById(`live-diff-file-${sessionId}-0`)!
+  expect(newestRow.screenY).toBeGreaterThanOrEqual(reorderedList.screenY)
+  expect(newestRow.screenY).toBeLessThan(reorderedList.screenY + reorderedList.height)
+  await click(`live-diff-file-${sessionId}-1`)
+  await act(async () => Bun.sleep(50))
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/terminal.ts")
+  fingerprints.set(18, "third")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/terminal.ts")
+  await click(`live-diff-file-${sessionId}-0`)
+  await act(async () => Bun.sleep(50))
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/file-18.ts")
+  fingerprints.set(17, "fourth")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/file-17.ts")
+  for (let index = 1; index < 20; index += 1) await key("j")
+  await tui?.renderOnce()
+  const list = tui!.renderer.root.findDescendantById(`live-diff-files-${sessionId}`)!
+  const last = tui!.renderer.root.findDescendantById(`live-diff-file-${sessionId}-19`)!
+  expect(last.screenY).toBeGreaterThanOrEqual(list.screenY)
+  expect(last.screenY).toBeLessThan(list.screenY + list.height)
+  await key("escape")
+  expect(focusedTerminal()).toBe(terminal)
+  const reads = read.mock.calls.length
+  fingerprints.set(0, "fifth")
+  await act(async () => Bun.sleep(650))
+  await tui?.renderOnce()
+  expect(read.mock.calls.length).toBeGreaterThan(reads)
+  expect(focusedTerminal() === terminal).toBe(true)
+  await click(`live-diff-add-${sessionId}`)
+  expect(Boolean(tui?.renderer.root.findDescendantById("terminal-dialog"))).toBe(true)
+  await key("escape")
+  await click(`live-diff-add-${sessionId}`)
+  await text("/fixture/another-project")
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await act(async () => Bun.sleep(50))
+    if (repository.mock.calls.some(([directory]) => directory === "/fixture/another-project")) break
+  }
+  expect(
+    repository.mock.calls.some(([directory]) => directory === "/fixture/another-project"),
+  ).toBe(true)
+  snapshot = snapshot.slice(0, 1)
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await act(async () => Bun.sleep(50))
+    await tui?.renderOnce()
+    if (!tui?.renderer.root.findDescendantById(`terminal-agent-${sessionId}`)) break
+  }
+  expect(Boolean(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`))).toBe(true)
+  const frozenReads = read.mock.calls.length
+  await act(async () => Bun.sleep(650))
+  expect(read.mock.calls.length).toBe(frozenReads)
+  await click(`live-diff-close-${sessionId}`)
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`) === undefined).toBe(true)
+  expect(focusedTerminal() === terminal).toBe(true)
+  expect(starts).toHaveLength(1)
+}, 16_000)
 
 test("narrow workspaces retain the sidebar, modal Escape and native input", async () => {
   await mount(true, 58, 18)
@@ -371,8 +631,6 @@ test("narrow workspaces retain the sidebar, modal Escape and native input", asyn
 test("new sections return to Tuiminais and keep the workspace session limit", async () => {
   await mount()
   await leader("c")
-  await leader("d")
-  await text("Other")
   await click("terminal-sidebar-new")
   const owned = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
@@ -398,19 +656,15 @@ test("settings agent-command input consumes typing and its own Escape", async ()
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
 })
 
-test("prefix navigation switches among live sections without relaunching their processes", async () => {
+test("sidebar navigation switches among live sections without relaunching their processes", async () => {
   await mount()
   await leader("c")
   const first = focusedTerminal()
   await leader("c")
   const second = focusedTerminal()
-  await leader("a")
+  await click(`terminal-sidebar-pane-${first.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(first)
-  await leader("f")
-  expect(focusedTerminal()).toBe(second)
-  await leader("p")
-  expect(focusedTerminal()).toBe(first)
-  await leader("tab")
+  await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(second)
   expect(starts).toHaveLength(2)
   expect(inputs).toEqual([[], []])

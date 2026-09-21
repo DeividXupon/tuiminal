@@ -153,6 +153,8 @@ export async function requestPinnedSidebarSnapshot(endpoint: string) {
   if (
     !Array.isArray(snapshot.sessions) ||
     !Array.isArray(snapshot.folders) ||
+    !Array.isArray(snapshot.collapsedFolderIds) ||
+    !snapshot.collapsedFolderIds.every((id) => typeof id === "string") ||
     typeof snapshot.selectedFolder !== "string" ||
     (snapshot.activeSessionId !== null && typeof snapshot.activeSessionId !== "string") ||
     !isTerminalMasterKey(snapshot.masterKey) ||

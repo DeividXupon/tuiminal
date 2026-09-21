@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs"
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   loadTerminalWorkspaceState,
+  parseTerminalWorkspaceState,
   saveTerminalWorkspaceState,
   terminalWorkspaceAssignmentKey,
   terminalWorkspaceStatePath,
@@ -15,7 +16,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-test("custom terminal folders and tmux placement round-trip outside the project", () => {
+test("only reserved folder folds and tmux placement persist outside the project", () => {
   const root = mkdtempSync(join(tmpdir(), "tuiminal-terminal-folders-"))
   roots.push(root)
   const project = join(root, "project")
@@ -42,14 +43,16 @@ test("custom terminal folders and tmux placement round-trip outside the project"
     project,
     {
       folders: [{ id: "folder-1", name: "Services" }],
-      assignments: { [key]: "folder-1" },
+      assignments: { [key]: "terminal" },
+      collapsedFolderIds: ["terminal", "folder-1"],
     },
     environment,
   )
 
   expect(loadTerminalWorkspaceState(project, environment)).toEqual({
-    folders: [{ id: "folder-1", name: "Services" }],
-    assignments: { [key]: "folder-1" },
+    folders: [],
+    assignments: { [key]: "terminal" },
+    collapsedFolderIds: ["terminal"],
   })
   expect(terminalWorkspaceStatePath(project, environment)).toStartWith(data)
 })
@@ -76,4 +79,28 @@ test("owned placement identity follows its stable window ID across display renam
     ownedByTuiminal: true,
   })
   expect(restored).toBe(first)
+})
+
+test("legacy custom folders and their placements are discarded on load", () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-terminal-folders-legacy-"))
+  roots.push(root)
+  const project = join(root, "project")
+  mkdirSync(project)
+
+  expect(
+    parseTerminalWorkspaceState(
+      JSON.stringify({
+        version: 1,
+        project: realpathSync.native(project),
+        folders: [{ id: "folder-1", name: "Services" }],
+        assignments: { legacy: "folder-1", reserved: "tmux" },
+        collapsedFolderIds: ["terminal", "folder-1"],
+      }),
+      project,
+    ),
+  ).toEqual({
+    folders: [],
+    assignments: { reserved: "tmux" },
+    collapsedFolderIds: ["terminal"],
+  })
 })

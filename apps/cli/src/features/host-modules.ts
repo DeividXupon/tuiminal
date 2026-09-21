@@ -31,6 +31,7 @@ import * as shared27 from "@xupon/tuiminal-core/ui/selectMouse"
 import * as shared28 from "@xupon/tuiminal-core/ui/syntax-style"
 import * as shared29 from "@xupon/tuiminal-core/runtime/feature-host"
 import * as shared30 from "@xupon/tuiminal-core/ui/ModalSurface"
+import * as shared31 from "@xupon/tuiminal-core/ui/NativeDiff"
 
 export function prepareFeatureHost(
   version: string,
@@ -73,6 +74,7 @@ export function prepareFeatureHost(
       "@xupon/tuiminal-core/ui/syntax-style": shared28,
       "@xupon/tuiminal-core/runtime/feature-host": shared29,
       "@xupon/tuiminal-core/ui/ModalSurface": shared30,
+      "@xupon/tuiminal-core/ui/NativeDiff": shared31,
     },
   })
 }

@@ -8,7 +8,23 @@ export class AgentOutput {
   private discardBel = false
 
   write(data: Uint8Array) {
-    for (const char of this.decoder.decode(data, { stream: true })) this.consume(char)
+    // Terminal output is overwhelmingly regular text/CSI styling. Avoid decoding and
+    // visiting every character unless an OSC/escape sequence can affect the title.
+    if (this.mode === "text" && !data.includes(0x1b)) return
+    const text = this.decoder.decode(data, { stream: true })
+    let index = 0
+    while (index < text.length) {
+      if (this.mode === "text") {
+        const escapeIndex = text.indexOf("\x1b", index)
+        if (escapeIndex < 0) return
+        this.mode = "escape"
+        index = escapeIndex + 1
+        continue
+      }
+      const char = text[index]
+      if (char) this.consume(char)
+      index += 1
+    }
   }
 
   clearTitle() {
@@ -21,7 +37,9 @@ export class AgentOutput {
   private finish() {
     const match = /^(?:0|2);([\s\S]*)$/.exec(this.pending)
     if (match) {
-      const title = match[1]!.replace(/[\p{Cc}\u202a-\u202e\u2066-\u2069]/gu, "").slice(0, 512)
+      const title = (match[1] ?? "")
+        .replace(/[\p{Cc}\u202a-\u202e\u2066-\u2069]/gu, "")
+        .slice(0, 512)
       if (this.title !== title) {
         this.title = title
         this.titleRevision++

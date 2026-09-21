@@ -3,8 +3,10 @@ import {
   TUIMINAL_TMUX_SERVER,
   TUIMINAL_TMUX_SESSION,
   TMUX_TERMINAL_ID_OPTION,
+  TMUX_TERMINAL_KIND_OPTION,
   tmuxLiteralArgument,
   type TmuxPaneTarget,
+  type TmuxTerminalKind,
 } from "../model/tmux"
 import { runTmux } from "./tmux-command"
 import type { startFreeTerminalProcess } from "./terminal"
@@ -26,7 +28,11 @@ function serializeCreation<T>(operation: () => Promise<T>) {
   return next
 }
 
-function parseCreatedTarget(output: string, windowName: string): TmuxPaneTarget {
+function parseCreatedTarget(
+  output: string,
+  windowName: string,
+  terminalKind: TmuxTerminalKind,
+): TmuxPaneTarget {
   const [socket, sessionId, windowId, paneId] = output.trim().split("\t")
   if (
     !socket?.startsWith("/") ||
@@ -43,6 +49,7 @@ function parseCreatedTarget(output: string, windowName: string): TmuxPaneTarget 
     name: TUIMINAL_TMUX_SESSION,
     windowName,
     persistentId: windowName,
+    terminalKind,
   }
 }
 
@@ -148,7 +155,11 @@ async function createOwnedWindowOutput(createArguments: string[], options: Optio
 }
 
 /** Creates one persistent window in the shared Tuiminal tmux session. */
-export async function createOwnedTmuxWindow(command: string[], options: Options) {
+export async function createOwnedTmuxWindow(
+  command: string[],
+  options: Options,
+  terminalKind: TmuxTerminalKind = "custom",
+) {
   return serializeCreation(async () => {
     const windowName = `terminal-${randomUUID()}`
     let target: TmuxPaneTarget | undefined
@@ -167,7 +178,7 @@ export async function createOwnedTmuxWindow(command: string[], options: Options)
     ]
     try {
       const output = await createOwnedWindowOutput(createArguments, options)
-      target = parseCreatedTarget(output, windowName)
+      target = parseCreatedTarget(output, windowName, terminalKind)
       await runTmux([
         "-S",
         target.socket,
@@ -177,6 +188,16 @@ export async function createOwnedTmuxWindow(command: string[], options: Options)
         target.windowId!,
         TMUX_TERMINAL_ID_OPTION,
         windowName,
+      ])
+      await runTmux([
+        "-S",
+        target.socket,
+        "set-option",
+        "-w",
+        "-t",
+        target.windowId!,
+        TMUX_TERMINAL_KIND_OPTION,
+        terminalKind,
       ])
       await runTmux([
         "-S",

@@ -105,7 +105,12 @@ export function TerminalAgentList({
   return (
     <box
       id="terminal-agent-list"
-      style={{ height, flexShrink: 0, border: compact ? [] : ["top"], borderColor: COLORS.border }}
+      style={{
+        height,
+        flexShrink: 0,
+        border: compact ? [] : ["bottom"],
+        borderColor: COLORS.border,
+      }}
     >
       {(!compact || height > 1) && (
         <box

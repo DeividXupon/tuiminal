@@ -5,12 +5,13 @@ import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
 import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import * as discovery from "../../packages/feature-terminal/src/services/tmux-discovery"
+import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import { TerminalRetirementError } from "../../packages/feature-terminal/src/services/terminal-lifecycle"
 
 const originalSettings = getUiSettings()
+const originalAuto = process.env.TUIMINAL_TERMINAL_AUTO_MIRROR
 let tui: TestRendererSetup | undefined
 const restores: Array<() => void> = []
 let changeTab: (terminal: boolean) => void = () => {}
@@ -34,26 +35,32 @@ afterEach(async () => {
   tui = undefined
   for (const restore of restores.splice(0)) restore()
   updateUiSettings(originalSettings)
+  if (originalAuto === undefined) delete process.env.TUIMINAL_TERMINAL_AUTO_MIRROR
+  else process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = originalAuto
 })
 
 async function mount(available = true) {
+  process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = "1"
   updateUiSettings({ language: "pt-BR", terminalMasterKey: "Ctrl+B" })
-  const find = spyOn(discovery, "discoverTmuxPanes").mockResolvedValue({
+  const find = spyOn(discovery, "discoverTmuxWorkspace").mockResolvedValue({
     available,
     panes: available
       ? [
           {
-            socket: "/tmp/fixture.sock",
-            sessionId: "$1",
-            name: "Agente externo",
-            panePid: 55,
-            windowId: "@3",
-            windowIndex: 3,
-            windowName: "codex",
-            paneId: "%6",
-            paneIndex: 0,
-            command: "node",
-            cwd: "/tmp/project",
+            pane: {
+              socket: "/tmp/fixture.sock",
+              sessionId: "$1",
+              name: "Agente externo",
+              panePid: 55,
+              windowId: "@3",
+              windowIndex: 3,
+              windowName: "codex",
+              paneId: "%6",
+              paneIndex: 0,
+              command: "node",
+              cwd: "/tmp/project",
+            },
+            agent: null,
           },
         ]
       : [],
@@ -90,6 +97,15 @@ async function mount(available = true) {
   }
 }
 
+async function waitForMirrors(start: ReturnType<typeof mock>, count: number) {
+  for (let i = 0; i < 110; i++) {
+    await act(async () => Bun.sleep(30))
+    await tui?.renderOnce()
+    if (start.mock.calls.length >= count) return
+  }
+  throw new Error(`Expected ${count} terminal launches`)
+}
+
 async function leader(key: string) {
   await act(async () => tui?.mockInput.pressKey("b", { ctrl: true }))
   await act(async () => tui?.mockInput.pressKey(key))
@@ -106,9 +122,7 @@ async function pressEscape() {
 
 test("mirror dimensions follow the real viewport after the sidebar, splits and window resize", async () => {
   const { mirrorResize, start } = await mount()
-  await leader("t")
-  await act(async () => tui?.mockInput.pressEnter())
-  await tui?.renderOnce()
+  await waitForMirrors(start, 1)
   const pane = tui!.renderer.currentFocusedRenderable!
   const sidebar = tui!.renderer.root.findDescendantById("terminal-sidebar")!
   const viewport = tui!.renderer.root.findDescendantById("terminal-panes")!
@@ -125,16 +139,9 @@ test("mirror dimensions follow the real viewport after the sidebar, splits and w
 
 test("a borrowed mirror stays in tmux and keeps receiving output behind Git", async () => {
   const { start, stop, output } = await mount()
-  await leader("t")
-  expect(tui?.captureCharFrame()).toContain("Agente externo:3.0")
-  expect(tui?.captureCharFrame()).toContain("node %6")
-  expect(tui?.captureCharFrame()).toContain("fora do tmux")
-  const row = tui?.renderer.root.findDescendantById("terminal-dialog-tmux-0")
-  expect(row).toBeDefined()
-  await act(async () => tui?.mockMouse.click(row!.screenX + 1, row!.screenY))
-  await tui?.renderOnce()
+  await waitForMirrors(start, 1)
   const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-tmux")!
-  const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
+  const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-auto-tmux-1")!
   expect(section.parent).toBe(folder.parent)
   expect(start.mock.calls[0]?.[0].tmux?.sessionId).toBe("$1")
   expect(start.mock.calls[0]?.[0].tmux?.paneId).toBe("%6")
@@ -158,41 +165,31 @@ test("a borrowed mirror stays in tmux and keeps receiving output behind Git", as
   expect(stop).toHaveBeenCalledTimes(1)
 })
 
-test("without tmux the picker explains native terminals and Escape restores input scope", async () => {
+test("without tmux a native terminal remains available without a picker", async () => {
   const { start } = await mount(false)
   await leader("t")
-  expect(tui?.captureCharFrame()).toContain("modo nativo")
-  expect(tui?.captureCharFrame()).toContain("fora do tmux")
-  await pressEscape()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-tmux")).toBeUndefined()
+  await pressEscape()
   await leader("c")
   expect(start).toHaveBeenCalledTimes(1)
   expect(start.mock.calls[0]?.[0].tmux).toBeUndefined()
 })
 
-test("panes in the same tmux session open separately and selecting the same pane only focuses it", async () => {
+test("panes in the same tmux session are discovered separately without duplicate launches", async () => {
   const { find, start } = await mount()
   const first = (await find(new AbortController().signal)).panes[0]!
   find.mockResolvedValue({
     available: true,
-    panes: [first, { ...first, paneId: "%9", paneIndex: 1 }],
+    panes: [first, { ...first, pane: { ...first.pane, paneId: "%9", paneIndex: 1 } }],
   })
-  await leader("t")
-  await act(async () => tui?.mockInput.pressEnter())
-  await tui?.renderOnce()
-  await leader("t")
-  await act(async () => tui?.mockInput.pressArrow("down"))
-  await act(async () => tui?.mockInput.pressEnter())
-  await tui?.renderOnce()
+  await waitForMirrors(start, 2)
   expect(start.mock.calls.map(([command]) => command.tmux?.paneId)).toEqual(["%6", "%9"])
-  await leader("t")
-  await act(async () => tui?.mockInput.pressEnter())
-  await tui?.renderOnce()
+  await act(async () => Bun.sleep(400))
   expect(start).toHaveBeenCalledTimes(2)
 })
 
 test("restart cannot duplicate a command while a failed detached launch still needs cleanup", async () => {
-  const { start } = await mount()
+  const { start } = await mount(false)
   const retire = mock(async (): Promise<void> => {
     throw new Error("cleanup unavailable")
   })

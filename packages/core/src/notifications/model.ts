@@ -6,6 +6,7 @@ export type NotificationInput = {
   title?: string
   message: string
   durationMs?: number | null
+  onPress?: () => void
 }
 
 export type AppNotification = Required<Pick<NotificationInput, "source" | "message">> & {
@@ -14,6 +15,7 @@ export type AppNotification = Required<Pick<NotificationInput, "source" | "messa
   title?: string
   createdAt: number
   durationMs: number
+  onPress?: () => void
 }
 
 export const APP_NOTIFICATION_LIMIT = 3

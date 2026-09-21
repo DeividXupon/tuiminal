@@ -204,12 +204,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       source: input.source,
       message: input.message,
       ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.onPress === undefined ? {} : { onPress: input.onPress }),
       createdAt,
       durationMs: resolveNotificationDuration(kind, input.durationMs),
     }
     setNotifications((current) => appendNotification(current, notification))
     return notification.id
   }, [])
+
+  const activate = useCallback(
+    (notification: AppNotification) => {
+      if (!notification.onPress) return
+      beginDismiss(notification.id)
+      notification.onPress()
+    },
+    [beginDismiss],
+  )
 
   const pauseAll = useCallback(() => {
     if (pausedRef.current) return
@@ -306,6 +316,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           notifications={presented}
           now={frameNow}
           onDismiss={beginDismiss}
+          onActivate={activate}
           onPause={pauseAll}
           onResume={resumeAll}
         />

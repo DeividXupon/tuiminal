@@ -10,21 +10,54 @@ export type ProcessIdentity = {
   stopped?: boolean
 }
 const AGENTS = new Set([
+  "agy",
+  "amp-local",
+  "antigravity",
+  "antigravity-cli",
   "codex",
   "claude",
   "claude-code",
   "gemini",
+  "gemini-cli",
   "aider",
   "goose",
   "opencode",
+  "open-code",
   "amp",
   "cline",
   "copilot",
+  "github-copilot",
+  "ghcs",
+  "devin",
+  "devin-cli",
+  "droid",
   "cursor-agent",
+  "cursor",
+  "grok",
+  "grok-build",
+  "grok-cli",
+  "hermes",
+  "hermes-agent",
   "auggie",
   "qwen",
   "qwen-code",
+  "qoder",
+  "qodercn",
+  "qodercli",
+  "qoderclicn",
+  "letta",
+  "letta-code",
+  "kilo",
+  "kilo-code",
   "kiro-cli",
+  "kiro",
+  "maki",
+  "mastra-code",
+  "mastracode",
+  "muse",
+  "muse-cli",
+  "muse-code",
+  "omp",
   "openhands",
   "swe-agent",
   "plandex",
@@ -33,6 +66,7 @@ const AGENTS = new Set([
   "cn",
   "pi",
   "kimi",
+  "kimi-code",
   "kimi-cli",
   "kimi_cli",
 ])
@@ -113,11 +147,64 @@ export function processIsAgent(process: ProcessIdentity, configured: readonly st
 
 function profileFor(command: string): AgentProfile {
   const value = command.replace(/\\/g, "/").toLowerCase()
+  const fileName = value
+    .split("/")
+    .at(-1)!
+    .replace(/\.(?:exe|cmd|bat|ps1|js|mjs|cjs|py)$/, "")
   if (/(?:^|\/|@openai\/)codex(?:\.[cm]?js|\.exe)?(?:\/|$)/.test(value)) return "codex"
   if (/(?:^|\/)claude(?:-code)?(?:\.[cm]?js|\.exe)?(?:\/|$)/.test(value)) return "claude"
   if (/(?:^|\/)gemini(?:-cli)?(?:\.[cm]?js|\.exe)?(?:\/|$)/.test(value)) return "gemini"
   if (/(?:^|\/)opencode(?:\.[cm]?js|\.exe)?(?:\/|$)/.test(value)) return "opencode"
-  return "generic"
+  if (/(?:^|\/)open-code(?:\.[cm]?js|\.exe)?(?:\/|$)/.test(value)) return "opencode"
+  if (/(?:^|\/)@github\/copilot(?:\/|$)/.test(value)) return "copilot"
+  if (/(?:^|\/)@qwen-code\/qwen-code(?:\/|$)/.test(value)) return "qwen"
+  if (/(?:^|\/)@(?:mariozechner|earendil-works)\/pi-coding-agent(?:\/|$)/.test(value)) return "pi"
+  const aliases: Partial<Record<string, AgentProfile>> = {
+    agy: "antigravity",
+    amp: "amp",
+    "amp-local": "amp",
+    antigravity: "antigravity",
+    "antigravity-cli": "antigravity",
+    cline: "cline",
+    copilot: "copilot",
+    "github-copilot": "copilot",
+    ghcs: "copilot",
+    cursor: "cursor",
+    "cursor-agent": "cursor",
+    devin: "devin",
+    "devin-cli": "devin",
+    droid: "droid",
+    grok: "grok",
+    "grok-build": "grok",
+    "grok-cli": "grok",
+    hermes: "hermes",
+    "hermes-agent": "hermes",
+    kilo: "kilo",
+    "kilo-code": "kilo",
+    kimi: "kimi",
+    "kimi-cli": "kimi",
+    kimi_cli: "kimi",
+    "kimi-code": "kimi",
+    kiro: "kiro",
+    "kiro-cli": "kiro",
+    letta: "letta",
+    "letta-code": "letta",
+    maki: "maki",
+    "mastra-code": "mastracode",
+    mastracode: "mastracode",
+    muse: "muse",
+    "muse-cli": "muse",
+    "muse-code": "muse",
+    omp: "omp",
+    pi: "pi",
+    qoder: "qodercli",
+    qodercn: "qodercli",
+    qodercli: "qodercli",
+    qoderclicn: "qodercli",
+    qwen: "qwen",
+    "qwen-code": "qwen",
+  }
+  return aliases[fileName] ?? "generic"
 }
 
 function genericAgentLabel(command: string) {
@@ -141,7 +228,32 @@ export function identifyProcessAgent(
   const label =
     profile === "generic"
       ? genericAgentLabel(command)
-      : { codex: "Codex", claude: "Claude Code", gemini: "Gemini", opencode: "OpenCode" }[profile]
+      : {
+          amp: "Amp",
+          antigravity: "Antigravity",
+          claude: "Claude Code",
+          cline: "Cline",
+          codex: "Codex",
+          copilot: "GitHub Copilot",
+          cursor: "Cursor Agent",
+          devin: "Devin",
+          droid: "Droid",
+          gemini: "Gemini",
+          grok: "Grok",
+          hermes: "Hermes Agent",
+          kilo: "Kilo Code",
+          kimi: "Kimi Code",
+          kiro: "Kiro CLI",
+          letta: "Letta Code",
+          maki: "Maki",
+          mastracode: "MastraCode",
+          muse: "Muse",
+          omp: "OMP",
+          opencode: "OpenCode",
+          pi: "Pi",
+          qodercli: "Qoder CLI",
+          qwen: "Qwen Code",
+        }[profile]
   return { key: `${process.pid}:${command}`, label, profile }
 }
 

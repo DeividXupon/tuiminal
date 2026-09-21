@@ -1,17 +1,18 @@
 import { getUiSettings } from "@xupon/tuiminal-core/settings/theme"
-import { useEffect, type RefObject } from "react"
+import { type RefObject, useEffect } from "react"
 import { identifyAgent } from "../model/agent-detection"
-import { terminalProcessPresentation } from "../model/process-title"
-import { AgentTaskTitle } from "../model/agent-task-title"
 import { detectAgentScreen, detectAgentTitle } from "../model/agent-screen"
 import {
-  observeAgent,
-  sameAgentStatus,
   type AgentIdentity,
   type AgentObservation,
+  type AgentSignal,
+  observeAgent,
+  sameAgentStatus,
 } from "../model/agent-state"
-import type { AgentMonitor } from "../services/agent-monitor"
+import { AgentTaskTitle } from "../model/agent-task-title"
+import { terminalProcessPresentation } from "../model/process-title"
 import type { TerminalSession } from "../model/sessions"
+import type { AgentMonitor } from "../services/agent-monitor"
 import { readTerminalProcesses } from "../services/agent-processes"
 import type { FreeTerminalProcessHandle } from "../services/terminal"
 
@@ -21,6 +22,9 @@ type TrackedAgent = {
   observation: AgentObservation | undefined
   workingTitleRevision: number | null
   taskTitle: AgentTaskTitle
+  signal: AgentSignal | undefined
+  outputRevision: number
+  titleRevision: number
 }
 
 type RunningCandidate = {
@@ -47,21 +51,29 @@ function scanTrackedScreen(id: string, entry: TrackedAgent, state: DetectionStat
     return
   }
   try {
-    const { title, titleRevision } = entry.output
-    const titleFinished =
-      entry.workingTitleRevision !== null && titleRevision > entry.workingTitleRevision
-    const signal = detectAgentScreen(
-      entry.identity.profile,
-      entry.output.screen(),
-      title,
-      titleFinished,
-    )
-    const titleSignal = detectAgentTitle(entry.identity.profile, title)
-    if (titleSignal.state === "working") entry.workingTitleRevision = titleRevision
+    const { title, titleRevision, revision } = entry.output
+    if (
+      !entry.signal ||
+      entry.outputRevision !== revision ||
+      entry.titleRevision !== titleRevision
+    ) {
+      const titleFinished =
+        entry.workingTitleRevision !== null && titleRevision > entry.workingTitleRevision
+      entry.signal = detectAgentScreen(
+        entry.identity.profile,
+        entry.output.screen(),
+        title,
+        titleFinished,
+      )
+      const titleSignal = detectAgentTitle(entry.identity.profile, title)
+      if (titleSignal.state === "working") entry.workingTitleRevision = titleRevision
+      entry.outputRevision = revision
+      entry.titleRevision = titleRevision
+    }
     entry.observation = observeAgent(
       entry.observation,
       entry.identity,
-      signal,
+      entry.signal,
       state.seen.current.has(id),
       Date.now(),
     )
@@ -112,9 +124,11 @@ function updateProcessPresentation(
   const presentation = rootPid
     ? terminalProcessPresentation(rootPid, processes, configured)
     : { title: null, busy: false }
-  if (current.busy !== presentation.busy) update(candidate.session.id, { busy: presentation.busy })
+  const patch: Partial<TerminalSession> = {}
+  if (current.busy !== presentation.busy) patch.busy = presentation.busy
   if (current.titleMode !== "manual" && presentation.title && presentation.title !== current.title)
-    update(candidate.session.id, { title: presentation.title })
+    patch.title = presentation.title
+  if (Object.keys(patch).length) update(candidate.session.id, patch)
 }
 
 function updateTrackedIdentity(
@@ -131,6 +145,7 @@ function updateTrackedIdentity(
   const previous = state.tracked.get(candidate.session.id)
   if (!identity) {
     state.tracked.delete(candidate.session.id)
+    if (previous?.output === output) output.suspendScreen()
     if (current.agent) {
       output.clearTitle()
       state.update(candidate.session.id, { agent: null })
@@ -149,6 +164,9 @@ function updateTrackedIdentity(
     observation: undefined,
     workingTitleRevision: null,
     taskTitle: new AgentTaskTitle(identity, state.unclaimedTitles.get(output) ?? -1),
+    signal: undefined,
+    outputRevision: -1,
+    titleRevision: -1,
   })
   state.unclaimedTitles.delete(output)
 }

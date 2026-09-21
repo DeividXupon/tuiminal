@@ -3,21 +3,16 @@ import { readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { atomicWriteFileSync, currentFileHash } from "@xupon/tuiminal-core/storage/atomic-file"
-import {
-  DEFAULT_FOLDER,
-  EXTERNAL_FOLDER,
-  cleanTerminalName,
-  type TerminalFolder,
-} from "../model/sessions"
+import { DEFAULT_FOLDER, EXTERNAL_FOLDER, type TerminalFolder } from "../model/sessions"
 import { TUIMINAL_TMUX_FOLDER, type TmuxPaneTarget } from "../model/tmux"
 
-const MAX_CUSTOM_FOLDERS = 64
 const MAX_ASSIGNMENTS = 512
 const RESERVED_FOLDERS = new Set([DEFAULT_FOLDER, TUIMINAL_TMUX_FOLDER, EXTERNAL_FOLDER])
 
 export type TerminalWorkspaceState = {
   folders: TerminalFolder[]
   assignments: Record<string, string>
+  collapsedFolderIds: string[]
 }
 
 type StoredTerminalWorkspaceState = TerminalWorkspaceState & {
@@ -28,6 +23,7 @@ type StoredTerminalWorkspaceState = TerminalWorkspaceState & {
 export const EMPTY_TERMINAL_WORKSPACE_STATE: TerminalWorkspaceState = {
   folders: [],
   assignments: {},
+  collapsedFolderIds: [],
 }
 
 function workspaceRoot(project: string) {
@@ -58,45 +54,31 @@ export function terminalWorkspaceStatePath(
   return join(terminalWorkspaceStateDirectory(environment), projectHash, "workspace.json")
 }
 
-function normalizeFolders(value: unknown) {
-  if (!Array.isArray(value)) return []
-  const folders = new Map<string, TerminalFolder>()
-  for (const candidate of value) {
-    if (!candidate || typeof candidate !== "object") continue
-    const { id, name } = candidate as Record<string, unknown>
-    if (
-      typeof id !== "string" ||
-      !/^folder-[a-zA-Z0-9_-]{1,64}$/.test(id) ||
-      RESERVED_FOLDERS.has(id) ||
-      typeof name !== "string"
-    )
-      continue
-    const cleanName = cleanTerminalName(name)
-    if (
-      !cleanName ||
-      [...folders.values()].some(
-        (folder) => folder.name.toLocaleLowerCase() === cleanName.toLocaleLowerCase(),
-      )
-    )
-      continue
-    folders.set(id, { id, name: cleanName })
-    if (folders.size === MAX_CUSTOM_FOLDERS) break
-  }
-  return [...folders.values()]
-}
-
-function normalizeAssignments(value: unknown, folders: readonly TerminalFolder[]) {
+function normalizeAssignments(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  const knownFolders = new Set([DEFAULT_FOLDER, ...folders.map((folder) => folder.id)])
   const assignments: Record<string, string> = {}
   let count = 0
   for (const [key, folderId] of Object.entries(value)) {
-    if (!key || key.length > 2048 || typeof folderId !== "string" || !knownFolders.has(folderId))
+    if (
+      !key ||
+      key.length > 2048 ||
+      typeof folderId !== "string" ||
+      !RESERVED_FOLDERS.has(folderId)
+    )
       continue
     assignments[key] = folderId
     if (++count === MAX_ASSIGNMENTS) break
   }
   return assignments
+}
+
+function normalizeCollapsedFolderIds(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return [
+    ...new Set(
+      value.filter((id): id is string => typeof id === "string" && RESERVED_FOLDERS.has(id)),
+    ),
+  ]
 }
 
 export function parseTerminalWorkspaceState(
@@ -106,8 +88,11 @@ export function parseTerminalWorkspaceState(
   const parsed = JSON.parse(source) as Partial<StoredTerminalWorkspaceState>
   if (parsed.version !== 1 || parsed.project !== workspaceRoot(project))
     return EMPTY_TERMINAL_WORKSPACE_STATE
-  const folders = normalizeFolders(parsed.folders)
-  return { folders, assignments: normalizeAssignments(parsed.assignments, folders) }
+  return {
+    folders: [],
+    assignments: normalizeAssignments(parsed.assignments),
+    collapsedFolderIds: normalizeCollapsedFolderIds(parsed.collapsedFolderIds),
+  }
 }
 
 export function loadTerminalWorkspaceState(
@@ -129,12 +114,6 @@ function mergeTerminalWorkspaceState(
   current: TerminalWorkspaceState,
   next: TerminalWorkspaceState,
 ) {
-  const folderEntries = new Map(current.folders.map((folder) => [folder.id, folder]))
-  for (const folder of next.folders) {
-    folderEntries.delete(folder.id)
-    folderEntries.set(folder.id, folder)
-  }
-  const folders = normalizeFolders([...folderEntries.values()].slice(-MAX_CUSTOM_FOLDERS))
   const assignmentEntries = new Map(Object.entries(current.assignments))
   for (const [key, folderId] of Object.entries(next.assignments)) {
     assignmentEntries.delete(key)
@@ -142,9 +121,9 @@ function mergeTerminalWorkspaceState(
   }
   const assignments = normalizeAssignments(
     Object.fromEntries([...assignmentEntries].slice(-MAX_ASSIGNMENTS)),
-    folders,
   )
-  return { folders, assignments }
+  const collapsedFolderIds = normalizeCollapsedFolderIds(next.collapsedFolderIds)
+  return { folders: [], assignments, collapsedFolderIds }
 }
 
 export function saveTerminalWorkspaceState(

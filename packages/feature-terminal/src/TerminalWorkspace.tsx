@@ -1,6 +1,6 @@
 import type { BoxRenderable } from "@opentui/core"
+import { resolve } from "node:path"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
   COLORS,
@@ -9,34 +9,13 @@ import {
   terminalMasterKeyBytes,
 } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import {
-  FREE_TERMINAL_WORKING_DIRECTORY,
-  createFreeTerminalCommand,
-  createShellTerminalCommand,
-} from "./services/terminal"
-import { useTerminalSessions } from "./hooks/use-terminal-sessions"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useAgentDetection } from "./hooks/use-agent-detection"
+import { useAgentNotifications } from "./hooks/use-agent-notifications"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
-import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
-import {
-  DEFAULT_FOLDER,
-  DEFAULT_FOLDER_NAME,
-  EXTERNAL_FOLDER,
-  EXTERNAL_FOLDER_NAME,
-  MAX_SESSIONS,
-  MAX_TERMINALS_PER_SECTION,
-  cleanTerminalName,
-  terminalSections,
-  type TerminalFolder,
-  type FreeTerminalCommand,
-} from "./model/sessions"
-import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
-import { TerminalSidebar } from "./ui/TerminalSidebar"
-import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
-import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
-import { TerminalTmuxDialog } from "./ui/TerminalTmuxDialog"
-import { TUIMINAL_TMUX_FOLDER, tmuxPaneKey, type TmuxPaneInfo } from "./model/tmux"
+import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { useTerminalSessions } from "./hooks/use-terminal-sessions"
 import {
   clearTerminalSidebar,
   publishTerminalSidebar,
@@ -48,15 +27,37 @@ import {
   terminalSidebarSnapshot,
   toggleTerminalSidebarPinned,
 } from "./model/pinned-sidebar"
-import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
-import { discoverTmuxWorkspace } from "./services/tmux-agents"
+import {
+  cleanTerminalName,
+  DEFAULT_FOLDER,
+  DEFAULT_FOLDER_NAME,
+  EXTERNAL_FOLDER,
+  EXTERNAL_FOLDER_NAME,
+  type FreeTerminalCommand,
+  MAX_SESSIONS,
+  MAX_TERMINALS_PER_SECTION,
+  type TerminalFolder,
+  terminalSections,
+} from "./model/sessions"
+import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
+import {
+  createFreeTerminalCommand,
+  createShellTerminalCommand,
+  FREE_TERMINAL_WORKING_DIRECTORY,
+} from "./services/terminal"
 import {
   loadTerminalWorkspaceState,
   saveTerminalWorkspaceState,
-  terminalWorkspaceAssignmentKey,
   type TerminalWorkspaceState,
+  terminalWorkspaceAssignmentKey,
 } from "./services/terminal-workspace-state"
+import { discoverTmuxWorkspace } from "./services/tmux-agents"
+import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
+import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
+import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
+import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
+import { TerminalSidebar } from "./ui/TerminalSidebar"
 
 const FULL_PANE: FreeTerminalPaneLayout = {
   top: 0,
@@ -72,12 +73,6 @@ const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
   { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
   { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
 ]
-
-function nextTerminalFolderId(folders: readonly TerminalFolder[]) {
-  let number = 1
-  while (folders.some((folder) => folder.id === `folder-${number}`)) number += 1
-  return `folder-${number}`
-}
 
 export function FreeTerminal({
   active,
@@ -105,7 +100,6 @@ export function FreeTerminal({
     launchCommand,
     closeSession,
     restartSession,
-    moveSession,
     terminalReady,
     terminalGone,
     terminalInput,
@@ -122,18 +116,23 @@ export function FreeTerminal({
   )
   const workspaceStateRef = useRef<TerminalWorkspaceState>(initialWorkspaceState)
   const lastWorkspaceStateSignature = useRef(JSON.stringify(initialWorkspaceState))
-  const [folders, setFolders] = useState<TerminalFolder[]>([
-    ...RESERVED_TERMINAL_FOLDERS,
-    ...initialWorkspaceState.folders,
-  ])
-  const foldersRef = useRef(folders)
-  foldersRef.current = folders
+  const folders = RESERVED_TERMINAL_FOLDERS
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState(
+    initialWorkspaceState.collapsedFolderIds,
+  )
   const [selectedFolder, setSelectedFolder] = useState(DEFAULT_FOLDER)
   const [leaderActive, setLeaderActive] = useState(false)
   const leaderRef = useRef(false)
-  const [dialog, setDialog] = useState<TerminalDialogKind | "tmux" | null>(null)
-  const dialogRef = useRef<TerminalDialogKind | "tmux" | null>(null)
+  const [dialog, setDialog] = useState<TerminalDialogKind | null>(null)
+  const dialogRef = useRef<TerminalDialogKind | null>(null)
   const [zoomed, setZoomed] = useState(false)
+  const [liveDiffTarget, setLiveDiffTarget] = useState<{
+    sessionId: string
+    agentKey: string
+    startedAt: number
+    manualDirectories: readonly string[]
+  } | null>(null)
+  const dialogSessionRef = useRef<string | null>(null)
   const sequence = useRef(0)
   const sidebarOwner = useRef({})
   const runActionRef = useRef<(key: string) => void>(() => undefined)
@@ -154,8 +153,19 @@ export function FreeTerminal({
     terminalSidebarFocusRevision,
   )
   const masterKey = getUiSettings().terminalMasterKey
-  const sections = terminalSections(sessions)
+  const sections = useMemo(() => terminalSections(sessions), [sessions])
   const activeSession = sessions.find((session) => session.id === activeSessionId)
+  useEffect(() => {
+    if (!liveDiffTarget) return
+    const owner = sessions.find((session) => session.id === liveDiffTarget.sessionId)
+    if (
+      !owner ||
+      owner.startedAt !== liveDiffTarget.startedAt ||
+      (owner.agent && owner.agent.key !== liveDiffTarget.agentKey)
+    ) {
+      setLiveDiffTarget(null)
+    }
+  }, [liveDiffTarget, sessions])
   const section = sections.find((section) => section.id === activeSession?.sectionId)
   const canSplit = Boolean(
     section && section.panes.length < MAX_TERMINALS_PER_SECTION && sessions.length < MAX_SESSIONS,
@@ -167,22 +177,27 @@ export function FreeTerminal({
     "\u0000",
   )
   const seenAgents = useRef<ReadonlySet<string>>(new Set())
-  seenAgents.current = new Set(
-    active && !dialog && !leaderActive
-      ? sessions
-          .filter(
-            (session) =>
-              session.sectionId === activeSession?.sectionId &&
-              (!zoomed || session.id === activeSessionId),
-          )
-          .map((session) => session.id)
-      : [],
+  seenAgents.current = useMemo(
+    () =>
+      new Set(
+        active && !dialog && !leaderActive
+          ? sessions
+              .filter(
+                (session) =>
+                  session.sectionId === activeSession?.sectionId &&
+                  (!zoomed || session.id === activeSessionId),
+              )
+              .map((session) => session.id)
+          : [],
+      ),
+    [active, activeSession?.sectionId, activeSessionId, dialog, leaderActive, sessions, zoomed],
   )
   useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
+  useAgentNotifications(sessions, seenAgents)
   const folderForTmuxPane = useCallback((pane: TmuxPaneInfo) => {
     const defaultFolder = pane.ownedByTuiminal ? DEFAULT_FOLDER : TUIMINAL_TMUX_FOLDER
     const savedFolder = workspaceStateRef.current.assignments[terminalWorkspaceAssignmentKey(pane)]
-    return savedFolder && foldersRef.current.some((folder) => folder.id === savedFolder)
+    return savedFolder && RESERVED_TERMINAL_FOLDERS.some((folder) => folder.id === savedFolder)
       ? savedFolder
       : defaultFolder
   }, [])
@@ -190,15 +205,18 @@ export function FreeTerminal({
   usePinnedTmuxSidebars(sidebarPinned, sidebarWidth, masterKey)
 
   useEffect(() => {
-    const assignments = { ...workspaceStateRef.current.assignments }
+    const assignments = Object.fromEntries(
+      Object.entries(workspaceStateRef.current.assignments).filter(([, folderId]) =>
+        folders.some((folder) => folder.id === folderId),
+      ),
+    )
     for (const session of sessions) {
       if (session.tmux) assignments[terminalWorkspaceAssignmentKey(session.tmux)] = session.folderId
     }
     const next: TerminalWorkspaceState = {
-      folders: folders.filter(
-        (folder) => !RESERVED_TERMINAL_FOLDERS.some((reserved) => reserved.id === folder.id),
-      ),
+      folders: [],
       assignments,
+      collapsedFolderIds,
     }
     const signature = JSON.stringify(next)
     if (signature === lastWorkspaceStateSignature.current) return
@@ -208,7 +226,17 @@ export function FreeTerminal({
     } catch {
       // Persistence failure must not interrupt live terminal sessions.
     }
-  }, [folders, sessions])
+  }, [collapsedFolderIds, sessions])
+
+  const toggleFolder = useCallback((id: string) => {
+    setCollapsedFolderIds((current) =>
+      current.includes(id) ? current.filter((folderId) => folderId !== id) : [...current, id],
+    )
+  }, [])
+  const selectFolderInSidebar = useCallback((id: string) => {
+    setSelectedFolder(id)
+    workspaceRef.current?.focus()
+  }, [])
 
   const selectSession = useCallback(
     (id: string) => {
@@ -232,11 +260,21 @@ export function FreeTerminal({
     if (activeSessionRef.current) focusTerminal(activeSessionRef.current)
     else queueMicrotask(() => workspaceRef.current?.focus())
   }, [activeSessionRef, focusTerminal])
+  const toggleSidebarActions = useCallback(() => {
+    if (leaderRef.current) {
+      leaderRef.current = false
+      setLeaderActive(false)
+      restoreFocus()
+      return
+    }
+    leaderRef.current = true
+    setLeaderActive(true)
+  }, [restoreFocus])
   const setLeader = (open: boolean) => {
     leaderRef.current = open
     setLeaderActive(open)
   }
-  const openDialog = (kind: TerminalDialogKind | "tmux") => {
+  const openDialog = (kind: TerminalDialogKind) => {
     dialogRef.current = kind
     setDialog(kind)
   }
@@ -245,18 +283,15 @@ export function FreeTerminal({
     setDialog(null)
     restoreFocus()
   }
-  const launchSection = (
-    command: FreeTerminalCommand = createShellTerminalCommand(),
-    folderId = DEFAULT_FOLDER,
-  ) => {
+  const launchSection = (command: FreeTerminalCommand = createShellTerminalCommand()) => {
     sequence.current += 1
     launchCommand(command, {
       sectionId: `section-${sequence.current}`,
       row: 0,
       column: 0,
-      folderId,
+      folderId: DEFAULT_FOLDER,
     })
-    setSelectedFolder(folderId)
+    setSelectedFolder(DEFAULT_FOLDER)
     setZoomed(false)
   }
   const split = (down: boolean) => {
@@ -272,21 +307,30 @@ export function FreeTerminal({
     })
     setZoomed(false)
   }
-  const mirrorSession = (target: TmuxPaneInfo) => {
-    launchSection(createTmuxMirrorCommand(target), folderForTmuxPane(target))
-    closeDialog()
-  }
-  const changeSection = (delta: number) => {
-    const current = sections.findIndex((candidate) => candidate.id === activeSession?.sectionId)
-    const next = sections[(Math.max(0, current) + delta + sections.length) % sections.length]
-    if (next) activateSession(next.panes[0]!.id)
-  }
   const disabled = (key: string) => {
     if (["v", "s"].includes(key)) return !canSplit
-    if (["n", "c", "/", "t"].includes(key)) return sessions.length >= MAX_SESSIONS
+    if (["n", "c", "/"].includes(key)) return sessions.length >= MAX_SESSIONS
     if (key === "r" && activeSession?.tmux) return true
-    if (["r", "x", "m", "e", "o", "tab", "p", "1", "a", "f"].includes(key)) return !activeSession
+    if (key === "d")
+      return !(
+        (activeSession?.status === "running" && activeSession.agent) ||
+        liveDiffTarget?.sessionId === activeSessionId
+      )
+    if (["r", "x", "m", "e", "1"].includes(key)) return !activeSession
     return key === "2" && section?.panes.length !== 2
+  }
+  const toggleLiveDiff = () => {
+    if (liveDiffTarget?.sessionId === activeSessionId) {
+      setLiveDiffTarget(null)
+      return
+    }
+    if (!activeSession?.agent) return
+    setLiveDiffTarget({
+      sessionId: activeSession.id,
+      agentKey: activeSession.agent.key,
+      startedAt: activeSession.startedAt,
+      manualDirectories: [],
+    })
   }
   const runAction = (key: string) => {
     if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
@@ -296,7 +340,7 @@ export function FreeTerminal({
       renderer.currentFocusedRenderable?.blur()
       return
     }
-    if (!["/", "d", "e", "l", "o", "t"].includes(key)) restoreFocus()
+    if (!["/", "e", "l"].includes(key)) restoreFocus()
     switch (key) {
       case "n":
       case "c":
@@ -305,26 +349,11 @@ export function FreeTerminal({
       case "/":
         openDialog("command")
         break
-      case "t":
-        openDialog("tmux")
-        break
       case "v":
         split(false)
         break
       case "s":
         split(true)
-        break
-      case "tab":
-        moveSession(1)
-        break
-      case "p":
-        moveSession(-1)
-        break
-      case "a":
-        changeSection(-1)
-        break
-      case "f":
-        changeSection(1)
         break
       case "1":
       case "2": {
@@ -342,14 +371,11 @@ export function FreeTerminal({
         requestTerminalSidebarFocus()
         void focusPinnedTmuxSidebar()
         break
-      case "d":
-        openDialog("folder")
-        break
       case "e":
         openDialog("rename")
         break
-      case "o":
-        openDialog("move")
+      case "d":
+        toggleLiveDiff()
         break
       case "r":
         if (activeSessionId) restartSession(activeSessionId)
@@ -360,16 +386,33 @@ export function FreeTerminal({
     }
   }
   runActionRef.current = runAction
+  const openSidebarTerminal = useCallback(() => runActionRef.current("n"), [])
+  const closeLiveDiff = useCallback(
+    (id: string) => {
+      setLiveDiffTarget((current) => (current?.sessionId === id ? null : current))
+      focusTerminal(id)
+    },
+    [focusTerminal],
+  )
+  const addLiveDiffProject = useCallback((id: string) => {
+    dialogSessionRef.current = id
+    dialogRef.current = "live-diff-path"
+    setDialog("live-diff-path")
+  }, [])
   const saveDialog = (value: string) => {
     if (dialog === "command") {
       launchSection(createFreeTerminalCommand(value))
       closeDialog()
       return
     }
-    if (dialog === "move") {
-      if (!folders.some((folder) => folder.id === value)) return
-      for (const pane of section?.panes ?? []) updateSession(pane.id, { folderId: value })
-      setSelectedFolder(value)
+    if (dialog === "live-diff-path") {
+      const id = dialogSessionRef.current
+      const directory = resolve(FREE_TERMINAL_WORKING_DIRECTORY, value)
+      setLiveDiffTarget((current) =>
+        current?.sessionId === id && !current.manualDirectories.includes(directory)
+          ? { ...current, manualDirectories: [...current.manualDirectories, directory] }
+          : current,
+      )
       closeDialog()
       return
     }
@@ -378,15 +421,7 @@ export function FreeTerminal({
     if (dialog === "rename" && activeSessionId) {
       updateSession(activeSessionId, { title: name, titleMode: "manual" })
       closeDialog()
-      return
     }
-    const existing = folders.find(
-      (folder) => folder.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
-    )
-    const id = existing?.id ?? nextTerminalFolderId(folders)
-    if (!existing) setFolders((current) => [...current, { id, name }])
-    setSelectedFolder(id)
-    closeDialog()
   }
 
   useEffect(() => {
@@ -400,30 +435,40 @@ export function FreeTerminal({
     else workspaceRef.current?.focus()
   }, [active, activeSessionId, focusTerminal])
 
-  useEffect(() => {
-    publishTerminalSidebar(sidebarOwner.current, {
+  const sidebarView = useMemo(
+    () => ({
       sessions: sidebarSessions,
       folders,
+      collapsedFolderIds,
       selectedFolder,
       activeSessionId,
       width: sidebarWidth,
       height: sidebarHeight,
       masterKey,
-      onSelectFolder: (id) => {
-        setSelectedFolder(id)
-        workspaceRef.current?.focus()
-      },
+      onSelectFolder: selectFolderInSidebar,
+      onToggleFolder: toggleFolder,
       onActivate: selectSession,
-      onActions: () => {
-        if (leaderRef.current) {
-          setLeader(false)
-          restoreFocus()
-        } else setLeader(true)
-      },
-      onNew: () => runAction("n"),
-      onFolder: () => runAction("d"),
-    })
-  })
+      onActions: toggleSidebarActions,
+      onNew: openSidebarTerminal,
+    }),
+    [
+      activeSessionId,
+      collapsedFolderIds,
+      masterKey,
+      openSidebarTerminal,
+      selectFolderInSidebar,
+      selectSession,
+      selectedFolder,
+      sidebarHeight,
+      sidebarSessions,
+      sidebarWidth,
+      toggleFolder,
+      toggleSidebarActions,
+    ],
+  )
+  useEffect(() => {
+    publishTerminalSidebar(sidebarOwner.current, sidebarView)
+  }, [sidebarView])
   useEffect(() => () => clearTerminalSidebar(sidebarOwner.current), [])
 
   useEffect(() => {
@@ -438,6 +483,7 @@ export function FreeTerminal({
       if (folders.some((candidate) => candidate.id === target.folderId)) {
         handledTargetRevision.current = requestedTargetRevision
         setSelectedFolder(target.folderId)
+        toggleFolder(target.folderId)
       }
       return
     }
@@ -479,10 +525,10 @@ export function FreeTerminal({
     requestedTargetRevision,
     sessions,
     sidebarSessions,
-    folders,
     selectSession,
     launchCommand,
     folderForTmuxPane,
+    toggleFolder,
   ])
 
   useKeyboard((key) => {
@@ -520,25 +566,18 @@ export function FreeTerminal({
             active={active}
             sessions={sidebarSessions}
             folders={folders}
+            collapsedFolderIds={collapsedFolderIds}
             selectedFolder={selectedFolder}
             activeSessionId={activeSessionId}
             width={sidebarWidth}
             height={sidebarHeight}
             masterKey={masterKey}
             focusRequest={focusRequest}
-            onSelectFolder={(id) => {
-              setSelectedFolder(id)
-              workspaceRef.current?.focus()
-            }}
+            onSelectFolder={selectFolderInSidebar}
+            onToggleFolder={toggleFolder}
             onActivate={selectSession}
-            onActions={() => {
-              if (leaderRef.current) {
-                setLeader(false)
-                restoreFocus()
-              } else setLeader(true)
-            }}
-            onNew={() => runAction("n")}
-            onFolder={() => runAction("d")}
+            onActions={toggleSidebarActions}
+            onNew={openSidebarTerminal}
           />
         )}
         <box
@@ -582,6 +621,7 @@ export function FreeTerminal({
                 key={session.id}
                 session={session}
                 active={session.id === activeSessionId}
+                toolActive={active}
                 visible={visible}
                 appearanceKey={appearanceKey}
                 layout={layout}
@@ -590,6 +630,20 @@ export function FreeTerminal({
                 onGone={terminalGone}
                 onInput={terminalInput}
                 onResize={terminalResize}
+                liveDiff={
+                  liveDiffTarget?.sessionId === session.id &&
+                  liveDiffTarget.startedAt === session.startedAt &&
+                  (!session.agent || liveDiffTarget.agentKey === session.agent.key)
+                    ? {
+                        agentKey: liveDiffTarget.agentKey,
+                        manualDirectories: liveDiffTarget.manualDirectories,
+                        stacked: splitSection || dimensions.width - sidebarWidth < 90,
+                        running: session.status === "running" && Boolean(session.agent),
+                      }
+                    : undefined
+                }
+                onCloseLiveDiff={closeLiveDiff}
+                onAddLiveDiffProject={addLiveDiffProject}
               />
             )
           })}
@@ -603,18 +657,10 @@ export function FreeTerminal({
           disabled={disabled}
         />
       )}
-      {dialog === "tmux" && <TerminalTmuxDialog onSelect={mirrorSession} onClose={closeDialog} />}
-      {dialog && dialog !== "tmux" && (
+      {dialog && (
         <TerminalDialog
           kind={dialog}
           initialValue={dialog === "rename" ? (activeSession?.title ?? "") : ""}
-          folders={
-            dialog === "move"
-              ? folders.filter(
-                  (folder) => folder.id !== TUIMINAL_TMUX_FOLDER && folder.id !== EXTERNAL_FOLDER,
-                )
-              : folders
-          }
           onSave={saveDialog}
           onClose={closeDialog}
         />

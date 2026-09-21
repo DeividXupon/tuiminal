@@ -1,6 +1,5 @@
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
-import { useEffect, useMemo, useRef, useState } from "react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import {
@@ -10,11 +9,12 @@ import {
 } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import {
   isRunningAgent,
-  terminalSections,
   type TerminalFolder,
   type TerminalSession,
+  terminalSections,
 } from "../model/sessions"
 import { AGENT_WORKING_FRAMES } from "../rendering/agent-presentation"
 import { TerminalAgentList } from "./TerminalAgentList"
@@ -23,7 +23,18 @@ import {
   TerminalSidebarFocusSweep,
   useTerminalSidebarFocusSweep,
 } from "./TerminalSidebarFocusSweep"
+
 export { terminalSidebarFocusSweep } from "./TerminalSidebarFocusSweep"
+
+const FOLDER_CURSOR_PREFIX = "terminal-folder:"
+
+function folderCursorId(id: string) {
+  return `${FOLDER_CURSOR_PREFIX}${id}`
+}
+
+function cursorFolderId(id: string | null) {
+  return id?.startsWith(FOLDER_CURSOR_PREFIX) ? id.slice(FOLDER_CURSOR_PREFIX.length) : null
+}
 
 function consumeKey(key: KeyEvent) {
   key.preventDefault()
@@ -94,7 +105,7 @@ function handleSidebarKey(
   handleActivationKey(key, options.cursorRef.current, options.onActivate)
 }
 
-export function TerminalSidebar({
+export const TerminalSidebar = memo(function TerminalSidebar({
   active = true,
   sessions,
   folders,
@@ -104,10 +115,11 @@ export function TerminalSidebar({
   height,
   masterKey,
   onSelectFolder,
+  collapsedFolderIds = [],
+  onToggleFolder = () => undefined,
   onActivate,
   onActions,
   onNew,
-  onFolder,
   navigationOnly = false,
   autoFocus = false,
   focusRequest = 0,
@@ -123,10 +135,11 @@ export function TerminalSidebar({
   height: number
   masterKey: TerminalMasterKey
   onSelectFolder: (id: string) => void
+  collapsedFolderIds?: readonly string[]
+  onToggleFolder?: (id: string) => void
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
-  onFolder: () => void
   navigationOnly?: boolean
   autoFocus?: boolean
   focusRequest?: number
@@ -138,16 +151,24 @@ export function TerminalSidebar({
     () => terminalSections(sessions.filter((session) => !isRunningAgent(session))),
     [sessions],
   )
+  const visibleFolders = useMemo(
+    () => folders.filter((folder) => sections.some((section) => section.folderId === folder.id)),
+    [folders, sections],
+  )
+  const collapsedFolders = useMemo(() => new Set(collapsedFolderIds), [collapsedFolderIds])
   const navigationIds = useMemo(
     () => [
-      ...folders.flatMap((folder) =>
-        sections
-          .filter((section) => section.folderId === folder.id)
-          .flatMap((section) => section.panes.map((pane) => pane.id)),
-      ),
       ...sessions.filter(isRunningAgent).map((session) => session.id),
+      ...visibleFolders.flatMap((folder) => [
+        folderCursorId(folder.id),
+        ...(collapsedFolders.has(folder.id)
+          ? []
+          : sections
+              .filter((section) => section.folderId === folder.id)
+              .flatMap((section) => section.panes.map((pane) => pane.id))),
+      ]),
     ],
-    [folders, sections, sessions],
+    [collapsedFolders, visibleFolders, sections, sessions],
   )
   const selectedSession = sessions.find((session) => session.id === activeSessionId)
   const activeFolder = selectedSession?.folderId
@@ -157,7 +178,7 @@ export function TerminalSidebar({
   const showSessionHeading = !agentCount || height >= 6
   const showCreationActions = !navigationOnly && (!agentCount || height >= 8)
   const fixedHeight =
-    Number(showSessionHeading) + (showCreationActions ? 2 : 0) + (navigationOnly ? 2 : 1)
+    Number(showSessionHeading) + Number(showCreationActions) + (navigationOnly ? 2 : 1)
   const agentHeight = agentCount
     ? Math.min(
         Math.max(1, height - fixedHeight),
@@ -185,6 +206,13 @@ export function TerminalSidebar({
   )
   const cursorRef = useRef(cursorId)
   const previousFocusRequest = useRef(focusRequest)
+  const selectFolder = (id: string) => {
+    const cursor = folderCursorId(id)
+    cursorRef.current = cursor
+    setCursorId(cursor)
+    onSelectFolder(id)
+    queueMicrotask(() => sidebarRef.current?.focus())
+  }
   useEffect(() => {
     setCursorId((current) => {
       const next =
@@ -222,13 +250,26 @@ export function TerminalSidebar({
       navigationIds,
       cursorRef,
       setCursorId,
-      onActivate,
+      onActivate: (id) => {
+        const folderId = cursorFolderId(id)
+        if (folderId) {
+          selectFolder(folderId)
+          onToggleFolder(folderId)
+          return
+        }
+        onActivate(id)
+      },
       onMasterKey,
       onEscape,
       blur: () => renderer.currentFocusedRenderable?.blur(),
     })
   })
   useEffect(() => {
+    const folderId = cursorFolderId(cursorId)
+    if (folderId) {
+      scrollRef.current?.scrollChildIntoView(`terminal-sidebar-folder-${folderId}`)
+      return
+    }
     const cursor = sessions.find((session) => session.id === cursorId)
     if (cursor && !isRunningAgent(cursor))
       scrollRef.current?.scrollChildIntoView(`terminal-sidebar-pane-${cursor.id}`)
@@ -241,7 +282,8 @@ export function TerminalSidebar({
       id="terminal-sidebar"
       ref={sidebarRef}
       focusable
-      onMouseDown={() => {
+      onMouseDown={(event) => {
+        if (event.button !== 0 || event.target?.id !== "terminal-sidebar") return
         startFocusSweep()
         sidebarRef.current?.focus()
       }}
@@ -257,6 +299,22 @@ export function TerminalSidebar({
       }}
     >
       <TerminalSidebarFocusSweep width={width} height={height} frame={focusSweepFrame} />
+      {(agentCount > 0 || !compactAgents) && (
+        <TerminalAgentList
+          compact={compactAgents}
+          frame={frame}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          cursorSessionId={cursorId}
+          width={width - 1}
+          height={agentHeight}
+          onActivate={(id) => {
+            cursorRef.current = id
+            setCursorId(id)
+            onActivate(id)
+          }}
+        />
+      )}
       {showSessionHeading && (
         <box
           style={{
@@ -286,13 +344,16 @@ export function TerminalSidebar({
         style={{ flexGrow: 1, minHeight: agentCount ? 0 : 1, width: "100%" }}
       >
         <TerminalSessionGroups
-          folders={folders}
+          folders={visibleFolders}
           sections={sections}
           selectedFolder={selectedFolder}
           activeSessionId={activeSessionId}
           cursorId={cursorId}
+          cursorFolderId={cursorFolderId(cursorId)}
+          collapsedFolderIds={collapsedFolders}
           width={width}
-          onSelectFolder={onSelectFolder}
+          onSelectFolder={selectFolder}
+          onToggleFolder={onToggleFolder}
           onActivate={(id) => {
             cursorRef.current = id
             setCursorId(id)
@@ -301,36 +362,12 @@ export function TerminalSidebar({
         />
       </scrollbox>
       {showCreationActions && (
-        <>
-          <InlineButton
-            compact
-            id="terminal-sidebar-new"
-            label="Novo terminal"
-            accent={COLORS.terminal}
-            onPress={onNew}
-          />
-          <InlineButton
-            compact
-            id="terminal-sidebar-new-folder"
-            label="Nova pasta"
-            onPress={onFolder}
-          />
-        </>
-      )}
-      {(agentCount > 0 || !compactAgents) && (
-        <TerminalAgentList
-          compact={compactAgents}
-          frame={frame}
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          cursorSessionId={cursorId}
-          width={width - 1}
-          height={agentHeight}
-          onActivate={(id) => {
-            cursorRef.current = id
-            setCursorId(id)
-            onActivate(id)
-          }}
+        <InlineButton
+          compact
+          id="terminal-sidebar-new"
+          label="Novo terminal"
+          accent={COLORS.terminal}
+          onPress={onNew}
         />
       )}
       {navigationOnly && (
@@ -348,4 +385,4 @@ export function TerminalSidebar({
       />
     </box>
   )
-}
+})

@@ -24,21 +24,22 @@ export type PinnedTerminalSelection =
 export type PinnedTerminalSidebarView = {
   sessions: TerminalSession[]
   folders: TerminalFolder[]
+  collapsedFolderIds: string[]
   selectedFolder: string
   activeSessionId: string | null
   width: number
   height: number
   masterKey: PinnedTerminalMasterKey
   onSelectFolder: (id: string) => void
+  onToggleFolder: (id: string) => void
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
-  onFolder: () => void
 }
 
 export type PinnedTerminalSidebarReplica = Pick<
   PinnedTerminalSidebarView,
-  "sessions" | "folders" | "selectedFolder" | "activeSessionId" | "masterKey"
+  "sessions" | "folders" | "collapsedFolderIds" | "selectedFolder" | "activeSessionId" | "masterKey"
 > & { theme: Record<string, string>; language: string }
 
 export type PinnedTerminalSidebarSnapshot = {
@@ -101,6 +102,7 @@ export function setTmuxHostSidebar(active: boolean) {
 }
 
 export function publishTerminalSidebar(owner: object, view: PinnedTerminalSidebarView) {
+  if (viewOwner === owner && snapshot.view === view) return
   viewOwner = owner
   publish({ ...snapshot, view })
 }
@@ -132,6 +134,7 @@ export function terminalSidebarReplica(
   return {
     sessions: view.sessions,
     folders: view.folders,
+    collapsedFolderIds: view.collapsedFolderIds,
     selectedFolder: view.selectedFolder,
     activeSessionId: view.activeSessionId,
     masterKey: view.masterKey,
