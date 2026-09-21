@@ -39,12 +39,10 @@ tools, not a public plugin platform. The CLI must work from any project director
 - Put durable cross-tool rules in `docs/ai/conventions.md`, domain-specific agent
   rules in the matching `docs/ai/` note, current feature contracts in `docs/design/`,
   and decisions in `docs/adr/`. Update the map and links when moving a document.
-- Use Bun 1.4.2 from `.bun-version`. During ordinary implementation prompts and
-  handoffs without a commit, do not run tests, typechecking, lint, build validation,
-  `git diff --check`, or any other automated check command. Add or update regression
-  coverage as code, but defer executing it. Only when the user explicitly requests a
-  commit, run `bun run check`, `git diff --check`, and any task-specific required gate
-  once immediately before creating that commit.
+- Use Bun 1.4.2 from `.bun-version`. Run focused tests and checks while implementing
+  changes, then broaden validation according to the affected surface. Before an
+  explicitly requested commit, run `bun run check`, `git diff --check`, and any
+  task-specific required gate once after the final code changes.
 - Do not commit, push, publish, change visibility, or kill user processes unless the
   user explicitly asks. Stop only resources owned by the current test or workspace.
 
