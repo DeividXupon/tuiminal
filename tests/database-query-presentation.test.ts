@@ -3,7 +3,9 @@ import { COLORS, getUiSettings, updateUiSettings } from "../packages/core/src/se
 import {
   queryCellForeground,
   queryCompletionPresentation,
+  queryResultSummary,
   queryRowColors,
+  queryWindowLoadingLabel,
 } from "../packages/feature-database/src/rendering/query-presentation"
 
 const settings = getUiSettings()
@@ -42,4 +44,28 @@ test("SQL completion kinds keep their distinct icons and syntax accents", () => 
   expect(queryCompletionPresentation("keyword")).toEqual({ icon: "K", accent: "#c792ea" })
   expect(queryCompletionPresentation("function")).toEqual({ icon: "ƒ", accent: "#82aaff" })
   expect(queryCompletionPresentation("column")).toEqual({ icon: "◇", accent: "#80cbc4" })
+})
+
+test("query result summary exposes the absolute window and available directions", () => {
+  expect(
+    queryResultSummary(
+      {
+        command: "SELECT",
+        mutating: false,
+        columns: ["id"],
+        rows: [],
+        rowCount: 50,
+        windowOffset: 40,
+        hasRowsBefore: true,
+        hasRowsAfter: true,
+        affectedRows: null,
+        durationMs: 4,
+        truncated: true,
+      },
+      false,
+      false,
+    ),
+  ).toBe("41–90 linhas ↑↓ · 4.0 ms")
+  expect(queryWindowLoadingLabel(-1)).toBe("Carregando 40 linhas acima…")
+  expect(queryWindowLoadingLabel(1)).toBe("Carregando 40 linhas abaixo…")
 })

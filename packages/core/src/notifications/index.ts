@@ -10,4 +10,9 @@ export {
   defaultNotificationDuration,
   inferNotificationKind,
 } from "./model"
-export type { AppNotification, NotificationInput, NotificationKind } from "./model"
+export type {
+  AppNotification,
+  NotificationInput,
+  NotificationKind,
+  NotificationMessageChunk,
+} from "./model"

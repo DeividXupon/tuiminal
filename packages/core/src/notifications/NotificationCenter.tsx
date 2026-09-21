@@ -203,6 +203,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       kind,
       source: input.source,
       message: input.message,
+      ...(input.messageChunks === undefined ? {} : { messageChunks: input.messageChunks }),
       ...(input.title === undefined ? {} : { title: input.title }),
       createdAt,
       durationMs: resolveNotificationDuration(kind, input.durationMs),

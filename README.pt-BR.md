@@ -138,13 +138,13 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 ### O que você pode fazer
 
 - **Conectar:** MySQL/MariaDB, PostgreSQL, SQLite e servidores MySQL MCP opcionais. MCP é sempre explícito e somente leitura.
-- **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos.
-- **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
+- **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos. `[/]` filtra o catálogo; `[Enter]` leva do filtro à lista de tabelas encontradas, e outro `[Enter]` abre a tabela selecionada. Em `[4]` Schema, `[G]` alterna um diagrama ASCII das relações diretas da tabela aberta; em terminais estreitos, cada chave estrangeira aparece empilhada verticalmente.
+- **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas e navegar horizontalmente sem perder a linha selecionada. A grade mantém até 50 linhas carregadas e busca mais 40 em qualquer extremidade ao pressionar novamente a tecla de direção. Cada leitura da tabela mostra uma prévia colorida do SELECT em uma notificação, com a tabela e `LIMIT`/`OFFSET`; colunas projetadas e textos de busca são abreviados.
 - **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
 - **Editar grandes seleções:** preparação em lote com busca indexada das alterações existentes, preservando snapshots e chaves `BigInt` exatas antes da revisão.
 - **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
-- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado. Trocar o layout ou maximizar o resultado preserva o editor e seu rascunho.
+- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado. Os resultados mantêm no máximo 50 linhas carregadas; pressionar `[↓]` novamente na última linha ou `[↑]` novamente na primeira carrega o próximo bloco sobreposto de 40. Trocar o layout ou maximizar o resultado preserva o editor e seu rascunho.
 - **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
 - **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
 
@@ -156,7 +156,7 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
 
-Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração. A paginação acompanha a altura do terminal sem pular registros quando cabem mais de 50 linhas.
+Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração.
 
 Resultados SQL só permitem edição quando selecionam diretamente colunas ou `*` de uma única tabela. Expressões, colunas renomeadas, agrupamentos e `DISTINCT` permanecem somente leitura; editar ou excluir também exige todas as colunas da chave primária no resultado.
 
@@ -182,6 +182,7 @@ A prévia de exportação processa só as primeiras linhas visíveis e mantém o
 | --- | --- |
 | Gerenciar conexões | `[C]` |
 | Dados, colunas, índices e schema | `[1]`, `[2]`, `[3]`, `[4]` |
+| Detalhes do schema / diagrama de relações | `[G]` no Schema |
 | Navegar por linhas | `[J/K]` ou `[↑/↓]` |
 | Abrir tabela ou editar célula | `[Enter]` |
 | Buscar tabela / buscar nos dados | `[/]` / `[S]` |

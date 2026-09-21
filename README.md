@@ -148,13 +148,13 @@ A responsive database explorer with a catalog, grid, inspector, and SQL workspac
 ### What you can do
 
 - **Connect:** MySQL/MariaDB, PostgreSQL, SQLite, and optional MySQL MCP servers. MCP is always explicit and read-only.
-- **Explore:** schemas, tables, and views; inspect records, columns, indexes, DDL, constraints, and relationships.
-- **Find data:** sort the active column, search all columns, paginate, and scroll horizontally while keeping the selected row.
+- **Explore:** schemas, tables, and views; inspect records, columns, indexes, DDL, constraints, and relationships. `[/]` filters the catalog; `[Enter]` moves from the filter to the matching table list, and a second `[Enter]` opens the selected table. In `[4]` Schema, `[G]` toggles a one-hop ASCII relationship diagram for the open table; narrow terminals stack each foreign-key connection vertically.
+- **Find data:** sort the active column, search all columns, and scroll horizontally while keeping the selected row. The table grid keeps up to 50 fetched rows and loads 40 more at either edge when you press the direction key again. Each table read shows a syntax-colored SELECT preview in a notification, including its table and `LIMIT`/`OFFSET`; projected columns and search literals are abbreviated.
 - **Select batches:** `[Space]` marks rows; `[Alt+Space]` sets an anchor and `[↑/↓]` grows or shrinks a spreadsheet-style range.
 - **Review writes:** stage `INSERT`, `UPDATE`, and `DELETE` locally. `[Ctrl+S]` opens review and executes the approved batch in a single transaction.
 - **Edit large selections:** indexed lookup of staged changes preserves snapshots and exact `BigInt` keys before review.
 - **Preserve decimals:** `DECIMAL`, `NUMERIC`, and `MONEY` values retain their entered digits through submission, including scientific notation. Database precision and scale still apply.
-- **Write SQL:** keep up to six independent tabs, execute only the statement under the cursor, cancel queries, and adjust the editor/result split. Layout changes and maximization preserve the editor and draft.
+- **Write SQL:** keep up to six independent tabs, execute only the statement under the cursor, cancel queries, and adjust the editor/result split. Results keep at most 50 fetched rows; pressing `[↓]` again at the last row or `[↑]` again at the first loads the next overlapping block of 40. Layout changes and maximization preserve the editor and draft.
 - **Inspect and export:** view every field in a row and export marked rows as CSV, TSV, or JSON.
 - **Protect information:** mask sensitive columns on demand and customize the terms used to identify them.
 
@@ -168,7 +168,7 @@ A responsive database explorer with a catalog, grid, inspector, and SQL workspac
 4. Press `[Ctrl+S]`, review every statement, and confirm again.
 5. Tuiminal executes one transaction; a failed statement rolls back the entire batch.
 
-Repeated rapid confirmations do not duplicate an in-flight execution. Approved statements cannot be changed during the transaction. Pagination adapts to terminal height without skipping records when more than 50 rows fit.
+Repeated rapid confirmations do not duplicate an in-flight execution. Approved statements cannot be changed during the transaction.
 
 SQL results are editable only when they directly select columns or `*` from one identifiable table. Expressions, aliases, duplicate columns, aggregates, grouping, `DISTINCT`, and ambiguous queries remain read-only. Editing or deleting requires the complete primary key in the result.
 
@@ -192,6 +192,7 @@ Export previews process only the first visible rows and retain the original lang
 | --- | --- |
 | Manage connections | `[C]` |
 | Data, columns, indexes, and schema | `[1]`, `[2]`, `[3]`, `[4]` |
+| Schema details / relationship diagram | `[G]` in Schema |
 | Navigate rows | `[J/K]` or `[↑/↓]` |
 | Open table or edit cell | `[Enter]` |
 | Search tables / search data | `[/]` / `[S]` |

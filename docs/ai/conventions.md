@@ -80,4 +80,4 @@
 - Keep the transparent mouse hit area over the current tutorial target paintless. Giving that overlay even a nearly transparent background erases wide Asian glyphs in OpenTUI; the surrounding dim regions provide the visual treatment.
 - Draw tutorial target outlines only on sides that have a free terminal cell outside the target. Never clamp an outline onto the target itself; one-row controls such as shortcut footers must remain fully readable when they touch a terminal edge.
 - The Database tutorial uses simulated hardcoded catalog, table, row, and write-state data so every step remains demonstrable without a configured database. Do not access a real database from tutorial mode.
-- The Database demo must cover table history, sort/search, batch row/page selection, export, staged single/batch writes, review, the row inspector, and pagination. Selected demo rows use the same `○`/`●` gutter language as the real grid.
+- The Database demo must cover table history, sort/search, batch row selection, export, staged single/batch writes, review, the row inspector, and sliding-window navigation. Selected demo rows use the same `○`/`●` gutter language as the real grid.

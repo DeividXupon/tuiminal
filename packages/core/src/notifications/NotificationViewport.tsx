@@ -1,3 +1,4 @@
+import { RGBA, StyledText, type TextChunk } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "../i18n/index"
 import { COLORS } from "../settings/theme"
@@ -24,6 +25,16 @@ const PRESENTATION: Record<NotificationKind, { icon: string; title: string; colo
   }
 
 const CARD_HEIGHT = 4
+
+function notificationMessageContent(notification: AppNotification) {
+  if (!notification.messageChunks) return translateUi(notification.message)
+  const chunks: TextChunk[] = notification.messageChunks.map((chunk) => ({
+    __isChunk: true,
+    text: chunk.text,
+    ...(chunk.color ? { fg: RGBA.fromHex(chunk.color) } : {}),
+  }))
+  return new StyledText(chunks)
+}
 
 export function NotificationViewport({
   notifications,
@@ -111,7 +122,8 @@ export function NotificationViewport({
               />
             </box>
             <text
-              content={translateUi(notification.message)}
+              id={`app-notification-message-${index}`}
+              content={notificationMessageContent(notification)}
               style={{ height: 2, fg: COLORS.text, wrapMode: "word" }}
             />
             <box

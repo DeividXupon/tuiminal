@@ -9,6 +9,7 @@ import {
   LAYOUT,
 } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
 import {
   DEFAULT_SENSITIVE_VISIBILITY,
   nextSensitiveVisibility,
@@ -24,6 +25,7 @@ import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directiona
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
 import { useDatabaseSelectionSweep } from "./hooks/use-database-selection-sweep"
+import { useDatabaseTableWindow } from "./hooks/use-database-table-window"
 import {
   type DatabaseBatchSelectedRow,
   databaseBatchRowIdentity,
@@ -35,12 +37,11 @@ import {
   databaseHorizontalKeyDirection,
   databaseHorizontalNavigationAction,
   databaseLoadingInsets,
-  databasePageChromeRows,
-  databasePageSize,
+  databaseResultScrollTop,
   databaseSidebarWidth,
   nextDatabaseTableSort,
-  preserveDatabasePageSelection,
 } from "./model/layout"
+import { DATABASE_TABLE_WINDOW_SIZE } from "./model/table-window"
 import { nextSqlTabIndex } from "./model/sql-workspace"
 import type {
   DatabaseCatalog,
@@ -79,6 +80,7 @@ import {
   TABLE_HISTORY_LIMIT,
 } from "./rendering/constants"
 import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
+import { tableReadNotification } from "./rendering/table-read-notification"
 import {
   applyTableMutations,
   databaseConnectionCanWrite,
@@ -100,6 +102,7 @@ import { type DatabaseChangeReviewItem, DatabaseChangesModal } from "./ui/Databa
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
 import { DatabaseEmptyState } from "./ui/DatabaseEmptyState"
 import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
+import { DatabaseSchemaView } from "./ui/DatabaseSchemaView"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
 import { RowInspector } from "./ui/RowInspector"
 
@@ -116,15 +119,16 @@ export function DatabaseViewer({
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
+  const { notify } = useNotifications()
   const maskingTermsSignature = sensitiveTermsSignature()
   const searchRef = useRef<InputRenderable | null>(null)
   const tableListRef = useRef<SelectRenderable | null>(null)
+  const tableGridScrollRef = useRef<ScrollBoxRenderable | null>(null)
   const rowInspectorRef = useRef<ScrollBoxRenderable | null>(null)
   const structureScrollRef = useRef<ScrollBoxRenderable | null>(null)
   const stagedChangeCounterRef = useRef(0)
   const selectedRowIndexRef = useRef(0)
   const selectedColumnIndexRef = useRef(0)
-  const previousPageSizeRef = useRef<number | null>(null)
   const pendingSelectedRowIndexRef = useRef<number | null>(null)
   const sqlTabCounterRef = useRef(0)
   const activePaneRef = useRef<DatabasePane>("catalog")
@@ -141,11 +145,11 @@ export function DatabaseViewer({
   const [search, setSearch] = useState("")
   const [selectedTable, setSelectedTable] = useState<DatabaseTable | null>(null)
   const [view, setView] = useState<DatabaseView>("data")
-  const [pageIndex, setPageIndex] = useState(0)
   const [columnOffset, setColumnOffset] = useState(0)
   const [pageData, setPageData] = useState<TablePage | null>(null)
   const [indexes, setIndexes] = useState<DatabaseIndex[] | null>(null)
   const [tableStructure, setTableStructure] = useState<DatabaseTableStructure | null>(null)
+  const [schemaDiagramOpen, setSchemaDiagramOpen] = useState(false)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [rowsLoading, setRowsLoading] = useState(false)
   const [indexesLoading, setIndexesLoading] = useState(false)
@@ -188,6 +192,17 @@ export function DatabaseViewer({
     setActivePane(pane)
   }, [])
   const activeConnection = connections.find((profile) => profile.id === activeConnectionId) ?? null
+  const notifyTableRead = useCallback(
+    (sql: string) => {
+      const preview = tableReadNotification(
+        sql,
+        activeConnection?.driver ?? "sqlite",
+        Math.min(52, terminal.width - 6),
+      )
+      notify({ source: "Banco", title: "SELECT", kind: "info", durationMs: 7_000, ...preview })
+    },
+    [activeConnection?.driver, notify, terminal.width],
+  )
   const activeTableQueryKey =
     activeConnectionId && selectedTable ? changeTableKey(activeConnectionId, selectedTable) : ""
   const activeTableQuery = activeTableQueryKey
@@ -199,6 +214,7 @@ export function DatabaseViewer({
     ? (tableHistoryByConnection[activeConnectionId] ?? [])
     : []
   const revealSensitive = sensitiveVisibility === "visible"
+  const tableWindowContextKey = `${activeConnectionId}:${selectedTable ? tableKey(selectedTable) : ""}:${activeTableQuerySignature}:${refreshKey}:${revealSensitive}:${maskingTermsSignature}`
   const sensitiveDataMasked = sensitiveDataIsMasked(sensitiveVisibility)
   const connectionCanWrite = activeConnection ? databaseConnectionCanWrite(activeConnection) : false
   const sidebarWidth = databaseSidebarWidth(terminal.width)
@@ -230,17 +246,12 @@ export function DatabaseViewer({
     view === "data" &&
     Boolean(selectedTable) &&
     !queryOpen
+  const tablePageMissing = pageData === null
   const hasPrimaryKey = pageData?.columns.some((column) => column.key === "PRI") ?? false
   const tableCanWrite = connectionCanWrite && selectedTable?.type === "table"
   const compactActions = tableAreaWidth < COMPACT_ACTIONS_BREAKPOINT
   const actionRowCount = databaseActionRowCount(tableAreaWidth, view === "data")
   const veryNarrowActions = actionRowCount === 3
-  const pageChromeRows = databasePageChromeRows({
-    hasTableHistory: Boolean(tableHistory.length && selectedTable),
-    actionRowCount,
-    compactActions,
-  })
-  const pageSize = databasePageSize(terminal.height, pageChromeRows)
   const loadingInsets = databaseLoadingInsets({
     hasTableHistory: Boolean(tableHistory.length && selectedTable),
     hasSelectedTable: Boolean(selectedTable),
@@ -254,6 +265,23 @@ export function DatabaseViewer({
   const indexNameWidth = Math.max(10, Math.min(28, Math.floor(tableAreaWidth * 0.32)))
   const indexTypeWidth = 9
   const indexDefinitionWidth = Math.max(8, tableAreaWidth - indexNameWidth - indexTypeWidth)
+  const tableWindow = useDatabaseTableWindow({
+    connectionId: activeConnectionId,
+    table: selectedTable,
+    query: activeTableQuery,
+    revealSensitive,
+    contextKey: tableWindowContextKey,
+    page: pageData,
+    setPage: setPageData,
+    scrollRef: tableGridScrollRef,
+    selectRow: (index) => {
+      selectedRowIndexRef.current = index
+      setSelectedRowIndex(index)
+    },
+    onQueryStart: notifyTableRead,
+  })
+  const tableWindowOffsetRef = useRef(tableWindow.offset)
+  tableWindowOffsetRef.current = tableWindow.offset
 
   const filteredTables = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR")
@@ -290,12 +318,18 @@ export function DatabaseViewer({
     () => catalogEntries.map(({ name, description, value }) => ({ name, description, value })),
     [catalogEntries],
   )
-  const selectedCatalogIndex = Math.max(
-    0,
-    catalogEntries.findIndex(
-      (entry) => entry.table && selectedTable && tableKey(entry.table) === tableKey(selectedTable),
-    ),
+  const selectedCatalogTableIndex = catalogEntries.findIndex(
+    (entry) => entry.table && selectedTable && tableKey(entry.table) === tableKey(selectedTable),
   )
+  const selectedCatalogIndex =
+    selectedCatalogTableIndex >= 0
+      ? selectedCatalogTableIndex
+      : search.trim()
+        ? Math.max(
+            0,
+            catalogEntries.findIndex((entry) => entry.table),
+          )
+        : 0
   const visibleColumns = useMemo(
     () => (pageData?.columns ?? []).slice(columnOffset, columnOffset + columnsPerView),
     [columnOffset, columnsPerView, pageData],
@@ -325,7 +359,7 @@ export function DatabaseViewer({
       const rowKey = pageData?.rowKeys[index] ?? null
       const change = rowKey ? (changesByRowKey.get(rowKeyFingerprint(rowKey)) ?? null) : null
       return {
-        id: `persisted-${pageIndex}-${index}`,
+        id: `persisted-${tableWindow.offset + index}`,
         data: change?.mutation.kind === "update" ? { ...row, ...change.mutation.values } : row,
         rowKey,
         change,
@@ -340,7 +374,7 @@ export function DatabaseViewer({
         change,
       }))
     return [...persistedRows, ...insertedRows]
-  }, [currentTableChanges, pageData, pageIndex])
+  }, [currentTableChanges, pageData, tableWindow.offset])
   const currentBatchRows = currentTableChangeKey
     ? (batchRowsByTable[currentTableChangeKey] ?? [])
     : []
@@ -418,8 +452,8 @@ export function DatabaseViewer({
 
   const resetTable = useCallback(() => {
     pendingSelectedRowIndexRef.current = null
+    tableWindow.reset()
     setSelectedTable(null)
-    setPageIndex(0)
     setColumnOffset(0)
     setPageData(null)
     setIndexes(null)
@@ -442,7 +476,7 @@ export function DatabaseViewer({
     setQueryOpen(false)
     setQueryTabs([])
     setActiveQueryTabId("")
-  }, [activatePane])
+  }, [activatePane, tableWindow.reset])
 
   const switchConnection = useCallback(
     (profile: DatabaseConnectionProfile) => {
@@ -487,6 +521,7 @@ export function DatabaseViewer({
   const openTable = useCallback(
     (table: DatabaseTable, recordHistory = true) => {
       pendingSelectedRowIndexRef.current = null
+      tableWindow.reset()
       if (recordHistory && activeConnectionId) {
         setTableHistoryByConnection((current) => {
           const connectionHistory = current[activeConnectionId] ?? []
@@ -499,8 +534,7 @@ export function DatabaseViewer({
           }
         })
       }
-      setSelectedTable(table)
-      setPageIndex(0)
+      setSelectedTable({ ...table })
       setColumnOffset(0)
       setPageData(null)
       setIndexes(null)
@@ -521,7 +555,7 @@ export function DatabaseViewer({
       setQueryOpen(false)
       setTimeout(() => tableListRef.current?.blur(), 0)
     },
-    [activatePane, activeConnectionId],
+    [activatePane, activeConnectionId, tableWindow.reset],
   )
 
   const navigateTableHistory = useCallback(
@@ -614,28 +648,26 @@ export function DatabaseViewer({
 
   const moveSelectedRow = useCallback(
     (delta: number) => {
-      setSelectedRowIndex((current) => {
-        const lastIndex = Math.max(0, gridRows.length - 1)
-        const next = Math.max(0, Math.min(lastIndex, current + delta))
-        selectedRowIndexRef.current = next
-        return next
-      })
+      if (rowsLoading) return
+      const current = selectedRowIndexRef.current
+      const lastIndex = Math.max(0, gridRows.length - 1)
+      const next = Math.max(0, Math.min(lastIndex, current + delta))
+      if (next === current && (delta < 0 ? current === 0 : current === lastIndex)) {
+        void tableWindow.load(delta < 0 ? -1 : 1)
+        return
+      }
+      selectedRowIndexRef.current = next
+      setSelectedRowIndex(next)
     },
-    [gridRows.length],
+    [gridRows.length, rowsLoading, tableWindow.load],
   )
-
-  const changePage = useCallback((delta: -1 | 1) => {
-    pendingSelectedRowIndexRef.current = 0
-    selectedRowIndexRef.current = 0
-    setSelectedRowIndex(0)
-    setPageIndex((current) => Math.max(0, current + delta))
-  }, [])
 
   const applyTableQuery = useCallback(
     (nextQuery: DatabaseTableQuery, preserveColumn = false) => {
       if (!activeConnectionId || !selectedTable) return
       const queryKey = changeTableKey(activeConnectionId, selectedTable)
       setTableQueries((current) => ({ ...current, [queryKey]: nextQuery }))
+      tableWindow.reset()
       loadedPageKeyRef.current = null
       pendingSelectedRowIndexRef.current = 0
       selectedRowIndexRef.current = 0
@@ -645,12 +677,11 @@ export function DatabaseViewer({
         setSelectedColumnIndex(0)
         setColumnOffset(0)
       }
-      setPageIndex(0)
       if (!preserveColumn) setPageData(null)
       setTableSearchOpen(false)
       focusPane("grid")
     },
-    [activeConnectionId, focusPane, selectedTable],
+    [activeConnectionId, focusPane, selectedTable, tableWindow.reset],
   )
 
   const cycleTableSort = useCallback(() => {
@@ -723,7 +754,7 @@ export function DatabaseViewer({
     selectedIndexRef: selectedRowIndexRef,
     updateSelectedRows: updateCurrentBatchRows,
     moveRow: moveSelectedRow,
-    resetKey: `${currentTableChangeKey}:${pageIndex}`,
+    resetKey: `${currentTableChangeKey}:${tableWindow.offset}`,
   })
 
   const clearCurrentBatchRows = useCallback(() => {
@@ -1292,22 +1323,6 @@ export function DatabaseViewer({
   }, [view])
 
   useEffect(() => {
-    const previousPageSize = previousPageSizeRef.current
-    previousPageSizeRef.current = pageSize
-    if (previousPageSize === null || previousPageSize === pageSize || !selectedTable) return
-    const nextSelection = preserveDatabasePageSelection({
-      pageIndex,
-      rowIndex: selectedRowIndexRef.current,
-      previousPageSize,
-      nextPageSize: pageSize,
-    })
-    pendingSelectedRowIndexRef.current = nextSelection.rowIndex
-    selectedRowIndexRef.current = nextSelection.rowIndex
-    setSelectedRowIndex(nextSelection.rowIndex)
-    if (nextSelection.pageIndex !== pageIndex) setPageIndex(nextSelection.pageIndex)
-  }, [pageIndex, pageSize, selectedTable])
-
-  useEffect(() => {
     const lastIndex = Math.max(0, gridRows.length - 1)
     setSelectedRowIndex((current) => {
       const next = Math.min(current, lastIndex)
@@ -1326,11 +1341,21 @@ export function DatabaseViewer({
   }, [pageData?.columns.length])
 
   useEffect(() => {
-    void selectedRowIndex
+    const scroll = tableGridScrollRef.current
+    if (scroll && pageData) {
+      scroll.scrollTo(
+        databaseResultScrollTop({
+          selectedRowIndex,
+          currentScrollTop: scroll.scrollTop,
+          viewportHeight: scroll.viewport.height,
+          rowCount: gridRows.length,
+        }),
+      )
+    }
     rowInspectorRef.current?.scrollTo(0)
     deleteSequenceArmedRef.current = false
     setDeleteSequenceArmed(false)
-  }, [selectedRowIndex])
+  }, [gridRows.length, pageData, selectedRowIndex])
 
   useEffect(() => {
     if (activePane !== "inspector") return
@@ -1363,25 +1388,28 @@ export function DatabaseViewer({
     const requestKey = [
       activeConnectionId,
       tableKey(selectedTable),
-      pageIndex,
-      pageSize,
       refreshKey,
       revealSensitive,
       activeTableQuerySignature,
       maskingTermsSignature,
     ].join(":")
-    if (loadedPageKeyRef.current === requestKey) return
+    if (loadedPageKeyRef.current === requestKey && !tablePageMissing) return
     let cancelled = false
     setRowsLoading(true)
     setError(null)
     void loadTablePage(
       activeConnectionId,
       selectedTable,
-      pageIndex * pageSize,
-      pageSize,
+      tableWindowOffsetRef.current,
+      DATABASE_TABLE_WINDOW_SIZE,
       revealSensitive,
       activeTableQuery,
-      { recordHistory: true },
+      {
+        recordHistory: true,
+        onQueryStart: (sql) => {
+          if (!cancelled) notifyTableRead(sql)
+        },
+      },
     )
       .then((nextPage) => {
         if (cancelled) return
@@ -1414,11 +1442,11 @@ export function DatabaseViewer({
     activeTableQuery,
     activeTableQuerySignature,
     maskingTermsSignature,
-    pageIndex,
-    pageSize,
+    notifyTableRead,
     refreshKey,
     revealSensitive,
     selectedTable,
+    tablePageMissing,
   ])
 
   useEffect(() => {
@@ -1479,7 +1507,14 @@ export function DatabaseViewer({
   }, [columnOffset, maxColumnOffset])
 
   useEffect(() => {
-    if (!active || (!catalogLoading && !rowsLoading && !indexesLoading && !structureLoading)) {
+    if (
+      !active ||
+      (!catalogLoading &&
+        !rowsLoading &&
+        !indexesLoading &&
+        !structureLoading &&
+        !tableWindow.loadingDirection)
+    ) {
       setMotionFrame(0)
       return
     }
@@ -1488,7 +1523,14 @@ export function DatabaseViewer({
       setMotionFrame((current) => (current + 1) % LOADING_FRAMES.length)
     }, 80)
     return () => clearInterval(interval)
-  }, [active, catalogLoading, indexesLoading, rowsLoading, structureLoading])
+  }, [
+    active,
+    catalogLoading,
+    indexesLoading,
+    rowsLoading,
+    structureLoading,
+    tableWindow.loadingDirection,
+  ])
 
   useKeyboard((key) => {
     if (
@@ -1620,6 +1662,13 @@ export function DatabaseViewer({
         focusPane("grid")
         setTimeout(() => structureScrollRef.current?.focus(), 0)
         break
+      case "g":
+        if (view === "schema") {
+          key.preventDefault()
+          setSchemaDiagramOpen((current) => !current)
+          setTimeout(() => structureScrollRef.current?.focus(), 0)
+        }
+        break
       case "v":
         toggleSensitiveData()
         break
@@ -1728,16 +1777,6 @@ export function DatabaseViewer({
         if (direction && navigateHorizontally(direction)) key.preventDefault()
         break
       }
-      case "n":
-        if (view === "data" && pageData?.hasMore && !rowsLoading) {
-          changePage(1)
-        }
-        break
-      case "p":
-        if (view === "data" && pageIndex > 0 && !rowsLoading) {
-          changePage(-1)
-        }
-        break
       case "r":
         if (selectedTable && !rowsLoading) {
           setRefreshKey((current) => current + 1)
@@ -1756,21 +1795,24 @@ export function DatabaseViewer({
         break
     }
   })
-
-  const visibleGridRows = gridRows
-  const firstRow = pageData?.rows.length ? pageIndex * pageSize + 1 : pageIndex * pageSize
-  const lastRow = pageIndex * pageSize + (pageData?.rows.length ?? 0)
+  const firstRow = pageData?.rows.length ? tableWindow.offset + 1 : tableWindow.offset
+  const lastRow = tableWindow.offset + (pageData?.rows.length ?? 0)
+  const rangeSummary =
+    `${firstRow}–${lastRow} ${tableWindow.offset ? "↑" : ""}${pageData?.hasMore ? "↓" : ""}`.trimEnd()
   const schemaCount = new Set(catalog?.tables.map((table) => table.schema) ?? []).size
   const compactDataSummary = veryNarrowActions
-    ? `p.${pageIndex + 1} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1} · ${gridRows.length} itens${activeConnectionChanges.length ? ` · ${activeConnectionChanges.length} pend.` : ""}`
-    : `${firstRow}–${lastRow} · p.${pageIndex + 1} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1} · ${gridRows.length} itens · ${activeConnectionChanges.length} pend.`
+    ? `${rangeSummary} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1}${activeConnectionChanges.length ? ` · ${activeConnectionChanges.length} pend.` : ""}`
+    : `${rangeSummary} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1} · ${gridRows.length} itens · ${activeConnectionChanges.length} pend.`
   const dataSummary = translateUi(
     sensitiveVisibility === "confirm"
-      ? `p.${pageIndex + 1} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1} · ${gridRows.length} itens`
+      ? `${rangeSummary} · cél ${selectedRowIndex + 1},${selectedColumnIndex + 1} · ${gridRows.length} itens`
       : gridAreaWidth < 65
         ? compactDataSummary
-        : `CÉLULA ${selectedRowIndex + 1},${selectedColumnIndex + 1}  •  ${gridRows.length} REGISTROS  •  ${activeConnectionChanges.length} ALTERAÇÕES PENDENTES  •  p.${pageIndex + 1} ${firstRow}–${lastRow}`,
+        : `CÉLULA ${selectedRowIndex + 1},${selectedColumnIndex + 1}  •  ${gridRows.length} REGISTROS  •  ${activeConnectionChanges.length} ALTERAÇÕES PENDENTES  •  ${rangeSummary}`,
   )
+  const tableLoadingSummary = tableWindow.loadingDirection
+    ? `${LOADING_FRAMES[motionFrame]} ${translateUi(tableWindow.loadingDirection < 0 ? "Carregando 40 linhas acima…" : "Carregando 40 linhas abaixo…")}`
+    : ""
   const sensitiveSummary = translateUi(
     sensitiveVisibility === "confirm"
       ? "⚠ [V] confirmar  ·  "
@@ -1779,7 +1821,6 @@ export function DatabaseViewer({
         : "",
   )
   if (tutorialMode) return <DatabaseTutorialDemo />
-
   return (
     <box
       id="database-workspace"
@@ -1853,8 +1894,7 @@ export function DatabaseViewer({
                 searchRef.current?.focus()
               }}
               onSubmit={() => {
-                const firstTable = filteredTables[0]
-                if (firstTable) openTable(firstTable)
+                activatePane("catalog")
                 tableListRef.current?.focus()
               }}
               width={Math.max(8, sidebarWidth - 4)}
@@ -2477,112 +2517,39 @@ export function DatabaseViewer({
                   )}
                 </box>
               ) : view === "schema" ? (
-                <scrollbox
-                  ref={structureScrollRef}
-                  id="database-schema-inspector"
-                  scrollY
-                  viewportCulling
-                  style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
-                  verticalScrollbarOptions={{
-                    trackOptions: {
-                      backgroundColor: COLORS.panel,
-                      foregroundColor: COLORS.border,
-                    },
+                <DatabaseSchemaView
+                  table={selectedTable}
+                  structure={tableStructure}
+                  loading={structureLoading}
+                  diagramOpen={schemaDiagramOpen}
+                  availableWidth={tableAreaWidth}
+                  scrollRef={structureScrollRef}
+                  onToggleDiagram={() => {
+                    setSchemaDiagramOpen((current) => !current)
+                    setTimeout(() => structureScrollRef.current?.focus(), 0)
                   }}
-                >
-                  {structureLoading ? null : tableStructure ? (
-                    <>
-                      <text
-                        content="◆ DDL"
-                        style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                      />
-                      <text content={tableStructure.ddl || "—"} style={{ fg: COLORS.text }} />
-                      <text content=" " />
-                      <text
-                        content={`◆ ${translateUi("RELACIONAMENTOS")} · ${tableStructure.relationships.length}`}
-                        style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                      />
-                      {tableStructure.relationships.length ? (
-                        tableStructure.relationships.map((relation) => (
-                          <text
-                            key={`${relation.direction}-${relation.name}-${relation.relatedSchema}-${relation.relatedTable}`}
-                            content={`${relation.direction === "outgoing" ? "→" : "←"} ${relation.name} · (${relation.columns.join(", ")}) ${relation.direction === "outgoing" ? "→" : "←"} ${relation.relatedSchema}.${relation.relatedTable} (${relation.relatedColumns.join(", ")}) · UPDATE ${relation.onUpdate} · DELETE ${relation.onDelete}`}
-                            style={{
-                              fg:
-                                relation.direction === "outgoing" ? COLORS.success : COLORS.warning,
-                            }}
-                          />
-                        ))
-                      ) : (
-                        <text
-                          content={translateUi("Nenhum relacionamento encontrado.")}
-                          style={{ fg: COLORS.muted }}
-                        />
-                      )}
-                      <text content=" " />
-                      <text
-                        content={`◆ ${translateUi("CONSTRAINTS")} · ${tableStructure.constraints.length}`}
-                        style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                      />
-                      {tableStructure.constraints.length ? (
-                        tableStructure.constraints.map((constraint) => (
-                          <text
-                            key={`${constraint.type}-${constraint.name}`}
-                            content={`${constraint.type} · ${constraint.name} · ${constraint.definition}`}
-                            style={{
-                              fg: constraint.type === "FOREIGN KEY" ? COLORS.warning : COLORS.text,
-                            }}
-                          />
-                        ))
-                      ) : (
-                        <text
-                          content={translateUi("Nenhuma constraint encontrada.")}
-                          style={{ fg: COLORS.muted }}
-                        />
-                      )}
-                      <text content=" " />
-                      <text
-                        content={`◆ ${translateUi("ÍNDICES")} · ${tableStructure.indexes.length}`}
-                        style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                      />
-                      {tableStructure.indexes.length ? (
-                        tableStructure.indexes.map((index) => (
-                          <text
-                            key={index.name}
-                            content={`${index.unique ? "UNIQUE" : "INDEX"} · ${index.name} · ${index.definition}`}
-                            style={{ fg: index.unique ? COLORS.database : COLORS.text }}
-                          />
-                        ))
-                      ) : (
-                        <text content="Nenhum índice encontrado." style={{ fg: COLORS.muted }} />
-                      )}
-                      <text content=" " />
-                      <ShortcutText
-                        content={translateUi("[↑/↓] Rolar · mouse")}
-                        style={{ fg: COLORS.muted }}
-                      />
-                    </>
-                  ) : (
-                    <text
-                      content={translateUi("Estrutura indisponível.")}
-                      style={{ fg: COLORS.muted }}
-                    />
-                  )}
-                </scrollbox>
+                />
               ) : (
                 <box style={{ flexGrow: 1, flexDirection: "row" }}>
                   {!detailOnly ? (
                     <box id="tutorial-db-table-grid" style={{ flexGrow: 1 }}>
                       <text
-                        content={writeNotice || `${sensitiveSummary}${dataSummary}`}
+                        id="database-table-summary"
+                        content={
+                          writeNotice ||
+                          tableWindow.loadError ||
+                          tableLoadingSummary ||
+                          `${sensitiveSummary}${dataSummary}`
+                        }
                         style={{
                           height: 1,
                           flexShrink: 0,
-                          fg: writeNotice.startsWith("Erro")
-                            ? COLORS.danger
-                            : writeNotice || sensitiveDataMasked
-                              ? COLORS.warning
-                              : COLORS.muted,
+                          fg:
+                            writeNotice.startsWith("Erro") || tableWindow.loadError
+                              ? COLORS.danger
+                              : writeNotice || sensitiveDataMasked
+                                ? COLORS.warning
+                                : COLORS.muted,
                         }}
                       />
                       {visibleColumns.length ? (
@@ -2640,132 +2607,151 @@ export function DatabaseViewer({
                       ) : (
                         <text content="Tabela sem colunas visíveis" style={{ fg: COLORS.muted }} />
                       )}
-                      {visibleGridRows.length ? (
-                        visibleGridRows.map((gridRow, index) => {
-                          const mutationKind = gridRow.change?.mutation.kind
-                          const rowBackground =
-                            mutationKind === "insert"
-                              ? COLORS.databaseInsertedBg
-                              : mutationKind === "delete"
-                                ? COLORS.databaseDeletedBg
-                                : mutationKind === "update"
-                                  ? COLORS.databaseEditedBg
-                                  : index % 2 === 0
-                                    ? COLORS.panel
-                                    : COLORS.panelRaised
-                          const rowAccent =
-                            mutationKind === "insert"
-                              ? COLORS.runner
-                              : mutationKind === "delete"
-                                ? COLORS.danger
-                                : mutationKind === "update"
-                                  ? COLORS.warning
-                                  : COLORS.muted
-                          return (
-                            <box
-                              key={gridRow.id}
-                              id={`database-row-${index}`}
-                              style={{
-                                height: 1,
-                                flexShrink: 0,
-                                flexDirection: "row",
-                                backgroundColor: rowBackground,
-                              }}
-                            >
-                              <Button
-                                id={`database-select-row-${index}`}
-                                onPress={() => {
-                                  activatePane("grid")
-                                  selectedRowIndexRef.current = index
-                                  setSelectedRowIndex(index)
-                                  toggleCurrentBatchRow(gridRow)
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: capture row keys before native scroll */}
+                      <scrollbox
+                        ref={tableGridScrollRef}
+                        id="database-table-rows"
+                        onKeyDown={selectionSweep.handleVerticalKey}
+                        scrollY
+                        viewportCulling
+                        style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
+                        verticalScrollbarOptions={{
+                          trackOptions: {
+                            backgroundColor: COLORS.panel,
+                            foregroundColor: COLORS.border,
+                          },
+                        }}
+                      >
+                        {gridRows.length ? (
+                          gridRows.map((gridRow, index) => {
+                            const mutationKind = gridRow.change?.mutation.kind
+                            const rowBackground =
+                              mutationKind === "insert"
+                                ? COLORS.databaseInsertedBg
+                                : mutationKind === "delete"
+                                  ? COLORS.databaseDeletedBg
+                                  : mutationKind === "update"
+                                    ? COLORS.databaseEditedBg
+                                    : index % 2 === 0
+                                      ? COLORS.panel
+                                      : COLORS.panelRaised
+                            const rowAccent =
+                              mutationKind === "insert"
+                                ? COLORS.runner
+                                : mutationKind === "delete"
+                                  ? COLORS.danger
+                                  : mutationKind === "update"
+                                    ? COLORS.warning
+                                    : COLORS.muted
+                            return (
+                              <box
+                                key={gridRow.id}
+                                id={`database-row-${index}`}
+                                style={{
+                                  height: 1,
+                                  flexShrink: 0,
+                                  flexDirection: "row",
+                                  backgroundColor: rowBackground,
                                 }}
-                                height={1}
-                                width={BATCH_SELECTOR_WIDTH}
-                                flexShrink={0}
                               >
-                                <text
-                                  content={
-                                    currentBatchRowIds.has(
-                                      databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                    )
-                                      ? "● "
-                                      : "○ "
-                                  }
-                                  style={{
-                                    fg: currentBatchRowIds.has(
-                                      databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                    )
-                                      ? COLORS.database
-                                      : COLORS.muted,
-                                    bg: rowBackground,
+                                <Button
+                                  id={`database-select-row-${index}`}
+                                  onPress={() => {
+                                    activatePane("grid")
+                                    selectedRowIndexRef.current = index
+                                    setSelectedRowIndex(index)
+                                    toggleCurrentBatchRow(gridRow)
                                   }}
+                                  height={1}
+                                  width={BATCH_SELECTOR_WIDTH}
+                                  flexShrink={0}
+                                >
+                                  <text
+                                    content={
+                                      currentBatchRowIds.has(
+                                        databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                                      )
+                                        ? "● "
+                                        : "○ "
+                                    }
+                                    style={{
+                                      fg: currentBatchRowIds.has(
+                                        databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                                      )
+                                        ? COLORS.database
+                                        : COLORS.muted,
+                                      bg: rowBackground,
+                                    }}
+                                  />
+                                </Button>
+                                <text
+                                  content="│"
+                                  style={{ fg: COLORS.border, bg: rowBackground }}
                                 />
-                              </Button>
-                              <text content="│" style={{ fg: COLORS.border, bg: rowBackground }} />
-                              {visibleColumns.map((column, visibleIndex) => {
-                                const absoluteIndex = columnOffset + visibleIndex
-                                const selectedCell =
-                                  activePane === "grid" &&
-                                  index === selectedRowIndex &&
-                                  absoluteIndex === selectedColumnIndex
-                                const changedCell =
-                                  gridRow.change?.mutation.kind === "update" &&
-                                  Object.hasOwn(gridRow.change.mutation.values, column.field)
-                                return (
-                                  <box
-                                    key={column.field}
-                                    style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-                                  >
-                                    <Button
-                                      id={`database-cell-${index}-${absoluteIndex}`}
-                                      onPress={() => {
-                                        activatePane("grid")
-                                        selectedRowIndexRef.current = index
-                                        setSelectedRowIndex(index)
-                                        selectedColumnIndexRef.current = absoluteIndex
-                                        setSelectedColumnIndex(absoluteIndex)
-                                      }}
-                                      height={1}
-                                      width={CELL_WIDTH}
-                                      flexShrink={0}
+                                {visibleColumns.map((column, visibleIndex) => {
+                                  const absoluteIndex = columnOffset + visibleIndex
+                                  const selectedCell =
+                                    activePane === "grid" &&
+                                    index === selectedRowIndex &&
+                                    absoluteIndex === selectedColumnIndex
+                                  const changedCell =
+                                    gridRow.change?.mutation.kind === "update" &&
+                                    Object.hasOwn(gridRow.change.mutation.values, column.field)
+                                  return (
+                                    <box
+                                      key={column.field}
+                                      style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
                                     >
-                                      {(state) => (
+                                      <Button
+                                        id={`database-cell-${index}-${absoluteIndex}`}
+                                        onPress={() => {
+                                          activatePane("grid")
+                                          selectedRowIndexRef.current = index
+                                          setSelectedRowIndex(index)
+                                          selectedColumnIndexRef.current = absoluteIndex
+                                          setSelectedColumnIndex(absoluteIndex)
+                                        }}
+                                        height={1}
+                                        width={CELL_WIDTH}
+                                        flexShrink={0}
+                                      >
+                                        {(state) => (
+                                          <text
+                                            content={fitCell(gridRow.data[column.field])}
+                                            style={{
+                                              fg: selectedCell
+                                                ? selectionColors.foreground
+                                                : changedCell || mutationKind
+                                                  ? rowAccent
+                                                  : state.focused
+                                                    ? COLORS.text
+                                                    : COLORS.muted,
+                                              bg: selectedCell
+                                                ? selectionColors.background
+                                                : rowBackground,
+                                            }}
+                                          />
+                                        )}
+                                      </Button>
+                                      {visibleIndex < visibleColumns.length - 1 ? (
                                         <text
-                                          content={fitCell(gridRow.data[column.field])}
-                                          style={{
-                                            fg: selectedCell
-                                              ? selectionColors.foreground
-                                              : changedCell || mutationKind
-                                                ? rowAccent
-                                                : state.focused
-                                                  ? COLORS.text
-                                                  : COLORS.muted,
-                                            bg: selectedCell
-                                              ? selectionColors.background
-                                              : rowBackground,
-                                          }}
+                                          content="│"
+                                          style={{ fg: COLORS.border, bg: rowBackground }}
                                         />
-                                      )}
-                                    </Button>
-                                    {visibleIndex < visibleColumns.length - 1 ? (
-                                      <text
-                                        content="│"
-                                        style={{ fg: COLORS.border, bg: rowBackground }}
-                                      />
-                                    ) : null}
-                                  </box>
-                                )
-                              })}
-                            </box>
-                          )
-                        })
-                      ) : (
-                        <text
-                          content="Nenhum registro nesta página."
-                          style={{ fg: COLORS.muted }}
-                        />
-                      )}
+                                      ) : null}
+                                    </box>
+                                  )
+                                })}
+                              </box>
+                            )
+                          })
+                        ) : (
+                          <text
+                            content={translateUi("A consulta não retornou linhas.")}
+                            style={{ fg: COLORS.muted }}
+                          />
+                        )}
+                      </scrollbox>
                     </box>
                   ) : null}
                   {sideInspectorVisible || detailOnly ? (
@@ -2791,7 +2777,7 @@ export function DatabaseViewer({
 
             {!queryOpen ? (
               <box
-                id="tutorial-db-pagination"
+                id="tutorial-db-navigation"
                 style={{
                   height: compactActions ? 2 : 1,
                   flexShrink: 0,
@@ -2803,18 +2789,6 @@ export function DatabaseViewer({
                 <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
                   {selectedTable && view === "data" ? (
                     <>
-                      <InlineButton
-                        label={compactActions ? "[P] ‹" : "[P] Pág. anterior"}
-                        accent={COLORS.database}
-                        disabled={pageIndex === 0 || rowsLoading}
-                        onPress={() => changePage(-1)}
-                      />
-                      <InlineButton
-                        label={compactActions ? "[N] ›" : "[N] Próxima pág."}
-                        accent={COLORS.database}
-                        disabled={!pageData?.hasMore || rowsLoading}
-                        onPress={() => changePage(1)}
-                      />
                       <InlineButton
                         label="[H/←]"
                         accent={COLORS.database}
