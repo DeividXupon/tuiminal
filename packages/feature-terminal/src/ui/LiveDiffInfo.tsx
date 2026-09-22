@@ -1,7 +1,7 @@
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import { liveDiffTotals, type LiveDiffFile } from "../model/live-diff"
+import { type LiveDiffFile, liveDiffTotals } from "../model/live-diff"
 
 export function LiveDiffInfo({
   files,
@@ -59,7 +59,7 @@ export function LiveDiffInfo({
           <>
             <span fg={COLORS.graphAccent}>{rootsCount}</span>
             <span fg={COLORS.muted}>
-              {` ${translateUi("projetos observados")} · ${translateUi("atualização a cada 500 ms")}`}
+              {` ${translateUi("projetos observados")} · ${translateUi("atualização a cada 250 ms")}`}
             </span>
           </>
         )}

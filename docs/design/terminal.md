@@ -215,6 +215,18 @@ edited line within the hunk whose changes differ from its prior snapshot, or
 the last hunk when a file is first observed. Line-number shifts alone do not
 move the preview. Manually selected files leave scrolling to the user. This
 changes only Live Diff, not the Git Diffs tool.
+After the first patch establishes a baseline, lines newly present in each later
+snapshot receive a palette-aware blue gutter and text background that stays visible
+while those lines remain in the current patch. A light band shimmers across only
+the newly observed glyphs for 1.6 seconds. Later edits to the same file add their
+new lines to the blue set, including edits in another hunk; they do not clear the
+earlier highlights. The blue set survives switching files for up to 16 recently
+previewed files in one Live Diff session. The normal green/red diff backgrounds
+remain on baseline rows. Multiple new lines in one snapshot shimmer together;
+unchanged lines and line-number-only shifts are not added. When a line leaves
+the patch, it has no remaining row to highlight. Edits between two polling rounds
+are shown as one observed change. Highlighting never moves a manually scrolled
+preview or changes the PTY.
 New uses the palette's purple with a light sweep, Edit uses its warning yellow,
 elapsed time and additions use the palette's blue, and deletions use its red.
 The path shows the project, an omitted-ancestors marker and only the file's
@@ -238,7 +250,7 @@ explicit accessible local path. The file list is limited to the first 1,000
 changed paths per root and visibly warns when truncated.
 
 While its agent is running, one non-overlapping read-only Git round starts at
-most every 500 ms. A separate one-second display timer advances elapsed labels
+most every 250 ms. A separate one-second display timer advances elapsed labels
 without rereading Git. Git commands use argv, bounded output/time, disable
 optional index locks and external diff/textconv, and never stage, restore, commit,
 write project files or read credentials. Closing the companion aborts its reads.
@@ -267,6 +279,12 @@ sessions disappear on detach while the `tuiminal` session and its windows remain
 The private server keeps mouse mode enabled so the wheel enters tmux copy mode and
 scrolls pane history while its client occupies the embedded terminal's alternate
 screen. Native terminals use the embedded terminal's own bounded scrollback.
+Each embedded pane loads the hosting terminal's reported ANSI colors 0–15,
+default foreground/background and cursor color. Available colors are applied to
+existing content without restarting its PTY; explicit RGB output retains its own
+color. If the host does not report a color, the embedded terminal keeps its
+default for that slot. The workspace owns one renderer palette subscription for
+all panes and releases it when the workspace unmounts.
 Tuiminal owns all workspace content splits and hides them with the Terminal tab.
 Creating or splitting a terminal never changes the enclosing tmux layout; the
 explicit pinned-sidebar helper described above is the only enclosing split owned by

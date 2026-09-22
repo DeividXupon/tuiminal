@@ -29,6 +29,7 @@ export type ColorPalette = {
   diffAddedBg: string
   diffRemovedBg: string
   diffModifiedBg: string
+  diffRecentBg: string
   diffChangedBg: string
   diffRemovedChangedBg: string
   diffHunkBg: string

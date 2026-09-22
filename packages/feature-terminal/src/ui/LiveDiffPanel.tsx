@@ -26,8 +26,11 @@ import { collectLiveDiffSnapshot } from "../services/live-diff-snapshot"
 import { LiveDiffFileTable } from "./LiveDiffFileTable"
 import { LiveDiffInfo } from "./LiveDiffInfo"
 
-const POLL_MS = 500
+// Git snapshots refresh while the observed agent is running.
+const POLL_MS = 250
 const DISCOVERY_MS = 2000
+// Repository discovery keeps its own two-second cadence.
+const DISCOVERY_ROUNDS = Math.max(1, Math.ceil(DISCOVERY_MS / POLL_MS))
 const MAX_ROOTS = 4
 
 const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
@@ -174,7 +177,8 @@ export function LiveDiffPanel({
       if (busy || controller.signal.aborted) return
       busy = true
       try {
-        if (scans++ % 4 === 0) await discover()
+        const shouldDiscover = scans++ % DISCOVERY_ROUNDS === 0
+        if (shouldDiscover) await discover()
         await updateSnapshot(
           rootsRef.current,
           filesRef,
@@ -208,7 +212,7 @@ export function LiveDiffPanel({
     () => files.find((file) => fileKey(file) === selectedKey) ?? files[0] ?? null,
     [files, selectedKey],
   )
-  const patch = useLiveDiffPatch(selected, showDiffAuto, preview, diff)
+  const patch = useLiveDiffPatch(selected, showDiffAuto, files, COLORS.diffRecentBg, preview, diff)
   useEffect(() => {
     if (selectedKey && !files.some((file) => fileKey(file) === selectedKey)) setSelectedKey(null)
   }, [files, selectedKey])

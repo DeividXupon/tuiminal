@@ -12,7 +12,10 @@ import {
 } from "../packages/feature-terminal/src/model/live-diff"
 import {
   changedHunkLineIndex,
+  type LiveDiffPatchHistory,
   latestChangedHunkIndex,
+  observeLiveDiffPatch,
+  recentDiffLines,
 } from "../packages/feature-terminal/src/rendering/live-diff-hunks"
 import {
   abbreviatedFolder,
@@ -129,6 +132,51 @@ test("automatic Live Diff follows the newly changed hunk in the complete patch",
   expect(changedHunkLineIndex(first, 0)).toBe(1)
   expect(changedHunkLineIndex(first, 1)).toBe(5)
   expect(changedHunkLineIndex(changedFirst, 0, first)).toBe(2)
+})
+
+test("Live Diff identifies fresh lines on repeated edits to the same file", () => {
+  const first = `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,3 +1,3 @@\n before\n-old\n+first\n after\n@@ -10,2 +10,2 @@\n-other\n+second\n`
+  const second = first.replace("+first", "+first again")
+  const third = second.replace("+second", "+second again")
+  expect(recentDiffLines(null, first)).toEqual([])
+  expect(recentDiffLines(first, second)).toEqual([{ line: 2, kind: "added" }])
+  expect(recentDiffLines(second, third)).toEqual([{ line: 5, kind: "added" }])
+  expect(recentDiffLines(first, third)).toEqual([
+    { line: 2, kind: "added" },
+    { line: 5, kind: "added" },
+  ])
+  expect(recentDiffLines(third, third)).toEqual([])
+  expect(recentDiffLines(third, third.replace("@@ -10,2 +10,2 @@", "@@ -12,2 +12,2 @@"))).toEqual(
+    [],
+  )
+  const fourth = third.replace("+second again", "+second again\n+extra\n+another")
+  expect(recentDiffLines(third, fourth)).toEqual([
+    { line: 6, kind: "added" },
+    { line: 7, kind: "added" },
+  ])
+  const fifth = fourth.replace("-other", "-older")
+  expect(recentDiffLines(fourth, fifth)).toEqual([{ line: 4, kind: "removed" }])
+
+  const history = new Map<string, LiveDiffPatchHistory>()
+  expect(observeLiveDiffPatch(history, "a.ts", first).highlighted).toEqual([])
+  expect(observeLiveDiffPatch(history, "a.ts", second).highlighted).toEqual([
+    { line: 2, kind: "added" },
+  ])
+  const accumulated = observeLiveDiffPatch(history, "a.ts", third)
+  expect(accumulated.highlighted).toEqual([
+    { line: 2, kind: "added" },
+    { line: 5, kind: "added" },
+  ])
+  expect(accumulated.recent).toEqual([{ line: 5, kind: "added" }])
+  observeLiveDiffPatch(history, "b.ts", first)
+  expect(observeLiveDiffPatch(history, "a.ts", third)).toMatchObject({
+    highlighted: accumulated.highlighted,
+    recent: [],
+    changed: false,
+  })
+  for (let index = 0; index < 16; index++) observeLiveDiffPatch(history, `other-${index}`, first)
+  expect(history.size).toBe(16)
+  expect(observeLiveDiffPatch(history, "a.ts", third).highlighted).toEqual([])
 })
 
 test("reads staged plus unstaged as one final diff and counts untracked files", async () => {

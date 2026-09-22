@@ -129,11 +129,11 @@ export const TERMINAL_LIVE_DIFF_MESSAGES = [
     "모니터링 중인 프로젝트",
   ],
   [
-    "atualização a cada 500 ms",
-    "refresh every 500 ms",
-    "actualización cada 500 ms",
-    "500 ms ごとに更新",
-    "每 500 毫秒刷新",
-    "500ms마다 새로 고침",
+    "atualização a cada 250 ms",
+    "refresh every 250 ms",
+    "actualización cada 250 ms",
+    "250 ms ごとに更新",
+    "每 250 毫秒刷新",
+    "250ms마다 새로 고침",
   ],
 ] as const

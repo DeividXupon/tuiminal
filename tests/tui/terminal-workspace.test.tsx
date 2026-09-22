@@ -1,12 +1,19 @@
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { rmSync } from "node:fs"
-import type { DiffRenderable, EmbeddedTerminalRenderable, ScrollBoxRenderable } from "@opentui/core"
+import {
+  CodeRenderable,
+  type DiffRenderable,
+  type EmbeddedTerminalRenderable,
+  LineNumberRenderable,
+  RGBA,
+  type ScrollBoxRenderable,
+} from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { App } from "../../apps/cli/src/App"
-import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
 import {
   resetPinnedTerminalSidebarForTests,
@@ -417,7 +424,7 @@ test("removed Master Key actions are absent while new terminals stay in Tuiminai
   expect(starts).toHaveLength(1)
 })
 
-test("Live Diff polls every 500 ms beside an agent without restarting its terminal", async () => {
+test("Live Diff polls every 250 ms beside an agent without restarting its terminal", async () => {
   const root = "/fixture/live-worktree"
   const fingerprints = new Map<number, string>()
   const repository = spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root)
@@ -466,6 +473,10 @@ test("Live Diff polls every 500 ms beside an agent without restarting its termin
   expect(tui?.captureCharFrame()).toContain("packages/terminal.ts")
   expect(tui?.captureCharFrame()).toContain("New")
   expect(tui?.captureCharFrame()).toContain("Show diff auto: true")
+  const firstPolls = read.mock.calls.length
+  for (let attempt = 0; attempt < 14 && read.mock.calls.length < firstPolls + 2; attempt++)
+    await act(async () => Bun.sleep(50))
+  expect(read.mock.calls.length).toBeGreaterThanOrEqual(firstPolls + 2)
   await click(`live-diff-file-${sessionId}-0`)
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
   const firstRow = tui!.renderer.root.findDescendantById(`live-diff-file-${sessionId}-0`)!
@@ -528,8 +539,8 @@ test("Live Diff polls every 500 ms beside an agent without restarting its termin
   expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/terminal.ts")
   expect(tui?.captureCharFrame()).toContain("Show diff auto: true")
   expect(preview.scrollTop).toBe(0)
-  const twoHunks = (first: string, second: string) =>
-    `diff --git a/packages/terminal.ts b/packages/terminal.ts\n--- a/packages/terminal.ts\n+++ b/packages/terminal.ts\n@@ -1,32 +1,32 @@\n first context\n-old first\n+${first}\n${Array.from({ length: 30 }, (_, index) => ` context_${index}\n`).join("")}@@ -70,3 +70,3 @@\n before\n-old second\n+${second}\n after\n`
+  const twoHunks = (first: string, second: string, oldFirst = "old first") =>
+    `diff --git a/packages/terminal.ts b/packages/terminal.ts\n--- a/packages/terminal.ts\n+++ b/packages/terminal.ts\n@@ -1,32 +1,32 @@\n first context\n-${oldFirst}\n+${first}\n${Array.from({ length: 30 }, (_, index) => ` context_${index}\n`).join("")}@@ -70,3 +70,3 @@\n before\n-old second\n+${second}\n after\n`
   patchContent = twoHunks("new first", "new second")
   fingerprints.set(0, "hunk-one")
   await act(async () => Bun.sleep(650))
@@ -537,21 +548,65 @@ test("Live Diff polls every 500 ms beside an agent without restarting its termin
   const completeDiff = tui!.renderer.root.findDescendantById(
     `live-diff-code-${sessionId}`,
   ) as DiffRenderable
+  const lineBackground = (line: number) =>
+    (
+      tui?.renderer.root.findDescendantById(`live-diff-code-${sessionId}`) as
+        | DiffRenderable
+        | undefined
+    )
+      ?.getChildren()
+      .find((child): child is LineNumberRenderable => child instanceof LineNumberRenderable)
+      ?.getLineColors()
+      .content.get(line)
+      ?.toInts()
   expect(completeDiff.getHunkRowOffsets()).toHaveLength(2)
   expect(preview.scrollTop).toBeGreaterThan(0)
   expect(tui?.captureCharFrame()).toContain("new second")
-  patchContent = twoHunks("newer first", "new second")
+  patchContent = twoHunks("newer first", "new second", "older first")
   fingerprints.set(0, "hunk-two")
   await act(async () => Bun.sleep(650))
   await tui?.renderOnce()
   expect(preview.scrollTop).toBe(0)
   expect(tui?.captureCharFrame()).toContain("newer first")
-  patchContent = twoHunks("newer first", "newer second")
+  expect(lineBackground(1)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(2)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  const code = completeDiff
+    .getChildren()
+    .flatMap((child) => child.getChildren())
+    .find((child): child is CodeRenderable => child instanceof CodeRenderable)
+  if (!code) throw new Error("Live Diff code renderable is missing")
+  const shimmerEdge =
+    RGBA.fromHex(COLORS.diffRecentBg)
+      .toInts()
+      .slice(0, 3)
+      .reduce((sum, value) => sum + value, 0) > 420
+      ? RGBA.fromHex("#496dad").toInts()
+      : RGBA.fromHex("#9fe7ff").toInts()
+  let sawShimmer = false
+  for (let attempt = 0; attempt < 8 && !sawShimmer; attempt++) {
+    await act(async () => Bun.sleep(60))
+    await tui?.renderOnce()
+    sawShimmer =
+      tui
+        ?.captureSpans()
+        .lines[code.screenY + 2]?.spans.some(
+          (span) => span.fg.toInts().join() === shimmerEdge.join(),
+        ) ?? false
+  }
+  expect(sawShimmer).toBe(true)
+  patchContent = twoHunks("newer first", "newer second", "older first")
   fingerprints.set(0, "hunk-three")
   await act(async () => Bun.sleep(650))
   await tui?.renderOnce()
   expect(preview.scrollTop).toBeGreaterThan(0)
   expect(tui?.captureCharFrame()).toContain("newer second")
+  expect(lineBackground(1)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(2)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  await act(async () => Bun.sleep(1700))
+  await tui?.renderOnce()
+  expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   fingerprints.set(19, "second")
   await act(async () => Bun.sleep(650))
   await tui?.renderOnce()
@@ -563,6 +618,13 @@ test("Live Diff polls every 500 ms beside an agent without restarting its termin
   await click(`live-diff-file-${sessionId}-1`)
   await act(async () => Bun.sleep(50))
   expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/terminal.ts")
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await tui?.renderOnce()
+    if (lineBackground(35)?.join() === RGBA.fromHex(COLORS.diffRecentBg).toInts().join()) break
+    await act(async () => Bun.sleep(25))
+  }
+  expect(lineBackground(2)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   fingerprints.set(18, "third")
   await act(async () => Bun.sleep(650))
   await tui?.renderOnce()

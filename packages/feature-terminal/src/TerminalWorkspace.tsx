@@ -15,6 +15,7 @@ import { useAgentNotifications } from "./hooks/use-agent-notifications"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
 import {
   clearTerminalSidebar,
@@ -82,6 +83,7 @@ export function FreeTerminal({
   externalSidebarHost?: boolean
 }) {
   const renderer = useRenderer()
+  const terminalPaletteSequence = useTerminalPalette()
   const dimensions = useTerminalDimensions()
   const workspaceRef = useRef<BoxRenderable | null>(null)
   const terminal = useTerminalSessions(active)
@@ -624,6 +626,7 @@ export function FreeTerminal({
                 toolActive={active}
                 visible={visible}
                 appearanceKey={appearanceKey}
+                paletteSequence={terminalPaletteSequence}
                 layout={layout}
                 onActivate={selectSession}
                 onReady={terminalReady}

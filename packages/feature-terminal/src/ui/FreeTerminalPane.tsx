@@ -25,6 +25,7 @@ type PaneProps = {
   toolActive?: boolean
   visible: boolean
   appearanceKey: string
+  paletteSequence: string
   layout: FreeTerminalPaneLayout
   onActivate: (id: string) => void
   onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
@@ -50,6 +51,7 @@ function samePane(previous: PaneProps, next: PaneProps) {
     previous.toolActive === next.toolActive &&
     previous.visible === next.visible &&
     previous.appearanceKey === next.appearanceKey &&
+    previous.paletteSequence === next.paletteSequence &&
     previous.layout.top === next.layout.top &&
     previous.layout.left === next.layout.left &&
     previous.layout.width === next.layout.width &&
@@ -75,6 +77,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   active,
   toolActive,
   visible,
+  paletteSequence,
   layout,
   onActivate,
   onReady,
@@ -89,6 +92,10 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   const borders: Array<"top" | "left"> = []
   if (layout.borderTop) borders.push("top")
   if (layout.borderLeft) borders.push("left")
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (terminal && paletteSequence) terminal.write(paletteSequence)
+  }, [paletteSequence])
   useEffect(() => {
     const terminal = terminalRef.current
     if (!terminal) return
