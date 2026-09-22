@@ -4,6 +4,7 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { ScrollBoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
@@ -227,6 +228,12 @@ test("direct query preserves the composite key from result through staging, revi
 
 test("SQL grid loads overlapping 50-row windows only after crossing a boundary", async () => {
   await mountQuery("SELECT id FROM users ORDER BY id", "compact", 0, 260)
+  const grid = tui?.renderer.root.findDescendantById("database-query-safety-results")
+  if (!(grid instanceof ScrollBoxRenderable)) throw new Error("Missing SQL result grid")
+  await act(async () => {
+    grid.focus()
+    await tui?.renderOnce()
+  })
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "database-query-safety-results")
   expect(tui?.renderer.root.findDescendantById("database-query-safety-result-row-49")).toBeDefined()
   expect(
