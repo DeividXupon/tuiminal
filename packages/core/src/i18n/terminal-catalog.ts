@@ -1,7 +1,9 @@
+import { TERMINAL_LIVE_DIFF_MESSAGES } from "./terminal-live-diff-catalog"
 import { TERMINAL_TMUX_MESSAGES } from "./terminal-tmux-catalog"
 
 export const TERMINAL_MESSAGES = [
   ...TERMINAL_TMUX_MESSAGES,
+  ...TERMINAL_LIVE_DIFF_MESSAGES,
   ["Tuiminais", "Tuiminals", "Tuiminales", "Tuiminal", "Tuiminal", "Tuiminal"],
   ["Outros", "Others", "Otros", "その他", "其他", "기타"],
   [

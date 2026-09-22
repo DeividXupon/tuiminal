@@ -124,6 +124,7 @@ function SidebarApp({
   const [replica, setReplica] = useState<PinnedTerminalSidebarReplica | null>(null)
   const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(null)
   const [localFolder, setLocalFolder] = useState<string | null>(null)
+  const [localCollapsedFolderIds, setLocalCollapsedFolderIds] = useState<string[]>([])
   const [leaderActive, setLeaderActive] = useState(false)
   const [focusRequest, setFocusRequest] = useState(0)
   useEffect(() => {
@@ -165,6 +166,7 @@ function SidebarApp({
   ]
   const activeSessionId = localActiveSessionId ?? replica?.activeSessionId ?? null
   const selectedFolder = localFolder ?? replica?.selectedFolder ?? DEFAULT_FOLDER
+  const collapsedFolderIds = replica?.collapsedFolderIds ?? localCollapsedFolderIds
   const masterKey = replica?.masterKey ?? getUiSettings().terminalMasterKey
   const managedSessions = useMemo(() => sessions.filter((session) => !session.external), [sessions])
   const sections = useMemo(() => terminalSections(managedSessions), [managedSessions])
@@ -178,9 +180,9 @@ function SidebarApp({
   const disabled = useCallback(
     (key: string) => {
       if (["v", "s"].includes(key)) return !canSplit
-      if (["n", "c", "/", "t"].includes(key)) return managedSessions.length >= MAX_SESSIONS
+      if (["n", "c", "/"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key === "r" && activeSession?.tmux) return true
-      if (["r", "x", "m", "e", "o", "tab", "p", "1", "a", "f"].includes(key)) return !activeSession
+      if (["r", "x", "m", "e", "1"].includes(key)) return !activeSession
       return key === "2" && activeSection?.panes.length !== 2
     },
     [activeSection, activeSession, canSplit, managedSessions.length],
@@ -216,11 +218,27 @@ function SidebarApp({
   const selectFolder = useCallback(
     async (id: string) => {
       setLocalFolder(id)
-      if (!replica) return
-      if (await sendPinnedSidebarTarget(endpoint, { folderId: id }))
-        await selectPinnedTmuxHost(sourceSocket, hostPane)
+      if (!replica) {
+        setLocalCollapsedFolderIds((current) =>
+          current.includes(id) ? current.filter((folderId) => folderId !== id) : [...current, id],
+        )
+        return
+      }
+      setReplica((current) =>
+        current
+          ? {
+              ...current,
+              collapsedFolderIds: current.collapsedFolderIds.includes(id)
+                ? current.collapsedFolderIds.filter((folderId) => folderId !== id)
+                : [...current.collapsedFolderIds, id],
+            }
+          : current,
+      )
+      // Folding is local sidebar navigation. Keep the helper pane selected;
+      // only activating content or an app-only action returns to the host pane.
+      await sendPinnedSidebarTarget(endpoint, { folderId: id })
     },
-    [endpoint, hostPane, replica, sourceSocket],
+    [endpoint, replica],
   )
   const focusSidebar = useCallback(() => {
     setLeaderActive(false)
@@ -258,7 +276,7 @@ function SidebarApp({
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["/", "t", "d", "e", "o", "g"].includes(key))
+      if (mode === "app" || ["/", "e", "g"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },
@@ -293,18 +311,19 @@ function SidebarApp({
         focusRequest={focusRequest}
         sessions={sessions}
         folders={folders}
+        collapsedFolderIds={collapsedFolderIds}
         selectedFolder={selectedFolder}
         activeSessionId={activeSessionId}
         width={Math.max(16, dimensions.width)}
         height={Math.max(1, dimensions.height - actionHeight)}
         masterKey={masterKey}
         onSelectFolder={(id) => void selectFolder(id)}
+        onToggleFolder={() => undefined}
         onActivate={(id) => void activate(id)}
         onActions={() => setLeaderActive(true)}
         onMasterKey={() => setLeaderActive(true)}
         onEscape={focusSidebar}
         onNew={() => undefined}
-        onFolder={() => undefined}
       />
       {leaderActive && (
         <TerminalActions

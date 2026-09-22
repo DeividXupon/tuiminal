@@ -37,7 +37,7 @@ Herdr separates several concerns:
    it. Attention rolls up through panes, tabs and workspaces.
 
 Relevant reference files are `src/detect/mod.rs`, `src/detect/manifest.rs`,
-`src/detect/manifests/{codex,claude,gemini,opencode}.toml`,
+`src/detect/manifests/`,
 `src/pane/agent_detection.rs`, `src/terminal/state.rs`, `src/pane/state.rs`,
 `src/app/actions.rs`, and `src/integration/assets/opencode/herdr-agent-state.js`.
 The public [agent documentation](https://herdr.dev/docs/agents/) and
@@ -80,16 +80,23 @@ when output/dimensions changed. Raw OSC title decoding is incremental across byt
 chunks, bounded, and independent of the visible terminal.
 
 Identified agents are sampled every 250 ms, even when their section or tool is
-inactive. The local profiles cover recognizable Codex, Claude Code, Gemini and
-OpenCode screen controls. Codex and Claude also use supported OSC 0/2 title
-signals. Idle Codex titles only finish a turn after an observed busy title;
-an arbitrary shell title cannot claim completion. Viewer screens preserve state.
+inactive. Local live-control profiles cover Codex, Claude Code, Gemini, OpenCode,
+Amp, Antigravity, Cline, GitHub Copilot, Cursor Agent, Devin, Droid, Grok,
+Hermes Agent, Kilo Code, Kimi Code, Kiro CLI, Letta Code, Maki, Muse, Pi,
+Qoder CLI and Qwen Code. Supported OSC 0/2 title status supplements the screen
+for Codex, Claude, Amp, Grok, Hermes, Kiro, Letta and Qwen. Some profiles have
+only busy or blocker evidence: they stay unknown when no reliable live idle
+control exists. OMP and MastraCode are identified by name but remain unknown
+without an authoritative integration or safe local screen signal. Idle Codex
+titles only finish a turn after an observed busy title; an arbitrary shell title
+cannot claim completion. Viewer screens preserve state.
 The OpenCode profile treats its bottom `esc interrupt` control as working even when
 the same row also contains command hints, and treats the idle `ctrl+p commands`
 footer as an explicit prompt. Its current tool rows refine working into reading,
 searching, thinking, writing or running without using conversation prose.
 Other identified agents enter the Agents list but have unknown activity until a
-profile exists. No agent hook installation, agent socket API, remote rule updates,
+profile exists. This is a fixed, independent TypeScript subset, not Herdr's
+TOML manifest engine or its lifecycle integration coverage. No agent hook installation, agent socket API, remote rule updates,
 session restore or agent metadata API is included in this MVP. The optional tmux
 transport and explicit mirrors are described in the [workspace contract](terminal.md).
 
@@ -120,6 +127,13 @@ using one shared 100 ms timer. The timer stops when no running agent is working,
 when the Terminal tool is inactive, and on unmount. Animation updates only the
 sidebar and preserves scrolling, focus and terminal instances. Color supplements
 the marker rather than being the only signal.
+
+An offscreen transition into `blocked` or `done` emits one global notification
+per agent/state transition. Merely changing task metadata or redrawing the same
+state does not notify again. Visible panes, including both halves of a split,
+do not pop a redundant alert. A notification click opens the exact existing
+session in Terminal and dismisses the card; its close control only dismisses.
+The notification does not take keyboard focus, submit input, or auto-approve.
 
 A live working row can additionally say reading, searching, thinking, writing or
 running. These are descriptions of the agent's displayed activity, not access to
@@ -161,8 +175,8 @@ title for each prompt.
 | Other recognized/configured agents | Accepts useful OSC titles with the same sanitization and common app-prefix handling, without requiring an activity profile |
 
 Pi and Kimi executable/module identities are recognized alongside the existing
-agent commands. Generic support includes tools such as Copilot, Aider, Goose,
-Amp and Cursor Agent **when they publish a useful title**; it does not imply every
+agent commands. Generic support includes tools such as Aider and Goose
+**when they publish a useful title**; it does not imply every
 version or configuration does so. Missing or disabled titles fall back to the
 terminal name. Arbitrary title components cannot be reliably separated into a
 task and project without a typed provider protocol.
@@ -199,14 +213,26 @@ refs, siblings, native focus and process handles. Failed process inspection keep
 the previous identity and retries; screen observation continues. An unavailable
 observer can still use title signals, otherwise its activity is unknown.
 
+Every launch starts with only a bounded replay/title observer. The native shadow
+terminal is allocated lazily after process inspection recognizes an agent, and its
+queued output is applied in batches before screen classification. Repeated scans
+reuse the last signal until output or title revision changes; timing-based idle and
+unknown transitions still advance on their normal polling cadence. When the agent
+ends, the shadow terminal is released while later bytes remain eligible for a new
+agent identity. The visible terminal always receives output immediately.
+
 This is heuristic observation, not a process-control authority. Unsupported UI
 versions, localized agent controls, small/wrapped screens, opaque wrappers, remote
 sessions and very short turns can be missed. Windows cannot distinguish a
 background agent using CIM alone. Unrecognized CLIs require an additional command
 identity, and that registration does not grant a state profile. No inference from
 CPU load, generic PTY output volume or elapsed silence is treated as completion.
+The optional [Live Diff companion](terminal.md#live-diff-companion) reads Git
+worktree state independently. It neither identifies an agent nor changes these
+activity transitions, and its file changes are not attributed to the agent.
 
-Regression sources cover foreground identity, runtime wrappers, current versus
+Regression sources cover foreground identity, runtime wrappers, expanded live
+controls and title signals, background notification navigation, current versus
 historical prompts, approval priority, split OSC sequences, unread completion,
 viewer/redraw stabilization, hidden sections, inactive tools, native screen
 erasure, observer disposal, task-title parsing/lifecycle, tmux title transport,

@@ -1,4 +1,5 @@
 import type { AgentActivity, AgentProfile, AgentSignal } from "./agent-state"
+import { detectExtendedAgentScreen } from "./agent-screen-extended"
 
 // Small, local profiles informed by Herdr's detector. See docs/design/terminal-agents.md.
 // Match live controls and activity rows, never arbitrary words in a transcript.
@@ -173,35 +174,70 @@ function isViewer(footer: string) {
   )
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Title markers are intentionally scoped by agent and ordered by blocked/working/idle priority.
 export function detectAgentTitle(
   profile: AgentProfile,
   title: string,
   titleFinished = false,
 ): AgentSignal {
   if (
-    profile === "codex" &&
-    /(?:^|\s[|—]\s)(?:\[\s*[!.]\s*\]\s*)?Action Required(?:$|\s[|—]\s)/i.test(title)
+    (profile === "codex" &&
+      /(?:^|\s[|—]\s)(?:\[\s*[!.]\s*\]\s*)?Action Required(?:$|\s[|—]\s)/i.test(title)) ||
+    (profile === "amp" && /plugin confirmation needed/i.test(title)) ||
+    (profile === "grok" && /action required/i.test(title)) ||
+    (profile === "hermes" && /^⚠[︎️]?(?:\s|$)/u.test(title)) ||
+    (profile === "letta" && /^\[\s*[!.]\s*\]\s*Action Required(?:\s*\||$)/i.test(title)) ||
+    (profile === "qwen" && /^✳︎?\s/u.test(title))
   ) {
     return { state: "blocked", source: "title" }
   }
   if (
     (profile === "codex" && /(?:^|\s)[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?:\s|$)/u.test(title)) ||
-    (profile === "claude" && /^[\u2800-\u28ff◐-◓]\s/u.test(title))
+    (profile === "claude" && /^[\u2800-\u28ff◐-◓]\s/u.test(title)) ||
+    (profile === "amp" && /^[\u2800-\u28ff]\s/u.test(title)) ||
+    (profile === "grok" && /(?:^|\s)[\u2801-\u28ff](?:\s|$)/u.test(title)) ||
+    (profile === "hermes" && /^⏳[︎️]?(?:\s|$)/u.test(title)) ||
+    (profile === "kiro" && /^[◐◓◑◒/|\\-]\s+kiro:/i.test(title)) ||
+    (profile === "letta" && /(?:^|\s)[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?:\s|$)/u.test(title)) ||
+    (profile === "qwen" && /^◐︎?\s/u.test(title))
   )
     return working("", "title")
   if (
     (profile === "claude" && /^✳\s/u.test(title)) ||
-    (profile === "codex" && titleFinished && title.trim())
+    (profile === "codex" && titleFinished && title.trim()) ||
+    (profile === "amp" && / - amp - /i.test(title)) ||
+    (profile === "grok" && /(?:^| - )grok$/i.test(title) && !/[\u2800-\u28ff]/u.test(title)) ||
+    (profile === "hermes" && /^✓[︎️]?(?:\s|$)/u.test(title))
   )
     return { state: "idle", source: "title" }
   return UNKNOWN
 }
 
 const PROFILES: Record<AgentProfile, (lines: string[]) => AgentSignal> = {
+  amp: (lines) => detectExtendedAgentScreen("amp", lines),
+  antigravity: (lines) => detectExtendedAgentScreen("antigravity", lines),
   codex,
   claude,
+  cline: (lines) => detectExtendedAgentScreen("cline", lines),
+  copilot: (lines) => detectExtendedAgentScreen("copilot", lines),
+  cursor: (lines) => detectExtendedAgentScreen("cursor", lines),
+  devin: (lines) => detectExtendedAgentScreen("devin", lines),
+  droid: (lines) => detectExtendedAgentScreen("droid", lines),
   gemini,
+  grok: (lines) => detectExtendedAgentScreen("grok", lines),
+  hermes: (lines) => detectExtendedAgentScreen("hermes", lines),
+  kilo: (lines) => detectExtendedAgentScreen("kilo", lines),
+  kimi: (lines) => detectExtendedAgentScreen("kimi", lines),
+  kiro: (lines) => detectExtendedAgentScreen("kiro", lines),
+  letta: (lines) => detectExtendedAgentScreen("letta", lines),
+  maki: (lines) => detectExtendedAgentScreen("maki", lines),
+  mastracode: (lines) => detectExtendedAgentScreen("mastracode", lines),
+  muse: (lines) => detectExtendedAgentScreen("muse", lines),
+  omp: (lines) => detectExtendedAgentScreen("omp", lines),
   opencode,
+  pi: (lines) => detectExtendedAgentScreen("pi", lines),
+  qodercli: (lines) => detectExtendedAgentScreen("qodercli", lines),
+  qwen: (lines) => detectExtendedAgentScreen("qwen", lines),
   generic: () => UNKNOWN,
 }
 

@@ -6,7 +6,6 @@ import { act, useState } from "react"
 import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
-import * as manual from "../../packages/feature-terminal/src/services/tmux-discovery"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 
@@ -81,10 +80,6 @@ async function mount(initial: Discovered["panes"] = [], enabled = true) {
     available: true,
     panes: snapshot,
   }))
-  const picker = spyOn(manual, "discoverTmuxPanes").mockImplementation(async () => ({
-    available: true,
-    panes: snapshot.map(({ pane }) => pane),
-  }))
   const processes = spyOn(inspection, "readTerminalProcesses").mockImplementation(async () =>
     snapshot.flatMap(({ pane, agent }, index) =>
       agent
@@ -130,7 +125,6 @@ async function mount(initial: Discovered["panes"] = [], enabled = true) {
   )
   restores.push(
     () => scan.mockRestore(),
-    () => picker.mockRestore(),
     () => processes.mockRestore(),
     () => start.mockRestore(),
   )
@@ -191,7 +185,7 @@ test("restores owned panes in Tuiminais and groups ordinary external panes under
   const frame = tui!.captureCharFrame()
   expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")).toBeDefined()
   expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-tmux")).toBeDefined()
-  expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-others")).toBeDefined()
+  expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-others")).toBeUndefined()
   expect(frame).toContain("Tuiminais")
   expect(frame).toMatch(/Sessões\s+2/)
   expect(frame).toMatch(/Agentes\s+1/)
@@ -225,7 +219,7 @@ test("automatic arrivals cannot steal a command dialog's focus", async () => {
   expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
 })
 
-test("closing an automatic mirror suppresses rediscovery but the manual picker can reopen it", async () => {
+test("closing an automatic mirror suppresses rediscovery for this run", async () => {
   const { scan, start, stop } = await mount([agent(1)])
   await waitFor(() => start.mock.calls.length === 1)
   await leader("x")
@@ -233,19 +227,12 @@ test("closing an automatic mirror suppresses rediscovery but the manual picker c
   await waitFor(() => scan.mock.calls.length > scans)
   expect(start).toHaveBeenCalledTimes(1)
   expect(stop).toHaveBeenCalledTimes(1)
-  await leader("t")
-  await waitFor(() => tui?.captureCharFrame().includes("agents:1.1") ?? false)
-  await act(async () => tui?.mockInput.pressEnter())
-  await waitFor(() => start.mock.calls.length === 2)
-  expect(start.mock.calls[1]?.[0].autoMirror).toBe(false)
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-tmux")).toBeUndefined()
 })
 
-test("manual mirrors are deduplicated and discovery respects the workspace limit", async () => {
+test("automatic discovery deduplicates panes and respects the workspace limit", async () => {
   const { start, setAgents } = await mount()
   setAgents(Array.from({ length: 14 }, (_, index) => agent(index + 1)))
-  await leader("t")
-  await waitFor(() => tui?.captureCharFrame().includes("agents:1.1") ?? false)
-  await act(async () => tui?.mockInput.pressEnter())
   await waitFor(() => start.mock.calls.length === 12)
   const targets = start.mock.calls.map(([command]) => command.tmux?.paneId)
   expect(new Set(targets).size).toBe(12)

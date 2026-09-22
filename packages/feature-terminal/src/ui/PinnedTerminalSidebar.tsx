@@ -33,6 +33,7 @@ export function PinnedTerminalSidebar({
       active={active}
       sessions={view.sessions}
       folders={view.folders}
+      collapsedFolderIds={view.collapsedFolderIds}
       selectedFolder={view.selectedFolder}
       activeSessionId={view.activeSessionId}
       width={view.width}
@@ -40,11 +41,11 @@ export function PinnedTerminalSidebar({
       masterKey={view.masterKey}
       focusRequest={snapshot.focusRevision}
       onSelectFolder={(id) => open(() => view.onSelectFolder(id))}
+      onToggleFolder={(id) => open(() => view.onToggleFolder(id))}
       onActivate={(id) => open(() => view.onActivate(id))}
       onActions={() => open(view.onActions)}
       onMasterKey={() => open(view.onActions)}
       onNew={() => open(view.onNew)}
-      onFolder={() => open(view.onFolder)}
     />
   )
 }

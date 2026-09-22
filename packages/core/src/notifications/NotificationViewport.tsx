@@ -40,12 +40,14 @@ export function NotificationViewport({
   notifications,
   now,
   onDismiss,
+  onActivate,
   onPause,
   onResume,
 }: {
   notifications: VisibleNotification[]
   now: number
   onDismiss: (id: string) => void
+  onActivate: (notification: AppNotification) => void
   onPause: () => void
   onResume: () => void
 }) {
@@ -81,9 +83,15 @@ export function NotificationViewport({
         const progress = notificationProgress(remainingMs, notification.durationMs)
         const progressColumns = Math.max(1, width - 3)
         return (
+          // biome-ignore lint/a11y/noStaticElementInteractions: Mouse activation is optional; the card remains non-focusable so terminal keyboard focus is preserved.
           <box
             id={`app-notification-${index}`}
             key={notification.id}
+            onMouseDown={(event) => {
+              if (!notification.onPress || dismissStartedAt !== null) return
+              event.preventDefault()
+              onActivate(notification)
+            }}
             style={{
               position: "relative",
               left: motion.offset,
@@ -117,7 +125,10 @@ export function NotificationViewport({
               <text
                 id={`app-notification-dismiss-${index}`}
                 content=" × "
-                onMouseDown={() => onDismiss(notification.id)}
+                onMouseDown={(event) => {
+                  event.stopPropagation()
+                  onDismiss(notification.id)
+                }}
                 style={{ fg: accent }}
               />
             </box>

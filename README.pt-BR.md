@@ -560,11 +560,8 @@ seu processo executando e dispensa o painel durante esta execução. A descobert
 Defina `TUIMINAL_TERMINAL_AUTO_MIRROR=0` antes de iniciar para desativá-la; os
 painéis persistentes do Tuiminal ainda são restaurados.
 
-Use a Master Key seguida de `[T]` para espelhar outro painel manualmente ou reabrir
-um espelho dispensado no servidor tmux do Tuiminal, padrão ou herdado. Escolha a linha com a
-sessão, janela, painel e comando do
-seu agente, usando o mouse ou `[Enter]`. Painéis ao lado do Tuiminal na mesma sessão
-tmux ficam disponíveis. O espelho carrega a tela que já existe e continua seguindo
+Painéis ao lado do Tuiminal na mesma sessão tmux são descobertos automaticamente.
+O espelho carrega a tela que já existe e continua seguindo
 esse painel mesmo quando outra janela é selecionada no terminal original.
 O teclado é compartilhado; fechar o espelho apenas desconecta o Tuiminal.
 As atualizações aceleram enquanto a saída muda e são solicitadas imediatamente
@@ -586,7 +583,7 @@ a tela atual do aplicativo; não importa o histórico de rolagem, a interface do
 de cópia do tmux ou a entrada do mouse. Terminais já abertos fora do tmux aparecem
 como metadados somente para leitura em **Outros**, mas ainda não podem ser espelhados;
 ao selecionar um deles, o Tuiminal informa o TTY original sem substituir o painel ativo.
-O seletor informa essa limitação. Sem tmux, crie terminais
+Sem tmux, crie terminais
 dentro do Tuiminal para usar divisões, estados dos agentes e execução em segundo
 plano com o backend nativo.
 
@@ -594,11 +591,13 @@ plano com o backend nativo.
 
 - Manter até 12 terminais, com no máximo dois por seção, lado a lado ou um acima do outro.
 - **Novo terminal** sempre abre uma seção separada. Para dividir a seção atual, use a Master Key seguida de `[V]` (lado) ou `[S]` (abaixo).
-- Usar um layout compacto inspirado no Herdr: sessões numeradas em duas linhas acima da lista de agentes. Um shell aguardando mostra `○ Ocioso`; `● Executando` aparece apenas enquanto há uma ferramenta ou comando em primeiro plano. A segunda linha mostra diretório, comando ou código de saída e o backend `native`/`tmux`; referências externas somente para leitura mostram seu TTY. A seção ativa recebe uma barra de destaque. Os terminais ocupam toda a área restante até os cantos, e divisões usam apenas um separador.
-- Novos terminais e comandos personalizados abrem em **Tuiminais**. Crie outras pastas, renomeie terminais e mova seções quando precisar. As pastas personalizadas e a posição das sessões tmux são salvas por projeto fora da pasta do projeto e restauradas na próxima abertura. A pasta reservada **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Sessões divididas mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
+- Usar um layout compacto inspirado no Herdr: a lista de agentes aparece primeiro na sidebar, seguida pelas sessões numeradas em duas linhas. Um shell aguardando mostra `○ Ocioso`; `● Executando` aparece apenas enquanto há uma ferramenta ou comando em primeiro plano. A segunda linha mostra diretório, comando ou código de saída e o backend `native`/`tmux`; referências externas somente para leitura mostram seu TTY. A seção ativa recebe uma barra de destaque. Os terminais ocupam toda a área restante até os cantos, e divisões usam apenas um separador.
+- Novos terminais e comandos personalizados abrem em **Tuiminais**. Renomeie terminais quando precisar. Clique no cabeçalho de uma pasta, ou destaque-o com `[↑/↓]` / `[J/K]` e pressione `[Enter]`, para recolher ou expandir suas sessões. Esse estado e a posição reservada das sessões tmux são salvos por projeto fora da pasta do projeto e restaurados na próxima abertura. Somente pastas reservadas não vazias aparecem. A pasta **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Sessões divididas mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
 - Os nomes dos terminais acompanham a ferramenta em execução automaticamente: `zsh` → `lazygit` → `zsh`. Agentes reconhecidos mostram o nome do CLI, como `codex`, mesmo quando o runtime informa `MainThread` ou `node`. Isso também funciona nos espelhos tmux. Nomes definidos manualmente pela ação `[E]` da Master Key permanecem fixos, inclusive após reiniciar.
 - Acompanhar agentes reconhecidos exclusivamente em **Agentes**, com um loader animado enquanto trabalham. **Sessões** mostra os demais terminais. As pastas e divisões originais são preservadas, e o terminal volta para Sessões quando o agente encerra.
-- Fixar a sidebar ativa com a Master Key seguida de `[B]` para manter Sessões e Agentes visíveis ao navegar pelas ferramentas do Tuiminal. Use `[L]` no menu de ações para focá-la, percorra Sessões e Agentes continuamente com `[↑/↓]` ou `[J/K]` e pressione `[Enter]` para abrir o item destacado. Um light sweep rápido atravessa o fundo inteiro da barra quando ela recebe o foco. Dentro do tmux, o Tuiminal também mantém um split lateral esquerdo marcado em cada janela do servidor atual: depois de selecionar esse split pela navegação normal do tmux, seus controles diretos já funcionam, e ele continua clicável enquanto o terminal vizinho está focado. O split ao lado do Tuiminal abre o alvo no workspace Terminal, enquanto outra janela seleciona diretamente seu painel tmux existente quando possível. A Master Key desse split abre as mesmas ações e executa ações sem diálogo sem sair da janela. Soltar a barra remove apenas esses splits auxiliares e restaura a configuração anterior de mouse do tmux.
+- Abrir **Live Diff** com a Master Key seguida de `[D]` para acompanhar, ao lado do agente, alterações Git em um ou mais projetos e worktrees. Linhas longas do diff quebram dentro do painel, que mantém o patch completo com as três linhas de contexto usuais. A lista é ordenada pela alteração mais recente e acompanha a seleção. O preview segue automaticamente o arquivo mais recente e rola até o hunk alterado por último; selecionar outro arquivo pausa esse acompanhamento, e voltar ao mais recente o reativa. Pressione `[Enter]` em um arquivo para focar o código: `[J/K]` ou `[↑/↓]` rolam uma linha e `[H/L]` ou `[←/→]` rolam meia página. No código, `[Esc]` reativa o diff automático, seleciona o arquivo mais recente e volta à lista. As linhas alinham New/Edit, caminho compacto com projeto/pasta pai/arquivo, tempo e contagens coloridas de `+`/`−` em colunas. Nomes de pastas usam no máximo 12 células; o cabeçalho do arquivo selecionado mantém o caminho completo. **Info** mostra `Show diff auto: true/false`, contagens e estado coloridos conforme o tema, o último projeto alterado e a dica contextual de `[Esc]` enquanto o código está focado. É possível adicionar outro diretório manualmente pelo painel.
+- Fixar a sidebar ativa com a Master Key seguida de `[B]` para manter Sessões e Agentes visíveis ao navegar pelas ferramentas do Tuiminal. Use `[L]` no menu de ações para focá-la, percorra cabeçalhos de pastas, Sessões e Agentes continuamente com `[↑/↓]` ou `[J/K]` e pressione `[Enter]` para alternar uma pasta ou abrir o item destacado. Um light sweep rápido atravessa o fundo inteiro da barra quando ela recebe o foco. Dentro do tmux, o Tuiminal também mantém um split lateral esquerdo marcado em cada janela do servidor atual: depois de selecionar esse split pela navegação normal do tmux, seus controles diretos já funcionam, e ele continua clicável enquanto o terminal vizinho está focado. Recolher ou expandir uma pasta mantém esse split da sidebar selecionado. O split ao lado do Tuiminal abre um terminal selecionado no workspace Terminal, enquanto outra janela seleciona diretamente seu painel tmux existente quando possível. A Master Key desse split abre as mesmas ações e executa ações sem diálogo sem sair da janela. Soltar a barra remove apenas esses splits auxiliares e restaura a configuração anterior de mouse do tmux.
+- Digitar `exit` em um shell interativo fecha o terminal e o remove de Sessões; comandos personalizados concluídos mantêm a saída final disponível para consulta e reinício.
 - Preservar cores, cursor, saída e processos ao redimensionar, trocar de seção ou de ferramenta. Reinícios aguardam o encerramento do processo anterior; ao sair, o Tuiminal desconecta terminais tmux persistentes e encerra apenas processos nativos próprios.
 
 Em `[,]` → **Terminal**, escolha a **Master Key** (padrão `[Ctrl+B]`). Ao pressioná-la,
@@ -609,16 +608,13 @@ uma lista de ações aparece na parte inferior. Escolha uma tecla ou clique na a
 | --- | --- |
 | `[N]` / `[C]` | Novo terminal / nova seção |
 | `[/]` | Comando personalizado em nova seção |
-| `[T]` | Espelhar um painel tmux existente |
 | `[V]` / `[S]` | Dividir para o lado / abaixo |
-| `[Tab]` / `[P]` | Próximo terminal / anterior |
-| `[A←]` / `[F→]` | Seção anterior / próxima |
 | `[1]` / `[2]` | Focar um terminal da seção |
 | `[M]` | Ampliar / restaurar |
 | `[B]` | Fixar / soltar a sidebar |
 | `[L]` | Focar a sidebar |
+| `[D]` | Abrir / fechar o Live Diff do agente |
 | `[E]` | Renomear terminal |
-| `[D]` / `[O]` | Nova pasta / mover seção |
 | `[R]` / `[X]` | Reiniciar / fechar terminal |
 | `[G]` | Liberar atalhos globais, incluindo `[,]` |
 | `[Esc]` | Cancelar a Master Key |
@@ -632,6 +628,8 @@ acessíveis. Clique em uma linha para focar aquele terminal. As
 atividades incluem lendo, pesquisando, pensando, escrevendo ou executando quando
 a interface do agente fornece esse sinal. O acompanhamento continua nas seções
 ocultas; abrir o painel concluído marca o resultado como visto.
+Pedidos de ação e conclusões não vistas em segundo plano também geram uma
+notificação; clique nela para abrir o painel exato ou dispense-a sem mudar o foco.
 
 Os títulos de tarefa usam o texto que o agente publica no terminal, inclusive em
 espelhos tmux já existentes. Os formatos abrangem Codex, Claude Code, OpenCode,
@@ -641,14 +639,25 @@ sessão inteira, em vez de cada prompt. Não são necessários hooks, chamadas e
 de modelo ou alterações na configuração dos agentes; quando o título não é
 exposto, o item continua mostrando o nome do terminal.
 
-O MVP local reconhece controles de tela de Codex, Claude Code, Gemini e OpenCode,
-além de títulos de terminal suportados de Codex/Claude. Não instala hooks nem
+O Live Diff consulta o Git a cada 500 ms enquanto o agente está em execução, sem reiniciar
+o terminal ou alterar os arquivos do projeto. Descobre projetos pelo diretório do terminal,
+pelos diretórios de trabalho dos processos associados quando disponíveis e por worktrees
+Git relacionados. É uma visão das mudanças nesses diretórios, não uma atribuição precisa
+de cada edição ao agente. Em sistemas sem inspeção de diretórios dos processos, use a
+adição manual para incluir projetos adicionais. Ao terminar o agente, o painel conserva
+o último estado até ser fechado.
+
+Os perfis locais reconhecem controles visíveis de Codex, Claude Code, Gemini,
+OpenCode, Amp, Antigravity, Cline, GitHub Copilot, Cursor Agent, Devin, Droid,
+Grok, Hermes, Kilo, Kimi, Kiro, Letta, Maki, Muse, Pi, Qoder e Qwen, além de
+títulos de estado de alguns agentes. OMP e MastraCode são identificados, mas
+não têm perfil local confiável de atividade. Não instala hooks nem
 altera configurações dos agentes. Identidade e atividade são heurísticas; agentes
 sem perfil e telas não reconhecidas podem permanecer com estado desconhecido.
 Para identificar um CLI privado ou renomeado, cadastre seu executável/módulo em
 **Terminal → Comandos de agentes adicionais**; isso não adiciona um perfil de
 estados. Veja o [contrato e estudo do Herdr](docs/design/terminal-agents.md).
-Pastas criadas pelo usuário e a pasta atribuída a cada painel tmux são salvas por
+O estado recolhido ou expandido das pastas predefinidas e a pasta atribuída a cada painel tmux são salvos por
 projeto no diretório de dados do Tuiminal, sem modificar o projeto aberto. A Master Key e as regras
 adicionais são salvas nas configurações. Quando o tmux está disponível, os terminais
 criados pelo Tuiminal são janelas persistentes na sessão compartilhada `tuiminal` e

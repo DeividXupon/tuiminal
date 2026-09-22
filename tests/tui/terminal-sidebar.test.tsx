@@ -74,7 +74,6 @@ test("sidebar separates numbered sessions from independently clickable agent sta
       onSelectFolder={() => undefined}
       onActions={() => undefined}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 32, height: 30 },
   )
@@ -103,7 +102,7 @@ test("sidebar separates numbered sessions from independently clickable agent sta
   expect(section.height).toBe(2)
   expect(lines[section.screenY]).toMatch(/▌01\s+● Task Shell\s+Executando/)
   expect(lines[section.screenY + 1]).toContain("workspace · native")
-  expect(agent.screenY).toBeGreaterThan(section.screenY)
+  expect(agent.screenY).toBeLessThan(section.screenY)
   await act(async () => tui?.mockMouse.click(agent.screenX + 2, agent.screenY))
   expect(selections).toEqual(["Claude"])
   // Listing an unseen result never acknowledges it; only the workspace owns that transition.
@@ -132,7 +131,6 @@ test("focused sidebar navigates continuously from sessions into agents and opens
       onActions={() => undefined}
       onMasterKey={() => masterKeys++}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 32, height: 24 },
   )
@@ -147,6 +145,54 @@ test("focused sidebar navigates continuously from sessions into agents and opens
 
   expect(selections).toEqual(["Codex"])
   expect(masterKeys).toBe(1)
+})
+
+test("folder rows are keyboard targets and Enter toggles their fold", async () => {
+  const selected: string[] = []
+  const activated: string[] = []
+  function Fixture() {
+    const [collapsed, setCollapsed] = useState<string[]>([])
+    return (
+      <TerminalSidebar
+        sessions={[{ ...session("Shell", "idle"), agent: null }]}
+        folders={[
+          { id: "terminal", name: "Terminal" },
+          { id: "empty", name: "Empty" },
+        ]}
+        collapsedFolderIds={collapsed}
+        selectedFolder="terminal"
+        activeSessionId="Shell"
+        width={32}
+        height={24}
+        masterKey="Ctrl+B"
+        onActivate={(id) => activated.push(id)}
+        onSelectFolder={(id) => selected.push(id)}
+        onToggleFolder={(id) =>
+          setCollapsed((current) =>
+            current.includes(id) ? current.filter((folder) => folder !== id) : [...current, id],
+          )
+        }
+        onActions={() => undefined}
+        onNew={() => undefined}
+      />
+    )
+  }
+  tui = await testRender(<Fixture />, { width: 32, height: 24 })
+  await tui.renderOnce()
+  await act(async () => tui!.renderer.root.findDescendantById("terminal-sidebar")!.focus())
+  await act(async () => tui!.mockInput.pressArrow("up"))
+  await act(async () => tui!.mockInput.pressEnter())
+  await tui.renderOnce()
+
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-section-Shell")).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-folder-empty")).toBeUndefined()
+  expect(selected).toEqual(["terminal"])
+  expect(activated).toEqual([])
+
+  await act(async () => tui!.mockInput.pressEnter())
+  await tui.renderOnce()
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-section-Shell")).toBeDefined()
+  expect(selected).toEqual(["terminal", "terminal"])
 })
 
 test("isolated tmux sidebar navigation works immediately without an internal focus request", async () => {
@@ -168,7 +214,6 @@ test("isolated tmux sidebar navigation works immediately without an internal foc
       onSelectFolder={() => undefined}
       onActions={() => undefined}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 32, height: 24 },
   )
@@ -215,7 +260,6 @@ test("sidebar focus keeps its heading while the background sweep covers its heig
         onSelectFolder={() => undefined}
         onActions={() => undefined}
         onNew={() => undefined}
-        onFolder={() => undefined}
       />
     )
   }
@@ -268,7 +312,6 @@ test("sidebar shows read-only external terminal references in Others", async () 
       onSelectFolder={() => undefined}
       onActions={() => undefined}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 32, height: 24 },
   )
@@ -300,7 +343,6 @@ test.each([3, 5, 8])("%i-row sidebars keep agents in a clickable compact list", 
       onSelectFolder={() => undefined}
       onActions={() => undefined}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 18, height },
   )
@@ -319,7 +361,7 @@ test.each([3, 5, 8])("%i-row sidebars keep agents in a clickable compact list", 
   expect(selections).toEqual(["Codex"])
 })
 
-test("the tmux sidebar keeps agents visible below a full sessions list", async () => {
+test("the tmux sidebar keeps agents first above a full sessions list", async () => {
   updateUiSettings({ language: "pt-BR" })
   const sessions: TerminalSession[] = [
     ...Array.from({ length: 6 }, (_, index) => ({
@@ -342,7 +384,6 @@ test("the tmux sidebar keeps agents visible below a full sessions list", async (
       onSelectFolder={() => undefined}
       onActions={() => undefined}
       onNew={() => undefined}
-      onFolder={() => undefined}
     />,
     { width: 17, height: 24 },
   )
@@ -350,8 +391,10 @@ test("the tmux sidebar keeps agents visible below a full sessions list", async (
 
   const list = tui.renderer.root.findDescendantById("terminal-agent-list")!
   const agent = tui.renderer.root.findDescendantById("terminal-agent-Codex")!
-  expect(list.screenY).toBeGreaterThan(0)
+  const folder = tui.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
+  expect(list.screenY).toBeGreaterThanOrEqual(0)
   expect(agent.screenY).toBeGreaterThanOrEqual(list.screenY)
+  expect(agent.screenY).toBeLessThan(folder.screenY)
   expect(agent.screenY).toBeLessThan(24)
   expect(tui.captureCharFrame()).toContain("Agentes")
   expect(tui.captureCharFrame().split("\n")[agent.screenY]).toContain("Codex")
@@ -377,7 +420,6 @@ test.each([8, 30])(
         onSelectFolder={() => undefined}
         onActions={() => undefined}
         onNew={() => undefined}
-        onFolder={() => undefined}
       />,
       { width: 32, height },
     )
@@ -449,7 +491,6 @@ test("working agents share an animated loader that stops with activity, visibili
         onSelectFolder={() => undefined}
         onActions={() => undefined}
         onNew={() => undefined}
-        onFolder={() => undefined}
       />
     )
   }

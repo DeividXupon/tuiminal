@@ -27,6 +27,7 @@ type LaunchContext = {
   outputs: RefObject<Map<string, AgentMonitor>>
   activeSession: RefObject<string | null>
   updateSession: (id: string, update: Partial<TerminalSession>) => void
+  closeFinishedShell: (id: string) => void
   focusTerminal: (id: string) => void
   setNotice: (message: string) => void
   notify: Notify
@@ -88,6 +89,11 @@ function finishTerminalExit(
   if (!launch.isCurrent()) return
   output.dispose()
   context.outputs.current.delete(id)
+  if (command.kind === "shell" && !result.stopped) {
+    if (!command.tmux) notifyTerminalExit(context.notify, command.label, result)
+    context.closeFinishedShell(id)
+    return
+  }
   const message = exitMessage(command, result)
   context.terminals.current.get(id)?.write(message.text)
   context.updateSession(id, {

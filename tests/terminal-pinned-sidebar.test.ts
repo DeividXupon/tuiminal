@@ -6,6 +6,7 @@ import { FEATURE_VERSION } from "../apps/cli/src/features/environment"
 import { prepareFeatureHost } from "../apps/cli/src/features/host-modules"
 import { FEATURE_HOST_KEY } from "../packages/core/src/runtime/feature-host"
 import {
+  publishTerminalSidebar,
   requestPinnedTerminalTarget,
   resetPinnedTerminalSidebarForTests,
   setTerminalSidebarPinned,
@@ -65,6 +66,31 @@ test("shared pinned sidebar state publishes toggles and immutable tmux target re
   toggleTerminalSidebarPinned()
   expect(terminalSidebarSnapshot().pinned).toBe(false)
   expect(changes).toBe(3)
+  unsubscribe()
+})
+
+test("publishing the same sidebar view does not notify subscribers twice", () => {
+  const owner = {}
+  const view = {
+    sessions: [],
+    folders: [],
+    collapsedFolderIds: [],
+    selectedFolder: "default",
+    activeSessionId: null,
+    width: 24,
+    height: 30,
+    masterKey: "Ctrl+B" as const,
+    onSelectFolder: () => undefined,
+    onToggleFolder: () => undefined,
+    onActivate: () => undefined,
+    onActions: () => undefined,
+    onNew: () => undefined,
+  }
+  let changes = 0
+  const unsubscribe = subscribeTerminalSidebar(() => changes++)
+  publishTerminalSidebar(owner, view)
+  publishTerminalSidebar(owner, view)
+  expect(changes).toBe(1)
   unsubscribe()
 })
 
@@ -291,6 +317,7 @@ test.skipIf(process.platform === "win32")(
     const replica = {
       sessions: [],
       folders: [{ id: "terminal", name: "Terminal" }],
+      collapsedFolderIds: ["terminal"],
       selectedFolder: "terminal",
       activeSessionId: null,
       masterKey: "Ctrl+B" as const,

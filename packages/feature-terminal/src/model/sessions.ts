@@ -1,7 +1,7 @@
 import type { AgentStatus } from "./agent-state"
-import type { TmuxPaneTarget } from "./tmux"
+import type { TmuxPaneTarget, TmuxTerminalKind } from "./tmux"
 
-export type FreeTerminalKind = "shell" | "custom"
+export type FreeTerminalKind = TmuxTerminalKind
 export type FreeTerminalCommand = {
   kind: FreeTerminalKind
   label: string

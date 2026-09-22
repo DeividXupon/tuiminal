@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto"
-import type { TmuxPaneTarget, TmuxSessionTarget } from "../model/tmux"
-import { startTmuxPaneMirror } from "./tmux-mirror"
-import { runTmux } from "./tmux-command"
-import { createOwnedTmuxWindow } from "./tmux-owned-session"
-import { registerTerminalResource } from "./terminal-resources"
-import { TerminalRetirementError } from "./terminal-lifecycle"
+import type { TmuxPaneTarget, TmuxSessionTarget, TmuxTerminalKind } from "../model/tmux"
 import {
-  startFreeTerminalProcess,
   type FreeTerminalExit,
   type FreeTerminalProcessHandle,
+  startFreeTerminalProcess,
 } from "./terminal"
+import { TerminalRetirementError } from "./terminal-lifecycle"
+import { registerTerminalResource } from "./terminal-resources"
+import { runTmux } from "./tmux-command"
+import { startTmuxPaneMirror } from "./tmux-mirror"
+import { createOwnedTmuxWindow } from "./tmux-owned-session"
 
 type Options = Parameters<typeof startFreeTerminalProcess>[1]
 
@@ -99,6 +99,7 @@ export async function startTmuxTerminal(
   command: string[],
   options: Options,
   borrowed?: TmuxPaneTarget,
+  terminalKind: TmuxTerminalKind = "custom",
 ): Promise<FreeTerminalProcessHandle> {
   if (borrowed && (!borrowed.ownedByTuiminal || !borrowed.windowId)) {
     const mirror = await startTmuxPaneMirror(borrowed, options)
@@ -117,7 +118,7 @@ export async function startTmuxTerminal(
   }
   const owned = borrowed
     ? { target: borrowed, destroy: () => destroyOwnedTmuxTarget(borrowed) }
-    : await createOwnedTmuxWindow(command, options)
+    : await createOwnedTmuxWindow(command, options, terminalKind)
   const target = owned.target
   let client: FreeTerminalProcessHandle | undefined
   let clientSession: Awaited<ReturnType<typeof createLinkedClientSession>> | undefined
@@ -175,6 +176,9 @@ export async function startTmuxTerminal(
     }
   }
   try {
+    // The tmux client uses the alternate screen, so OpenTUI's local scrollback is empty.
+    // Let tmux receive wheel events and enter its own copy mode instead.
+    await runTmux(["-S", target.socket, "set-option", "-gq", "mouse", "on"])
     clientSession = await createLinkedClientSession(target)
     client = startFreeTerminalProcess(
       ["tmux", "-S", target.socket, "-f", "/dev/null", "attach-session", "-t", clientSession.name],

@@ -543,11 +543,8 @@ that pane dismissed for this execution. Automatic discovery respects the
 12-terminal limit. Set `TUIMINAL_TERMINAL_AUTO_MIRROR=0` before launching to disable
 external discovery; persistent Tuiminal panes are still restored.
 
-Use the Master Key followed by `[T]` to manually mirror another pane or reopen a
-dismissed mirror on the Tuiminal, default, or inherited tmux server. Choose the row matching
-your agent's session, window, pane
-and command, using the mouse or `[Enter]`. Panes beside Tuiminal in the same tmux
-session are available. The mirror loads the pane's existing screen and keeps
+Panes beside Tuiminal in the same tmux session are discovered automatically.
+The mirror loads the pane's existing screen and keeps
 following that exact pane even when another window is selected in the original
 terminal. Keyboard input is shared; closing the mirror only disconnects Tuiminal.
 Updates accelerate while output changes and refresh immediately after input.
@@ -566,7 +563,6 @@ resize loop. Mirroring refreshes the current application screen;
 it does not import scrollback, tmux copy-mode UI or mouse input. Terminals already
 open outside tmux are listed as read-only metadata in **Others**, but cannot yet be
 mirrored; selecting one identifies its original TTY without replacing the active pane.
-The picker states this limitation.
 Without tmux, create terminals inside Tuiminal to use splits, agent status and
 background execution with the native backend.
 
@@ -576,11 +572,13 @@ background execution with the native backend.
 
 - Keep up to 12 terminals, with at most two panes per section, split right or below.
 - **New terminal** always opens a separate section. To split the current section, use the Master Key followed by `[V]` (right) or `[S]` (below).
-- Use a compact workspace inspired by Herdr: numbered two-line sessions above an agent list in the sidebar. An idle shell shows `○ Idle`; `● Running` appears only while a foreground tool or command is active. The second row shows its directory, command or exit code with the `native`/`tmux` backend; read-only external rows show their TTY. The active section has an accent rail. Terminals fill the remaining area to every edge; splits use a single separator.
-- New terminals and custom commands open in **Tuiminals**. Create other folders, rename terminals, and move sections when needed. Custom folders and tmux session placement are saved per project outside the project directory and restored on the next launch. The reserved **tmux** folder contains mirrorable external panes; **Others** lists non-tmux POSIX terminals with their foreground command, state, directory and TTY as read-only references. Recognized external agents appear in **Agents** with unknown activity because Tuiminal cannot inspect their screen. Split sessions keep both two-line terminal items independently clickable beside one vertical separator.
+- Use a compact workspace inspired by Herdr: the agent list comes first in the sidebar, followed by numbered two-line sessions. An idle shell shows `○ Idle`; `● Running` appears only while a foreground tool or command is active. The second row shows its directory, command or exit code with the `native`/`tmux` backend; read-only external rows show their TTY. The active section has an accent rail. Terminals fill the remaining area to every edge; splits use a single separator.
+- New terminals and custom commands open in **Tuiminals**. Rename terminals when needed. Click a folder heading, or highlight it with `[↑/↓]` / `[J/K]` and press `[Enter]`, to collapse or expand it. That fold state and reserved tmux session placement are saved per project outside the project directory and restored on the next launch. Only non-empty reserved folders appear. The **tmux** folder contains mirrorable external panes; **Others** lists non-tmux POSIX terminals with their foreground command, state, directory and TTY as read-only references. Recognized external agents appear in **Agents** with unknown activity because Tuiminal cannot inspect their screen. Split sessions keep both two-line terminal items independently clickable beside one vertical separator.
 - Terminal names follow the running tool automatically: `zsh` → `lazygit` → `zsh`. Recognized agents show their CLI name, such as `codex`, even when the runtime reports `MainThread` or `node`. This also works with tmux mirrors. Names chosen manually through the Master Key's `[E]` action remain fixed, including after a restart.
 - Follow recognized agents exclusively in **Agents**, with an animated loader while they work. **Sessions** shows the remaining terminals. The original folders and splits are preserved, and a terminal returns to Sessions when its agent ends.
-- Pin the live sidebar with Master Key then `[B]` so Sessions and Agents stay visible while you move between Tuiminal tools. Use `[L]` from the action menu to focus it, move continuously through Sessions and Agents with `[↑/↓]` or `[J/K]`, and press `[Enter]` to open the highlighted item. Focus is marked by a fast light sweep across the sidebar background. Inside tmux, Tuiminal also keeps a marked left sidebar split in each window of the current server: after selecting that split with normal tmux navigation, its direct navigation works immediately, and it remains clickable while the neighboring terminal has focus. The split beside Tuiminal opens the target in its Terminal workspace, while another window selects its existing tmux pane directly when possible. Its Master Key opens the same actions and can run non-dialog actions without leaving that window. Unpinning removes only those helper splits and restores the previous tmux mouse setting.
+- Open **Live Diff** for a recognized agent with Master Key then `[D]`. It shares that agent's existing pane (beside it, or below it in narrow sections) without starting another terminal. Long code lines wrap in the selected file's complete Git patch, including the usual three context lines. **Files** is ordered by most recent change and follows keyboard selection. The preview automatically follows the newest file and scrolls to its latest changed hunk; selecting an older file pauses this, and returning to the newest resumes automatic follow. Press `[Enter]` on a file to focus its code: `[J/K]` or `[↑/↓]` scroll one line and `[H/L]` or `[←/→]` scroll half a page. In code, `[Esc]` re-enables automatic follow, selects the newest file and returns to the file list. Rows align New/Edit, a compact project/parent/file path, elapsed time and colored `+`/`−` counts in columns. Folder labels use at most 12 display cells; the selected-file header retains the full path. **Info** shows `Show diff auto: true/false`, theme-colored change counts and the last changed project's path, plus the contextual `[Esc]` hint while code is focused. The panel checks at most every 500 ms while the agent runs. Click **Add project**, or focus the panel and press `[N]`, to include another local repository; related Git worktrees are discovered automatically. `[Esc]` from the file list returns focus to the terminal. The final snapshot remains after the agent exits until the panel is closed.
+- Pin the live sidebar with Master Key then `[B]` so Sessions and Agents stay visible while you move between Tuiminal tools. Use `[L]` from the action menu to focus it, move continuously through folder headings, Sessions and Agents with `[↑/↓]` or `[J/K]`, and press `[Enter]` to toggle a folder or open the highlighted item. Focus is marked by a fast light sweep across the sidebar background. Inside tmux, Tuiminal also keeps a marked left sidebar split in each window of the current server: after selecting that split with normal tmux navigation, its direct navigation works immediately, and it remains clickable while the neighboring terminal has focus. Folding a folder keeps that sidebar split selected. The split beside Tuiminal opens a selected terminal in its Terminal workspace, while another window selects its existing tmux pane directly when possible. Its Master Key opens the same actions and can run non-dialog actions without leaving that window. Unpinning removes only those helper splits and restores the previous tmux mouse setting.
+- Typing `exit` in an interactive shell closes that terminal and removes it from Sessions; completed custom commands keep their final output available for inspection and restart.
 - Preserve colors, cursor, output and processes across resizing, sections and tool switches. Restarts wait for the previous owned process to retire; application shutdown detaches persistent tmux terminals and stops only owned native processes.
 
 In `[,]` → **Terminal**, choose the **Master Key** (default `[Ctrl+B]`). Press it to
@@ -592,16 +590,13 @@ literal control byte to the process.
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
 | `[/]` | Custom command in a new section |
-| `[T]` | Mirror an existing tmux pane |
 | `[V]` / `[S]` | Split right / below |
-| `[Tab]` / `[P]` | Next / previous terminal |
-| `[A←]` / `[F→]` | Previous / next section |
 | `[1]` / `[2]` | Focus a pane in the current section |
 | `[M]` | Maximize / restore |
 | `[B]` | Pin / unpin the sidebar |
 | `[L]` | Focus the sidebar |
 | `[E]` | Rename terminal |
-| `[D]` / `[O]` | New folder / move section |
+| `[D]` | Toggle Live Diff for a recognized agent |
 | `[R]` / `[X]` | Restart / close terminal |
 | `[G]` | Release global shortcuts, including `[,]` |
 | `[Esc]` | Cancel the Master Key |
@@ -614,6 +609,8 @@ layouts use compact rows to keep agents accessible. Click
 a row to focus that terminal. Activity labels include reading, searching, thinking,
 writing or running when the live agent UI provides that signal. Completion
 continues to be tracked in hidden sections; opening the completed pane acknowledges it.
+Offscreen requests for input and unseen completions also raise a notification;
+click it to open that exact pane, or dismiss it without changing focus.
 
 Task titles use the text the agent publishes to the terminal, including existing
 tmux mirrors. Formats cover Codex, Claude Code, OpenCode, Qwen, Pi and Gemini's
@@ -622,14 +619,24 @@ publishes a useful title. Some titles describe the whole session rather than eac
 prompt. No hooks, extra model calls or agent configuration changes are needed;
 agents that do not expose a title keep the terminal name as fallback.
 
-The local MVP recognizes screen controls for Codex, Claude Code, Gemini and
-OpenCode, plus supported Codex/Claude terminal titles. It installs no hooks and
+Live Diff is read-only and displays the current Git worktree changes against
+`HEAD`, including staged, unstaged and untracked files. It does not establish who
+edited a file: pre-existing edits and changes from other processes can appear.
+Discovery is best-effort (process directories and linked worktrees), and you can
+add a local path explicitly. Binary/oversized changes have no line count, and
+very large change lists are visibly limited. It does not alter agent status.
+
+Local profiles recognize live controls for Codex, Claude Code, Gemini, OpenCode,
+Amp, Antigravity, Cline, GitHub Copilot, Cursor Agent, Devin, Droid, Grok,
+Hermes, Kilo, Kimi, Kiro, Letta, Maki, Muse, Pi, Qoder and Qwen, with supported
+status titles for some agents. OMP and MastraCode are identified but have no
+reliable local activity profile. It installs no hooks and
 changes no agent configuration. Process identity and activity are heuristic;
 unsupported agents and unrecognized screens can remain unknown. For a private or
 renamed CLI, register its executable/module in **Terminal → Additional agent
 commands** to identify it; this does not add a state profile. See the
 [activity contract and Herdr research](docs/design/terminal-agents.md) for details.
-User-created folders and the folder placement of tmux panes persist per project in
+The fold state of the predefined folders and the folder placement of tmux panes persist per project in
 Tuiminal's user data directory; the opened project is not modified. The Master Key and additional
 recognition rules persist in settings. On systems with tmux, terminals created by
 Tuiminal are persistent windows in the shared session `tuiminal` and return in

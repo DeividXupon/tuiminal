@@ -78,6 +78,12 @@ test("owned terminals share the tuiminal session and close only their own window
   )
   expect(persistence?.at(-1)).toStartWith("terminal-")
   expect(handle.tmux?.persistentId).toBe(persistence?.at(-1))
+  const kind = calls.find(
+    (args) => args.includes("set-option") && args.includes("@tuiminal_terminal_kind"),
+  )
+  expect(kind?.at(-1)).toBe("custom")
+  expect(handle.tmux?.terminalKind).toBe("custom")
+  expect(calls).toContainEqual(["-S", "/tmp/owned-test.sock", "set-option", "-gq", "mouse", "on"])
   expect(calls.flat()).not.toContain("split-window")
   expect(await handle.readAgentPid?.()).toBe(456)
   expect(nativeSpy?.mock.calls[0]?.[0]?.slice(0, -1)).toEqual([
@@ -129,6 +135,7 @@ test("a restored Tuiminal window receives an independent linked client", async (
   )
   handles.push(handle)
 
+  expect(calls).toContainEqual(["-S", "/tmp/owned-test.sock", "set-option", "-gq", "mouse", "on"])
   expect(calls.some((args) => args.includes("new-window"))).toBe(false)
   expect(calls.filter((args) => args.includes("new-session"))).toHaveLength(1)
   await handle.close?.()

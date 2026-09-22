@@ -28,6 +28,7 @@
     "./ui/InlineButton": "./src/ui/InlineButton.tsx",
     "./ui/ModalSurface": "./src/ui/ModalSurface.tsx",
     "./ui/MountWhen": "./src/ui/MountWhen.tsx",
+    "./ui/NativeDiff": "./src/ui/NativeDiff.tsx",
     "./ui/PasswordInput": "./src/ui/PasswordInput.ts",
     "./ui/PlasmaLoadingOverlay": "./src/ui/PlasmaLoadingOverlay.tsx",
     "./ui/SelectionClipboard": "./src/ui/SelectionClipboard.tsx",

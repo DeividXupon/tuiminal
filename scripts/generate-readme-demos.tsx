@@ -1,15 +1,14 @@
-import type { FeatureState } from "../apps/cli/src/features/controller"
-import { demoTextRuns } from "./readme-demo-text"
-import { prepareTerminalMirrorDemo } from "./readme-terminal-mirror"
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import type { TextareaRenderable } from "@opentui/core"
-import type { CapturedFrame } from "@opentui/core"
+import type { CapturedFrame, TextareaRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, createElement, useState } from "react"
+import type { FeatureState } from "../apps/cli/src/features/controller"
+import { demoTextRuns } from "./readme-demo-text"
+import { prepareTerminalMirrorDemo } from "./readme-terminal-mirror"
 
 type FocusRect = {
   x: number
@@ -584,9 +583,6 @@ async function nativeTerminalFrames() {
   try {
     await settle(tui)
     const frames = [snapshot(tui, "Terminal · sessões e agentes na sidebar", undefined, 140)]
-    await prefix("d")
-    await typeInto(tui, "terminal-command-input", "Development")
-    await pressKey(tui, "enter")
     await prefix("/")
     await typeInto(
       tui,
@@ -596,6 +592,15 @@ async function nativeTerminalFrames() {
     await pressKey(tui, "enter")
     await settle(tui, () => tui.captureCharFrame().includes("API shell ready"))
     frames.push(snapshot(tui, "Pastas organizam as seções abertas"))
+    await clickRenderable(tui, "terminal-sidebar-folder-terminal")
+    frames.push(
+      snapshot(
+        tui,
+        "Clique no cabeçalho para recolher e guardar o estado da pasta",
+        "terminal-sidebar-folder-terminal",
+      ),
+    )
+    await clickRenderable(tui, "terminal-sidebar-folder-terminal")
     await prefix("v")
     await settle(
       tui,
@@ -614,6 +619,50 @@ async function nativeTerminalFrames() {
     await prefix("e")
     await typeInto(tui, "terminal-command-input", "API review", true)
     await pressKey(tui, "enter")
+    const agentSessionId = tui.renderer.currentFocusedRenderable?.id?.replace("free-terminal-", "")
+    await settle(
+      tui,
+      () => Boolean(tui.renderer.root.findDescendantById(`terminal-agent-${agentSessionId}`)),
+      400,
+    )
+    process.env.TUIMINAL_TEST_STATIC_LOADERS = "0"
+    await prefix("d")
+    await settle(
+      tui,
+      () =>
+        tui.captureCharFrame().includes("cache.ts") &&
+        tui.captureCharFrame().includes("export const"),
+      400,
+    )
+    for (let frame = 0; frame < 4; frame += 1) {
+      await act(async () => Bun.sleep(90))
+      await tui.renderOnce()
+      frames.push(snapshot(tui, "Live Diff · patch completo no hunk recente", undefined, 90))
+    }
+    await clickRenderable(tui, `live-diff-file-${agentSessionId}-0`)
+    await pressKey(tui, "enter")
+    frames.push(
+      snapshot(
+        tui,
+        "[Enter] foca o código · [J/K] rola · [Esc] volta aos arquivos",
+        `live-diff-preview-${agentSessionId}`,
+        220,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await clickRenderable(tui, `live-diff-file-${agentSessionId}-1`)
+    await pressKey(tui, "enter")
+    frames.push(
+      snapshot(
+        tui,
+        "Info · Show diff auto: false · [Esc] reativa",
+        `live-diff-preview-${agentSessionId}`,
+        220,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await prefix("d")
+    process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     await prefix("v")
     await prefix("/")
     await typeInto(tui, "terminal-command-input", `node "${reviewerPath}"`)
@@ -621,8 +670,6 @@ async function nativeTerminalFrames() {
     await prefix("e")
     await typeInto(tui, "terminal-command-input", "Tests review", true)
     await pressKey(tui, "enter")
-    await prefix("a")
-    await prefix("1")
     await settle(
       tui,
       () =>
@@ -639,6 +686,7 @@ async function nativeTerminalFrames() {
     )
     return frames
   } finally {
+    process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     destroy(tui)
     await stopAllFreeTerminalProcesses()
   }

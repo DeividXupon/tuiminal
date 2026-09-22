@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AgentOutput } from "../packages/feature-terminal/src/model/agent-output"
 import { detectAgentScreen } from "../packages/feature-terminal/src/model/agent-screen"
+import type { AgentProfile } from "../packages/feature-terminal/src/model/agent-state"
 import {
   observeAgent,
   type AgentIdentity,
@@ -136,6 +137,76 @@ describe("agent live-screen profiles", () => {
     expect(detectAgentScreen("claude", "", "◐ project").state).toBe("working")
     expect(detectAgentScreen("claude", "", "✳ project").state).toBe("idle")
     expect(detectAgentScreen("codex", "Allow command?", "⠋ project").state).toBe("blocked")
+  })
+  test.each([
+    ["amp", "Waiting for approval\nRun this command?", "╰ Amp thinking ─", ""],
+    [
+      "antigravity",
+      "Requesting permission for: shell\nDo you want to proceed?",
+      "⠋ Searching files",
+      "",
+    ],
+    [
+      "cline",
+      "Cline needs permission\nApprove tool call?\n[y] Approve [n] Deny",
+      "Thinking... (esc to cancel)",
+      "❯\n(Tab) Shift+Tab",
+    ],
+    ["copilot", "Esc to cancel · Enter to confirm", "◎ Waiting for background agents", ""],
+    ["cursor", "Write to this file?\nProceed (y) · Reject & propose changes", "ctrl+c to stop", ""],
+    [
+      "devin",
+      "Approve once · Select · Confirm · Esc cancel",
+      "Running tools · Esc to interrupt",
+      "❭ Ask Devin to build",
+    ],
+    ["droid", "> Yes, allow\n↑↓ to navigate\nEnter to select · Esc to cancel", "⠋ Esc to stop", ""],
+    ["grok", "┃ 2 (○) Yes, proceed", "⠧ Waiting on subagent… [stop]", "Ctrl+.:shortcuts"],
+    ["hermes", "Dangerous command approval\nEnter to confirm", "Ctrl+C to interrupt", ""],
+    ["kilo", "△ Permission required", "esc interrupt", ""],
+    ["kimi", "Run this command?\nApprove · Reject · ↵ confirm", "⠋ thinking...", ""],
+    [
+      "kiro",
+      "Tool approval · approve all pending",
+      "Kiro is working · type to steer · ctrl+s to queue",
+      "> Ask a question or describe a task",
+    ],
+    [
+      "letta",
+      "Run this command?\nEnter to select · Esc to cancel",
+      "Running...",
+      '› Try "Explain"',
+    ],
+    ["maki", "Permission required\nY allow · N deny", "⠋ [BUILD] task", "[BUILD] ready"],
+    [
+      "muse",
+      "Do you trust this workspace?\nTrust and continue",
+      "◆ Working (2s · esc to interrupt)",
+      "⟩",
+    ],
+    ["qodercli", "Permission required", "⠋ Searching", ""],
+    [
+      "qwen",
+      "Allow execution of: shell\nYes, allow once",
+      "⠋ Searching (2s · esc to cancel)",
+      "> Type your message",
+    ],
+  ] as const)("%s recognizes its visible controls", (profile, blocked, busy, idle) => {
+    expect(detectAgentScreen(profile, blocked).state).toBe("blocked")
+    expect(detectAgentScreen(profile, busy).state).toBe("working")
+    if (idle) expect(detectAgentScreen(profile, idle).state).toBe("idle")
+  })
+  test("title-only profiles and incomplete profiles preserve unknown instead of guessing", () => {
+    expect(detectAgentScreen("qwen", "", "✳ Qwen Code").state).toBe("blocked")
+    expect(detectAgentScreen("qwen", "", "◐ Qwen Code").state).toBe("working")
+    expect(detectAgentScreen("letta", "", "[ ! ] Action Required | Task").state).toBe("blocked")
+    expect(detectAgentScreen("hermes", "", "✓ Hermes").state).toBe("idle")
+    expect(detectAgentScreen("amp", "", "project - amp - session").state).toBe("idle")
+    expect(detectAgentScreen("pi", "── ⠋ Working ─────────").state).toBe("working")
+    for (const profile of ["omp", "mastracode", "pi", "cursor"] as AgentProfile[])
+      expect(detectAgentScreen(profile, "The docs mention approval and working").state).toBe(
+        "unknown",
+      )
   })
 })
 

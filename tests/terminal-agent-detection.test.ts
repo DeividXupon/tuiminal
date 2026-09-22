@@ -64,7 +64,49 @@ describe("terminal agent detection", () => {
         executable: "node",
         command: `node /opt/node_modules/@${scope}/pi-coding-agent/dist/cli.js`,
       }),
-    ).toMatchObject({ profile: "generic", label: "pi" })
+    ).toMatchObject({ profile: "pi", label: "Pi" })
+  })
+  test.each([
+    ["@github/copilot", "copilot"],
+    ["@qwen-code/qwen-code", "qwen"],
+  ] as const)("runtime module %s selects the %s profile", (module, profile) => {
+    expect(
+      identifyProcessAgent({
+        pid: 3,
+        parentPid: 1,
+        executable: "node",
+        command: `node /opt/node_modules/${module}/dist/index.js`,
+      }),
+    ).toMatchObject({ profile })
+  })
+  test.each([
+    ["amp-local", "amp", "Amp"],
+    ["agy", "antigravity", "Antigravity"],
+    ["cline", "cline", "Cline"],
+    ["ghcs", "copilot", "GitHub Copilot"],
+    ["cursor-agent", "cursor", "Cursor Agent"],
+    ["devin-cli", "devin", "Devin"],
+    ["droid", "droid", "Droid"],
+    ["grok-build", "grok", "Grok"],
+    ["hermes-agent", "hermes", "Hermes Agent"],
+    ["kilo-code", "kilo", "Kilo Code"],
+    ["kimi_cli", "kimi", "Kimi Code"],
+    ["kiro-cli", "kiro", "Kiro CLI"],
+    ["letta-code", "letta", "Letta Code"],
+    ["maki", "maki", "Maki"],
+    ["mastracode", "mastracode", "MastraCode"],
+    ["muse-cli", "muse", "Muse"],
+    ["open-code", "opencode", "OpenCode"],
+    ["omp", "omp", "OMP"],
+    ["qodercli", "qodercli", "Qoder CLI"],
+    ["qwen-code", "qwen", "Qwen Code"],
+  ] as const)("%s receives its own %s identity", (executable, profile, label) => {
+    expect(
+      identifyProcessAgent({ pid: 4, parentPid: 1, executable, command: executable }),
+    ).toMatchObject({
+      profile,
+      label,
+    })
   })
   test("configured identities recognize an arbitrary private agent without matching prompt arguments", () => {
     const process = {

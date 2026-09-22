@@ -4,6 +4,7 @@ import * as tmux from "../packages/feature-terminal/src/services/tmux-terminal"
 import * as capability from "../packages/feature-terminal/src/services/tmux-command"
 import { startWorkspaceTerminal } from "../packages/feature-terminal/src/services/terminal-backend"
 import { parseTmuxPanes, supportsTmux } from "../packages/feature-terminal/src/model/tmux"
+import { createTmuxMirrorCommand } from "../packages/feature-terminal/src/services/tmux-mirror-command"
 
 const preference = process.env.TUIMINAL_TERMINAL_BACKEND
 const command = terminal.createFreeTerminalCommand("echo first && echo second")
@@ -60,6 +61,7 @@ test("available tmux receives the original command without a second native launc
   const result = await startWorkspaceTerminal(command, options, new AbortController().signal)
   expect(result.backend).toBe("tmux")
   expect(multiplexed.mock.calls[0]?.[0]).toEqual(command.command)
+  expect(multiplexed.mock.calls[0]?.[3]).toBe("custom")
   expect(native).not.toHaveBeenCalled()
 })
 
@@ -123,7 +125,36 @@ test("tmux discovery keeps immutable server/pane identities and Unicode names", 
       "/tmp/demo.sock\t$2\ttuiminal\t@3\t0\tzsh\t%4\t0\tzsh\t456\t\t'zsh'\tShell\tterminal-stable-id\t/tmp/my project\n",
     )[0]?.persistentId,
   ).toBe("terminal-stable-id")
+  expect(
+    parseTmuxPanes(
+      "/tmp/demo.sock\t$2\ttuiminal\t@3\t0\tzsh\t%4\t0\tzsh\t456\t\t'zsh' '-l'\tShell\tterminal-stable-id\tterminal-kind=shell\t/tmp/my project\n",
+    )[0],
+  ).toMatchObject({ terminalKind: "shell", cwd: "/tmp/my project" })
   expect(supportsTmux("tmux 3.2a")).toBe(true)
   expect(supportsTmux("tmux 3.1c")).toBe(false)
   expect(supportsTmux("unexpected output")).toBe(false)
+})
+
+test("restored owned tmux panes retain shell lifecycle semantics", () => {
+  const pane = parseTmuxPanes(
+    "/tmp/demo.sock\t$2\ttuiminal\t@3\t0\tzsh\t%4\t0\tzsh\t456\t\t'zsh' '-l'\tShell\tterminal-stable-id\tterminal-kind=shell\t/tmp/project\n",
+  )[0]!
+  const { terminalKind, ...legacyPane } = pane
+  expect(terminalKind).toBe("shell")
+  expect(createTmuxMirrorCommand({ ...pane, ownedByTuiminal: true }).kind).toBe("shell")
+  expect(
+    createTmuxMirrorCommand({
+      ...legacyPane,
+      startCommand: "'/bin/zsh' '-lc' 'printf done'",
+      ownedByTuiminal: true,
+    }).kind,
+  ).toBe("custom")
+  expect(
+    createTmuxMirrorCommand({
+      ...legacyPane,
+      startCommand: "'/bin/zsh' '-l'",
+      ownedByTuiminal: true,
+    }).kind,
+  ).toBe("shell")
+  expect(createTmuxMirrorCommand({ ...pane, ownedByTuiminal: false }).kind).toBe("custom")
 })

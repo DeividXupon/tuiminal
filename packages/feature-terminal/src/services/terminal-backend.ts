@@ -20,7 +20,7 @@ export function startWorkspaceTerminal(
           "tmux 3.2 ou superior não está disponível. Use o modo automático ou nativo.",
         )
       const handle = useTmux
-        ? await startTmuxTerminal(command.command, options, command.tmux)
+        ? await startTmuxTerminal(command.command, options, command.tmux, command.kind)
         : startFreeTerminalProcess(command.command, options)
       if (signal.aborted) {
         try {

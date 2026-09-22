@@ -131,6 +131,39 @@ test("floating stack presents every severity, caps at three and never steals foc
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("notification-focus-owner")
 })
 
+test("clicking an actionable card runs its target, while dismiss only closes it", async () => {
+  let activations = 0
+  let publish: ReturnType<typeof useNotifications>["notify"] = () => ""
+  await renderNotifications(
+    [
+      {
+        source: "Terminal",
+        kind: "warning",
+        message: "Codex · Fix login",
+        onPress: () => {
+          activations += 1
+        },
+      },
+    ],
+    { width: 90, height: 32 },
+    (notify) => {
+      publish = notify
+    },
+  )
+  const card = tui!.renderer.root.findDescendantById("app-notification-0")!
+  await act(async () => tui?.mockMouse.click(card.screenX + 3, card.screenY + 1))
+  await tui?.renderOnce()
+  expect(activations).toBe(1)
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("notification-focus-owner")
+  await settle(() => !tui!.captureCharFrame().includes("Codex · Fix login"))
+
+  act(() => publish({ source: "Terminal", message: "Codex · Again", onPress: () => activations++ }))
+  await tui?.renderOnce()
+  await click("app-notification-dismiss-0")
+  expect(activations).toBe(1)
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("notification-focus-owner")
+})
+
 test("a notification animates away while a longer error remains", async () => {
   const originalSetTimeout = globalThis.setTimeout
   const expirations: Array<() => void> = []

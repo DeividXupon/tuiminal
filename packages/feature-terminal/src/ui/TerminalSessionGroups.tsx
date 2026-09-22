@@ -141,8 +141,11 @@ export function TerminalSessionGroups({
   selectedFolder,
   activeSessionId,
   cursorId,
+  cursorFolderId,
+  collapsedFolderIds,
   width,
   onSelectFolder,
+  onToggleFolder,
   onActivate,
 }: {
   folders: TerminalFolder[]
@@ -150,44 +153,55 @@ export function TerminalSessionGroups({
   selectedFolder: string
   activeSessionId: string | null
   cursorId: string | null
+  cursorFolderId: string | null
+  collapsedFolderIds: ReadonlySet<string>
   width: number
   onSelectFolder: (id: string) => void
+  onToggleFolder: (id: string) => void
   onActivate: (id: string) => void
 }) {
-  return folders.map((folder) => (
-    <box key={folder.id} style={{ flexShrink: 0, marginTop: 1 }}>
-      <Button
-        id={`terminal-sidebar-folder-${folder.id}`}
-        height={1}
-        width="100%"
-        onPress={() => onSelectFolder(folder.id)}
-      >
-        <text
-          content={` ▾ ${truncateDisplay(
-            folder.id === DEFAULT_FOLDER || folder.id === EXTERNAL_FOLDER
-              ? translateUi(folder.name)
-              : folder.name,
-            width - 4,
-          )}`}
-          style={{
-            fg: COLORS.text,
-            bg: selectedFolder === folder.id ? COLORS.panelRaised : "transparent",
+  return folders.map((folder) => {
+    const collapsed = collapsedFolderIds.has(folder.id)
+    const cursor = cursorFolderId === folder.id
+    return (
+      <box key={folder.id} style={{ flexShrink: 0, marginTop: 1 }}>
+        <Button
+          id={`terminal-sidebar-folder-${folder.id}`}
+          height={1}
+          width="100%"
+          onPress={() => {
+            onSelectFolder(folder.id)
+            onToggleFolder(folder.id)
           }}
-        />
-      </Button>
-      {sections
-        .filter((section) => section.folderId === folder.id)
-        .map((section) => (
-          <TerminalSectionRow
-            key={section.id}
-            section={section}
-            number={sections.indexOf(section) + 1}
-            activeSessionId={activeSessionId}
-            cursorId={cursorId}
-            width={width}
-            onActivate={onActivate}
+        >
+          <text
+            content={` ${collapsed ? "▸" : "▾"} ${truncateDisplay(
+              folder.id === DEFAULT_FOLDER || folder.id === EXTERNAL_FOLDER
+                ? translateUi(folder.name)
+                : folder.name,
+              width - 4,
+            )}`}
+            style={{
+              fg: cursor ? COLORS.terminal : COLORS.text,
+              bg: selectedFolder === folder.id || cursor ? COLORS.panelRaised : "transparent",
+            }}
           />
-        ))}
-    </box>
-  ))
+        </Button>
+        {!collapsed &&
+          sections
+            .filter((section) => section.folderId === folder.id)
+            .map((section) => (
+              <TerminalSectionRow
+                key={section.id}
+                section={section}
+                number={sections.indexOf(section) + 1}
+                activeSessionId={activeSessionId}
+                cursorId={cursorId}
+                width={width}
+                onActivate={onActivate}
+              />
+            ))}
+      </box>
+    )
+  })
 }
