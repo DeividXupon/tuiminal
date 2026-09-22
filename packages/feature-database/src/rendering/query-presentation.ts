@@ -1,6 +1,8 @@
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import type { DatabaseQueryWindowDirection } from "../model/query-window"
 import type { SqlCompletionKind } from "../model/sql-autocomplete"
-import type { DatabaseTableMutation } from "../model/types"
+import type { DatabaseQueryResult, DatabaseTableMutation } from "../model/types"
 
 export function queryCompletionPresentation(kind: SqlCompletionKind) {
   switch (kind) {
@@ -41,4 +43,24 @@ export function queryCellForeground(
   if (selected) return selectionForeground
   if (changed) return rowAccent
   return focused ? COLORS.text : COLORS.muted
+}
+
+export function queryResultSummary(
+  result: DatabaseQueryResult | null,
+  compact: boolean,
+  hasMaskedValues: boolean,
+) {
+  if (!result) return translateUi("O resultado aparecerá aqui")
+  if (result.mutating) {
+    return `${result.command} · ${result.affectedRows ?? "?"} ${translateUi("linha(s) afetada(s)")} · ${result.durationMs.toFixed(1)} ms`
+  }
+  const bounded = result.hasRowsBefore || result.hasRowsAfter
+  const rows = bounded
+    ? `${result.windowOffset + 1}–${result.windowOffset + result.rowCount} ${translateUi("linhas")} ${result.hasRowsBefore ? "↑" : ""}${result.hasRowsAfter ? "↓" : ""}`
+    : `${result.rowCount} ${translateUi(compact ? "linhas" : "linha(s)")}`
+  return `${rows} · ${result.durationMs.toFixed(1)} ms${hasMaskedValues ? (compact ? " · 🔒" : ` · ${translateUi("sensíveis mascarados")}`) : ""}`
+}
+
+export function queryWindowLoadingLabel(direction: DatabaseQueryWindowDirection) {
+  return translateUi(direction < 0 ? "Carregando 40 linhas acima…" : "Carregando 40 linhas abaixo…")
 }

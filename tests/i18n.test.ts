@@ -21,6 +21,17 @@ import {
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test("translates sliding table-window summaries without pagination", () => {
+    expect(
+      translateUi("CÉLULA 11,2  •  50 REGISTROS  •  3 ALTERAÇÕES PENDENTES  •  41–90 ↑↓", "en"),
+    ).toBe("CELL 11,2  •  50 RECORDS  •  3 PENDING CHANGES  •  41–90 ↑↓")
+    expect(translateUi("41–90 ↑↓ · cél 11,2 · 50 itens · 3 pend.", "en")).toBe(
+      "41–90 ↑↓ · cell 11,2 · 50 items · 3 pending",
+    )
+    expect(translateUi("1–50 ↓ · cél 1,1 · 3 pend.", "en")).toBe("1–50 ↓ · cell 1,1 · 3 pending")
+    expect(translateUi("1–4 · cél 1,1 · 4 itens", "en")).toBe("1–4 · cell 1,1 · 4 items")
+  })
+
   test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
     "translates grouped Git navigation in %s",
     (language) => {
@@ -247,6 +258,9 @@ describe("internationalization", () => {
     expect(translateUi("3 execuções", "zh-CN")).toBe("3 次执行")
     expect(translateUi("● RODANDO · api", "en")).toBe("● RUNNING · api")
     expect(translateUi("Schema completo", "zh-CN")).toBe("完整架构")
+    expect(translateUi("[G] Diagrama", "en")).toBe("[G] Diagram")
+    expect(translateUi("[G] Detalhes", "ja")).toBe("[G] 詳細")
+    expect(translateUi("auto-relação", "ko")).toBe("자기 참조")
     expect(translateUi("Nenhum relacionamento encontrado.", "ja")).toBe(
       "リレーションがありません。",
     )

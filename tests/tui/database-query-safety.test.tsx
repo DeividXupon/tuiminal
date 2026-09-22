@@ -1,6 +1,6 @@
 import "./setup"
-import { afterEach, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -11,6 +11,7 @@ import { getUiSettings, updateUiSettings } from "../../packages/core/src/setting
 import type { DatabaseConnectionProfile } from "../../packages/feature-database/src/model/types"
 import type { StagedDatabaseChange } from "../../packages/feature-database/src/model/workspace"
 import { DatabaseQueryWorkspace } from "../../packages/feature-database/src/query/DatabaseQueryWorkspace"
+import * as databaseService from "../../packages/feature-database/src/services/database"
 import {
   addDatabaseConnection,
   applyTableMutations,
@@ -49,6 +50,10 @@ async function key(name: string, options: { ctrl?: boolean } = {}) {
   })
 }
 
+async function keys(name: string, count: number) {
+  for (let index = 0; index < count; index += 1) await key(name)
+}
+
 async function click(id: string) {
   if (!tui) throw new Error("TUI not mounted")
   const target = tui.renderer.root.findDescendantById(id)
@@ -59,14 +64,25 @@ async function click(id: string) {
   })
 }
 
-async function mountQuery(sql: string, layout: "compact" | "framed" = "compact") {
+async function mountQuery(
+  sql: string,
+  layout: "compact" | "framed" = "compact",
+  selectedColumn = 2,
+  rowCount = 2,
+) {
   previousDefault = getDefaultDatabaseConnectionId()
   fixtureRoot = mkdtempSync(join(tmpdir(), "tuiminal-query-safety-"))
   const filename = join(fixtureRoot, "fixture.sqlite")
   const database = new Database(filename, { create: true })
   database.exec(
-    "CREATE TABLE users (tenant_id INTEGER, id INTEGER, name TEXT, PRIMARY KEY (tenant_id, id)); INSERT INTO users VALUES (1, 1, 'Original'), (1, 2, 'Unrelated');",
+    "CREATE TABLE users (tenant_id INTEGER, id INTEGER, name TEXT, PRIMARY KEY (tenant_id, id));",
   )
+  const insert = database.prepare("INSERT INTO users VALUES (?, ?, ?)")
+  database.transaction(() => {
+    for (let id = 1; id <= rowCount; id += 1) {
+      insert.run(1, id, id === 1 ? "Original" : id === 2 ? "Unrelated" : `User ${id}`)
+    }
+  })()
   database.close()
   const { profile } = await addDatabaseConnection(
     {
@@ -128,9 +144,11 @@ async function mountQuery(sql: string, layout: "compact" | "framed" = "compact")
     tui = await testRender(<Harness />, { width: 120, height: 35 })
   })
   await settle(() =>
-    Boolean(tui?.renderer.root.findDescendantById("database-query-safety-cell-0-2")),
+    Boolean(
+      tui?.renderer.root.findDescendantById(`database-query-safety-cell-0-${selectedColumn}`),
+    ),
   )
-  await click("database-query-safety-cell-0-2")
+  await click(`database-query-safety-cell-0-${selectedColumn}`)
   return filename
 }
 
@@ -206,3 +224,61 @@ test("direct query preserves the composite key from result through staging, revi
   ])
   database.close()
 })
+
+test("SQL grid loads overlapping 50-row windows only after crossing a boundary", async () => {
+  await mountQuery("SELECT id FROM users ORDER BY id", "compact", 0, 260)
+  await settle(() => tui?.renderer.currentFocusedRenderable?.id === "database-query-safety-results")
+  expect(tui?.renderer.root.findDescendantById("database-query-safety-result-row-49")).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById("database-query-safety-result-row-50"),
+  ).toBeUndefined()
+
+  const execute = databaseService.executeDatabaseQuery
+  let release = () => {}
+  const ready = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const calls = spyOn(databaseService, "executeDatabaseQuery").mockImplementation(
+    async (...args) => {
+      if (args[3]?.resultOffset === 50) await ready
+      return execute(...args)
+    },
+  )
+  try {
+    await keys("ARROW_DOWN", 49)
+    await settle(() => tui?.captureCharFrame().includes("REGISTRO 50 / 50") ?? false)
+    expect(calls).toHaveBeenCalledTimes(0)
+
+    await key("ARROW_DOWN")
+    await settle(() => tui?.captureCharFrame().includes("Carregando 40 linhas abaixo…") ?? false)
+    expect(calls).toHaveBeenCalledTimes(1)
+    expect(calls.mock.calls[0]?.[3]).toMatchObject({
+      resultOffset: 50,
+      resultLimit: 40,
+      recordHistory: false,
+    })
+
+    release()
+    await settle(() => tui?.captureCharFrame().includes("41–90 linhas ↑↓") ?? false)
+    expect(
+      tui?.renderer.root.findDescendantById("database-query-safety-result-row-49"),
+    ).toBeDefined()
+    expect(
+      tui?.renderer.root.findDescendantById("database-query-safety-result-row-50"),
+    ).toBeUndefined()
+
+    await keys("ARROW_UP", 10)
+    await key("ARROW_UP")
+    await settle(() => tui?.captureCharFrame().includes("1–50 linhas ↓") ?? false)
+    expect(calls).toHaveBeenCalledTimes(2)
+    expect(calls.mock.calls[1]?.[3]).toMatchObject({
+      resultOffset: 0,
+      resultLimit: 40,
+      recordHistory: false,
+    })
+  } finally {
+    release()
+    await Promise.allSettled(calls.mock.results.map((call) => call.value))
+    calls.mockRestore()
+  }
+}, 20_000)

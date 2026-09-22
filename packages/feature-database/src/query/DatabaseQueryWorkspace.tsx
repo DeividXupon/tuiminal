@@ -2,8 +2,6 @@ import type { BoxRenderable, ScrollBoxRenderable, TextareaRenderable } from "@op
 import { RenderableEvents, RGBA } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { COLORS, databaseSelectionColors } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import {
   DEFAULT_SENSITIVE_VISIBILITY,
@@ -11,9 +9,12 @@ import {
   type SensitiveVisibility,
   sensitiveDataIsMasked,
 } from "@xupon/tuiminal-core/security/sensitive-data"
+import { COLORS, databaseSelectionColors } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDatabaseQueryNotifications } from "../hooks/use-database-notifications"
+import { useDatabaseQueryWindow } from "../hooks/use-database-query-window"
 import { useDatabaseSelectionSweep } from "../hooks/use-database-selection-sweep"
 import { useIdentifiedQueryRows } from "../hooks/use-identified-query-rows"
 import { useQueryResultHorizontalNavigation } from "../hooks/use-query-result-horizontal-navigation"
@@ -27,8 +28,8 @@ import { databaseResultScrollTop } from "../model/layout"
 import {
   databaseEditableQueryTable,
   databaseQueryResultColumns,
-  databaseQueryTableWriteBlockReason,
   databaseQueryResultRowKey,
+  databaseQueryTableWriteBlockReason,
 } from "../model/query-edit"
 import { getSqlCompletionContext, sqlAutocompleteTableKey } from "../model/sql-autocomplete"
 import { sqlStatementAtOffset } from "../model/sql-statements"
@@ -66,12 +67,14 @@ import {
   SQL_SYNTAX_STYLE,
   SQL_TAB_LIMIT,
 } from "../rendering/constants"
-import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
   queryCellForeground,
   queryCompletionPresentation,
+  queryResultSummary,
   queryRowColors,
+  queryWindowLoadingLabel,
 } from "../rendering/query-presentation"
+import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
   fitCell,
   queryPlaceholder,
@@ -213,6 +216,21 @@ export function DatabaseQueryWorkspace({
     index: number
     total: number
   } | null>(null)
+  const queryWindow = useDatabaseQueryWindow({
+    connectionId,
+    result,
+    sqlRef: lastExecutedSqlRef,
+    revealSensitive: querySensitiveVisibility === "visible",
+    requestRef: queryAbortRef,
+    scrollRef: resultScrollRef,
+    setBusy,
+    setNotice: setResultNotice,
+    setResult,
+    selectRow: (index) => {
+      selectedResultRowIndexRef.current = index
+      setSelectedResultRowIndex(index)
+    },
+  })
   const identifiedRows = useIdentifiedQueryRows(result?.rows ?? [])
   const splitEditorHeight = sqlSplitEditorHeight(terminal.height, editorRatio)
   const editorHeight =
@@ -899,13 +917,17 @@ export function DatabaseQueryWorkspace({
 
   const moveResultRow = useCallback(
     (delta: number) => {
-      setSelectedResultRowIndex((current) => {
-        const next = Math.max(0, Math.min(queryGridRows.length - 1, current + delta))
-        selectedResultRowIndexRef.current = next
-        return next
-      })
+      const current = selectedResultRowIndexRef.current
+      const next = Math.max(0, Math.min(queryGridRows.length - 1, current + delta))
+      const atBoundary = delta < 0 ? current === 0 : current === queryGridRows.length - 1
+      if (next === current && atBoundary) {
+        void queryWindow.load(delta < 0 ? -1 : 1)
+        return
+      }
+      selectedResultRowIndexRef.current = next
+      setSelectedResultRowIndex(next)
     },
-    [queryGridRows.length],
+    [queryGridRows.length, queryWindow],
   )
 
   const moveResultColumn = useCallback(
@@ -1683,13 +1705,10 @@ export function DatabaseQueryWorkspace({
     ? `◆ SQL${favoriteHeader}`
     : `${translateUi("◆ EDITOR SQL")} · ${databaseDriverLabel(connection.driver)}${favoriteHeader}`
 
-  const resultSummary = result
-    ? result.mutating
-      ? `${result.command} · ${result.affectedRows ?? "?"} ${translateUi("linha(s) afetada(s)")} · ${result.durationMs.toFixed(1)} ms`
-      : compactActions
-        ? `${result.rowCount} ${translateUi("linhas")} · ${result.durationMs.toFixed(1)} ms${result.truncated ? ` · ${translateUi("500 máx.")}` : ""}${queryHasMaskedValues ? " · 🔒" : ""}`
-        : `${result.rowCount} ${translateUi("linha(s)")} · ${result.durationMs.toFixed(1)} ms${result.truncated ? ` · ${translateUi("exibindo as primeiras 500")}` : ""}${queryHasMaskedValues ? ` · ${translateUi("sensíveis mascarados")}` : ""}`
-    : translateUi("O resultado aparecerá aqui")
+  const resultSummary = queryResultSummary(result, compactActions, queryHasMaskedValues)
+  const windowLoadingStatus = queryWindow.loadingDirection
+    ? `${queryWindow.loadingFrame} ${queryWindowLoadingLabel(queryWindow.loadingDirection)}`
+    : ""
 
   return (
     <box
@@ -2080,11 +2099,16 @@ export function DatabaseQueryWorkspace({
         </box>
       ) : (
         <text
-          content={translateUi(resultNotice || resultSummary)}
+          content={windowLoadingStatus || translateUi(resultNotice || resultSummary)}
           style={{
             height: 1,
             flexShrink: 0,
-            fg: resultNotice ? COLORS.warning : result ? COLORS.database : COLORS.muted,
+            fg:
+              resultNotice && !windowLoadingStatus
+                ? COLORS.warning
+                : result
+                  ? COLORS.database
+                  : COLORS.muted,
           }}
         />
       )}

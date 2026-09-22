@@ -235,6 +235,31 @@ for (const layout of ["framed", "compact"] as const) {
   })
 }
 
+test("notification body renders syntax-colored message chunks", async () => {
+  await renderNotifications([
+    {
+      source: "Banco",
+      kind: "info",
+      title: "SELECT",
+      message: "SELECT … FROM demo\nLIMIT 51 OFFSET 0",
+      messageChunks: [
+        { text: "SELECT", color: COLORS.database },
+        { text: " … FROM demo\n" },
+        { text: "LIMIT", color: COLORS.database },
+        { text: " " },
+        { text: "51", color: COLORS.warning },
+        { text: " OFFSET 0" },
+      ],
+    },
+  ])
+
+  expect(tui?.captureCharFrame()).toContain("LIMIT 51 OFFSET 0")
+  const spans = tui?.captureSpans().lines.flatMap((line) => line.spans) ?? []
+  const spanColor = (content: string) => spans.find((span) => span.text === content)?.fg.toInts()
+  expect(spanColor("SELECT")).toEqual(RGBA.fromHex(COLORS.database).toInts())
+  expect(spanColor("51")).toEqual(RGBA.fromHex(COLORS.warning).toInts())
+})
+
 test("hovering one card pauses and resumes every countdown and progress bar", async () => {
   await renderNotifications([
     { source: "Git", kind: "success", message: "Primeiro timer", durationMs: 700 },

@@ -118,6 +118,9 @@ export type DatabaseQueryResult = {
   columns: string[]
   rows: Array<Record<string, unknown>>
   rowCount: number
+  windowOffset: number
+  hasRowsBefore: boolean
+  hasRowsAfter: boolean
   affectedRows: number | null
   durationMs: number
   truncated: boolean
@@ -131,6 +134,9 @@ export type DatabaseQueryPlan = {
 
 export type DatabaseQueryExecutionOptions = {
   signal?: AbortSignal
+  resultOffset?: number
+  resultLimit?: number
+  recordHistory?: boolean
 }
 
 export type DatabaseSavedQuery = {
@@ -176,4 +182,5 @@ export type DatabaseQueryHistoryEntry = {
 
 export type DatabaseTablePageOptions = {
   recordHistory?: boolean
+  onQueryStart?: (sql: string) => void
 }

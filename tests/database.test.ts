@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
+import { afterAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -490,6 +490,49 @@ describe("SQLite catalog and data browsing", () => {
     expect(ids).toEqual(Array.from({ length: 620 }, (_, index) => index + 1))
   })
 
+  test("reports each table SELECT as it starts, including the look-ahead row", async () => {
+    const queries: string[] = []
+    const first = await loadTablePage(
+      "write-one",
+      usersTable,
+      0,
+      50,
+      false,
+      { search: "", sort: null },
+      { onQueryStart: (sql) => queries.push(sql) },
+    )
+    const next = await loadTablePage(
+      "write-one",
+      usersTable,
+      50,
+      40,
+      false,
+      { search: "", sort: null },
+      { onQueryStart: (sql) => queries.push(sql) },
+    )
+    expect(first.rows).toHaveLength(50)
+    expect(next.rows).toHaveLength(40)
+    expect(queries).toHaveLength(2)
+    expect(queries[0]).toContain('FROM "users"')
+    expect(queries[0]).toContain("LIMIT 51 OFFSET 0")
+    expect(queries[1]).toContain("LIMIT 41 OFFSET 50")
+
+    const unaffected = await loadTablePage(
+      "write-one",
+      usersTable,
+      0,
+      1,
+      false,
+      { search: "", sort: null },
+      {
+        onQueryStart: () => {
+          throw new Error("notification unavailable")
+        },
+      },
+    )
+    expect(unaffected.rows).toHaveLength(1)
+  })
+
   test("records table rendering without recording internal catalog queries", async () => {
     const historyBefore = listDatabaseQueryHistory("write-one")
 
@@ -908,7 +951,7 @@ describe("SQL execution", () => {
     removeDatabaseSavedQuery("write-two", favorite.id)
   })
 
-  test("returns query metadata and caps large result sets", async () => {
+  test("keeps query results in overlapping windows of at most 50 rows", async () => {
     const result = await executeDatabaseQuery(
       "write-one",
       "SELECT id, name, active FROM users ORDER BY id",
@@ -918,12 +961,48 @@ describe("SQL execution", () => {
       command: "SELECT",
       mutating: false,
       columns: ["id", "name", "active"],
-      rowCount: 500,
+      rowCount: 50,
+      windowOffset: 0,
+      hasRowsBefore: false,
+      hasRowsAfter: true,
       truncated: true,
     })
-    expect(result.rows).toHaveLength(500)
+    expect(result.rows).toHaveLength(50)
     expect(result.rows[0]).toEqual({ id: 1, name: "User 0001", active: 1 })
+    expect(result.rows.at(-1)).toEqual({ id: 50, name: "User 0050", active: 1 })
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
+
+    const historyCount = listDatabaseQueryHistory("write-one").length
+    const next = await executeDatabaseQuery(
+      "write-one",
+      "SELECT id, name, active FROM users ORDER BY id",
+      false,
+      { resultOffset: 50, resultLimit: 40, recordHistory: false },
+    )
+    expect(next).toMatchObject({
+      rowCount: 40,
+      windowOffset: 50,
+      hasRowsBefore: true,
+      hasRowsAfter: true,
+    })
+    expect(next.rows[0]?.id).toBe(51)
+    expect(next.rows.at(-1)?.id).toBe(90)
+
+    const last = await executeDatabaseQuery(
+      "write-one",
+      "SELECT id, name, active FROM users ORDER BY id",
+      false,
+      { resultOffset: 600, resultLimit: 40, recordHistory: false },
+    )
+    expect(last).toMatchObject({
+      rowCount: 20,
+      windowOffset: 600,
+      hasRowsBefore: true,
+      hasRowsAfter: false,
+    })
+    expect(last.rows[0]?.id).toBe(601)
+    expect(last.rows.at(-1)?.id).toBe(620)
+    expect(listDatabaseQueryHistory("write-one")).toHaveLength(historyCount)
   })
 
   test("masks sensitive and binary values in ad-hoc query results by default", async () => {

@@ -1,10 +1,13 @@
 export type NotificationKind = "info" | "success" | "warning" | "error"
 
+export type NotificationMessageChunk = { text: string; color?: string }
+
 export type NotificationInput = {
   kind?: NotificationKind
   source: string
   title?: string
   message: string
+  messageChunks?: NotificationMessageChunk[]
   durationMs?: number | null
   onPress?: () => void
 }
@@ -12,6 +15,7 @@ export type NotificationInput = {
 export type AppNotification = Required<Pick<NotificationInput, "source" | "message">> & {
   id: string
   kind: NotificationKind
+  messageChunks?: NotificationMessageChunk[]
   title?: string
   createdAt: number
   durationMs: number
