@@ -1,24 +1,24 @@
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useMemo, useRef } from "react"
-import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
+import { useEffect, useMemo, useRef } from "react"
 import {
+  type HttpJsonTree,
   httpJsonPathAtLine,
   httpJsonTreeActionForKey,
   httpJsonTreeForDocument,
   updateHttpJsonTree,
-  type HttpJsonTree,
 } from "../model/json-tree"
 import { findHttpTextMatches } from "../model/response"
 import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
 import { responseFiletype } from "./format"
-import { httpResponseContent } from "./http-response-content"
+import { HttpResponseHeader } from "./HttpResponseHeader"
 import { HttpResponseState } from "./HttpResponseState"
 import { HttpResponseToolbar } from "./HttpResponseToolbar"
-import { HttpResponseHeader } from "./HttpResponseHeader"
 import { buildHttpJsonDocument } from "./http-json-document"
+import { httpResponseContent } from "./http-response-content"
 
 const RESPONSE_SYNTAX = createUiSyntaxStyle()
 const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
@@ -192,7 +192,7 @@ export function HttpResponsePane({
     if (!focused || !jsonTree) return
     const scroll = scrollRef.current
     if (!scroll) return
-    scroll.focus()
+    if (!presentation.searchOpen && !presentation.jsonPathOpen) scroll.focus()
     const top = scroll.scrollTop
     const rows = Math.max(1, scroll.viewport.height)
     if (jsonTree.selectedLine < top) {
@@ -200,7 +200,7 @@ export function HttpResponsePane({
     } else if (jsonTree.selectedLine >= top + rows) {
       scroll.scrollTo(Math.max(0, jsonTree.selectedLine - rows + 1))
     }
-  }, [focused, jsonTree])
+  }, [focused, jsonTree, presentation.searchOpen, presentation.jsonPathOpen])
 
   const cycleSearch = () => {
     if (!matches.length) return

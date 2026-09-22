@@ -438,7 +438,15 @@ export function AppContent() {
             {features.state.installed.includes(ONLY_TAB) &&
               !closed.has(ONLY_TAB) &&
               ONLY_TAB === "terminal" && (
-                <FreeTerminal active={!interactionBlocked} externalSidebarHost />
+                <FreeTerminal
+                  active={!interactionBlocked}
+                  externalSidebarHost
+                  onOpenSettings={openSettings}
+                  onQuit={() => {
+                    features.controller.cancel()
+                    void exit.quit()
+                  }}
+                />
               )}
           </box>
         </box>
@@ -545,6 +553,12 @@ export function AppContent() {
                 <FreeTerminal
                   active={activeTab === "terminal" && !interactionBlocked}
                   externalSidebarHost
+                  onOpenSettings={openSettings}
+                  onSelectTool={(tool) => void selectTab(tool)}
+                  onQuit={() => {
+                    features.controller.cancel()
+                    void exit.quit()
+                  }}
                 />
               </box>
             ) : null}

@@ -2730,6 +2730,7 @@ describe("HTTP TUI", () => {
       )
       await act(async () => tui?.mockInput.typeText("answer"))
       await settle(() => tui?.captureCharFrame().includes("1/1") ?? false)
+      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-response-search-http-scratch-1")
       expect(tui.captureCharFrame()).toContain("[Enter] Próximo")
       await key("ESCAPE")
       await settle(() => !(tui?.captureCharFrame().includes("[Enter] Próximo") ?? true))

@@ -23,11 +23,11 @@ section has room for a second pane. New section does the same. Only the explicit
 Split right / below actions add a second pane to the current section. Custom
 commands create a new section and are passed unchanged to the native shell.
 
-The left sidebar has a Sessions heading and a count of its visible sections,
+The left sidebar has a Terminals heading and a count of its visible sections,
 followed by non-empty folders and zero-padded numbered sections. Clicking a folder
 header, or highlighting it with the sidebar cursor and pressing Enter, collapses
 or expands its rows, and that fold state is restored per project;
-empty folders stay out of the sidebar. Sessions lists only terminals without a running recognized
+empty folders stay out of the sidebar. Terminals lists only terminals without a running recognized
 agent, including completed custom commands whose output is retained. A naturally
 exited interactive shell is closed and removed from the workspace.
 Running agents appear exclusively in Agents, regardless of their activity state.
@@ -48,9 +48,9 @@ new terminals and restored panes without a saved assignment;
 the reserved tmux folder contains ordinary panes discovered on external servers.
 Users can rename terminals; the only folders are Tuiminais, tmux and Others.
 The New terminal action sits below navigation; the Master Key stays at the bottom.
-In a shell/agent split, Sessions shows only the shell and Agents shows the agent;
+In a shell/agent split, Terminals shows only the shell and Agents shows the agent;
 the actual split, section and folder assignment remain intact. When the agent
-returns to its shell, its terminal reappears in Sessions; if the shell itself
+returns to its shell, its terminal reappears in Terminals; if the shell itself
 exits, the terminal is removed instead.
 
 Terminal names automatically follow the foreground executable: opening `lazygit`
@@ -111,16 +111,22 @@ or disabled actions leave it open. Repeating the Master Key sends its literal
 control byte to the selected PTY. Neither the prefix, action nor cancellation
 reaches the shell. Dialogs own their keyboard and Escape; closing one restores the
 selected terminal. Switching tools or opening global settings dismisses local
-menus and dialogs. `[G]` after the prefix releases focus for global shortcuts.
+menus and dialogs. While the menu is open, the first nine visible Agents or
+Terminals rows receive a key (`[1]`, `[2]`, … `[9]`), ordered as displayed with
+Agents first. Type its key to activate that existing pane; collapsed terminal
+folders do not receive a key. `[Alt+1–5]` keeps its global tool
+navigation role: Database, Git, Runner, HTTP, and Free Terminal. `[,]` opens
+settings, and `[Q]` requests application exit. The custom-command dialog remains
+available from a sidebar button.
 
 `[B]` after the Master Key pins the terminal sidebar to the left side of the
-application. The same live Sessions and Agents navigation then remains visible
+application. The same live Terminals and Agents navigation then remains visible without a right border
 while the user switches among installed tools; Terminal removes its internal copy
 so there is still exactly one sidebar. Selecting a terminal or agent from the
 pinned sidebar opens Terminal and focuses the existing pane. Unpinning returns the
 sidebar to the Terminal workspace without restarting a PTY or changing its folder.
 `[L]` from the action menu focuses the visible sidebar. Its `[↑/↓]` and `[J/K]`
-cursor crosses the Sessions/Agents boundary as one ordered list, and `[Enter]`
+cursor crosses the Terminals/Agents boundary as one ordered list, and `[Enter]`
 activates the highlighted existing pane. While the pinned sidebar owns focus, the
 tool behind it does not process keyboard input.
 
@@ -132,11 +138,11 @@ The tmux split replaces the in-app host so only one sidebar is visible. While th
 app is reachable, helpers receive its live sidebar snapshot, including reserved
 folders, manual names, status, agent task titles, language and palette colors. If
 that channel is unavailable, they fall back to read-only process and pane metadata;
-they do not attach another client or mirror screen contents. A click in the split
-beside Tuiminal asks the app over a private `0600` local socket to open/focus the
-target inside Terminal. A click in a different window selects a target pane on the
-same tmux server directly; targets on another server are opened in Tuiminal and the
-client returns to its Tuiminal pane. While these helper splits exist, Tuiminal enables
+they do not attach another client or mirror screen contents. A terminal or agent activation from any helper asks the app over a private `0600`
+local socket to open or focus the target inside Terminal, then returns the client to
+the Tuiminal pane. If the target has no existing workspace session, Tuiminal creates
+a mirror and its normal classification places it under Agents or Sessions. Helpers
+never switch the client directly to the source pane. While these helper splits exist, Tuiminal enables
 tmux mouse routing so the sidebar remains clickable even when the adjacent content
 pane owns focus. It restores an initially disabled mouse option when the sidebar is
 unpinned and leaves an initially enabled option unchanged. Each helper consumes its
@@ -169,41 +175,47 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | Key after the Master Key | Action |
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
-| `[/]` | Run a custom command in a new section |
+| `[A]` | Start native Codex in a new section |
 | `[V]` / `[S]` | Split right / below |
-| `[1]` / `[2]` | Focus a pane of the current section |
-| `[M]` | Maximize / restore |
+| `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
+| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
 | `[B]` | Pin / unpin the sidebar |
 | `[L]` | Focus the visible sidebar |
 | `[E]` | Rename selected terminal |
-| `[D]` | Toggle Live Diff for a recognized agent |
+| `[D]` | Open Live Diff for a recognized agent, or focus it when already open |
 | `[R]` / `[X]` | Restart / close selected terminal |
-| `[G]` | Release global shortcuts |
+| `[,]` | Open settings |
+| `[Q]` | Quit Tuiminal |
 | `[Esc]` | Cancel without changing terminal focus |
 
 ## Live Diff companion
 
 Master Key then `[D]` opens a read-only Live Diff beside the selected recognized
-agent's existing PTY. The companion does not consume a terminal slot or create a
+agent's existing PTY and focuses it immediately. Repeating `[D]` focuses the open Live Diff; its close control or `[X]` removes it. The companion does not consume a terminal slot or create a
 tmux pane. It shares only one separator with the PTY and stacks below it when the
 available width is narrow or the section already has two terminals. Toggling it
 off, switching sections, changing theme, and refreshing Git never relaunch the
 agent or remount its embedded terminal. One agent companion is active at a time.
 The focused file list supports `[J/K]` / `[↑/↓]` to select a file, `[Enter]` to
-focus its code preview, `[N]` to add a local project directory, and `[Esc]` to
+focus its code preview, `[H/L]` / `[←/→]` to highlight a monitored project,
+`[N]` to show or hide that project's files, `[A]` to open a searchable picker of nearby Git projects, `[X]` to close Live Diff, and `[Esc]` to
 return focus to the terminal. In the code preview, `[J/K]` / `[↑/↓]` scroll by
 one rendered row and `[H/L]` / `[←/→]` by half a viewport; `[Esc]` re-enables
 automatic follow, selects the newest file and returns to file navigation without
 leaving Live Diff. Clicking the preview focuses it, while
-clicking a file returns to file navigation. Its close and add controls are also
-clickable. The Master Key's `[N]` still creates a terminal; it is not captured
+clicking a file returns to file navigation. Clicking a project chip highlights it;
+the close control and the `[A]` Add project button in the bottom shortcut area are also clickable. The Master Key's `[N]` still creates a terminal; it is not captured
 by Live Diff.
 
 The panel has a scrollable unified patch for the selected file, a scrollable
-Files list, and a compact Info summary. Info shows `Show diff auto: true/false`
-with theme-colored totals, additions, deletions, project and state; while code
-is focused, it shows the contextual `[Esc]` action. Long code lines wrap inside the preview
-and remain vertically scrollable. The Files list follows keyboard selection. Its
+Files list, and a compact Info summary. The Live Diff code heading shows
+`Show auto: true/false`; Info keeps theme-colored totals, additions, deletions and projects; while code
+is focused, it shows the contextual `[Esc]` action. The panel reserves fourteen fewer
+columns than its usual split and keeps that width while focused. Focusing the code
+widens only its preview by 30 columns toward available space; Files and Info
+keep their widths. Long code lines stay on
+one row until the code preview is focused, then wrap and remain vertically
+scrollable. The Files list follows keyboard selection. Its
 table rows align status, compact path, elapsed time, added and deleted line counts;
 files are ordered by their latest detected change, newest first. The preview
 automatically follows the newest file, pauses that follow when an older file is
@@ -227,13 +239,18 @@ unchanged lines and line-number-only shifts are not added. When a line leaves
 the patch, it has no remaining row to highlight. Edits between two polling rounds
 are shown as one observed change. Highlighting never moves a manually scrolled
 preview or changes the PTY.
-New uses the palette's purple with a light sweep, Edit uses its warning yellow,
+Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green.
 elapsed time and additions use the palette's blue, and deletions use its red.
 The path shows the project, an omitted-ancestors marker and only the file's
 immediate parent folder; folder names are middle-truncated to 12 display cells.
-The full repository-relative path remains in the selected-file header. Info sums the current
-changed files and textual additions/deletions across monitored roots and displays
-the full path of the last root with a detected change. Counts are the final Git
+There is no selected-file heading above the code. Info sums the current
+visible changed files and textual additions/deletions. The last changed root's
+folder name appears at the right of the totals on the same Info row. The Files and Info boxes omit their redundant headings, and the Add project button shares the bottom shortcut row when it fits. Beneath the last project, the Watching
+row shows each monitored root as `/folder-name`, with spacing between chips and
+compact, left-aligned continuation rows when they do not fit. Avoid a single orphan chip
+on the final row when two balanced rows fit. Visible project names have a vivid background;
+hidden names have a muted background. Hiding a root
+filters the file list, preview and totals while Git polling continues. Counts are the final Git
 worktree state against `HEAD`, not cumulative edit history: staged and unstaged
 changes are not double-counted, and a commit can clear the list. Untracked text
 files are included; binary, oversized, and mode-only changes have unknown line
@@ -242,7 +259,7 @@ files as additions. Very large patches show a non-text preview fallback.
 
 On activation and every two seconds, discovery checks the launch/tmux path,
 the recognized agent's process tree cwd where the OS exposes it, and Git-linked
-worktrees. A path entered through `[N]` is resolved locally and need not be linked
+worktrees. A path entered through Add project is resolved locally and need not be linked
 to the launch repository. Up to four canonical roots are monitored. On macOS cwd
 inspection uses `lsof`; on Linux it uses `/proc/<pid>/cwd`; Windows falls back
 to known launch/tmux/manual paths. Remote SSH/container filesystems require an

@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import {
+  AGENT_WORKING_FRAMES,
+  agentPresentation,
+  codexActivityIndicators,
+} from "../packages/feature-terminal/src/rendering/agent-presentation"
+import { tmuxAgentNotice } from "../packages/feature-terminal/src/rendering/tmux-agent-notice"
+import {
+  createCodexAgentCommand,
+  createCodexTerminalCommand,
+} from "../packages/feature-terminal/src/services/terminal"
+import { codexAppServerActivity } from "../packages/feature-terminal/src/services/codex-app-server"
+import {
   terminalSessionDetail,
   terminalStatusLabel,
   terminalStatusMarker,
@@ -7,9 +18,11 @@ import {
 import {
   cleanTerminalName,
   DEFAULT_FOLDER,
+  masterKeyShortcutLabel,
   MAX_TERMINALS_PER_SECTION,
   normalizeSectionLayout,
   terminalSections,
+  visibleTerminalShortcutTargets,
   type TerminalSession,
 } from "../packages/feature-terminal/src/model/sessions"
 
@@ -37,6 +50,59 @@ export function session(id: string, patch: Partial<TerminalSession> = {}): Termi
 }
 
 describe("Free Terminal presentation", () => {
+  test("keeps the working loader", () => {
+    expect(AGENT_WORKING_FRAMES).toEqual(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+    expect(agentPresentation("working", 1)).toMatchObject({
+      marker: "⠙",
+      shortLabel: "Trabalhando",
+    })
+  })
+  test("maps only public app-server item kinds to the structured Codex indicators", () => {
+    expect(
+      codexAppServerActivity({ method: "item/started", params: { item: { type: "reasoning" } } }),
+    ).toBe("thinking")
+    expect(
+      codexAppServerActivity({
+        method: "item/started",
+        params: { item: { type: "commandExecution" } },
+      }),
+    ).toBe("running")
+    expect(codexAppServerActivity({ method: "item/plan/delta" })).toBe("updating")
+    expect(codexAppServerActivity({ method: "item/fileChange/patchUpdated" })).toBe("coding")
+    expect(codexAppServerActivity({ method: "item/reasoning/textDelta" })).toBeNull()
+    expect(codexActivityIndicators("coding", 2)).toEqual([
+      { key: "thinking", marker: "◑", active: false },
+      { key: "command", marker: "›_", active: false },
+      { key: "update", marker: "◆", active: false },
+      { key: "code", marker: "{}", active: true },
+    ])
+  })
+  test("starts the native Codex CLI in a real terminal", () => {
+    expect(createCodexTerminalCommand()).toMatchObject({
+      kind: "custom",
+      label: "Codex",
+      displayCommand: "codex",
+      command: ["codex"],
+    })
+  })
+  test("creates a first-party app-server session instead of a shell command", () => {
+    expect(createCodexAgentCommand("Corrija o login")).toMatchObject({
+      kind: "codex",
+      label: "Codex",
+      displayCommand: "codex app-server",
+      command: [],
+      codex: { prompt: "Corrija o login" },
+    })
+  })
+  test("explains the richer Tuiminal path for tmux agents", () => {
+    expect(tmuxAgentNotice(null)).toBeNull()
+    expect(tmuxAgentNotice({ label: "Codex" })).toMatchObject({
+      source: "Terminal",
+      kind: "info",
+      title: "Agente no tmux",
+      message: "Execute este agente no Tuiminal para mais funcionalidades.",
+    })
+  })
   test.each([DEFAULT_FOLDER, "work"])("keeps an agent's paired section in %s", (folderId) => {
     const first = session("shell", { folderId })
     const second = session("agent", {
@@ -64,6 +130,28 @@ describe("Free Terminal presentation", () => {
     expect(terminalSections([ordinary, agent])[0]?.folderId).toBe("work")
     expect(normalizeSectionLayout([agent], "one")[0]).toMatchObject({ row: 0, column: 0 })
     expect(normalizeSectionLayout([session("below", { row: 1 })], "one")[0]?.row).toBe(0)
+  })
+  test("orders Master Key targets as visible agents followed by expanded terminals", () => {
+    const shell = session("shell")
+    const agent = session("agent", {
+      agent: { key: "codex", label: "Codex", profile: "codex", state: "working", activity: null },
+    })
+    const hidden = session("hidden", { folderId: "tmux", sectionId: "two" })
+    expect(
+      visibleTerminalShortcutTargets(
+        [shell, agent, hidden],
+        [
+          { id: DEFAULT_FOLDER, name: "Tuiminais" },
+          { id: "tmux", name: "tmux" },
+        ],
+        ["tmux"],
+      ).map(({ id }) => id),
+    ).toEqual(["agent", "shell"])
+  })
+  test("limits Master Key labels to its nine direct keys", () => {
+    expect(masterKeyShortcutLabel(0)).toBe("[1]")
+    expect(masterKeyShortcutLabel(8)).toBe("[9]")
+    expect(masterKeyShortcutLabel(9)).toBeNull()
   })
   test("keeps exit and failure states visible in sidebar titles", () => {
     expect(terminalStatusMarker("running")).toBe("○")

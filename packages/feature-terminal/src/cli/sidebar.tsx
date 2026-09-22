@@ -1,12 +1,8 @@
 import { createCliRenderer } from "@opentui/core"
-import { createRoot, useFocus, useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { createRoot, useFocus, useTerminalDimensions } from "@opentui/react"
 import { isLanguage, setLanguage } from "@xupon/tuiminal-core/i18n/index"
-import {
-  COLORS,
-  getUiSettings,
-  matchesTerminalMasterKey,
-} from "@xupon/tuiminal-core/settings/theme"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { detectAgentTitle } from "../model/agent-screen"
 import { agentTaskTitle } from "../model/agent-task-title"
 import type { PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
@@ -17,8 +13,10 @@ import {
   EXTERNAL_FOLDER_NAME,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
+  numberedTerminalSections,
   type TerminalSession,
   terminalSections,
+  visibleTerminalShortcutTargets,
 } from "../model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "../model/tmux"
 import {
@@ -26,11 +24,15 @@ import {
   sendPinnedSidebarTarget,
 } from "../services/pinned-sidebar-control"
 import { waitForPinnedTmuxSidebarFocus } from "../services/pinned-sidebar-focus"
-import { selectPinnedTmuxHost, selectPinnedTmuxTarget } from "../services/pinned-sidebar-navigation"
+import {
+  routePinnedTerminalToTuiminal,
+  selectPinnedTmuxHost,
+} from "../services/pinned-sidebar-navigation"
 import { waitForPinnedSidebarTerminalReady } from "../services/pinned-sidebar-terminal"
 import { discoverTmuxWorkspace } from "../services/tmux-agents"
 import { TERMINAL_ACTIONS, TerminalActions } from "../ui/TerminalActions"
 import { TerminalSidebar } from "../ui/TerminalSidebar"
+import { useSidebarKeyboard } from "./sidebar-keyboard"
 
 type SidebarMode = "app" | "tmux"
 type DiscoveredRows = Awaited<ReturnType<typeof discoverTmuxWorkspace>>["panes"]
@@ -126,6 +128,7 @@ function SidebarApp({
   const [localFolder, setLocalFolder] = useState<string | null>(null)
   const [localCollapsedFolderIds, setLocalCollapsedFolderIds] = useState<string[]>([])
   const [leaderActive, setLeaderActive] = useState(false)
+  const masterTargetDigits = useRef("")
   const [focusRequest, setFocusRequest] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
@@ -170,6 +173,11 @@ function SidebarApp({
   const masterKey = replica?.masterKey ?? getUiSettings().terminalMasterKey
   const managedSessions = useMemo(() => sessions.filter((session) => !session.external), [sessions])
   const sections = useMemo(() => terminalSections(managedSessions), [managedSessions])
+  const numberedSections = useMemo(() => numberedTerminalSections(sessions), [sessions])
+  const masterKeyTargets = useMemo(
+    () => visibleTerminalShortcutTargets(sessions, folders, collapsedFolderIds),
+    [collapsedFolderIds, folders, sessions],
+  )
   const activeSession = sessions.find((session) => session.id === activeSessionId)
   const activeSection = sections.find((section) => section.id === activeSession?.sectionId)
   const canSplit = Boolean(
@@ -180,40 +188,36 @@ function SidebarApp({
   const disabled = useCallback(
     (key: string) => {
       if (["v", "s"].includes(key)) return !canSplit
-      if (["n", "c", "/"].includes(key)) return managedSessions.length >= MAX_SESSIONS
+      if (["n", "c"].includes(key)) return managedSessions.length >= MAX_SESSIONS
+      if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
+      if ([",", "q"].includes(key)) return !replica
       if (key === "r" && activeSession?.tmux) return true
-      if (["r", "x", "m", "e", "1"].includes(key)) return !activeSession
-      return key === "2" && activeSection?.panes.length !== 2
+      return ["r", "x", "e"].includes(key) && !activeSession
     },
-    [activeSection, activeSession, canSplit, managedSessions.length],
+    [activeSession, canSplit, managedSessions.length, numberedSections, replica],
   )
   const activate = useCallback(
     async (id: string) => {
       const session = sessions.find((candidate) => candidate.id === id)
       if (!session) return
       const target = session.tmux as TmuxPaneInfo | undefined
-      if (
-        mode === "tmux" &&
-        target?.windowId &&
-        (await selectPinnedTmuxTarget(sourceSocket, target))
-      ) {
-        setLocalActiveSessionId(id)
-        setLocalFolder(session.folderId)
-        if (replica) await sendPinnedSidebarTarget(endpoint, { sessionId: id })
-        return
-      }
       const selection = replica
         ? { sessionId: id }
         : target
           ? { socket: target.socket, paneId: target.paneId }
           : null
       if (!selection) return
-      const delivered = await sendPinnedSidebarTarget(endpoint, selection)
-      if (delivered) await selectPinnedTmuxHost(sourceSocket, hostPane)
-      else if (!delivered && mode === "app" && target?.windowId)
-        await selectPinnedTmuxTarget(sourceSocket, target)
+      const delivered = await routePinnedTerminalToTuiminal(
+        selection,
+        (next) => sendPinnedSidebarTarget(endpoint, next),
+        () => selectPinnedTmuxHost(sourceSocket, hostPane),
+      )
+      if (delivered) {
+        setLocalActiveSessionId(id)
+        setLocalFolder(session.folderId)
+      }
     },
-    [endpoint, hostPane, mode, replica, sessions, sourceSocket],
+    [endpoint, hostPane, replica, sessions, sourceSocket],
   )
   const selectFolder = useCallback(
     async (id: string) => {
@@ -241,6 +245,7 @@ function SidebarApp({
     [endpoint, replica],
   )
   const focusSidebar = useCallback(() => {
+    masterTargetDigits.current = ""
     setLeaderActive(false)
     setFocusRequest((current) => current + 1)
   }, [])
@@ -271,35 +276,32 @@ function SidebarApp({
       }
       if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
       setLeaderActive(false)
+      if (key.startsWith("alt+")) {
+        const target = numberedSections[Number(key.at(-1)) - 1]?.panes[0]
+        if (target) await activate(target.id)
+        return
+      }
       const delivered = await sendPinnedSidebarTarget(endpoint, { action: key })
       if (!delivered) {
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["/", "e", "g"].includes(key))
+      if (mode === "app" || ["e", ",", "q"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },
-    [disabled, endpoint, focusSidebar, hostPane, mode, sourceSocket],
+    [activate, disabled, endpoint, focusSidebar, hostPane, mode, numberedSections, sourceSocket],
   )
-  useKeyboard((key) => {
-    if (key.defaultPrevented) return
-    if (matchesTerminalMasterKey(key, masterKey)) {
-      key.preventDefault()
-      key.stopPropagation()
-      if (leaderActive) focusSidebar()
-      else setLeaderActive(true)
-      return
-    }
-    if (leaderActive) {
-      key.preventDefault()
-      key.stopPropagation()
-      if (key.name === "escape") focusSidebar()
-      else void runAction(key.name)
-      return
-    }
-    if (key.ctrl && key.name === "c") onExit()
-    else if (key.name === "q") onExit()
+  useSidebarKeyboard({
+    masterKey,
+    leaderActive,
+    masterTargetDigits,
+    masterKeyTargets,
+    focusSidebar,
+    setLeaderActive,
+    runAction,
+    activate,
+    onExit,
   })
   const actionHeight = leaderActive ? Math.max(3, Math.floor(dimensions.height / 2)) : 0
   return (
@@ -316,7 +318,9 @@ function SidebarApp({
         activeSessionId={activeSessionId}
         width={Math.max(16, dimensions.width)}
         height={Math.max(1, dimensions.height - actionHeight)}
+        borderRight={false}
         masterKey={masterKey}
+        masterKeyActive={leaderActive}
         onSelectFolder={(id) => void selectFolder(id)}
         onToggleFolder={() => undefined}
         onActivate={(id) => void activate(id)}

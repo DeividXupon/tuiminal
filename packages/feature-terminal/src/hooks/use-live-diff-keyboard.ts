@@ -41,6 +41,8 @@ function handleFileKey(
   selected: boolean,
   onReturnTerminal: () => void,
   onAddProject: () => void,
+  toggleProject: () => void,
+  selectProjectRelative: (delta: number) => void,
   selectRelative: (delta: number) => void,
 ) {
   if (key.name === "escape") {
@@ -51,7 +53,13 @@ function handleFileKey(
     preview?.focus()
   } else if (key.name === "n") {
     consume(key)
+    toggleProject()
+  } else if (key.name === "a") {
+    consume(key)
     onAddProject()
+  } else if (["h", "left", "l", "right"].includes(key.name)) {
+    consume(key)
+    selectProjectRelative(key.name === "h" || key.name === "left" ? -1 : 1)
   } else if (["j", "down", "k", "up"].includes(key.name)) {
     consume(key)
     selectRelative(key.name === "j" || key.name === "down" ? 1 : -1)
@@ -64,7 +72,10 @@ export function useLiveDiffKeyboard({
   preview,
   selected,
   onReturnTerminal,
+  onClose,
   onAddProject,
+  toggleProject,
+  selectProjectRelative,
   onActivateDiffAuto,
   selectRelative,
 }: {
@@ -73,7 +84,10 @@ export function useLiveDiffKeyboard({
   preview: RenderableRef<ScrollBoxRenderable>
   selected: boolean
   onReturnTerminal: () => void
+  onClose: () => void
   onAddProject: () => void
+  toggleProject: () => void
+  selectProjectRelative: (delta: number) => void
   onActivateDiffAuto: () => void
   selectRelative: (delta: number) => void
 }) {
@@ -87,8 +101,22 @@ export function useLiveDiffKeyboard({
       focused = focused.parent
     }
     if (!focused) return
+    if (key.name === "x") {
+      consume(key)
+      onClose()
+      return
+    }
     if (inPreview) handlePreviewKey(key, preview.current, onActivateDiffAuto)
     else
-      handleFileKey(key, preview.current, selected, onReturnTerminal, onAddProject, selectRelative)
+      handleFileKey(
+        key,
+        preview.current,
+        selected,
+        onReturnTerminal,
+        onAddProject,
+        toggleProject,
+        selectProjectRelative,
+        selectRelative,
+      )
   })
 }

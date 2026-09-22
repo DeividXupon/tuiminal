@@ -583,7 +583,7 @@ async function nativeTerminalFrames() {
   try {
     await settle(tui)
     const frames = [snapshot(tui, "Terminal · sessões e agentes na sidebar", undefined, 140)]
-    await prefix("/")
+    await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(
       tui,
       "terminal-command-input",
@@ -613,7 +613,7 @@ async function nativeTerminalFrames() {
       snapshot(tui, "Master Key · ações na parte inferior · [Esc] cancela", undefined, 220),
     )
     await pressKey(tui, "escape")
-    await prefix("/")
+    await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(tui, "terminal-command-input", `node "${agentPath}"`)
     await pressKey(tui, "enter")
     await prefix("e")
@@ -664,7 +664,7 @@ async function nativeTerminalFrames() {
     await prefix("d")
     process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     await prefix("v")
-    await prefix("/")
+    await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(tui, "terminal-command-input", `node "${reviewerPath}"`)
     await pressKey(tui, "enter")
     await prefix("e")

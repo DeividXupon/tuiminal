@@ -114,8 +114,8 @@ Sessions lists ordinary terminals with their process states; running recognized
 agents appear only in Agents, including idle and unknown agents. In a mixed split,
 only the ordinary terminal appears in Sessions, without changing the actual split.
 A dedicated Agents list shows every running agent in two lines: its marker, name
-and right-aligned localized activity/status, followed by its published task title
-or, when unavailable, its terminal name. A row
+and right-aligned localized status; its published task title or, when unavailable,
+its terminal name. A row
 activates the existing pane without acknowledging other results. Compact status
 labels keep the list readable; the done marker continues to mean unseen completion.
 The agent list has its own bounded scroll area and uses single-line rows on very
@@ -135,12 +135,20 @@ do not pop a redundant alert. A notification click opens the exact existing
 session in Terminal and dismisses the card; its close control only dismisses.
 The notification does not take keyboard focus, submit input, or auto-approve.
 
-A live working row can additionally say reading, searching, thinking, writing or
-running. These are descriptions of the agent's displayed activity, not access to
-its reasoning or proof of filesystem operations. Words in a user prompt, prose
-answer, old tool result or project title do not set an activity label. UI labels
-are localized in all six languages; screen matching currently targets recognized
-English agent controls.
+A live working row keeps its existing animated loader in the first line. Agents
+already discovered in tmux remain best-effort screen observations, so their rows do
+not present structured activity indicators. Activating a tmux agent shows an
+informational notification that running the agent through Tuiminal enables more
+features. This does not change the borrowed process, send it input, or imply that
+Tuiminal can access its reasoning.
+
+## Native Codex sessions
+
+`[A] New Codex`, and the empty workspace's matching action, launch the installed
+`codex` CLI in a normal owned PTY. Codex retains its native composer, approval
+flow, and commands such as `/resume` and `/model`. Tuiminal observes that process
+and its screen under the same best-effort rules used for other terminal agents;
+it does not infer private reasoning or submit input on the agent's behalf.
 
 After observed work, explicit idle must persist for at least 700 ms. Silence does
 not complete a task. Missing evidence preserves the previous state for a 3-second

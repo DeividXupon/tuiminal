@@ -48,15 +48,26 @@ function createTerminalSession(
   kindSequences: RefObject<Map<FreeTerminalKind, number>>,
 ): TerminalSession {
   sessionSequence.current += 1
+  const id = `${command.kind}-${Date.now()}-${sessionSequence.current}`
   const number = (kindSequences.current.get(command.kind) ?? 0) + 1
   kindSequences.current.set(command.kind, number)
   return {
     ...command,
     ...placement,
-    id: `${command.kind}-${Date.now()}-${sessionSequence.current}`,
+    id,
     title: command.tmux ? command.label : `${command.label} ${number}`,
     titleMode: "automatic",
-    agent: null,
+    agent: command.codex
+      ? {
+          key: `codex-app-server:${id}`,
+          label: "Codex",
+          profile: "codex",
+          state: "working",
+          activity: "thinking",
+          taskTitle: command.codex.prompt,
+        }
+      : null,
+    ...(command.codex ? { agentIntegration: "codex-app-server" as const } : {}),
     busy: false,
     status: "starting",
     pid: null,

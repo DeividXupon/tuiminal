@@ -50,7 +50,7 @@ function session(id: string, state: AgentState): TerminalSession {
   }
 }
 
-test("sidebar separates numbered sessions from independently clickable agent status rows", async () => {
+test("sidebar separates numbered terminals from independently clickable agent status rows", async () => {
   updateUiSettings({ language: "pt-BR" })
   const selections: string[] = []
   const sessions: TerminalSession[] = [
@@ -79,11 +79,11 @@ test("sidebar separates numbered sessions from independently clickable agent sta
   )
   await tui.renderOnce()
   const frame = tui.captureCharFrame()
-  for (const label of ["Sessões", "Agentes", "Lendo", "Aguardando", "Concluído", "Task Claude"])
+  for (const label of ["Terminais", "Agentes", "Lendo", "Aguardando", "Concluído", "Task Claude"])
     expect(frame).toContain(label)
   const lines = frame.split("\n")
   const count = (id: string) => lines[tui!.renderer.root.findDescendantById(id)!.screenY]
-  expect(count("terminal-sidebar-count")).toMatch(/Sessões\s+3/)
+  expect(count("terminal-sidebar-count")).toMatch(/Terminais\s+3/)
   expect(count("terminal-agent-count")).toMatch(/Agentes\s+3/)
   for (const id of ["Codex", "Claude", "Gemini"]) {
     expect(tui.renderer.root.findDescendantById(`terminal-sidebar-pane-${id}`)).toBeUndefined()
@@ -95,6 +95,7 @@ test("sidebar separates numbered sessions from independently clickable agent sta
     expect(tui.renderer.root.findDescendantById(`terminal-agent-${id}`)).toBeUndefined()
   }
   const agent = tui.renderer.root.findDescendantById("terminal-agent-Claude")!
+  const codexAgent = tui.renderer.root.findDescendantById("terminal-agent-Codex")!
   const section = tui.renderer.root.findDescendantById("terminal-sidebar-section-Shell")!
   const folder = tui.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   expect(tui.renderer.root.findDescendantById("terminal-sidebar-folder-ai")).toBeUndefined()
@@ -103,10 +104,50 @@ test("sidebar separates numbered sessions from independently clickable agent sta
   expect(lines[section.screenY]).toMatch(/▌01\s+● Task Shell\s+Executando/)
   expect(lines[section.screenY + 1]).toContain("workspace · native")
   expect(agent.screenY).toBeLessThan(section.screenY)
+  expect(codexAgent.height).toBe(2)
+  expect(lines[codexAgent.screenY]).toMatch(/⠋ Codex\s+Lendo/)
+  expect(lines[codexAgent.screenY + 1]).toContain("Task Codex")
   await act(async () => tui?.mockMouse.click(agent.screenX + 2, agent.screenY))
   expect(selections).toEqual(["Claude"])
   // Listing an unseen result never acknowledges it; only the workspace owns that transition.
   expect(sessions[2]?.agent?.state).toBe("done")
+})
+
+test("Master Key labels only the visible agents and terminals in sidebar order", async () => {
+  const sessions: TerminalSession[] = [
+    session("Codex", "working"),
+    { ...session("Shell", "idle"), agent: null },
+    { ...session("Hidden", "idle"), agent: null, folderId: "tmux" },
+  ]
+  tui = await testRender(
+    <TerminalSidebar
+      masterKeyActive
+      sessions={sessions}
+      folders={[
+        { id: "terminal", name: "Terminal" },
+        { id: "tmux", name: "tmux" },
+      ]}
+      collapsedFolderIds={["tmux"]}
+      selectedFolder="terminal"
+      activeSessionId="Shell"
+      width={40}
+      height={30}
+      masterKey="Ctrl+B"
+      onActivate={() => undefined}
+      onSelectFolder={() => undefined}
+      onActions={() => undefined}
+      onNew={() => undefined}
+    />,
+    { width: 40, height: 30 },
+  )
+  await tui.renderOnce()
+
+  const frame = tui.captureCharFrame()
+  expect(frame).toContain("[1]")
+  expect(frame).toContain("[2]")
+  expect(tui.renderer.root.findDescendantById("terminal-agent-shortcut-Codex")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-shortcut-Shell")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-shortcut-Hidden")).toBeUndefined()
 })
 
 test("focused sidebar navigates continuously from sessions into agents and opens with Enter", async () => {
@@ -271,7 +312,7 @@ test("sidebar focus keeps its heading while the background sweep covers its heig
     const sidebar = tui.renderer.root.findDescendantById("terminal-sidebar")!
     const sweep = tui.renderer.root.findDescendantById("terminal-sidebar-focus-sweep")!
     expect(sweep.height).toBe(sidebar.height)
-    expect(tui.captureCharFrame()).toContain("Sessões")
+    expect(tui.captureCharFrame()).toContain("Terminais")
     expect(tui.renderer.root.findDescendantById("terminal-sidebar-count")).toBeDefined()
   } finally {
     act(() => tui?.renderer.destroy())

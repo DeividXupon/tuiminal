@@ -46,9 +46,14 @@ async function startFixture(deferStop = false, shell = false) {
     },
   )
   tui = await testRender(<FreeTerminal active />, { width: 100, height: 28 })
+  await tui.renderOnce()
   if (shell) await leader("c")
   else {
-    await leader("/")
+    const command = tui?.renderer.root.findDescendantById("terminal-sidebar-command")
+    if (!command) throw new Error("Missing command control")
+    await act(async () => tui?.mockMouse.click(command.screenX + 1, command.screenY))
+    await tui?.renderOnce()
+    expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
     await act(async () => {
       tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
       await tui?.mockInput.typeText("fixture-command")

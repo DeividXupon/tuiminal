@@ -1,11 +1,15 @@
+export type LiveDiffFileStatus = "New" | "Edit" | "Delete" | "Rename" | "Copy" | "Type"
+
 export type LiveDiffFile = {
   root: string
   path: string
+  originalPath?: string
   additions: number | null
   deletions: number | null
   fingerprint: string
   untracked: boolean
   newFile: boolean
+  change?: LiveDiffFileStatus
   headExists: boolean
   changedAt: number
 }
@@ -20,22 +24,48 @@ export function liveDiffElapsedLabel(timestamp: number, now: number) {
 }
 
 export function parseLiveDiffStatus(source: string) {
-  return source
-    .split("\0")
-    .flatMap((record) =>
-      record.length >= 4 && record[2] === " "
-        ? [{ status: record.slice(0, 2), path: record.slice(3) }]
-        : [],
-    )
+  const records = source.split("\0")
+  const parsed: Array<{ status: string; path: string; originalPath?: string }> = []
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index] ?? ""
+    if (record.length < 4 || record[2] !== " ") continue
+    const status = record.slice(0, 2)
+    const path = record.slice(3)
+    const originalPath = /[RC]/.test(status) ? records[++index] : undefined
+    parsed.push({ status, path, ...(originalPath ? { originalPath } : {}) })
+  }
+  return parsed
+}
+
+export function parseLiveDiffNameStatus(source: string) {
+  const records = source.split("\0")
+  const parsed = new Map<string, { code: string; originalPath?: string }>()
+  for (let index = 0; index < records.length; ) {
+    const code = records[index++] ?? ""
+    if (!code) continue
+    if (/^[RC]/.test(code)) {
+      const originalPath = records[index++] ?? ""
+      const path = records[index++] ?? ""
+      if (path) parsed.set(path, { code: code[0]!, originalPath })
+    } else {
+      const path = records[index++] ?? ""
+      if (path) parsed.set(path, { code: code[0]! })
+    }
+  }
+  return parsed
 }
 
 export function parseLiveDiffNumstat(source: string) {
   const stats = new Map<string, { additions: number | null; deletions: number | null }>()
-  for (const record of source.split("\0")) {
+  const records = source.split("\0")
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index] ?? ""
     const first = record.indexOf("\t")
     const second = record.indexOf("\t", first + 1)
     if (first < 0 || second < 0) continue
-    const path = record.slice(second + 1)
+    const inlinePath = record.slice(second + 1)
+    const path = inlinePath || records[index + 2] || records[index + 1] || ""
+    if (!inlinePath) index += 2
     if (!path) continue
     const additions = Number(record.slice(0, first))
     const deletions = Number(record.slice(first + 1, second))

@@ -100,6 +100,9 @@
   `[←/→]` collapse/expand and `[Enter]` toggles. Preserve selection and collapsed
   JSON Pointer paths per document, render the colored tree as one styled text
   document, and never mutate the captured raw response.
+- Opening response search or JSONPath gives its input focus. Response completion
+  and JSON navigation effects must not later refocus the result scrollbox while
+  either input remains open.
 - Keep narrow HTTP panes clipped to their bounds. At low heights, compress the
   local `Mais` tab strip to one row, keep Options scrollable, and put its execution
   controls before metadata so keyboard and mouse actions remain reachable.

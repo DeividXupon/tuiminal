@@ -187,7 +187,7 @@ test("restores owned panes in Tuiminais and groups ordinary external panes under
   expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-tmux")).toBeDefined()
   expect(tui!.renderer.root.findDescendantById("terminal-sidebar-folder-others")).toBeUndefined()
   expect(frame).toContain("Tuiminais")
-  expect(frame).toMatch(/Sessões\s+2/)
+  expect(frame).toMatch(/Terminais\s+2/)
   expect(frame).toMatch(/Agentes\s+1/)
 })
 
@@ -211,7 +211,9 @@ test("new agents preserve local terminal focus and remain hidden behind Git", as
 
 test("automatic arrivals cannot steal a command dialog's focus", async () => {
   const { start, setAgents } = await mount()
-  await leader("/")
+  const command = tui?.renderer.root.findDescendantById("terminal-sidebar-command")
+  if (!command) throw new Error("Missing command control")
+  await act(async () => tui?.mockMouse.click(command.screenX + 1, command.screenY))
   const focused = tui?.renderer.currentFocusedRenderable
   setAgents([agent(1)])
   await waitFor(() => start.mock.calls.length === 1)

@@ -1,4 +1,3 @@
-import { basename } from "node:path"
 import {
   type BoxRenderable,
   type DiffRenderable,
@@ -12,10 +11,12 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { NativeDiff } from "@xupon/tuiminal-core/ui/NativeDiff"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLiveDiffKeyboard } from "../hooks/use-live-diff-keyboard"
+import { useLiveDiffFocus } from "../hooks/use-live-diff-focus"
 import { useLiveDiffPatch } from "../hooks/use-live-diff-patch"
+import { useLiveDiffProjects } from "../hooks/use-live-diff-projects"
 import { descendantProcesses } from "../model/agent-detection"
 import { type LiveDiffFile, mergeLiveDiffFiles } from "../model/live-diff"
-import { liveDiffWrappedHeight } from "../rendering/live-diff-table"
+import { liveDiffUnwrappedHeight, liveDiffWrappedHeight } from "../rendering/live-diff-table"
 import { readTerminalProcesses } from "../services/agent-processes"
 import {
   liveDiffRepositoryRoot,
@@ -26,10 +27,8 @@ import { collectLiveDiffSnapshot } from "../services/live-diff-snapshot"
 import { LiveDiffFileTable } from "./LiveDiffFileTable"
 import { LiveDiffInfo } from "./LiveDiffInfo"
 
-// Git snapshots refresh while the observed agent is running.
 const POLL_MS = 250
 const DISCOVERY_MS = 2000
-// Repository discovery keeps its own two-second cadence.
 const DISCOVERY_ROUNDS = Math.max(1, Math.ceil(DISCOVERY_MS / POLL_MS))
 const MAX_ROOTS = 4
 
@@ -69,6 +68,10 @@ export function LiveDiffPanel({
   manualDirectories,
   running,
   active,
+  fileTableHeight,
+  stableContentWidth,
+  stacked,
+  focusRequest,
   onClose,
   onAddProject,
   onReturnTerminal,
@@ -79,8 +82,12 @@ export function LiveDiffPanel({
   manualDirectories: readonly string[]
   running: boolean
   active: boolean
+  fileTableHeight: number
+  stableContentWidth: number
+  stacked: boolean
   onClose: (id: string) => void
-  onAddProject: (id: string) => void
+  onAddProject: (id: string, roots: readonly string[]) => void
+  focusRequest: number
   onReturnTerminal: () => void
 }) {
   const panel = useRef<BoxRenderable | null>(null)
@@ -100,6 +107,7 @@ export function LiveDiffPanel({
   const filesRef = useRef<LiveDiffFile[]>([])
   const directoryRef = useRef<string[]>([])
   directoryRef.current = [initialDirectory, ...manualDirectories, ...processDirectories]
+  useLiveDiffFocus(panel, focusRequest)
 
   useEffect(() => {
     const scroll = preview.current
@@ -130,7 +138,6 @@ export function LiveDiffPanel({
           )
         }
       } catch {
-        // Keep the launch/tmux directory when the OS does not expose process cwd.
       } finally {
         if (!controller.signal.aborted) timer = setTimeout(() => void inspect(), DISCOVERY_MS)
       }
@@ -208,31 +215,49 @@ export function LiveDiffPanel({
     return () => clearInterval(timer)
   }, [])
 
+  const {
+    hiddenRoots,
+    visibleFiles,
+    selectedProject,
+    selectProject,
+    toggleProject,
+    selectProjectRelative,
+  } = useLiveDiffProjects(roots, files)
   const selected = useMemo(
-    () => files.find((file) => fileKey(file) === selectedKey) ?? files[0] ?? null,
-    [files, selectedKey],
+    () => visibleFiles.find((file) => fileKey(file) === selectedKey) ?? visibleFiles[0] ?? null,
+    [visibleFiles, selectedKey],
   )
-  const patch = useLiveDiffPatch(selected, showDiffAuto, files, COLORS.diffRecentBg, preview, diff)
+  const patch = useLiveDiffPatch(
+    selected,
+    showDiffAuto,
+    visibleFiles,
+    COLORS.diffRecentBg,
+    preview,
+    diff,
+  )
   useEffect(() => {
-    if (selectedKey && !files.some((file) => fileKey(file) === selectedKey)) setSelectedKey(null)
-  }, [files, selectedKey])
+    if (selectedKey && !visibleFiles.some((file) => fileKey(file) === selectedKey))
+      setSelectedKey(null)
+  }, [visibleFiles, selectedKey])
   const selectFile = useCallback(
     (file: LiveDiffFile) => {
-      setSelectedKey(fileKey(file) === (files[0] && fileKey(files[0])) ? null : fileKey(file))
+      setSelectedKey(
+        fileKey(file) === (visibleFiles[0] && fileKey(visibleFiles[0])) ? null : fileKey(file),
+      )
     },
-    [files],
+    [visibleFiles],
   )
   const selectRelative = useCallback(
     (delta: number) => {
-      if (!files.length) return
+      if (!visibleFiles.length) return
       const index = Math.max(
         0,
-        files.findIndex((file) => selected && fileKey(file) === fileKey(selected)),
+        visibleFiles.findIndex((file) => selected && fileKey(file) === fileKey(selected)),
       )
-      const next = files[(index + delta + files.length) % files.length]
+      const next = visibleFiles[(index + delta + visibleFiles.length) % visibleFiles.length]
       if (next) selectFile(next)
     },
-    [files, selected, selectFile],
+    [visibleFiles, selected, selectFile],
   )
   const activateDiffAuto = useCallback(() => {
     setSelectedKey(null)
@@ -244,7 +269,10 @@ export function LiveDiffPanel({
     preview,
     selected: Boolean(selected),
     onReturnTerminal,
-    onAddProject: () => onAddProject(sessionId),
+    onClose: () => onClose(sessionId),
+    onAddProject: () => onAddProject(sessionId, roots),
+    toggleProject,
+    selectProjectRelative,
     onActivateDiffAuto: activateDiffAuto,
     selectRelative,
   })
@@ -252,10 +280,8 @@ export function LiveDiffPanel({
     () => liveDiffWrappedHeight(patch, previewWidth),
     [patch, previewWidth],
   )
+  const diffHeight = codeFocused ? wrappedHeight : liveDiffUnwrappedHeight(patch)
   const selectedPatch = selected && patch
-  const header = selected
-    ? `${basename(selected.root)} · ${selected.path}`
-    : translateUi("Nenhum arquivo alterado")
   const focusPanel = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
     onReturnTerminal()
@@ -287,64 +313,83 @@ export function LiveDiffPanel({
           backgroundColor: COLORS.panelRaised,
         }}
       >
-        <text content={translateUi("Live Diff")} style={{ fg: COLORS.terminal }} />
+        <text wrapMode="none">
+          <span fg={COLORS.terminal}>{translateUi("Live Diff")}</span>
+          <span fg={COLORS.muted}>{` · ${translateUi("Show auto")}: `}</span>
+          <span fg={showDiffAuto ? COLORS.success : COLORS.warning}>
+            {showDiffAuto ? "true" : "false"}
+          </span>
+        </text>
         <InlineButton
           compact
           id={`live-diff-close-${sessionId}`}
-          label="Fechar"
+          label="×"
           onPress={() => onClose(sessionId)}
         />
       </box>
-      <text
-        content={`${codeFocused ? "◆" : " "} ${header}`}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: codeFocused ? COLORS.focus : COLORS.text }}
-      />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the native scroll pane needs mouse focus for keyboard scrolling. */}
-      <scrollbox
-        ref={preview}
-        id={`live-diff-preview-${sessionId}`}
-        focusable
-        scrollY
-        viewportCulling
-        onMouseDown={focusPreview}
-        onSizeChange={function (this: BoxRenderable) {
-          setPreviewWidth((current) => (current === this.width ? current : this.width))
-        }}
-        style={{ flexGrow: 1, minHeight: 1, width: "100%" }}
-      >
-        {selectedPatch ? (
-          <NativeDiff
-            id={`live-diff-code-${sessionId}`}
-            diffRef={diff}
-            patch={patch}
-            filetype={pathToFiletype(selected.path) ?? "text"}
-            height={wrappedHeight}
-            wrapMode="char"
-          />
-        ) : (
-          <text
-            content={translateUi(
-              selected ? "Alteração binária ou sem linhas textuais." : "Nenhum arquivo alterado",
-            )}
-            style={{ fg: COLORS.muted }}
-          />
-        )}
-      </scrollbox>
+      <box style={{ flexGrow: 1, minHeight: 1, width: "100%", position: "relative" }}>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: the native scroll pane needs mouse focus for keyboard scrolling. */}
+        <scrollbox
+          ref={preview}
+          id={`live-diff-preview-${sessionId}`}
+          focusable
+          scrollY
+          viewportCulling
+          onMouseDown={focusPreview}
+          onSizeChange={function (this: BoxRenderable) {
+            setPreviewWidth((current) => (current === this.width ? current : this.width))
+          }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: codeFocused && !stacked ? -30 : 0,
+            width: codeFocused ? stableContentWidth + 30 : "100%",
+            height: "100%",
+            backgroundColor: COLORS.canvas,
+          }}
+        >
+          {selectedPatch ? (
+            <NativeDiff
+              id={`live-diff-code-${sessionId}`}
+              diffRef={diff}
+              patch={patch}
+              filetype={pathToFiletype(selected.path) ?? "text"}
+              height={diffHeight}
+              wrapMode={codeFocused ? "char" : "none"}
+            />
+          ) : (
+            <text
+              content={translateUi(
+                selected ? "Alteração binária ou sem linhas textuais." : "Nenhum arquivo alterado",
+              )}
+              style={{ fg: COLORS.muted }}
+            />
+          )}
+        </scrollbox>
+      </box>
       <LiveDiffFileTable
         sessionId={sessionId}
-        files={files}
+        files={visibleFiles}
         selected={selected}
         now={now}
         error={error}
         active={active}
         onSelect={selectFile}
-        onAddProject={() => onAddProject(sessionId)}
         onFocus={focusPanel}
+        height={fileTableHeight}
       />
       <LiveDiffInfo
-        files={files}
-        rootsCount={roots.length}
+        sessionId={sessionId}
+        width={stableContentWidth}
+        files={visibleFiles}
+        roots={roots}
+        selectedProject={selectedProject}
+        hiddenRoots={hiddenRoots}
+        onSelectProject={(root, event) => {
+          selectProject(root)
+          focusPanel(event)
+        }}
+        onAddProject={() => onAddProject(sessionId, roots)}
         lastProject={lastProject}
         error={error}
         showDiffAuto={showDiffAuto}

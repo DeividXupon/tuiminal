@@ -16,7 +16,14 @@ export function useHttpResponseFocus({
   const focusedResponseKey = useRef("")
 
   useEffect(() => {
-    if (!active || !document || pane !== "response" || document.execution.status !== "success") {
+    if (
+      !active ||
+      !document ||
+      pane !== "response" ||
+      document.execution.status !== "success" ||
+      document.responsePresentation.searchOpen ||
+      document.responsePresentation.jsonPathOpen
+    ) {
       if (pane !== "response") focusedResponseKey.current = ""
       return
     }

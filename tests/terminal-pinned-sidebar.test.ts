@@ -26,6 +26,7 @@ import {
   restorePinnedSidebarMouse,
   waitForPinnedTmuxSidebarFocus,
 } from "../packages/feature-terminal/src/services/pinned-sidebar-focus"
+import { routePinnedTerminalToTuiminal } from "../packages/feature-terminal/src/services/pinned-sidebar-navigation"
 import { waitForPinnedSidebarTerminalReady } from "../packages/feature-terminal/src/services/pinned-sidebar-terminal"
 import {
   reconcilePinnedTmuxSidebars,
@@ -69,6 +70,36 @@ test("shared pinned sidebar state publishes toggles and immutable tmux target re
   unsubscribe()
 })
 
+test("pinned navigation routes terminals through Tuiminal before opening its host pane", async () => {
+  const target = { socket: "/tmp/work.sock", paneId: "%8" }
+  const events: string[] = []
+  expect(
+    await routePinnedTerminalToTuiminal(
+      target,
+      async (selection) => {
+        events.push(`deliver:${"paneId" in selection ? selection.paneId : "other"}`)
+        return true
+      },
+      async () => {
+        events.push("host")
+      },
+    ),
+  ).toBe(true)
+  expect(events).toEqual(["deliver:%8", "host"])
+
+  events.length = 0
+  expect(
+    await routePinnedTerminalToTuiminal(
+      target,
+      async () => false,
+      async () => {
+        events.push("host")
+      },
+    ),
+  ).toBe(false)
+  expect(events).toEqual([])
+})
+
 test("publishing the same sidebar view does not notify subscribers twice", () => {
   const owner = {}
   const view = {
@@ -85,6 +116,7 @@ test("publishing the same sidebar view does not notify subscribers twice", () =>
     onActivate: () => undefined,
     onActions: () => undefined,
     onNew: () => undefined,
+    onCommand: () => undefined,
   }
   let changes = 0
   const unsubscribe = subscribeTerminalSidebar(() => changes++)

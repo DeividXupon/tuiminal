@@ -6,11 +6,11 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 
-export type TerminalDialogKind = "command" | "rename" | "live-diff-path"
+export type TerminalDialogKind = "command" | "codex" | "rename"
 const TITLES = {
   command: "Novo comando",
+  codex: "Nova tarefa Codex",
   rename: "Renomear terminal",
-  "live-diff-path": "Adicionar projeto ao Live Diff",
 }
 export function TerminalDialog({
   kind,

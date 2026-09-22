@@ -1,6 +1,7 @@
 import { Button } from "@tuiparts/react/button"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import {
   DEFAULT_FOLDER,
   EXTERNAL_FOLDER,
@@ -23,6 +24,7 @@ function TerminalPaneButton({
   paneWidth,
   selected,
   cursor,
+  shortcut,
   separator,
   onActivate,
 }: {
@@ -31,6 +33,7 @@ function TerminalPaneButton({
   paneWidth: number
   selected: boolean
   cursor: boolean
+  shortcut?: string | undefined
   separator: boolean
   onActivate: (id: string) => void
 }) {
@@ -40,6 +43,7 @@ function TerminalPaneButton({
     Math.max(1, Math.min(Math.floor(paneWidth * 0.44), Math.max(1, paneWidth - 3))),
   )
   const titleColor = cursor ? COLORS.terminal : selected ? COLORS.text : COLORS.muted
+  const shortcutWidth = shortcut ? displayWidth(shortcut) + 1 : 0
   return (
     <box style={{ flexDirection: "row", flexGrow: 1, flexBasis: 0, minWidth: 0 }}>
       {separator && (
@@ -63,6 +67,14 @@ function TerminalPaneButton({
           }}
         >
           <box style={{ height: 1, flexDirection: "row", width: "100%" }}>
+            {shortcut && (
+              <ShortcutText
+                id={`terminal-sidebar-shortcut-${pane.id}`}
+                content={`${shortcut} `}
+                highlight={false}
+                style={{ fg: COLORS.terminal, width: shortcutWidth, flexShrink: 0 }}
+              />
+            )}
             <text
               id={`terminal-sidebar-status-${pane.id}`}
               content={`${terminalStatusMarker(pane.status, pane.busy)} `}
@@ -70,7 +82,10 @@ function TerminalPaneButton({
             />
             <text
               id={`terminal-sidebar-title-${pane.id}`}
-              content={truncateDisplay(pane.title, Math.max(1, paneWidth - statusWidth - 2))}
+              content={truncateDisplay(
+                pane.title,
+                Math.max(1, paneWidth - statusWidth - 2 - shortcutWidth),
+              )}
               style={{ fg: titleColor, flexGrow: 1 }}
             />
             <text
@@ -81,7 +96,10 @@ function TerminalPaneButton({
           </box>
           <text
             id={`terminal-sidebar-detail-${pane.id}`}
-            content={`  ${truncateDisplay(terminalSessionDetail(pane), Math.max(1, paneWidth - 2))}`}
+            content={`${shortcut ? " ".repeat(shortcutWidth) : "  "}${truncateDisplay(
+              terminalSessionDetail(pane),
+              Math.max(1, paneWidth - (shortcut ? shortcutWidth : 2)),
+            )}`}
             style={{ fg: COLORS.muted }}
           />
         </box>
@@ -93,6 +111,7 @@ function TerminalPaneButton({
 function TerminalSectionRow({
   section,
   number,
+  shortcuts,
   activeSessionId,
   cursorId,
   width,
@@ -100,15 +119,18 @@ function TerminalSectionRow({
 }: {
   section: TerminalSection
   number: number
+  shortcuts: ReadonlyMap<string, string>
   activeSessionId: string | null
   cursorId: string | null
   width: number
   onActivate: (id: string) => void
 }) {
   const active = section.panes.some((pane) => pane.id === activeSessionId)
+  const masterKeyActive = section.panes.some((pane) => shortcuts.has(pane.id))
+  const railWidth = masterKeyActive ? 1 : 4
   const paneWidth = Math.max(
     1,
-    Math.floor((width - 5 - (section.panes.length - 1)) / section.panes.length),
+    Math.floor((width - railWidth - (section.panes.length - 1)) / section.panes.length),
   )
   return (
     <box
@@ -116,8 +138,14 @@ function TerminalSectionRow({
       style={{ flexDirection: "row", height: 2, flexShrink: 0 }}
     >
       <text
-        content={`${active ? "▌" : " "}${String(number).padStart(2, "0")} `}
-        style={{ fg: active ? COLORS.terminal : COLORS.muted, width: 4, flexShrink: 0 }}
+        content={
+          masterKeyActive
+            ? active
+              ? "▌"
+              : " "
+            : `${active ? "▌" : " "}${String(number).padStart(2, "0")} `
+        }
+        style={{ fg: active ? COLORS.terminal : COLORS.muted, width: railWidth, flexShrink: 0 }}
       />
       {section.panes.map((pane, index) => (
         <TerminalPaneButton
@@ -127,6 +155,7 @@ function TerminalSectionRow({
           paneWidth={paneWidth}
           selected={activeSessionId === pane.id}
           cursor={cursorId === pane.id}
+          shortcut={shortcuts.get(pane.id)}
           separator={index > 0}
           onActivate={onActivate}
         />
@@ -144,6 +173,7 @@ export function TerminalSessionGroups({
   cursorFolderId,
   collapsedFolderIds,
   width,
+  shortcuts = new Map(),
   onSelectFolder,
   onToggleFolder,
   onActivate,
@@ -156,6 +186,7 @@ export function TerminalSessionGroups({
   cursorFolderId: string | null
   collapsedFolderIds: ReadonlySet<string>
   width: number
+  shortcuts?: ReadonlyMap<string, string>
   onSelectFolder: (id: string) => void
   onToggleFolder: (id: string) => void
   onActivate: (id: string) => void
@@ -195,6 +226,7 @@ export function TerminalSessionGroups({
                 key={section.id}
                 section={section}
                 number={sections.indexOf(section) + 1}
+                shortcuts={shortcuts}
                 activeSessionId={activeSessionId}
                 cursorId={cursorId}
                 width={width}

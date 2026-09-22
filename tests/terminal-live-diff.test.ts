@@ -1,12 +1,13 @@
 import { afterEach, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { displayWidth } from "../packages/core/src/i18n/index"
 import {
   liveDiffTotals,
   mergeLiveDiffFiles,
+  parseLiveDiffNameStatus,
   parseLiveDiffNumstat,
   parseLiveDiffStatus,
 } from "../packages/feature-terminal/src/model/live-diff"
@@ -23,6 +24,7 @@ import {
   liveDiffDisplayPath,
   liveDiffFileStatus,
   liveDiffPathWidth,
+  liveDiffUnwrappedHeight,
   liveDiffWrappedHeight,
 } from "../packages/feature-terminal/src/rendering/live-diff-table"
 import {
@@ -31,6 +33,7 @@ import {
   readLiveDiffPatch,
   readLiveDiffRoot,
 } from "../packages/feature-terminal/src/services/live-diff"
+import { discoverLiveDiffProjects } from "../packages/feature-terminal/src/services/live-diff-projects"
 
 const temporary: string[] = []
 afterEach(() => {
@@ -64,16 +67,78 @@ function repository(committed = true) {
 }
 
 test("parses NUL-delimited Git paths without losing spaces or tabs", () => {
-  expect(parseLiveDiffStatus(" M packages/a b.ts\0?? tabs\there.txt\0")).toEqual([
+  expect(
+    parseLiveDiffStatus(" M packages/a b.ts\0?? tabs\there.txt\0R  new name.ts\0old name.ts\0"),
+  ).toEqual([
     { status: " M", path: "packages/a b.ts" },
     { status: "??", path: "tabs\there.txt" },
+    { status: "R ", path: "new name.ts", originalPath: "old name.ts" },
   ])
-  expect(parseLiveDiffNumstat("2\t1\tpackages/a b.ts\0-\t-\tasset.bin\0")).toEqual(
+  expect(
+    parseLiveDiffNameStatus("D\0gone.ts\0R100\0old.ts\0new.ts\0C90\0a.ts\0b.ts\0T\0type.ts\0"),
+  ).toEqual(
+    new Map([
+      ["gone.ts", { code: "D" }],
+      ["new.ts", { code: "R", originalPath: "old.ts" }],
+      ["b.ts", { code: "C", originalPath: "a.ts" }],
+      ["type.ts", { code: "T" }],
+    ]),
+  )
+  expect(
+    parseLiveDiffNumstat("2\t1\tpackages/a b.ts\0-\t-\tasset.bin\0" + "0\t0\t\0old.ts\0new.ts\0"),
+  ).toEqual(
     new Map([
       ["packages/a b.ts", { additions: 2, deletions: 1 }],
       ["asset.bin", { additions: null, deletions: null }],
+      ["new.ts", { additions: 0, deletions: 0 }],
     ]),
   )
+})
+
+test("classifies deleted, renamed, copied and type-changed files", async () => {
+  const root = repository()
+  write(root, "delete.ts", "delete me\n")
+  write(root, "rename.ts", "rename me\n")
+  write(root, "copy.ts", "copy me\n")
+  git(root, "add", "--all")
+  git(root, "commit", "--quiet", "-m", "status fixture")
+
+  rmSync(join(root, "delete.ts"))
+  git(root, "mv", "rename.ts", "renamed.ts")
+  copyFileSync(join(root, "copy.ts"), join(root, "copied.ts"))
+  git(root, "add", "--all")
+
+  const files = (await readLiveDiffRoot(root, new AbortController().signal)).files
+  expect(liveDiffFileStatus(files.find((file) => file.path === "delete.ts")!)).toBe("Delete")
+  expect(files.find((file) => file.path === "renamed.ts")).toMatchObject({
+    change: "Rename",
+    originalPath: "rename.ts",
+  })
+  expect(files.find((file) => file.path === "copied.ts")).toMatchObject({
+    change: "Copy",
+    originalPath: "copy.ts",
+  })
+  expect(liveDiffFileStatus({ ...files[0]!, change: "Type" })).toBe("Type")
+})
+
+test("discovers nearby Git projects for the Live Diff picker", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "tuiminal-live-diff-projects-"))
+  temporary.push(parent)
+  const current = join(parent, "current")
+  const sibling = join(parent, "sibling")
+  const ignored = join(parent, "node_modules", "hidden")
+  for (const project of [current, sibling, ignored])
+    mkdirSync(join(project, ".git"), { recursive: true })
+  const previousRoots = process.env.TUIMINAL_PROJECT_ROOTS
+  process.env.TUIMINAL_PROJECT_ROOTS = parent
+  try {
+    const projects = await discoverLiveDiffProjects([current], new AbortController().signal)
+    expect(projects.map((project) => project.name)).toEqual(["current", "sibling"])
+    expect(projects.every((project) => project.parent === basename(parent))).toBe(true)
+  } finally {
+    if (previousRoots === undefined) delete process.env.TUIMINAL_PROJECT_ROOTS
+    else process.env.TUIMINAL_PROJECT_ROOTS = previousRoots
+  }
 })
 
 test("Live Diff rows shorten only ancestor folders and reserve aligned columns", () => {
@@ -92,6 +157,7 @@ test("Live Diff rows shorten only ancestor folders and reserve aligned columns",
   )
   expect(liveDiffPathWidth(60)).toBe(35)
   expect(liveDiffWrappedHeight("@@ -1 +1 @@\n+abcdefghijklmnopqrstuvwx\n", 20)).toBe(5)
+  expect(liveDiffUnwrappedHeight("@@ -1 +1 @@\n+abcdefghijklmnopqrstuvwx\n")).toBe(3)
 })
 
 test("Live Diff orders changed files newest first and preserves timestamps for unchanged files", () => {

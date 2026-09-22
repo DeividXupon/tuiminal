@@ -106,6 +106,33 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
   }
 }
 
+/** Creates a Codex session whose lifecycle is owned by the local app-server. */
+export function createCodexAgentCommand(prompt: string): FreeTerminalCommand {
+  return {
+    kind: "codex",
+    label: "Codex",
+    shortLabel: "Codex",
+    displayCommand: "codex app-server",
+    command: [],
+    accent: COLORS.terminal,
+    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    codex: { prompt },
+  }
+}
+
+/** Launches the locally installed Codex CLI in a native PTY. */
+export function createCodexTerminalCommand(): FreeTerminalCommand {
+  return {
+    kind: "custom",
+    label: "Codex",
+    shortLabel: "Codex",
+    displayCommand: "codex",
+    command: ["codex"],
+    accent: COLORS.terminal,
+    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+  }
+}
+
 function processEnvironment() {
   return Object.fromEntries(
     Object.entries(process.env).filter(

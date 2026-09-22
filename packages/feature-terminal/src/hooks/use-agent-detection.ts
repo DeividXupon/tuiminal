@@ -92,7 +92,12 @@ function scanAgentScreens(state: DetectionState) {
 
 function runningCandidates(state: DetectionState): RunningCandidate[] {
   return state.sessions.current
-    .filter((session) => session.status === "running" && session.pid)
+    .filter(
+      (session) =>
+        session.status === "running" &&
+        session.pid &&
+        session.agentIntegration !== "codex-app-server",
+    )
     .map((session) => ({
       session,
       output: state.outputs.current.get(session.id),

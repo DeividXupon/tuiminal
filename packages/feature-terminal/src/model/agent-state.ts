@@ -25,7 +25,14 @@ export type AgentProfile =
   | "qwen"
   | "generic"
 export type AgentState = "unknown" | "working" | "blocked" | "idle" | "done"
-export type AgentActivity = "reading" | "searching" | "thinking" | "writing" | "running"
+export type AgentActivity =
+  | "reading"
+  | "searching"
+  | "thinking"
+  | "writing"
+  | "running"
+  | "updating"
+  | "coding"
 export type AgentIdentity = { key: string; label: string; profile: AgentProfile }
 export type AgentStatus = AgentIdentity & {
   state: AgentState

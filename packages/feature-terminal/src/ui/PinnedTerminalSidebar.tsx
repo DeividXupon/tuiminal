@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { subscribeTerminalSidebar, terminalSidebarSnapshot } from "../model/pinned-sidebar"
+import { MAX_SESSIONS } from "../model/sessions"
 import { TerminalSidebar } from "./TerminalSidebar"
 
 export function PinnedTerminalSidebar({
@@ -38,7 +39,9 @@ export function PinnedTerminalSidebar({
       activeSessionId={view.activeSessionId}
       width={view.width}
       height={height}
+      borderRight={false}
       masterKey={view.masterKey}
+      masterKeyActive={view.masterKeyActive ?? false}
       focusRequest={snapshot.focusRevision}
       onSelectFolder={(id) => open(() => view.onSelectFolder(id))}
       onToggleFolder={(id) => open(() => view.onToggleFolder(id))}
@@ -46,6 +49,11 @@ export function PinnedTerminalSidebar({
       onActions={() => open(view.onActions)}
       onMasterKey={() => open(view.onActions)}
       onNew={() => open(view.onNew)}
+      onCommand={
+        view.sessions.filter((session) => !session.external).length < MAX_SESSIONS
+          ? () => open(view.onCommand)
+          : undefined
+      }
     />
   )
 }

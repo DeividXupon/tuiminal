@@ -30,11 +30,13 @@ export type PinnedTerminalSidebarView = {
   width: number
   height: number
   masterKey: PinnedTerminalMasterKey
+  masterKeyActive?: boolean
   onSelectFolder: (id: string) => void
   onToggleFolder: (id: string) => void
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
+  onCommand: () => void
 }
 
 export type PinnedTerminalSidebarReplica = Pick<

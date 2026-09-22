@@ -1,6 +1,6 @@
 import { basename } from "node:path"
 import { displayWidth, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-import type { LiveDiffFile } from "../model/live-diff"
+import type { LiveDiffFile, LiveDiffFileStatus } from "../model/live-diff"
 
 export const LIVE_DIFF_STATUS_WIDTH = 7
 export const LIVE_DIFF_TIME_WIDTH = 5
@@ -50,8 +50,10 @@ export function liveDiffPathWidth(listWidth: number) {
   )
 }
 
-export function liveDiffFileStatus(file: LiveDiffFile): "New" | "Edit" {
-  return file.newFile ? "New" : "Edit"
+export function liveDiffFileStatus(
+  file: Pick<LiveDiffFile, "change" | "newFile">,
+): LiveDiffFileStatus {
+  return file.change ?? (file.newFile ? "New" : "Edit")
 }
 
 export function liveDiffWrappedHeight(patch: string, previewWidth: number) {
@@ -61,4 +63,8 @@ export function liveDiffWrappedHeight(patch: string, previewWidth: number) {
     return count + Math.max(1, Math.ceil(displayWidth(line.slice(1)) / codeWidth))
   }, 2)
   return Math.min(2000, rows)
+}
+
+export function liveDiffUnwrappedHeight(patch: string) {
+  return Math.min(2000, 2 + patch.split("\n").filter((line) => /^[ +\-]/.test(line)).length)
 }

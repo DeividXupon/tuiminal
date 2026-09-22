@@ -1,10 +1,20 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
-import { useEffect, useRef } from "react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useEffect, useRef } from "react"
 import { isRunningAgent, type TerminalSession } from "../model/sessions"
 import { agentPresentation } from "../rendering/agent-presentation"
+
+function agentPrimaryColor(
+  compact: boolean,
+  taskTitle: string | null | undefined,
+  selected: boolean,
+) {
+  if (compact && taskTitle) return COLORS.focus
+  return selected ? COLORS.text : COLORS.muted
+}
 
 function TerminalAgentRow({
   compact,
@@ -12,6 +22,7 @@ function TerminalAgentRow({
   session,
   selected,
   cursor,
+  shortcut,
   width,
   onActivate,
 }: {
@@ -20,17 +31,22 @@ function TerminalAgentRow({
   session: TerminalSession
   selected: boolean
   cursor: boolean
+  shortcut?: string | undefined
   width: number
   onActivate: (id: string) => void
 }) {
   const agent = session.agent
   if (!agent) return null
-  const status = agentPresentation(agent.state, agent.activity, frame)
+  const status = agentPresentation(
+    agent.state,
+    frame,
+    session.agentIntegration === "codex-app-server" ? null : agent.activity,
+  )
   const cursorRail = cursor ? "▌" : " "
   const statusWidth = Math.min(displayWidth(status.shortLabel), Math.max(5, width - 14))
+  const shortcutWidth = shortcut ? displayWidth(shortcut) + 1 : 0
   const primary = compact && agent.taskTitle ? agent.taskTitle : agent.label
-  const primaryColor =
-    compact && agent.taskTitle ? COLORS.focus : selected ? COLORS.text : COLORS.muted
+  const primaryColor = agentPrimaryColor(compact, agent.taskTitle, selected)
   return (
     <Button
       id={`terminal-agent-${session.id}`}
@@ -51,12 +67,23 @@ function TerminalAgentRow({
           content={compact ? cursorRail : `${cursorRail}\n${cursorRail}`}
           style={{ fg: COLORS.terminal, width: 1, flexShrink: 0 }}
         />
+        {shortcut && (
+          <ShortcutText
+            id={`terminal-agent-shortcut-${session.id}`}
+            content={`${shortcut} `}
+            highlight={false}
+            style={{ fg: COLORS.terminal, width: shortcutWidth, flexShrink: 0 }}
+          />
+        )}
         <box style={{ height: compact ? 1 : 2, flexGrow: 1, minWidth: 0 }}>
           <box style={{ height: 1, flexDirection: "row", width: "100%" }}>
             <text content={`${status.marker} `} style={{ fg: status.color, flexShrink: 0 }} />
             <text
               id={`terminal-agent-primary-${session.id}`}
-              content={truncateDisplay(primary, Math.max(2, width - statusWidth - 6))}
+              content={truncateDisplay(
+                primary,
+                Math.max(2, width - statusWidth - 6 - shortcutWidth),
+              )}
               style={{ fg: primaryColor, flexGrow: 1 }}
             />
             <text
@@ -85,6 +112,7 @@ export function TerminalAgentList({
   cursorSessionId,
   width,
   height,
+  shortcuts = new Map(),
   onActivate,
 }: {
   compact?: boolean
@@ -94,6 +122,7 @@ export function TerminalAgentList({
   cursorSessionId?: string | null
   width: number
   height: number
+  shortcuts?: ReadonlyMap<string, string>
   onActivate: (id: string) => void
 }) {
   const agents = sessions.filter(isRunningAgent)
@@ -148,6 +177,7 @@ export function TerminalAgentList({
             session={session}
             selected={session.id === activeSessionId}
             cursor={session.id === cursorSessionId}
+            shortcut={shortcuts.get(session.id)}
             width={width}
             onActivate={onActivate}
           />

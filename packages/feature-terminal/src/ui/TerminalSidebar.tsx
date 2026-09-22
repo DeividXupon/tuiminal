@@ -1,20 +1,18 @@
-import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
+import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
-import {
-  COLORS,
-  matchesTerminalMasterKey,
-  type TerminalMasterKey,
-} from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, type TerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import {
   isRunningAgent,
+  masterKeyShortcutLabel,
+  numberedTerminalSections,
   type TerminalFolder,
   type TerminalSession,
-  terminalSections,
+  visibleTerminalShortcutTargets,
 } from "../model/sessions"
 import { AGENT_WORKING_FRAMES } from "../rendering/agent-presentation"
 import { TerminalAgentList } from "./TerminalAgentList"
@@ -23,6 +21,7 @@ import {
   TerminalSidebarFocusSweep,
   useTerminalSidebarFocusSweep,
 } from "./TerminalSidebarFocusSweep"
+import { handleSidebarKey } from "./terminal-sidebar-keyboard"
 
 export { terminalSidebarFocusSweep } from "./TerminalSidebarFocusSweep"
 
@@ -34,75 +33,6 @@ function folderCursorId(id: string) {
 
 function cursorFolderId(id: string | null) {
   return id?.startsWith(FOLDER_CURSOR_PREFIX) ? id.slice(FOLDER_CURSOR_PREFIX.length) : null
-}
-
-function consumeKey(key: KeyEvent) {
-  key.preventDefault()
-  key.stopPropagation()
-}
-
-function handleMasterKey(key: KeyEvent, masterKey: TerminalMasterKey, onMasterKey?: () => void) {
-  if (!onMasterKey || !matchesTerminalMasterKey(key, masterKey)) return false
-  consumeKey(key)
-  onMasterKey()
-  return true
-}
-
-function handleEscapeKey(key: KeyEvent, onEscape: (() => void) | undefined, blur: () => void) {
-  if (key.name !== "escape") return false
-  consumeKey(key)
-  if (onEscape) onEscape()
-  else blur()
-  return true
-}
-
-function handleMovementKey(
-  key: KeyEvent,
-  navigationIds: string[],
-  cursorRef: { current: string | null },
-  setCursorId: (id: string) => void,
-) {
-  const direction = ["up", "k"].includes(key.name) ? -1 : ["down", "j"].includes(key.name) ? 1 : 0
-  if (!direction || !navigationIds.length) return false
-  consumeKey(key)
-  const index = navigationIds.indexOf(cursorRef.current ?? "")
-  const origin = index >= 0 ? index : direction > 0 ? -1 : 0
-  const next = navigationIds[(origin + direction + navigationIds.length) % navigationIds.length]
-  if (next) {
-    cursorRef.current = next
-    setCursorId(next)
-  }
-  return true
-}
-
-function handleActivationKey(
-  key: KeyEvent,
-  cursorId: string | null,
-  onActivate: (id: string) => void,
-) {
-  if (!cursorId || (key.name !== "enter" && key.name !== "return")) return false
-  consumeKey(key)
-  onActivate(cursorId)
-  return true
-}
-
-function handleSidebarKey(
-  key: KeyEvent,
-  options: {
-    masterKey: TerminalMasterKey
-    navigationIds: string[]
-    cursorRef: { current: string | null }
-    setCursorId: (id: string) => void
-    onActivate: (id: string) => void
-    onMasterKey: (() => void) | undefined
-    onEscape: (() => void) | undefined
-    blur: () => void
-  },
-) {
-  if (handleMasterKey(key, options.masterKey, options.onMasterKey)) return
-  if (handleEscapeKey(key, options.onEscape, options.blur)) return
-  if (handleMovementKey(key, options.navigationIds, options.cursorRef, options.setCursorId)) return
-  handleActivationKey(key, options.cursorRef.current, options.onActivate)
 }
 
 export const TerminalSidebar = memo(function TerminalSidebar({
@@ -120,11 +50,14 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   onActivate,
   onActions,
   onNew,
+  onCommand,
   navigationOnly = false,
   autoFocus = false,
   focusRequest = 0,
   onMasterKey,
   onEscape,
+  borderRight = true,
+  masterKeyActive = false,
 }: {
   active?: boolean
   sessions: TerminalSession[]
@@ -140,22 +73,37 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
+  onCommand?: (() => void) | undefined
   navigationOnly?: boolean
   autoFocus?: boolean
   focusRequest?: number
   onMasterKey?: () => void
   onEscape?: () => void
+  borderRight?: boolean
+  /** Shows the direct Master Key target beside each visible agent or terminal. */
+  masterKeyActive?: boolean
 }) {
   const renderer = useRenderer()
-  const sections = useMemo(
-    () => terminalSections(sessions.filter((session) => !isRunningAgent(session))),
-    [sessions],
-  )
+  const sections = useMemo(() => numberedTerminalSections(sessions), [sessions])
   const visibleFolders = useMemo(
     () => folders.filter((folder) => sections.some((section) => section.folderId === folder.id)),
     [folders, sections],
   )
   const collapsedFolders = useMemo(() => new Set(collapsedFolderIds), [collapsedFolderIds])
+  const shortcuts = useMemo(
+    () =>
+      masterKeyActive
+        ? new Map(
+            visibleTerminalShortcutTargets(sessions, folders, collapsedFolderIds).flatMap(
+              (session, index) => {
+                const shortcut = masterKeyShortcutLabel(index)
+                return shortcut ? [[session.id, shortcut]] : []
+              },
+            ),
+          )
+        : new Map<string, string>(),
+    [collapsedFolderIds, folders, masterKeyActive, sessions],
+  )
   const navigationIds = useMemo(
     () => [
       ...sessions.filter(isRunningAgent).map((session) => session.id),
@@ -178,7 +126,9 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   const showSessionHeading = !agentCount || height >= 6
   const showCreationActions = !navigationOnly && (!agentCount || height >= 8)
   const fixedHeight =
-    Number(showSessionHeading) + Number(showCreationActions) + (navigationOnly ? 2 : 1)
+    Number(showSessionHeading) +
+    Number(showCreationActions) * (onCommand ? 2 : 1) +
+    (navigationOnly ? 2 : 1)
   const agentHeight = agentCount
     ? Math.min(
         Math.max(1, height - fixedHeight),
@@ -294,8 +244,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
         position: "relative",
         overflow: "hidden",
         backgroundColor: COLORS.canvas,
-        border: ["right"],
-        borderColor: COLORS.border,
+        ...(borderRight ? { border: ["right"] as const, borderColor: COLORS.border } : {}),
       }}
     >
       <TerminalSidebarFocusSweep width={width} height={height} frame={focusSweepFrame} />
@@ -306,7 +255,8 @@ export const TerminalSidebar = memo(function TerminalSidebar({
           sessions={sessions}
           activeSessionId={activeSessionId}
           cursorSessionId={cursorId}
-          width={width - 1}
+          shortcuts={shortcuts}
+          width={width - Number(borderRight)}
           height={agentHeight}
           onActivate={(id) => {
             cursorRef.current = id
@@ -325,17 +275,15 @@ export const TerminalSidebar = memo(function TerminalSidebar({
             flexShrink: 0,
           }}
         >
-          <>
-            <text
-              content={truncateDisplay(translateUi("Sessões"), width - 6)}
-              style={{ fg: COLORS.muted, flexGrow: 1 }}
-            />
-            <text
-              id="terminal-sidebar-count"
-              content={String(sections.length)}
-              style={{ fg: COLORS.muted }}
-            />
-          </>
+          <text
+            content={truncateDisplay(translateUi("Terminais"), width - 6)}
+            style={{ fg: COLORS.muted, flexGrow: 1 }}
+          />
+          <text
+            id="terminal-sidebar-count"
+            content={String(sections.length)}
+            style={{ fg: COLORS.muted }}
+          />
         </box>
       )}
       <scrollbox
@@ -352,6 +300,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
           cursorFolderId={cursorFolderId(cursorId)}
           collapsedFolderIds={collapsedFolders}
           width={width}
+          shortcuts={shortcuts}
           onSelectFolder={selectFolder}
           onToggleFolder={onToggleFolder}
           onActivate={(id) => {
@@ -368,6 +317,15 @@ export const TerminalSidebar = memo(function TerminalSidebar({
           label="Novo terminal"
           accent={COLORS.terminal}
           onPress={onNew}
+        />
+      )}
+      {showCreationActions && onCommand && (
+        <InlineButton
+          compact
+          id="terminal-sidebar-command"
+          label="Comando"
+          accent={COLORS.terminal}
+          onPress={onCommand}
         />
       )}
       {navigationOnly && (

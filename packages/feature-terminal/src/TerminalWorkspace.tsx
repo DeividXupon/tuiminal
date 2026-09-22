@@ -1,7 +1,7 @@
 import type { BoxRenderable } from "@opentui/core"
-import { resolve } from "node:path"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
 import {
   COLORS,
   getUiSettings,
@@ -39,10 +39,13 @@ import {
   MAX_TERMINALS_PER_SECTION,
   type TerminalFolder,
   terminalSections,
+  visibleTerminalShortcutTargets,
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
+  createCodexAgentCommand,
+  createCodexTerminalCommand,
   createFreeTerminalCommand,
   createShellTerminalCommand,
   FREE_TERMINAL_WORKING_DIRECTORY,
@@ -55,10 +58,13 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
+import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
-import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
+import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
+import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
+import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
 
 const FULL_PANE: FreeTerminalPaneLayout = {
   top: 0,
@@ -78,10 +84,17 @@ const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
 export function FreeTerminal({
   active,
   externalSidebarHost = false,
+  onOpenSettings,
+  onSelectTool,
+  onQuit,
 }: {
   active: boolean
   externalSidebarHost?: boolean
+  onOpenSettings?: () => void
+  onSelectTool?: (tool: "database" | "git" | "runner" | "http" | "terminal") => void
+  onQuit?: () => void
 }) {
+  const { notify } = useNotifications()
   const renderer = useRenderer()
   const terminalPaletteSequence = useTerminalPalette()
   const dimensions = useTerminalDimensions()
@@ -127,14 +140,20 @@ export function FreeTerminal({
   const leaderRef = useRef(false)
   const [dialog, setDialog] = useState<TerminalDialogKind | null>(null)
   const dialogRef = useRef<TerminalDialogKind | null>(null)
-  const [zoomed, setZoomed] = useState(false)
   const [liveDiffTarget, setLiveDiffTarget] = useState<{
     sessionId: string
     agentKey: string
     startedAt: number
     manualDirectories: readonly string[]
+    focusRequest: number
   } | null>(null)
-  const dialogSessionRef = useRef<string | null>(null)
+  const [liveDiffProjectPicker, setLiveDiffProjectPicker] = useState<{
+    sessionId: string
+    projects: readonly LiveDiffProject[]
+    loading: boolean
+    error: string
+  } | null>(null)
+  const liveDiffProjectSearch = useRef<AbortController | null>(null)
   const sequence = useRef(0)
   const sidebarOwner = useRef({})
   const runActionRef = useRef<(key: string) => void>(() => undefined)
@@ -156,6 +175,10 @@ export function FreeTerminal({
   )
   const masterKey = getUiSettings().terminalMasterKey
   const sections = useMemo(() => terminalSections(sessions), [sessions])
+  const masterKeyTargets = useMemo(
+    () => visibleTerminalShortcutTargets(sidebarSessions, folders, collapsedFolderIds),
+    [collapsedFolderIds, sidebarSessions],
+  )
   const activeSession = sessions.find((session) => session.id === activeSessionId)
   useEffect(() => {
     if (!liveDiffTarget) return
@@ -184,15 +207,11 @@ export function FreeTerminal({
       new Set(
         active && !dialog && !leaderActive
           ? sessions
-              .filter(
-                (session) =>
-                  session.sectionId === activeSession?.sectionId &&
-                  (!zoomed || session.id === activeSessionId),
-              )
+              .filter((session) => session.sectionId === activeSession?.sectionId)
               .map((session) => session.id)
           : [],
       ),
-    [active, activeSession?.sectionId, activeSessionId, dialog, leaderActive, sessions, zoomed],
+    [active, activeSession?.sectionId, dialog, leaderActive, sessions],
   )
   useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
   useAgentNotifications(sessions, seenAgents)
@@ -253,10 +272,14 @@ export function FreeTerminal({
         return
       }
       const session = sessionsRef.current.find((session) => session.id === id)
-      if (session) setSelectedFolder(session.folderId)
+      if (session) {
+        setSelectedFolder(session.folderId)
+        const notice = session.tmux ? tmuxAgentNotice(session.agent) : null
+        if (notice) notify(notice)
+      }
       activateSession(id)
     },
-    [activateSession, externalSessions, sessionsRef, setNotice],
+    [activateSession, externalSessions, notify, sessionsRef, setNotice],
   )
   const restoreFocus = useCallback(() => {
     if (activeSessionRef.current) focusTerminal(activeSessionRef.current)
@@ -294,7 +317,6 @@ export function FreeTerminal({
       folderId: DEFAULT_FOLDER,
     })
     setSelectedFolder(DEFAULT_FOLDER)
-    setZoomed(false)
   }
   const split = (down: boolean) => {
     if (!activeSession || !canSplit) {
@@ -307,23 +329,26 @@ export function FreeTerminal({
       row: down ? 1 : 0,
       column: down ? 0 : 1,
     })
-    setZoomed(false)
   }
   const disabled = (key: string) => {
     if (["v", "s"].includes(key)) return !canSplit
-    if (["n", "c", "/"].includes(key)) return sessions.length >= MAX_SESSIONS
+    if (["n", "c", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
+    if (key.startsWith("alt+")) return !onSelectTool
+    if (key === ",") return !onOpenSettings
+    if (key === "q") return !onQuit
     if (key === "r" && activeSession?.tmux) return true
     if (key === "d")
       return !(
         (activeSession?.status === "running" && activeSession.agent) ||
         liveDiffTarget?.sessionId === activeSessionId
       )
-    if (["r", "x", "m", "e", "1"].includes(key)) return !activeSession
-    return key === "2" && section?.panes.length !== 2
+    return ["r", "x", "e"].includes(key) && !activeSession
   }
   const toggleLiveDiff = () => {
     if (liveDiffTarget?.sessionId === activeSessionId) {
-      setLiveDiffTarget(null)
+      setLiveDiffTarget((current) =>
+        current ? { ...current, focusRequest: current.focusRequest + 1 } : current,
+      )
       return
     }
     if (!activeSession?.agent) return
@@ -332,6 +357,7 @@ export function FreeTerminal({
       agentKey: activeSession.agent.key,
       startedAt: activeSession.startedAt,
       manualDirectories: [],
+      focusRequest: 1,
     })
   }
   const runAction = (key: string) => {
@@ -342,14 +368,14 @@ export function FreeTerminal({
       renderer.currentFocusedRenderable?.blur()
       return
     }
-    if (!["/", "e", "l"].includes(key)) restoreFocus()
+    if (!["e", "l", ",", "q"].includes(key) && !key.startsWith("alt+")) restoreFocus()
     switch (key) {
       case "n":
       case "c":
         launchSection()
         break
-      case "/":
-        openDialog("command")
+      case "a":
+        launchSection(createCodexTerminalCommand())
         break
       case "v":
         split(false)
@@ -357,15 +383,16 @@ export function FreeTerminal({
       case "s":
         split(true)
         break
-      case "1":
-      case "2": {
-        const pane = section?.panes[Number(key) - 1]
-        if (pane) activateSession(pane.id)
+      case "alt+1":
+      case "alt+2":
+      case "alt+3":
+      case "alt+4":
+      case "alt+5": {
+        const tools = ["database", "git", "runner", "http", "terminal"] as const
+        const tool = tools[Number(key.at(-1)) - 1]
+        if (tool) onSelectTool?.(tool)
         break
       }
-      case "m":
-        setZoomed((value) => !value)
-        break
       case "b":
         toggleTerminalSidebarPinned()
         break
@@ -385,10 +412,21 @@ export function FreeTerminal({
       case "x":
         if (activeSessionId) closeSession(activeSessionId)
         break
+      case ",":
+        onOpenSettings?.()
+        break
+      case "q":
+        onQuit?.()
+        break
     }
   }
   runActionRef.current = runAction
   const openSidebarTerminal = useCallback(() => runActionRef.current("n"), [])
+  const openSidebarCommand = useCallback(() => {
+    dialogRef.current = "command"
+    setDialog("command")
+  }, [])
+  const openCodexTerminal = useCallback(() => runActionRef.current("a"), [])
   const closeLiveDiff = useCallback(
     (id: string) => {
       setLiveDiffTarget((current) => (current?.sessionId === id ? null : current))
@@ -396,25 +434,76 @@ export function FreeTerminal({
     },
     [focusTerminal],
   )
-  const addLiveDiffProject = useCallback((id: string) => {
-    dialogSessionRef.current = id
-    dialogRef.current = "live-diff-path"
-    setDialog("live-diff-path")
-  }, [])
+  const addLiveDiffProject = useCallback(
+    (id: string, roots: readonly string[]) => {
+      const session = sessionsRef.current.find((candidate) => candidate.id === id)
+      const seeds = [session?.workingDirectory ?? "", ...roots]
+      liveDiffProjectSearch.current?.abort()
+      const controller = new AbortController()
+      liveDiffProjectSearch.current = controller
+      setLiveDiffProjectPicker({
+        sessionId: id,
+        projects: [],
+        loading: true,
+        error: "",
+      })
+      void discoverLiveDiffProjects(seeds, controller.signal)
+        .then((projects) => {
+          if (controller.signal.aborted) return
+          const existing = new Set(roots)
+          setLiveDiffProjectPicker((current) =>
+            current?.sessionId === id
+              ? {
+                  ...current,
+                  projects: projects.filter((project) => !existing.has(project.path)),
+                  loading: false,
+                }
+              : current,
+          )
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          setLiveDiffProjectPicker((current) =>
+            current?.sessionId === id
+              ? {
+                  ...current,
+                  loading: false,
+                  error: translateUi("Não foi possível procurar projetos Git."),
+                }
+              : current,
+          )
+        })
+    },
+    [sessionsRef],
+  )
+  const closeLiveDiffProjectPicker = useCallback(() => {
+    liveDiffProjectSearch.current?.abort()
+    liveDiffProjectSearch.current = null
+    const id = liveDiffProjectPicker?.sessionId
+    setLiveDiffProjectPicker(null)
+    if (id) queueMicrotask(() => focusTerminal(id))
+  }, [focusTerminal, liveDiffProjectPicker?.sessionId])
+  const selectLiveDiffProject = useCallback(
+    (path: string) => {
+      const id = liveDiffProjectPicker?.sessionId
+      if (!id) return
+      setLiveDiffTarget((current) =>
+        current?.sessionId === id && !current.manualDirectories.includes(path)
+          ? { ...current, manualDirectories: [...current.manualDirectories, path] }
+          : current,
+      )
+      closeLiveDiffProjectPicker()
+    },
+    [closeLiveDiffProjectPicker, liveDiffProjectPicker?.sessionId],
+  )
   const saveDialog = (value: string) => {
     if (dialog === "command") {
       launchSection(createFreeTerminalCommand(value))
       closeDialog()
       return
     }
-    if (dialog === "live-diff-path") {
-      const id = dialogSessionRef.current
-      const directory = resolve(FREE_TERMINAL_WORKING_DIRECTORY, value)
-      setLiveDiffTarget((current) =>
-        current?.sessionId === id && !current.manualDirectories.includes(directory)
-          ? { ...current, manualDirectories: [...current.manualDirectories, directory] }
-          : current,
-      )
+    if (dialog === "codex") {
+      launchSection(createCodexAgentCommand(value))
       closeDialog()
       return
     }
@@ -432,10 +521,12 @@ export function FreeTerminal({
       setLeaderActive(false)
       dialogRef.current = null
       setDialog(null)
-    } else if (dialogRef.current || leaderRef.current) return
+      liveDiffProjectSearch.current?.abort()
+      setLiveDiffProjectPicker(null)
+    } else if (dialogRef.current || liveDiffProjectPicker || leaderRef.current) return
     else if (activeSessionId) focusTerminal(activeSessionId)
     else workspaceRef.current?.focus()
-  }, [active, activeSessionId, focusTerminal])
+  }, [active, activeSessionId, focusTerminal, liveDiffProjectPicker])
 
   const sidebarView = useMemo(
     () => ({
@@ -447,17 +538,21 @@ export function FreeTerminal({
       width: sidebarWidth,
       height: sidebarHeight,
       masterKey,
+      masterKeyActive: leaderActive,
       onSelectFolder: selectFolderInSidebar,
       onToggleFolder: toggleFolder,
       onActivate: selectSession,
       onActions: toggleSidebarActions,
       onNew: openSidebarTerminal,
+      onCommand: openSidebarCommand,
     }),
     [
       activeSessionId,
       collapsedFolderIds,
+      leaderActive,
       masterKey,
       openSidebarTerminal,
+      openSidebarCommand,
       selectFolderInSidebar,
       selectSession,
       selectedFolder,
@@ -513,6 +608,8 @@ export function FreeTerminal({
       )
       if (!found || controller.signal.aborted) return
       handledTargetRevision.current = requestedTargetRevision
+      const notice = tmuxAgentNotice(found.agent)
+      if (notice) notify(notice)
       sequence.current += 1
       launchCommand(createTmuxMirrorCommand(found.pane, found.agent?.label, false), {
         sectionId: `pinned-tmux-${sequence.current}`,
@@ -530,11 +627,12 @@ export function FreeTerminal({
     selectSession,
     launchCommand,
     folderForTmuxPane,
+    notify,
     toggleFolder,
   ])
 
   useKeyboard((key) => {
-    if (!active || dialogRef.current || key.defaultPrevented) return
+    if (!active || dialogRef.current || liveDiffProjectPicker || key.defaultPrevented) return
     const configuredKey = getUiSettings().terminalMasterKey
     if (matchesTerminalMasterKey(key, configuredKey)) {
       key.preventDefault()
@@ -551,8 +649,25 @@ export function FreeTerminal({
     if (!leaderRef.current) return
     key.preventDefault()
     key.stopPropagation()
+    const action = terminalActionKey(key)
+    if (action?.startsWith("alt+")) {
+      runAction(action)
+      return
+    }
+    if (
+      /^[1-9]$/.test(key.name) &&
+      !key.ctrl &&
+      !key.meta &&
+      !key.option &&
+      !key.shift &&
+      !key.super
+    ) {
+      const target = masterKeyTargets[Number(key.name) - 1]
+      if (target) selectSession(target.id)
+      return
+    }
     // Unknown keys stay in the menu; [Esc] always cancels without reaching the PTY.
-    runAction(key.name)
+    if (action) runAction(action)
   })
 
   return (
@@ -574,12 +689,14 @@ export function FreeTerminal({
             width={sidebarWidth}
             height={sidebarHeight}
             masterKey={masterKey}
+            masterKeyActive={leaderActive}
             focusRequest={focusRequest}
             onSelectFolder={selectFolderInSidebar}
             onToggleFolder={toggleFolder}
             onActivate={selectSession}
             onActions={toggleSidebarActions}
             onNew={openSidebarTerminal}
+            onCommand={sessions.length < MAX_SESSIONS ? openSidebarCommand : undefined}
           />
         )}
         <box
@@ -593,19 +710,25 @@ export function FreeTerminal({
         >
           {!sessions.length && (
             <box style={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
-              <InlineButton
-                compact
-                label="Novo terminal"
-                accent={COLORS.terminal}
-                onPress={() => launchSection()}
-              />
+              <box style={{ flexDirection: "row" }}>
+                <InlineButton
+                  compact
+                  label="Novo terminal"
+                  accent={COLORS.terminal}
+                  onPress={() => launchSection()}
+                />
+                <InlineButton
+                  compact
+                  label="Novo Codex"
+                  accent={COLORS.terminal}
+                  onPress={openCodexTerminal}
+                />
+              </box>
             </box>
           )}
           {sessions.map((session) => {
-            const visible =
-              session.sectionId === activeSession?.sectionId &&
-              (!zoomed || session.id === activeSessionId)
-            const splitSection = section?.panes.length === 2 && !zoomed
+            const visible = session.sectionId === activeSession?.sectionId
+            const splitSection = section?.panes.length === 2
             const down = section?.panes.some((pane) => pane.row === 1)
             const layout: FreeTerminalPaneLayout =
               !splitSection || !visible
@@ -642,6 +765,7 @@ export function FreeTerminal({
                         manualDirectories: liveDiffTarget.manualDirectories,
                         stacked: splitSection || dimensions.width - sidebarWidth < 90,
                         running: session.status === "running" && Boolean(session.agent),
+                        focusRequest: liveDiffTarget.focusRequest,
                       }
                     : undefined
                 }
@@ -666,6 +790,15 @@ export function FreeTerminal({
           initialValue={dialog === "rename" ? (activeSession?.title ?? "") : ""}
           onSave={saveDialog}
           onClose={closeDialog}
+        />
+      )}
+      {liveDiffProjectPicker && (
+        <LiveDiffProjectPicker
+          projects={liveDiffProjectPicker.projects}
+          loading={liveDiffProjectPicker.loading}
+          error={liveDiffProjectPicker.error}
+          onSelect={selectLiveDiffProject}
+          onClose={closeLiveDiffProjectPicker}
         />
       )}
     </box>

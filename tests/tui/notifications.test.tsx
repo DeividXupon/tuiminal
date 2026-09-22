@@ -469,8 +469,7 @@ test("Free Terminal completion reaches the global center", async () => {
   process.env.TUIMINAL_ONLY_TAB = "terminal"
   tui = await testRender(<App />, { width: 120, height: 30 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-workspace")))
-  await act(async () => tui?.mockInput.pressKey("b", { ctrl: true }))
-  await act(async () => tui?.mockInput.pressKey("/"))
+  await click("terminal-sidebar-command")
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-command-input")))
   act(() => tui?.renderer.root.findDescendantById("terminal-command-input")?.focus())
   await act(async () => tui?.mockInput.typeText("true"))

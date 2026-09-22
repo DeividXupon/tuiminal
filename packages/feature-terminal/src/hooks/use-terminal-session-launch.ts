@@ -4,6 +4,7 @@ import { useCallback, useRef, type RefObject } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
 import { AgentMonitor } from "../services/agent-monitor"
+import { startCodexAppServer } from "../services/codex-app-server"
 import {
   FREE_TERMINAL_WORKING_DIRECTORY,
   type FreeTerminalExit,
@@ -56,8 +57,9 @@ function beginAgentOutput(id: string, size: TerminalSize, context: LaunchContext
   context.outputs.current.get(id)?.dispose()
   const output = new AgentMonitor(size.columns, size.rows)
   context.outputs.current.set(id, output)
+  const command = context.commands.current.get(id)
   context.updateSession(id, {
-    agent: null,
+    ...(command?.codex ? {} : { agent: null }),
     busy: false,
     status: "starting",
     pid: null,
@@ -181,22 +183,77 @@ async function launchTerminal(
   const size = terminalSize(id, context)
   const output = beginAgentOutput(id, size, context)
   const active: ActiveLaunch = { handle: null, ended: false }
-  try {
-    active.handle = await startWorkspaceTerminal(
-      command,
-      {
-        cwd: FREE_TERMINAL_WORKING_DIRECTORY,
-        ...size,
-        onData(data) {
-          if (!launch.isCurrent()) return
-          output.write(data)
-          context.terminals.current.get(id)?.write(data)
-        },
-        onExit: (result) =>
-          finishTerminalExit(id, command, result, launch, active, output, context),
+  let codexActivity: "thinking" | "running" | "updating" | "coding" = "thinking"
+  let codexState: "working" | "blocked" | "done" | "unknown" = "working"
+  const updateCodexAgent = () => {
+    const session = context.commands.current.get(id)
+    if (!launch.isCurrent() || !session?.codex) return
+    context.updateSession(id, {
+      agent: {
+        key: `codex-app-server:${id}`,
+        label: "Codex",
+        profile: "codex",
+        state: codexState,
+        activity: codexState === "working" ? codexActivity : null,
+        taskTitle: session.codex.prompt,
       },
-      launch.signal,
-    )
+      agentIntegration: "codex-app-server",
+    })
+  }
+  try {
+    active.handle = command.codex
+      ? startCodexAppServer(
+          command.codex.prompt,
+          command.workingDirectory ?? FREE_TERMINAL_WORKING_DIRECTORY,
+          {
+            onActivity(activity) {
+              codexActivity = activity
+              codexState = "working"
+              updateCodexAgent()
+            },
+            onState(state) {
+              codexState = state === "failed" ? "unknown" : state
+              if (codexState === "working") codexActivity = "thinking"
+              updateCodexAgent()
+            },
+            onOutput(text) {
+              if (launch.isCurrent()) context.terminals.current.get(id)?.write(text)
+            },
+            onError(message) {
+              if (!launch.isCurrent()) return
+              context.terminals.current
+                .get(id)
+                ?.write(`\r\n\u001b[38;2;255;107;107m× ${message}\u001b[0m\r\n`)
+              context.setNotice(`Erro do Codex: ${message}`)
+            },
+            onExit(code) {
+              finishTerminalExit(
+                id,
+                command,
+                { code, signal: null, stopped: false },
+                launch,
+                active,
+                output,
+                context,
+              )
+            },
+          },
+        )
+      : await startWorkspaceTerminal(
+          command,
+          {
+            cwd: FREE_TERMINAL_WORKING_DIRECTORY,
+            ...size,
+            onData(data) {
+              if (!launch.isCurrent()) return
+              output.write(data)
+              context.terminals.current.get(id)?.write(data)
+            },
+            onExit: (result) =>
+              finishTerminalExit(id, command, result, launch, active, output, context),
+          },
+          launch.signal,
+        )
     await acceptStartedTerminal(id, command, active.handle, active, isCurrent, context)
   } catch (error) {
     failTerminalStart(id, error, launch, isCurrent, terminal, output, context)

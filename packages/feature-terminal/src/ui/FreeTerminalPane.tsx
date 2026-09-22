@@ -1,6 +1,6 @@
-import { EmbeddedTerminalRenderable } from "@opentui/core"
+import { type BoxRenderable, EmbeddedTerminalRenderable } from "@opentui/core"
 import { extend } from "@opentui/react"
-import { memo, useEffect, useRef } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { TerminalSession } from "../model/sessions"
 import { LiveDiffPanel } from "./LiveDiffPanel"
@@ -38,10 +38,32 @@ type PaneProps = {
         manualDirectories: readonly string[]
         stacked: boolean
         running: boolean
+        focusRequest: number
       }
     | undefined
   onCloseLiveDiff?: (id: string) => void
-  onAddLiveDiffProject?: (id: string) => void
+  onAddLiveDiffProject?: (id: string, roots: readonly string[]) => void
+}
+function liveDiffWidths(frameWidth: number, borderLeft: boolean, stacked: boolean) {
+  const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
+  const originalDiffWidth = Math.round(innerWidth * (stacked ? 1 : 0.48))
+  const minimumDiffWidth = Math.min(27, innerWidth)
+  const normalDiffWidth = Math.max(minimumDiffWidth, originalDiffWidth - 14)
+  return {
+    diffWidth: normalDiffWidth,
+    stableContentWidth: Math.max(1, normalDiffWidth - (stacked ? 0 : 1)),
+    terminalWidth: Math.max(1, innerWidth - normalDiffWidth),
+  }
+}
+function liveDiffHeights(frameHeight: number, borderTop: boolean, stacked: boolean) {
+  if (!stacked) return { terminalHeight: "100%" as const, diffHeight: "100%" as const }
+  if (!frameHeight) return { terminalHeight: "52%" as const, diffHeight: "48%" as const }
+  const innerHeight = Math.max(1, frameHeight - (borderTop ? 1 : 0))
+  const diffHeight = Math.min(
+    Math.max(1, innerHeight - 1),
+    Math.max(16, Math.round(innerHeight * 0.48)),
+  )
+  return { terminalHeight: Math.max(1, innerHeight - diffHeight), diffHeight }
 }
 function samePane(previous: PaneProps, next: PaneProps) {
   // Names and process/agent status belong to the sidebar; this pane only reads the session ID.
@@ -68,6 +90,7 @@ function samePane(previous: PaneProps, next: PaneProps) {
     previous.liveDiff?.manualDirectories === next.liveDiff?.manualDirectories &&
     previous.liveDiff?.stacked === next.liveDiff?.stacked &&
     previous.liveDiff?.running === next.liveDiff?.running &&
+    previous.liveDiff?.focusRequest === next.liveDiff?.focusRequest &&
     previous.onCloseLiveDiff === next.onCloseLiveDiff &&
     previous.onAddLiveDiffProject === next.onAddLiveDiffProject
   )
@@ -89,6 +112,19 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   onAddLiveDiffProject,
 }: PaneProps) {
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
+  const [frameHeight, setFrameHeight] = useState(0)
+  const [frameWidth, setFrameWidth] = useState(0)
+  const { diffWidth, stableContentWidth, terminalWidth } = liveDiffWidths(
+    frameWidth,
+    layout.borderLeft,
+    Boolean(liveDiff?.stacked),
+  )
+  const fileTableHeight = liveDiff?.stacked ? 4 : Math.max(4, Math.round(frameHeight * 0.3))
+  const { terminalHeight, diffHeight } = liveDiffHeights(
+    frameHeight,
+    layout.borderTop,
+    Boolean(liveDiff?.stacked),
+  )
   const borders: Array<"top" | "left"> = []
   if (layout.borderTop) borders.push("top")
   if (layout.borderLeft) borders.push("left")
@@ -121,6 +157,11 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
       <box
         id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
+        onSizeChange={function (this: BoxRenderable) {
+          if (!liveDiff) return
+          setFrameHeight((current) => (current === this.height ? current : this.height))
+          setFrameWidth((current) => (current === this.width ? current : this.width))
+        }}
         style={{
           flexGrow: 1,
           minWidth: 1,
@@ -135,8 +176,8 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
       >
         <box
           style={{
-            width: liveDiff && !liveDiff.stacked ? "52%" : "100%",
-            height: liveDiff?.stacked ? "52%" : "100%",
+            width: liveDiff && !liveDiff.stacked && frameWidth ? terminalWidth : "100%",
+            height: terminalHeight,
             minWidth: 1,
             minHeight: 1,
             flexShrink: 1,
@@ -156,8 +197,8 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
         {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
           <box
             style={{
-              width: liveDiff.stacked ? "100%" : "48%",
-              height: liveDiff.stacked ? "48%" : "100%",
+              width: frameWidth ? diffWidth : liveDiff.stacked ? "100%" : "48%",
+              height: diffHeight,
               minWidth: 1,
               minHeight: 1,
               flexShrink: 1,
@@ -172,6 +213,10 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               manualDirectories={liveDiff.manualDirectories}
               running={liveDiff.running}
               active={Boolean(toolActive && active)}
+              fileTableHeight={fileTableHeight}
+              stableContentWidth={stableContentWidth}
+              stacked={liveDiff.stacked}
+              focusRequest={liveDiff.focusRequest}
               onClose={onCloseLiveDiff}
               onAddProject={onAddLiveDiffProject}
               onReturnTerminal={() => onActivate(session.id)}

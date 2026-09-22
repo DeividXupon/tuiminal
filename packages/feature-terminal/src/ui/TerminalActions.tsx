@@ -7,12 +7,14 @@ import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 export const TERMINAL_ACTIONS = [
   ["n", "[N] Novo terminal"],
   ["c", "[C] Nova seção"],
-  ["/", "[/] Comando"],
+  ["a", "[A] Novo Codex"],
   ["v", "[V] Dividir lado"],
   ["s", "[S] Dividir abaixo"],
-  ["1", "[1] Primeiro terminal"],
-  ["2", "[2] Segundo terminal"],
-  ["m", "[M] Ampliar / restaurar"],
+  ["alt+1", "[Alt+1] Banco"],
+  ["alt+2", "[Alt+2] Git"],
+  ["alt+3", "[Alt+3] Runner"],
+  ["alt+4", "[Alt+4] HTTP"],
+  ["alt+5", "[Alt+5] Free Terminal"],
   ["b", "[B] Fixar / soltar barra"],
   ["l", "[L] Focar barra lateral"],
   ["e", "[E] Renomear terminal"],
@@ -20,8 +22,29 @@ export const TERMINAL_ACTIONS = [
   ["r", "[R] Reiniciar terminal"],
   ["x", "[X] Fechar terminal"],
   ["g", "[G] Liberar atalhos globais"],
+  [",", "[,] Configurações"],
+  ["q", "[Q] Sair do Tuiminal"],
   ["escape", "[Esc] Cancelar"],
 ] as const
+
+export function terminalActionKey(key: {
+  name: string
+  sequence?: string
+  raw?: string
+  meta?: boolean
+  option?: boolean
+  ctrl?: boolean
+  shift?: boolean
+  super?: boolean
+}) {
+  if (key.meta || key.option) {
+    if (key.ctrl || key.shift || key.super) return null
+    const number = [key.name, key.sequence, key.raw].find((value) => /^[1-5]$/.test(value ?? ""))
+    return number ? `alt+${number}` : null
+  }
+  if (key.ctrl || key.shift || key.super) return null
+  return [key.name, key.sequence, key.raw].includes(",") ? "," : key.name
+}
 
 export function TerminalActions({
   width,
@@ -54,7 +77,7 @@ export function TerminalActions({
       }}
     >
       <ShortcutText
-        content="Master Key · escolha uma ação · [Esc] cancelar"
+        content="Master Key · [1–9] agente ou terminal · [Esc] cancelar"
         style={{ fg: COLORS.terminal, height: 1 }}
       />
       <scrollbox scrollY style={{ flexGrow: 1 }}>

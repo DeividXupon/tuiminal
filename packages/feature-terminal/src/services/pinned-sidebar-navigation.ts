@@ -1,28 +1,14 @@
-import type { TmuxPaneInfo } from "../model/tmux"
+import type { PinnedTerminalSelection } from "../model/pinned-sidebar"
 import { runAttachedTmux } from "./tmux-command"
 
-export async function selectPinnedTmuxTarget(sourceSocket: string, target: TmuxPaneInfo) {
-  if (sourceSocket !== target.socket) return false
-  try {
-    await runAttachedTmux([
-      "-S",
-      sourceSocket,
-      "switch-client",
-      "-t",
-      target.sessionId,
-      ";",
-      "select-window",
-      "-t",
-      target.windowId,
-      ";",
-      "select-pane",
-      "-t",
-      target.paneId,
-    ])
-    return true
-  } catch {
-    return false
-  }
+export async function routePinnedTerminalToTuiminal(
+  selection: PinnedTerminalSelection,
+  deliver: (selection: PinnedTerminalSelection) => Promise<boolean>,
+  openHost: () => Promise<void>,
+) {
+  if (!(await deliver(selection))) return false
+  await openHost()
+  return true
 }
 
 export async function selectPinnedTmuxHost(sourceSocket: string, hostPane: string) {

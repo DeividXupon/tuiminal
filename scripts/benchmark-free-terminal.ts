@@ -63,6 +63,7 @@ const sidebarView = {
   onActivate: () => undefined,
   onActions: () => undefined,
   onNew: () => undefined,
+  onCommand: () => undefined,
   onFolder: () => undefined,
 }
 

@@ -2,7 +2,6 @@ import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { liveDiffElapsedLabel, type LiveDiffFile } from "../model/live-diff"
 import {
   LIVE_DIFF_CHANGE_WIDTH,
@@ -15,6 +14,13 @@ import {
 
 const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
 const rightAligned = (value: string, width: number) => value.padStart(width - 1).padEnd(width)
+const statusColor = (status: ReturnType<typeof liveDiffFileStatus>) => {
+  if (status === "New") return COLORS.gitMerged
+  if (status === "Delete") return COLORS.danger
+  if (status === "Copy") return COLORS.success
+  if (status === "Rename") return COLORS.focus
+  return COLORS.warning
+}
 
 export function LiveDiffFileTable({
   sessionId,
@@ -24,8 +30,8 @@ export function LiveDiffFileTable({
   error,
   active,
   onSelect,
-  onAddProject,
   onFocus,
+  height,
 }: {
   sessionId: string
   files: LiveDiffFile[]
@@ -34,13 +40,13 @@ export function LiveDiffFileTable({
   error: string
   active: boolean
   onSelect: (file: LiveDiffFile) => void
-  onAddProject: () => void
   onFocus: (event: { stopPropagation: () => void }) => void
+  height: number
 }) {
   const fileList = useRef<ScrollBoxRenderable | null>(null)
   const [listWidth, setListWidth] = useState(80)
   const [sweepFrame, setSweepFrame] = useState<number | null>(null)
-  const hasNewFile = files.some((file) => file.newFile)
+  const hasNewFile = files.some((file) => liveDiffFileStatus(file) === "New")
   useEffect(() => {
     if (!active || !hasNewFile || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") {
       setSweepFrame(null)
@@ -68,33 +74,15 @@ export function LiveDiffFileTable({
 
   return (
     <box
+      id={`live-diff-file-table-${sessionId}`}
       style={{
-        height: "30%",
+        height,
         minHeight: 4,
         flexShrink: 0,
         border: ["top"],
         borderColor: COLORS.border,
       }}
     >
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <text
-          content={`${translateUi("Arquivos")} · ${files.length}`}
-          style={{ fg: COLORS.terminal }}
-        />
-        <InlineButton
-          compact
-          id={`live-diff-add-${sessionId}`}
-          label="[N] Adicionar projeto"
-          onPress={onAddProject}
-        />
-      </box>
       <box
         style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: COLORS.panelAlt }}
       >
@@ -177,7 +165,7 @@ export function LiveDiffFileTable({
                   wrapMode="none"
                   style={{
                     width: LIVE_DIFF_STATUS_WIDTH,
-                    fg: status === "New" ? COLORS.gitMerged : COLORS.warning,
+                    fg: statusColor(status),
                   }}
                 />
               </box>
