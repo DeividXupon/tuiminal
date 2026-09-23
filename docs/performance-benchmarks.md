@@ -26,6 +26,8 @@ bun run benchmark:git:remote:ui
 BENCHMARK_OUTPUT=git-remote-ui.json bun run benchmark:git:remote:ui
 bun run benchmark:git:inbox:ui
 BENCHMARK_OUTPUT=git-inbox-ui.json bun run benchmark:git:inbox:ui
+bun run benchmark:git:pr
+BENCHMARK_SAMPLES=30 BENCHMARK_WARMUP=5 BENCHMARK_OUTPUT=git-pr-large.json bun run benchmark:git:pr
 bun run benchmark:http:ui
 BENCHMARK_OUTPUT=http-ui.json bun run benchmark:http:ui
 bun run benchmark:database:ui
@@ -33,10 +35,11 @@ BENCHMARK_OUTPUT=database-ui.json bun run benchmark:database:ui
 ```
 
 `benchmark:all` runs the service, startup, native tab/action, Runner execution
-and flow, HTTP response, Git Diffs, Git PR/Issue and Inbox remote UI, complete HTTP, and complete Database suites
+and flow, HTTP response, Git Diffs, Git PR/Issue and Inbox remote UI, the
+large-data PR workload, complete HTTP, and complete Database suites
 sequentially. It writes one report to `dist/benchmarks/all.json` by default,
 with all raw samples, suite membership, and the source commit. Use `--suite`
-with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,http-ui,database-ui`
+with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui`
 to select a subset. `--samples` and `--warmup` apply to service and mounted
 UI suites; startup keeps its own `--startup-samples` and `--startup-warmup`
 defaults of five and one. `--external-database` opts the service suite into
@@ -114,7 +117,9 @@ inside the isolated test fixture. Sample, warmup, and optional output settings
 match `benchmark:tui`.
 
 `benchmark:git:ui` mounts the production Git Diffs workspace against a separate
-disposable repository. Three cases measure `[S]` from a focused diff to loaded
+disposable repository. Three cases measure opening the complete commit graph,
+opening the detailed commit log, and switching a loaded diff from unified to
+two-column layout. Three more measure `[S]` from a focused diff to loaded
 partial-stage panes, then line-mode selection and application in each direction.
 Four more cases measure folder stage and unstage with `[Space]`, opening the
 exact-target discard confirmation with `[D]`, and confirming the discard with
@@ -125,18 +130,30 @@ including that an unrelated changed file remains untouched. Sample, warmup,
 and optional output settings match `benchmark:tui`.
 
 `benchmark:git:remote:ui` mounts the production PR and Issue dashboards against
-an isolated `gh` fixture. Four cases measure initial list loading through
-authentication and the first rendered page, then `[R]` refresh through a newly
-rendered page. Each sample starts with a fresh dashboard, and the fixture marks
-each remote response with a revision number so the measurement stops only after
-the new data is visible. The refresh timer excludes the initial list load.
+an isolated `gh` fixture. Eight cases measure initial list loading through
+authentication and the first rendered page, selecting another row through its
+newly rendered details, reaching the final loaded row through automatic second-page
+rendering, and `[R]` refresh through a newly rendered page. Each sample starts
+with a fresh dashboard. The fixture returns selection-specific detail bodies and
+marks each list response with a revision number, so the measurements cannot stop
+on stale details or the previous page. Detail, pagination, and refresh timers
+exclude the initial list load.
 Sample, warmup, and optional output settings match `benchmark:tui`.
 
 `benchmark:git:inbox:ui` mounts the production Inbox against the same isolated
-`gh` fixture. Two cases time the first rendered notification page and `[R]`
-refresh through a newly rendered page. The fixture marks each notification
-response with a revision number; the refresh timer excludes the initial load.
+`gh` fixture. Three cases time the first rendered notification page, reaching the
+final loaded row through automatic second-page rendering, and `[R]` refresh
+through a newly rendered page. The fixture marks each notification response with
+a revision number; pagination and refresh timers exclude the initial load.
 Sample, warmup, and optional output settings match `benchmark:tui`.
+
+`benchmark:git:pr` is the specialized large-data PR suite. It measures bounded
+selection movement, merging 5,000 updates into a 20,000-item cache, parsing a
+256 KiB description, and parsing a 2 MiB diff. Selection latency is reported per
+movement through `operationsPerSample`; the other cases report the complete
+operation. `BENCHMARK_SAMPLES`, `BENCHMARK_WARMUP`, and `BENCHMARK_OUTPUT` use the
+same semantics and report schema as the mounted suites. It performs no network or
+filesystem writes other than the optional report.
 
 `benchmark:http:ui` mounts the complete HTTP client with an initial URL pointing
 to a disposable loopback server. Seven cases measure keyboard and mouse Send to
@@ -186,12 +203,12 @@ can change results. The command does not enforce a universal latency budget.
 
 The default service suite has 163 portable cases across the five tools, plus one
 live Runner port-discovery case on POSIX hosts with `lsof`. The native TUI suite
-has 24 cases; the mounted Git Diffs and complete HTTP and Database UI suites
-have seven each; the mounted Git PR/Issue remote UI suite has four and the Inbox
-UI suite has two; the mounted HTTP response suite has three; the Runner execution
+has 24 cases; the mounted Git Diffs suite has ten cases; the complete HTTP and
+Database UI suites have seven each; the mounted Git PR/Issue remote UI suite has
+eight and the Inbox UI suite has three; the mounted HTTP response suite has three; the Runner execution
 suite has four; the complete Runner flow UI suite adds three cases; and cold
-startup adds five tool-specific measurements. The eleven maintained offline suites
-cover 229 portable cases, plus the live Runner port case on POSIX hosts with
+startup adds five tool-specific measurements. The twelve maintained offline suites
+cover 241 portable cases, plus the live Runner port case on POSIX hosts with
 `lsof`. The opt-in native database
 matrix adds 30 more when Docker is available. Remote Git responses come from
 a disposable `gh` fixture process, so those cases include
@@ -205,8 +222,8 @@ process launch and JSON parsing without network latency.
 | HTTP | `.http` parse and project scan, request preparation/auth/variables, loopback GET/POST/multipart/file/redirect, finite and continuous chunked capture, continuous-stream truncation and midstream cancellation with transport retirement, complete 128 KiB GET download with protected publication, name collision, redirect, midstream cancellation, 404 and unsafe POST rejection, mounted response-hook completion, duplicate suppression, cancellation and owner-close abort, input-driven keyboard/mouse Send, response search, Pretty JSON collapse and visible complete download, approved cross-origin redirect with credential stripping, timeout and cancellation, bounded response capture, single-request collection run, a three-request dependency/extraction/assertion chain with redacted report, ten-row dataset execution with four workers both alone and combined with dependency chains, response inspection/diff, cookie jar, history body budget and persisted roundtrip, Postman and OpenAPI import preview/apply |
 | Free Terminal | PTY output/title processing, native PTY launch and retirement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based agent detection and state transitions, section navigation grouping and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch |
 
-The older `scripts/benchmark-git-pr.ts` and `scripts/benchmark-free-terminal.ts`
-remain available for their larger, specialized PR and terminal workloads.
+The older `scripts/benchmark-free-terminal.ts` remains available for its larger,
+specialized terminal workload.
 
 ## Coverage still to add
 
@@ -222,8 +239,8 @@ coverage. A run that visited all five tabs also produced an OpenTUI warning at 1
 - Database: other MCP controls and mounted UI, native-driver cancellation, schema
   caches, and later SQL result windows on the external drivers. The opt-in Docker matrix still needs a
   live-daemon run to verify its measurements.
-- Git: coordinator cycles for the remaining non-comment actions and other mounted
-  Diffs controls.
+- Git: coordinator cycles for the remaining non-comment actions, mounted Compare,
+  command-console and remote write controls, plus other mouse interactions.
 - Runner: other mounted process controls and edits to running plans. The live
   port-discovery case needs a POSIX
   host with `lsof` and has not run on Windows.

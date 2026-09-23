@@ -51,6 +51,23 @@ test("all document layouts count header-like code and preserve inline line numbe
   ])
 })
 
+test("document parsing preserves section boundaries and trailing source newlines", () => {
+  const first = [
+    "diff --git a/first.txt b/first.txt",
+    "--- a/first.txt",
+    "+++ b/first.txt",
+    "@@ -1 +1 @@",
+    "-before",
+    "+after",
+  ].join("\n")
+  const second = first.replaceAll("first.txt", "second.txt")
+  const documents = parseDiffDocuments(`── STAGED ──\n${first}\n\n── WORKTREE ──\n${second}\n`)
+  expect(documents.map(({ section, path, source }) => ({ section, path, source }))).toEqual([
+    { section: "STAGED", path: "first.txt", source: `${first}\n` },
+    { section: "WORKTREE", path: "second.txt", source: `${second}\n` },
+  ])
+})
+
 test.each(["hunk", "line"] as const)(
   "%s staging keeps every header-like changed line",
   (granularity) => {

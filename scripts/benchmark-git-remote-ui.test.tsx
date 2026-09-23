@@ -29,7 +29,7 @@ function benchmarkCounts() {
   return { samples, warmup }
 }
 
-test("Git remote PR and Issue list load and refresh latency", async () => {
+test("Git remote PR and Issue list, details, pagination, and refresh latency", async () => {
   const projectRoot = process.env.TUIMINAL_WORKDIR ?? ""
   if (!projectRoot || !process.env.XDG_CONFIG_HOME) {
     throw new Error("Missing isolated Git TUI fixture")
@@ -99,6 +99,17 @@ test("Git remote PR and Issue list load and refresh latency", async () => {
       `${kind} refreshed remote page`,
     )
   }
+  async function press(key: string) {
+    await act(async () => tui?.mockInput.pressKey(key))
+    await tui?.renderOnce()
+  }
+  async function moveNearPageEnd(kind: "pr" | "issue") {
+    for (let index = 0; index < 18; index += 1) await press("j")
+    await waitFor(
+      () => (frame().match(/▶[^\n]*#19\b/) ?? []).length === 1,
+      `${kind} penultimate first-page row`,
+    )
+  }
 
   try {
     process.env.TUIMINAL_GH_EXECUTABLE = installBenchmarkGh(root)
@@ -135,6 +146,66 @@ test("Git remote PR and Issue list load and refresh latency", async () => {
         verify: (rendered) => {
           if (!rendered.includes("Benchmark item 1 revision 1") || revision() !== 1) {
             throw new Error(`${kind} initial remote page did not load exactly once`)
+          }
+        },
+      }),
+      defineBenchmark({
+        id: `ui.git_${kind}_remote_details`,
+        tool: "git",
+        description: `Select another ${kind} and render its details through fake gh`,
+        beforeEach: async () => {
+          await clear()
+          await mount(kind)
+          await waitFor(
+            () =>
+              frame().includes(
+                kind === "pr"
+                  ? "Benchmark pull request description #1"
+                  : "Benchmark issue description #1",
+              ),
+            `${kind} initial details`,
+          )
+        },
+        run: async () => {
+          await press("j")
+          return waitFor(
+            () =>
+              frame().includes(
+                kind === "pr"
+                  ? "Benchmark pull request description #2"
+                  : "Benchmark issue description #2",
+              ),
+            `${kind} selected details`,
+          )
+        },
+        verify: (rendered) => {
+          const expected =
+            kind === "pr"
+              ? "Benchmark pull request description #2"
+              : "Benchmark issue description #2"
+          if (!rendered.includes(expected))
+            throw new Error(`${kind} details did not follow selection`)
+        },
+      }),
+      defineBenchmark({
+        id: `ui.git_${kind}_remote_pagination`,
+        tool: "git",
+        description: `Select the last ${kind} row and render the automatically loaded next page`,
+        beforeEach: async () => {
+          await clear()
+          await mount(kind)
+          await moveNearPageEnd(kind)
+        },
+        run: async () => {
+          await press("j")
+          return waitFor(
+            () => Boolean(tui?.renderer.root.findDescendantById(`git-${kind}-row-39`)),
+            `${kind} second remote page`,
+          )
+        },
+        verify: () => {
+          if (!tui?.renderer.root.findDescendantById(`git-${kind}-row-39`) || revision() !== 2) {
+            throw new Error(`${kind} automatic pagination did not render exactly one next page`)
           }
         },
       }),

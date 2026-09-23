@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
+  gitHistoryNavigationDelta,
+  isGitHistoryFocused,
+} from "../packages/feature-git/src/model/base-navigation"
+import {
   preparePullRequestAction,
   transitionPullRequestAction,
 } from "../packages/feature-git/src/model/pr/actions"
@@ -11,8 +15,8 @@ import {
   adjacentPreviewTab,
   movePullRequestIndex,
   nextPullRequestPreviewPosition,
-  pullRequestNavigationAction,
   pullRequestActionKindForShortcut,
+  pullRequestNavigationAction,
   pullRequestWorkspaceAction,
   resolvePullRequestLayout,
 } from "../packages/feature-git/src/model/pr/navigation"
@@ -36,10 +40,6 @@ import {
   DEFAULT_GIT_WORKSPACE_TAB,
   gitWorkspaceTabForKey,
 } from "../packages/feature-git/src/model/workspace"
-import {
-  gitHistoryNavigationDelta,
-  isGitHistoryFocused,
-} from "../packages/feature-git/src/model/base-navigation"
 import { pullRequestDashboardPresentation } from "../packages/feature-git/src/ui/pr/presentation"
 
 const identity = DEMO_PULL_REQUESTS[0]?.identity ?? {
@@ -311,6 +311,21 @@ describe("Pull request queries and identity", () => {
     expect(
       validatePullRequestIdentity({ ...identity, url: "http://github.com/equipe/api/pull/142" }),
     ).toBe(false)
+  })
+
+  test("cached identity keys revalidate mutated identities", () => {
+    const identity = {
+      nodeId: "PR_cache",
+      owner: "equipe",
+      repository: "api",
+      number: 7,
+      host: "github.com",
+      url: "https://github.com/equipe/api/pull/7",
+    }
+    expect(pullRequestIdentityKey(identity)).toBe("github.com:PR_cache")
+    expect(pullRequestIdentityKey(identity)).toBe("github.com:PR_cache")
+    identity.url = "http://github.com/equipe/api/pull/7"
+    expect(() => pullRequestIdentityKey(identity)).toThrow("Invalid pull request identity")
   })
 })
 

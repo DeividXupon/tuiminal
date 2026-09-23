@@ -14,6 +14,7 @@ const suiteIds = [
   "git-ui",
   "git-remote-ui",
   "git-inbox-ui",
+  "git-pr",
   "http-ui",
   "database-ui",
 ] as const
@@ -32,7 +33,7 @@ const testFiles: Partial<Record<SuiteId, string>> = {
 const projectRoot = resolve(import.meta.dir, "..")
 
 function usage() {
-  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,http-ui,database-ui] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
+  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
 }
 
 function requiredValue(args: string[], index: number, option: string) {
@@ -150,6 +151,7 @@ function command(id: SuiteId, file: string, config: ReturnType<typeof options>) 
       file,
     ]
   }
+  if (id === "git-pr") return [join(import.meta.dir, "benchmark-git-pr.ts")]
   const testFile = testFiles[id]
   if (!testFile) throw new Error(`Missing benchmark test for ${id}`)
   return ["test", "--preload", "./tests/tui/setup.ts", join(import.meta.dir, testFile)]

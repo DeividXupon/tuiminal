@@ -15,7 +15,7 @@ test("aggregate benchmark preserves every raw Git UI sample and suite membership
         process.execPath,
         script,
         "--suite",
-        "git-ui",
+        "git-ui,git-remote-ui,git-inbox-ui,git-pr",
         "--samples",
         "1",
         "--warmup",
@@ -33,16 +33,24 @@ test("aggregate benchmark preserves every raw Git UI sample and suite membership
       results: Array<{ id: string; tool: string; samplesMs: number[] }>
     }
     expect(report.runtime.bun).toBe("1.4.2")
-    expect(report.suites.map((suite) => suite.id)).toEqual(["git-ui"])
-    expect(report.results.length).toBe(7)
-    expect(report.suites[0]?.caseIds).toEqual(report.results.map((result) => result.id))
+    expect(report.suites.map((suite) => suite.id)).toEqual([
+      "git-ui",
+      "git-remote-ui",
+      "git-inbox-ui",
+      "git-pr",
+    ])
+    expect(report.results.length).toBe(25)
+    expect(report.suites.map((suite) => suite.caseIds.length)).toEqual([10, 8, 3, 4])
+    expect(report.suites.flatMap((suite) => suite.caseIds)).toEqual(
+      report.results.map((result) => result.id),
+    )
     expect(
       report.results.every((result) => result.tool === "git" && result.samplesMs.length === 1),
     ).toBe(true)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
-}, 15_000)
+}, 30_000)
 
 test("aggregate benchmark rejects an unknown suite before writing a report", () => {
   const root = mkdtempSync(join(tmpdir(), "tuiminal-benchmark-all-invalid-"))

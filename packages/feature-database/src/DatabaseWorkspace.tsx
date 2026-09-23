@@ -1,13 +1,6 @@
 import type { InputRenderable, ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import {
-  COLORS,
-  databaseSelectionColors,
-  focusedPanelBorder,
-  LAYOUT,
-} from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
 import {
@@ -17,12 +10,19 @@ import {
   sensitiveDataIsMasked,
   sensitiveTermsSignature,
 } from "@xupon/tuiminal-core/security/sensitive-data"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import {
+  COLORS,
+  databaseSelectionColors,
+  focusedPanelBorder,
+  LAYOUT,
+} from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
+import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
 import { useDatabaseSelectionSweep } from "./hooks/use-database-selection-sweep"
 import { useDatabaseTableWindow } from "./hooks/use-database-table-window"
@@ -41,8 +41,8 @@ import {
   databaseSidebarWidth,
   nextDatabaseTableSort,
 } from "./model/layout"
-import { DATABASE_TABLE_WINDOW_SIZE } from "./model/table-window"
 import { nextSqlTabIndex } from "./model/sql-workspace"
+import { DATABASE_TABLE_WINDOW_SIZE } from "./model/table-window"
 import type {
   DatabaseCatalog,
   DatabaseConnectionProfile,
@@ -79,13 +79,13 @@ import {
   SQL_TAB_LIMIT,
   TABLE_HISTORY_LIMIT,
 } from "./rendering/constants"
-import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
 import { tableReadNotification } from "./rendering/table-read-notification"
+import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
 import {
   applyTableMutations,
+  DatabaseMutationCommitUncertainError,
   databaseConnectionCanWrite,
   databaseDriverLabel,
-  DatabaseMutationCommitUncertainError,
   getDefaultDatabaseConnectionId,
   listDatabaseConnections,
   listDatabaseTables,
@@ -101,6 +101,7 @@ import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
 import { type DatabaseChangeReviewItem, DatabaseChangesModal } from "./ui/DatabaseChangesModal"
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
 import { DatabaseEmptyState } from "./ui/DatabaseEmptyState"
+import { DatabaseGridRowView } from "./ui/DatabaseGridRowView"
 import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
 import { DatabaseSchemaView } from "./ui/DatabaseSchemaView"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
@@ -333,6 +334,10 @@ export function DatabaseViewer({
   const visibleColumns = useMemo(
     () => (pageData?.columns ?? []).slice(columnOffset, columnOffset + columnsPerView),
     [columnOffset, columnsPerView, pageData],
+  )
+  const visibleColumnFields = useMemo(
+    () => visibleColumns.map((column) => column.field),
+    [visibleColumns],
   )
   const maxColumnOffset = Math.max(0, (pageData?.columns.length ?? 0) - columnsPerView)
   const currentTableChangeKey =
@@ -747,6 +752,27 @@ export function DatabaseViewer({
       updateCurrentBatchRows((current) => toggleDatabaseBatchRow(current, row))
     },
     [updateCurrentBatchRows],
+  )
+
+  const selectTableBatchRow = useCallback(
+    (rowIndex: number, gridRow: DatabaseGridRow) => {
+      activatePane("grid")
+      selectedRowIndexRef.current = rowIndex
+      setSelectedRowIndex(rowIndex)
+      toggleCurrentBatchRow(gridRow)
+    },
+    [activatePane, toggleCurrentBatchRow],
+  )
+
+  const selectTableGridCell = useCallback(
+    (rowIndex: number, columnIndex: number) => {
+      activatePane("grid")
+      selectedRowIndexRef.current = rowIndex
+      setSelectedRowIndex(rowIndex)
+      selectedColumnIndexRef.current = columnIndex
+      setSelectedColumnIndex(columnIndex)
+    },
+    [activatePane],
   )
 
   const selectionSweep = useDatabaseSelectionSweep({
@@ -2623,128 +2649,31 @@ export function DatabaseViewer({
                         }}
                       >
                         {gridRows.length ? (
-                          gridRows.map((gridRow, index) => {
-                            const mutationKind = gridRow.change?.mutation.kind
-                            const rowBackground =
-                              mutationKind === "insert"
-                                ? COLORS.databaseInsertedBg
-                                : mutationKind === "delete"
-                                  ? COLORS.databaseDeletedBg
-                                  : mutationKind === "update"
-                                    ? COLORS.databaseEditedBg
-                                    : index % 2 === 0
-                                      ? COLORS.panel
-                                      : COLORS.panelRaised
-                            const rowAccent =
-                              mutationKind === "insert"
-                                ? COLORS.runner
-                                : mutationKind === "delete"
-                                  ? COLORS.danger
-                                  : mutationKind === "update"
-                                    ? COLORS.warning
-                                    : COLORS.muted
-                            return (
-                              <box
-                                key={gridRow.id}
-                                id={`database-row-${index}`}
-                                style={{
-                                  height: 1,
-                                  flexShrink: 0,
-                                  flexDirection: "row",
-                                  backgroundColor: rowBackground,
-                                }}
-                              >
-                                <Button
-                                  id={`database-select-row-${index}`}
-                                  onPress={() => {
-                                    activatePane("grid")
-                                    selectedRowIndexRef.current = index
-                                    setSelectedRowIndex(index)
-                                    toggleCurrentBatchRow(gridRow)
-                                  }}
-                                  height={1}
-                                  width={BATCH_SELECTOR_WIDTH}
-                                  flexShrink={0}
-                                >
-                                  <text
-                                    content={
-                                      currentBatchRowIds.has(
-                                        databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                      )
-                                        ? "● "
-                                        : "○ "
-                                    }
-                                    style={{
-                                      fg: currentBatchRowIds.has(
-                                        databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                      )
-                                        ? COLORS.database
-                                        : COLORS.muted,
-                                      bg: rowBackground,
-                                    }}
-                                  />
-                                </Button>
-                                <text
-                                  content="│"
-                                  style={{ fg: COLORS.border, bg: rowBackground }}
-                                />
-                                {visibleColumns.map((column, visibleIndex) => {
-                                  const absoluteIndex = columnOffset + visibleIndex
-                                  const selectedCell =
-                                    activePane === "grid" &&
-                                    index === selectedRowIndex &&
-                                    absoluteIndex === selectedColumnIndex
-                                  const changedCell =
-                                    gridRow.change?.mutation.kind === "update" &&
-                                    Object.hasOwn(gridRow.change.mutation.values, column.field)
-                                  return (
-                                    <box
-                                      key={column.field}
-                                      style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-                                    >
-                                      <Button
-                                        id={`database-cell-${index}-${absoluteIndex}`}
-                                        onPress={() => {
-                                          activatePane("grid")
-                                          selectedRowIndexRef.current = index
-                                          setSelectedRowIndex(index)
-                                          selectedColumnIndexRef.current = absoluteIndex
-                                          setSelectedColumnIndex(absoluteIndex)
-                                        }}
-                                        height={1}
-                                        width={CELL_WIDTH}
-                                        flexShrink={0}
-                                      >
-                                        {(state) => (
-                                          <text
-                                            content={fitCell(gridRow.data[column.field])}
-                                            style={{
-                                              fg: selectedCell
-                                                ? selectionColors.foreground
-                                                : changedCell || mutationKind
-                                                  ? rowAccent
-                                                  : state.focused
-                                                    ? COLORS.text
-                                                    : COLORS.muted,
-                                              bg: selectedCell
-                                                ? selectionColors.background
-                                                : rowBackground,
-                                            }}
-                                          />
-                                        )}
-                                      </Button>
-                                      {visibleIndex < visibleColumns.length - 1 ? (
-                                        <text
-                                          content="│"
-                                          style={{ fg: COLORS.border, bg: rowBackground }}
-                                        />
-                                      ) : null}
-                                    </box>
-                                  )
-                                })}
-                              </box>
-                            )
-                          })
+                          gridRows.map((gridRow, index) => (
+                            <DatabaseGridRowView
+                              key={gridRow.id}
+                              gridRow={gridRow}
+                              rowIndex={index}
+                              idPrefix="database"
+                              rowIdSegment="row"
+                              columns={visibleColumnFields}
+                              columnOffset={columnOffset}
+                              cellWidth={CELL_WIDTH}
+                              separateCells
+                              selectedColumnIndex={
+                                activePane === "grid" && index === selectedRowIndex
+                                  ? selectedColumnIndex
+                                  : -1
+                              }
+                              batchSelected={currentBatchRowIds.has(
+                                databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                              )}
+                              selectionForeground={selectionColors.foreground}
+                              selectionBackground={selectionColors.background}
+                              onToggleBatch={selectTableBatchRow}
+                              onSelectCell={selectTableGridCell}
+                            />
+                          ))
                         ) : (
                           <text
                             content={translateUi("A consulta não retornou linhas.")}

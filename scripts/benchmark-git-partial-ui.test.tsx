@@ -145,6 +145,68 @@ test("Git partial-stage and folder-action latency in the native interface", asyn
     updateUiSettings({ layout: "framed", language: "pt-BR" })
     const cases = [
       defineBenchmark({
+        id: "ui.git_graph_open",
+        tool: "git",
+        description: "Open the complete mounted commit graph from a focused diff",
+        beforeEach: () => reset(false),
+        run: async () => {
+          await press("g")
+          return waitFor(
+            () =>
+              (tui?.captureCharFrame() ?? "").includes("ÁRVORE DE COMMITS") &&
+              (tui?.captureCharFrame() ?? "").includes("Partial-stage TUI fixture"),
+            "complete commit graph",
+          )
+        },
+        verify: (frame) => {
+          if (
+            !frame.includes("ÁRVORE DE COMMITS") ||
+            !frame.includes("Partial-stage TUI fixture")
+          ) {
+            throw new Error("Mounted Git graph did not render the fixture commit")
+          }
+        },
+      }),
+      defineBenchmark({
+        id: "ui.git_log_open",
+        tool: "git",
+        description: "Open the detailed mounted commit log from a focused diff",
+        beforeEach: () => reset(false),
+        run: async () => {
+          await press("o")
+          return waitFor(
+            () => Boolean(tui?.renderer.root.findDescendantById("git-base-log-row-0")),
+            "detailed commit log",
+          )
+        },
+        verify: (frame) => {
+          if (
+            !frame.includes("HISTÓRICO DE COMMITS") ||
+            !frame.includes("Partial-stage TUI fixture")
+          ) {
+            throw new Error("Mounted Git log did not render the fixture commit")
+          }
+        },
+      }),
+      defineBenchmark({
+        id: "ui.git_diff_layout",
+        tool: "git",
+        description: "Switch the mounted file diff from unified to two-column layout",
+        beforeEach: () => reset(false),
+        run: async () => {
+          await press("v")
+          return waitFor(
+            () => (tui?.captureCharFrame() ?? "").includes("[V] 2 colunas"),
+            "two-column diff layout",
+          )
+        },
+        verify: (frame) => {
+          if (!frame.includes("[V] 2 colunas") || !frame.includes("ADDED_A")) {
+            throw new Error("Mounted Git diff did not switch layout with its content intact")
+          }
+        },
+      }),
+      defineBenchmark({
         id: "ui.git_partial_open",
         tool: "git",
         description: "Open partial staging from a focused diff until both native panes load",

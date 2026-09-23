@@ -82,15 +82,17 @@ export function tuiActionBenchmarks({
       },
       run: async () => {
         await act(async () => tui.mockInput.pressKey("g"))
-        const frame = await waitForUi(
-          () => tui.captureCharFrame().includes("ÁRVORE DE COMMITS"),
-          "Git graph",
-        )
+        const frame = await waitForUi(() => {
+          const current = tui.captureCharFrame()
+          return current.includes("ÁRVORE DE COMMITS") && current.includes("Benchmark fixture")
+        }, "Git graph")
         graphOpen = true
         return frame
       },
       verify: (frame) => {
-        if (!frame.includes("ÁRVORE DE COMMITS")) throw new Error("Git graph is missing")
+        if (!frame.includes("ÁRVORE DE COMMITS") || !frame.includes("Benchmark fixture")) {
+          throw new Error("Git graph did not render the fixture commit")
+        }
       },
     }),
   )

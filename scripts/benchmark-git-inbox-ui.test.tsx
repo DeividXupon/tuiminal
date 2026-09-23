@@ -18,7 +18,7 @@ function benchmarkCounts() {
   return { samples, warmup }
 }
 
-test("Git Inbox remote list load and refresh latency", async () => {
+test("Git Inbox remote list load, pagination, and refresh latency", async () => {
   if (!process.env.TUIMINAL_WORKDIR || !process.env.XDG_CONFIG_HOME) {
     throw new Error("Missing isolated Git TUI fixture")
   }
@@ -81,6 +81,17 @@ test("Git Inbox remote list load and refresh latency", async () => {
       "refreshed remote page",
     )
   }
+  async function press(key: string) {
+    await act(async () => tui?.mockInput.pressKey(key))
+    await tui?.renderOnce()
+  }
+  async function moveNearPageEnd() {
+    for (let index = 0; index < 18; index += 1) await press("j")
+    await waitFor(
+      () => (frame().match(/▶[^\n]*●[^\n]*team\/repo/) ?? []).length === 1,
+      "penultimate first-page notification",
+    )
+  }
 
   try {
     process.env.TUIMINAL_GH_EXECUTABLE = installBenchmarkGh(root)
@@ -104,6 +115,28 @@ test("Git Inbox remote list load and refresh latency", async () => {
         verify: (rendered) => {
           if (!rendered.includes("Benchmark notification 1 revision 1") || revision() !== 1) {
             throw new Error("Inbox initial remote page did not load exactly once")
+          }
+        },
+      }),
+      defineBenchmark({
+        id: "ui.git_inbox_remote_pagination",
+        tool: "git",
+        description: "Select the final notification and render the automatically loaded next page",
+        beforeEach: async () => {
+          await clear()
+          await mount()
+          await moveNearPageEnd()
+        },
+        run: async () => {
+          await press("j")
+          return waitFor(
+            () => Boolean(tui?.renderer.root.findDescendantById("git-inbox-row-24")),
+            "second notification page",
+          )
+        },
+        verify: () => {
+          if (!tui?.renderer.root.findDescendantById("git-inbox-row-24") || revision() !== 2) {
+            throw new Error("Inbox automatic pagination did not render exactly one next page")
           }
         },
       }),

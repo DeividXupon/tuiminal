@@ -7,7 +7,10 @@ type RemotePage<Item> = {
 }
 
 function newestFirst<Item extends UpdatedItem>(items: Iterable<Item>) {
-  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  return [...items].sort((left, right) => {
+    if (left.updatedAt === right.updatedAt) return 0
+    return left.updatedAt > right.updatedAt ? -1 : 1
+  })
 }
 
 /** Pure page aggregation shared by PR and Issue sessions; I/O ownership stays separate. */
@@ -37,7 +40,8 @@ export function mergeRemoteItems<Item extends UpdatedItem>(
   additions: readonly Item[],
   identityKey: (item: Item) => string,
 ) {
-  const items = new Map(current.map((item) => [identityKey(item), item]))
+  const items = new Map<string, Item>()
+  for (const item of current) items.set(identityKey(item), item)
   for (const item of additions) items.set(identityKey(item), item)
   return newestFirst(items.values())
 }

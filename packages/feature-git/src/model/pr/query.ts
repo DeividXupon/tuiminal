@@ -5,6 +5,7 @@ export { normalizeGitHubSearchQuery as normalizePullRequestQuery } from "../sear
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const ACCOUNT_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+const identityKeyCache = new WeakMap<PullRequestIdentity, PullRequestIdentity & { key: string }>()
 
 export type EffectivePullRequestQuery = {
   repository: string | null
@@ -40,8 +41,21 @@ export function validatePullRequestIdentity(identity: PullRequestIdentity) {
 }
 
 export function pullRequestIdentityKey(identity: PullRequestIdentity) {
+  const cached = identityKeyCache.get(identity)
+  if (
+    cached?.host === identity.host &&
+    cached.nodeId === identity.nodeId &&
+    cached.owner === identity.owner &&
+    cached.repository === identity.repository &&
+    cached.number === identity.number &&
+    cached.url === identity.url
+  ) {
+    return cached.key
+  }
   if (!validatePullRequestIdentity(identity)) throw new Error("Invalid pull request identity")
-  return `${identity.host.toLowerCase()}:${identity.nodeId}`
+  const key = `${identity.host.toLowerCase()}:${identity.nodeId}`
+  identityKeyCache.set(identity, { ...identity, key })
+  return key
 }
 
 export function samePullRequestIdentity(left: PullRequestIdentity, right: PullRequestIdentity) {

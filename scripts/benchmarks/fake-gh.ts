@@ -58,6 +58,7 @@ if (args[1] === "graphql") {
     process.exit(0)
   }
   if (request.query.includes("TuiminalPullRequestDetails")) {
+    const number = Number(request.variables.number || 7)
     const commented = process.env.BENCHMARK_GH_STATE && existsSync(process.env.BENCHMARK_GH_STATE)
     const closed = process.env.BENCHMARK_GH_ACTION_STATE && existsSync(process.env.BENCHMARK_GH_ACTION_STATE)
     const checkFile = process.env.BENCHMARK_GH_CHECK_STATE_FILE
@@ -77,7 +78,7 @@ if (args[1] === "graphql") {
       squashMergeAllowed: true,
       rebaseMergeAllowed: false,
       pullRequest: {
-        body: "Benchmark pull request description",
+        body: "Benchmark pull request description #" + number,
         baseRefOid: "base123", headRefOid: "abc123", state: closed ? "CLOSED" : "OPEN", isDraft: false,
         mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
         viewerCanUpdateBranch: true, viewerCanClose: true, viewerCanUpdate: true,
@@ -96,14 +97,15 @@ if (args[1] === "graphql") {
     process.exit(0)
   }
   if (request.query.includes("TuiminalIssueDetails")) {
+    const number = Number(request.variables.number || 7)
     const commented = process.env.BENCHMARK_GH_STATE && existsSync(process.env.BENCHMARK_GH_STATE)
     const closed = process.env.BENCHMARK_GH_ACTION_STATE && existsSync(process.env.BENCHMARK_GH_ACTION_STATE)
     const olderPage = request.variables.before === "issue-page-2"
     console.log(JSON.stringify({ data: { repository: {
       viewerPermission: "WRITE",
       issue: {
-        id: "I_7", number: 7, url: "https://github.com/team/repo/issues/7",
-        title: "Benchmark issue", body: "Benchmark issue description", state: closed ? "CLOSED" : "OPEN",
+        id: "I_" + number, number, url: "https://github.com/team/repo/issues/" + number,
+        title: "Benchmark issue", body: "Benchmark issue description #" + number, state: closed ? "CLOSED" : "OPEN",
         createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z",
         viewerCanClose: true, viewerCanUpdate: true,
         author: { login: "author" },
