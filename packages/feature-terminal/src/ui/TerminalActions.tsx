@@ -1,15 +1,16 @@
 import type { BoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useEffect, useRef } from "react"
 
 export const TERMINAL_ACTIONS = [
   ["n", "[N] Novo terminal"],
   ["c", "[C] Nova seção"],
   ["a", "[A] Novo Codex"],
   ["v", "[V] Dividir lado"],
-  ["s", "[S] Dividir abaixo"],
+  ["h", "[H] Dividir abaixo"],
+  ["s", "[S] Mensagens enviadas"],
   ["alt+1", "[Alt+1] Banco"],
   ["alt+2", "[Alt+2] Git"],
   ["alt+3", "[Alt+3] Runner"],

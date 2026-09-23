@@ -10,6 +10,7 @@ import {
   isRunningAgent,
   masterKeyShortcutLabel,
   numberedTerminalSections,
+  orderedRunningAgents,
   type TerminalFolder,
   type TerminalSession,
   visibleTerminalShortcutTargets,
@@ -106,7 +107,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   )
   const navigationIds = useMemo(
     () => [
-      ...sessions.filter(isRunningAgent).map((session) => session.id),
+      ...orderedRunningAgents(sessions).map((session) => session.id),
       ...visibleFolders.flatMap((folder) => [
         folderCursorId(folder.id),
         ...(collapsedFolders.has(folder.id)
@@ -132,20 +133,22 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   const agentHeight = agentCount
     ? Math.min(
         Math.max(1, height - fixedHeight),
-        Math.max(compactAgents ? 2 : 4, Math.floor(height * 0.4)),
+        Math.max(compactAgents ? 2 : 5, Math.floor(height * 0.4)),
       )
     : 3
   const [frame, setFrame] = useState(0)
-  const working = sessions.some(
-    (session) => session.status === "running" && session.agent?.state === "working",
+  const animatingAgents = sessions.some(
+    (session) =>
+      session.status === "running" &&
+      (session.agent?.state === "working" || session.agentIntegration === "codex-app-server"),
   )
   useEffect(() => {
-    if (!active || !working || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return
+    if (!active || !animatingAgents || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return
     const timer = setInterval(() => {
       setFrame((current) => (current + 1) % AGENT_WORKING_FRAMES.length)
     }, 100)
     return () => clearInterval(timer)
-  }, [active, working])
+  }, [active, animatingAgents])
   const sidebarRef = useRef<BoxRenderable | null>(null)
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const { frame: focusSweepFrame, start: startFocusSweep } = useTerminalSidebarFocusSweep()

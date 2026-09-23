@@ -3,7 +3,13 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { AgentActivity, AgentState } from "../model/agent-state"
 
 export const AGENT_WORKING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-export const CODEX_THINKING_FRAMES = ["◐", "◓", "◑", "◒"]
+
+const CODEX_ACTIVITY_MARKERS = {
+  code: "{}",
+  command: ">_",
+  plan: "txt",
+  tool: "●",
+} as const
 
 const STATES: Record<AgentState, { marker: string; label: string }> = {
   working: { marker: "⠋", label: "Trabalhando" },
@@ -51,17 +57,30 @@ export function agentPresentation(
   }
 }
 
-/** Public app-server events, deliberately separate from private reasoning content. */
-export function codexActivityIndicators(activity: AgentActivity | null, frame = 0) {
-  const active = activity ?? "thinking"
-  return [
-    {
-      key: "thinking",
-      marker: CODEX_THINKING_FRAMES[frame % CODEX_THINKING_FRAMES.length]!,
-      active: active === "thinking",
-    },
-    { key: "command", marker: "›_", active: active === "running" },
-    { key: "update", marker: "◆", active: active === "updating" },
-    { key: "code", marker: "{}", active: active === "coding" || active === "writing" },
-  ]
+export function codexActivityIndicators(
+  state: AgentState,
+  activity: AgentActivity | null,
+  frame = 0,
+) {
+  const active =
+    state === "working"
+      ? activity === "coding" || activity === "writing"
+        ? "code"
+        : activity === "running"
+          ? "command"
+          : activity === "updating"
+            ? "plan"
+            : activity === "tooling"
+              ? "tool"
+              : null
+      : null
+  const bright = Math.floor(frame / 3) % 2 === 0
+  return (Object.keys(CODEX_ACTIVITY_MARKERS) as Array<keyof typeof CODEX_ACTIVITY_MARKERS>).map(
+    (key) => ({
+      key,
+      marker: CODEX_ACTIVITY_MARKERS[key],
+      active: key === active,
+      bright: key === active && bright,
+    }),
+  )
 }

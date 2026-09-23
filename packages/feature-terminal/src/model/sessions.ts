@@ -1,7 +1,7 @@
 import type { AgentStatus } from "./agent-state"
 import type { TmuxPaneTarget, TmuxTerminalKind } from "./tmux"
 
-export type FreeTerminalKind = TmuxTerminalKind | "codex"
+export type FreeTerminalKind = TmuxTerminalKind
 export type FreeTerminalCommand = {
   kind: FreeTerminalKind
   label: string
@@ -17,8 +17,8 @@ export type FreeTerminalCommand = {
   autoMirror?: boolean
   /** Read-only reference to a native terminal owned by another application. */
   external?: { terminalId: string }
-  /** A first-party Codex app-server session, not a terminal screen observation. */
-  codex?: { prompt: string }
+  /** Launch the official Codex TUI against an owned app-server. */
+  codex?: { appServer: true }
 }
 export type TerminalSession = FreeTerminalCommand & {
   id: string
@@ -36,8 +36,8 @@ export type TerminalSession = FreeTerminalCommand & {
   exitCode: number | null
   startedAt: number
   agent: AgentStatus | null
-  /** The activity state is authoritative when Tuiminal owns the Codex app-server. */
-  agentIntegration?: "codex-app-server"
+  /** App-server events are authoritative for this session's agent state. */
+  agentIntegration?: "codex-app-server" | "screen"
   backend?: "native" | "tmux" | "external"
 }
 export type TerminalFolder = { id: string; name: string }
@@ -51,6 +51,19 @@ export const EXTERNAL_FOLDER_NAME = "Outros"
 
 export function isRunningAgent(session: TerminalSession) {
   return session.status === "running" && session.agent !== null
+}
+
+/** Integrated agents connect to an app-server owned on this machine's localhost. */
+export function isLocalhostAgentSession(session: TerminalSession) {
+  return session.agentIntegration === "codex-app-server"
+}
+
+export function orderedRunningAgents(sessions: readonly TerminalSession[]) {
+  const agents = sessions.filter(isRunningAgent)
+  return [
+    ...agents.filter((session) => !isLocalhostAgentSession(session)),
+    ...agents.filter(isLocalhostAgentSession),
+  ]
 }
 
 export function normalizeSectionLayout(sessions: TerminalSession[], sectionId: string) {
@@ -82,7 +95,7 @@ export function numberedTerminalSections(sessions: readonly TerminalSession[]) {
 /**
  * Rows reachable through the Master Key, in exactly the order the sidebar paints
  * them. Collapsed folders do not expose their terminal rows, while running agents
- * remain visible in their dedicated list.
+ * remain visible in their dedicated terminal-then-localhost list.
  */
 export function visibleTerminalShortcutTargets(
   sessions: readonly TerminalSession[],
@@ -92,7 +105,7 @@ export function visibleTerminalShortcutTargets(
   const collapsedFolders = new Set(collapsedFolderIds)
   const sections = numberedTerminalSections(sessions)
   return [
-    ...sessions.filter(isRunningAgent),
+    ...orderedRunningAgents(sessions),
     ...folders.flatMap((folder) =>
       collapsedFolders.has(folder.id)
         ? []

@@ -187,7 +187,8 @@ function SidebarApp({
   )
   const disabled = useCallback(
     (key: string) => {
-      if (["v", "s"].includes(key)) return !canSplit
+      if (["v", "h"].includes(key)) return !canSplit
+      if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
       if (["n", "c"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
       if ([",", "q"].includes(key)) return !replica
@@ -286,7 +287,7 @@ function SidebarApp({
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["e", ",", "q"].includes(key))
+      if (mode === "app" || ["e", "s", ",", "q"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },

@@ -6,10 +6,9 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 
-export type TerminalDialogKind = "command" | "codex" | "rename"
+export type TerminalDialogKind = "command" | "rename"
 const TITLES = {
   command: "Novo comando",
-  codex: "Nova tarefa Codex",
   rename: "Renomear terminal",
 }
 export function TerminalDialog({

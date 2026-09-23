@@ -1,27 +1,37 @@
 import { describe, expect, test } from "bun:test"
 import {
+  agentMessageElapsedLabel,
+  agentMessageModelLabel,
+  cleanAgentMessage,
+  EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+} from "../packages/feature-terminal/src/model/agent-message-history"
+import {
+  cleanTerminalName,
+  DEFAULT_FOLDER,
+  MAX_TERMINALS_PER_SECTION,
+  masterKeyShortcutLabel,
+  normalizeSectionLayout,
+  orderedRunningAgents,
+  type TerminalSession,
+  terminalSections,
+  visibleTerminalShortcutTargets,
+} from "../packages/feature-terminal/src/model/sessions"
+import {
   AGENT_WORKING_FRAMES,
   agentPresentation,
   codexActivityIndicators,
 } from "../packages/feature-terminal/src/rendering/agent-presentation"
-import { tmuxAgentNotice } from "../packages/feature-terminal/src/rendering/tmux-agent-notice"
-import { createCodexAgentCommand } from "../packages/feature-terminal/src/services/terminal"
-import { codexAppServerActivity } from "../packages/feature-terminal/src/services/codex-app-server"
 import {
   terminalSessionDetail,
   terminalStatusLabel,
   terminalStatusMarker,
 } from "../packages/feature-terminal/src/rendering/presentation"
+import { tmuxAgentNotice } from "../packages/feature-terminal/src/rendering/tmux-agent-notice"
 import {
-  cleanTerminalName,
-  DEFAULT_FOLDER,
-  masterKeyShortcutLabel,
-  MAX_TERMINALS_PER_SECTION,
-  normalizeSectionLayout,
-  terminalSections,
-  visibleTerminalShortcutTargets,
-  type TerminalSession,
-} from "../packages/feature-terminal/src/model/sessions"
+  codexAppServerActivity,
+  codexAppServerState,
+} from "../packages/feature-terminal/src/services/codex-app-server"
+import { createCodexAgentCommand } from "../packages/feature-terminal/src/services/terminal"
 
 export function session(id: string, patch: Partial<TerminalSession> = {}): TerminalSession {
   return {
@@ -47,6 +57,34 @@ export function session(id: string, patch: Partial<TerminalSession> = {}): Termi
 }
 
 describe("Free Terminal presentation", () => {
+  test("bounds and formats integrated agent message history", () => {
+    expect(agentMessageElapsedLabel(0, 1_000)).toBe("—")
+    expect(agentMessageElapsedLabel(1_000, 1_999)).toBe("0s")
+    expect(agentMessageElapsedLabel(1_000, 62_000)).toBe("1m")
+    expect(agentMessageElapsedLabel(1_000, 7_202_000)).toBe("2h")
+    expect(agentMessageElapsedLabel(1_000, 172_802_000)).toBe("2d")
+    expect(cleanAgentMessage("  hello\n\u202eright-to-left\tworld  ")).toBe(
+      "hello right-to-left world",
+    )
+    expect(cleanAgentMessage("a".repeat(4_001))).toHaveLength(4_000)
+    expect(
+      agentMessageModelLabel({
+        id: "message-1",
+        turnId: "turn-1",
+        text: "hello",
+        sentAt: 1,
+        durationMs: 1_080_000,
+        status: "completed",
+        hasImage: false,
+        hasAudio: false,
+        hasSkill: false,
+        model: "gpt-6-sol",
+        effort: "medium",
+        serviceTier: "fast",
+        ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+      }),
+    ).toBe("gpt-6-sol · medium · fast")
+  })
   test("keeps the working loader", () => {
     expect(AGENT_WORKING_FRAMES).toEqual(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
     expect(agentPresentation("working", 1)).toMatchObject({
@@ -54,34 +92,56 @@ describe("Free Terminal presentation", () => {
       shortLabel: "Trabalhando",
     })
   })
-  test("maps only public app-server item kinds to the structured Codex indicators", () => {
-    expect(
-      codexAppServerActivity({ method: "item/started", params: { item: { type: "reasoning" } } }),
-    ).toBe("thinking")
+  test("opens the official Codex TUI against an owned app-server", () => {
+    expect(createCodexAgentCommand()).toMatchObject({
+      kind: "custom",
+      label: "Codex",
+      displayCommand: "codex --remote",
+      command: ["codex"],
+      codex: { appServer: true },
+    })
+  })
+  test("derives agent state from public app-server events", () => {
+    expect(codexAppServerState({ method: "turn/started" })).toBe("working")
     expect(
       codexAppServerActivity({
         method: "item/started",
         params: { item: { type: "commandExecution" } },
       }),
     ).toBe("running")
-    expect(codexAppServerActivity({ method: "item/plan/delta" })).toBe("updating")
-    expect(codexAppServerActivity({ method: "item/fileChange/patchUpdated" })).toBe("coding")
+    expect(
+      codexAppServerActivity({
+        method: "item/started",
+        params: { item: { type: "mcpToolCall" } },
+      }),
+    ).toBe("tooling")
+    expect(
+      codexAppServerState({
+        method: "thread/status/changed",
+        params: { status: { type: "active", activeFlags: ["waitingOnApproval"] } },
+      }),
+    ).toBe("blocked")
+    expect(
+      codexAppServerState({ method: "turn/completed", params: { turn: { status: "completed" } } }),
+    ).toBe("done")
     expect(codexAppServerActivity({ method: "item/reasoning/textDelta" })).toBeNull()
-    expect(codexActivityIndicators("coding", 2)).toEqual([
-      { key: "thinking", marker: "◑", active: false },
-      { key: "command", marker: "›_", active: false },
-      { key: "update", marker: "◆", active: false },
-      { key: "code", marker: "{}", active: true },
-    ])
   })
-  test("creates a first-party app-server session instead of a shell command", () => {
-    expect(createCodexAgentCommand("Corrija o login")).toMatchObject({
-      kind: "codex",
-      label: "Codex",
-      displayCommand: "codex app-server",
-      command: [],
-      codex: { prompt: "Corrija o login" },
-    })
+  test("presents portable Codex activity indicators", () => {
+    expect(codexActivityIndicators("working", "coding", 0)).toEqual([
+      { key: "code", marker: "{}", active: true, bright: true },
+      { key: "command", marker: ">_", active: false, bright: false },
+      { key: "plan", marker: "txt", active: false, bright: false },
+      { key: "tool", marker: "●", active: false, bright: false },
+    ])
+    expect(codexActivityIndicators("working", "tooling", 3)).toEqual([
+      { key: "code", marker: "{}", active: false, bright: false },
+      { key: "command", marker: ">_", active: false, bright: false },
+      { key: "plan", marker: "txt", active: false, bright: false },
+      { key: "tool", marker: "●", active: true, bright: false },
+    ])
+    expect(codexActivityIndicators("idle", null, 0).every((indicator) => !indicator.active)).toBe(
+      true,
+    )
   })
   test("explains the richer Tuiminal path for tmux agents", () => {
     expect(tmuxAgentNotice(null)).toBeNull()
@@ -136,6 +196,46 @@ describe("Free Terminal presentation", () => {
         ["tmux"],
       ).map(({ id }) => id),
     ).toEqual(["agent", "shell"])
+  })
+  test("orders terminal agents before localhost-integrated agents", () => {
+    const agent = {
+      key: "codex",
+      label: "Codex",
+      profile: "codex" as const,
+      state: "working" as const,
+      activity: null,
+    }
+    const remoteTmux = session("remote-tmux", {
+      agent,
+      tmux: { socket: "/tmp/tmux", sessionId: "$1", name: "work", paneId: "%1" },
+    })
+    const remoteExternal = session("remote-external", {
+      agent,
+      external: { terminalId: "pts/7" },
+      backend: "external",
+    })
+    const ownedTmux = session("owned-tmux", {
+      agent,
+      tmux: {
+        socket: "/tmp/tuiminal",
+        sessionId: "$2",
+        name: "tuiminal",
+        paneId: "%2",
+        ownedByTuiminal: true,
+      },
+    })
+    const native = session("native", { agent, backend: "native" })
+    const localhost = session("localhost", {
+      agent,
+      agentIntegration: "codex-app-server",
+      backend: "native",
+    })
+
+    expect(
+      orderedRunningAgents([localhost, remoteTmux, native, remoteExternal, ownedTmux]).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["remote-tmux", "native", "remote-external", "owned-tmux", "localhost"])
   })
   test("limits Master Key labels to its nine direct keys", () => {
     expect(masterKeyShortcutLabel(0)).toBe("[1]")
