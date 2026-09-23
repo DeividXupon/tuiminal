@@ -175,8 +175,9 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | Key after the Master Key | Action |
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
-| `[A]` | Compose a task and start Codex through app-server in a new section |
-| `[V]` / `[S]` | Split right / below |
+| `[A]` | Open the Codex terminal interface connected to app-server in a new section |
+| `[V]` / `[H]` | Split right / below |
+| `[S]` | Open or focus sent-message history for an integrated Codex session |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
 | `[B]` | Pin / unpin the sidebar |
@@ -187,6 +188,59 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | `[,]` | Open settings |
 | `[Q]` | Quit Tuiminal |
 | `[Esc]` | Cancel without changing terminal focus |
+
+## Sent-message history
+
+Master Key then `[S]` opens a compact table below the selected integrated Codex
+terminal and focuses it. Columns are ordered as elapsed time, status, message,
+image, audio, skill, and model. Status combines turn duration with `✓` for
+completion, `×` for failure or interruption, and `…` while queued or running, for
+example `18m ✓`. Image, audio, and skill use `✓` as presence indicators. Model
+configuration combines model, reasoning effort, and service tier as
+`gpt-6-sol · medium · fast`; historical messages fall back to the selected
+thread's current configuration and use `—` only when neither source is available.
+`[J/K]` and `[↑/↓]` wrap through the rows, mouse presses select a row, and
+`[Enter]` opens the selected turn's detail. The detail expands the lower region to
+half of the terminal column, leaving the other half for the terminal.
+Its overview uses the bracketed title actions `[M]` for the full user message,
+`[R]` for the final response and other public agent text, `[A]` for complete public
+activity, and `[D]` for that turn's files and diff. `[J/K]` and `[↑/↓]` scroll a
+full section. `[Esc]` returns from a section to the overview, from the overview to
+the table, then to the terminal. Focused `[X]` or the close control removes the panel.
+The overview fills the expanded region with theme-aware cards rather than leaving
+unused rows. Its activity and change previews use alternating backgrounds, while
+status, model, additions, and removals retain semantic colors. The `[D]` section
+splits the turn patch into file blocks with a visible path, change kind, and local
+statistics before each shared native diff renderer. Those renderers provide syntax
+highlighting, line-number gutters, and addition/removal backgrounds. It renders only the patch associated with the
+selected turn, not the current repository-wide Live Diff. A colored line renderer
+keeps legacy or partial patches without unified hunks readable.
+
+The history combines text input carried by the public outbound app-server requests
+`turn/start`, `turn/steer`, and `thread/queue/add` with earlier `userMessage` items
+from public thread history responses. After a thread is resumed or forked, the
+relay requests `thread/turns/list` pages with full items until `nextCursor` is
+empty. Selecting another thread replaces the table; additional
+`thread/turns/list` and `thread/items/list` pages merge by stable message ID. The
+outbound message is linked to the `turn.id` returned by `turn/start` even when
+that response does not repeat its `userMessage` item, so public item, diff,
+status, and duration events update an open detail immediately without a reset. The
+relay does not inspect the rendered terminal, read private reasoning content, or
+submit anything to Codex. It associates each message with public `agentMessage`,
+`reasoning.summary`, plan, command, tool, file-change, and `turn/diff/updated`
+events from the same turn. The response section labels reasoning summaries as
+public and states that internal private reasoning is not displayed. The complete sanitized user-message
+history is session-local and cached in memory, with each entry limited to 4,000
+code points; restart and close clear the cache until the selected thread is
+hydrated again. The action is disabled for screen-observed agents and ordinary
+terminals.
+
+The table consumes roughly the lower 30% of the terminal column and the detail
+expands it to 50%; both retain a usable terminal minimum and consume no
+terminal slot. With side-by-side
+Live Diff, the diff remains full-height on the right and the history divides only
+the terminal column. In the narrow stacked Live Diff layout, history divides the
+terminal region above the diff.
 
 ## Live Diff companion
 
