@@ -142,25 +142,26 @@ informational notification that running the agent through Tuiminal enables more
 features. This does not change the borrowed process, send it input, or imply that
 Tuiminal can access its reasoning.
 
-## Native Codex sessions
+## Integrated Codex sessions
 
-`[A] New Codex`, and the empty workspace's matching action, launch the installed
-`codex` CLI in a normal owned PTY. Codex retains its native composer, approval
-flow, and commands such as `/resume` and `/model`. Tuiminal observes that process
-and its screen under the same best-effort rules used for other terminal agents;
-it does not infer private reasoning or submit input on the agent's behalf.
+`[A] New Codex`, and the empty workspace's matching action, open the task composer
+and launch the installed `codex app-server` behind a first-party terminal session.
+The session uses Codex's thread, turn, tool, and approval system while Tuiminal owns
+the terminal presentation. Public app-server events provide authoritative activity
+state; private reasoning is never rendered. Approval requests remain explicit and
+are never accepted on the user's behalf.
 
-After observed work, explicit idle must persist for at least 700 ms. Silence does
-not complete a task. Missing evidence preserves the previous state for a 3-second
-redraw grace, then becomes unknown. Unseen completion persists through missing
-signals until viewed or a new recognized working/blocked state arrives. Opening
-a viewer interrupts idle confirmation. Initial idle is never an unread result.
+For integrated Codex sessions, `turn/completed` determines completion and public
+item events determine the visible activity. Silence does not complete a task.
+Unseen completion persists until viewed or a later turn starts. Native and tmux
+agents without an authoritative integration continue to use the bounded screen
+observation rules above.
 
 A result is seen when its pane is visible in the active Terminal tool, with no
 Terminal dialog or Master Key menu open. Both visible split panes count; a hidden
 maximized sibling does not. Opening a different tool or global settings does not
 acknowledge completion. New work resets the completion cycle. Leaving the agent
-process returns its row to Sessions; PTY exit/failure retains the
+process returns its row to Sessions; app-server or PTY exit/failure retains the
 normal process marker and output there.
 
 ## Task titles

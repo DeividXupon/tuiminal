@@ -5,10 +5,7 @@ import {
   codexActivityIndicators,
 } from "../packages/feature-terminal/src/rendering/agent-presentation"
 import { tmuxAgentNotice } from "../packages/feature-terminal/src/rendering/tmux-agent-notice"
-import {
-  createCodexAgentCommand,
-  createCodexTerminalCommand,
-} from "../packages/feature-terminal/src/services/terminal"
+import { createCodexAgentCommand } from "../packages/feature-terminal/src/services/terminal"
 import { codexAppServerActivity } from "../packages/feature-terminal/src/services/codex-app-server"
 import {
   terminalSessionDetail,
@@ -76,14 +73,6 @@ describe("Free Terminal presentation", () => {
       { key: "update", marker: "◆", active: false },
       { key: "code", marker: "{}", active: true },
     ])
-  })
-  test("starts the native Codex CLI in a real terminal", () => {
-    expect(createCodexTerminalCommand()).toMatchObject({
-      kind: "custom",
-      label: "Codex",
-      displayCommand: "codex",
-      command: ["codex"],
-    })
   })
   test("creates a first-party app-server session instead of a shell command", () => {
     expect(createCodexAgentCommand("Corrija o login")).toMatchObject({

@@ -110,6 +110,7 @@ export function startCodexAppServer(
   })
   let requestId = 0
   let initializeId: number | null = null
+  let threadStartId: number | null = null
   let threadId: string | null = null
   let input = ""
   let pendingApproval: PendingApproval | null = null
@@ -122,12 +123,13 @@ export function startCodexAppServer(
     released = true
     unregister()
   }
-  const send = (method: string, params: JsonRecord) => {
-    const id = ++requestId
-    return Promise.resolve(
-      subprocess.stdin.write(encoder.encode(`${JSON.stringify({ method, id, params })}\n`)),
-    ).then(() => id)
-  }
+  const writeMessage = (message: JsonRecord) =>
+    Promise.resolve(subprocess.stdin.write(encoder.encode(`${JSON.stringify(message)}\n`))).then(
+      () => undefined,
+    )
+  const send = (method: string, params: JsonRecord) =>
+    writeMessage({ method, id: ++requestId, params })
+  const notify = (method: string, params: JsonRecord) => writeMessage({ method, params })
   const sendResponse = (id: number, result: JsonRecord) =>
     Promise.resolve(subprocess.stdin.write(encoder.encode(`${JSON.stringify({ id, result })}\n`)))
   const startTurn = () => {
@@ -138,7 +140,7 @@ export function startCodexAppServer(
     events.onState("working")
     void send("turn/start", {
       threadId,
-      input: [{ type: "text", text: next, text_elements: [] }],
+      input: [{ type: "text", text: next }],
     }).catch((error: unknown) => events.onError(String(error)))
   }
   const answerApproval = (accepted: boolean) => {
@@ -190,13 +192,24 @@ export function startCodexAppServer(
       return
     }
     if (!message) return
+    const error = object(message.error)
+    if (error) {
+      events.onState("failed")
+      events.onError(text(error.message) || "O app-server do Codex recusou a solicitação.")
+      return
+    }
     const result = object(message.result)
     if (result && message.id === initializeId) {
-      void send("thread/start", { cwd, approvalPolicy: "on-request" }).catch((error: unknown) =>
-        events.onError(error instanceof Error ? error.message : String(error)),
-      )
+      void notify("initialized", {})
+        .then(() => {
+          threadStartId = requestId + 1
+          return send("thread/start", { cwd, approvalPolicy: "onRequest" })
+        })
+        .catch((error: unknown) =>
+          events.onError(error instanceof Error ? error.message : String(error)),
+        )
     }
-    if (result && !threadId) {
+    if (result && message.id === threadStartId && !threadId) {
       const thread = object(result.thread)
       if (thread && text(thread.id)) {
         threadId = text(thread.id)
@@ -286,16 +299,13 @@ export function startCodexAppServer(
   events.onOutput("\u001bcCodex · app-server\r\n\r\n")
   events.onState("working")
   events.onActivity("thinking")
+  initializeId = requestId + 1
   void send("initialize", {
     clientInfo: { name: "tuiminal", title: "Tuiminal", version: "0.2.0" },
     capabilities: { experimentalApi: false, requestAttestation: false },
-  })
-    .then((id) => {
-      initializeId = id
-    })
-    .catch((error: unknown) =>
-      events.onError(error instanceof Error ? error.message : String(error)),
-    )
+  }).catch((error: unknown) =>
+    events.onError(error instanceof Error ? error.message : String(error)),
+  )
   input = prompt
   return handle
 }

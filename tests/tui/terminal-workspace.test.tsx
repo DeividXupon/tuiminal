@@ -150,11 +150,12 @@ test("Master Key action parsing accepts Alt tool keys and ignores unrelated modi
   expect(terminalActionKey({ name: "," })).toBe(",")
 })
 
-test("Master Key starts the native Codex CLI in a real terminal", async () => {
+test("Master Key opens the Codex app-server task composer", async () => {
   await mount()
   await leader("a")
-  expect(commands).toEqual([["codex"]])
-  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+  expect(commands).toEqual([])
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Nova tarefa Codex")
 })
 
 test("Master Key reveals bottom actions and Escape cancels without sending bytes or closing App", async () => {

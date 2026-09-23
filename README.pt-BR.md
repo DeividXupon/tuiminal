@@ -592,7 +592,7 @@ plano com o backend nativo.
 - Manter até 12 terminais, com no máximo dois por seção, lado a lado ou um acima do outro.
 - **Novo terminal** sempre abre uma seção separada. Para dividir a seção atual, use a Master Key seguida de `[V]` (lado) ou `[S]` (abaixo).
 - Use o botão **Comando** da sidebar para iniciar um comando personalizado em uma nova seção.
-- Use a Master Key `[A]` ou **Novo Codex** para iniciar o Codex instalado em seu próprio terminal. Isso preserva a interface nativa e comandos como `/resume` e `/model`; escreva a tarefa diretamente no Codex.
+- Use a Master Key `[A]` ou **Novo Codex** para escrever uma tarefa e iniciar o Codex instalado por meio do `app-server` em uma sessão de terminal integrada. O Tuiminal mantém o terminal interativo, mostra os estados públicos de atividade do Codex e deixa cada aprovação sob seu controle.
 - Usar um layout compacto inspirado no Herdr: a lista de agentes aparece primeiro na sidebar, seguida pelos terminais numerados em duas linhas. Um shell aguardando mostra `○ Ocioso`; `● Executando` aparece apenas enquanto há uma ferramenta ou comando em primeiro plano. A segunda linha mostra diretório, comando ou código de saída e o backend `native`/`tmux`; referências externas somente para leitura mostram seu TTY. A seção ativa recebe uma barra de destaque. Os terminais ocupam toda a área restante até os cantos, e divisões usam apenas um separador.
 - Novos terminais e comandos personalizados abrem em **Tuiminais**. Renomeie terminais quando precisar. Clique no cabeçalho de uma pasta, ou destaque-o com `[↑/↓]` / `[J/K]` e pressione `[Enter]`, para recolher ou expandir seus terminais. Esse estado e a posição reservada das sessões tmux são salvos por projeto fora da pasta do projeto e restaurados na próxima abertura. Somente pastas reservadas não vazias aparecem. A pasta **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Terminais divididos mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
 - Os nomes dos terminais acompanham a ferramenta em execução automaticamente: `zsh` → `lazygit` → `zsh`. Agentes reconhecidos mostram o nome do CLI, como `codex`, mesmo quando o runtime informa `MainThread` ou `node`. Isso também funciona nos espelhos tmux. Nomes definidos manualmente pela ação `[E]` da Master Key permanecem fixos, inclusive após reiniciar.
@@ -609,7 +609,7 @@ uma lista de ações aparece na parte inferior. Escolha uma tecla ou clique na a
 | Após a Master Key | Ação |
 | --- | --- |
 | `[N]` / `[C]` | Novo terminal / nova seção |
-| `[A]` | Iniciar o Codex nativo em nova seção |
+| `[A]` | Escrever uma tarefa e iniciar o Codex via app-server em nova seção |
 | `[V]` / `[S]` | Dividir para o lado / abaixo |
 | `[1]`, `[2]`, … `[9]` | Ativar o agente ou terminal visível correspondente |
 | `[Alt+1–5]` | Abrir Banco, Git, Runner, HTTP ou Free Terminal |

@@ -45,7 +45,6 @@ import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
   createCodexAgentCommand,
-  createCodexTerminalCommand,
   createFreeTerminalCommand,
   createShellTerminalCommand,
   FREE_TERMINAL_WORKING_DIRECTORY,
@@ -375,7 +374,7 @@ export function FreeTerminal({
         launchSection()
         break
       case "a":
-        launchSection(createCodexTerminalCommand())
+        openDialog("codex")
         break
       case "v":
         split(false)

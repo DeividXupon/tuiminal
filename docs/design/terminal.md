@@ -175,7 +175,7 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | Key after the Master Key | Action |
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
-| `[A]` | Start native Codex in a new section |
+| `[A]` | Compose a task and start Codex through app-server in a new section |
 | `[V]` / `[S]` | Split right / below |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |

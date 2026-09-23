@@ -573,7 +573,7 @@ background execution with the native backend.
 - Keep up to 12 terminals, with at most two panes per section, split right or below.
 - **New terminal** always opens a separate section. To split the current section, use the Master Key followed by `[V]` (right) or `[S]` (below).
 - Use the sidebar's **Command** button to start a custom command in a new section.
-- Use Master Key `[A]` or **New Codex** to start the installed Codex CLI in its own terminal. This keeps Codex's native interface and commands such as `/resume` and `/model`; type the task directly in Codex.
+- Use Master Key `[A]` or **New Codex** to compose a task and start the installed Codex through `app-server` in a first-party terminal session. Tuiminal keeps the terminal interactive, displays public Codex activity states, and leaves every approval under your control.
 - Use a compact workspace inspired by Herdr: the agent list comes first in the sidebar, followed by numbered two-line terminals. An idle shell shows `○ Idle`; `● Running` appears only while a foreground tool or command is active. The second row shows its directory, command or exit code with the `native`/`tmux` backend; read-only external rows show their TTY. The active section has an accent rail. Terminals fill the remaining area to every edge; splits use a single separator.
 - New terminals and custom commands open in **Tuiminals**. Rename terminals when needed. Click a folder heading, or highlight it with `[↑/↓]` / `[J/K]` and press `[Enter]`, to collapse or expand it. That fold state and reserved tmux session placement are saved per project outside the project directory and restored on the next launch. Only non-empty reserved folders appear. The **tmux** folder contains mirrorable external panes; **Others** lists non-tmux POSIX terminals with their foreground command, state, directory and TTY as read-only references. Recognized external agents appear in **Agents** with unknown activity because Tuiminal cannot inspect their screen. Split sessions keep both two-line terminal items independently clickable beside one vertical separator.
 - Terminal names follow the running tool automatically: `zsh` → `lazygit` → `zsh`. Recognized agents show their CLI name, such as `codex`, even when the runtime reports `MainThread` or `node`. This also works with tmux mirrors. Names chosen manually through the Master Key's `[E]` action remain fixed, including after a restart.
@@ -591,7 +591,7 @@ literal control byte to the process.
 | After the Master Key | Action |
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
-| `[A]` | Start native Codex in a new section |
+| `[A]` | Compose a task and start Codex through app-server in a new section |
 | `[V]` / `[S]` | Split right / below |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |

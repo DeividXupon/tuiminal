@@ -120,19 +120,6 @@ export function createCodexAgentCommand(prompt: string): FreeTerminalCommand {
   }
 }
 
-/** Launches the locally installed Codex CLI in a native PTY. */
-export function createCodexTerminalCommand(): FreeTerminalCommand {
-  return {
-    kind: "custom",
-    label: "Codex",
-    shortLabel: "Codex",
-    displayCommand: "codex",
-    command: ["codex"],
-    accent: COLORS.terminal,
-    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
-  }
-}
-
 function processEnvironment() {
   return Object.fromEntries(
     Object.entries(process.env).filter(
