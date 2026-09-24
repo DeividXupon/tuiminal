@@ -106,17 +106,17 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
   }
 }
 
-/** Creates a Codex session whose lifecycle is owned by the local app-server. */
-export function createCodexAgentCommand(prompt: string): FreeTerminalCommand {
+/** Opens the official Codex TUI backed by a Tuiminal-owned local app-server. */
+export function createCodexAgentCommand(): FreeTerminalCommand {
   return {
-    kind: "codex",
+    kind: "custom",
     label: "Codex",
     shortLabel: "Codex",
-    displayCommand: "codex app-server",
-    command: [],
+    displayCommand: "codex --remote",
+    command: ["codex"],
     accent: COLORS.terminal,
     workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
-    codex: { prompt },
+    codex: { appServer: true },
   }
 }
 

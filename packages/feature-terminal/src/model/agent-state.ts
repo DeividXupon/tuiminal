@@ -33,6 +33,7 @@ export type AgentActivity =
   | "running"
   | "updating"
   | "coding"
+  | "tooling"
 export type AgentIdentity = { key: string; label: string; profile: AgentProfile }
 export type AgentStatus = AgentIdentity & {
   state: AgentState

@@ -17,6 +17,7 @@ import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
+import type { AgentMessageHistoryEntry } from "./model/agent-message-history"
 import {
   clearTerminalSidebar,
   publishTerminalSidebar,
@@ -38,10 +39,13 @@ import {
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   type TerminalFolder,
+  type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
+import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
+import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
   createCodexAgentCommand,
@@ -57,13 +61,11 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
-import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
+import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
-import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
-import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
 
 const FULL_PANE: FreeTerminalPaneLayout = {
   top: 0,
@@ -79,6 +81,22 @@ const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
   { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
   { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
 ]
+
+type MessageHistoryTarget = {
+  sessionId: string
+  startedAt: number
+  focusRequest: number
+}
+
+function messageHistoryForSession(
+  session: TerminalSession,
+  target: MessageHistoryTarget | null,
+  messages: ReadonlyMap<string, readonly AgentMessageHistoryEntry[]>,
+) {
+  if (!target || target.sessionId !== session.id || target.startedAt !== session.startedAt)
+    return undefined
+  return { messages: messages.get(session.id) ?? [], focusRequest: target.focusRequest }
+}
 
 export function FreeTerminal({
   active,
@@ -101,6 +119,7 @@ export function FreeTerminal({
   const terminal = useTerminalSessions(active)
   const {
     sessions,
+    agentMessages,
     sessionsRef,
     dismissedTmuxPanes,
     activeSessionId,
@@ -146,6 +165,9 @@ export function FreeTerminal({
     manualDirectories: readonly string[]
     focusRequest: number
   } | null>(null)
+  const [messageHistoryTarget, setMessageHistoryTarget] = useState<MessageHistoryTarget | null>(
+    null,
+  )
   const [liveDiffProjectPicker, setLiveDiffProjectPicker] = useState<{
     sessionId: string
     projects: readonly LiveDiffProject[]
@@ -190,6 +212,16 @@ export function FreeTerminal({
       setLiveDiffTarget(null)
     }
   }, [liveDiffTarget, sessions])
+  useEffect(() => {
+    if (!messageHistoryTarget) return
+    const owner = sessions.find((session) => session.id === messageHistoryTarget.sessionId)
+    if (
+      !owner ||
+      owner.startedAt !== messageHistoryTarget.startedAt ||
+      owner.agentIntegration !== "codex-app-server"
+    )
+      setMessageHistoryTarget(null)
+  }, [messageHistoryTarget, sessions])
   const section = sections.find((section) => section.id === activeSession?.sectionId)
   const canSplit = Boolean(
     section && section.panes.length < MAX_TERMINALS_PER_SECTION && sessions.length < MAX_SESSIONS,
@@ -330,7 +362,8 @@ export function FreeTerminal({
     })
   }
   const disabled = (key: string) => {
-    if (["v", "s"].includes(key)) return !canSplit
+    if (["v", "h"].includes(key)) return !canSplit
+    if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
     if (["n", "c", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
     if (key.startsWith("alt+")) return !onSelectTool
     if (key === ",") return !onOpenSettings
@@ -359,6 +392,20 @@ export function FreeTerminal({
       focusRequest: 1,
     })
   }
+  const toggleMessageHistory = () => {
+    if (messageHistoryTarget?.sessionId === activeSessionId) {
+      setMessageHistoryTarget((current) =>
+        current ? { ...current, focusRequest: current.focusRequest + 1 } : current,
+      )
+      return
+    }
+    if (activeSession?.agentIntegration !== "codex-app-server") return
+    setMessageHistoryTarget({
+      sessionId: activeSession.id,
+      startedAt: activeSession.startedAt,
+      focusRequest: 1,
+    })
+  }
   const runAction = (key: string) => {
     if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
     setLeader(false)
@@ -374,13 +421,16 @@ export function FreeTerminal({
         launchSection()
         break
       case "a":
-        openDialog("codex")
+        launchSection(createCodexAgentCommand())
         break
       case "v":
         split(false)
         break
-      case "s":
+      case "h":
         split(true)
+        break
+      case "s":
+        toggleMessageHistory()
         break
       case "alt+1":
       case "alt+2":
@@ -429,6 +479,13 @@ export function FreeTerminal({
   const closeLiveDiff = useCallback(
     (id: string) => {
       setLiveDiffTarget((current) => (current?.sessionId === id ? null : current))
+      focusTerminal(id)
+    },
+    [focusTerminal],
+  )
+  const closeMessageHistory = useCallback(
+    (id: string) => {
+      setMessageHistoryTarget((current) => (current?.sessionId === id ? null : current))
       focusTerminal(id)
     },
     [focusTerminal],
@@ -498,11 +555,6 @@ export function FreeTerminal({
   const saveDialog = (value: string) => {
     if (dialog === "command") {
       launchSection(createFreeTerminalCommand(value))
-      closeDialog()
-      return
-    }
-    if (dialog === "codex") {
-      launchSection(createCodexAgentCommand(value))
       closeDialog()
       return
     }
@@ -770,6 +822,13 @@ export function FreeTerminal({
                 }
                 onCloseLiveDiff={closeLiveDiff}
                 onAddLiveDiffProject={addLiveDiffProject}
+                messageHistory={messageHistoryForSession(
+                  session,
+                  messageHistoryTarget,
+                  agentMessages,
+                )}
+                onCloseMessageHistory={closeMessageHistory}
+                onReturnMessageHistoryTerminal={focusTerminal}
               />
             )
           })}

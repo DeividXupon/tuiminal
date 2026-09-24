@@ -16,11 +16,13 @@ import { act } from "react"
 import { App } from "../../apps/cli/src/App"
 import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
+import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../../packages/feature-terminal/src/model/agent-message-history"
 import {
   resetPinnedTerminalSidebarForTests,
   terminalSidebarSnapshot,
 } from "../../packages/feature-terminal/src/model/pinned-sidebar"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
+import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
@@ -38,6 +40,10 @@ const originalInitialTab = process.env.TUIMINAL_INITIAL_TAB
 const originalWorkspaceState = process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE
 let tui: TestRendererSetup | undefined
 let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
+let codexSpy:
+  | ReturnType<typeof spyOn<typeof codexServer, "startCodexAppServerTerminal">>
+  | undefined
+let codexEvents: codexServer.CodexAppServerEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 const liveDiffSpies: Array<{ mockRestore: () => void }> = []
 const inputs: string[][] = []
@@ -49,6 +55,8 @@ afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
   spawnSpy?.mockRestore()
+  codexSpy?.mockRestore()
+  codexEvents = undefined
   inspectionSpy?.mockRestore()
   for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
   inputs.length = 0
@@ -95,6 +103,14 @@ async function mount(
       stop: async () => undefined,
     }
   })
+  codexSpy = spyOn(codexServer, "startCodexAppServerTerminal").mockImplementation(
+    async (options, events) => {
+      codexEvents = events
+      commands.push(["codex", "--remote", "ws://127.0.0.1:4500"])
+      starts.push(options)
+      return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
+    },
+  )
   if (app) process.env.TUIMINAL_ONLY_TAB = "terminal"
   if (fullApp) {
     delete process.env.TUIMINAL_ONLY_TAB
@@ -150,12 +166,261 @@ test("Master Key action parsing accepts Alt tool keys and ignores unrelated modi
   expect(terminalActionKey({ name: "," })).toBe(",")
 })
 
-test("Master Key opens the Codex app-server task composer", async () => {
+test("Master Key opens the official Codex TUI connected to app-server", async () => {
   await mount()
   await leader("a")
-  expect(commands).toEqual([])
-  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeDefined()
-  expect(tui?.captureCharFrame()).toContain("Nova tarefa Codex")
+  expect(commands[0]).toEqual(["codex", "--remote", "ws://127.0.0.1:4500"])
+  expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+})
+
+test("Master Key S opens a navigable sent-message history below the agent terminal", async () => {
+  await mount(false, 140, 36)
+  await leader("a")
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  await act(async () => {
+    codexEvents?.onUserMessageHistory(
+      [
+        {
+          id: "anterior",
+          turnId: "turn-anterior",
+          text: "Mensagem anterior do agente aberto",
+          sentAt: Date.now() - 60_000,
+          durationMs: 12_000,
+          status: "completed",
+          hasImage: false,
+          hasAudio: false,
+          hasSkill: false,
+          model: null,
+          effort: null,
+          serviceTier: null,
+          ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+        },
+      ],
+      true,
+    )
+    codexEvents?.onUserMessageHistory(
+      [
+        {
+          id: "mais-antiga",
+          turnId: "turn-mais-antiga",
+          text: "Mensagem de outra página",
+          sentAt: Date.now() - 120_000,
+          durationMs: 45_000,
+          status: "interrupted",
+          hasImage: false,
+          hasAudio: false,
+          hasSkill: false,
+          model: null,
+          effort: null,
+          serviceTier: null,
+          ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+        },
+      ],
+      false,
+    )
+    codexEvents?.onUserMessage({
+      id: "primeira",
+      turnId: "turn-primeira",
+      text: "Primeira mensagem enviada ao agente",
+      sentAt: Date.now() - 1_000,
+      durationMs: 1_080_000,
+      status: "completed",
+      hasImage: false,
+      hasAudio: false,
+      hasSkill: false,
+      model: "gpt-6-sol",
+      effort: "medium",
+      serviceTier: "fast",
+      finalResponse: "Feito. O texto agora usa a cor principal do tema.",
+      commentary: ["Vou validar o painel e executar os testes."],
+      reasoningSummaries: ["O painel precisava preservar contraste em temas claros e escuros."],
+      plans: ["Atualizar o painel\nAdicionar cobertura de interface"],
+      activities: [
+        {
+          id: "command-1",
+          kind: "command",
+          label: "bun test tests/tui/terminal-workspace.test.tsx",
+          detail: "1 pass",
+          at: Date.now() - 500,
+        },
+      ],
+      changes: [
+        {
+          id: "change-1",
+          path: "packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx",
+          kind: "update",
+          diff: "diff --git a/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx b/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n--- a/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n+++ b/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n@@ -1 +1 @@\n-old\n+new",
+        },
+        {
+          id: "change-2",
+          path: "packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx",
+          kind: "create",
+          diff: "diff --git a/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx b/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx\n--- /dev/null\n+++ b/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx\n@@ -0,0 +1 @@\n+export const visual = true",
+        },
+      ],
+      turnDiff:
+        "diff --git a/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx b/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n--- a/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n+++ b/packages/feature-terminal/src/ui/AgentMessageHistoryPanel.tsx\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx b/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx\n--- /dev/null\n+++ b/packages/feature-terminal/src/ui/AgentMessageDiffDetail.tsx\n@@ -0,0 +1 @@\n+export const visual = true",
+    })
+    codexEvents?.onUserMessage({
+      id: "segunda",
+      turnId: "turn-segunda",
+      text: "Segunda mensagem enviada ao agente",
+      sentAt: Date.now(),
+      durationMs: null,
+      status: "inProgress",
+      hasImage: true,
+      hasAudio: true,
+      hasSkill: true,
+      model: "gpt-6-sol",
+      effort: "medium",
+      serviceTier: "fast",
+      ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+    })
+  })
+  await tui?.renderOnce()
+  await leader("s")
+
+  const app = tui
+  if (!app) throw new Error("Missing TUI")
+  const panel = app.renderer.root.findDescendantById(`agent-message-history-${sessionId}`)
+  if (!panel) throw new Error("Missing sent-message history")
+  const terminalColumn = panel.parent?.parent
+  if (!terminalColumn) throw new Error("Missing terminal column")
+  expect(panel.screenY).toBeGreaterThan(terminal.screenY)
+  expect(terminal.height).toBeLessThan(terminalColumn.height)
+  expect(app.captureCharFrame()).toContain("Mensagens enviadas · 4")
+  expect(app.captureCharFrame()).toContain("Status")
+  expect(app.captureCharFrame()).toContain("Imagem")
+  expect(app.captureCharFrame()).toContain("Áudio")
+  expect(app.captureCharFrame()).toContain("Skill")
+  expect(app.captureCharFrame()).toContain("gpt-6-sol · medium · fast")
+  expect(app.captureCharFrame()).toContain("Segunda mensagem enviada ao agente")
+  expect(app.captureCharFrame()).toContain("Primeira mensagem enviada ao agente")
+  expect(app.captureCharFrame()).toContain("Mensagem anterior do agente aberto")
+  expect(app.captureCharFrame()).toContain("Mensagem de outra página")
+  expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
+
+  const header = app
+    .captureCharFrame()
+    .split("\n")
+    .find((line) => line.includes("Tempo") && line.includes("Status"))
+  if (!header) throw new Error("Missing sent-message history header")
+  expect([
+    header.indexOf("Tempo"),
+    header.indexOf("Status"),
+    header.indexOf("Mensagem"),
+    header.indexOf("Imagem"),
+    header.indexOf("Áudio"),
+    header.indexOf("Skill"),
+    header.indexOf("Modelo"),
+  ]).toEqual(
+    [...header.matchAll(/Tempo|Status|Mensagem|Imagem|Áudio|Skill|Modelo/g)].map(
+      (match) => match.index,
+    ),
+  )
+  const spans = app.captureSpans().lines.flatMap((line) => line.spans)
+  expect(spans.find((span) => span.text.includes("Segunda mensagem"))?.fg.toInts()).toEqual(
+    RGBA.fromHex(COLORS.text).toInts(),
+  )
+  expect(spans.find((span) => span.text.includes("gpt-6-sol"))?.fg.toInts()).toEqual(
+    RGBA.fromHex(COLORS.terminal).toInts(),
+  )
+
+  const selectedLine = () =>
+    app
+      .captureCharFrame()
+      .split("\n")
+      .slice(panel.screenY, panel.screenY + panel.height)
+      .find((line) => line.includes("▌"))
+  const selectedBefore = selectedLine()
+  expect(selectedBefore).toContain("Segunda mensagem enviada ao agente")
+  expect(selectedBefore).toContain("0s …")
+  expect(selectedBefore?.match(/✓/g)).toHaveLength(3)
+  await key("j")
+  const selectedAfter = selectedLine()
+  expect(selectedAfter).toContain("Primeira mensagem enviada ao agente")
+  expect(selectedAfter).toContain("18m ✓")
+  const tableHeight = panel.height
+  await key("enter")
+  await app.renderOnce()
+  expect(panel.height).toBeGreaterThan(tableHeight)
+  expect(panel.height).toBeLessThanOrEqual(Math.ceil(terminalColumn.height * 0.5))
+  expect(panel.height).toBeGreaterThanOrEqual(Math.floor(terminalColumn.height * 0.5) - 1)
+  const overview = app.renderer.root.findDescendantById("agent-message-overview-primeira")
+  expect(overview?.height).toBeGreaterThan(Math.floor(panel.height * 0.8))
+  expect(app.captureCharFrame()).toContain("Detalhes da mensagem · 18m ✓")
+  expect(app.captureCharFrame()).toContain("MENSAGEM [M]")
+  expect(app.captureCharFrame()).toContain("RESPOSTA FINAL [R]")
+  expect(app.captureCharFrame()).toContain("ATIVIDADE [A]")
+  expect(app.captureCharFrame()).toContain("ALTERAÇÕES [D]")
+  expect(app.captureCharFrame()).toContain("Feito. O texto agora usa a cor principal do tema.")
+
+  await act(async () => {
+    codexEvents?.onUserMessageHistory(
+      [
+        {
+          id: "primeira",
+          turnId: "turn-primeira",
+          text: "Primeira mensagem enviada ao agente",
+          sentAt: Date.now() - 1_000,
+          durationMs: 1_080_000,
+          status: "completed",
+          hasImage: false,
+          hasAudio: false,
+          hasSkill: false,
+          model: "gpt-6-sol",
+          effort: "medium",
+          serviceTier: "fast",
+          ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+          finalResponse: "Resposta atualizada ao vivo sem reset.",
+        },
+      ],
+      false,
+    )
+  })
+  await app.renderOnce()
+  expect(app.captureCharFrame()).toContain("Resposta atualizada ao vivo sem reset.")
+
+  await key("r")
+  expect(app.captureCharFrame()).toContain("RESUMOS PÚBLICOS")
+  expect(app.captureCharFrame()).toContain(
+    "O painel precisava preservar contraste em temas claros e escuros.",
+  )
+  for (let index = 0; index < 12; index += 1) await key("j")
+  expect(app.captureCharFrame()).toContain("O raciocínio interno privado não é exibido.")
+  await key("escape")
+  await key("a")
+  expect(app.captureCharFrame()).toContain("Comando executado")
+  expect(app.captureCharFrame()).toContain("bun test tests/tui/terminal-workspace.test.tsx")
+  await key("escape")
+  await key("d")
+  expect(app.captureCharFrame()).toContain("AgentMessageHistoryPanel.tsx")
+  expect(app.captureCharFrame()).toContain("2 arquivos")
+  expect(app.captureCharFrame()).toContain("1 + new")
+  const firstMessageDiff = app.renderer.root.findDescendantById(
+    "agent-message-turn-diff-primeira-0",
+  )
+  expect((firstMessageDiff as DiffRenderable).wrapMode).toBe("none")
+  for (let index = 0; index < 10; index += 1) await key("j")
+  expect(app.captureCharFrame()).toContain("AgentMessageDiffDetail.tsx")
+  const secondMessageDiff = app.renderer.root.findDescendantById(
+    "agent-message-turn-diff-primeira-1",
+  )
+  expect((secondMessageDiff as DiffRenderable).wrapMode).toBe("none")
+  await key("escape")
+  await key("escape")
+  expect(app.captureCharFrame()).toContain("Mensagens enviadas · 4")
+  await key("escape")
+  expect(focusedTerminal()).toBe(terminal)
+
+  await leader("d")
+  const liveDiff = app.renderer.root.findDescendantById(`live-diff-${sessionId}`)
+  if (!liveDiff) throw new Error("Missing Live Diff")
+  expect(liveDiff.screenX).toBeGreaterThan(panel.screenX)
+  expect(liveDiff.screenY).toBeLessThan(panel.screenY)
+  expect(liveDiff.screenY + liveDiff.height).toBeGreaterThanOrEqual(panel.screenY + panel.height)
 })
 
 test("Master Key reveals bottom actions and Escape cancels without sending bytes or closing App", async () => {
@@ -342,7 +607,7 @@ test("two panes fill one compact section and a third split is refused", async ()
   expect(second.screenX).toBe(first.screenX + first.width + 1)
   expect(first.width + second.width + 1).toBe(panes.width)
   expect(tui?.captureCharFrame()).toContain("│")
-  await leader("s")
+  await leader("h")
   expect(starts).toHaveLength(2)
   await key("escape")
   const splitWidth = second.width
@@ -386,7 +651,7 @@ test("paired sidebar rows support mouse selection", async () => {
   await mount()
   await click("terminal-sidebar-new")
   const first = focusedTerminal()
-  await leader("s")
+  await leader("h")
   const second = focusedTerminal()
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(second.screenY).toBe(first.screenY + first.height + 1)

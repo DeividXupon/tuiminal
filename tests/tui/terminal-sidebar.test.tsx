@@ -113,6 +113,70 @@ test("sidebar separates numbered terminals from independently clickable agent st
   expect(sessions[2]?.agent?.state).toBe("done")
 })
 
+test("integrated Codex rows show a third activity line", async () => {
+  updateUiSettings({ language: "pt-BR" })
+  const codex = session("Codex", "working")
+  codex.agentIntegration = "codex-app-server"
+  codex.agent!.activity = "running"
+  tui = await testRender(
+    <TerminalSidebar
+      sessions={[codex]}
+      folders={[{ id: "terminal", name: "Terminal" }]}
+      selectedFolder="terminal"
+      activeSessionId="Codex"
+      width={32}
+      height={30}
+      masterKey="Ctrl+B"
+      onActivate={() => undefined}
+      onSelectFolder={() => undefined}
+      onActions={() => undefined}
+      onNew={() => undefined}
+    />,
+    { width: 32, height: 30 },
+  )
+  await tui.renderOnce()
+
+  const row = tui.renderer.root.findDescendantById("terminal-agent-Codex")!
+  const lines = tui.captureCharFrame().split("\n")
+  expect(row.height).toBe(3)
+  expect(lines[row.screenY + 2]).toMatch(/\{\}\s+>_\s+txt\s+●/)
+})
+
+test("agent list separates terminal and localhost sessions", async () => {
+  updateUiSettings({ language: "pt-BR" })
+  const localhost = session("Localhost", "idle")
+  localhost.agentIntegration = "codex-app-server"
+  const terminal = session("Terminal", "unknown")
+  tui = await testRender(
+    <TerminalSidebar
+      sessions={[localhost, terminal]}
+      folders={[{ id: "terminal", name: "Terminal" }]}
+      selectedFolder="terminal"
+      activeSessionId="Terminal"
+      width={32}
+      height={30}
+      masterKey="Ctrl+B"
+      onActivate={() => undefined}
+      onSelectFolder={() => undefined}
+      onActions={() => undefined}
+      onNew={() => undefined}
+    />,
+    { width: 32, height: 30 },
+  )
+  await tui.renderOnce()
+
+  const terminalGroup = tui.renderer.root.findDescendantById("terminal-agent-group-term")!
+  const localhostGroup = tui.renderer.root.findDescendantById("terminal-agent-group-localhost")!
+  const terminalRow = tui.renderer.root.findDescendantById("terminal-agent-Terminal")!
+  const localhostRow = tui.renderer.root.findDescendantById("terminal-agent-Localhost")!
+  const frame = tui.captureCharFrame()
+  expect(frame).toContain("Local • term")
+  expect(frame).toContain("Local • localhost")
+  expect(terminalGroup.screenY).toBeLessThan(terminalRow.screenY)
+  expect(terminalRow.screenY).toBeLessThan(localhostGroup.screenY)
+  expect(localhostGroup.screenY).toBeLessThan(localhostRow.screenY)
+})
+
 test("Master Key labels only the visible agents and terminals in sidebar order", async () => {
   const sessions: TerminalSession[] = [
     session("Codex", "working"),

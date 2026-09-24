@@ -115,16 +115,27 @@ agents appear only in Agents, including idle and unknown agents. In a mixed spli
 only the ordinary terminal appears in Sessions, without changing the actual split.
 A dedicated Agents list shows every running agent in two lines: its marker, name
 and right-aligned localized status; its published task title or, when unavailable,
-its terminal name. A row
+its terminal name. The list groups screen-observed native, tmux and external-terminal
+agents under `Local • term`, then integrated app-server sessions under
+`Local • localhost`. These names describe the current transports without claiming a
+real remote runtime. Keyboard navigation and Master Key numbering follow that visual
+order. Compact layouts omit the subgroup headings while retaining the same order.
+Integrated Codex sessions add a third line with code, command,
+plan, and tool indicators; only the current public app-server activity pulses.
+Always use the broadly supported `{}`, `>_`, `txt`, and `●` markers so the
+activity line does not depend on a patched font. Distribute the four markers across
+the available line with space between them. When the agent is stopped, all activity
+markers remain inactive and the first-line state represents it. A row
 activates the existing pane without acknowledging other results. Compact status
 labels keep the list readable; the done marker continues to mean unseen completion.
 The agent list has its own bounded scroll area and uses single-line rows on very
 short layouts so running agents remain accessible. Compact rows prefer the task
 title to the agent label when one is available, retaining the status marker.
 Sections stay in their chosen folders as agents start, change state and stop;
-there is no automatic AI folder. Working markers animate in Agents
-using one shared 100 ms timer. The timer stops when no running agent is working,
-when the Terminal tool is inactive, and on unmount. Animation updates only the
+there is no automatic AI folder. Working markers and integrated Codex activity
+indicators animate in Agents using one shared 100 ms timer. The timer stops when no
+running agent is working and no integrated Codex session remains, when the Terminal
+tool is inactive, and on unmount. Animation updates only the
 sidebar and preserves scrolling, focus and terminal instances. Color supplements
 the marker rather than being the only signal.
 
@@ -144,12 +155,48 @@ Tuiminal can access its reasoning.
 
 ## Integrated Codex sessions
 
-`[A] New Codex`, and the empty workspace's matching action, open the task composer
-and launch the installed `codex app-server` behind a first-party terminal session.
-The session uses Codex's thread, turn, tool, and approval system while Tuiminal owns
-the terminal presentation. Public app-server events provide authoritative activity
-state; private reasoning is never rendered. Approval requests remain explicit and
-are never accepted on the user's behalf.
+`[A] New Codex`, and the empty workspace's matching action, start one owned
+`codex app-server` on localhost and launch the official Codex terminal UI with
+`codex --remote` in a native PTY. The user composes tasks and handles approvals in
+Codex's own interface. A localhost WebSocket relay passes the CLI protocol through
+unchanged while Tuiminal reads public thread, turn, and item events from the server
+stream. It never submits agent input or approvals, and never reads private reasoning.
+The app-server, relay, and PTY are stopped together when the session closes.
+
+Master Key then `[S]` opens an in-memory history of messages sent by the user in
+the selected thread. The relay combines text inputs on the public outbound requests
+`turn/start`, `turn/steer`, and `thread/queue/add` with earlier `userMessage` items
+from public `thread/resume`, `thread/read`, `thread/turns/list`, and
+`thread/items/list` responses. After resuming or forking a thread, the relay pages
+`thread/turns/list` with full items until `nextCursor` is empty. Opening another
+thread replaces the table, while paginated history merges by stable item or client
+ID. A new outbound message is linked to the `turn.id` returned by `turn/start`
+even if the response omits the repeated `userMessage`, allowing public item,
+diff, status, and duration events to update the open detail live. It does not
+scrape the terminal transcript or expose private reasoning content.
+For each turn it also collects public final and commentary `agentMessage` items,
+`reasoning.summary` values, plans, activities, file changes, and the exact
+`turn/diff/updated` patch. The table shows the newest message first and orders columns as
+elapsed time, status, message, image, audio, skill, and model. Status is the turn
+duration plus `✓` for completion, `×` for failure or interruption, or `…` while
+queued or running. Image, audio, and skill use `✓` presence indicators. Model
+configuration appears as `gpt-6-sol · medium · fast`; messages without per-turn
+telemetry fall back to the selected thread's current configuration and use `—`
+only when neither source is available. The table supports mouse or wrapping
+keyboard selection, and `[Enter]` opens a turn detail in the lower half of the
+terminal column, leaving the other half for the PTY. The overview exposes
+`MENSAGEM [M]`, `RESPOSTA FINAL [R]`, `ATIVIDADE [A]`, and `ALTERAÇÕES [D]`;
+the bracketed keys open full scrollable sections. The response section includes
+only public text and explicitly explains that internal private reasoning is not
+displayed. The overview fills the expanded region with theme-aware cards. The
+change section separates that turn's patch into file blocks with visible paths,
+change kinds, local statistics, and native diff views with syntax highlighting,
+line-number gutters, and semantic addition/removal backgrounds;
+partial patches without unified hunks use a colored line fallback. `[Esc]` unwinds
+section, overview, table, and terminal focus. It retains the complete sanitized
+user-message history in memory, limits each entry to 4,000 code points, and clears
+on restart or close until the thread is hydrated again. Screen-observed native,
+tmux, and external agents do not offer this structured history.
 
 For integrated Codex sessions, `turn/completed` determines completion and public
 item events determine the visible activity. Silence does not complete a task.

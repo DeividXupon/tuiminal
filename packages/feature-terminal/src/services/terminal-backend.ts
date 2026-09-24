@@ -11,8 +11,6 @@ export function startWorkspaceTerminal(
   signal: AbortSignal,
 ): Promise<FreeTerminalProcessHandle> {
   const terminalKind = command.kind
-  if (terminalKind === "codex")
-    throw new Error("Agentes Codex precisam ser iniciados pelo controlador do app-server.")
   return trackTerminalLaunch(
     (async () => {
       const preference = process.env.TUIMINAL_TERMINAL_BACKEND ?? "auto"

@@ -1,8 +1,10 @@
 import { type BoxRenderable, EmbeddedTerminalRenderable } from "@opentui/core"
 import { extend } from "@opentui/react"
-import { memo, useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { memo, useEffect, useRef, useState } from "react"
+import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import type { TerminalSession } from "../model/sessions"
+import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
 import { LiveDiffPanel } from "./LiveDiffPanel"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
@@ -43,6 +45,14 @@ type PaneProps = {
     | undefined
   onCloseLiveDiff?: (id: string) => void
   onAddLiveDiffProject?: (id: string, roots: readonly string[]) => void
+  messageHistory?:
+    | {
+        messages: readonly AgentMessageHistoryEntry[]
+        focusRequest: number
+      }
+    | undefined
+  onCloseMessageHistory?: (id: string) => void
+  onReturnMessageHistoryTerminal?: (id: string) => void
 }
 function liveDiffWidths(frameWidth: number, borderLeft: boolean, stacked: boolean) {
   const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
@@ -64,6 +74,21 @@ function liveDiffHeights(frameHeight: number, borderTop: boolean, stacked: boole
     Math.max(16, Math.round(innerHeight * 0.48)),
   )
   return { terminalHeight: Math.max(1, innerHeight - diffHeight), diffHeight }
+}
+function messageHistoryHeights(terminalAreaHeight: number, open: boolean, detailOpen: boolean) {
+  if (!open) return { historyHeight: "32%" as const, embeddedHeight: "100%" as const }
+  if (!terminalAreaHeight)
+    return detailOpen
+      ? { historyHeight: "50%" as const, embeddedHeight: "50%" as const }
+      : { historyHeight: "32%" as const, embeddedHeight: "68%" as const }
+  const desiredHeight = detailOpen
+    ? Math.round(terminalAreaHeight * 0.5)
+    : Math.max(6, Math.round(terminalAreaHeight * 0.3))
+  const historyHeight = Math.max(1, Math.min(desiredHeight, Math.max(1, terminalAreaHeight - 5)))
+  return {
+    historyHeight,
+    embeddedHeight: Math.max(1, terminalAreaHeight - historyHeight),
+  }
 }
 function samePane(previous: PaneProps, next: PaneProps) {
   // Names and process/agent status belong to the sidebar; this pane only reads the session ID.
@@ -92,7 +117,11 @@ function samePane(previous: PaneProps, next: PaneProps) {
     previous.liveDiff?.running === next.liveDiff?.running &&
     previous.liveDiff?.focusRequest === next.liveDiff?.focusRequest &&
     previous.onCloseLiveDiff === next.onCloseLiveDiff &&
-    previous.onAddLiveDiffProject === next.onAddLiveDiffProject
+    previous.onAddLiveDiffProject === next.onAddLiveDiffProject &&
+    previous.messageHistory?.messages === next.messageHistory?.messages &&
+    previous.messageHistory?.focusRequest === next.messageHistory?.focusRequest &&
+    previous.onCloseMessageHistory === next.onCloseMessageHistory &&
+    previous.onReturnMessageHistoryTerminal === next.onReturnMessageHistoryTerminal
   )
 }
 export const FreeTerminalPane = memo(function FreeTerminalPane({
@@ -110,10 +139,14 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   liveDiff,
   onCloseLiveDiff,
   onAddLiveDiffProject,
+  messageHistory,
+  onCloseMessageHistory,
+  onReturnMessageHistoryTerminal,
 }: PaneProps) {
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
   const [frameHeight, setFrameHeight] = useState(0)
   const [frameWidth, setFrameWidth] = useState(0)
+  const [messageDetailOpen, setMessageDetailOpen] = useState(false)
   const { diffWidth, stableContentWidth, terminalWidth } = liveDiffWidths(
     frameWidth,
     layout.borderLeft,
@@ -124,6 +157,12 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     frameHeight,
     layout.borderTop,
     Boolean(liveDiff?.stacked),
+  )
+  const terminalAreaHeight = typeof terminalHeight === "number" ? terminalHeight : frameHeight
+  const { historyHeight, embeddedHeight } = messageHistoryHeights(
+    terminalAreaHeight,
+    Boolean(messageHistory),
+    messageDetailOpen,
   )
   const borders: Array<"top" | "left"> = []
   if (layout.borderTop) borders.push("top")
@@ -138,6 +177,9 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     onReady(session.id, terminal)
     return () => onGone(session.id, terminal)
   }, [onGone, onReady, session.id])
+  useEffect(() => {
+    if (!messageHistory) setMessageDetailOpen(false)
+  }, [messageHistory])
   return (
     <box
       visible={visible}
@@ -158,7 +200,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
         id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
         onSizeChange={function (this: BoxRenderable) {
-          if (!liveDiff) return
+          if (!liveDiff && !messageHistory) return
           setFrameHeight((current) => (current === this.height ? current : this.height))
           setFrameWidth((current) => (current === this.width ? current : this.width))
         }}
@@ -181,18 +223,43 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
             minWidth: 1,
             minHeight: 1,
             flexShrink: 1,
+            flexDirection: "column",
           }}
         >
-          <embedded-terminal
-            ref={terminalRef}
-            id={`free-terminal-${session.id}`}
-            maxScrollback={5_000}
-            selectable
-            onData={(data) => onInput(session.id, data)}
-            onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
-            onMouseDown={() => onActivate(session.id)}
-            style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
-          />
+          <box style={{ width: "100%", height: embeddedHeight, minHeight: 1, flexShrink: 1 }}>
+            <embedded-terminal
+              ref={terminalRef}
+              id={`free-terminal-${session.id}`}
+              maxScrollback={5_000}
+              selectable
+              onData={(data) => onInput(session.id, data)}
+              onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
+              onMouseDown={() => onActivate(session.id)}
+              style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
+            />
+          </box>
+          {messageHistory && onCloseMessageHistory && onReturnMessageHistoryTerminal && (
+            <box
+              style={{
+                width: "100%",
+                height: historyHeight,
+                minHeight: 1,
+                flexShrink: 1,
+                border: ["top"],
+                borderColor: COLORS.border,
+              }}
+            >
+              <AgentMessageHistoryPanel
+                sessionId={session.id}
+                messages={messageHistory.messages}
+                active={Boolean(toolActive && active)}
+                focusRequest={messageHistory.focusRequest}
+                onClose={onCloseMessageHistory}
+                onReturnTerminal={onReturnMessageHistoryTerminal}
+                onDetailModeChange={setMessageDetailOpen}
+              />
+            </box>
+          )}
         </box>
         {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
           <box

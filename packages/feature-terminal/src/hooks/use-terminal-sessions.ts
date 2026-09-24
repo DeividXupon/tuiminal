@@ -1,6 +1,8 @@
 import type { EmbeddedTerminalRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
+import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
+import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
 import {
   type FreeTerminalCommand,
   type FreeTerminalKind,
@@ -62,9 +64,8 @@ function createTerminalSession(
           key: `codex-app-server:${id}`,
           label: "Codex",
           profile: "codex",
-          state: "working",
-          activity: "thinking",
-          taskTitle: command.codex.prompt,
+          state: "idle",
+          activity: null,
         }
       : null,
     ...(command.codex ? { agentIntegration: "codex-app-server" as const } : {}),
@@ -95,6 +96,9 @@ export function useTerminalSessions(active: boolean) {
   const closeFinishedShellRef = useRef<(id: string) => void>(() => undefined)
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [agentMessages, setAgentMessages] = useState<
+    ReadonlyMap<string, readonly AgentMessageHistoryEntry[]>
+  >(new Map())
   const [notice, setNotice] = useState("")
   activeRef.current = active
   activeSessionRef.current = activeSessionId
@@ -111,6 +115,25 @@ export function useTerminalSessions(active: boolean) {
     next[index] = { ...session, ...update }
     sessionsRef.current = next
     setSessions(next)
+  }, [])
+  const updateAgentMessages = useCallback(
+    (id: string, messages: readonly AgentMessageHistoryEntry[], replace: boolean) => {
+      const cleaned = sanitizeAgentMessages(messages)
+      setAgentMessages((current) => {
+        const next = new Map(current)
+        next.set(id, mergeAgentMessageHistory(replace ? [] : (current.get(id) ?? []), cleaned))
+        return next
+      })
+    },
+    [],
+  )
+  const clearAgentMessages = useCallback((id: string) => {
+    setAgentMessages((current) => {
+      if (!current.has(id)) return current
+      const next = new Map(current)
+      next.delete(id)
+      return next
+    })
   }, [])
   const focusTerminal = useCallback((id: string | null) => {
     if (!id) return
@@ -143,6 +166,8 @@ export function useTerminalSessions(active: boolean) {
     outputs: agentOutputs,
     activeSession: activeSessionRef,
     updateSession,
+    updateAgentMessages,
+    clearAgentMessages,
     closeFinishedShell: (id) => closeFinishedShellRef.current(id),
     focusTerminal,
     setNotice,
@@ -245,6 +270,7 @@ export function useTerminalSessions(active: boolean) {
       terminalSizes.current.delete(id)
       agentOutputs.current.get(id)?.dispose()
       agentOutputs.current.delete(id)
+      clearAgentMessages(id)
 
       const remaining = normalizeSectionLayout(
         currentSessions.filter((session) => session.id !== id),
@@ -259,7 +285,7 @@ export function useTerminalSessions(active: boolean) {
       setNotice(next ? `Terminal fechado · foco em ${next.title}.` : "Nenhum terminal ativo.")
       if (next) focusTerminal(next.id)
     },
-    [focusTerminal],
+    [clearAgentMessages, focusTerminal],
   )
   closeFinishedShellRef.current = closeSession
 
@@ -294,6 +320,7 @@ export function useTerminalSessions(active: boolean) {
 
   return {
     sessions,
+    agentMessages,
     sessionsRef,
     dismissedTmuxPanes,
     activeSessionId,
