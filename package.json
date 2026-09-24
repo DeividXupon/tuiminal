@@ -24,6 +24,7 @@
     "benchmark:git:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-git-partial-ui.test.tsx",
     "benchmark:git:remote:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-git-remote-ui.test.tsx",
     "benchmark:git:inbox:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-git-inbox-ui.test.tsx",
+    "benchmark:git:pr": "bun scripts/benchmark-git-pr.ts",
     "benchmark:http:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-http-ui.test.tsx",
     "benchmark:database:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-database-ui.test.tsx",
     "check": "bun run typecheck && bun run format:check && bun run lint && bun run check:ai-docs && bun run check:workspaces && bun run check:architecture && bun run check:maintainability && bun run check:licenses && bun run test",
