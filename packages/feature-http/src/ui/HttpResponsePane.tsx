@@ -23,6 +23,37 @@ import { httpResponseContent } from "./http-response-content"
 const RESPONSE_SYNTAX = createUiSyntaxStyle()
 const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
 
+function textLineCount(content: string) {
+  let lines = 1
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) === 10) lines += 1
+  }
+  return lines
+}
+
+function matchedTextLine(content: string, match: { start: number; end: number; column: number }) {
+  const start = Math.max(0, match.start - match.column + 1)
+  const nextBreak = content.indexOf("\n", match.end)
+  return content.slice(start, nextBreak < 0 ? content.length : nextBreak)
+}
+
+function responseContentForCopy(
+  document: HttpDocumentState,
+  cookies: HttpCookie[],
+  renderedContent: string,
+  structured: boolean,
+) {
+  return structured ? httpResponseContent(document, cookies) : renderedContent
+}
+
+function renderedResponseContent(
+  document: HttpDocumentState,
+  cookies: HttpCookie[],
+  structured: boolean,
+) {
+  return structured ? "" : httpResponseContent(document, cookies)
+}
+
 function HttpResponseDocument({
   content,
   response,
@@ -103,7 +134,7 @@ function HttpResponseDocument({
     )
   }
   const filetype = responseFiletype(response)
-  const height = Math.max(1, content.split("\n").length)
+  const height = textLineCount(content)
   const displayedContent = content || translateUi("(resposta vazia)")
   if (filetype === "text" || response.capturedBytes > MAX_HIGHLIGHTED_RESPONSE_BYTES) {
     return (
@@ -164,8 +195,10 @@ export function HttpResponsePane({
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const response = document.execution.status === "success" ? document.execution.response : null
   const presentation = document.responsePresentation
-  const content = httpResponseContent(document, cookies)
   const jsonTree = useMemo(() => httpJsonTreeForDocument(document), [document])
+  // The structured JSON document owns rendering while its tree is active. Build
+  // the separate plain/pretty string only when a view or action actually needs it.
+  const content = renderedResponseContent(document, cookies, jsonTree !== null)
   const matches = useMemo(
     () => findHttpTextMatches(content, presentation.searchQuery),
     [content, presentation.searchQuery],
@@ -174,7 +207,7 @@ export function HttpResponsePane({
   const activeMatch = matches.length
     ? matches[presentation.searchMatchIndex % matches.length]
     : undefined
-  const matchedLine = activeMatch ? content.split("\n")[activeMatch.line - 1] : undefined
+  const matchedLine = activeMatch ? matchedTextLine(content, activeMatch) : undefined
   const copyLabel =
     document.responseView === "headers"
       ? "HEADERS"
@@ -250,7 +283,9 @@ export function HttpResponsePane({
         onChange={onPresentationChange}
         onSearchNext={cycleSearch}
         onFocus={onFocus}
-        onCopy={() => onCopy(content, copyLabel)}
+        onCopy={() =>
+          onCopy(responseContentForCopy(document, cookies, content, jsonTree !== null), copyLabel)
+        }
         onCopyLine={matchedLine ? () => onCopy(matchedLine, "LINHA") : null}
         onSave={onSave}
         onOpen={onOpen}
@@ -262,7 +297,7 @@ export function HttpResponsePane({
       {jsonTree ? (
         <text
           content={truncateDisplay(
-            `JSON ${jsonTree.nodes.findIndex((node) => node.path === jsonTree.selectedPath) + 1}/${jsonTree.nodes.length}  ${jsonTree.selectedPath || "/"}`,
+            `JSON ${(jsonTree.nodeIndexes.get(jsonTree.selectedPath) ?? 0) + 1}/${jsonTree.nodes.length}  ${jsonTree.selectedPath || "/"}`,
             Math.max(1, position.width - 4),
           )}
           style={{ height: 1, flexShrink: 0, fg: COLORS.http, bg: COLORS.panelRaised }}

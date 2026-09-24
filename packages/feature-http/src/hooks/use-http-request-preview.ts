@@ -9,14 +9,16 @@ export function useHttpPreview(
   config: HttpWorkspaceConfig,
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext,
 ) {
+  const request = document?.request
+  const revision = document?.revision
   return useMemo(() => {
-    if (!document) return null
+    if (!request || revision === undefined) return null
     return createHttpPreparedRequestPreview({
-      sourceRequest: document.request,
-      effectiveRequest: applyHttpWorkspaceConfig(document.request, config),
-      revision: document.revision,
-      variables: variablesForRequest(document.request),
+      sourceRequest: request,
+      effectiveRequest: applyHttpWorkspaceConfig(request, config),
+      revision,
+      variables: variablesForRequest(request),
       projectRoot: HTTP_WORKING_DIRECTORY,
     })
-  }, [config, document, variablesForRequest])
+  }, [config, request, revision, variablesForRequest])
 }

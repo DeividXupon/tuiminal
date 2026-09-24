@@ -1,18 +1,4 @@
 import {
-  HTTP_METHODS,
-  HttpDocumentState,
-  HttpHistoryEntry,
-  HttpPane,
-  HttpRequestDefinition,
-  HttpRequestMoreView,
-  HttpRequestView,
-  HttpResponseSnapshot,
-  HttpResponseView,
-  HttpWorkspaceOverlay,
-  HttpWorkspaceState,
-} from "./types"
-import { requestPatchIsUnchanged } from "./request-patch"
-import {
   budgetHttpHistory,
   createHttpErrorHistoryEntry,
   createHttpSuccessHistoryEntry,
@@ -20,6 +6,20 @@ import {
   isHttpHistoryAction,
   reduceHttpHistoryAction,
 } from "./history"
+import { requestPatchIsUnchanged } from "./request-patch"
+import {
+  HTTP_METHODS,
+  type HttpDocumentState,
+  type HttpHistoryEntry,
+  type HttpPane,
+  type HttpRequestDefinition,
+  type HttpRequestMoreView,
+  type HttpRequestView,
+  type HttpResponseSnapshot,
+  type HttpResponseView,
+  type HttpWorkspaceOverlay,
+  type HttpWorkspaceState,
+} from "./types"
 export const HTTP_DOCUMENT_LIMIT = 6
 export function hasUnsavedHttpDocuments(documents: HttpDocumentState[]) {
   return documents.some((document) => document.revision !== document.savedRevision)
@@ -201,7 +201,7 @@ function addHistory(state: HttpWorkspaceState, entry: HttpHistoryEntry) {
 
 function reduceHttpExecution(state: HttpWorkspaceState, action: HttpExecutionAction) {
   if (action.type === "start-execution") {
-    return updateDocument(state, action.documentId, (document) => ({
+    const next = updateDocument(state, action.documentId, (document) => ({
       ...document,
       execution: {
         status: "running",
@@ -210,6 +210,7 @@ function reduceHttpExecution(state: HttpWorkspaceState, action: HttpExecutionAct
         requestRevision: action.requestRevision,
       },
     }))
+    return next === state ? state : { ...next, activePane: "response" as const }
   }
   const document = state.documents.find((candidate) => candidate.request.id === action.documentId)
   const executionId =

@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from "react"
-import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
-import { HTTP_DOCUMENT_LIMIT } from "../model/workspace"
 import { exportPreparedRequestAsCurl } from "../exporting/curl"
 import { importCurl } from "../importing/curl"
-import { prepareHttpRequest } from "../services/request-builder"
-import { HTTP_WORKING_DIRECTORY } from "../services/context"
-import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
 import { httpRequestSecretValues } from "../model/secrets"
+import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
+import { HTTP_DOCUMENT_LIMIT } from "../model/workspace"
+import { HTTP_WORKING_DIRECTORY } from "../services/context"
+import { prepareHttpRequest } from "../services/request-builder"
+import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
 
 type HttpClipboard = { copyToClipboardOSC52: (content: string) => boolean }
 
@@ -28,25 +28,27 @@ export function useHttpCurl({
   onImported: (request: HttpRequestDefinition) => void
 }) {
   const [command, setCommand] = useState("")
+  const request = activeDocument?.request
+  const revision = activeDocument?.revision
   const exported = useMemo(() => {
-    if (!activeDocument) return ""
+    if (!request || revision === undefined) return ""
     try {
-      const request = applyHttpWorkspaceConfig(activeDocument.request, workspaceConfig)
-      const variables = variablesForRequest(activeDocument.request)
+      const configured = applyHttpWorkspaceConfig(request, workspaceConfig)
+      const variables = variablesForRequest(request)
       const prepared = prepareHttpRequest(
-        request,
+        configured,
         "curl-preview",
-        activeDocument.revision,
+        revision,
         variables,
         HTTP_WORKING_DIRECTORY,
       )
       return exportPreparedRequestAsCurl(prepared, {
-        secretValues: httpRequestSecretValues(request, variables),
+        secretValues: httpRequestSecretValues(configured, variables),
       })
     } catch (error) {
       return error instanceof Error ? error.message : String(error)
     }
-  }, [activeDocument, variablesForRequest, workspaceConfig])
+  }, [request, revision, variablesForRequest, workspaceConfig])
 
   const applyImport = useCallback(() => {
     if (documentCount >= HTTP_DOCUMENT_LIMIT) {

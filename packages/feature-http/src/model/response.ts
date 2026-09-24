@@ -58,8 +58,8 @@ export function responseBodyText(
 }
 
 export function findHttpTextMatches(source: string, query: string) {
+  if (!query) return []
   const needle = query.toLocaleLowerCase()
-  if (!needle) return []
   const haystack = source.toLocaleLowerCase()
   const matches: HttpTextMatch[] = []
   let offset = 0

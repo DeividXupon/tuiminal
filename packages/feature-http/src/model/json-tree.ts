@@ -28,6 +28,7 @@ export type HttpJsonTreeNode = {
 export type HttpJsonTree = {
   lines: HttpJsonTreeLine[]
   nodes: HttpJsonTreeNode[]
+  nodeIndexes: ReadonlyMap<string, number>
   selectedPath: string
   selectedLine: number
 }
@@ -168,11 +169,12 @@ function buildJsonTree(
   } catch {
     return null
   }
-  const selected = nodes.some((node) => node.path === selectedPath)
+  const nodeIndexes = new Map(nodes.map((node, index) => [node.path, index]))
+  const selected = nodeIndexes.has(selectedPath ?? "")
     ? (selectedPath ?? "")
     : (nodes[0]?.path ?? "")
-  const selectedLine = nodes.find((node) => node.path === selected)?.line ?? 0
-  return { lines, nodes, selectedPath: selected, selectedLine }
+  const selectedLine = nodes[nodeIndexes.get(selected) ?? 0]?.line ?? 0
+  return { lines, nodes, nodeIndexes, selectedPath: selected, selectedLine }
 }
 
 export function httpJsonTreeForDocument(document: HttpDocumentState): HttpJsonTree | null {
@@ -210,7 +212,7 @@ export function httpJsonTreeForDocument(document: HttpDocumentState): HttpJsonTr
 }
 
 function selectJsonTreeNode(tree: HttpJsonTree, selectedPath: string | null) {
-  const node = tree.nodes.find((candidate) => candidate.path === selectedPath) ?? tree.nodes[0]
+  const node = tree.nodes[tree.nodeIndexes.get(selectedPath ?? "") ?? 0]
   if (!node || node.path === tree.selectedPath) return tree
   return { ...tree, selectedPath: node.path, selectedLine: node.line }
 }
@@ -299,7 +301,7 @@ export function updateHttpJsonTree(
 > | null {
   const tree = visibleTree === undefined ? httpJsonTreeForDocument(document) : visibleTree
   if (!tree) return null
-  const currentIndex = tree.nodes.findIndex((node) => node.path === tree.selectedPath)
+  const currentIndex = tree.nodeIndexes.get(tree.selectedPath) ?? 0
   const current = tree.nodes[Math.max(0, currentIndex)]
   if (!current) return null
   return JSON_TREE_UPDATES[action]({

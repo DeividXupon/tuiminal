@@ -1,4 +1,12 @@
 import { useCallback } from "react"
+import {
+  HTTP_ENVIRONMENT_PREPARATION_ERROR,
+  httpHistoryErrorPrivacy,
+} from "../model/history-privacy"
+import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
+import { isOpaqueHttpRequest } from "../model/request-capabilities"
+import { combineHttpPrivacy, requestHttpPrivacy } from "../model/secrets"
+import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 import type {
   HttpDocumentState,
   HttpHistoryEntry,
@@ -8,17 +16,9 @@ import type {
   HttpResponseSnapshot,
   HttpVariableContext,
 } from "../model/types"
-import { isOpaqueHttpRequest } from "../model/request-capabilities"
-import { requestHttpPrivacy, combineHttpPrivacy } from "../model/secrets"
-import {
-  HTTP_ENVIRONMENT_PREPARATION_ERROR,
-  httpHistoryErrorPrivacy,
-} from "../model/history-privacy"
-import type { HttpInsecureTlsApproval } from "../model/tls-policy"
-import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 import type { HttpWorkspaceAction } from "../model/workspace"
-import { newHttpExecutionId, type HttpDocumentRefs } from "../runtime"
-import { runHttpCollectionCase, type HttpRunCase } from "../services/collection-runner"
+import { type HttpDocumentRefs, newHttpExecutionId } from "../runtime"
+import { type HttpRunCase, runHttpCollectionCase } from "../services/collection-runner"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
 import type { HttpCookieJarResolver } from "../services/cookies"
 import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
@@ -71,7 +71,6 @@ function startExecution(context: SendContext, document: HttpDocumentState) {
   const controller = new AbortController()
   context.abortControllers.current.set(details.executionId, controller)
   context.dispatch({ type: "start-execution", ...details })
-  context.dispatch({ type: "select-pane", pane: "response" })
   context.refsFor(details.documentId).response?.scrollTo(0)
   return { details, controller }
 }

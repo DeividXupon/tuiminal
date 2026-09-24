@@ -95,6 +95,18 @@ function secretRedactor(secretValues: readonly string[]) {
     patterns.reduce((text, pattern) => text.replaceAll(pattern, "<redacted>"), value)
 }
 
+function buildHttpPrivacyContext(secretValues: readonly string[]): HttpPrivacyContext {
+  const redactText = secretRedactor(secretValues)
+  return Object.freeze({
+    hasSecrets: secretValues.length > 0,
+    redactText,
+    redactUrl: (value: string) => redactUrl(value, redactText),
+    toJSON: () => undefined,
+  })
+}
+
+const EMPTY_HTTP_PRIVACY_CONTEXT = buildHttpPrivacyContext([])
+
 function secretFormPattern(value: string) {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const pattern = escaped.replace(
@@ -126,13 +138,7 @@ function encodedSecretForms(secret: string) {
 
 export function createHttpPrivacyContext(secretValues: readonly string[] = []): HttpPrivacyContext {
   const values = [...new Set(secretValues.filter(Boolean))]
-  const redactText = secretRedactor(values)
-  return Object.freeze({
-    hasSecrets: values.length > 0,
-    redactText,
-    redactUrl: (value: string) => redactUrl(value, redactText),
-    toJSON: () => undefined,
-  })
+  return values.length ? buildHttpPrivacyContext(values) : EMPTY_HTTP_PRIVACY_CONTEXT
 }
 
 export function httpHeadersPrivacy(headers: ReadonlyArray<readonly [string, string]>) {
@@ -169,6 +175,8 @@ export function combineHttpPrivacy(
       contexts.flatMap((context) => (context ? (combinedContexts.get(context) ?? [context]) : [])),
     ),
   ]
+  if (!active.length) return EMPTY_HTTP_PRIVACY_CONTEXT
+  if (active.length === 1) return active[0] ?? EMPTY_HTTP_PRIVACY_CONTEXT
   const combined = Object.freeze({
     hasSecrets: active.some((context) => context.hasSecrets),
     redactText: (value: string) =>
