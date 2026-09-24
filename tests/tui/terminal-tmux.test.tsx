@@ -8,7 +8,6 @@ import { getUiSettings, updateUiSettings } from "../../packages/core/src/setting
 import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
-import { TerminalRetirementError } from "../../packages/feature-terminal/src/services/terminal-lifecycle"
 
 const originalSettings = getUiSettings()
 const originalAuto = process.env.TUIMINAL_TERMINAL_AUTO_MIRROR
@@ -170,7 +169,7 @@ test("without tmux a native terminal remains available without a picker", async 
   await leader("t")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-tmux")).toBeUndefined()
   await pressEscape()
-  await leader("c")
+  await leader("n")
   expect(start).toHaveBeenCalledTimes(1)
   expect(start.mock.calls[0]?.[0].tmux).toBeUndefined()
 })
@@ -186,18 +185,4 @@ test("panes in the same tmux session are discovered separately without duplicate
   expect(start.mock.calls.map(([command]) => command.tmux?.paneId)).toEqual(["%6", "%9"])
   await act(async () => Bun.sleep(400))
   expect(start).toHaveBeenCalledTimes(2)
-})
-
-test("restart cannot duplicate a command while a failed detached launch still needs cleanup", async () => {
-  const { start } = await mount(false)
-  const retire = mock(async (): Promise<void> => {
-    throw new Error("cleanup unavailable")
-  })
-  start.mockRejectedValue(new TerminalRetirementError(new Error("create timed out"), retire))
-  await leader("c")
-  expect(start).toHaveBeenCalledTimes(1)
-  await leader("r")
-  expect(retire).toHaveBeenCalledTimes(1)
-  expect(start).toHaveBeenCalledTimes(1)
-  retire.mockImplementation(async () => {})
 })

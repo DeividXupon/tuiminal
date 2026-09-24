@@ -3,9 +3,11 @@ import { extend } from "@opentui/react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { memo, useEffect, useRef, useState } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
+import { type TerminalFocusTargetKey, terminalFocusTargetKey } from "../model/focus-selection"
 import type { TerminalSession } from "../model/sessions"
 import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
 import { LiveDiffPanel } from "./LiveDiffPanel"
+import { TerminalFocusSelection } from "./TerminalFocusSelection"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
 declare module "@opentui/react" {
@@ -39,6 +41,8 @@ type PaneProps = {
         agentKey: string
         manualDirectories: readonly string[]
         stacked: boolean
+        coversTerminal: boolean
+        sharesSplitPane: boolean
         running: boolean
         focusRequest: number
       }
@@ -53,22 +57,86 @@ type PaneProps = {
     | undefined
   onCloseMessageHistory?: (id: string) => void
   onReturnMessageHistoryTerminal?: (id: string) => void
+  focusSelection?:
+    | {
+        selectedTarget: TerminalFocusTargetKey
+        onFocus: (target: TerminalFocusTargetKey) => void
+      }
+    | undefined
 }
 function liveDiffWidths(frameWidth: number, borderLeft: boolean, stacked: boolean) {
   const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
-  const originalDiffWidth = Math.round(innerWidth * (stacked ? 1 : 0.48))
+  if (stacked)
+    return {
+      diffWidth: innerWidth,
+      stableContentWidth: innerWidth,
+      terminalWidth: innerWidth,
+    }
+  const originalDiffWidth = Math.round(innerWidth * 0.48)
   const minimumDiffWidth = Math.min(27, innerWidth)
   const normalDiffWidth = Math.max(minimumDiffWidth, originalDiffWidth - 14)
   return {
     diffWidth: normalDiffWidth,
-    stableContentWidth: Math.max(1, normalDiffWidth - (stacked ? 0 : 1)),
+    stableContentWidth: Math.max(1, normalDiffWidth - 1),
     terminalWidth: Math.max(1, innerWidth - normalDiffWidth),
   }
 }
-function liveDiffHeights(frameHeight: number, borderTop: boolean, stacked: boolean) {
+function paneLiveDiffWidths(
+  frameWidth: number,
+  borderLeft: boolean,
+  liveDiff: PaneProps["liveDiff"],
+) {
+  if (liveDiff?.coversTerminal) {
+    const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
+    return { diffWidth: innerWidth, stableContentWidth: innerWidth, terminalWidth: innerWidth }
+  }
+  return liveDiffWidths(frameWidth, borderLeft, Boolean(liveDiff?.stacked))
+}
+function terminalContentWidth(
+  liveDiff: PaneProps["liveDiff"],
+  frameWidth: number,
+  terminalWidth: number,
+) {
+  return liveDiff && !liveDiff.coversTerminal && !liveDiff.stacked && frameWidth
+    ? terminalWidth
+    : "100%"
+}
+function liveDiffContainerStyle(
+  coversTerminal: boolean,
+  frameWidth: number,
+  diffWidth: number,
+  stacked: boolean,
+  diffHeight: number | "48%" | "100%",
+) {
+  if (coversTerminal)
+    return {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      width: "100%" as const,
+      height: "100%" as const,
+      zIndex: 2,
+      backgroundColor: COLORS.canvas,
+    }
+  return {
+    position: "relative" as const,
+    width: frameWidth ? diffWidth : stacked ? ("100%" as const) : ("48%" as const),
+    height: diffHeight,
+  }
+}
+function liveDiffHeights(
+  frameHeight: number,
+  borderTop: boolean,
+  stacked: boolean,
+  sharesSplitPane: boolean,
+) {
   if (!stacked) return { terminalHeight: "100%" as const, diffHeight: "100%" as const }
   if (!frameHeight) return { terminalHeight: "52%" as const, diffHeight: "48%" as const }
   const innerHeight = Math.max(1, frameHeight - (borderTop ? 1 : 0))
+  if (sharesSplitPane) {
+    const diffHeight = Math.max(1, Math.round(innerHeight * 0.48))
+    return { terminalHeight: Math.max(1, innerHeight - diffHeight), diffHeight }
+  }
   const diffHeight = Math.min(
     Math.max(1, innerHeight - 1),
     Math.max(16, Math.round(innerHeight * 0.48)),
@@ -114,6 +182,8 @@ function samePane(previous: PaneProps, next: PaneProps) {
     previous.liveDiff?.agentKey === next.liveDiff?.agentKey &&
     previous.liveDiff?.manualDirectories === next.liveDiff?.manualDirectories &&
     previous.liveDiff?.stacked === next.liveDiff?.stacked &&
+    previous.liveDiff?.coversTerminal === next.liveDiff?.coversTerminal &&
+    previous.liveDiff?.sharesSplitPane === next.liveDiff?.sharesSplitPane &&
     previous.liveDiff?.running === next.liveDiff?.running &&
     previous.liveDiff?.focusRequest === next.liveDiff?.focusRequest &&
     previous.onCloseLiveDiff === next.onCloseLiveDiff &&
@@ -121,7 +191,9 @@ function samePane(previous: PaneProps, next: PaneProps) {
     previous.messageHistory?.messages === next.messageHistory?.messages &&
     previous.messageHistory?.focusRequest === next.messageHistory?.focusRequest &&
     previous.onCloseMessageHistory === next.onCloseMessageHistory &&
-    previous.onReturnMessageHistoryTerminal === next.onReturnMessageHistoryTerminal
+    previous.onReturnMessageHistoryTerminal === next.onReturnMessageHistoryTerminal &&
+    previous.focusSelection?.selectedTarget === next.focusSelection?.selectedTarget &&
+    previous.focusSelection?.onFocus === next.focusSelection?.onFocus
   )
 }
 export const FreeTerminalPane = memo(function FreeTerminalPane({
@@ -142,21 +214,24 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   messageHistory,
   onCloseMessageHistory,
   onReturnMessageHistoryTerminal,
+  focusSelection,
 }: PaneProps) {
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
+  const frameRef = useRef<BoxRenderable | null>(null)
   const [frameHeight, setFrameHeight] = useState(0)
   const [frameWidth, setFrameWidth] = useState(0)
   const [messageDetailOpen, setMessageDetailOpen] = useState(false)
-  const { diffWidth, stableContentWidth, terminalWidth } = liveDiffWidths(
+  const { diffWidth, stableContentWidth, terminalWidth } = paneLiveDiffWidths(
     frameWidth,
     layout.borderLeft,
-    Boolean(liveDiff?.stacked),
+    liveDiff,
   )
   const fileTableHeight = liveDiff?.stacked ? 4 : Math.max(4, Math.round(frameHeight * 0.3))
   const { terminalHeight, diffHeight } = liveDiffHeights(
     frameHeight,
     layout.borderTop,
     Boolean(liveDiff?.stacked),
+    Boolean(liveDiff?.sharesSplitPane),
   )
   const terminalAreaHeight = typeof terminalHeight === "number" ? terminalHeight : frameHeight
   const { historyHeight, embeddedHeight } = messageHistoryHeights(
@@ -164,6 +239,9 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     Boolean(messageHistory),
     messageDetailOpen,
   )
+  const terminalFocusTarget = terminalFocusTargetKey("terminal", session.id)
+  const historyFocusTarget = terminalFocusTargetKey("history", session.id)
+  const liveDiffFocusTarget = terminalFocusTargetKey("live-diff", session.id)
   const borders: Array<"top" | "left"> = []
   if (layout.borderTop) borders.push("top")
   if (layout.borderLeft) borders.push("left")
@@ -180,6 +258,13 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   useEffect(() => {
     if (!messageHistory) setMessageDetailOpen(false)
   }, [messageHistory])
+  useEffect(() => {
+    if (!liveDiff && !messageHistory) return
+    const frame = frameRef.current
+    if (!frame) return
+    setFrameHeight((current) => (current === frame.height ? current : frame.height))
+    setFrameWidth((current) => (current === frame.width ? current : frame.width))
+  }, [liveDiff, messageHistory])
   return (
     <box
       visible={visible}
@@ -197,6 +282,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes handle terminal mouse activation without ARIA roles. */}
       <box
+        ref={frameRef}
         id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
         onSizeChange={function (this: BoxRenderable) {
@@ -213,12 +299,13 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
           borderColor: active ? COLORS.terminal : COLORS.border,
           backgroundColor: COLORS.canvas,
           overflow: "hidden",
+          position: "relative",
           flexDirection: liveDiff?.stacked ? "column" : "row",
         }}
       >
         <box
           style={{
-            width: liveDiff && !liveDiff.stacked && frameWidth ? terminalWidth : "100%",
+            width: terminalContentWidth(liveDiff, frameWidth, terminalWidth),
             height: terminalHeight,
             minWidth: 1,
             minHeight: 1,
@@ -226,7 +313,16 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
             flexDirection: "column",
           }}
         >
-          <box style={{ width: "100%", height: embeddedHeight, minHeight: 1, flexShrink: 1 }}>
+          <box
+            id={`terminal-focus-target-terminal-${session.id}`}
+            style={{
+              width: "100%",
+              height: embeddedHeight,
+              minHeight: 1,
+              flexShrink: 1,
+              position: "relative",
+            }}
+          >
             <embedded-terminal
               ref={terminalRef}
               id={`free-terminal-${session.id}`}
@@ -237,16 +333,23 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               onMouseDown={() => onActivate(session.id)}
               style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
             />
+            {focusSelection && (
+              <TerminalFocusSelection
+                target={terminalFocusTarget}
+                selected={focusSelection.selectedTarget === terminalFocusTarget}
+                onFocus={focusSelection.onFocus}
+              />
+            )}
           </box>
           {messageHistory && onCloseMessageHistory && onReturnMessageHistoryTerminal && (
             <box
+              id={`terminal-focus-target-history-${session.id}`}
               style={{
                 width: "100%",
                 height: historyHeight,
                 minHeight: 1,
                 flexShrink: 1,
-                border: ["top"],
-                borderColor: COLORS.border,
+                position: "relative",
               }}
             >
               <AgentMessageHistoryPanel
@@ -256,21 +359,33 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
                 focusRequest={messageHistory.focusRequest}
                 onClose={onCloseMessageHistory}
                 onReturnTerminal={onReturnMessageHistoryTerminal}
+                onActivateSession={() => onActivate(session.id)}
                 onDetailModeChange={setMessageDetailOpen}
               />
+              {focusSelection && (
+                <TerminalFocusSelection
+                  target={historyFocusTarget}
+                  selected={focusSelection.selectedTarget === historyFocusTarget}
+                  onFocus={focusSelection.onFocus}
+                />
+              )}
             </box>
           )}
         </box>
         {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
           <box
+            id={`terminal-focus-target-live-diff-${session.id}`}
             style={{
-              width: frameWidth ? diffWidth : liveDiff.stacked ? "100%" : "48%",
-              height: diffHeight,
               minWidth: 1,
               minHeight: 1,
               flexShrink: 1,
-              border: [liveDiff.stacked ? "top" : "left"],
-              borderColor: COLORS.border,
+              ...liveDiffContainerStyle(
+                liveDiff.coversTerminal,
+                frameWidth,
+                diffWidth,
+                liveDiff.stacked,
+                diffHeight,
+              ),
             }}
           >
             <LiveDiffPanel
@@ -283,11 +398,22 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               fileTableHeight={fileTableHeight}
               stableContentWidth={stableContentWidth}
               stacked={liveDiff.stacked}
+              coversTerminal={liveDiff.coversTerminal}
               focusRequest={liveDiff.focusRequest}
               onClose={onCloseLiveDiff}
               onAddProject={onAddLiveDiffProject}
-              onReturnTerminal={() => onActivate(session.id)}
+              onActivateSession={() => onActivate(session.id)}
+              onReturnTerminal={() =>
+                liveDiff.coversTerminal ? onCloseLiveDiff(session.id) : onActivate(session.id)
+              }
             />
+            {focusSelection && (
+              <TerminalFocusSelection
+                target={liveDiffFocusTarget}
+                selected={focusSelection.selectedTarget === liveDiffFocusTarget}
+                onFocus={focusSelection.onFocus}
+              />
+            )}
           </box>
         )}
       </box>

@@ -3,9 +3,9 @@ import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
+import { SensitiveTermsModal } from "../../apps/cli/src/ui/SensitiveTermsModal"
 import { InlineButton } from "../../packages/core/src/ui/InlineButton"
 import { ModalSurface } from "../../packages/core/src/ui/ModalSurface"
-import { SensitiveTermsModal } from "../../apps/cli/src/ui/SensitiveTermsModal"
 
 let tui: TestRendererSetup | undefined
 

@@ -1,22 +1,22 @@
-import { CodeRenderable, type DiffRenderable, RGBA, type ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useRef, useState } from "react"
+import { CodeRenderable, type DiffRenderable, type ScrollBoxRenderable } from "@opentui/core"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { LiveDiffFile } from "../model/live-diff"
 import {
   changedHunkLineIndex,
   type LiveDiffPatchHistory,
   latestChangedHunkIndex,
   observeLiveDiffPatch,
+  prepareLiveDiffPatch,
   type RecentDiffLine,
 } from "../rendering/live-diff-hunks"
 import {
   drawLiveDiffTextShimmer,
+  LIVE_DIFF_SHIMMER_FRAME_COUNT,
   LIVE_DIFF_SHIMMER_FRAME_MS,
-  LIVE_DIFF_SHIMMER_MS,
 } from "../rendering/live-diff-shimmer"
 import { readLiveDiffPatch } from "../services/live-diff"
 
 type ScrollTarget = { patch: string; index: number; line: number | null }
-type RecentChange = { patch: string; lines: RecentDiffLine[] }
 type HighlightedPatch = { patch: string; lines: RecentDiffLine[] }
 type RenderRef<T> = { current: T | null }
 
@@ -44,29 +44,50 @@ export function useLiveDiffPatch(
   selected: LiveDiffFile | null,
   automatic: boolean,
   files: readonly LiveDiffFile[],
-  recentBackgroundColor: string,
+  snapshotReady: boolean,
+  shimmerColor: string,
   preview: RenderRef<ScrollBoxRenderable>,
   diff: RenderRef<DiffRenderable>,
 ) {
   const previousPatch = useRef<{ key: string; patch: string } | null>(null)
   const patchHistory = useRef(new Map<string, LiveDiffPatchHistory>())
+  const fingerprints = useRef(new Map<string, string>())
+  const fingerprintsInitialized = useRef(false)
+  const initiallyRecent = useRef(new Set<string>())
   const [patch, setPatch] = useState("")
+  const [separatorLines, setSeparatorLines] = useState<number[]>([])
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null)
   const [highlightedPatch, setHighlightedPatch] = useState<HighlightedPatch | null>(null)
-  const [recentChange, setRecentChange] = useState<RecentChange | null>(null)
 
   useEffect(() => {
+    if (!snapshotReady) return
     const available = new Set(files.map(fileKey))
-    for (const key of patchHistory.current.keys())
+    for (const file of files) {
+      const key = fileKey(file)
+      const previousFingerprint = fingerprints.current.get(key)
+      if (
+        fingerprintsInitialized.current &&
+        previousFingerprint !== file.fingerprint &&
+        !patchHistory.current.has(key)
+      )
+        initiallyRecent.current.add(key)
+      fingerprints.current.set(key, file.fingerprint)
+    }
+    for (const key of patchHistory.current.keys()) {
       if (!available.has(key)) patchHistory.current.delete(key)
-  }, [files])
+    }
+    for (const key of fingerprints.current.keys()) {
+      if (!available.has(key)) fingerprints.current.delete(key)
+    }
+    fingerprintsInitialized.current = true
+  }, [files, snapshotReady])
 
   useEffect(() => {
     if (!selected) {
       setPatch("")
+      setSeparatorLines([])
       setScrollTarget(null)
       setHighlightedPatch(null)
-      setRecentChange(null)
       previousPatch.current = null
       return
     }
@@ -77,22 +98,28 @@ export function useLiveDiffPatch(
     if (oldPatch === null) {
       preview.current?.scrollTo(0)
       setPatch("")
+      setSeparatorLines([])
       setScrollTarget(null)
       setHighlightedPatch(null)
-      setRecentChange(null)
     }
     void readLiveDiffPatch(selected, controller.signal)
-      .then((result) => {
+      .then((rawPatch) => {
         if (controller.signal.aborted) return
+        const prepared = prepareLiveDiffPatch(rawPatch)
+        const result = prepared.patch
         const index = automatic ? latestChangedHunkIndex(oldPatch, result) : null
-        const observed = observeLiveDiffPatch(patchHistory.current, key, result)
+        const observed = observeLiveDiffPatch(
+          patchHistory.current,
+          key,
+          result,
+          initiallyRecent.current.delete(key),
+        )
         previousPatch.current = { key, patch: result }
         setPatch(result)
+        setSeparatorLines(prepared.separatorLines)
         setHighlightedPatch(
           observed.highlighted.length ? { patch: result, lines: observed.highlighted } : null,
         )
-        if (observed.changed)
-          setRecentChange(observed.recent.length ? { patch: result, lines: observed.recent } : null)
         setScrollTarget(
           index === null
             ? null
@@ -102,9 +129,9 @@ export function useLiveDiffPatch(
       .catch(() => {
         if (!controller.signal.aborted) {
           setPatch("")
+          setSeparatorLines([])
           setScrollTarget(null)
           setHighlightedPatch(null)
-          setRecentChange(null)
         }
       })
     return () => controller.abort()
@@ -123,25 +150,20 @@ export function useLiveDiffPatch(
     if (!highlightedPatch || highlightedPatch.patch !== patch) return
     const nativeDiff = diff.current
     if (!nativeDiff) return
-    const background = RGBA.fromHex(recentBackgroundColor)
-    for (const { line } of highlightedPatch.lines)
-      nativeDiff.setLineColor(line, { gutter: background, content: background })
-  }, [patch, highlightedPatch, diff, recentBackgroundColor])
-
-  useEffect(() => {
-    if (!recentChange || recentChange.patch !== patch) return
-    const nativeDiff = diff.current
-    if (!nativeDiff) return
     const code = codeRenderableOf(nativeDiff)
-    const recentBackground = RGBA.fromHex(recentBackgroundColor)
-    const highlightedLines = new Set(recentChange.lines.map(({ line }) => line))
-    let progress = 0
+    const highlightedLines = new Set(highlightedPatch.lines.map(({ line }) => line))
+    let frame = 0
     const previousRender = code?.render
     // OpenTUI's TextBufferRenderable.render bypasses renderAfter, so decorate
-    // only this CodeRenderable instance while the brief animation is active.
+    // only this CodeRenderable instance while persistent blue lines are active.
     const renderShimmer: CodeRenderable["render"] = (buffer, deltaTime) => {
       if (code) previousRender?.call(code, buffer, deltaTime)
-      if (code) drawLiveDiffTextShimmer(buffer, code, highlightedLines, progress, recentBackground)
+      if (code)
+        drawLiveDiffTextShimmer(buffer, code, highlightedLines, {
+          frame,
+          frameCount: LIVE_DIFF_SHIMMER_FRAME_COUNT,
+          shineColor: shimmerColor,
+        })
     }
     const removeShimmer = () => {
       if (!code || !previousRender || code.render !== renderShimmer) return
@@ -155,20 +177,27 @@ export function useLiveDiffPatch(
     const frameTimer =
       code &&
       setInterval(() => {
-        progress = Math.min(1, progress + LIVE_DIFF_SHIMMER_FRAME_MS / LIVE_DIFF_SHIMMER_MS)
+        frame = (frame + 1) % LIVE_DIFF_SHIMMER_FRAME_COUNT
         code.requestRender()
       }, LIVE_DIFF_SHIMMER_FRAME_MS)
-    const timer = setTimeout(() => {
-      if (frameTimer) clearInterval(frameTimer)
-      removeShimmer()
-      setRecentChange((current) => (current === recentChange ? null : current))
-    }, LIVE_DIFF_SHIMMER_MS)
     return () => {
-      clearTimeout(timer)
       if (frameTimer) clearInterval(frameTimer)
       removeShimmer()
     }
-  }, [patch, recentChange, diff, recentBackgroundColor])
+  }, [patch, highlightedPatch, diff, shimmerColor])
 
-  return patch
+  const highlightedLines = useMemo(
+    () =>
+      highlightedPatch?.patch === patch
+        ? new Set(highlightedPatch.lines.map(({ line }) => line))
+        : new Set<number>(),
+    [highlightedPatch, patch],
+  )
+  const hiddenSeparatorLines = useMemo(() => new Set(separatorLines), [separatorLines])
+
+  return {
+    patch,
+    highlightedLines,
+    separatorLines: hiddenSeparatorLines,
+  }
 }

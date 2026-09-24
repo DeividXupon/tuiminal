@@ -14,9 +14,19 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { App } from "../../apps/cli/src/App"
-import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import {
+  COLORS,
+  getUiSettings,
+  paletteFor,
+  updateUiSettings,
+} from "../../packages/core/src/settings/theme"
+import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
 import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../../packages/feature-terminal/src/model/agent-message-history"
+import {
+  publishCodexResumeThreads,
+  resetCodexResumeThreadsForTests,
+} from "../../packages/feature-terminal/src/model/codex-resume-threads"
 import {
   resetPinnedTerminalSidebarForTests,
   terminalSidebarSnapshot,
@@ -43,6 +53,9 @@ let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProces
 let codexSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "startCodexAppServerTerminal">>
   | undefined
+let codexResumeSpy:
+  | ReturnType<typeof spyOn<typeof codexServer, "refreshCodexResumeThreads">>
+  | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 const liveDiffSpies: Array<{ mockRestore: () => void }> = []
@@ -56,6 +69,7 @@ afterEach(() => {
   tui = undefined
   spawnSpy?.mockRestore()
   codexSpy?.mockRestore()
+  codexResumeSpy?.mockRestore()
   codexEvents = undefined
   inspectionSpy?.mockRestore()
   for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
@@ -64,6 +78,7 @@ afterEach(() => {
   commands.length = 0
   snapshot = []
   resetPinnedTerminalSidebarForTests()
+  resetCodexResumeThreadsForTests()
   updateUiSettings(originalSettings)
   if (originalOnlyTab === undefined) delete process.env.TUIMINAL_ONLY_TAB
   else process.env.TUIMINAL_ONLY_TAB = originalOnlyTab
@@ -106,11 +121,16 @@ async function mount(
   codexSpy = spyOn(codexServer, "startCodexAppServerTerminal").mockImplementation(
     async (options, events) => {
       codexEvents = events
-      commands.push(["codex", "--remote", "ws://127.0.0.1:4500"])
+      commands.push(
+        options.resumeThreadId
+          ? ["codex", "resume", options.resumeThreadId, "--remote", "ws://127.0.0.1:4500"]
+          : ["codex", "--remote", "ws://127.0.0.1:4500"],
+      )
       starts.push(options)
       return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
     },
   )
+  codexResumeSpy = spyOn(codexServer, "refreshCodexResumeThreads").mockResolvedValue([])
   if (app) process.env.TUIMINAL_ONLY_TAB = "terminal"
   if (fullApp) {
     delete process.env.TUIMINAL_ONLY_TAB
@@ -141,6 +161,11 @@ async function leader(action: string) {
   await key("b", true)
   await key(action)
 }
+async function split(action: "v" | "h") {
+  await leader(action)
+  expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
+  await key("n")
+}
 async function click(id: string) {
   const target = tui?.renderer.root.findDescendantById(id)
   if (!target) throw new Error(`Missing ${id}`)
@@ -149,6 +174,19 @@ async function click(id: string) {
 }
 function focusedTerminal() {
   return tui?.renderer.currentFocusedRenderable as EmbeddedTerminalRenderable
+}
+function spanColor(text: string, line?: number) {
+  const lines = tui?.captureSpans().lines ?? []
+  const span = (line === undefined ? lines : lines.slice(line, line + 1))
+    .flatMap((entry) => entry.spans)
+    .find((entry) => entry.text.includes(text))
+  if (!span) throw new Error(`Missing colored text ${text}\n${tui?.captureCharFrame()}`)
+  return span.fg.toInts()
+}
+function renderable(id: string) {
+  const target = tui?.renderer.root.findDescendantById(id)
+  if (!target) throw new Error(`Missing ${id}`)
+  return target
 }
 async function text(value: string) {
   await act(async () => tui?.mockInput.typeText(value))
@@ -172,6 +210,112 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
   expect(commands[0]).toEqual(["codex", "--remote", "ws://127.0.0.1:4500"])
   expect(codexSpy).toHaveBeenCalledTimes(1)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+})
+
+test("Master Key lists and resumes conversations from the local Codex /resume list", async () => {
+  await mount(false, 140, 36)
+  await leader("a")
+  await act(async () => {
+    publishCodexResumeThreads([
+      {
+        id: "0199-resume-login",
+        title: "Revisar autenticação",
+        preview: "Corrija o fluxo de login do projeto",
+        lastResponse: "O login foi corrigido e os testes passaram.",
+        cwd: "/workspace/project",
+        updatedAt: Date.now(),
+        state: "working",
+      },
+      {
+        id: "0199-resume-login-mobile",
+        title: "Revisar login mobile",
+        preview: "Confira o fluxo de login em telas pequenas",
+        lastResponse: "A experiência mobile foi revisada.",
+        cwd: "/workspace/project",
+        updatedAt: Date.now() - 125_000,
+        state: "idle",
+      },
+    ])
+  })
+  await tui?.renderOnce()
+  await key("b", true)
+
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-resume-thread-0199-resume-login"),
+  ).toBeDefined()
+
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("login"))
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("AGENTES · CODEX /RESUME")
+  expect(tui?.captureCharFrame()).toContain("Revisar autenticação")
+  expect(tui?.captureCharFrame()).toContain("Corrija o fluxo de login")
+  expect(spanColor("Revisar autenticação")).toEqual(RGBA.fromHex(COLORS.terminal).toInts())
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
+  await arrow("right")
+  expect(tui?.captureCharFrame()).toContain("› AGENTES · CODEX /RESUME")
+  expect(tui?.captureCharFrame()).toContain("O login foi corrigido")
+  expect(tui?.captureCharFrame()).toContain("passaram.")
+  expect(tui?.captureCharFrame()).toContain("Corrija o fluxo de login do projeto")
+  expect(tui?.captureCharFrame()).toContain("Ocioso · 2m")
+  expect(spanColor("· 2m")).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  const responsePanel = tui?.renderer.root.findDescendantById("terminal-agent-response-panel")
+  const responseText = tui?.renderer.root.findDescendantById("terminal-agent-response-text")
+  const actionsModal = tui?.renderer.root.findDescendantById("terminal-actions")
+  const selectedAgent = tui?.renderer.root.findDescendantById(
+    "terminal-resume-thread-0199-resume-login",
+  )
+  expect(actionsModal?.width).toBe(120)
+  expect(responsePanel?.screenY).toBeGreaterThan(selectedAgent?.screenY ?? 0)
+  expect((responsePanel as BoxRenderable | undefined)?.border).toBe(false)
+  expect(responseText?.height).toBe(3)
+  expect(tui?.renderer.root.findDescendantById("terminal-agent-response-tooltip")).toBeUndefined()
+  expect(spanColor("Revisar autentica")).toEqual(RGBA.fromHex(COLORS.focus).toInts())
+  expect(spanColor("O login foi corrigido")).toEqual(RGBA.fromHex(COLORS.focus).toInts())
+  await arrow("down")
+  expect(tui?.captureCharFrame()).toContain("A experiência mobile foi revisada.")
+  await arrow("up")
+  expect(tui?.captureCharFrame()).toContain("O login foi corrigido")
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
+  expect(codexSpy).toHaveBeenCalledTimes(2)
+  expect(commands.at(-1)).toEqual([
+    "codex",
+    "resume",
+    "0199-resume-login",
+    "--remote",
+    "ws://127.0.0.1:4500",
+  ])
+})
+
+test("Master Key idle time uses the light palette's primary text color", async () => {
+  updateUiSettings({ colorMode: "light", palette: "prime" })
+  await mount(false, 140, 36)
+  await act(async () => {
+    publishCodexResumeThreads([
+      {
+        id: "0199-resume-light-idle",
+        title: "Agente ocioso",
+        preview: "Última tarefa concluída",
+        lastResponse: "A tarefa foi concluída.",
+        cwd: "/workspace/project",
+        updatedAt: Date.now() - 125_000,
+        state: "idle",
+      },
+    ])
+  })
+  await tui?.renderOnce()
+  await key("b", true)
+  await arrow("right")
+
+  expect(tui?.captureCharFrame()).toContain("Ocioso · 2m")
+  expect(spanColor("· 2m")).toEqual(RGBA.fromHex(paletteFor("prime", "light").text).toInts())
+  await arrow("left")
+  const actionTitle = renderable("terminal-action-title-a")
+  expect(spanColor("Novo Codex", actionTitle.screenY)).toEqual(
+    RGBA.fromHex(paletteFor("prime", "light").text).toInts(),
+  )
 })
 
 test("Master Key S opens a navigable sent-message history below the agent terminal", async () => {
@@ -284,7 +428,9 @@ test("Master Key S opens a navigable sent-message history below the agent termin
 
   const app = tui
   if (!app) throw new Error("Missing TUI")
-  const panel = app.renderer.root.findDescendantById(`agent-message-history-${sessionId}`)
+  const panel = app.renderer.root.findDescendantById(
+    `agent-message-history-${sessionId}`,
+  ) as BoxRenderable | null
   if (!panel) throw new Error("Missing sent-message history")
   const terminalColumn = panel.parent?.parent
   if (!terminalColumn) throw new Error("Missing terminal column")
@@ -300,6 +446,30 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   expect(app.captureCharFrame()).toContain("Primeira mensagem enviada ao agente")
   expect(app.captureCharFrame()).toContain("Mensagem anterior do agente aberto")
   expect(app.captureCharFrame()).toContain("Mensagem de outra página")
+  expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  expect(spanColor("[J/K]", panel.screenY + panel.height - 1)).toEqual(
+    RGBA.fromHex(BRAND_COLOR).toInts(),
+  )
+
+  await leader("m")
+  expect(
+    app.renderer.root.findDescendantById(`terminal-focus-selection-tint-history-${sessionId}`),
+  ).toBeDefined()
+  await key("k")
+  await key("enter")
+  expect(focusedTerminal()).toBe(terminal)
+  await leader("m")
+  await key("j")
+  expect(
+    app.renderer.root.findDescendantById(`terminal-focus-selection-tint-history-${sessionId}`),
+  ).toBeDefined()
+  await key("k")
+  await arrow("down")
+  expect(
+    app.renderer.root.findDescendantById(`terminal-focus-selection-tint-history-${sessionId}`),
+  ).toBeDefined()
+  await key("enter")
   expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
 
   const header = app
@@ -356,6 +526,19 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   expect(app.captureCharFrame()).toContain("ATIVIDADE [A]")
   expect(app.captureCharFrame()).toContain("ALTERAÇÕES [D]")
   expect(app.captureCharFrame()).toContain("Feito. O texto agora usa a cor principal do tema.")
+  const messageHeading = app
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((line) => line.includes("MENSAGEM [M]"))
+  expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  await click(`free-terminal-${sessionId}`)
+  expect(focusedTerminal()).toBe(terminal)
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
+  expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  await click(`agent-message-history-${sessionId}`)
+  expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
 
   await act(async () => {
     codexEvents?.onUserMessageHistory(
@@ -414,6 +597,9 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   expect(app.captureCharFrame()).toContain("Mensagens enviadas · 4")
   await key("escape")
   expect(focusedTerminal()).toBe(terminal)
+  expect(spanColor("[J/K]", panel.screenY + panel.height - 1)).toEqual(
+    RGBA.fromHex(COLORS.muted).toInts(),
+  )
 
   await leader("d")
   const liveDiff = app.renderer.root.findDescendantById(`live-diff-${sessionId}`)
@@ -423,15 +609,51 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   expect(liveDiff.screenY + liveDiff.height).toBeGreaterThanOrEqual(panel.screenY + panel.height)
 })
 
-test("Master Key reveals bottom actions and Escape cancels without sending bytes or closing App", async () => {
+test("Master Key opens a centered searchable modal and Escape restores terminal focus", async () => {
   await mount(true)
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   const height = terminal.height
   await key("b", true)
   expect(tui?.captureCharFrame()).toContain("Master Key")
-  expect(tui?.renderer.root.findDescendantById("terminal-actions")?.screenY).toBeGreaterThan(10)
-  expect(terminal.height).toBeLessThan(height)
+  const modal = tui?.renderer.root.findDescendantById("terminal-actions")
+  const actionPanel = tui?.renderer.root.findDescendantById("terminal-action-panel")
+  const agentPanel = tui?.renderer.root.findDescendantById("terminal-agent-panel")
+  expect(modal?.screenX).toBeGreaterThan(0)
+  expect(modal?.screenY).toBeGreaterThan(0)
+  expect(modal?.width).toBe(118)
+  expect((actionPanel as BoxRenderable | undefined)?.border).toBe(false)
+  expect((agentPanel as BoxRenderable | undefined)?.border).toBe(false)
+  expect(agentPanel?.screenX).toBeGreaterThan(actionPanel?.screenX ?? 0)
+  expect(tui?.renderer.root.findDescendantById("terminal-actions-backdrop")).toBeUndefined()
+  expect(terminal.height).toBe(height)
+  expect(tui?.captureCharFrame()).toContain("Abre um shell em uma nova seção.")
+  const newCodex = renderable("terminal-action-a")
+  const sentMessages = renderable("terminal-action-s")
+  const liveDiff = renderable("terminal-action-d")
+  const chooseBox = renderable("terminal-action-m")
+  expect(sentMessages.screenY).toBe(newCodex.screenY + 2)
+  expect(liveDiff.screenY).toBe(sentMessages.screenY + 2)
+  expect(chooseBox.screenY).toBe(liveDiff.screenY + 2)
+  for (const action of ["c", "r", "g"])
+    expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
+  expect(spanColor("Novo Codex", newCodex.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  const featureTag = renderable("terminal-action-tag-d-feature")
+  const agentTag = renderable("terminal-action-tag-d-agent")
+  expect(featureTag.screenX).toBeGreaterThan(renderable("terminal-action-title-d").screenX)
+  expect(agentTag.screenX).toBeGreaterThan(featureTag.screenX)
+  expect(spanColor("FEATURE", liveDiff.screenY)).toEqual(RGBA.fromHex(COLORS.graphAccent).toInts())
+  expect(spanColor("AGENTE", liveDiff.screenY)).toEqual(RGBA.fromHex(COLORS.database).toInts())
+  await key("/")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-action-search")
+  await act(async () => tui?.mockInput.typeText("codex"))
+  await tui?.renderOnce()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-a")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-n")).toBeUndefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
+  expect(terminal.height).toBe(height)
   await key("escape")
   expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
   expect(focusedTerminal()).toBe(terminal)
@@ -442,17 +664,75 @@ test("Master Key reveals bottom actions and Escape cancels without sending bytes
   expect(inputs[0]?.join("")).toBe("\u0002")
 })
 
+test("Free Terminal header and sidebar shortcuts highlight only with the Master Key", async () => {
+  await mount(false, 160, 30, {}, true)
+  const muted = RGBA.fromHex(COLORS.muted).toInts()
+  const brand = RGBA.fromHex(BRAND_COLOR).toInts()
+  expect(tui?.captureCharFrame()).not.toContain("[Alt+1–5] MUDAR")
+
+  for (const shortcut of ["[Alt+1]", "[Alt+3]", "[Alt+5]", "[,]", "[Q]"])
+    expect(spanColor(shortcut, 0)).toEqual(muted)
+
+  await leader("n")
+  const sessionId = focusedTerminal().id.replace("free-terminal-", "")
+  const sidebarBefore = renderable("terminal-sidebar")
+  const sectionBefore = renderable("terminal-sidebar-section-section-1")
+  const statusBefore = renderable(`terminal-sidebar-status-${sessionId}`)
+  const sidebarGeometry = {
+    x: sidebarBefore.screenX,
+    y: sidebarBefore.screenY,
+    width: sidebarBefore.width,
+    height: sidebarBefore.height,
+  }
+  const statusX = statusBefore.screenX
+
+  await key("b", true)
+
+  for (const shortcut of ["[Alt+1]", "[Alt+3]", "[Alt+5]", "[,]", "[Q]"])
+    expect(spanColor(shortcut, 0)).toEqual(brand)
+  const sidebarAfter = renderable("terminal-sidebar")
+  const sectionAfter = renderable("terminal-sidebar-section-section-1")
+  const statusAfter = renderable(`terminal-sidebar-status-${sessionId}`)
+  expect({
+    x: sidebarAfter.screenX,
+    y: sidebarAfter.screenY,
+    width: sidebarAfter.width,
+    height: sidebarAfter.height,
+  }).toEqual(sidebarGeometry)
+  expect(sectionAfter.screenX).toBe(sectionBefore.screenX)
+  expect(statusAfter.screenX).toBe(statusX)
+  expect(spanColor("[1]", statusAfter.screenY)).toEqual(brand)
+
+  await key("escape")
+  for (const shortcut of ["[Alt+1]", "[Alt+3]", "[Alt+5]", "[,]", "[Q]"])
+    expect(spanColor(shortcut, 0)).toEqual(muted)
+})
+
+test("Master Key two-line action rows execute once by mouse", async () => {
+  await mount()
+  await key("b", true)
+  await click("terminal-action-n")
+  expect(commands).toHaveLength(1)
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
+})
+
 test("Master Key selects visible terminals with their single-digit sidebar keys", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const first = focusedTerminal()
-  await leader("c")
+  await leader("n")
   const second = focusedTerminal()
   expect(second).not.toBe(first)
 
   await key("b", true)
-  expect(tui?.captureCharFrame()).toContain("[1]")
-  expect(tui?.captureCharFrame()).toContain("[2]")
+  const firstSessionId = first.id.replace("free-terminal-", "")
+  const secondSessionId = second.id.replace("free-terminal-", "")
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-sidebar-shortcut-${firstSessionId}`),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-sidebar-shortcut-${secondSessionId}`),
+  ).toBeDefined()
   await key("1")
 
   expect(focusedTerminal()).toBe(first)
@@ -462,7 +742,7 @@ test("Master Key selects visible terminals with their single-digit sidebar keys"
 test("Master Key Alt numbers select the five application tools", async () => {
   const selected: string[] = []
   await mount(false, 120, 30, { onSelectTool: (tool) => selected.push(tool) })
-  await leader("c")
+  await leader("n")
   for (const [number, expected] of [
     ["1", "database"],
     ["2", "git"],
@@ -481,7 +761,7 @@ test("Master Key Alt numbers select the five application tools", async () => {
 
 test("Master Key Alt tool selection works through the full application", async () => {
   await mount(false, 120, 30, {}, true)
-  await leader("c")
+  await leader("n")
   await key("b", true)
   await act(async () => tui?.mockInput.pressKey("1", { meta: true }))
   await tui?.renderOnce()
@@ -496,7 +776,7 @@ test("Master Key comma and Q invoke application actions without sending shell in
     onOpenSettings: () => settings++,
     onQuit: () => quits++,
   })
-  await leader("c")
+  await leader("n")
   await leader(",")
   expect(settings).toBe(1)
   await leader("q")
@@ -506,7 +786,7 @@ test("Master Key comma and Q invoke application actions without sending shell in
 
 test("Master Key comma opens application settings from the terminal", async () => {
   await mount(true)
-  await leader("c")
+  await leader("n")
   await leader(",")
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
@@ -515,7 +795,7 @@ test("Master Key comma opens application settings from the terminal", async () =
 
 test("Master Key pins one global sidebar and returns it to the Terminal workspace", async () => {
   await mount(true)
-  await leader("c")
+  await leader("n")
   const workspace = tui!.renderer.root.findDescendantById("terminal-workspace")!
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(
@@ -535,6 +815,19 @@ test("Master Key pins one global sidebar and returns it to the Terminal workspac
   expect(panes.screenX).toBeGreaterThan(workspace.screenX)
 })
 
+test("Master Key M can select the pinned global sidebar", async () => {
+  await mount(true)
+  await leader("n")
+  await leader("b")
+  await leader("m")
+  await arrow("left")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-focus-selection-tint-sidebar-main"),
+  ).toBeDefined()
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+})
+
 test("pinned sidebar keeps the custom command dialog accessible", async () => {
   await mount(true)
   await leader("b")
@@ -546,14 +839,131 @@ test("pinned sidebar keeps the custom command dialog accessible", async () => {
 
 test("Master Key can move keyboard focus from a terminal into the sidebar", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   await leader("l")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
 })
 
+test("Master Key M selects visible boxes with arrows or HJKL before moving focus", async () => {
+  await mount()
+  await leader("n")
+  const first = focusedTerminal()
+  const firstId = first.id.replace("free-terminal-", "")
+  await split("v")
+  const second = focusedTerminal()
+  const secondId = second.id.replace("free-terminal-", "")
+  const sidebar = renderable("terminal-sidebar")
+  const sidebarSection = renderable("terminal-sidebar-section-section-1")
+  const sidebarGeometry = {
+    x: sidebar.screenX,
+    y: sidebar.screenY,
+    width: sidebar.width,
+    height: sidebar.height,
+    sectionX: sidebarSection.screenX,
+    sectionY: sidebarSection.screenY,
+    sectionWidth: sidebarSection.width,
+    sectionHeight: sidebarSection.height,
+  }
+
+  const expectStableSidebar = () => {
+    const currentSidebar = renderable("terminal-sidebar")
+    const currentSection = renderable("terminal-sidebar-section-section-1")
+    expect(currentSidebar).toBe(sidebar)
+    expect(currentSection).toBe(sidebarSection)
+    expect({
+      x: currentSidebar.screenX,
+      y: currentSidebar.screenY,
+      width: currentSidebar.width,
+      height: currentSidebar.height,
+      sectionX: currentSection.screenX,
+      sectionY: currentSection.screenY,
+      sectionWidth: currentSection.width,
+      sectionHeight: currentSection.height,
+    }).toEqual(sidebarGeometry)
+    expect(
+      tui?.renderer.root.findDescendantById(`terminal-sidebar-shortcut-${firstId}`),
+    ).toBeUndefined()
+    expect(
+      tui?.renderer.root.findDescendantById(`terminal-sidebar-shortcut-${secondId}`),
+    ).toBeUndefined()
+  }
+
+  await leader("m")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
+  expect(tui?.captureCharFrame()).toContain("Pressione [Enter] para focar")
+  expectStableSidebar()
+  const selectedTint = tui?.renderer.root.findDescendantById(
+    `terminal-focus-selection-tint-terminal-${secondId}`,
+  ) as BoxRenderable | null
+  expect(selectedTint?.backgroundColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-tint-terminal-${secondId}`),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-tint-terminal-${firstId}`),
+  ).toBeUndefined()
+  const firstDim = tui?.renderer.root.findDescendantById(
+    `terminal-focus-selection-dim-terminal-${firstId}`,
+  ) as BoxRenderable | null
+  const sidebarDim = tui?.renderer.root.findDescendantById(
+    "terminal-focus-selection-dim-sidebar-main",
+  ) as BoxRenderable | null
+  expect(firstDim?.backgroundColor.toInts()).toEqual(RGBA.fromHex("#000000").toInts())
+  expect(sidebarDim?.backgroundColor.toInts()).toEqual(RGBA.fromHex("#000000").toInts())
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-dim-terminal-${secondId}`),
+  ).toBeUndefined()
+
+  await arrow("left")
+  expectStableSidebar()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-tint-terminal-${firstId}`),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-dim-terminal-${secondId}`),
+  ).toBeDefined()
+  await key("escape")
+  expect(focusedTerminal()).toBe(second)
+  expectStableSidebar()
+
+  await leader("m")
+  await arrow("left")
+  await arrow("left")
+  const sidebarTint = tui?.renderer.root.findDescendantById(
+    "terminal-focus-selection-tint-sidebar-main",
+  ) as BoxRenderable | null
+  expect(sidebarTint?.backgroundColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  const prompt = tui?.renderer.root.findDescendantById(
+    "terminal-focus-selection-prompt",
+  ) as BoxRenderable | null
+  expect(prompt?.backgroundColor.toInts()).toEqual(RGBA.fromHex(COLORS.panelRaised).toInts())
+  expect(prompt?.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+
+  await leader("m")
+  await arrow("right")
+  await key("l")
+  expectStableSidebar()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-tint-terminal-${secondId}`),
+  ).toBeDefined()
+  await key("h")
+  await key("enter")
+
+  expect(focusedTerminal()).toBe(first)
+  expectStableSidebar()
+
+  await leader("m")
+  await click(`terminal-focus-selection-terminal-${secondId}`)
+  expect(focusedTerminal()).toBe(second)
+  expectStableSidebar()
+  expect(inputs.every((input) => input.length === 0)).toBe(true)
+})
+
 test("returning from the pinned sidebar redraws and keeps the terminal visible", async () => {
   await mount(true)
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   await act(async () => starts[0]?.onData(new TextEncoder().encode("visible prompt")))
   await tui?.renderOnce()
@@ -573,7 +983,7 @@ test("returning from the pinned sidebar redraws and keeps the terminal visible",
 
 test("mouse wheel scrolls terminal history without sending input to the shell", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   const output = Array.from({ length: 80 }, (_, index) => `history-${index}`).join("\r\n")
   await act(async () => starts[0]?.onData(new TextEncoder().encode(`${output}\r\n`)))
@@ -588,11 +998,15 @@ test("mouse wheel scrolls terminal history without sending input to the shell", 
   expect(inputs[0]).toEqual([])
 })
 
-test("two panes fill one compact section and a third split is refused", async () => {
+test("split confirmation can create a second pane and a third split is refused", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const first = focusedTerminal()
   await leader("v")
+  expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("O que deseja colocar no novo painel?")
+  expect(starts).toHaveLength(1)
+  await click("terminal-split-option-0")
   const second = focusedTerminal()
   expect(starts).toHaveLength(2)
   expect(first.screenY).toBe(second.screenY)
@@ -619,6 +1033,32 @@ test("two panes fill one compact section and a third split is refused", async ()
   expect(starts).toHaveLength(2)
 })
 
+test("split confirmation moves an existing agent without restarting it", async () => {
+  await mount()
+  await leader("a")
+  const agent = focusedTerminal()
+  await leader("n")
+  const shell = focusedTerminal()
+  expect(starts).toHaveLength(2)
+
+  await leader("v")
+  expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("AGENTES EXISTENTES")
+  expect(tui?.captureCharFrame()).toContain("Codex")
+  await click("terminal-split-option-1")
+
+  const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
+  expect(focusedTerminal()).toBe(agent)
+  expect(shell.screenY).toBe(agent.screenY)
+  expect(shell.width + agent.width + 1).toBe(panes.width)
+  expect(agent.screenX).toBe(shell.screenX + shell.width + 1)
+  expect(starts).toHaveLength(2)
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1"),
+  ).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-2")).toBeDefined()
+})
+
 test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (method) => {
   await mount()
   const create = () => (method === "keyboard" ? leader("n") : click("terminal-sidebar-new"))
@@ -636,7 +1076,7 @@ test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (me
   expect(focusedTerminal()).toBe(first)
   await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(second)
-  await leader("v")
+  await split("v")
   const third = focusedTerminal()
   expect(second.width + third.width + 1).toBe(panes.width)
   expect(third.screenX).toBe(second.screenX + second.width + 1)
@@ -651,7 +1091,7 @@ test("paired sidebar rows support mouse selection", async () => {
   await mount()
   await click("terminal-sidebar-new")
   const first = focusedTerminal()
-  await leader("h")
+  await split("h")
   const second = focusedTerminal()
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(second.screenY).toBe(first.screenY + first.height + 1)
@@ -683,7 +1123,7 @@ test("legacy custom folders cannot return to the Terminal workspace", async () =
   await mount()
 
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")).toBeUndefined()
-  await leader("c")
+  await leader("n")
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-new-folder")).toBeUndefined()
   expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY).folders).toEqual([])
@@ -696,7 +1136,7 @@ test("session folders collapse, persist per project, and omit empty folders", as
   for (const id of ["terminal", "tmux", "others"])
     expect(tui?.renderer.root.findDescendantById(`terminal-sidebar-folder-${id}`)).toBeUndefined()
 
-  await leader("c")
+  await leader("n")
   const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   expect(folder).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
@@ -737,7 +1177,7 @@ test("changing Master Key in contextual settings takes effect and keeps shell in
   expect(getUiSettings().terminalMasterKey).toBe("Ctrl+A")
   await key("escape")
   await key("a", true)
-  await key("c")
+  await key("n")
   expect(starts).toHaveLength(1)
   await key("b", true)
   expect(inputs[0]?.join("")).toBe("\u0002")
@@ -749,8 +1189,8 @@ test("changing Master Key in contextual settings takes effect and keeps shell in
 
 test("an agent launched under a shell keeps its pair in Tuiminais without restarting", async () => {
   await mount()
-  await leader("c")
-  await leader("v")
+  await leader("n")
+  await split("v")
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
   const agentId = `terminal-agent-${sessionId}`
@@ -804,23 +1244,188 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
 test("removed Master Key actions are absent while new terminals stay in Tuiminais", async () => {
   await mount()
   await key("b", true)
-  for (const action of ["t", "tab", "p", "f", "o", "m", "/"])
+  for (const action of ["t", "tab", "p", "f", "o", "c", "r", "g"])
     expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-action-a")).toBeDefined()
-  expect(tui?.renderer.root.findDescendantById("terminal-action-g")).toBeDefined()
-  for (const action of ["m", "/"]) {
-    await key(action)
-    expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
-  }
+  await key("c")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("r")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("g")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  expect(starts).toHaveLength(0)
+  await key("m")
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("/")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-action-search")
   expect(tui?.renderer.root.findDescendantById("terminal-action-d")).toBeDefined()
+  await key("escape")
   await key("escape")
   await leader("d")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("escape")
   await click("terminal-sidebar-new")
   const owned = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
   expect(section.parent).toBe(owned.parent)
   expect(starts).toHaveLength(1)
+})
+
+test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (direction) => {
+  const root = "/fixture/split-live-diff"
+  liveDiffSpies.push(
+    spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root),
+    spyOn(liveDiff, "liveDiffWorktrees").mockResolvedValue([root]),
+    spyOn(liveDiff, "readProcessDirectories").mockResolvedValue([]),
+    spyOn(liveDiff, "readLiveDiffRoot").mockResolvedValue({
+      truncated: false,
+      files: [],
+    }),
+    spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
+  )
+  await mount()
+  await leader("a")
+  const agentTerminal = focusedTerminal()
+  const sessionId = agentTerminal.id.replace("free-terminal-", "")
+  await split(direction)
+  const siblingTerminal = focusedTerminal()
+  const siblingId = siblingTerminal.id.replace("free-terminal-", "")
+  await click(`terminal-agent-${sessionId}`)
+  const panes = renderable("terminal-panes")
+  const agentFrame = renderable(`terminal-pane-frame-${sessionId}`)
+  const siblingFrame = renderable(`terminal-pane-frame-${siblingId}`)
+  const agentPane = agentFrame.parent!
+  if (direction === "h")
+    expect(agentTerminal.height + siblingTerminal.height + 1).toBe(panes.height)
+  else expect(agentTerminal.width + siblingTerminal.width + 1).toBe(panes.width)
+
+  await leader("d")
+  const panel = renderable(`live-diff-${sessionId}`)
+  const target = renderable(`terminal-focus-target-live-diff-${sessionId}`)
+  expect(target.screenX).toBe(agentPane.screenX)
+  expect(target.screenY).toBe(agentTerminal.screenY + agentTerminal.height)
+  expect(target.width).toBe(agentPane.width)
+  expect(target.height).toBeLessThan(agentPane.height)
+  expect(agentTerminal.height).toBeLessThan(agentPane.height)
+  expect(Math.abs(target.height - agentTerminal.height)).toBeLessThanOrEqual(2)
+  expect(panel.screenX).toBeGreaterThanOrEqual(target.screenX)
+  expect(panel.screenY).toBeGreaterThanOrEqual(target.screenY)
+  expect(panel.width).toBeLessThanOrEqual(target.width)
+  expect(panel.height).toBeLessThanOrEqual(target.height)
+  expect(target.width < panes.width || target.height < panes.height).toBe(true)
+  expect(siblingFrame.parent?.visible).toBe(true)
+  expect(siblingTerminal.width).toBeGreaterThan(0)
+  expect(siblingTerminal.height).toBeGreaterThan(0)
+  expect(starts).toHaveLength(2)
+  await click(`free-terminal-${siblingId}`)
+  expect(focusedTerminal()).toBe(siblingTerminal)
+  await click(`live-diff-${sessionId}`)
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeDefined()
+  expect(focusedTerminal()).toBe(agentTerminal)
+  await leader("d")
+  await key("x")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeUndefined()
+  expect(focusedTerminal()).toBe(agentTerminal)
+  expect(siblingFrame.parent?.visible).toBe(true)
+  if (direction === "h")
+    expect(agentTerminal.height + siblingTerminal.height + 1).toBe(panes.height)
+  else expect(agentTerminal.width + siblingTerminal.width + 1).toBe(panes.width)
+  expect(starts).toHaveLength(2)
+})
+
+test("Live Diff covers its split pane only when the terminal is very small", async () => {
+  const root = "/fixture/narrow-split-live-diff"
+  liveDiffSpies.push(
+    spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root),
+    spyOn(liveDiff, "liveDiffWorktrees").mockResolvedValue([root]),
+    spyOn(liveDiff, "readProcessDirectories").mockResolvedValue([]),
+    spyOn(liveDiff, "readLiveDiffRoot").mockResolvedValue({ truncated: false, files: [] }),
+    spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
+  )
+  await mount(false, 76, 18)
+  await leader("a")
+  const agentTerminal = focusedTerminal()
+  const sessionId = agentTerminal.id.replace("free-terminal-", "")
+  await split("v")
+  const siblingTerminal = focusedTerminal()
+  const siblingId = siblingTerminal.id.replace("free-terminal-", "")
+  await click(`terminal-agent-${sessionId}`)
+  const agentPane = renderable(`terminal-pane-frame-${sessionId}`).parent!
+  const siblingPane = renderable(`terminal-pane-frame-${siblingId}`).parent!
+
+  await leader("d")
+  const target = renderable(`terminal-focus-target-live-diff-${sessionId}`)
+  expect(target.screenX).toBe(agentPane.screenX)
+  expect(target.screenY).toBe(agentPane.screenY)
+  expect(target.width).toBe(agentPane.width)
+  expect(target.height).toBe(agentPane.height)
+  expect(siblingPane.visible).toBe(true)
+  expect(siblingTerminal.width).toBeGreaterThan(0)
+  expect(starts).toHaveLength(2)
+})
+
+test("split agents keep independent Live Diff panels", async () => {
+  const root = "/fixture/two-live-diffs"
+  liveDiffSpies.push(
+    spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root),
+    spyOn(liveDiff, "liveDiffWorktrees").mockResolvedValue([root]),
+    spyOn(liveDiff, "readProcessDirectories").mockResolvedValue([]),
+    spyOn(liveDiff, "readLiveDiffRoot").mockResolvedValue({ truncated: false, files: [] }),
+    spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
+  )
+  await mount()
+  await leader("a")
+  const firstId = focusedTerminal().id.replace("free-terminal-", "")
+  await leader("a")
+  const secondId = focusedTerminal().id.replace("free-terminal-", "")
+  await leader("v")
+  await click("terminal-split-option-1")
+
+  await leader("d")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${firstId}`)).toBeDefined()
+  await click(`terminal-agent-${secondId}`)
+  await leader("d")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${firstId}`)).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${secondId}`)).toBeDefined()
+  expect(starts).toHaveLength(2)
+
+  await click(`live-diff-${firstId}`)
+  await key("x")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${firstId}`)).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${secondId}`)).toBeDefined()
+  await click(`terminal-agent-${secondId}`)
+  await leader("d")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${secondId}`)
+})
+
+test("split Codex agents keep independent sent-message histories", async () => {
+  await mount()
+  await leader("a")
+  const firstId = focusedTerminal().id.replace("free-terminal-", "")
+  await leader("a")
+  const secondId = focusedTerminal().id.replace("free-terminal-", "")
+  await leader("v")
+  await click("terminal-split-option-1")
+
+  await leader("s")
+  expect(tui?.renderer.root.findDescendantById(`agent-message-history-${firstId}`)).toBeDefined()
+  await click(`terminal-agent-${secondId}`)
+  await leader("s")
+  expect(tui?.renderer.root.findDescendantById(`agent-message-history-${firstId}`)).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById(`agent-message-history-${secondId}`)).toBeDefined()
+  expect(starts).toHaveLength(2)
+
+  await click(`agent-message-history-${firstId}`)
+  await key("x")
+  expect(tui?.renderer.root.findDescendantById(`agent-message-history-${firstId}`)).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById(`agent-message-history-${secondId}`)).toBeDefined()
+  await click(`terminal-agent-${secondId}`)
+  await leader("s")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${secondId}`)
 })
 
 test("Live Diff polls every 250 ms beside an agent without restarting its terminal", async () => {
@@ -862,14 +1467,18 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
           })),
   }))
   let patchContent = `diff --git a/packages/terminal.ts b/packages/terminal.ts\n--- a/packages/terminal.ts\n+++ b/packages/terminal.ts\n@@ -1 +1,41 @@\n-old\n+${"long_code_".repeat(20)}\n${Array.from({ length: 40 }, (_, index) => `+added_${index}\n`).join("")}`
-  const patch = spyOn(liveDiff, "readLiveDiffPatch").mockImplementation(async () => patchContent)
+  const patch = spyOn(liveDiff, "readLiveDiffPatch").mockImplementation(async (file) =>
+    file.path === "packages/file-19.ts"
+      ? "diff --git a/packages/file-19.ts b/packages/file-19.ts\n--- a/packages/file-19.ts\n+++ b/packages/file-19.ts\n@@ -1 +1 @@\n-late old\n+late new\n"
+      : patchContent,
+  )
   const projects = spyOn(liveDiffProjects, "discoverLiveDiffProjects").mockResolvedValue([
     { path: secondRoot, name: "another-project", parent: "fixture" },
   ])
   liveDiffSpies.push(repository, worktrees, directories, read, patch, projects)
 
   await mount()
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
   snapshot = [
@@ -915,7 +1524,8 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   expect(tui?.captureCharFrame()).toContain("Último:")
   expect(tui?.captureCharFrame()).toContain("/live-worktree")
   expect(tui?.captureCharFrame()).not.toContain("/fixture/live-worktree")
-  const panel = tui!.renderer.root.findDescendantById(`live-diff-${sessionId}`)!
+  const panel = tui!.renderer.root.findDescendantById(`live-diff-${sessionId}`) as BoxRenderable
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   const frame = tui!.renderer.root.findDescendantById(`terminal-pane-frame-${sessionId}`)!
   expect(panel.parent!.width).toBe(Math.round(frame.width * 0.48) - 14)
   const fileTable = tui!.renderer.root.findDescendantById(`live-diff-file-table-${sessionId}`)!
@@ -932,6 +1542,12 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   expect(addProject.screenY).toBeGreaterThan(fileTable.screenY + fileTable.height - 1)
   expect(tui?.captureCharFrame()).toContain("[A] Adicionar projeto")
   expect(tui?.captureCharFrame()).toContain("Observando:")
+  const liveDiffShortcutLine = () =>
+    tui
+      ?.captureCharFrame()
+      .split("\n")
+      .findIndex((line) => line.includes("[H/L]")) ?? -1
+  expect(spanColor("[H/L]", liveDiffShortcutLine())).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   const normalPanelWidth = panel.width
   const normalPanelHeight = panel.height
   const normalPreview = tui!.renderer.root.findDescendantById(`live-diff-preview-${sessionId}`)!
@@ -944,6 +1560,7 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   const normalInfoHeight = info.height
   await key("enter")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-preview-${sessionId}`)
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   expect((nativeDiff as DiffRenderable).wrapMode).toBe("char")
   expect(panel.width).toBe(normalPanelWidth)
   expect(panel.height).toBe(normalPanelHeight)
@@ -1019,6 +1636,11 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
       .content.get(line)
       ?.toInts()
   expect(completeDiff.getHunkRowOffsets()).toHaveLength(2)
+  const lineNumbers = completeDiff
+    .getChildren()
+    .find((child): child is LineNumberRenderable => child instanceof LineNumberRenderable)
+  expect(lineNumbers?.getHideLineNumbers().has(33)).toBe(true)
+  expect(lineBackground(33)).toEqual(RGBA.fromHex(COLORS.canvas).toInts())
   expect(preview.scrollTop).toBeGreaterThan(0)
   expect(tui?.captureCharFrame()).toContain("new second")
   patchContent = twoHunks("newer first", "new second", "older first")
@@ -1035,25 +1657,18 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
     .flatMap((child) => child.getChildren())
     .find((child): child is CodeRenderable => child instanceof CodeRenderable)
   if (!code) throw new Error("Live Diff code renderable is missing")
-  const shimmerEdge =
-    RGBA.fromHex(COLORS.diffRecentBg)
-      .toInts()
-      .slice(0, 3)
-      .reduce((sum, value) => sum + value, 0) > 420
-      ? RGBA.fromHex("#496dad").toInts()
-      : RGBA.fromHex("#9fe7ff").toInts()
-  let sawShimmer = false
-  for (let attempt = 0; attempt < 8 && !sawShimmer; attempt++) {
+  const shimmerFrames = new Set<string>()
+  for (let attempt = 0; attempt < 8 && shimmerFrames.size < 2; attempt++) {
     await act(async () => Bun.sleep(60))
     await tui?.renderOnce()
-    sawShimmer =
+    shimmerFrames.add(
       tui
         ?.captureSpans()
-        .lines[code.screenY + 2]?.spans.some(
-          (span) => span.fg.toInts().join() === shimmerEdge.join(),
-        ) ?? false
+        .lines[code.screenY + 2]?.spans.map((span) => span.fg.toInts().join())
+        .join("|") ?? "",
+    )
   }
-  expect(sawShimmer).toBe(true)
+  expect(shimmerFrames.size).toBeGreaterThan(1)
   patchContent = twoHunks("newer first", "newer second", "older first")
   fingerprints.set(0, "hunk-three")
   await act(async () => Bun.sleep(650))
@@ -1064,12 +1679,27 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   expect(lineBackground(2)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   await act(async () => Bun.sleep(1700))
-  await tui?.renderOnce()
+  const loopedShimmerFrames = new Set<string>()
+  for (let attempt = 0; attempt < 20 && loopedShimmerFrames.size < 2; attempt++) {
+    await act(async () => Bun.sleep(60))
+    await tui?.renderOnce()
+    loopedShimmerFrames.add(
+      tui
+        ?.captureSpans()
+        .lines.slice(code.screenY, code.screenY + code.height)
+        .flatMap((line) => line.spans.map((span) => span.fg.toInts().join()))
+        .join("|") ?? "",
+    )
+  }
+  expect(loopedShimmerFrames.size).toBeGreaterThan(1)
   expect(lineBackground(35)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   fingerprints.set(19, "second")
   await act(async () => Bun.sleep(650))
   await tui?.renderOnce()
   expect(patch.mock.calls.at(-1)?.[0].path).toBe("packages/file-19.ts")
+  expect(tui?.captureCharFrame()).toContain("late new")
+  expect(lineBackground(0)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
+  expect(lineBackground(1)).toEqual(RGBA.fromHex(COLORS.diffRecentBg).toInts())
   const reorderedList = tui!.renderer.root.findDescendantById(`live-diff-files-${sessionId}`)!
   const newestRow = tui!.renderer.root.findDescendantById(`live-diff-file-${sessionId}-0`)!
   expect(newestRow.screenY).toBeGreaterThanOrEqual(reorderedList.screenY)
@@ -1103,6 +1733,8 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   expect(last.screenY).toBeLessThan(list.screenY + list.height)
   await key("escape")
   expect(focusedTerminal()).toBe(terminal)
+  expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
+  expect(spanColor("[H/L]", liveDiffShortcutLine())).toEqual(RGBA.fromHex(COLORS.muted).toInts())
   const reads = read.mock.calls.length
   fingerprints.set(0, "fifth")
   await act(async () => Bun.sleep(650))
@@ -1172,7 +1804,7 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   expect(starts).toHaveLength(1)
 }, 16_000)
 
-test("stacked Live Diff keeps its panel width and widens only the code area", async () => {
+test("stacked Live Diff uses the full pane width and widens only the code area", async () => {
   const root = "/fixture/stacked-project"
   liveDiffSpies.push(
     spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root),
@@ -1203,7 +1835,7 @@ test("stacked Live Diff keeps its panel width and widens only the code area", as
     ),
   )
   await mount(false, 80, 30)
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
   snapshot = [
@@ -1223,7 +1855,7 @@ test("stacked Live Diff keeps its panel width and widens only the code area", as
   }
   const panel = tui!.renderer.root.findDescendantById(`live-diff-${sessionId}`)!
   const frame = tui!.renderer.root.findDescendantById(`terminal-pane-frame-${sessionId}`)!
-  expect(panel.parent!.width).toBe(frame.width - 14)
+  expect(panel.parent!.width).toBe(frame.width)
   const preview = tui!.renderer.root.findDescendantById(`live-diff-preview-${sessionId}`)!
   const files = tui!.renderer.root.findDescendantById(`live-diff-file-table-${sessionId}`)!
   const info = tui!.renderer.root.findDescendantById(`live-diff-info-${sessionId}`)!
@@ -1269,7 +1901,7 @@ test("stacked Live Diff keeps its panel width and widens only the code area", as
 
 test("narrow workspaces retain the sidebar, modal Escape and native input", async () => {
   await mount(true, 58, 18)
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   await click("terminal-sidebar-command")
   await key("escape")
@@ -1281,16 +1913,16 @@ test("narrow workspaces retain the sidebar, modal Escape and native input", asyn
 
 test("new sections return to Tuiminais and keep the workspace session limit", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   await click("terminal-sidebar-new")
   const owned = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
   expect(section.parent).toBe(owned.parent)
   const panes = tui?.renderer.root.findDescendantById("terminal-panes")
   expect(focusedTerminal().width).toBe(panes!.width)
-  for (let i = 2; i < 12; i++) await leader("c")
+  for (let i = 2; i < 12; i++) await leader("n")
   expect(starts).toHaveLength(12)
-  await leader("c")
+  await leader("n")
   expect(starts).toHaveLength(12)
 })
 
@@ -1309,9 +1941,9 @@ test("settings agent-command input consumes typing and its own Escape", async ()
 
 test("sidebar navigation switches among live sections without relaunching their processes", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const first = focusedTerminal()
-  await leader("c")
+  await leader("n")
   const second = focusedTerminal()
   await click(`terminal-sidebar-pane-${first.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(first)
@@ -1323,7 +1955,7 @@ test("sidebar navigation switches among live sections without relaunching their 
 
 test("terminals fill every available edge at all sizes without replacing the native process", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const terminal = focusedTerminal()
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   const sidebar = tui!.renderer.root.findDescendantById("terminal-sidebar")!

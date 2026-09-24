@@ -1,15 +1,18 @@
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { liveDiffElapsedLabel, type LiveDiffFile } from "../model/live-diff"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { type LiveDiffFile, liveDiffElapsedLabel } from "../model/live-diff"
 import {
+  fittedLiveDiffPath,
   LIVE_DIFF_CHANGE_WIDTH,
+  LIVE_DIFF_ROW_HIGHLIGHT_MS,
   LIVE_DIFF_STATUS_WIDTH,
   LIVE_DIFF_TIME_WIDTH,
-  fittedLiveDiffPath,
   liveDiffFileStatus,
   liveDiffPathWidth,
+  liveDiffRowBackground,
+  liveDiffRowHighlightProgress,
 } from "../rendering/live-diff-table"
 
 const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
@@ -46,7 +49,13 @@ export function LiveDiffFileTable({
   const fileList = useRef<ScrollBoxRenderable | null>(null)
   const [listWidth, setListWidth] = useState(80)
   const [sweepFrame, setSweepFrame] = useState<number | null>(null)
+  const [animationNow, setAnimationNow] = useState(Date.now())
   const hasNewFile = files.some((file) => liveDiffFileStatus(file) === "New")
+  const latestListHighlight = files.reduce(
+    (latest, file) => Math.max(latest, file.listHighlightAt ?? 0),
+    0,
+  )
+  const animationEnabled = process.env.TUIMINAL_TEST_STATIC_LOADERS !== "1"
   useEffect(() => {
     if (!active || !hasNewFile || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") {
       setSweepFrame(null)
@@ -55,6 +64,20 @@ export function LiveDiffFileTable({
     const timer = setInterval(() => setSweepFrame((frame) => ((frame ?? -1) + 1) % 8), 70)
     return () => clearInterval(timer)
   }, [active, hasNewFile])
+
+  useEffect(() => {
+    if (!active || !animationEnabled || latestListHighlight === 0) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const frame = () => {
+      const current = Date.now()
+      setAnimationNow(current)
+      const remaining = latestListHighlight + LIVE_DIFF_ROW_HIGHLIGHT_MS - current
+      if (remaining > 0) timer = setTimeout(frame, Math.min(40, remaining))
+    }
+    const remaining = latestListHighlight + LIVE_DIFF_ROW_HIGHLIGHT_MS - Date.now()
+    if (remaining > 0) timer = setTimeout(frame, Math.min(40, remaining))
+    return () => clearTimeout(timer)
+  }, [active, animationEnabled, latestListHighlight])
 
   const selectedFileKey = selected ? fileKey(selected) : null
   const selectedIndex = files.findIndex((file) => fileKey(file) === selectedFileKey)
@@ -71,6 +94,7 @@ export function LiveDiffFileTable({
     () => files.map((file) => fittedLiveDiffPath(file.root, file.path, pathWidth)),
     [files, pathWidth],
   )
+  const renderedAnimationNow = Math.max(animationNow, Date.now())
 
   return (
     <box
@@ -123,6 +147,10 @@ export function LiveDiffFileTable({
         {files.map((file, index) => {
           const isSelected = selected && fileKey(file) === fileKey(selected)
           const status = liveDiffFileStatus(file)
+          const normalBackground = isSelected ? COLORS.panelRaised : COLORS.canvas
+          const highlightProgress = animationEnabled
+            ? liveDiffRowHighlightProgress(file.listHighlightAt, renderedAnimationNow)
+            : 0
           return (
             // biome-ignore lint/a11y/noStaticElementInteractions: file rows are also selectable from the keyboard with J/K.
             <box
@@ -137,7 +165,11 @@ export function LiveDiffFileTable({
                 height: 1,
                 flexShrink: 0,
                 flexDirection: "row",
-                backgroundColor: isSelected ? COLORS.panelRaised : COLORS.canvas,
+                backgroundColor: liveDiffRowBackground(
+                  normalBackground,
+                  COLORS.diffRecentBg,
+                  highlightProgress,
+                ),
               }}
             >
               <box

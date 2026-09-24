@@ -1,19 +1,34 @@
-import { createServer } from "node:net"
+import {
+  publishCodexResumeThreads,
+  updateCodexResumeThreadResponse,
+} from "../model/codex-resume-threads"
 import {
   type CodexObservedUserMessage,
   codexAppServerUserMessage,
   codexAppServerUserMessageHistory,
 } from "./codex-message-history"
 import { CodexMessageHistoryObserver } from "./codex-message-history-observer"
+import {
+  codexResumeThreads,
+  resumeListFrame,
+  unusedCodexLoopbackPort,
+  waitForCodexAppServer,
+} from "./codex-resume"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
+export {
+  codexResumeLastResponse,
+  codexResumeThreads,
+  refreshCodexResumeThreads,
+} from "./codex-resume"
 export type { CodexObservedUserMessage }
 export { codexAppServerUserMessage, codexAppServerUserMessageHistory }
 
 type RecordValue = Record<string, unknown>
 type TerminalOptions = Parameters<typeof startFreeTerminalProcess>[1]
-type CodexActivity = "thinking" | "running" | "updating" | "coding" | "tooling"
+type CodexTerminalOptions = TerminalOptions & { resumeThreadId?: string }
+type CodexActivity = "thinking" | "writing" | "running" | "updating" | "coding" | "tooling"
 type CodexState = "working" | "blocked" | "done" | "unknown"
 
 export type CodexAppServerEvents = {
@@ -32,13 +47,16 @@ function object(value: unknown): RecordValue | null {
 export function codexAppServerActivity(message: unknown): CodexActivity | null {
   const event = object(message)
   const method = event?.method
-  if (method === "item/plan/delta") return "updating"
+  if (method === "item/agentMessage/delta") return "writing"
+  if (method === "item/plan/delta" || method === "turn/plan/updated") return "updating"
   if (method === "item/fileChange/patchUpdated") return "coding"
   if (method !== "item/started") return null
   const item = object(object(event?.params)?.item)
   switch (item?.type) {
     case "reasoning":
       return "thinking"
+    case "agentMessage":
+      return "writing"
     case "commandExecution":
       return "running"
     case "fileChange":
@@ -73,41 +91,6 @@ export function codexAppServerState(message: unknown): CodexState | null {
   return codexAppServerActivity(message) ? "working" : null
 }
 
-async function unusedLoopbackPort() {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", resolve)
-  })
-  const address = server.address()
-  const port = address && typeof address !== "string" ? address.port : 0
-  await new Promise<void>((resolve) => server.close(() => resolve()))
-  if (!port) throw new Error("Não foi possível reservar uma porta para o Codex app-server.")
-  return port
-}
-
-async function waitUntilReady(
-  url: string,
-  server: { exitCode: number | null },
-  signal: AbortSignal,
-) {
-  const deadline = Date.now() + 5000
-  while (Date.now() < deadline) {
-    signal.throwIfAborted()
-    if (server.exitCode !== null)
-      throw new Error("O Codex app-server encerrou durante a inicialização.")
-    const status = await fetch(`${url.replace("ws:", "http:")}/readyz`, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(500)]),
-    }).then(
-      (response) => response.ok,
-      () => false,
-    )
-    if (status) return
-    await Bun.sleep(50)
-  }
-  throw new Error("O Codex app-server não ficou pronto para a interface do Codex.")
-}
-
 function publishObserverEvent(message: RecordValue, events: CodexAppServerEvents) {
   const params = object(message.params)
   if (message.method === "thread/name/updated" && typeof params?.threadName === "string")
@@ -122,11 +105,81 @@ type Relay = {
   upstream: WebSocket | null
   pending: string[]
   history: CodexMessageHistoryObserver
+  resumeRequestIds: Set<string>
+  resumeRequestSequence: number
   closing: boolean
 }
 
+let relaySequence = 0
+
+function requestResumeThreads(relay: Relay, relayId: number, cwd: string | undefined) {
+  const upstream = relay.upstream
+  if (!upstream || upstream.readyState !== WebSocket.OPEN) return
+  relay.resumeRequestSequence += 1
+  const id = `tuiminal-resume-list:${relayId}:${relay.resumeRequestSequence}`
+  relay.resumeRequestIds.add(id)
+  upstream.send(resumeListFrame(id, cwd))
+}
+
+function inspectUpstreamFrame(
+  value: string,
+  relay: Relay,
+  upstream: WebSocket,
+  events: CodexAppServerEvents,
+  relayId: number,
+  cwd: string | undefined,
+) {
+  try {
+    const message = object(JSON.parse(value))
+    if (!message) return false
+    const resumeResponse =
+      typeof message.id === "string" && relay.resumeRequestIds.delete(message.id)
+    if (resumeResponse) publishCodexResumeThreads(codexResumeThreads(message))
+    if (message.method === "item/completed") {
+      const params = object(message.params)
+      const item = object(params?.item)
+      if (
+        typeof params?.threadId === "string" &&
+        item?.type === "agentMessage" &&
+        typeof item.text === "string"
+      )
+        updateCodexResumeThreadResponse(params.threadId, item.text)
+    }
+    if (typeof message.method === "string") publishObserverEvent(message, events)
+    const historyResponse =
+      !resumeResponse &&
+      relay.history.observeServer(message, events, (frame) => upstream.send(frame))
+    if (message.method === "turn/completed" || message.method === "thread/name/updated")
+      requestResumeThreads(relay, relayId, cwd)
+    return resumeResponse || historyResponse
+  } catch {
+    // Preserve the original frame even if it cannot be inspected.
+    return false
+  }
+}
+
+function inspectClientFrame(
+  value: string,
+  relay: Relay,
+  events: CodexAppServerEvents,
+  relayId: number,
+  cwd: string | undefined,
+) {
+  try {
+    const request = object(JSON.parse(value))
+    if (!request) return
+    relay.history.observeClient(request, events)
+    if (request.method === "initialized")
+      queueMicrotask(() => requestResumeThreads(relay, relayId, cwd))
+  } catch {
+    // Preserve the original frame even if it cannot be inspected.
+  }
+}
+
 /** Transparently forwards the CLI protocol and inspects only public server events. */
-export function startCodexAppServerRelay(url: string, events: CodexAppServerEvents) {
+export function startCodexAppServerRelay(url: string, events: CodexAppServerEvents, cwd?: string) {
+  relaySequence += 1
+  const relayId = relaySequence
   const relays = new Set<Relay>()
   const server = Bun.serve<Relay>({
     hostname: "127.0.0.1",
@@ -136,6 +189,8 @@ export function startCodexAppServerRelay(url: string, events: CodexAppServerEven
         upstream: null,
         pending: [],
         history: new CodexMessageHistoryObserver(),
+        resumeRequestIds: new Set(),
+        resumeRequestSequence: 0,
         closing: false,
       }
       if (server.upgrade(request, { data: relay })) {
@@ -155,19 +210,15 @@ export function startCodexAppServerRelay(url: string, events: CodexAppServerEven
         })
         upstream.addEventListener("message", (event) => {
           const value = String(event.data)
-          let internalHistoryResponse = false
-          try {
-            const message = object(JSON.parse(value))
-            if (message) {
-              if (typeof message.method === "string") publishObserverEvent(message, events)
-              internalHistoryResponse = relay.history.observeServer(message, events, (frame) =>
-                upstream.send(frame),
-              )
-            }
-          } catch {
-            // Preserve the original frame even if it cannot be inspected.
-          }
-          if (!relay.closing && !internalHistoryResponse) client.send(value)
+          const internalResponse = inspectUpstreamFrame(
+            value,
+            relay,
+            upstream,
+            events,
+            relayId,
+            cwd,
+          )
+          if (!relay.closing && !internalResponse) client.send(value)
         })
         upstream.addEventListener("close", () => {
           if (!relay.closing) events.onError("Codex app-server desconectou.")
@@ -177,12 +228,7 @@ export function startCodexAppServerRelay(url: string, events: CodexAppServerEven
       message(client, message) {
         const relay = client.data
         const value = String(message)
-        try {
-          const request = object(JSON.parse(value))
-          if (request) relay.history.observeClient(request, events)
-        } catch {
-          // Preserve the original frame even if it cannot be inspected.
-        }
+        inspectClientFrame(value, relay, events, relayId, cwd)
         if (relay.upstream?.readyState === WebSocket.OPEN) relay.upstream.send(value)
         else if (relay.pending.length < 16) relay.pending.push(value)
         else client.close(1013, "Codex app-server unavailable")
@@ -210,11 +256,11 @@ export function startCodexAppServerRelay(url: string, events: CodexAppServerEven
 
 /** One owned app-server backs one official Codex TUI; Tuiminal only observes it. */
 export async function startCodexAppServerTerminal(
-  options: TerminalOptions,
+  options: CodexTerminalOptions,
   events: CodexAppServerEvents,
   signal: AbortSignal,
 ): Promise<FreeTerminalProcessHandle> {
-  const port = await unusedLoopbackPort()
+  const port = await unusedCodexLoopbackPort()
   signal.throwIfAborted()
   const url = `ws://127.0.0.1:${port}`
   const server = Bun.spawn(["codex", "app-server", "--listen", url], {
@@ -241,11 +287,16 @@ export async function startCodexAppServerTerminal(
   const unregister = registerTerminalResource({ stop: stopServer })
   let terminal: FreeTerminalProcessHandle | null = null
   try {
-    await waitUntilReady(url, server, signal)
-    relay = startCodexAppServerRelay(url, events)
+    await waitForCodexAppServer(url, server, signal)
+    relay = startCodexAppServerRelay(url, events, options.cwd)
     signal.throwIfAborted()
-    const ownedTerminal = startFreeTerminalProcess(["codex", "--remote", relay.url], {
-      ...options,
+    const terminalCommand = options.resumeThreadId
+      ? ["codex", "resume", options.resumeThreadId, "--remote", relay.url]
+      : ["codex", "--remote", relay.url]
+    const { resumeThreadId: _resumeThreadId, ...terminalOptions } = options
+    void _resumeThreadId
+    const ownedTerminal = startFreeTerminalProcess(terminalCommand, {
+      ...terminalOptions,
       onExit(result) {
         void stopServer()
           .catch((error: unknown) => events.onError(String(error)))

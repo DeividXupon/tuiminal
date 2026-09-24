@@ -37,6 +37,7 @@
     "./ui/directional-shortcut": "./src/ui/directional-shortcut.ts",
     "./ui/selectMouse": "./src/ui/selectMouse.ts",
     "./ui/syntax-style": "./src/ui/syntax-style.ts",
+    "./ui/text-shimmer": "./src/ui/text-shimmer.ts",
     "./runtime/feature-host": "./src/runtime/feature-host.ts"
   },
   "peerDependencies": {

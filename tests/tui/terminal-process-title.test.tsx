@@ -80,9 +80,9 @@ function rowTitle(terminalId: string) {
   return row ? (tui?.captureCharFrame().split("\n")[row.screenY] ?? "") : ""
 }
 
-test("tool names follow a live shell and manual names survive later commands and restart", async () => {
+test("tool names follow a live shell and manual names survive later commands", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
   snapshot = processes(101, "lazygit")
   await waitFor(
@@ -109,19 +109,13 @@ test("tool names follow a live shell and manual names survive later commands and
   const scans = inspect!.mock.calls.length
   await waitFor(() => inspect!.mock.calls.length > scans)
   expect(rowTitle(terminal.id)).toContain("Review")
-  await leader("r")
-  await waitFor(() => launches === 2)
-  snapshot = processes(102, "lazygit")
-  const restartScans = inspect!.mock.calls.length
-  await waitFor(() => inspect!.mock.calls.length > restartScans)
-  expect(rowTitle(terminal.id)).toContain("Review")
   expect(tui!.renderer.currentFocusedRenderable).toBe(terminal)
-  expect(launches).toBe(2)
+  expect(launches).toBe(1)
 }, 20_000)
 
 test("tmux names follow the mirrored pane instead of its local client or sibling panes", async () => {
   await mount(501)
-  await leader("c")
+  await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
   snapshot = [...processes(101, "tmux"), ...processes(501, "lazygit"), ...processes(601, "nvim")]
   await waitFor(() => rowTitle(terminal.id).includes("lazygit"))
@@ -130,29 +124,3 @@ test("tmux names follow the mirrored pane instead of its local client or sibling
   expect(tui!.renderer.currentFocusedRenderable).toBe(terminal)
   expect(launches).toBe(1)
 })
-
-test("a process snapshot pending during restart cannot rename the replacement terminal", async () => {
-  await mount()
-  await leader("c")
-  const terminal = tui!.renderer.currentFocusedRenderable!
-  snapshot = processes(101, "lazygit")
-  await waitFor(() => rowTitle(terminal.id).includes("lazygit"))
-  let finish: ((value: ProcessIdentity[]) => void) | undefined
-  inspect!.mockImplementationOnce(
-    (signal) =>
-      new Promise((resolve) => {
-        finish = resolve
-        signal.addEventListener("abort", () => resolve([]), { once: true })
-      }),
-  )
-  await waitFor(() => finish !== undefined)
-  await leader("r")
-  await waitFor(() => launches === 2)
-  await act(async () => finish!(processes(101, "stale-command")))
-  await tui?.renderOnce()
-  expect(rowTitle(terminal.id)).not.toContain("stale-command")
-  snapshot = processes(102, "nvim")
-  await waitFor(() => rowTitle(terminal.id).includes("nvim"))
-  expect(tui!.renderer.currentFocusedRenderable).toBe(terminal)
-  expect(launches).toBe(2)
-}, 15_000)

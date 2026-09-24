@@ -1,9 +1,8 @@
 import { basename } from "node:path"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { type LiveDiffFile, liveDiffTotals } from "../model/live-diff"
+import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
 function projectRows(roots: readonly string[], firstWidth: number, fullWidth: number) {
   const rows: Array<Array<{ root: string; index: number; label: string }>> = [[]]
@@ -45,6 +44,7 @@ export function LiveDiffInfo({
   error,
   showDiffAuto,
   codeFocused,
+  shortcutColor,
 }: {
   sessionId: string
   width: number
@@ -58,6 +58,7 @@ export function LiveDiffInfo({
   error: string
   showDiffAuto: boolean
   codeFocused: boolean
+  shortcutColor: string
 }) {
   const totals = liveDiffTotals(files)
   const projectsLabel = `${translateUi("Observando")}: `
@@ -151,39 +152,43 @@ export function LiveDiffInfo({
       </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         {codeFocused ? (
-          <ShortcutText
+          <TerminalShortcutText
             content={
               showDiffAuto
                 ? "[Esc] Voltar à lista · [X] Fechar"
                 : "[Esc] Ativar diff auto · [X] Fechar"
             }
+            shortcutColor={shortcutColor}
             wrapMode="none"
             style={{ fg: COLORS.muted }}
           />
         ) : error ? (
           <text content={error} style={{ fg: COLORS.warning }} />
         ) : (
-          <ShortcutText
+          <TerminalShortcutText
             content="[H/L] projeto · [N] visibilidade · [X] Fechar"
+            shortcutColor={shortcutColor}
             wrapMode="none"
             style={{ fg: COLORS.muted }}
           />
         )}
         {sharedFooter && !codeFocused && (
-          <InlineButton
+          <TerminalInlineButton
             compact
             id={`live-diff-add-${sessionId}`}
             label="[A] Adicionar projeto"
+            shortcutColor={shortcutColor}
             onPress={onAddProject}
           />
         )}
       </box>
       {!codeFocused && !sharedFooter && (
         <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-          <InlineButton
+          <TerminalInlineButton
             compact
             id={`live-diff-add-${sessionId}`}
             label="[A] Adicionar projeto"
+            shortcutColor={shortcutColor}
             onPress={onAddProject}
           />
         </box>

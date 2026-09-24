@@ -18,7 +18,7 @@ export type FreeTerminalCommand = {
   /** Read-only reference to a native terminal owned by another application. */
   external?: { terminalId: string }
   /** Launch the official Codex TUI against an owned app-server. */
-  codex?: { appServer: true }
+  codex?: { appServer: true; resumeThreadId?: string }
 }
 export type TerminalSession = FreeTerminalCommand & {
   id: string

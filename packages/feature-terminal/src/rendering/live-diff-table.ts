@@ -5,6 +5,29 @@ import type { LiveDiffFile, LiveDiffFileStatus } from "../model/live-diff"
 export const LIVE_DIFF_STATUS_WIDTH = 7
 export const LIVE_DIFF_TIME_WIDTH = 5
 export const LIVE_DIFF_CHANGE_WIDTH = 6
+export const LIVE_DIFF_ROW_HIGHLIGHT_MS = 2000
+
+const clamp = (value: number) => Math.max(0, Math.min(1, value))
+
+export function liveDiffRowHighlightProgress(highlightedAt: number | undefined, now: number) {
+  if (highlightedAt === undefined) return 0
+  return 1 - clamp((now - highlightedAt) / LIVE_DIFF_ROW_HIGHLIGHT_MS)
+}
+
+export function liveDiffRowBackground(base: string, highlight: string, progress: number) {
+  const baseMatch = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(base)
+  const highlightMatch = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(highlight)
+  if (!baseMatch || !highlightMatch) return progress > 0 ? highlight : base
+  const ratio = clamp(progress)
+  const channel = (fromHex: string | undefined, toHex: string | undefined) => {
+    const from = Number.parseInt(fromHex ?? "00", 16)
+    const to = Number.parseInt(toHex ?? "00", 16)
+    return Math.round(from + (to - from) * ratio)
+      .toString(16)
+      .padStart(2, "0")
+  }
+  return `#${channel(baseMatch[1], highlightMatch[1])}${channel(baseMatch[2], highlightMatch[2])}${channel(baseMatch[3], highlightMatch[3])}`
+}
 
 function displaySuffix(value: string, maxWidth: number) {
   const graphemes =

@@ -3,9 +3,12 @@ import { useKeyboard, useRenderer } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS, type TerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
+import { useRenderableFocus } from "../hooks/use-renderable-focus"
+import {
+  TERMINAL_SIDEBAR_FOCUS_TARGET,
+  type TerminalFocusTargetKey,
+} from "../model/focus-selection"
 import {
   isRunningAgent,
   masterKeyShortcutLabel,
@@ -16,8 +19,15 @@ import {
   visibleTerminalShortcutTargets,
 } from "../model/sessions"
 import { AGENT_WORKING_FRAMES } from "../rendering/agent-presentation"
+import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { TerminalAgentList } from "./TerminalAgentList"
+import { TerminalFocusSelection } from "./TerminalFocusSelection"
 import { TerminalSessionGroups } from "./TerminalSessionGroups"
+import {
+  TerminalInlineButton,
+  TerminalShortcutAnimation,
+  TerminalShortcutText,
+} from "./TerminalShortcut"
 import {
   TerminalSidebarFocusSweep,
   useTerminalSidebarFocusSweep,
@@ -34,6 +44,28 @@ function folderCursorId(id: string) {
 
 function cursorFolderId(id: string | null) {
   return id?.startsWith(FOLDER_CURSOR_PREFIX) ? id.slice(FOLDER_CURSOR_PREFIX.length) : null
+}
+
+type SidebarFocusSelection =
+  | {
+      selectedTarget: TerminalFocusTargetKey
+      onFocus: (target: TerminalFocusTargetKey) => void
+    }
+  | undefined
+
+function TerminalSidebarFocusSelection({
+  focusSelection,
+}: {
+  focusSelection: SidebarFocusSelection
+}) {
+  if (!focusSelection) return null
+  return (
+    <TerminalFocusSelection
+      target={TERMINAL_SIDEBAR_FOCUS_TARGET}
+      selected={focusSelection.selectedTarget === TERMINAL_SIDEBAR_FOCUS_TARGET}
+      onFocus={focusSelection.onFocus}
+    />
+  )
 }
 
 export const TerminalSidebar = memo(function TerminalSidebar({
@@ -59,6 +91,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   onEscape,
   borderRight = true,
   masterKeyActive = false,
+  focusSelection,
 }: {
   active?: boolean
   sessions: TerminalSession[]
@@ -83,6 +116,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   borderRight?: boolean
   /** Shows the direct Master Key target beside each visible agent or terminal. */
   masterKeyActive?: boolean
+  focusSelection?: SidebarFocusSelection
 }) {
   const renderer = useRenderer()
   const sections = useMemo(() => numberedTerminalSections(sessions), [sessions])
@@ -150,6 +184,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
     return () => clearInterval(timer)
   }, [active, animatingAgents])
   const sidebarRef = useRef<BoxRenderable | null>(null)
+  const sidebarFocused = useRenderableFocus(sidebarRef)
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const { frame: focusSweepFrame, start: startFocusSweep } = useTerminalSidebarFocusSweep()
   const [cursorId, setCursorId] = useState<string | null>(
@@ -230,120 +265,124 @@ export const TerminalSidebar = memo(function TerminalSidebar({
       scrollRef.current?.scrollChildIntoView(`terminal-sidebar-pane-${activeSessionId}`)
   }, [activeSessionId, activeFolder, activeAgent, cursorId, selectedFolder, sessions])
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes own native terminal focus and do not expose ARIA roles.
-    <box
-      id="terminal-sidebar"
-      ref={sidebarRef}
-      focusable
-      onMouseDown={(event) => {
-        if (event.button !== 0 || event.target?.id !== "terminal-sidebar") return
-        startFocusSweep()
-        sidebarRef.current?.focus()
-      }}
-      style={{
-        width,
-        height,
-        flexShrink: 0,
-        position: "relative",
-        overflow: "hidden",
-        backgroundColor: COLORS.canvas,
-        ...(borderRight ? { border: ["right"] as const, borderColor: COLORS.border } : {}),
-      }}
-    >
-      <TerminalSidebarFocusSweep width={width} height={height} frame={focusSweepFrame} />
-      {(agentCount > 0 || !compactAgents) && (
-        <TerminalAgentList
-          compact={compactAgents}
-          frame={frame}
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          cursorSessionId={cursorId}
-          shortcuts={shortcuts}
-          width={width - Number(borderRight)}
-          height={agentHeight}
-          onActivate={(id) => {
-            cursorRef.current = id
-            setCursorId(id)
-            onActivate(id)
-          }}
-        />
-      )}
-      {showSessionHeading && (
-        <box
-          style={{
-            height: 1,
-            flexDirection: "row",
-            paddingLeft: 1,
-            paddingRight: 1,
-            flexShrink: 0,
-          }}
-        >
-          <text
-            content={truncateDisplay(translateUi("Terminais"), width - 6)}
-            style={{ fg: COLORS.muted, flexGrow: 1 }}
-          />
-          <text
-            id="terminal-sidebar-count"
-            content={String(sections.length)}
-            style={{ fg: COLORS.muted }}
-          />
-        </box>
-      )}
-      <scrollbox
-        ref={scrollRef}
-        scrollY
-        style={{ flexGrow: 1, minHeight: agentCount ? 0 : 1, width: "100%" }}
+    <TerminalShortcutAnimation active={active}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes own native terminal focus and do not expose ARIA roles. */}
+      <box
+        id="terminal-sidebar"
+        ref={sidebarRef}
+        focusable
+        onMouseDown={(event) => {
+          if (event.button !== 0 || event.target?.id !== "terminal-sidebar") return
+          startFocusSweep()
+          sidebarRef.current?.focus()
+        }}
+        style={{
+          width,
+          height,
+          flexShrink: 0,
+          position: "relative",
+          overflow: "hidden",
+          backgroundColor: COLORS.canvas,
+          ...(borderRight ? { border: ["right"] as const, borderColor: COLORS.border } : {}),
+        }}
       >
-        <TerminalSessionGroups
-          folders={visibleFolders}
-          sections={sections}
-          selectedFolder={selectedFolder}
-          activeSessionId={activeSessionId}
-          cursorId={cursorId}
-          cursorFolderId={cursorFolderId(cursorId)}
-          collapsedFolderIds={collapsedFolders}
-          width={width}
-          shortcuts={shortcuts}
-          onSelectFolder={selectFolder}
-          onToggleFolder={onToggleFolder}
-          onActivate={(id) => {
-            cursorRef.current = id
-            setCursorId(id)
-            onActivate(id)
-          }}
-        />
-      </scrollbox>
-      {showCreationActions && (
-        <InlineButton
+        <TerminalSidebarFocusSweep width={width} height={height} frame={focusSweepFrame} />
+        {(agentCount > 0 || !compactAgents) && (
+          <TerminalAgentList
+            compact={compactAgents}
+            frame={frame}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            cursorSessionId={cursorId}
+            shortcuts={shortcuts}
+            width={width - Number(borderRight)}
+            height={agentHeight}
+            onActivate={(id) => {
+              cursorRef.current = id
+              setCursorId(id)
+              onActivate(id)
+            }}
+          />
+        )}
+        {showSessionHeading && (
+          <box
+            style={{
+              height: 1,
+              flexDirection: "row",
+              paddingLeft: 1,
+              paddingRight: 1,
+              flexShrink: 0,
+            }}
+          >
+            <text
+              content={truncateDisplay(translateUi("Terminais"), width - 6)}
+              style={{ fg: COLORS.muted, flexGrow: 1 }}
+            />
+            <text
+              id="terminal-sidebar-count"
+              content={String(sections.length)}
+              style={{ fg: COLORS.muted }}
+            />
+          </box>
+        )}
+        <scrollbox
+          ref={scrollRef}
+          scrollY
+          style={{ flexGrow: 1, minHeight: agentCount ? 0 : 1, width: "100%" }}
+        >
+          <TerminalSessionGroups
+            folders={visibleFolders}
+            sections={sections}
+            selectedFolder={selectedFolder}
+            activeSessionId={activeSessionId}
+            cursorId={cursorId}
+            cursorFolderId={cursorFolderId(cursorId)}
+            collapsedFolderIds={collapsedFolders}
+            width={width}
+            shortcuts={shortcuts}
+            onSelectFolder={selectFolder}
+            onToggleFolder={onToggleFolder}
+            onActivate={(id) => {
+              cursorRef.current = id
+              setCursorId(id)
+              onActivate(id)
+            }}
+          />
+        </scrollbox>
+        {showCreationActions && (
+          <TerminalInlineButton
+            compact
+            id="terminal-sidebar-new"
+            label="Novo terminal"
+            accent={COLORS.terminal}
+            onPress={onNew}
+          />
+        )}
+        {showCreationActions && onCommand && (
+          <TerminalInlineButton
+            compact
+            id="terminal-sidebar-command"
+            label="Comando"
+            accent={COLORS.terminal}
+            onPress={onCommand}
+          />
+        )}
+        {navigationOnly && (
+          <TerminalShortcutText
+            content="[↑/↓] [Enter]"
+            shortcutColor={terminalShortcutColor(active, sidebarFocused)}
+            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+          />
+        )}
+        <TerminalInlineButton
           compact
-          id="terminal-sidebar-new"
-          label="Novo terminal"
+          id="terminal-sidebar-actions"
+          label={`[${masterKey}]`}
           accent={COLORS.terminal}
-          onPress={onNew}
+          onPress={onActions}
         />
-      )}
-      {showCreationActions && onCommand && (
-        <InlineButton
-          compact
-          id="terminal-sidebar-command"
-          label="Comando"
-          accent={COLORS.terminal}
-          onPress={onCommand}
-        />
-      )}
-      {navigationOnly && (
-        <ShortcutText
-          content="[↑/↓] [Enter]"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-        />
-      )}
-      <InlineButton
-        compact
-        id="terminal-sidebar-actions"
-        label={`[${masterKey}]`}
-        accent={COLORS.terminal}
-        onPress={onActions}
-      />
-    </box>
+        <TerminalSidebarFocusSelection focusSelection={focusSelection} />
+      </box>
+    </TerminalShortcutAnimation>
   )
 })

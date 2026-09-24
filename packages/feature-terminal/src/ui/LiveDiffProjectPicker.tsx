@@ -2,10 +2,10 @@ import type { BoxRenderable, InputRenderable, ScrollBoxRenderable } from "@opent
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LiveDiffProject } from "../services/live-diff-projects"
+import { TerminalInlineButton } from "./TerminalShortcut"
 
 export function LiveDiffProjectPicker({
   projects,
@@ -141,13 +141,13 @@ export function LiveDiffProjectPicker({
         )}
       </scrollbox>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
+        <TerminalInlineButton
           compact
           label="[Enter] Adicionar"
           onPress={choose}
           disabled={!filtered.length}
         />
-        <InlineButton compact label="[Esc] Cancelar" onPress={onClose} />
+        <TerminalInlineButton compact label="[Esc] Cancelar" onPress={onClose} />
       </box>
     </ModalSurface>
   )

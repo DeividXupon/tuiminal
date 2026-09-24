@@ -100,7 +100,7 @@ function isAgentState(terminalId: string, label: string) {
 // All data and process identities are fixture-owned; no installed agent or credentials are used.
 test.each(["native", "tmux"])("%s Codex names hide MainThread", async (backend) => {
   await mount(backend === "tmux" ? async () => 456 : undefined)
-  await leader("c")
+  await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
   const sessionId = terminal.id.replace("free-terminal-", "")
   snapshot = [
@@ -128,7 +128,7 @@ test.each(["native", "tmux"])("%s Codex names hide MainThread", async (backend) 
 
 test("tmux agents are detected beneath their pane shell rather than the embedded client", async () => {
   await mount(async () => 456)
-  await leader("c")
+  await leader("n")
   snapshot = [{ pid: 466, parentPid: 456, executable: "codex", command: "codex", foreground: true }]
   await output("• Reading files (2s • esc to interrupt)\n› \n? for shortcuts")
   await waitFor(() => Boolean(tui?.captureCharFrame().includes("Lendo")))
@@ -138,7 +138,7 @@ test("tmux agents are detected beneath their pane shell rather than the embedded
 
 test("task titles update existing agent rows, retain manual names and retire with the agent", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
   const sessionId = terminal.id.replace("free-terminal-", "")
   const rowId = `terminal-agent-${sessionId}`
@@ -195,12 +195,12 @@ test("task titles update existing agent rows, retain manual names and retire wit
 
 test("states continue offscreen, preserve the pane and acknowledge a finished turn on return", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const first = tui?.renderer.currentFocusedRenderable as EmbeddedTerminalRenderable
   snapshot = [{ pid: 111, parentPid: 101, executable: "codex", command: "codex", foreground: true }]
   await output("• Reading files (2s • esc to interrupt)\n› \n? for shortcuts")
   await waitFor(() => Boolean(tui?.captureCharFrame().includes("Lendo")))
-  await leader("c")
+  await leader("n")
   await output("› Make changes\nAllow command?\nPress enter to confirm or esc to cancel")
   await waitFor(() => isAgentState(first.id, "!"))
   await output("• Writing files (3s • esc to interrupt)\n› ")
@@ -222,14 +222,14 @@ test("states continue offscreen, preserve the pane and acknowledge a finished tu
 
 test("background attention notifies once and clicking opens the exact agent pane", async () => {
   await mount(undefined, true)
-  await leader("c")
+  await leader("n")
   const first = tui!.renderer.currentFocusedRenderable as EmbeddedTerminalRenderable
   snapshot = [
     { pid: 111, parentPid: 101, executable: "qwen-code", command: "qwen-code", foreground: true },
   ]
   await output("◐ Working\n⠋ Searching (2s · esc to cancel)")
   await waitFor(() => isAgentState(first.id, "Pesquisando"))
-  await leader("c")
+  await leader("n")
   const second = tui!.renderer.currentFocusedRenderable
   await output("Allow execution of: shell\nYes, allow once")
   await waitFor(() => tui!.captureCharFrame().includes("Aguardando você · Terminal"))
@@ -243,7 +243,7 @@ test("background attention notifies once and clicking opens the exact agent pane
   await waitFor(() => tui!.renderer.currentFocusedRenderable === first)
   await output("⠋ Searching (3s · esc to cancel)")
   await waitFor(() => isAgentState(first.id, "Pesquisando"))
-  await leader("c")
+  await leader("n")
   await output("> Type your message")
   await waitFor(() => tui!.captureCharFrame().includes("Concluído · Terminal"))
   expect(tui!.renderer.currentFocusedRenderable).not.toBe(first)
@@ -251,7 +251,7 @@ test("background attention notifies once and clicking opens the exact agent pane
 
 test("a visible agent blocker changes its row without a redundant notification", async () => {
   await mount(undefined, true)
-  await leader("c")
+  await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
   snapshot = [
     { pid: 111, parentPid: 101, executable: "qwen-code", command: "qwen-code", foreground: true },
@@ -283,7 +283,7 @@ test("observer screens support native cursor erasure, resize and repeated dispos
 
 test("OSC status survives a tool switch and stale process snapshots cannot restore a closed agent", async () => {
   await mount()
-  await leader("c")
+  await leader("n")
   const terminalId = tui!.renderer.currentFocusedRenderable!.id
   const agentId = `terminal-agent-${terminalId.replace("free-terminal-", "")}`
   snapshot = [{ pid: 111, parentPid: 101, executable: "codex", command: "codex" }]

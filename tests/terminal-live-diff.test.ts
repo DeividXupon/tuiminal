@@ -16,6 +16,7 @@ import {
   type LiveDiffPatchHistory,
   latestChangedHunkIndex,
   observeLiveDiffPatch,
+  prepareLiveDiffPatch,
   recentDiffLines,
 } from "../packages/feature-terminal/src/rendering/live-diff-hunks"
 import {
@@ -24,6 +25,8 @@ import {
   liveDiffDisplayPath,
   liveDiffFileStatus,
   liveDiffPathWidth,
+  liveDiffRowBackground,
+  liveDiffRowHighlightProgress,
   liveDiffUnwrappedHeight,
   liveDiffWrappedHeight,
 } from "../packages/feature-terminal/src/rendering/live-diff-table"
@@ -184,6 +187,39 @@ test("Live Diff orders changed files newest first and preserves timestamps for u
       ({ path }) => path,
     ),
   ).toEqual(["a.ts", "b.ts"])
+
+  const highlighted = mergeLiveDiffFiles(
+    next,
+    [file("a.ts", "a3"), file("b.ts", "b3"), file("c.ts", "c1")],
+    3000,
+    new Set([root]),
+  )
+  expect(highlighted.map(({ path, listHighlightAt }) => [path, listHighlightAt])).toEqual([
+    ["a.ts", 3000],
+    ["b.ts", 3000],
+    ["c.ts", 3000],
+  ])
+  expect(
+    mergeLiveDiffFiles(
+      highlighted,
+      [file("a.ts", "a3"), file("b.ts", "b3"), file("c.ts", "c1")],
+      4000,
+      new Set([root]),
+    ).map(({ listHighlightAt }) => listHighlightAt),
+  ).toEqual([3000, 3000, 3000])
+  expect(mergeLiveDiffFiles([], [file("initial.ts", "first")], 3000)[0]?.listHighlightAt).toBe(
+    undefined,
+  )
+})
+
+test("Live Diff file-row highlight fades completely in two seconds", () => {
+  expect(liveDiffRowHighlightProgress(1000, 1000)).toBe(1)
+  expect(liveDiffRowHighlightProgress(1000, 2000)).toBe(0.5)
+  expect(liveDiffRowHighlightProgress(1000, 3000)).toBe(0)
+  expect(liveDiffRowHighlightProgress(undefined, 1000)).toBe(0)
+  expect(liveDiffRowBackground("#000000", "#ffffff", 1)).toBe("#ffffff")
+  expect(liveDiffRowBackground("#000000", "#ffffff", 0.5)).toBe("#808080")
+  expect(liveDiffRowBackground("#000000", "#ffffff", 0)).toBe("#000000")
 })
 
 test("automatic Live Diff follows the newly changed hunk in the complete patch", () => {
@@ -243,6 +279,22 @@ test("Live Diff identifies fresh lines on repeated edits to the same file", () =
   for (let index = 0; index < 16; index++) observeLiveDiffPatch(history, `other-${index}`, first)
   expect(history.size).toBe(16)
   expect(observeLiveDiffPatch(history, "a.ts", third).highlighted).toEqual([])
+
+  const initiallyRecent = new Map<string, LiveDiffPatchHistory>()
+  expect(observeLiveDiffPatch(initiallyRecent, "late.ts", first, true).highlighted).toEqual([
+    { line: 1, kind: "removed" },
+    { line: 2, kind: "added" },
+    { line: 4, kind: "removed" },
+    { line: 5, kind: "added" },
+  ])
+})
+
+test("Live Diff inserts one valid visual row between hunks", () => {
+  const source = `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n@@ -10,2 +10,2 @@\n-before\n+after\n tail\n`
+  const prepared = prepareLiveDiffPatch(source)
+  expect(prepared.patch).toContain("@@ -1,3 +1,3 @@\n-old\n+new\n same\n \n@@ -10,2 +10,2 @@")
+  expect(prepared.separatorLines).toEqual([3])
+  expect(liveDiffUnwrappedHeight(prepared.patch)).toBe(liveDiffUnwrappedHeight(source) + 1)
 })
 
 test("reads staged plus unstaged as one final diff and counts untracked files", async () => {

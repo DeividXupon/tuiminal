@@ -61,6 +61,18 @@ describe("shortcut accent", () => {
     expect(result.chunks.filter((chunk) => !chunk.fg).map((chunk) => chunk.text)).toContain("→]")
   })
 
+  test("animates shortcut glyphs with a gradual traveling highlight", () => {
+    const value = "[Ctrl+B] ação"
+    const animation = { frame: 10, frameCount: 28, shineColor: "#ffffff" }
+    const result = shortcutContent(value, BRAND_COLOR, animation)
+    if (typeof result === "string") throw new Error("Expected animated shortcuts")
+    expect(result.chunks.map((chunk) => chunk.text).join("")).toBe(value)
+    const keyChunks = result.chunks.filter((chunk) => chunk.fg)
+    expect(keyChunks.map((chunk) => chunk.text).join("")).toBe("[Ctrl+B]")
+    expect(new Set(keyChunks.map((chunk) => chunk.fg?.toInts().join(","))).size).toBeGreaterThan(2)
+    expect(result.chunks.find((chunk) => chunk.text === " ação")?.fg).toBeUndefined()
+  })
+
   test("does not allocate styled text for ordinary text or incomplete hints", () => {
     for (const value of ["", "texto normal", "[Ctrl+", "[]", "[Enter\n]"]) {
       expect(shortcutContent(value)).toBe(value)

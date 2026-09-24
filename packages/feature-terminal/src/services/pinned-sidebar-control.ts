@@ -7,12 +7,26 @@ import type { PinnedTerminalSelection, PinnedTerminalSidebarReplica } from "../m
 
 const MAX_MESSAGE_BYTES = 4096
 
+function validResumeThread(value: unknown) {
+  if (!value || typeof value !== "object") return false
+  const thread = value as Record<string, unknown>
+  return (
+    typeof thread.id === "string" &&
+    typeof thread.title === "string" &&
+    typeof thread.preview === "string" &&
+    typeof thread.cwd === "string" &&
+    typeof thread.updatedAt === "number" &&
+    ["working", "blocked", "idle", "failed"].includes(String(thread.state))
+  )
+}
+
 function validTarget(value: unknown): value is PinnedTerminalSelection {
   if (!value || typeof value !== "object") return false
   const target = value as Partial<PinnedTerminalSelection> & {
     socket?: string
     paneId?: string
     sessionId?: string
+    resumeThreadId?: string
     folderId?: string
     action?: string
   }
@@ -21,6 +35,7 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
   return Boolean(
     (target.socket?.startsWith("/") && /^%\d+$/.test(target.paneId ?? "")) ||
       validId(target.sessionId) ||
+      validId(target.resumeThreadId) ||
       validId(target.folderId) ||
       validId(target.action),
   )
@@ -154,6 +169,8 @@ export async function requestPinnedSidebarSnapshot(endpoint: string) {
     !Array.isArray(snapshot.sessions) ||
     !Array.isArray(snapshot.folders) ||
     !Array.isArray(snapshot.collapsedFolderIds) ||
+    !Array.isArray(snapshot.recentThreads) ||
+    !snapshot.recentThreads.every(validResumeThread) ||
     !snapshot.collapsedFolderIds.every((id) => typeof id === "string") ||
     typeof snapshot.selectedFolder !== "string" ||
     (snapshot.activeSessionId !== null && typeof snapshot.activeSessionId !== "string") ||

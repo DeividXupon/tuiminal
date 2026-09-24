@@ -2,16 +2,22 @@ import type { BoxRenderable, KeyEvent, Renderable, ScrollBoxRenderable } from "@
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import {
   type AgentMessageHistoryEntry,
   agentMessageElapsedLabel,
   agentMessageModelLabel,
   agentMessageStatusLabel,
 } from "../model/agent-message-history"
-import { AgentMessageDetails, type AgentMessageDetailView } from "./AgentMessageDetails"
+import { terminalShortcutColor } from "../rendering/terminal-shortcut"
+import {
+  AgentMessageDetails,
+  type AgentMessageDetailView,
+  AgentMessageShortcutColor,
+} from "./AgentMessageDetails"
+import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
 const TIME_WIDTH = 8
 const STATUS_WIDTH = 11
@@ -82,6 +88,7 @@ export function AgentMessageHistoryPanel({
   focusRequest,
   onClose,
   onReturnTerminal,
+  onActivateSession,
   onDetailModeChange,
 }: {
   sessionId: string
@@ -90,6 +97,7 @@ export function AgentMessageHistoryPanel({
   focusRequest: number
   onClose: (id: string) => void
   onReturnTerminal: (id: string) => void
+  onActivateSession: () => void
   onDetailModeChange: (open: boolean) => void
 }) {
   const renderer = useRenderer()
@@ -103,6 +111,8 @@ export function AgentMessageHistoryPanel({
   const [width, setWidth] = useState(120)
   const [height, setHeight] = useState(30)
   const [detailView, setDetailView] = useState<AgentMessageDetailView | null>(null)
+  const panelFocused = useRenderableFocus(panel)
+  const shortcutColor = terminalShortcutColor(active, panelFocused)
   const selectedEntry = rows.find((entry) => entry.id === selectedId) ?? rows[0] ?? null
 
   const openDetail = (view: AgentMessageDetailView) => {
@@ -165,21 +175,35 @@ export function AgentMessageHistoryPanel({
     }
   })
 
+  const focusPanel = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+    if (active) {
+      panel.current?.focus()
+      return
+    }
+    onActivateSession()
+    setTimeout(() => panel.current?.focus(), 0)
+  }
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI focusable boxes do not expose ARIA roles.
     <box
       ref={panel}
       id={`agent-message-history-${sessionId}`}
       focusable
-      onMouseDown={(event) => {
-        event.stopPropagation()
-        panel.current?.focus()
-      }}
+      onMouseDown={focusPanel}
       onSizeChange={function (this: BoxRenderable) {
         setWidth((current) => (current === this.width ? current : this.width))
         setHeight((current) => (current === this.height ? current : this.height))
       }}
-      style={{ flexGrow: 1, minHeight: 1, minWidth: 1, backgroundColor: COLORS.canvas }}
+      style={{
+        flexGrow: 1,
+        minHeight: 1,
+        minWidth: 1,
+        border: ["top"],
+        borderColor: active && panelFocused ? BRAND_COLOR : COLORS.border,
+        backgroundColor: COLORS.canvas,
+      }}
     >
       <box
         style={{
@@ -200,7 +224,7 @@ export function AgentMessageHistoryPanel({
               : ` · ${messages.length}`}
           </span>
         </text>
-        <InlineButton
+        <TerminalInlineButton
           compact
           id={`agent-message-history-close-${sessionId}`}
           label="×"
@@ -325,22 +349,25 @@ export function AgentMessageHistoryPanel({
         </scrollbox>
       )}
       {detailView && selectedEntry && (
-        <AgentMessageDetails
-          entry={selectedEntry}
-          view={detailView}
-          now={now}
-          width={width}
-          height={Math.max(1, height - 2)}
-          scrollRef={list}
-          onOpen={openDetail}
-        />
+        <AgentMessageShortcutColor value={shortcutColor}>
+          <AgentMessageDetails
+            entry={selectedEntry}
+            view={detailView}
+            now={now}
+            width={width}
+            height={Math.max(1, height - 2)}
+            scrollRef={list}
+            onOpen={openDetail}
+          />
+        </AgentMessageShortcutColor>
       )}
-      <ShortcutText
+      <TerminalShortcutText
         content={translateUi(
           detailView
             ? "[M] mensagem · [R] resposta · [A] atividade · [D] diff · [Esc] voltar"
             : "[J/K] navegar · [Enter] abrir · [Esc] terminal · [X] fechar",
         )}
+        shortcutColor={shortcutColor}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>

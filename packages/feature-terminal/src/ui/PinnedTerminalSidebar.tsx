@@ -42,6 +42,7 @@ export function PinnedTerminalSidebar({
       borderRight={false}
       masterKey={view.masterKey}
       masterKeyActive={view.masterKeyActive ?? false}
+      focusSelection={view.focusSelection}
       focusRequest={snapshot.focusRevision}
       onSelectFolder={(id) => open(() => view.onSelectFolder(id))}
       onToggleFolder={(id) => open(() => view.onToggleFolder(id))}

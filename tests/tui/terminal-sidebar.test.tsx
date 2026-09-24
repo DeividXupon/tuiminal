@@ -139,7 +139,7 @@ test("integrated Codex rows show a third activity line", async () => {
   const row = tui.renderer.root.findDescendantById("terminal-agent-Codex")!
   const lines = tui.captureCharFrame().split("\n")
   expect(row.height).toBe(3)
-  expect(lines[row.screenY + 2]).toMatch(/\{\}\s+>_\s+txt\s+●/)
+  expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
 })
 
 test("agent list separates terminal and localhost sessions", async () => {

@@ -1,5 +1,6 @@
 import { TERMINAL_ACTION_MESSAGES } from "./terminal-action-catalog"
 import { TERMINAL_LIVE_DIFF_MESSAGES } from "./terminal-live-diff-catalog"
+import { TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES } from "./terminal-master-key-catalog"
 import { TERMINAL_TMUX_MESSAGES } from "./terminal-tmux-catalog"
 
 export const TERMINAL_MESSAGES = [
@@ -234,7 +235,64 @@ export const TERMINAL_MESSAGES = [
   ["Encerrado", "Exited", "Finalizado", "終了", "已退出", "종료됨"],
   ["Falhou", "Failed", "Falló", "失敗", "失败", "실패"],
   ["Master Key", "Master Key", "Master Key", "マスターキー", "主键", "마스터 키"],
+  [
+    "Pressione [Enter] para focar",
+    "Press [Enter] to focus",
+    "Presiona [Enter] para enfocar",
+    "[Enter] を押してフォーカス",
+    "按 [Enter] 聚焦",
+    "[Enter]를 눌러 포커스",
+  ],
   ["Novo terminal", "New terminal", "Nuevo terminal", "新規ターミナル", "新建终端", "새 터미널"],
+  [
+    "Dividir à direita",
+    "Split right",
+    "Dividir a la derecha",
+    "左右に分割",
+    "左右分屏",
+    "좌우 분할",
+  ],
+  ["Dividir abaixo", "Split below", "Dividir abajo", "上下に分割", "上下分屏", "상하 분할"],
+  [
+    "O que deseja colocar no novo painel?",
+    "What do you want in the new pane?",
+    "¿Qué quieres colocar en el nuevo panel?",
+    "新しいペインに何を配置しますか？",
+    "要在新窗格中放置什么？",
+    "새 창에 무엇을 배치하시겠습니까?",
+  ],
+  [
+    "Inicia um novo shell nesta divisão.",
+    "Starts a new shell in this split.",
+    "Inicia un nuevo shell en esta división.",
+    "この分割で新しいシェルを起動します。",
+    "在此分屏中启动新的 shell。",
+    "이 분할에서 새 셸을 시작합니다.",
+  ],
+  [
+    "AGENTES EXISTENTES",
+    "EXISTING AGENTS",
+    "AGENTES EXISTENTES",
+    "既存のエージェント",
+    "现有智能体",
+    "기존 에이전트",
+  ],
+  [
+    "Nenhum agente disponível.",
+    "No agents available.",
+    "No hay agentes disponibles.",
+    "利用可能なエージェントはありません。",
+    "没有可用的智能体。",
+    "사용 가능한 에이전트가 없습니다.",
+  ],
+  [
+    "[Enter] Selecionar",
+    "[Enter] Select",
+    "[Enter] Seleccionar",
+    "[Enter] 選択",
+    "[Enter] 选择",
+    "[Enter] 선택",
+  ],
   [
     "Novo agente Codex",
     "New Codex agent",
@@ -361,4 +419,5 @@ export const TERMINAL_MESSAGES = [
   ],
   ["Mover seção", "Move section", "Mover sección", "セクションを移動", "移动分区", "섹션 이동"],
   ...TERMINAL_ACTION_MESSAGES,
+  ...TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES,
 ] as const

@@ -1,10 +1,26 @@
-import { CodeRenderable, type DiffRenderable, type Renderable } from "@opentui/core"
+import {
+  CodeRenderable,
+  type DiffRenderable,
+  LineNumberRenderable,
+  type Renderable,
+} from "@opentui/core"
 import type { Ref } from "react"
 import { COLORS } from "../settings/theme"
 import { createUiSyntaxStyle } from "./syntax-style"
 
 const syntaxStyle = createUiSyntaxStyle()
 const fittedCells = new WeakSet<CodeRenderable>()
+const appliedDecorations = new WeakMap<
+  DiffRenderable,
+  {
+    lineColors: ReadonlyMap<number, Parameters<DiffRenderable["setLineColor"]>[1]> | undefined
+    hiddenLineNumbers: ReadonlySet<number> | undefined
+    patch: string
+    filetype: string
+    view: "unified" | "split"
+    wrapMode: "none" | "word" | "char"
+  }
+>()
 
 /** Keep code inside the native diff gutter after a resize. */
 export function fitNativeDiffCodeCells(root: Renderable | null) {
@@ -12,7 +28,7 @@ export function fitNativeDiffCodeCells(root: Renderable | null) {
   const pending = root.getChildren()
   while (pending.length) {
     const child = pending.pop()
-    if (!child || !child.visible || child.isDestroyed) continue
+    if (!child?.visible || child.isDestroyed) continue
     if (!(child instanceof CodeRenderable)) {
       pending.push(...child.getChildren())
       continue
@@ -40,6 +56,8 @@ export function NativeDiff({
   height,
   view = "unified",
   wrapMode = "none",
+  lineColors,
+  hiddenLineNumbers,
 }: {
   id?: string
   diffRef?: Ref<DiffRenderable>
@@ -48,6 +66,8 @@ export function NativeDiff({
   height: number
   view?: "unified" | "split"
   wrapMode?: "none" | "word" | "char"
+  lineColors?: ReadonlyMap<number, Parameters<DiffRenderable["setLineColor"]>[1]>
+  hiddenLineNumbers?: ReadonlySet<number>
 }) {
   return (
     <diff
@@ -55,6 +75,32 @@ export function NativeDiff({
       {...(diffRef ? { ref: diffRef } : {})}
       renderBefore={function () {
         fitNativeDiffCodeCells(this)
+        const applied = appliedDecorations.get(this)
+        if (
+          applied !== undefined &&
+          applied.lineColors === lineColors &&
+          applied.hiddenLineNumbers === hiddenLineNumbers &&
+          applied.patch === patch &&
+          applied.filetype === filetype &&
+          applied.view === view &&
+          applied.wrapMode === wrapMode
+        )
+          return
+        if (lineColors) this.setLineColors(new Map(lineColors))
+        if (hiddenLineNumbers) {
+          for (const child of this.getChildren()) {
+            if (!(child instanceof LineNumberRenderable)) continue
+            child.setHideLineNumbers(new Set(hiddenLineNumbers))
+          }
+        }
+        appliedDecorations.set(this, {
+          lineColors,
+          hiddenLineNumbers,
+          patch,
+          filetype,
+          view,
+          wrapMode,
+        })
       }}
       diff={patch}
       filetype={filetype}

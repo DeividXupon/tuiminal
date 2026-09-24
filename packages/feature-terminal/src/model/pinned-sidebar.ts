@@ -1,3 +1,5 @@
+import type { CodexResumeThread } from "./codex-resume-threads"
+import type { TerminalFocusTargetKey } from "./focus-selection"
 import type { TerminalFolder, TerminalSession } from "./sessions"
 
 type PinnedTerminalMasterKey =
@@ -18,6 +20,7 @@ export type PinnedTerminalTarget = {
 export type PinnedTerminalSelection =
   | PinnedTerminalTarget
   | { sessionId: string }
+  | { resumeThreadId: string }
   | { folderId: string }
   | { action: string }
 
@@ -30,7 +33,14 @@ export type PinnedTerminalSidebarView = {
   width: number
   height: number
   masterKey: PinnedTerminalMasterKey
+  recentThreads: readonly CodexResumeThread[]
   masterKeyActive?: boolean
+  focusSelection?:
+    | {
+        selectedTarget: TerminalFocusTargetKey
+        onFocus: (target: TerminalFocusTargetKey) => void
+      }
+    | undefined
   onSelectFolder: (id: string) => void
   onToggleFolder: (id: string) => void
   onActivate: (id: string) => void
@@ -41,7 +51,13 @@ export type PinnedTerminalSidebarView = {
 
 export type PinnedTerminalSidebarReplica = Pick<
   PinnedTerminalSidebarView,
-  "sessions" | "folders" | "collapsedFolderIds" | "selectedFolder" | "activeSessionId" | "masterKey"
+  | "sessions"
+  | "folders"
+  | "collapsedFolderIds"
+  | "selectedFolder"
+  | "activeSessionId"
+  | "masterKey"
+  | "recentThreads"
 > & { theme: Record<string, string>; language: string }
 
 export type PinnedTerminalSidebarSnapshot = {
@@ -140,6 +156,7 @@ export function terminalSidebarReplica(
     selectedFolder: view.selectedFolder,
     activeSessionId: view.activeSessionId,
     masterKey: view.masterKey,
+    recentThreads: view.recentThreads,
     theme,
     language,
   }

@@ -12,6 +12,7 @@ export type LiveDiffFile = {
   change?: LiveDiffFileStatus
   headExists: boolean
   changedAt: number
+  listHighlightAt?: number
 }
 
 export type LiveDiffRoot = { root: string; files: LiveDiffFile[] }
@@ -79,14 +80,22 @@ export function parseLiveDiffNumstat(source: string) {
 
 export function mergeLiveDiffFiles(
   previous: readonly LiveDiffFile[],
-  current: readonly Omit<LiveDiffFile, "changedAt">[],
+  current: readonly Omit<LiveDiffFile, "changedAt" | "listHighlightAt">[],
   now: number,
+  observedRoots: ReadonlySet<string> = new Set(),
 ) {
   const prior = new Map(previous.map((file) => [`${file.root}\0${file.path}`, file]))
   return current
     .map((file) => {
       const old = prior.get(`${file.root}\0${file.path}`)
-      return { ...file, changedAt: old?.fingerprint === file.fingerprint ? old.changedAt : now }
+      const changed = old?.fingerprint !== file.fingerprint
+      const listHighlightAt =
+        changed && (old !== undefined || observedRoots.has(file.root)) ? now : old?.listHighlightAt
+      return {
+        ...file,
+        changedAt: changed ? now : (old?.changedAt ?? now),
+        ...(listHighlightAt === undefined ? {} : { listHighlightAt }),
+      }
     })
     .sort((left, right) => right.changedAt - left.changedAt)
 }

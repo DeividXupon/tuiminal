@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { COLORS } from "../packages/core/src/settings/theme"
 import {
   agentMessageElapsedLabel,
   agentMessageModelLabel,
@@ -90,6 +91,7 @@ describe("Free Terminal presentation", () => {
     expect(agentPresentation("working", 1)).toMatchObject({
       marker: "⠙",
       shortLabel: "Trabalhando",
+      color: COLORS.terminal,
     })
   })
   test("opens the official Codex TUI against an owned app-server", () => {
@@ -99,6 +101,10 @@ describe("Free Terminal presentation", () => {
       displayCommand: "codex --remote",
       command: ["codex"],
       codex: { appServer: true },
+    })
+    expect(createCodexAgentCommand("thread-123")).toMatchObject({
+      displayCommand: "codex resume thread-123 --remote",
+      codex: { appServer: true, resumeThreadId: "thread-123" },
     })
   })
   test("derives agent state from public app-server events", () => {
@@ -115,6 +121,25 @@ describe("Free Terminal presentation", () => {
         params: { item: { type: "mcpToolCall" } },
       }),
     ).toBe("tooling")
+    for (const phase of ["commentary", "final_answer"])
+      expect(
+        codexAppServerActivity({
+          method: "item/started",
+          params: { item: { type: "agentMessage", phase } },
+        }),
+      ).toBe("writing")
+    expect(
+      codexAppServerActivity({
+        method: "item/agentMessage/delta",
+        params: { itemId: "message-1", delta: "Update for the user" },
+      }),
+    ).toBe("writing")
+    expect(
+      codexAppServerActivity({
+        method: "turn/plan/updated",
+        params: { turnId: "turn-1", plan: [{ step: "Update the panel" }] },
+      }),
+    ).toBe("updating")
     expect(
       codexAppServerState({
         method: "thread/status/changed",
@@ -128,17 +153,37 @@ describe("Free Terminal presentation", () => {
   })
   test("presents portable Codex activity indicators", () => {
     expect(codexActivityIndicators("working", "coding", 0)).toEqual([
+      { key: "thinking", marker: "...", active: false, bright: false },
       { key: "code", marker: "{}", active: true, bright: true },
       { key: "command", marker: ">_", active: false, bright: false },
-      { key: "plan", marker: "txt", active: false, bright: false },
+      { key: "text", marker: "txt", active: false, bright: false },
       { key: "tool", marker: "●", active: false, bright: false },
     ])
     expect(codexActivityIndicators("working", "tooling", 3)).toEqual([
+      { key: "thinking", marker: "...", active: false, bright: false },
       { key: "code", marker: "{}", active: false, bright: false },
       { key: "command", marker: ">_", active: false, bright: false },
-      { key: "plan", marker: "txt", active: false, bright: false },
+      { key: "text", marker: "txt", active: false, bright: false },
       { key: "tool", marker: "●", active: true, bright: false },
     ])
+    expect(codexActivityIndicators("working", "thinking", 0)[0]).toEqual({
+      key: "thinking",
+      marker: "...",
+      active: true,
+      bright: true,
+    })
+    expect(codexActivityIndicators("working", "updating", 0)).toContainEqual({
+      key: "text",
+      marker: "txt",
+      active: true,
+      bright: true,
+    })
+    expect(codexActivityIndicators("working", "writing", 0)).toContainEqual({
+      key: "text",
+      marker: "txt",
+      active: true,
+      bright: true,
+    })
     expect(codexActivityIndicators("idle", null, 0).every((indicator) => !indicator.active)).toBe(
       true,
     )

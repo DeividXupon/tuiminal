@@ -2,10 +2,28 @@ import { expect, test } from "bun:test"
 import {
   codexAppServerUserMessage,
   codexAppServerUserMessageHistory,
+  codexResumeLastResponse,
+  codexResumeThreads,
   startCodexAppServerRelay,
 } from "../packages/feature-terminal/src/services/codex-app-server"
 
 type MockSocket = { send: (data: string) => unknown }
+
+function replyToResumeListRequest(
+  socket: MockSocket,
+  message: Record<string, unknown>,
+  requests?: Record<string, unknown>[],
+) {
+  if (
+    typeof message.id !== "string" ||
+    !message.id.startsWith("tuiminal-resume-list:") ||
+    message.method !== "thread/list"
+  )
+    return false
+  requests?.push(message)
+  socket.send(JSON.stringify({ id: message.id, result: { data: [], nextCursor: null } }))
+  return true
+}
 
 function replyToInternalHistoryRequest(
   socket: MockSocket,
@@ -88,6 +106,77 @@ test("extracts only public user text from supported Codex requests", () => {
     }),
   ).toBe("Fix login\nKeep the current layout")
   expect(codexAppServerUserMessage({ method: "turn/interrupt", params: {} })).toBeNull()
+})
+
+test("parses the local Codex /resume thread summaries", () => {
+  expect(
+    codexResumeThreads({
+      result: {
+        data: [
+          {
+            id: "thread-older",
+            name: null,
+            preview: "Older task",
+            cwd: "/workspace/older",
+            updatedAt: 10,
+            recencyAt: 11,
+            status: { type: "notLoaded" },
+          },
+          {
+            id: "thread-newer",
+            name: "Review auth",
+            preview: "Fix login\nwithout changing layout",
+            cwd: "/workspace/app",
+            updatedAt: 20,
+            recencyAt: 22,
+            status: { type: "active", activeFlags: ["waitingOnApproval"] },
+          },
+        ],
+      },
+    }),
+  ).toEqual([
+    {
+      id: "thread-newer",
+      title: "Review auth",
+      preview: "Fix login without changing layout",
+      lastResponse: "",
+      cwd: "/workspace/app",
+      updatedAt: 22,
+      state: "blocked",
+    },
+    {
+      id: "thread-older",
+      title: "Older task",
+      preview: "Older task",
+      lastResponse: "",
+      cwd: "/workspace/older",
+      updatedAt: 11,
+      state: "idle",
+    },
+  ])
+})
+
+test("extracts the latest public agent response for the /resume picker", () => {
+  expect(
+    codexResumeLastResponse({
+      result: {
+        data: [
+          {
+            id: "turn-newest",
+            items: [
+              { type: "agentMessage", phase: "commentary", text: "Working on it" },
+              { type: "agentMessage", phase: "final_answer", text: "Login fixed\nwith tests" },
+              { type: "reasoning", content: ["Private reasoning"] },
+            ],
+          },
+          {
+            id: "turn-older",
+            items: [{ type: "agentMessage", text: "Older response" }],
+          },
+        ],
+      },
+    }),
+  ).toBe("Login fixed with tests")
 })
 
 test("extracts previous user messages from public thread history", () => {
@@ -173,6 +262,7 @@ test("extracts previous user messages from public thread history", () => {
 test("Codex TUI frames and approvals pass through while public activity is observed", async () => {
   const requests: Record<string, unknown>[] = []
   const internalHistoryRequests: Record<string, unknown>[] = []
+  const internalResumeRequests: Record<string, unknown>[] = []
   const responses: Record<string, unknown>[] = []
   const states: string[] = []
   const activities: string[] = []
@@ -196,6 +286,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
     websocket: {
       message(socket, data) {
         const message = JSON.parse(String(data)) as Record<string, unknown>
+        if (replyToResumeListRequest(socket, message, internalResumeRequests)) return
         if (replyToInternalHistoryRequest(socket, message, internalHistoryRequests)) return
         requests.push(message)
         if (message.method === "initialize") {
@@ -332,31 +423,35 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       },
     },
   })
-  const relay = startCodexAppServerRelay(`ws://127.0.0.1:${appServer.port}`, {
-    onActivity: (activity) => activities.push(activity),
-    onState: (state) => states.push(state),
-    onTitle: (title) => titles.push(title),
-    onUserMessage: (message) => {
-      userMessages.push(message.text)
-      userMessageIds.push(message.id)
-      userMessageConfigurations.push({
-        status: message.status,
-        hasImage: message.hasImage,
-        hasAudio: message.hasAudio,
-        hasSkill: message.hasSkill,
-        model: message.model,
-        effort: message.effort,
-        serviceTier: message.serviceTier,
-      })
+  const relay = startCodexAppServerRelay(
+    `ws://127.0.0.1:${appServer.port}`,
+    {
+      onActivity: (activity) => activities.push(activity),
+      onState: (state) => states.push(state),
+      onTitle: (title) => titles.push(title),
+      onUserMessage: (message) => {
+        userMessages.push(message.text)
+        userMessageIds.push(message.id)
+        userMessageConfigurations.push({
+          status: message.status,
+          hasImage: message.hasImage,
+          hasAudio: message.hasAudio,
+          hasSkill: message.hasSkill,
+          model: message.model,
+          effort: message.effort,
+          serviceTier: message.serviceTier,
+        })
+      },
+      onUserMessageHistory: (messages, replace) => {
+        historicalMessages.push(messages.map((message) => message.text))
+        historicalMessageIds.push(messages.map((message) => message.id))
+        historicalMessageDetails.push(...messages)
+        historicalReplacements.push(replace)
+      },
+      onError: (message) => errors.push(message),
     },
-    onUserMessageHistory: (messages, replace) => {
-      historicalMessages.push(messages.map((message) => message.text))
-      historicalMessageIds.push(messages.map((message) => message.id))
-      historicalMessageDetails.push(...messages)
-      historicalReplacements.push(replace)
-    },
-    onError: (message) => errors.push(message),
-  })
+    "/workspace/project",
+  )
   const client = new WebSocket(relay.url)
   client.addEventListener("message", (event) => {
     const message = JSON.parse(String(event.data)) as Record<string, unknown>
@@ -411,6 +506,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       let i = 0;
       i < 80 &&
       (states.at(-1) !== "done" ||
+        internalResumeRequests.length === 0 ||
         internalHistoryRequests.length !== 2 ||
         !historicalMessageDetails.some(
           (message) =>
@@ -442,6 +538,22 @@ test("Codex TUI frames and approvals pass through while public activity is obser
         (message) => typeof message.id === "string" && message.id.startsWith("tuiminal-history:"),
       ),
     ).toBe(false)
+    expect(
+      responses.some(
+        (message) =>
+          typeof message.id === "string" && message.id.startsWith("tuiminal-resume-list:"),
+      ),
+    ).toBe(false)
+    expect(internalResumeRequests[0]).toMatchObject({
+      method: "thread/list",
+      params: {
+        cursor: null,
+        limit: 6,
+        sortKey: "recency_at",
+        sortDirection: "desc",
+        cwd: "/workspace/project",
+      },
+    })
     expect(
       internalHistoryRequests.map((message) => ({
         method: message.method,

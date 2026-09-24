@@ -425,6 +425,7 @@ export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]>
           width: 24,
           height: 30,
           masterKey: "Ctrl+B",
+          recentThreads: [],
           onSelectFolder: () => undefined,
           onToggleFolder: () => undefined,
           onActivate: () => undefined,

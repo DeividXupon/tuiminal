@@ -1,18 +1,20 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { formatUiDateTime, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { RefObject } from "react"
+import { createContext, type RefObject, useContext } from "react"
 import {
   type AgentMessageActivityKind,
-  agentMessageDiffStats,
   type AgentMessageHistoryEntry,
+  agentMessageDiffStats,
   agentMessageElapsedLabel,
   agentMessageModelLabel,
   agentMessageStatusLabel,
 } from "../model/agent-message-history"
 import { AgentMessageDiffDetail } from "./AgentMessageDiffDetail"
+import { TerminalShortcutText } from "./TerminalShortcut"
 
 export type AgentMessageDetailView = "overview" | "message" | "response" | "activity" | "diff"
+export const AgentMessageShortcutColor = createContext(COLORS.muted)
 
 function clock(value: number) {
   return formatUiDateTime(value, { hour: "2-digit", minute: "2-digit" })
@@ -41,6 +43,7 @@ function SectionHeading({
   shortcut: string
   onOpen: () => void
 }) {
+  const shortcutColor = useContext(AgentMessageShortcutColor)
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI headings are keyboard and mouse actions.
     <box
@@ -53,10 +56,11 @@ function SectionHeading({
         backgroundColor: COLORS.panelRaised,
       }}
     >
-      <text>
-        <span fg={COLORS.text}>{translateUi(label)}</span>
-        <span fg={COLORS.terminal}>{` [${shortcut}]`}</span>
-      </text>
+      <TerminalShortcutText
+        content={`${translateUi(label)} [${shortcut}]`}
+        shortcutColor={shortcutColor}
+        style={{ fg: COLORS.text }}
+      />
     </box>
   )
 }

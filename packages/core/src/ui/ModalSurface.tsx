@@ -41,17 +41,19 @@ export function ModalSurface({
   const backdropLayerId = layerId ?? `${id}-layer`
   return (
     <>
-      <box
-        id={`${id}-backdrop`}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={zIndex}
-        backgroundColor="#030509"
-        opacity={backdropOpacity}
-      />
+      {backdropOpacity > 0 && (
+        <box
+          id={`${id}-backdrop`}
+          position="absolute"
+          top={0}
+          left={0}
+          width="100%"
+          height="100%"
+          zIndex={zIndex}
+          backgroundColor="#030509"
+          opacity={backdropOpacity}
+        />
+      )}
       {/* The centered full-screen layer sits above the dimmer, so it owns outside clicks. */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: Native terminal backdrop handling is pointer-only; the feature owns keyboard dismissal. */}
       <box

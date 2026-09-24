@@ -193,7 +193,7 @@ test("restores owned panes in Tuiminais and groups ordinary external panes under
 
 test("new agents preserve local terminal focus and remain hidden behind Git", async () => {
   const { start, setAgents } = await mount()
-  await leader("c")
+  await leader("n")
   await waitFor(
     () => tui?.renderer.currentFocusedRenderable?.id.startsWith("free-terminal-") ?? false,
   )
@@ -262,6 +262,6 @@ test("the external opt-out still restores panes owned by Tuiminal", async () => 
   expect(scan).toHaveBeenCalled()
   await waitFor(() => start.mock.calls.length === 1)
   expect(start.mock.calls[0]?.[0].tmux?.paneId).toBe("%2")
-  await leader("c")
+  await leader("n")
   expect(start.mock.calls[1]?.[0].tmux).toBeUndefined()
 })

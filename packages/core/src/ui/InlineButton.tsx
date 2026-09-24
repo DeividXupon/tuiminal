@@ -1,9 +1,10 @@
-import { ShortcutText } from "./ShortcutText"
 import type { ButtonRenderable } from "@tuiparts/core/button"
 import { Button } from "@tuiparts/react/button"
 import type { Ref } from "react"
 import { translateUi } from "../i18n/index"
 import { COLORS, LAYOUT } from "../settings/theme"
+import { ShortcutText } from "./ShortcutText"
+import type { ShortcutAnimation } from "./shortcut-content"
 
 export type InlineButtonProps = {
   id?: string
@@ -14,6 +15,8 @@ export type InlineButtonProps = {
   selected?: boolean
   compact?: boolean
   disabled?: boolean
+  shortcutColor?: string | undefined
+  shortcutAnimation?: ShortcutAnimation | undefined
   buttonRef?: Ref<ButtonRenderable>
 }
 
@@ -57,6 +60,8 @@ export function InlineButton({
   selected = false,
   disabled = false,
   compact = LAYOUT.compact,
+  shortcutColor,
+  shortcutAnimation,
   buttonRef,
 }: InlineButtonProps) {
   return (
@@ -72,6 +77,8 @@ export function InlineButton({
         <ShortcutText
           content={` ${translateUi(label)} `}
           highlight={!selected}
+          shortcutColor={shortcutColor}
+          shortcutAnimation={shortcutAnimation}
           style={buttonColors({
             pressed: state.pressed,
             selected,

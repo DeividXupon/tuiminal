@@ -1,4 +1,4 @@
-import type { BoxRenderable } from "@opentui/core"
+import type { BoxRenderable, KeyEvent } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
@@ -8,16 +8,26 @@ import {
   matchesTerminalMasterKey,
   terminalMasterKeyBytes,
 } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useAgentDetection } from "./hooks/use-agent-detection"
 import { useAgentNotifications } from "./hooks/use-agent-notifications"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
 import type { AgentMessageHistoryEntry } from "./model/agent-message-history"
+import {
+  codexResumeThreadsSnapshot,
+  subscribeCodexResumeThreads,
+} from "./model/codex-resume-threads"
+import {
+  parseTerminalFocusTargetKey,
+  TERMINAL_SIDEBAR_FOCUS_TARGET,
+  type TerminalFocusTargetKey,
+  terminalFocusTargetKey,
+} from "./model/focus-selection"
 import {
   clearTerminalSidebar,
   publishTerminalSidebar,
@@ -38,6 +48,7 @@ import {
   type FreeTerminalCommand,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
+  orderedRunningAgents,
   type TerminalFolder,
   type TerminalSession,
   terminalSections,
@@ -45,6 +56,7 @@ import {
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
+import { refreshCodexResumeThreads } from "./services/codex-app-server"
 import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
@@ -61,20 +73,13 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
-import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./ui/FreeTerminalPane"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
+import { liveDiffCoversSplitPane, TerminalPanes } from "./ui/TerminalPanes"
+import { TerminalShortcutAnimation } from "./ui/TerminalShortcut"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
-
-const FULL_PANE: FreeTerminalPaneLayout = {
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  borderTop: false,
-  borderLeft: false,
-}
+import { TerminalSplitDialog } from "./ui/TerminalSplitDialog"
 
 const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
   { id: DEFAULT_FOLDER, name: DEFAULT_FOLDER_NAME },
@@ -88,14 +93,44 @@ type MessageHistoryTarget = {
   focusRequest: number
 }
 
+type LiveDiffTarget = {
+  sessionId: string
+  agentKey: string
+  startedAt: number
+  manualDirectories: readonly string[]
+  focusRequest: number
+}
+
+type SplitRequest = {
+  sourceSessionId: string
+  sectionId: string
+  folderId: string
+  down: boolean
+}
+
 function messageHistoryForSession(
   session: TerminalSession,
-  target: MessageHistoryTarget | null,
+  target: MessageHistoryTarget | undefined,
   messages: ReadonlyMap<string, readonly AgentMessageHistoryEntry[]>,
 ) {
   if (!target || target.sessionId !== session.id || target.startedAt !== session.startedAt)
     return undefined
   return { messages: messages.get(session.id) ?? [], focusRequest: target.focusRequest }
+}
+
+function liveDiffCoversActiveSplit(
+  sessions: readonly TerminalSession[],
+  availableWidth: number,
+  availableHeight: number,
+  sidebarWidth: number,
+) {
+  if (sessions.length !== MAX_TERMINALS_PER_SECTION) return false
+  return liveDiffCoversSplitPane({
+    availableWidth,
+    availableHeight,
+    sidebarWidth,
+    splitDown: sessions.some((session) => session.row === 1),
+  })
 }
 
 export function FreeTerminal({
@@ -104,17 +139,20 @@ export function FreeTerminal({
   onOpenSettings,
   onSelectTool,
   onQuit,
+  onMasterKeyActiveChange,
 }: {
   active: boolean
   externalSidebarHost?: boolean
   onOpenSettings?: () => void
   onSelectTool?: (tool: "database" | "git" | "runner" | "http" | "terminal") => void
   onQuit?: () => void
+  onMasterKeyActiveChange?: (active: boolean) => void
 }) {
   const { notify } = useNotifications()
   const renderer = useRenderer()
   const terminalPaletteSequence = useTerminalPalette()
   const dimensions = useTerminalDimensions()
+  const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
   const workspaceRef = useRef<BoxRenderable | null>(null)
   const terminal = useTerminalSessions(active)
   const {
@@ -124,15 +162,14 @@ export function FreeTerminal({
     dismissedTmuxPanes,
     activeSessionId,
     activeSessionRef,
-    terminalRefs,
     agentOutputs,
     processHandles,
     activateSession,
     focusTerminal,
     updateSession,
+    moveSession,
     launchCommand,
     closeSession,
-    restartSession,
     terminalReady,
     terminalGone,
     terminalInput,
@@ -158,16 +195,14 @@ export function FreeTerminal({
   const leaderRef = useRef(false)
   const [dialog, setDialog] = useState<TerminalDialogKind | null>(null)
   const dialogRef = useRef<TerminalDialogKind | null>(null)
-  const [liveDiffTarget, setLiveDiffTarget] = useState<{
-    sessionId: string
-    agentKey: string
-    startedAt: number
-    manualDirectories: readonly string[]
-    focusRequest: number
-  } | null>(null)
-  const [messageHistoryTarget, setMessageHistoryTarget] = useState<MessageHistoryTarget | null>(
-    null,
+  const [splitRequest, setSplitRequest] = useState<SplitRequest | null>(null)
+  const splitRequestRef = useRef<SplitRequest | null>(null)
+  const [liveDiffTargets, setLiveDiffTargets] = useState<ReadonlyMap<string, LiveDiffTarget>>(
+    () => new Map(),
   )
+  const [messageHistoryTargets, setMessageHistoryTargets] = useState<
+    ReadonlyMap<string, MessageHistoryTarget>
+  >(() => new Map())
   const [liveDiffProjectPicker, setLiveDiffProjectPicker] = useState<{
     sessionId: string
     projects: readonly LiveDiffProject[]
@@ -177,7 +212,9 @@ export function FreeTerminal({
   const liveDiffProjectSearch = useRef<AbortController | null>(null)
   const sequence = useRef(0)
   const sidebarOwner = useRef({})
+  const activateFocusTargetRef = useRef<(target: TerminalFocusTargetKey) => void>(() => undefined)
   const runActionRef = useRef<(key: string) => void>(() => undefined)
+  const resumeCodexThreadRef = useRef<(threadId: string) => void>(() => undefined)
   const handledTargetRevision = useRef(0)
   const sidebarPinned = useSyncExternalStore(
     subscribeTerminalSidebar,
@@ -201,34 +238,122 @@ export function FreeTerminal({
     [collapsedFolderIds, sidebarSessions],
   )
   const activeSession = sessions.find((session) => session.id === activeSessionId)
-  useEffect(() => {
-    if (!liveDiffTarget) return
-    const owner = sessions.find((session) => session.id === liveDiffTarget.sessionId)
-    if (
-      !owner ||
-      owner.startedAt !== liveDiffTarget.startedAt ||
-      (owner.agent && owner.agent.key !== liveDiffTarget.agentKey)
-    ) {
-      setLiveDiffTarget(null)
-    }
-  }, [liveDiffTarget, sessions])
-  useEffect(() => {
-    if (!messageHistoryTarget) return
-    const owner = sessions.find((session) => session.id === messageHistoryTarget.sessionId)
-    if (
-      !owner ||
-      owner.startedAt !== messageHistoryTarget.startedAt ||
-      owner.agentIntegration !== "codex-app-server"
-    )
-      setMessageHistoryTarget(null)
-  }, [messageHistoryTarget, sessions])
-  const section = sections.find((section) => section.id === activeSession?.sectionId)
-  const canSplit = Boolean(
-    section && section.panes.length < MAX_TERMINALS_PER_SECTION && sessions.length < MAX_SESSIONS,
+  const splitAgents = useMemo(
+    () =>
+      orderedRunningAgents(sessions).filter(
+        (session) =>
+          session.id !== activeSession?.id && session.sectionId !== activeSession?.sectionId,
+      ),
+    [activeSession?.id, activeSession?.sectionId, sessions],
   )
-  const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
-  const sidebarHeight =
-    dimensions.height - 1 - (leaderActive ? Math.max(3, Math.floor(dimensions.height / 2)) : 0)
+  const focusTargets = useMemo(() => {
+    const targets: TerminalFocusTargetKey[] = [TERMINAL_SIDEBAR_FOCUS_TARGET]
+    if (!activeSession) return targets
+    const activeSectionSessions = sessions.filter(
+      (session) => session.sectionId === activeSession.sectionId,
+    )
+    const liveDiffCoversTerminal = liveDiffCoversActiveSplit(
+      activeSectionSessions,
+      dimensions.width,
+      dimensions.height,
+      sidebarWidth,
+    )
+    for (const session of sessions) {
+      if (session.sectionId !== activeSession.sectionId) continue
+      const liveDiffTarget = liveDiffTargets.get(session.id)
+      const liveDiffVisible =
+        liveDiffTarget?.startedAt === session.startedAt &&
+        (!session.agent || liveDiffTarget.agentKey === session.agent.key)
+      const liveDiffCoversSession = liveDiffCoversTerminal && liveDiffVisible
+      if (!liveDiffCoversSession) targets.push(terminalFocusTargetKey("terminal", session.id))
+      if (
+        !liveDiffCoversSession &&
+        messageHistoryForSession(session, messageHistoryTargets.get(session.id), agentMessages)
+      )
+        targets.push(terminalFocusTargetKey("history", session.id))
+      if (liveDiffVisible) targets.push(terminalFocusTargetKey("live-diff", session.id))
+    }
+    return targets
+  }, [
+    activeSession,
+    agentMessages,
+    dimensions.height,
+    dimensions.width,
+    liveDiffTargets,
+    messageHistoryTargets,
+    sessions,
+    sidebarWidth,
+  ])
+  const {
+    busyRef: boxFocusBusyRef,
+    focus: focusBox,
+    open: openBoxFocus,
+    rememberOrigin: rememberBoxFocusOrigin,
+    selectedTarget: selectedBoxFocusTarget,
+  } = useTerminalFocusSelection({
+    active,
+    activeSessionId,
+    targets: focusTargets,
+    workspaceRef,
+    focusTerminal,
+    onActivateRef: activateFocusTargetRef,
+  })
+  useEffect(() => {
+    onMasterKeyActiveChange?.(leaderActive)
+    return () => {
+      if (leaderActive) onMasterKeyActiveChange?.(false)
+    }
+  }, [leaderActive, onMasterKeyActiveChange])
+  useEffect(() => {
+    setLiveDiffTargets((current) => {
+      let changed = false
+      const next = new Map(current)
+      for (const [sessionId, target] of current) {
+        const owner = sessions.find((session) => session.id === sessionId)
+        if (
+          owner &&
+          owner.startedAt === target.startedAt &&
+          (!owner.agent || owner.agent.key === target.agentKey)
+        )
+          continue
+        next.delete(sessionId)
+        changed = true
+      }
+      return changed ? next : current
+    })
+  }, [sessions])
+  useEffect(() => {
+    setMessageHistoryTargets((current) => {
+      let changed = false
+      const next = new Map(current)
+      for (const [sessionId, target] of current) {
+        const owner = sessions.find((session) => session.id === sessionId)
+        if (owner?.startedAt === target.startedAt && owner.agentIntegration === "codex-app-server")
+          continue
+        next.delete(sessionId)
+        changed = true
+      }
+      return changed ? next : current
+    })
+  }, [sessions])
+  const section = sections.find((section) => section.id === activeSession?.sectionId)
+  const hasSplitRoom = Boolean(section && section.panes.length < MAX_TERMINALS_PER_SECTION)
+  const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
+  const canSplit = hasSplitRoom && (canCreateSplitTerminal || splitAgents.length > 0)
+  const sidebarHeight = dimensions.height - 1
+  const recentThreads = useSyncExternalStore(
+    subscribeCodexResumeThreads,
+    codexResumeThreadsSnapshot,
+    codexResumeThreadsSnapshot,
+  )
+  useEffect(() => {
+    if (!active || process.env.TUIMINAL_TERMINAL_CODEX_RESUME === "0") return
+    const controller = new AbortController()
+    void refreshCodexResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, controller.signal).catch(
+      () => undefined,
+    )
+    return () => controller.abort()
+  }, [active])
   const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
     "\u0000",
   )
@@ -236,13 +361,21 @@ export function FreeTerminal({
   seenAgents.current = useMemo(
     () =>
       new Set(
-        active && !dialog && !leaderActive
+        active && !dialog && !splitRequest && !leaderActive && !selectedBoxFocusTarget
           ? sessions
               .filter((session) => session.sectionId === activeSession?.sectionId)
               .map((session) => session.id)
           : [],
       ),
-    [active, activeSession?.sectionId, dialog, leaderActive, sessions],
+    [
+      active,
+      activeSession?.sectionId,
+      dialog,
+      leaderActive,
+      selectedBoxFocusTarget,
+      sessions,
+      splitRequest,
+    ],
   )
   useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
   useAgentNotifications(sessions, seenAgents)
@@ -323,9 +456,10 @@ export function FreeTerminal({
       restoreFocus()
       return
     }
+    rememberBoxFocusOrigin()
     leaderRef.current = true
     setLeaderActive(true)
-  }, [restoreFocus])
+  }, [rememberBoxFocusOrigin, restoreFocus])
   const setLeader = (open: boolean) => {
     leaderRef.current = open
     setLeaderActive(open)
@@ -339,6 +473,11 @@ export function FreeTerminal({
     setDialog(null)
     restoreFocus()
   }
+  const closeSplitDialog = (restore = true) => {
+    splitRequestRef.current = null
+    setSplitRequest(null)
+    if (restore) restoreFocus()
+  }
   const launchSection = (command: FreeTerminalCommand = createShellTerminalCommand()) => {
     sequence.current += 1
     launchCommand(command, {
@@ -349,85 +488,183 @@ export function FreeTerminal({
     })
     setSelectedFolder(DEFAULT_FOLDER)
   }
-  const split = (down: boolean) => {
+  const resumeCodexThread = (threadId: string) => {
+    if (sessions.length >= MAX_SESSIONS) {
+      setNotice("O limite de terminais foi atingido.")
+      return
+    }
+    setLeader(false)
+    launchSection(createCodexAgentCommand(threadId))
+  }
+  resumeCodexThreadRef.current = resumeCodexThread
+  const requestSplit = (down: boolean) => {
     if (!activeSession || !canSplit) {
       setNotice("Esta seção já possui dois terminais.")
       return
     }
-    launchCommand(createShellTerminalCommand(), {
+    const request = {
+      sourceSessionId: activeSession.id,
       sectionId: activeSession.sectionId,
       folderId: activeSession.folderId,
-      row: down ? 1 : 0,
-      column: down ? 0 : 1,
-    })
+      down,
+    }
+    splitRequestRef.current = request
+    setSplitRequest(request)
+  }
+  const splitPlacement = (request: SplitRequest) => ({
+    sectionId: request.sectionId,
+    folderId: request.folderId,
+    row: (request.down ? 1 : 0) as 0 | 1,
+    column: (request.down ? 0 : 1) as 0 | 1,
+  })
+  const currentSplitRequest = () => {
+    const request = splitRequestRef.current
+    const current = sessionsRef.current
+    const source = current.find((session) => session.id === request?.sourceSessionId)
+    if (
+      !request ||
+      source?.sectionId !== request.sectionId ||
+      current.filter((session) => session.sectionId === request.sectionId).length >=
+        MAX_TERMINALS_PER_SECTION
+    ) {
+      closeSplitDialog()
+      return null
+    }
+    return request
+  }
+  const createSplitTerminal = () => {
+    const request = currentSplitRequest()
+    if (!request || sessionsRef.current.length >= MAX_SESSIONS) return
+    closeSplitDialog(false)
+    launchCommand(createShellTerminalCommand(), splitPlacement(request))
+  }
+  const placeSplitAgent = (id: string) => {
+    const request = currentSplitRequest()
+    if (
+      !request ||
+      !orderedRunningAgents(sessionsRef.current).some(
+        (session) =>
+          session.id === id &&
+          session.id !== request.sourceSessionId &&
+          session.sectionId !== request.sectionId,
+      )
+    )
+      return
+    closeSplitDialog(false)
+    moveSession(id, splitPlacement(request))
   }
   const disabled = (key: string) => {
     if (["v", "h"].includes(key)) return !canSplit
     if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
-    if (["n", "c", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
+    if (["n", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
     if (key.startsWith("alt+")) return !onSelectTool
     if (key === ",") return !onOpenSettings
     if (key === "q") return !onQuit
-    if (key === "r" && activeSession?.tmux) return true
     if (key === "d")
       return !(
         (activeSession?.status === "running" && activeSession.agent) ||
-        liveDiffTarget?.sessionId === activeSessionId
+        (activeSessionId && liveDiffTargets.has(activeSessionId))
       )
-    return ["r", "x", "e"].includes(key) && !activeSession
+    return ["x", "e", "m"].includes(key) && !activeSession
   }
   const toggleLiveDiff = () => {
-    if (liveDiffTarget?.sessionId === activeSessionId) {
-      setLiveDiffTarget((current) =>
-        current ? { ...current, focusRequest: current.focusRequest + 1 } : current,
-      )
+    if (!activeSessionId) return
+    if (liveDiffTargets.has(activeSessionId)) {
+      setLiveDiffTargets((current) => {
+        const target = current.get(activeSessionId)
+        if (!target) return current
+        const next = new Map(current)
+        next.set(activeSessionId, { ...target, focusRequest: target.focusRequest + 1 })
+        return next
+      })
       return
     }
-    if (!activeSession?.agent) return
-    setLiveDiffTarget({
-      sessionId: activeSession.id,
-      agentKey: activeSession.agent.key,
-      startedAt: activeSession.startedAt,
-      manualDirectories: [],
-      focusRequest: 1,
+    const session = activeSession
+    const agent = session?.agent
+    if (!session || !agent) return
+    setLiveDiffTargets((current) => {
+      const next = new Map(current)
+      next.set(session.id, {
+        sessionId: session.id,
+        agentKey: agent.key,
+        startedAt: session.startedAt,
+        manualDirectories: [],
+        focusRequest: 1,
+      })
+      return next
     })
   }
   const toggleMessageHistory = () => {
-    if (messageHistoryTarget?.sessionId === activeSessionId) {
-      setMessageHistoryTarget((current) =>
-        current ? { ...current, focusRequest: current.focusRequest + 1 } : current,
-      )
+    if (!activeSessionId) return
+    if (messageHistoryTargets.has(activeSessionId)) {
+      setMessageHistoryTargets((current) => {
+        const target = current.get(activeSessionId)
+        if (!target) return current
+        const next = new Map(current)
+        next.set(activeSessionId, { ...target, focusRequest: target.focusRequest + 1 })
+        return next
+      })
       return
     }
     if (activeSession?.agentIntegration !== "codex-app-server") return
-    setMessageHistoryTarget({
-      sessionId: activeSession.id,
-      startedAt: activeSession.startedAt,
-      focusRequest: 1,
+    setMessageHistoryTargets((current) => {
+      const next = new Map(current)
+      next.set(activeSession.id, {
+        sessionId: activeSession.id,
+        startedAt: activeSession.startedAt,
+        focusRequest: 1,
+      })
+      return next
     })
   }
-  const runAction = (key: string) => {
-    if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
-    setLeader(false)
-    if (key === "g") {
-      terminalRefs.current.get(activeSessionRef.current ?? "")?.blur()
-      renderer.currentFocusedRenderable?.blur()
+  activateFocusTargetRef.current = (target) => {
+    const { kind, sessionId } = parseTerminalFocusTargetKey(target)
+    if (kind === "sidebar") {
+      requestTerminalSidebarFocus()
+      void focusPinnedTmuxSidebar()
       return
     }
-    if (!["e", "l", ",", "q"].includes(key) && !key.startsWith("alt+")) restoreFocus()
+    selectSession(sessionId)
+    if (kind === "history")
+      setMessageHistoryTargets((current) => {
+        const target = current.get(sessionId)
+        if (!target) return current
+        const next = new Map(current)
+        next.set(sessionId, { ...target, focusRequest: target.focusRequest + 1 })
+        return next
+      })
+    else if (kind === "live-diff")
+      setLiveDiffTargets((current) => {
+        const target = current.get(sessionId)
+        if (!target) return current
+        const next = new Map(current)
+        next.set(sessionId, { ...target, focusRequest: target.focusRequest + 1 })
+        return next
+      })
+  }
+  const runFocusAction = (key: string, invokedFromLeader: boolean) => {
+    if (key !== "m") return false
+    openBoxFocus(invokedFromLeader)
+    return true
+  }
+  const runAction = (key: string) => {
+    if (disabled(key) || !TERMINAL_ACTIONS.some((action) => action.key === key)) return
+    const invokedFromLeader = leaderRef.current
+    setLeader(false)
+    if (runFocusAction(key, invokedFromLeader)) return
+    if (!["e", "l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
     switch (key) {
       case "n":
-      case "c":
         launchSection()
         break
       case "a":
         launchSection(createCodexAgentCommand())
         break
       case "v":
-        split(false)
+        requestSplit(false)
         break
       case "h":
-        split(true)
+        requestSplit(true)
         break
       case "s":
         toggleMessageHistory()
@@ -455,9 +692,6 @@ export function FreeTerminal({
       case "d":
         toggleLiveDiff()
         break
-      case "r":
-        if (activeSessionId) restartSession(activeSessionId)
-        break
       case "x":
         if (activeSessionId) closeSession(activeSessionId)
         break
@@ -478,14 +712,24 @@ export function FreeTerminal({
   const openCodexTerminal = useCallback(() => runActionRef.current("a"), [])
   const closeLiveDiff = useCallback(
     (id: string) => {
-      setLiveDiffTarget((current) => (current?.sessionId === id ? null : current))
+      setLiveDiffTargets((current) => {
+        if (!current.has(id)) return current
+        const next = new Map(current)
+        next.delete(id)
+        return next
+      })
       focusTerminal(id)
     },
     [focusTerminal],
   )
   const closeMessageHistory = useCallback(
     (id: string) => {
-      setMessageHistoryTarget((current) => (current?.sessionId === id ? null : current))
+      setMessageHistoryTargets((current) => {
+        if (!current.has(id)) return current
+        const next = new Map(current)
+        next.delete(id)
+        return next
+      })
       focusTerminal(id)
     },
     [focusTerminal],
@@ -543,11 +787,16 @@ export function FreeTerminal({
     (path: string) => {
       const id = liveDiffProjectPicker?.sessionId
       if (!id) return
-      setLiveDiffTarget((current) =>
-        current?.sessionId === id && !current.manualDirectories.includes(path)
-          ? { ...current, manualDirectories: [...current.manualDirectories, path] }
-          : current,
-      )
+      setLiveDiffTargets((current) => {
+        const target = current.get(id)
+        if (!target || target.manualDirectories.includes(path)) return current
+        const next = new Map(current)
+        next.set(id, {
+          ...target,
+          manualDirectories: [...target.manualDirectories, path],
+        })
+        return next
+      })
       closeLiveDiffProjectPicker()
     },
     [closeLiveDiffProjectPicker, liveDiffProjectPicker?.sessionId],
@@ -572,12 +821,21 @@ export function FreeTerminal({
       setLeaderActive(false)
       dialogRef.current = null
       setDialog(null)
+      splitRequestRef.current = null
+      setSplitRequest(null)
       liveDiffProjectSearch.current?.abort()
       setLiveDiffProjectPicker(null)
-    } else if (dialogRef.current || liveDiffProjectPicker || leaderRef.current) return
+    } else if (
+      dialogRef.current ||
+      splitRequestRef.current ||
+      liveDiffProjectPicker ||
+      leaderRef.current ||
+      boxFocusBusyRef.current
+    )
+      return
     else if (activeSessionId) focusTerminal(activeSessionId)
     else workspaceRef.current?.focus()
-  }, [active, activeSessionId, focusTerminal, liveDiffProjectPicker])
+  }, [active, activeSessionId, boxFocusBusyRef, focusTerminal, liveDiffProjectPicker])
 
   const sidebarView = useMemo(
     () => ({
@@ -589,7 +847,11 @@ export function FreeTerminal({
       width: sidebarWidth,
       height: sidebarHeight,
       masterKey,
+      recentThreads,
       masterKeyActive: leaderActive,
+      focusSelection: selectedBoxFocusTarget
+        ? { selectedTarget: selectedBoxFocusTarget, onFocus: focusBox }
+        : undefined,
       onSelectFolder: selectFolderInSidebar,
       onToggleFolder: toggleFolder,
       onActivate: selectSession,
@@ -602,10 +864,13 @@ export function FreeTerminal({
       collapsedFolderIds,
       leaderActive,
       masterKey,
+      recentThreads,
       openSidebarTerminal,
       openSidebarCommand,
+      focusBox,
       selectFolderInSidebar,
       selectSession,
+      selectedBoxFocusTarget,
       selectedFolder,
       sidebarHeight,
       sidebarSessions,
@@ -625,6 +890,11 @@ export function FreeTerminal({
     if ("action" in target) {
       handledTargetRevision.current = requestedTargetRevision
       runActionRef.current(target.action)
+      return
+    }
+    if ("resumeThreadId" in target) {
+      handledTargetRevision.current = requestedTargetRevision
+      resumeCodexThreadRef.current(target.resumeThreadId)
       return
     }
     if ("folderId" in target) {
@@ -682,28 +952,44 @@ export function FreeTerminal({
     toggleFolder,
   ])
 
-  useKeyboard((key) => {
-    if (!active || dialogRef.current || liveDiffProjectPicker || key.defaultPrevented) return
+  const handleMasterKey = (key: KeyEvent) => {
     const configuredKey = getUiSettings().terminalMasterKey
-    if (matchesTerminalMasterKey(key, configuredKey)) {
+    if (!matchesTerminalMasterKey(key, configuredKey)) return false
+    key.preventDefault()
+    key.stopPropagation()
+    if (leaderRef.current) {
+      processHandles.current
+        .get(activeSessionRef.current ?? "")
+        ?.write(terminalMasterKeyBytes(configuredKey))
+      setLeader(false)
+      restoreFocus()
+    } else {
+      rememberBoxFocusOrigin()
+      setLeader(true)
+    }
+    return true
+  }
+
+  const handleLeaderKey = (key: KeyEvent) => {
+    if (!leaderRef.current) return false
+    if (renderer.currentFocusedRenderable?.id === "terminal-action-search") return true
+    if (key.name === "/" || key.sequence === "/" || key.raw === "/") {
       key.preventDefault()
       key.stopPropagation()
-      if (leaderRef.current) {
-        processHandles.current
-          .get(activeSessionRef.current ?? "")
-          ?.write(terminalMasterKeyBytes(configuredKey))
-        setLeader(false)
-        restoreFocus()
-      } else setLeader(true)
-      return
+      renderer.root.findDescendantById("terminal-action-search")?.focus()
+      return true
     }
-    if (!leaderRef.current) return
+    if (
+      ["up", "down", "left", "right", "enter", "return"].includes(key.name) ||
+      ["j", "k"].includes(key.name.toLowerCase())
+    )
+      return true
     key.preventDefault()
     key.stopPropagation()
     const action = terminalActionKey(key)
     if (action?.startsWith("alt+")) {
       runAction(action)
-      return
+      return true
     }
     if (
       /^[1-9]$/.test(key.name) &&
@@ -715,150 +1001,126 @@ export function FreeTerminal({
     ) {
       const target = masterKeyTargets[Number(key.name) - 1]
       if (target) selectSession(target.id)
-      return
+      return true
     }
-    // Unknown keys stay in the menu; [Esc] always cancels without reaching the PTY.
     if (action) runAction(action)
+    return true
+  }
+
+  useKeyboard((key) => {
+    if (
+      !active ||
+      dialogRef.current ||
+      splitRequestRef.current ||
+      liveDiffProjectPicker ||
+      key.defaultPrevented
+    )
+      return
+    if (handleMasterKey(key)) return
+    handleLeaderKey(key)
   })
 
   return (
-    <box
-      id="terminal-workspace"
-      ref={workspaceRef}
-      focusable
-      style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
-    >
-      <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
-        {!(externalSidebarHost && sidebarPinned) && (
-          <TerminalSidebar
-            active={active}
-            sessions={sidebarSessions}
-            folders={folders}
-            collapsedFolderIds={collapsedFolderIds}
-            selectedFolder={selectedFolder}
+    <TerminalShortcutAnimation active={active}>
+      <box
+        id="terminal-workspace"
+        ref={workspaceRef}
+        focusable
+        style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
+      >
+        <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
+          {!(externalSidebarHost && sidebarPinned) && (
+            <TerminalSidebar
+              active={active}
+              sessions={sidebarSessions}
+              folders={folders}
+              collapsedFolderIds={collapsedFolderIds}
+              selectedFolder={selectedFolder}
+              activeSessionId={activeSessionId}
+              width={sidebarWidth}
+              height={sidebarHeight}
+              masterKey={masterKey}
+              masterKeyActive={leaderActive}
+              focusSelection={
+                selectedBoxFocusTarget
+                  ? { selectedTarget: selectedBoxFocusTarget, onFocus: focusBox }
+                  : undefined
+              }
+              focusRequest={focusRequest}
+              onSelectFolder={selectFolderInSidebar}
+              onToggleFolder={toggleFolder}
+              onActivate={selectSession}
+              onActions={toggleSidebarActions}
+              onNew={openSidebarTerminal}
+              onCommand={sessions.length < MAX_SESSIONS ? openSidebarCommand : undefined}
+            />
+          )}
+          <TerminalPanes
+            sessions={sessions}
+            activeSession={activeSession}
             activeSessionId={activeSessionId}
-            width={sidebarWidth}
-            height={sidebarHeight}
-            masterKey={masterKey}
-            masterKeyActive={leaderActive}
-            focusRequest={focusRequest}
-            onSelectFolder={selectFolderInSidebar}
-            onToggleFolder={toggleFolder}
+            toolActive={active}
+            appearanceKey={appearanceKey}
+            paletteSequence={terminalPaletteSequence}
+            availableWidth={dimensions.width}
+            availableHeight={dimensions.height}
+            sidebarWidth={sidebarWidth}
+            liveDiffTargets={liveDiffTargets}
+            messageHistoryTargets={messageHistoryTargets}
+            agentMessages={agentMessages}
+            selectedFocusTarget={selectedBoxFocusTarget}
+            onNewTerminal={launchSection}
+            onNewCodex={openCodexTerminal}
             onActivate={selectSession}
-            onActions={toggleSidebarActions}
-            onNew={openSidebarTerminal}
-            onCommand={sessions.length < MAX_SESSIONS ? openSidebarCommand : undefined}
+            onReady={terminalReady}
+            onGone={terminalGone}
+            onInput={terminalInput}
+            onResize={terminalResize}
+            onCloseLiveDiff={closeLiveDiff}
+            onAddLiveDiffProject={addLiveDiffProject}
+            onCloseMessageHistory={closeMessageHistory}
+            onReturnMessageHistoryTerminal={focusTerminal}
+            onFocusTarget={focusBox}
+          />
+        </box>
+        {leaderActive && (
+          <TerminalActions
+            width={dimensions.width}
+            height={dimensions.height}
+            recentThreads={recentThreads}
+            onAction={runAction}
+            onSelectThread={resumeCodexThread}
+            disabled={disabled}
           />
         )}
-        <box
-          id="terminal-panes"
-          style={{
-            flexGrow: 1,
-            position: "relative",
-            overflow: "hidden",
-            minWidth: 1,
-          }}
-        >
-          {!sessions.length && (
-            <box style={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
-              <box style={{ flexDirection: "row" }}>
-                <InlineButton
-                  compact
-                  label="Novo terminal"
-                  accent={COLORS.terminal}
-                  onPress={() => launchSection()}
-                />
-                <InlineButton
-                  compact
-                  label="Novo Codex"
-                  accent={COLORS.terminal}
-                  onPress={openCodexTerminal}
-                />
-              </box>
-            </box>
-          )}
-          {sessions.map((session) => {
-            const visible = session.sectionId === activeSession?.sectionId
-            const splitSection = section?.panes.length === 2
-            const down = section?.panes.some((pane) => pane.row === 1)
-            const layout: FreeTerminalPaneLayout =
-              !splitSection || !visible
-                ? FULL_PANE
-                : {
-                    top: down && session.row === 1 ? "50%" : 0,
-                    left: !down && session.column === 1 ? "50%" : 0,
-                    width: down ? "100%" : "50%",
-                    height: down ? "50%" : "100%",
-                    borderTop: Boolean(down && session.row === 1),
-                    borderLeft: Boolean(!down && session.column === 1),
-                  }
-            return (
-              <FreeTerminalPane
-                key={session.id}
-                session={session}
-                active={session.id === activeSessionId}
-                toolActive={active}
-                visible={visible}
-                appearanceKey={appearanceKey}
-                paletteSequence={terminalPaletteSequence}
-                layout={layout}
-                onActivate={selectSession}
-                onReady={terminalReady}
-                onGone={terminalGone}
-                onInput={terminalInput}
-                onResize={terminalResize}
-                liveDiff={
-                  liveDiffTarget?.sessionId === session.id &&
-                  liveDiffTarget.startedAt === session.startedAt &&
-                  (!session.agent || liveDiffTarget.agentKey === session.agent.key)
-                    ? {
-                        agentKey: liveDiffTarget.agentKey,
-                        manualDirectories: liveDiffTarget.manualDirectories,
-                        stacked: splitSection || dimensions.width - sidebarWidth < 90,
-                        running: session.status === "running" && Boolean(session.agent),
-                        focusRequest: liveDiffTarget.focusRequest,
-                      }
-                    : undefined
-                }
-                onCloseLiveDiff={closeLiveDiff}
-                onAddLiveDiffProject={addLiveDiffProject}
-                messageHistory={messageHistoryForSession(
-                  session,
-                  messageHistoryTarget,
-                  agentMessages,
-                )}
-                onCloseMessageHistory={closeMessageHistory}
-                onReturnMessageHistoryTerminal={focusTerminal}
-              />
-            )
-          })}
-        </box>
+        {dialog && (
+          <TerminalDialog
+            kind={dialog}
+            initialValue={dialog === "rename" ? (activeSession?.title ?? "") : ""}
+            onSave={saveDialog}
+            onClose={closeDialog}
+          />
+        )}
+        {splitRequest && (
+          <TerminalSplitDialog
+            down={splitRequest.down}
+            agents={splitAgents}
+            canCreateTerminal={canCreateSplitTerminal}
+            onCreateTerminal={createSplitTerminal}
+            onSelectAgent={placeSplitAgent}
+            onClose={closeSplitDialog}
+          />
+        )}
+        {liveDiffProjectPicker && (
+          <LiveDiffProjectPicker
+            projects={liveDiffProjectPicker.projects}
+            loading={liveDiffProjectPicker.loading}
+            error={liveDiffProjectPicker.error}
+            onSelect={selectLiveDiffProject}
+            onClose={closeLiveDiffProjectPicker}
+          />
+        )}
       </box>
-      {leaderActive && (
-        <TerminalActions
-          width={dimensions.width}
-          height={Math.max(3, Math.floor(dimensions.height / 2))}
-          onAction={runAction}
-          disabled={disabled}
-        />
-      )}
-      {dialog && (
-        <TerminalDialog
-          kind={dialog}
-          initialValue={dialog === "rename" ? (activeSession?.title ?? "") : ""}
-          onSave={saveDialog}
-          onClose={closeDialog}
-        />
-      )}
-      {liveDiffProjectPicker && (
-        <LiveDiffProjectPicker
-          projects={liveDiffProjectPicker.projects}
-          loading={liveDiffProjectPicker.loading}
-          error={liveDiffProjectPicker.error}
-          onSelect={selectLiveDiffProject}
-          onClose={closeLiveDiffProjectPicker}
-        />
-      )}
-    </box>
+    </TerminalShortcutAnimation>
   )
 }

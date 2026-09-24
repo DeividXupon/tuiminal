@@ -14,6 +14,7 @@ import {
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   numberedTerminalSections,
+  orderedRunningAgents,
   type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
@@ -178,22 +179,25 @@ function SidebarApp({
     () => visibleTerminalShortcutTargets(sessions, folders, collapsedFolderIds),
     [collapsedFolderIds, folders, sessions],
   )
+  const recentThreads = replica?.recentThreads ?? []
   const activeSession = sessions.find((session) => session.id === activeSessionId)
   const activeSection = sections.find((section) => section.id === activeSession?.sectionId)
+  const hasMovableAgent = orderedRunningAgents(managedSessions).some(
+    (session) => session.id !== activeSession?.id && session.sectionId !== activeSession?.sectionId,
+  )
   const canSplit = Boolean(
     activeSection &&
       activeSection.panes.length < MAX_TERMINALS_PER_SECTION &&
-      managedSessions.length < MAX_SESSIONS,
+      (managedSessions.length < MAX_SESSIONS || hasMovableAgent),
   )
   const disabled = useCallback(
     (key: string) => {
       if (["v", "h"].includes(key)) return !canSplit
       if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
-      if (["n", "c"].includes(key)) return managedSessions.length >= MAX_SESSIONS
+      if (["n", "a"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
       if ([",", "q"].includes(key)) return !replica
-      if (key === "r" && activeSession?.tmux) return true
-      return ["r", "x", "e"].includes(key) && !activeSession
+      return ["x", "e", "m"].includes(key) && !activeSession
     },
     [activeSession, canSplit, managedSessions.length, numberedSections, replica],
   )
@@ -275,7 +279,7 @@ function SidebarApp({
         focusSidebar()
         return
       }
-      if (disabled(key) || !TERMINAL_ACTIONS.some(([action]) => action === key)) return
+      if (disabled(key) || !TERMINAL_ACTIONS.some((action) => action.key === key)) return
       setLeaderActive(false)
       if (key.startsWith("alt+")) {
         const target = numberedSections[Number(key.at(-1)) - 1]?.panes[0]
@@ -287,7 +291,7 @@ function SidebarApp({
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["e", "s", ",", "q"].includes(key))
+      if (mode === "app" || ["v", "h", "e", "s", "m", ",", "q"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },
@@ -304,7 +308,6 @@ function SidebarApp({
     activate,
     onExit,
   })
-  const actionHeight = leaderActive ? Math.max(3, Math.floor(dimensions.height / 2)) : 0
   return (
     <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
       <TerminalSidebar
@@ -318,7 +321,7 @@ function SidebarApp({
         selectedFolder={selectedFolder}
         activeSessionId={activeSessionId}
         width={Math.max(16, dimensions.width)}
-        height={Math.max(1, dimensions.height - actionHeight)}
+        height={Math.max(1, dimensions.height)}
         borderRight={false}
         masterKey={masterKey}
         masterKeyActive={leaderActive}
@@ -333,8 +336,16 @@ function SidebarApp({
       {leaderActive && (
         <TerminalActions
           width={dimensions.width}
-          height={actionHeight}
+          height={dimensions.height}
+          recentThreads={recentThreads}
           onAction={(key) => void runAction(key)}
+          onSelectThread={(resumeThreadId) => {
+            setLeaderActive(false)
+            void (async () => {
+              const delivered = await sendPinnedSidebarTarget(endpoint, { resumeThreadId })
+              if (delivered) await selectPinnedTmuxHost(sourceSocket, hostPane)
+            })()
+          }}
           disabled={disabled}
         />
       )}

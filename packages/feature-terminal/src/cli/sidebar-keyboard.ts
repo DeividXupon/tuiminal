@@ -1,5 +1,5 @@
 import type { KeyEvent } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import {
   matchesTerminalMasterKey,
   type TerminalMasterKey,
@@ -56,6 +56,7 @@ function handleLeaderKey(key: KeyEvent, options: SidebarKeyboardOptions) {
 }
 
 export function useSidebarKeyboard(options: SidebarKeyboardOptions) {
+  const renderer = useRenderer()
   useKeyboard((key) => {
     if (key.defaultPrevented) return
     if (matchesTerminalMasterKey(key, options.masterKey)) {
@@ -67,7 +68,18 @@ export function useSidebarKeyboard(options: SidebarKeyboardOptions) {
       }
       return
     }
+    if (renderer.currentFocusedRenderable?.id === "terminal-action-search") return
     if (options.leaderActive) {
+      if (key.name === "/" || key.sequence === "/" || key.raw === "/") {
+        consumeKey(key)
+        renderer.root.findDescendantById("terminal-action-search")?.focus()
+        return
+      }
+      if (
+        ["up", "down", "left", "right", "enter", "return"].includes(key.name) ||
+        ["j", "k"].includes(key.name.toLowerCase())
+      )
+        return
       handleLeaderKey(key, options)
       return
     }

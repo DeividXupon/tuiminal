@@ -2,21 +2,23 @@ import {
   type BoxRenderable,
   type DiffRenderable,
   pathToFiletype,
-  RenderableEvents,
   type ScrollBoxRenderable,
 } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { NativeDiff } from "@xupon/tuiminal-core/ui/NativeDiff"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useLiveDiffKeyboard } from "../hooks/use-live-diff-keyboard"
 import { useLiveDiffFocus } from "../hooks/use-live-diff-focus"
+import { useLiveDiffKeyboard } from "../hooks/use-live-diff-keyboard"
 import { useLiveDiffPatch } from "../hooks/use-live-diff-patch"
 import { useLiveDiffProjects } from "../hooks/use-live-diff-projects"
+import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import { descendantProcesses } from "../model/agent-detection"
 import { type LiveDiffFile, mergeLiveDiffFiles } from "../model/live-diff"
 import { liveDiffUnwrappedHeight, liveDiffWrappedHeight } from "../rendering/live-diff-table"
+import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { readTerminalProcesses } from "../services/agent-processes"
 import {
   liveDiffRepositoryRoot,
@@ -34,9 +36,58 @@ const MAX_ROOTS = 4
 
 const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
 
+function liveDiffPreviewGeometry(
+  codeFocused: boolean,
+  stacked: boolean,
+  coversTerminal: boolean,
+  stableContentWidth: number,
+) {
+  if (!codeFocused || coversTerminal) return { left: 0, width: "100%" as const }
+  return {
+    left: stacked ? 0 : -30,
+    width: stableContentWidth + 30,
+  }
+}
+
+type LiveDiffColors = Pick<
+  typeof COLORS,
+  "canvas" | "diffAddedBg" | "diffGutterBg" | "diffRecentBg" | "diffRemovedBg" | "panel"
+>
+
+function decoratedLineColors(
+  patch: string,
+  highlightedLines: ReadonlySet<number>,
+  separatorLines: ReadonlySet<number>,
+  colors: LiveDiffColors,
+) {
+  const result = new Map<number, { gutter: string; content: string }>()
+  let inHunk = false
+  let codeLine = 0
+  for (const text of patch.split("\n")) {
+    if (text.startsWith("@@ ")) {
+      inHunk = true
+      continue
+    }
+    if (!inHunk) continue
+    const marker = text[0]
+    if (marker === "+")
+      result.set(codeLine++, { gutter: colors.diffAddedBg, content: colors.diffAddedBg })
+    else if (marker === "-")
+      result.set(codeLine++, { gutter: colors.diffRemovedBg, content: colors.diffRemovedBg })
+    else if (marker === " ")
+      result.set(codeLine++, { gutter: colors.diffGutterBg, content: colors.panel })
+  }
+  for (const line of separatorLines)
+    result.set(line, { gutter: colors.canvas, content: colors.canvas })
+  for (const line of highlightedLines)
+    result.set(line, { gutter: colors.diffRecentBg, content: colors.diffRecentBg })
+  return result
+}
+
 async function updateSnapshot(
   roots: readonly string[],
   filesRef: { current: LiveDiffFile[] },
+  observedRoots: Set<string>,
   signal: AbortSignal,
   warning: string,
   setFiles: (files: LiveDiffFile[]) => void,
@@ -48,10 +99,11 @@ async function updateSnapshot(
   if (signal.aborted) return
   if (snapshot.changedRoot) setLastProject(snapshot.changedRoot)
   if (snapshot.changed) {
-    const merged = mergeLiveDiffFiles(filesRef.current, snapshot.files, Date.now())
+    const merged = mergeLiveDiffFiles(filesRef.current, snapshot.files, Date.now(), observedRoots)
     filesRef.current = merged
     setFiles(merged)
   }
+  for (const root of roots) observedRoots.add(root)
   setError(
     snapshot.failed
       ? translateUi("Atualização parcial do Live Diff.")
@@ -71,9 +123,11 @@ export function LiveDiffPanel({
   fileTableHeight,
   stableContentWidth,
   stacked,
+  coversTerminal,
   focusRequest,
   onClose,
   onAddProject,
+  onActivateSession,
   onReturnTerminal,
 }: {
   sessionId: string
@@ -85,9 +139,11 @@ export function LiveDiffPanel({
   fileTableHeight: number
   stableContentWidth: number
   stacked: boolean
+  coversTerminal: boolean
   onClose: (id: string) => void
   onAddProject: (id: string, roots: readonly string[]) => void
   focusRequest: number
+  onActivateSession: () => void
   onReturnTerminal: () => void
 }) {
   const panel = useRef<BoxRenderable | null>(null)
@@ -101,26 +157,17 @@ export function LiveDiffPanel({
   const [lastProject, setLastProject] = useState("")
   const [now, setNow] = useState(Date.now())
   const [previewWidth, setPreviewWidth] = useState(80)
-  const [codeFocused, setCodeFocused] = useState(false)
+  const [snapshotReady, setSnapshotReady] = useState(false)
   const showDiffAuto = selectedKey === null
   const rootsRef = useRef<string[]>([])
   const filesRef = useRef<LiveDiffFile[]>([])
+  const observedRoots = useRef(new Set<string>())
   const directoryRef = useRef<string[]>([])
   directoryRef.current = [initialDirectory, ...manualDirectories, ...processDirectories]
   useLiveDiffFocus(panel, focusRequest)
-
-  useEffect(() => {
-    const scroll = preview.current
-    if (!scroll) return
-    const focused = () => setCodeFocused(true)
-    const blurred = () => setCodeFocused(false)
-    scroll.on(RenderableEvents.FOCUSED, focused)
-    scroll.on(RenderableEvents.BLURRED, blurred)
-    return () => {
-      scroll.off(RenderableEvents.FOCUSED, focused)
-      scroll.off(RenderableEvents.BLURRED, blurred)
-    }
-  }, [])
+  const panelFocused = useRenderableFocus(panel)
+  const codeFocused = useRenderableFocus(preview)
+  const shortcutColor = terminalShortcutColor(active, panelFocused || codeFocused)
 
   useEffect(() => {
     if (!running) return
@@ -189,12 +236,14 @@ export function LiveDiffPanel({
         await updateSnapshot(
           rootsRef.current,
           filesRef,
+          observedRoots.current,
           controller.signal,
           discoveryWarning,
           setFiles,
           setLastProject,
           setError,
         )
+        if (!controller.signal.aborted) setSnapshotReady(true)
       } catch {
         if (!controller.signal.aborted)
           setError(translateUi("Não foi possível atualizar o Live Diff."))
@@ -227,14 +276,37 @@ export function LiveDiffPanel({
     () => visibleFiles.find((file) => fileKey(file) === selectedKey) ?? visibleFiles[0] ?? null,
     [visibleFiles, selectedKey],
   )
-  const patch = useLiveDiffPatch(
+  const { patch, highlightedLines, separatorLines } = useLiveDiffPatch(
     selected,
     showDiffAuto,
     visibleFiles,
-    COLORS.diffRecentBg,
+    snapshotReady,
+    COLORS.text,
     preview,
     diff,
   )
+  const { canvas, diffAddedBg, diffGutterBg, diffRecentBg, diffRemovedBg, panel: panelBg } = COLORS
+  const diffAppearance = [
+    canvas,
+    diffAddedBg,
+    diffGutterBg,
+    diffRecentBg,
+    diffRemovedBg,
+    panelBg,
+  ].join("\0")
+  const lineColors = useMemo(() => {
+    // COLORS is mutated in place when the palette changes; this key keeps the
+    // complete native line-color map synchronized without rebuilding it per frame.
+    void diffAppearance
+    return decoratedLineColors(patch, highlightedLines, separatorLines, {
+      canvas,
+      diffAddedBg,
+      diffGutterBg,
+      diffRecentBg,
+      diffRemovedBg,
+      panel: panelBg,
+    })
+  }, [patch, highlightedLines, separatorLines, diffAppearance])
   useEffect(() => {
     if (selectedKey && !visibleFiles.some((file) => fileKey(file) === selectedKey))
       setSelectedKey(null)
@@ -281,16 +353,39 @@ export function LiveDiffPanel({
     [patch, previewWidth],
   )
   const diffHeight = codeFocused ? wrappedHeight : liveDiffUnwrappedHeight(patch)
+  const previewGeometry = liveDiffPreviewGeometry(
+    codeFocused,
+    stacked,
+    coversTerminal,
+    stableContentWidth,
+  )
   const selectedPatch = selected && patch
+  const activatePanel = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+    if (active) {
+      panel.current?.focus()
+      return
+    }
+    onActivateSession()
+    setTimeout(() => panel.current?.focus(), 0)
+  }
   const focusPanel = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
-    onReturnTerminal()
-    queueMicrotask(() => panel.current?.focus())
+    if (active) {
+      queueMicrotask(() => panel.current?.focus())
+      return
+    }
+    onActivateSession()
+    setTimeout(() => panel.current?.focus(), 0)
   }
   const focusPreview = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
-    onReturnTerminal()
-    queueMicrotask(() => preview.current?.focus())
+    if (active) {
+      queueMicrotask(() => preview.current?.focus())
+      return
+    }
+    onActivateSession()
+    setTimeout(() => preview.current?.focus(), 0)
   }
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI focusable boxes do not expose ARIA roles.
@@ -298,11 +393,15 @@ export function LiveDiffPanel({
       ref={panel}
       id={`live-diff-${sessionId}`}
       focusable
-      onMouseDown={(event) => {
-        event.stopPropagation()
-        panel.current?.focus()
+      onMouseDown={activatePanel}
+      style={{
+        flexGrow: 1,
+        minWidth: 1,
+        minHeight: 1,
+        border: coversTerminal ? [] : [stacked ? "top" : "left"],
+        borderColor: active && (panelFocused || codeFocused) ? BRAND_COLOR : COLORS.border,
+        backgroundColor: COLORS.canvas,
       }}
-      style={{ flexGrow: 1, minWidth: 1, minHeight: 1, backgroundColor: COLORS.canvas }}
     >
       <box
         style={{
@@ -342,8 +441,8 @@ export function LiveDiffPanel({
           style={{
             position: "absolute",
             top: 0,
-            left: codeFocused && !stacked ? -30 : 0,
-            width: codeFocused ? stableContentWidth + 30 : "100%",
+            left: previewGeometry.left,
+            width: previewGeometry.width,
             height: "100%",
             backgroundColor: COLORS.canvas,
           }}
@@ -356,6 +455,8 @@ export function LiveDiffPanel({
               filetype={pathToFiletype(selected.path) ?? "text"}
               height={diffHeight}
               wrapMode={codeFocused ? "char" : "none"}
+              lineColors={lineColors}
+              hiddenLineNumbers={separatorLines}
             />
           ) : (
             <text
@@ -394,6 +495,7 @@ export function LiveDiffPanel({
         error={error}
         showDiffAuto={showDiffAuto}
         codeFocused={codeFocused}
+        shortcutColor={shortcutColor}
       />
     </box>
   )

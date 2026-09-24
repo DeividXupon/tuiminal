@@ -74,6 +74,7 @@ export function AppContent() {
   const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialTargetId, setTutorialTargetId] = useState<string | null>(null)
+  const [terminalMasterKeyActive, setTerminalMasterKeyActive] = useState(false)
   const [terminalSidebarFocused, setTerminalSidebarFocused] = useState(false)
   useEffect(() => {
     const update = () =>
@@ -376,6 +377,9 @@ export function AppContent() {
               id="tutorial-settings-button"
               label={compactNavigation ? "[,]" : "[,] Config"}
               accent={COLORS.focus}
+              shortcutColor={
+                ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
+              }
               onPress={openSettings}
             />
             <InlineButton
@@ -383,6 +387,9 @@ export function AppContent() {
               id="app-exit-button"
               label={compactNavigation ? "[Q]" : "[Q] Sair"}
               accent={COLORS.focus}
+              shortcutColor={
+                ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
+              }
               onPress={() => void exit.quit()}
             />
           </box>
@@ -441,6 +448,7 @@ export function AppContent() {
                 <FreeTerminal
                   active={!interactionBlocked}
                   externalSidebarHost
+                  onMasterKeyActiveChange={setTerminalMasterKeyActive}
                   onOpenSettings={openSettings}
                   onQuit={() => {
                     features.controller.cancel()
@@ -467,6 +475,7 @@ export function AppContent() {
         installed={features.state.installed}
         compactNavigation={compactNavigation}
         minimalNavigation={minimalNavigation}
+        terminalMasterKeyActive={terminalMasterKeyActive}
         openSettings={openSettings}
         onQuit={() => {
           features.controller.cancel()
@@ -553,6 +562,7 @@ export function AppContent() {
                 <FreeTerminal
                   active={activeTab === "terminal" && !interactionBlocked}
                   externalSidebarHost
+                  onMasterKeyActiveChange={setTerminalMasterKeyActive}
                   onOpenSettings={openSettings}
                   onSelectTool={(tool) => void selectTab(tool)}
                   onQuit={() => {

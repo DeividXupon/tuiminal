@@ -106,17 +106,17 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
   }
 }
 
-/** Opens the official Codex TUI backed by a Tuiminal-owned local app-server. */
-export function createCodexAgentCommand(): FreeTerminalCommand {
+/** Opens or resumes the official Codex TUI backed by a Tuiminal-owned local app-server. */
+export function createCodexAgentCommand(resumeThreadId?: string): FreeTerminalCommand {
   return {
     kind: "custom",
     label: "Codex",
     shortLabel: "Codex",
-    displayCommand: "codex --remote",
+    displayCommand: resumeThreadId ? `codex resume ${resumeThreadId} --remote` : "codex --remote",
     command: ["codex"],
     accent: COLORS.terminal,
     workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
-    codex: { appServer: true },
+    codex: { appServer: true, ...(resumeThreadId ? { resumeThreadId } : {}) },
   }
 }
 

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test"
 import { type CodeRenderable, type OptimizedBuffer, RGBA } from "@opentui/core"
+import {
+  blendTextColor,
+  type TextShimmerAnimation,
+  textShimmerIntensity,
+} from "../packages/core/src/ui/text-shimmer"
 import { drawLiveDiffTextShimmer } from "../packages/feature-terminal/src/rendering/live-diff-shimmer"
 
 const code = {
@@ -37,31 +42,45 @@ function capturedBuffer(background: RGBA) {
   return { buffer, draws }
 }
 
-function shineColumns(draws: ReturnType<typeof capturedBuffer>["draws"], row: number, color: RGBA) {
-  const target = color.toInts().join()
-  return draws
-    .filter((draw) => draw.y === row && draw.color.toInts().join() === target)
-    .map((draw) => draw.x)
+function expectedColor(position: number, animation: TextShimmerAnimation) {
+  return blendTextColor(
+    RGBA.fromHex("#dddddd"),
+    RGBA.fromHex(animation.shineColor),
+    textShimmerIntensity(position, code.width, animation),
+  ).toInts()
 }
 
-test("Live Diff shimmer crosses only freshly changed text, including wrapped rows", () => {
+test("Live Diff uses the shortcut shimmer curve on changed text, including wrapped rows", () => {
   const background = RGBA.fromHex("#344b70")
   const { buffer, draws } = capturedBuffer(background)
-  const shine = RGBA.fromHex("#ffffff")
-  drawLiveDiffTextShimmer(buffer, code, new Set([1]), 6 / 26, background)
-  expect(shineColumns(draws, 0, shine)).toEqual([])
-  expect(shineColumns(draws, 1, shine)).toContain(3)
-  expect(shineColumns(draws, 2, shine)).toContain(3)
+  const first = { frame: 5, frameCount: 28, shineColor: "#ffffff" }
+  drawLiveDiffTextShimmer(buffer, code, new Set([1]), first)
+  expect(draws.some((draw) => draw.y === 0)).toBe(false)
+  expect(draws.find((draw) => draw.y === 1 && draw.x === 3)?.color.toInts()).toEqual(
+    expectedColor(3, first),
+  )
+  expect(draws.find((draw) => draw.y === 2 && draw.x === 3)?.color.toInts()).toEqual(
+    expectedColor(3, first),
+  )
+  expect(
+    new Set(draws.filter((draw) => draw.y === 1).map((draw) => draw.color.toInts().join())).size,
+  ).toBeGreaterThan(2)
 
   draws.length = 0
-  drawLiveDiffTextShimmer(buffer, code, new Set([1]), 16 / 26, background)
-  expect(shineColumns(draws, 1, shine)).toContain(13)
-  expect(shineColumns(draws, 1, shine)).not.toContain(3)
+  const second = { ...first, frame: 17 }
+  drawLiveDiffTextShimmer(buffer, code, new Set([1]), second)
+  expect(draws.find((draw) => draw.y === 1 && draw.x === 13)?.color.toInts()).toEqual(
+    expectedColor(13, second),
+  )
+  expect(draws.some((draw) => draw.y === 1 && draw.x === 3)).toBe(false)
 })
 
-test("Live Diff shimmer uses dark text on light palette backgrounds", () => {
+test("Live Diff shimmer follows the palette-aware shortcut target color", () => {
   const background = RGBA.fromHex("#bed3f4")
   const { buffer, draws } = capturedBuffer(background)
-  drawLiveDiffTextShimmer(buffer, code, new Set([1]), 6 / 26, background)
-  expect(shineColumns(draws, 1, RGBA.fromHex("#172b56"))).toContain(3)
+  const animation = { frame: 5, frameCount: 28, shineColor: "#172b56" }
+  drawLiveDiffTextShimmer(buffer, code, new Set([1]), animation)
+  expect(draws.find((draw) => draw.y === 1 && draw.x === 3)?.color.toInts()).toEqual(
+    expectedColor(3, animation),
+  )
 })

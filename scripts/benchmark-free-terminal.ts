@@ -58,6 +58,7 @@ const sidebarView = {
   width: 24,
   height: 30,
   masterKey: "Ctrl+B" as const,
+  recentThreads: [],
   onSelectFolder: () => undefined,
   onToggleFolder: () => undefined,
   onActivate: () => undefined,

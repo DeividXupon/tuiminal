@@ -195,7 +195,8 @@ async function launchTerminal(
   if (command.codex && clear) context.clearAgentMessages(id)
   const active: ActiveLaunch = { handle: null, ended: false }
   let codexState: "working" | "blocked" | "done" | "unknown" | "idle" = "idle"
-  let codexActivity: "thinking" | "running" | "updating" | "coding" | "tooling" = "thinking"
+  let codexActivity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling" =
+    "thinking"
   let codexTitle: string | undefined
   const updateCodexAgent = () => {
     if (!launch.isCurrent()) return
@@ -213,6 +214,7 @@ async function launchTerminal(
   }
   const options = {
     cwd: FREE_TERMINAL_WORKING_DIRECTORY,
+    ...(command.codex?.resumeThreadId ? { resumeThreadId: command.codex.resumeThreadId } : {}),
     ...size,
     onData(data: Uint8Array) {
       if (!launch.isCurrent()) return

@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { Button } from "@tuiparts/react/button"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { useEffect, useRef } from "react"
 import {
   isLocalhostAgentSession,
@@ -10,6 +10,7 @@ import {
   type TerminalSession,
 } from "../model/sessions"
 import { agentPresentation, codexActivityIndicators } from "../rendering/agent-presentation"
+import { TerminalShortcutText } from "./TerminalShortcut"
 
 function agentPrimaryColor(
   compact: boolean,
@@ -44,7 +45,7 @@ function TerminalAgentRow({
   const status = agentPresentation(agent.state, frame, agent.activity)
   const cursorRail = cursor ? "▌" : " "
   const statusWidth = Math.min(displayWidth(status.shortLabel), Math.max(5, width - 14))
-  const shortcutWidth = shortcut ? displayWidth(shortcut) + 1 : 0
+  const shortcutWidth = shortcut ? displayWidth(shortcut) : 0
   const primary = compact && agent.taskTitle ? agent.taskTitle : agent.label
   const primaryColor = agentPrimaryColor(compact, agent.taskTitle, selected)
   const showActivity = !compact && session.agentIntegration === "codex-app-server"
@@ -75,11 +76,11 @@ function TerminalAgentRow({
           style={{ fg: COLORS.terminal, width: 1, flexShrink: 0 }}
         />
         {shortcut && (
-          <ShortcutText
+          <TerminalShortcutText
             id={`terminal-agent-shortcut-${session.id}`}
-            content={`${shortcut} `}
-            highlight={false}
-            style={{ fg: COLORS.terminal, width: shortcutWidth, flexShrink: 0 }}
+            content={shortcut}
+            shortcutColor={BRAND_COLOR}
+            style={{ fg: BRAND_COLOR, width: shortcutWidth, flexShrink: 0 }}
           />
         )}
         <box style={{ height: rowHeight, flexGrow: 1, minWidth: 0 }}>

@@ -1,20 +1,21 @@
 import { Tabs } from "@tuiparts/react/tabs"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { NavigationTab } from "./NavigationTab"
 import type { ToolId } from "../tool-catalog"
+import { NavigationTab } from "./NavigationTab"
 
 function WorkspaceTabs({
   installed,
   compact,
   minimal,
+  shortcutColor,
 }: {
   installed: readonly ToolId[]
   compact: boolean
   minimal: boolean
+  shortcutColor?: string | undefined
 }) {
   const tabs = [
     { value: "database", label: translateUi("Banco"), compactLabel: "DB", shortcut: "[Alt+1]" },
@@ -39,6 +40,7 @@ function WorkspaceTabs({
             value={value}
             label={compact ? compactLabel : label}
             shortcut={shortcut}
+            shortcutColor={shortcutColor}
           />
         ))}
     </Tabs.List>
@@ -50,6 +52,7 @@ export function WorkspaceHeader({
   terminalCompact = false,
   compactNavigation,
   minimalNavigation,
+  terminalMasterKeyActive = false,
   openSettings,
   onQuit,
 }: {
@@ -57,9 +60,11 @@ export function WorkspaceHeader({
   installed: readonly ToolId[]
   compactNavigation: boolean
   minimalNavigation: boolean
+  terminalMasterKeyActive?: boolean
   openSettings: () => void
   onQuit: () => void
 }) {
+  const shortcutColor = terminalCompact && !terminalMasterKeyActive ? COLORS.muted : undefined
   return (
     <box
       id="tutorial-app-header"
@@ -83,25 +88,22 @@ export function WorkspaceHeader({
         installed={installed}
         compact={compactNavigation}
         minimal={minimalNavigation}
+        shortcutColor={shortcutColor}
       />
       <box style={{ flexDirection: "row", alignItems: "center" }}>
-        {compactNavigation ? null : (
-          <ShortcutText
-            content={`[Alt+1–5] ${translateUi("MUDAR")}  `}
-            style={{ fg: COLORS.muted }}
-          />
-        )}
         <InlineButton
           compact={terminalCompact || LAYOUT.compact}
           id="tutorial-settings-button"
           label={compactNavigation ? "[,]" : "[,] Config"}
           accent={COLORS.focus}
+          shortcutColor={shortcutColor}
           onPress={openSettings}
         />
         <InlineButton
           compact={terminalCompact || LAYOUT.compact}
           label={compactNavigation ? "[Q]" : "[Q] Sair"}
           accent={COLORS.focus}
+          shortcutColor={shortcutColor}
           onPress={onQuit}
         />
       </box>

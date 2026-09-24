@@ -1,10 +1,10 @@
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { useEffect, useRef, useState } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
+import { useEffect, useRef, useState } from "react"
+import { TerminalInlineButton } from "./TerminalShortcut"
 
 export type TerminalDialogKind = "command" | "rename"
 const TITLES = {
@@ -66,8 +66,8 @@ export function TerminalDialog({
         }}
       />
       <box style={{ height: 1, flexDirection: "row", flexShrink: 0 }}>
-        <InlineButton compact label="[Enter] Salvar" onPress={submit} />
-        <InlineButton compact label="[Esc] Cancelar" onPress={onClose} />
+        <TerminalInlineButton compact label="[Enter] Salvar" onPress={submit} />
+        <TerminalInlineButton compact label="[Esc] Cancelar" onPress={onClose} />
       </box>
     </ModalSurface>
   )

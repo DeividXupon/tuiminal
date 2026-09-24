@@ -147,6 +147,36 @@ export function useTerminalSessions(active: boolean) {
       terminal.invalidate()
     })
   }, [])
+  const moveSession = useCallback(
+    (id: string, placement: TerminalPlacement) => {
+      const current = sessionsRef.current
+      const moving = current.find((session) => session.id === id)
+      if (!moving) return false
+      const destination = current.filter(
+        (session) => session.sectionId === placement.sectionId && session.id !== id,
+      )
+      if (destination.length >= MAX_TERMINALS_PER_SECTION) {
+        setNotice("Esta seção já possui dois terminais.")
+        return false
+      }
+      const next = normalizeSectionLayout(
+        current.map((session) => {
+          if (session.id === id) return { ...session, ...placement }
+          if (session.sectionId === placement.sectionId)
+            return { ...session, row: 0 as const, column: 0 as const }
+          return session
+        }),
+        moving.sectionId,
+      )
+      sessionsRef.current = next
+      setSessions(next)
+      activeSessionRef.current = id
+      setActiveSessionId(id)
+      focusTerminal(id)
+      return true
+    },
+    [focusTerminal],
+  )
   const activateSession = useCallback(
     (id: string) => {
       if (!sessionsRef.current.some((session) => session.id === id)) return
@@ -331,6 +361,7 @@ export function useTerminalSessions(active: boolean) {
     activateSession,
     focusTerminal,
     updateSession,
+    moveSession,
     launchCommand,
     closeSession,
     restartSession,

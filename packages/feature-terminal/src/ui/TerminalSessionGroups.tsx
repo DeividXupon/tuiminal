@@ -1,13 +1,13 @@
 import { Button } from "@tuiparts/react/button"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import {
   DEFAULT_FOLDER,
   EXTERNAL_FOLDER,
-  terminalSections,
   type TerminalFolder,
   type TerminalSession,
+  type terminalSections,
 } from "../model/sessions"
 import {
   terminalSessionDetail,
@@ -15,6 +15,7 @@ import {
   terminalStatusLabel,
   terminalStatusMarker,
 } from "../rendering/presentation"
+import { TerminalShortcutText } from "./TerminalShortcut"
 
 type TerminalSection = ReturnType<typeof terminalSections>[number]
 
@@ -43,7 +44,7 @@ function TerminalPaneButton({
     Math.max(1, Math.min(Math.floor(paneWidth * 0.44), Math.max(1, paneWidth - 3))),
   )
   const titleColor = cursor ? COLORS.terminal : selected ? COLORS.text : COLORS.muted
-  const shortcutWidth = shortcut ? displayWidth(shortcut) + 1 : 0
+  const shortcutWidth = shortcut ? displayWidth(shortcut) : 0
   return (
     <box style={{ flexDirection: "row", flexGrow: 1, flexBasis: 0, minWidth: 0 }}>
       {separator && (
@@ -68,11 +69,11 @@ function TerminalPaneButton({
         >
           <box style={{ height: 1, flexDirection: "row", width: "100%" }}>
             {shortcut && (
-              <ShortcutText
+              <TerminalShortcutText
                 id={`terminal-sidebar-shortcut-${pane.id}`}
-                content={`${shortcut} `}
-                highlight={false}
-                style={{ fg: COLORS.terminal, width: shortcutWidth, flexShrink: 0 }}
+                content={shortcut}
+                shortcutColor={BRAND_COLOR}
+                style={{ fg: BRAND_COLOR, width: shortcutWidth, flexShrink: 0 }}
               />
             )}
             <text

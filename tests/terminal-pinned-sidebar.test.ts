@@ -111,6 +111,7 @@ test("publishing the same sidebar view does not notify subscribers twice", () =>
     width: 24,
     height: 30,
     masterKey: "Ctrl+B" as const,
+    recentThreads: [],
     onSelectFolder: () => undefined,
     onToggleFolder: () => undefined,
     onActivate: () => undefined,
@@ -353,6 +354,7 @@ test.skipIf(process.platform === "win32")(
       selectedFolder: "terminal",
       activeSessionId: null,
       masterKey: "Ctrl+B" as const,
+      recentThreads: [],
       theme: { canvas: "#000000" },
       language: "pt-BR",
     }
@@ -368,10 +370,14 @@ test.skipIf(process.platform === "win32")(
       )
       expect(await sendPinnedSidebarTarget(control!.endpoint, { folderId: "terminal" })).toBe(true)
       expect(await sendPinnedSidebarTarget(control!.endpoint, { action: "n" })).toBe(true)
+      expect(
+        await sendPinnedSidebarTarget(control!.endpoint, { resumeThreadId: "thread-123" }),
+      ).toBe(true)
       expect(selected).toEqual([
         { sessionId: "shell-123-1" },
         { folderId: "terminal" },
         { action: "n" },
+        { resumeThreadId: "thread-123" },
       ])
     } finally {
       await control?.close()
