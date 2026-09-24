@@ -44,6 +44,7 @@ process.env.TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY = "0"
 process.env.TUIMINAL_TERMINAL_RESTORE = "0"
 process.env.TUIMINAL_TERMINAL_PINNED_TMUX = "0"
 process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "0"
+process.env.TUIMINAL_TERMINAL_CODEX_RESUME = "0"
 process.env.XDG_DATA_HOME = join(CAPTURE_ROOT, "data")
 process.env.TUIMINAL_WORKDIR = PROJECT_ROOT
 process.env.TUIMINAL_HTTP_HOME = PROJECT_ROOT
@@ -602,6 +603,8 @@ async function nativeTerminalFrames() {
     )
     await clickRenderable(tui, "terminal-sidebar-folder-terminal")
     await prefix("v")
+    frames.push(snapshot(tui, "Escolha um novo terminal ou agente existente"))
+    await pressKey(tui, "n")
     await settle(
       tui,
       () =>
@@ -609,9 +612,7 @@ async function nativeTerminalFrames() {
     )
     frames.push(snapshot(tui, "[Ctrl+B] [V] · dois terminais por seção"))
     await pressKey(tui, "b", { ctrl: true })
-    frames.push(
-      snapshot(tui, "Master Key · ações na parte inferior · [Esc] cancela", undefined, 220),
-    )
+    frames.push(snapshot(tui, "Master Key · ações e chats em um modal pesquisável", undefined, 220))
     await pressKey(tui, "escape")
     await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(tui, "terminal-command-input", `node "${agentPath}"`)
@@ -664,6 +665,7 @@ async function nativeTerminalFrames() {
     await prefix("d")
     process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     await prefix("v")
+    await pressKey(tui, "n")
     await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(tui, "terminal-command-input", `node "${reviewerPath}"`)
     await pressKey(tui, "enter")

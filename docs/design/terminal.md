@@ -20,8 +20,10 @@ Two panes are the limit, not two additional panes beside an original. Closing on
 expands its sibling. There are at most 12 terminals in a workspace. New terminal
 always opens a new section in the reserved Tuiminais folder, including when the current
 section has room for a second pane. New section does the same. Only the explicit
-Split right / below actions add a second pane to the current section. Custom
-commands create a new section and are passed unchanged to the native shell.
+Split right / below actions open a confirmation that can either start a new shell
+or move an already-running agent terminal into the second pane. Moving an agent
+preserves its PTY and process, and its former section expands any remaining sibling.
+Custom commands create a new section and are passed unchanged to the native shell.
 
 The left sidebar has a Terminals heading and a count of its visible sections,
 followed by non-empty folders and zero-padded numbered sections. Clicking a folder
@@ -79,7 +81,7 @@ focus accent so they remain legible across every light/dark palette and distinct
 from state colors. All running agents are listed,
 including agents in other sections. The list scrolls independently and selecting a
 row activates the existing pane. Empty lists say there are no active agents.
-Below ten available rows (including while the Master Key menu is open), running
+Below ten available rows, running
 agents remain accessible as compact single-line rows with task title (or agent
 name) and status. With
 agents present, the creation buttons are hidden below eight rows and the Sessions
@@ -105,19 +107,59 @@ Settings opened from Terminal contain a Terminal category with the persisted
 The global layout selector is hidden in this context because Terminal is always
 compact. Other tools retain their layout preference.
 
-The Master Key opens a mouse-accessible action list at the bottom. It owns input
-until an enabled action is chosen or `[Esc]` cancels. There is no timeout. Unknown
-or disabled actions leave it open. Repeating the Master Key sends its literal
+The Master Key opens a centered, mouse-accessible modal up to 120 columns wide without
+dimming or changing the embedded terminal geometry. It contains solid, borderless
+side-by-side Actions and Agents boxes inside the modal's single outer border;
+`[←/→]` changes the active box, while `[↑/↓]` or `[J/K]` moves inside it. Every action
+is a vertical two-line row: bracketed shortcut and name first, then a short description.
+The name uses the palette's primary text color so it stays light in dark mode and dark
+in light mode. Colored, localized tags align at the opposite end of the title row and
+classify agent-only features, general features, terminal operations, sidebar operations,
+navigation, and application actions. Agent-only features may show both feature and agent
+tags. Actions are ordered by those purposes. `[C]`, `[R]`, and `[G]` are not Master Key
+actions.
+Agents shows up to six conversations from the owned localhost Codex app-server's
+`thread/list`, with the current-directory scope and recency ordering used by Codex
+`/resume`. A short-lived owned app-server loads the list and bounded public
+`thread/turns/list` results when Terminal becomes active, even before a Codex pane
+exists; integrated panes keep it current afterward. An agent row shows `[Enter]`, its
+name, prompt preview and live state. Idle rows append the elapsed time since their last
+activity using the palette's primary text color, which stays bright on dark palettes
+and dark on light palettes. Focusing an agent keeps that row intact and shows up to three wrapped lines
+of its latest public `agentMessage` below the Agents list; the response follows
+`[↑/↓]` selection. Its marker, title, state and response use semantic state/focus
+colors. Selecting it opens a new
+section running the official TUI through `codex resume <thread-id> --remote <relay>`.
+The relay consumes its own `thread/list` requests and responses rather than forwarding
+them into the visible TUI. `[/]` focuses one filter for actions and agents;
+horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
+selected result. `[Esc]` first unfocuses the filter,
+then closes the modal. The modal owns input until an enabled action is chosen or
+cancelled. There is no timeout. Unknown or disabled actions leave it open.
+Repeating the Master Key sends its literal
 control byte to the selected PTY. Neither the prefix, action nor cancellation
 reaches the shell. Dialogs own their keyboard and Escape; closing one restores the
 selected terminal. Switching tools or opening global settings dismisses local
-menus and dialogs. While the menu is open, the first nine visible Agents or
+menus and dialogs. While the modal is open, the first nine visible Agents or
 Terminals rows receive a key (`[1]`, `[2]`, … `[9]`), ordered as displayed with
 Agents first. Type its key to activate that existing pane; collapsed terminal
 folders do not receive a key. `[Alt+1–5]` keeps its global tool
 navigation role: Database, Git, Runner, HTTP, and Free Terminal. `[,]` opens
-settings, and `[Q]` requests application exit. The custom-command dialog remains
+settings, and `[Q]` requests application exit. In the Terminal header these global
+shortcut tokens remain muted until the Master Key is active, when they use the fixed
+blue brand accent. The temporary `[1]`–`[9]` sidebar labels use that same blue without
+changing the sidebar's geometry. The custom-command dialog remains
 available from a sidebar button.
+
+Master Key then `[M]` closes the action modal and enters box-selection mode for
+the visible sidebar, terminal panes, sent-message history, and Live Diff panels. The box
+that owned focus before the Master Key opens is selected first, receives a
+translucent blue background, and shows `Press [Enter] to focus` on its own solid,
+theme-aware surface with a blue border. Every other selectable box receives a
+subtle translucent black layer so the active choice remains visually dominant. Arrow keys and
+`[H/J/K/L]` move spatially among the open boxes; `[Enter]` transfers focus,
+`[Esc]` restores the original focus, and clicking a box focuses it directly.
+Selection mode consumes every key so none reaches a PTY or focused companion.
 
 `[B]` after the Master Key pins the terminal sidebar to the left side of the
 application. The same live Terminals and Agents navigation then remains visible without a right border
@@ -176,8 +218,9 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | --- | --- |
 | `[N]` / `[C]` | New terminal / new section |
 | `[A]` | Open the Codex terminal interface connected to app-server in a new section |
-| `[V]` / `[H]` | Split right / below |
+| `[V]` / `[H]` | Choose a new shell or an existing agent, then split right / below |
 | `[S]` | Open or focus sent-message history for an integrated Codex session |
+| `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
 | `[B]` | Pin / unpin the sidebar |
@@ -207,6 +250,11 @@ Its overview uses the bracketed title actions `[M]` for the full user message,
 activity, and `[D]` for that turn's files and diff. `[J/K]` and `[↑/↓]` scroll a
 full section. `[Esc]` returns from a section to the overview, from the overview to
 the table, then to the terminal. Focused `[X]` or the close control removes the panel.
+Every bracketed history shortcut, including the overview title actions, uses a blue
+brand base with a smooth per-character highlight while history owns keyboard focus.
+Its top separator uses the same blue brand color while focused. The shortcuts become
+static palette-muted gray and the separator returns to the normal border color while
+the visible panel is unfocused.
 The overview fills the expanded region with theme-aware cards rather than leaving
 unused rows. Its activity and change previews use alternating backgrounds, while
 status, model, additions, and removals retain semantic colors. The `[D]` section
@@ -235,6 +283,10 @@ code points; restart and close clear the cache until the selected thread is
 hydrated again. The action is disabled for screen-observed agents and ordinary
 terminals.
 
+Each integrated Codex session can keep its own sent-message history panel open.
+In a split, opening, focusing, or closing one session's history does not replace
+or mutate the sibling session's panel.
+
 The table consumes roughly the lower 30% of the terminal column and the detail
 expands it to 50%; both retain a usable terminal minimum and consume no
 terminal slot. With side-by-side
@@ -246,10 +298,17 @@ terminal region above the diff.
 
 Master Key then `[D]` opens a read-only Live Diff beside the selected recognized
 agent's existing PTY and focuses it immediately. Repeating `[D]` focuses the open Live Diff; its close control or `[X]` removes it. The companion does not consume a terminal slot or create a
-tmux pane. It shares only one separator with the PTY and stacks below it when the
-available width is narrow or the section already has two terminals. Toggling it
-off, switching sections, changing theme, and refreshing Git never relaunch the
-agent or remount its embedded terminal. One agent companion is active at a time.
+tmux pane. In a section with two split terminals, it normally shares the selected
+terminal's pane at an approximately 52/48 terminal-to-diff ratio while the other
+terminal remains visible. Only when that pane is too narrow or short to keep both
+regions useful does Live Diff temporarily cover the selected pane. Both PTYs remain
+mounted; `[Esc]` or `[X]` restores the covered terminal without relaunching either
+process. Otherwise, Live Diff shares one separator with the PTY and stacks below it
+when the available width is narrow. Toggling it off,
+switching sections, changing theme, and refreshing Git never relaunch the agent or
+remount its embedded terminal. Each recognized agent session can keep its own companion
+open; opening, focusing, adding projects to, or closing one Live Diff does not replace
+or mutate another session's panel.
 The focused file list supports `[J/K]` / `[↑/↓]` to select a file, `[Enter]` to
 focus its code preview, `[H/L]` / `[←/→]` to highlight a monitored project,
 `[N]` to show or hide that project's files, `[A]` to open a searchable picker of nearby Git projects, `[X]` to close Live Diff, and `[Esc]` to
@@ -261,12 +320,19 @@ clicking a file returns to file navigation. Clicking a project chip highlights i
 the close control and the `[A]` Add project button in the bottom shortcut area are also clickable. The Master Key's `[N]` still creates a terminal; it is not captured
 by Live Diff.
 
+All bracketed Live Diff shortcuts use a blue brand base with a smooth per-character
+highlight while either its file navigation or code preview owns keyboard focus.
+They switch to static palette-muted gray when focus returns to the PTY or another
+box, without hiding the panel. The shared separator follows the same focus state,
+using the blue brand color while focused and the normal border color otherwise.
+
 The panel has a scrollable unified patch for the selected file, a scrollable
 Files list, and a compact Info summary. The Live Diff code heading shows
 `Show auto: true/false`; Info keeps theme-colored totals, additions, deletions and projects; while code
-is focused, it shows the contextual `[Esc]` action. The panel reserves fourteen fewer
-columns than its usual split and keeps that width while focused. Focusing the code
-widens only its preview by 30 columns toward available space; Files and Info
+is focused, it shows the contextual `[Esc]` action. In the side-by-side layout, the
+panel reserves fourteen fewer columns than its usual split and keeps that width while
+focused. A stacked panel uses the complete pane width so it leaves no unused strip
+beside the diff. Focusing the code widens only its preview by 30 columns toward available space; Files and Info
 keep their widths. Long code lines stay on
 one row until the code preview is focused, then wrap and remain vertically
 scrollable. The Files list follows keyboard selection. Its
@@ -275,16 +341,23 @@ files are ordered by their latest detected change, newest first. The preview
 automatically follows the newest file, pauses that follow when an older file is
 selected, and resumes it when the newest file is selected again. A file that
 disappears while selected returns the preview to newest-file follow mode.
+After the initial snapshot, every file changed in a polling round independently
+starts with a blue row background that fades back to its normal selected or
+unselected background over two seconds. Files changed in the same round animate
+together.
 Both automatic follow and manual selection retain the complete unified patch
-with three Git context lines. Automatic follow scrolls the preview to the newly
+with three Git context lines and one numberless visual separator row between
+hunks. Automatic follow scrolls the preview to the newly
 edited line within the hunk whose changes differ from its prior snapshot, or
 the last hunk when a file is first observed. Line-number shifts alone do not
 move the preview. Manually selected files leave scrolling to the user. This
 changes only Live Diff, not the Git Diffs tool.
-After the first patch establishes a baseline, lines newly present in each later
-snapshot receive a palette-aware blue gutter and text background that stays visible
-while those lines remain in the current patch. A light band shimmers across only
-the newly observed glyphs for 1.6 seconds. Later edits to the same file add their
+After the initial repository snapshot establishes the baseline, lines newly present
+in each later snapshot receive a palette-aware blue gutter and text background that
+stays visible while those lines remain in the current patch. This includes files
+that changed before their first preview, so selecting another file cannot silently
+turn an observed edit into baseline. A light band repeatedly shimmers across only
+the blue glyphs in a 1.6-second cycle. Later edits to the same file add their
 new lines to the blue set, including edits in another hunk; they do not clear the
 earlier highlights. The blue set survives switching files for up to 16 recently
 previewed files in one Live Diff session. The normal green/red diff backgrounds
@@ -293,7 +366,7 @@ unchanged lines and line-number-only shifts are not added. When a line leaves
 the patch, it has no remaining row to highlight. Edits between two polling rounds
 are shown as one observed change. Highlighting never moves a manually scrolled
 preview or changes the PTY.
-Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green.
+Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the same gradual per-character shimmer curve, palette target, frame count, and cadence as Free Terminal shortcut keys while preserving its syntax color as the base.
 elapsed time and additions use the palette's blue, and deletions use its red.
 The path shows the project, an omitted-ancestors marker and only the file's
 immediate parent folder; folder names are middle-truncated to 12 display cells.
@@ -425,7 +498,8 @@ pane ID, independently of the original client's selected window or active pane.
 No new shell, session, external split or attached client is created for a mirror.
 A missing pane fails visibly instead of opening an empty replacement terminal.
 Mirrors temporarily fit the source pane to the actual embedded viewport, after
-subtracting the sidebar, application navigation, action menu and split separators.
+subtracting the sidebar, application navigation and split separators. The Master
+Key modal overlays this viewport and does not resize it.
 The source application receives the new terminal dimensions and can redraw/reflow
 its own interface. This changes its size in the original terminal too: one running
 PTY cannot provide two independent application layouts.

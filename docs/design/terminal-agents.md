@@ -120,12 +120,14 @@ agents under `Local • term`, then integrated app-server sessions under
 `Local • localhost`. These names describe the current transports without claiming a
 real remote runtime. Keyboard navigation and Master Key numbering follow that visual
 order. Compact layouts omit the subgroup headings while retaining the same order.
-Integrated Codex sessions add a third line with code, command,
-plan, and tool indicators; only the current public app-server activity pulses.
-Always use the broadly supported `{}`, `>_`, `txt`, and `●` markers so the
-activity line does not depend on a patched font. Distribute the four markers across
-the available line with space between them. When the agent is stopped, all activity
-markers remain inactive and the first-line state represents it. A row
+Integrated Codex sessions add a third line with thinking, code, command,
+user-visible text, and tool indicators; only the current public app-server activity
+pulses.
+Always use the broadly supported `...`, `{}`, `>_`, `txt`, and `●` markers so the
+activity line does not depend on a patched font. Distribute the five markers across
+the available line with space between them. `txt` covers public `agentMessage`
+updates and final answers as well as plan updates. When the agent is stopped, all
+activity markers remain inactive and the first-line state represents it. A row
 activates the existing pane without acknowledging other results. Compact status
 labels keep the list readable; the done marker continues to mean unseen completion.
 The agent list has its own bounded scroll area and uses single-line rows on very
