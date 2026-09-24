@@ -716,9 +716,10 @@ Main commands:
 | `bun run benchmark:runner:execution` | Measure mounted Runner restart policy and optional log persistence |
 | `bun run benchmark:runner:flow` | Measure real Runner flow execution, restart, and stop through the native interface |
 | `bun run benchmark:http:response` | Measure mounted HTTP response download completion and cancellation |
-| `bun run benchmark:git:ui` | Measure partial staging and folder stage, unstage, and discard in the native Git interface |
-| `bun run benchmark:git:remote:ui` | Measure PR and Issue list loading and refresh in the native Git interface |
-| `bun run benchmark:git:inbox:ui` | Measure Inbox list loading and refresh in the native Git interface |
+| `bun run benchmark:git:ui` | Measure Git graph, log, diff layout, partial staging, and folder actions in the native interface |
+| `bun run benchmark:git:remote:ui` | Measure PR and Issue list, details, pagination, and refresh in the native interface |
+| `bun run benchmark:git:inbox:ui` | Measure Inbox list, pagination, and refresh in the native interface |
+| `bun run benchmark:git:pr` | Measure large PR selection, cache merging, Markdown, and diff parsing |
 | `bun run benchmark:http:ui` | Measure HTTP Send, response search, JSON navigation, download, and cancellation in the native interface |
 | `bun run benchmark:database:ui` | Measure catalog opening, grid navigation, and SQL execution in the native Database interface |
 | `bun run check` | Types, formatting, lint, workspaces, architecture, maintainability, and tests |

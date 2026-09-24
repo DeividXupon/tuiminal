@@ -309,9 +309,11 @@ export function highlightChangedChunks(
   return result
 }
 
-function createDiffDocument(lines: string[], section: string, selectedPath?: string): DiffDocument {
-  const source = lines.join("\n")
-  const path = resolveDiffDocumentPath(lines[0] ?? "", selectedPath)
+function isDiffContentPrefix(code: number) {
+  return code === 0x2d || code === 0x20 || code === 0x2b
+}
+
+function diffDocumentLineCounts(source: string) {
   let unifiedLineCount = 0
   let splitLineCount = 0
   let removedLines = 0
@@ -323,23 +325,41 @@ function createDiffDocument(lines: string[], section: string, selectedPath?: str
     addedLines = 0
   }
 
-  for (const line of lines) {
-    if (insideHunk && /^[- +]/.test(line)) unifiedLineCount += 1
-    if (line.startsWith("@@")) {
+  let lineStart = 0
+  while (lineStart <= source.length) {
+    const newline = source.indexOf("\n", lineStart)
+    const lineEnd = newline === -1 ? source.length : newline
+    const first = source.charCodeAt(lineStart)
+    if (insideHunk && isDiffContentPrefix(first)) {
+      unifiedLineCount += 1
+    }
+    if (first === 0x40 && source.charCodeAt(lineStart + 1) === 0x40) {
       flushChangedLines()
       insideHunk = true
-    } else if (insideHunk && line.startsWith(" ")) {
+    } else if (insideHunk && first === 0x20) {
       flushChangedLines()
       splitLineCount += 1
-    } else if (insideHunk && line.startsWith("-")) {
+    } else if (insideHunk && first === 0x2d) {
       removedLines += 1
-    } else if (insideHunk && line.startsWith("+")) {
+    } else if (insideHunk && first === 0x2b) {
       addedLines += 1
     }
+    if (newline === -1) break
+    lineStart = lineEnd + 1
   }
   flushChangedLines()
+  return { unifiedLineCount, splitLineCount }
+}
 
-  let pendingInlineLines: string[] | undefined = lines
+function createDiffDocument(source: string, section: string, selectedPath?: string): DiffDocument {
+  const firstLineEnd = source.indexOf("\n")
+  const path = resolveDiffDocumentPath(
+    source.slice(0, firstLineEnd === -1 ? source.length : firstLineEnd),
+    selectedPath,
+  )
+  const { unifiedLineCount, splitLineCount } = diffDocumentLineCounts(source)
+
+  let pendingInlineSource: string | undefined = source
   let inlineRows: InlineDiffRow[] | undefined
   return {
     key: `${section}:${path}`,
@@ -351,8 +371,8 @@ function createDiffDocument(lines: string[], section: string, selectedPath?: str
     splitLineCount,
     get inlineRows() {
       if (!inlineRows) {
-        inlineRows = parseInlineRows(pendingInlineLines ?? [])
-        pendingInlineLines = undefined
+        inlineRows = parseInlineRows(pendingInlineSource?.split("\n") ?? [])
+        pendingInlineSource = undefined
       }
       return inlineRows
     },
@@ -362,26 +382,30 @@ function createDiffDocument(lines: string[], section: string, selectedPath?: str
 export function parseDiffDocuments(input: string, selectedPath?: string): DiffDocument[] {
   const documents: DiffDocument[] = []
   let section = "ALTERAÇÕES"
-  let lines: string[] = []
+  let documentStart = -1
 
-  const flush = () => {
-    if (!lines.length) return
-    documents.push(createDiffDocument(lines, section, selectedPath))
-    lines = []
+  const flush = (end: number, beforeNextLine: boolean) => {
+    if (documentStart === -1) return
+    const sourceEnd = beforeNextLine && input.charCodeAt(end - 1) === 0x0a ? end - 1 : end
+    documents.push(createDiffDocument(input.slice(documentStart, sourceEnd), section, selectedPath))
+    documentStart = -1
   }
 
-  for (const line of input.split("\n")) {
-    if (line.startsWith("──")) {
-      flush()
-      section = line.replace(/─/g, "").trim()
-    } else if (line.startsWith("diff --git ")) {
-      flush()
-      lines = [line]
-    } else if (lines.length) {
-      lines.push(line)
+  let lineStart = 0
+  while (lineStart <= input.length) {
+    const newline = input.indexOf("\n", lineStart)
+    const lineEnd = newline === -1 ? input.length : newline
+    if (input.startsWith("──", lineStart)) {
+      flush(lineStart, true)
+      section = input.slice(lineStart, lineEnd).replace(/─/g, "").trim()
+    } else if (input.startsWith("diff --git ", lineStart)) {
+      flush(lineStart, true)
+      documentStart = lineStart
     }
+    if (newline === -1) break
+    lineStart = lineEnd + 1
   }
-  flush()
+  flush(input.length, false)
 
   return documents
 }

@@ -633,5 +633,15 @@ resource disposal, and watches have dedicated suites; `tests/tui/` covers the re
 interface, including guided terminals, focus, rendering, and simulated tutorials.
 Remote reads/writes use fixtures or fake `gh`, never the user's account.
 
-For list/rendering cost, use `bun scripts/benchmark-git-pr.ts`. Measure again on the
-checkout under review; older results do not guarantee current latency.
+Large-list reconciliation caches a validated PR or Issue identity key only
+alongside an exact snapshot of every identity field, so a mutated identity is
+validated again. GitHub timestamps use ordinal ISO ordering, Markdown
+destinations are parsed once per description, and diff documents defer line-array
+allocation until intraline rows are requested. These optimizations must preserve
+inert text, URL validation,
+newest-first ordering, source boundaries, and lazy intraline comparison.
+
+For large-list and rendering cost, use `bun run benchmark:git:pr`; use the dedicated
+`benchmark:git:ui`, `benchmark:git:remote:ui`, and `benchmark:git:inbox:ui` commands
+for mounted interaction latency. Measure again on the checkout under review; older
+results do not guarantee current latency.

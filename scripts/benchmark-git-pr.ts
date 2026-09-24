@@ -64,7 +64,10 @@ function largeDiff(targetBytes = 2 * 1024 * 1024) {
 }
 
 const current = Array.from({ length: 20_000 }, (_, index) => fixture(index))
-const additions = Array.from({ length: 5_000 }, (_, index) => fixture(index + 17_500))
+const additions = Array.from({ length: 5_000 }, (_, index) => {
+  const item = fixture(index + 17_500)
+  return { ...item, title: `Updated ${item.title}` }
+})
 const markdown =
   `${"# Título\n- item com **ênfase** e [link](https://example.test)\n".repeat(4_500)}`.slice(
     0,
@@ -76,15 +79,25 @@ const cases = [
   defineBenchmark({
     id: "git.pr_large_selection",
     tool: "git",
-    description: "Move PR selection through 100,000 bounded rows",
+    description: "Move PR selection 100,000 times within a bounded list",
     operationsPerSample: 100_000,
     run: () => {
       let index = 0
-      for (let step = 0; step < 100_000; step += 1) index = movePullRequestIndex(index, 20, 1)
-      return index
+      let direction: -1 | 1 = 1
+      let movements = 0
+      for (let step = 0; step < 100_000; step += 1) {
+        const next = movePullRequestIndex(index, 20, direction)
+        if (next !== index) movements += 1
+        index = next
+        if (index === 19) direction = -1
+        else if (index === 0) direction = 1
+      }
+      return { index, movements }
     },
-    verify: (index) => {
-      if (index !== 19) throw new Error("Large PR selection did not remain bounded")
+    verify: ({ index, movements }) => {
+      if (index !== 16 || movements !== 100_000) {
+        throw new Error("Large PR selection did not move within its bounds")
+      }
     },
   }),
   defineBenchmark({
@@ -93,7 +106,15 @@ const cases = [
     description: "Merge 5,000 PR updates into a 20,000-item cache",
     run: () => mergePullRequestItems(current, additions),
     verify: (items) => {
-      if (items.length !== 22_500) throw new Error("Large PR merge returned the wrong item count")
+      const updated = items.find((item) => item.identity.nodeId === "PR_benchmark_17500")
+      const appended = items.find((item) => item.identity.nodeId === "PR_benchmark_22499")
+      if (
+        items.length !== 22_500 ||
+        updated?.title !== "Updated Mudança Unicode 日本語 17500" ||
+        appended?.title !== "Updated Mudança Unicode 日本語 22499"
+      ) {
+        throw new Error("Large PR merge did not update and append the expected items")
+      }
     },
   }),
   defineBenchmark({

@@ -6,13 +6,9 @@ export type PullRequestMarkdownLine = {
 }
 
 export function sanitizeGitHubText(value: string) {
-  let output = ""
-  for (const character of value.normalize("NFC")) {
-    const code = character.codePointAt(0) ?? 0
-    if (character === "\n" || character === "\t") output += character
-    else if (code >= 0x20 && code !== 0x7f && !(code >= 0x80 && code <= 0x9f)) output += character
-  }
-  return output
+  return value
+    .normalize("NFC")
+    .replace(/\p{Cc}/gu, (character) => (character === "\n" || character === "\t" ? character : ""))
 }
 
 export function boundedPullRequestDescription(value: string) {
@@ -29,37 +25,53 @@ export function boundedPullRequestDescription(value: string) {
   }
 }
 
-function safeMarkdownDestination(value: string) {
+function safeMarkdownDestination(value: string, cache: Map<string, string>) {
+  const target = value.trim()
+  const cached = cache.get(target)
+  if (cached !== undefined) return cached
   try {
-    const url = new URL(value.trim())
-    return url.protocol === "https:" ? url.toString() : ""
+    const url = new URL(target)
+    const result = url.protocol === "https:" ? url.toString() : ""
+    cache.set(target, result)
+    return result
   } catch {
+    cache.set(target, "")
     return ""
   }
 }
 
-function readableMarkdownInline(value: string) {
-  return value
-    .replace(
+function readableMarkdownInline(value: string, destinationCache: Map<string, string>) {
+  let output = value
+  if (output.includes("![")) {
+    output = output.replace(
       /!\[([^\]\n]*)\]\(([^)\n]+)\)/g,
       (_match, alt: string) => `imagem: ${alt || "sem descrição"}`,
     )
-    .replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (_match, label: string, target: string) => {
-      const safeTarget = safeMarkdownDestination(target)
-      return safeTarget ? `${label} · ${safeTarget}` : label
-    })
-    .replace(/<\/?[A-Za-z][^>\n]*>/g, "")
-    .replace(/`([^`\n]+)`/g, "$1")
-    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
-    .replace(/__([^_\n]+)__/g, "$1")
-    .replace(/~~([^~\n]+)~~/g, "$1")
-    .replace(/\\([\\`*_[\]{}()#+.!~-])/g, "$1")
+  }
+  if (output.includes("[")) {
+    output = output.replace(
+      /\[([^\]\n]+)\]\(([^)\n]+)\)/g,
+      (_match, label: string, target: string) => {
+        const safeTarget = safeMarkdownDestination(target, destinationCache)
+        return safeTarget ? `${label} · ${safeTarget}` : label
+      },
+    )
+  }
+  if (output.includes("<")) output = output.replace(/<\/?[A-Za-z][^>\n]*>/g, "")
+  if (output.includes("`")) output = output.replace(/`([^`\n]+)`/g, "$1")
+  if (output.includes("**")) output = output.replace(/\*\*([^*\n]+)\*\*/g, "$1")
+  if (output.includes("__")) output = output.replace(/__([^_\n]+)__/g, "$1")
+  if (output.includes("~~")) output = output.replace(/~~([^~\n]+)~~/g, "$1")
+  if (output.includes("\\")) output = output.replace(/\\([\\`*_[\]{}()#+.!~-])/g, "$1")
+  return output
 }
 
 export function pullRequestMarkdownLines(value: string): PullRequestMarkdownLine[] {
   const lines: PullRequestMarkdownLine[] = []
+  const destinationCache = new Map<string, string>()
   let fenced = false
-  for (const sourceLine of sanitizeGitHubText(value.replace(/\r\n?/g, "\n")).split("\n")) {
+  const normalizedLines = value.includes("\r") ? value.replace(/\r\n?/g, "\n") : value
+  for (const sourceLine of sanitizeGitHubText(normalizedLines).split("\n")) {
     const trimmed = sourceLine.trim()
     if (/^```/.test(trimmed)) {
       fenced = !fenced
@@ -75,20 +87,29 @@ export function pullRequestMarkdownLines(value: string): PullRequestMarkdownLine
     }
     const heading = trimmed.match(/^#{1,6}\s+(.+)$/)
     if (heading) {
-      lines.push({ kind: "heading", content: `◆ ${readableMarkdownInline(heading[1] ?? "")}` })
+      lines.push({
+        kind: "heading",
+        content: `◆ ${readableMarkdownInline(heading[1] ?? "", destinationCache)}`,
+      })
       continue
     }
     const quote = trimmed.match(/^>\s?(.*)$/)
     if (quote) {
-      lines.push({ kind: "quote", content: `│ ${readableMarkdownInline(quote[1] ?? "")}` })
+      lines.push({
+        kind: "quote",
+        content: `│ ${readableMarkdownInline(quote[1] ?? "", destinationCache)}`,
+      })
       continue
     }
     const bullet = trimmed.match(/^(?:[-+*]|\d+[.)])\s+(.+)$/)
     if (bullet) {
-      lines.push({ kind: "bullet", content: `• ${readableMarkdownInline(bullet[1] ?? "")}` })
+      lines.push({
+        kind: "bullet",
+        content: `• ${readableMarkdownInline(bullet[1] ?? "", destinationCache)}`,
+      })
       continue
     }
-    lines.push({ kind: "text", content: readableMarkdownInline(sourceLine) })
+    lines.push({ kind: "text", content: readableMarkdownInline(sourceLine, destinationCache) })
   }
   return lines
 }

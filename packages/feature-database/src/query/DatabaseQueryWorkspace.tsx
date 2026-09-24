@@ -68,10 +68,8 @@ import {
   SQL_TAB_LIMIT,
 } from "../rendering/constants"
 import {
-  queryCellForeground,
   queryCompletionPresentation,
   queryResultSummary,
-  queryRowColors,
   queryWindowLoadingLabel,
 } from "../rendering/query-presentation"
 import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
@@ -95,11 +93,13 @@ import {
 } from "../services/database"
 import { DatabaseBatchExportModal } from "../ui/DatabaseBatchExportModal"
 import { DatabaseCellEditor } from "../ui/DatabaseCellEditor"
+import { DatabaseGridRowView } from "../ui/DatabaseGridRowView"
 import {
   DatabaseQueryFavoritesModal,
   type DatabaseQueryFavoritesMode,
 } from "../ui/DatabaseQueryFavoritesModal"
 import { RowInspector } from "../ui/RowInspector"
+
 export function DatabaseQueryWorkspace({
   active,
   tabId,
@@ -254,8 +254,10 @@ export function DatabaseQueryWorkspace({
     ),
   )
   const maxColumnOffset = Math.max(0, (result?.columns.length ?? 0) - visibleColumnCount)
-  const visibleColumns =
-    result?.columns.slice(columnOffset, columnOffset + visibleColumnCount) ?? []
+  const visibleColumns = useMemo(
+    () => result?.columns.slice(columnOffset, columnOffset + visibleColumnCount) ?? [],
+    [columnOffset, result?.columns, visibleColumnCount],
+  )
   const resultColumnMetadata = useMemo(
     () => databaseQueryResultColumns(result?.columns ?? [], resultTableColumns ?? []),
     [result?.columns, resultTableColumns],
@@ -995,6 +997,26 @@ export function DatabaseQueryWorkspace({
     const row = batchRow(gridRow)
     setResultBatchRows((current) => toggleDatabaseBatchRow(current, row))
   }, [])
+
+  const selectResultBatchRow = useCallback(
+    (rowIndex: number, gridRow: DatabaseGridRow) => {
+      selectedResultRowIndexRef.current = rowIndex
+      setSelectedResultRowIndex(rowIndex)
+      focusResultPane("grid")
+      toggleResultBatchRow(gridRow)
+    },
+    [focusResultPane, toggleResultBatchRow],
+  )
+
+  const selectResultGridCell = useCallback(
+    (rowIndex: number, columnIndex: number) => {
+      selectedResultRowIndexRef.current = rowIndex
+      setSelectedResultRowIndex(rowIndex)
+      selectResultGridColumn(columnIndex)
+      focusResultPane("grid")
+    },
+    [focusResultPane, selectResultGridColumn],
+  )
 
   const selectionSweep = useDatabaseSelectionSweep({
     rows: queryGridRows,
@@ -2275,98 +2297,31 @@ export function DatabaseQueryWorkspace({
                       },
                     }}
                   >
-                    {queryGridRows.map((gridRow, rowIndex) => {
-                      const mutationKind = gridRow.change?.mutation.kind
-                      const { background: rowBackground, accent: rowAccent } = queryRowColors(
-                        mutationKind,
-                        rowIndex,
-                      )
-                      return (
-                        <box
-                          key={gridRow.id}
-                          id={queryElementId(`result-row-${rowIndex}`)}
-                          style={{
-                            height: 1,
-                            flexShrink: 0,
-                            flexDirection: "row",
-                            backgroundColor: rowBackground,
-                          }}
-                        >
-                          <Button
-                            id={queryElementId(`select-row-${rowIndex}`)}
-                            onPress={() => {
-                              selectedResultRowIndexRef.current = rowIndex
-                              setSelectedResultRowIndex(rowIndex)
-                              focusResultPane("grid")
-                              toggleResultBatchRow(gridRow)
-                            }}
-                            height={1}
-                            width={BATCH_SELECTOR_WIDTH}
-                            flexShrink={0}
-                          >
-                            <text
-                              content={
-                                resultBatchRowIds.has(
-                                  databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                )
-                                  ? "● "
-                                  : "○ "
-                              }
-                              style={{
-                                fg: resultBatchRowIds.has(
-                                  databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                )
-                                  ? COLORS.database
-                                  : COLORS.muted,
-                                bg: rowBackground,
-                              }}
-                            />
-                          </Button>
-                          <text content="│" style={{ fg: COLORS.border, bg: rowBackground }} />
-                          {visibleColumns.map((column, visibleIndex) => {
-                            const absoluteIndex = columnOffset + visibleIndex
-                            const selectedCell =
-                              rowIndex === selectedResultRowIndex &&
-                              absoluteIndex === selectedResultGridColumnIndex &&
-                              resultPane === "grid"
-                            const changedCell =
-                              gridRow.change?.mutation.kind === "update" &&
-                              Object.hasOwn(gridRow.change.mutation.values, column)
-                            return (
-                              <Button
-                                key={`${column}-${absoluteIndex}`}
-                                id={queryElementId(`cell-${rowIndex}-${absoluteIndex}`)}
-                                onPress={() => {
-                                  selectedResultRowIndexRef.current = rowIndex
-                                  setSelectedResultRowIndex(rowIndex)
-                                  selectResultGridColumn(absoluteIndex)
-                                  focusResultPane("grid")
-                                }}
-                                height={1}
-                                width={queryCellWidth}
-                                flexShrink={0}
-                              >
-                                {(state) => (
-                                  <text
-                                    content={fitCell(gridRow.data[column], queryCellWidth)}
-                                    style={{
-                                      fg: queryCellForeground(
-                                        selectedCell,
-                                        Boolean(changedCell || mutationKind),
-                                        state.focused,
-                                        rowAccent,
-                                        selectionColors.foreground,
-                                      ),
-                                      bg: selectedCell ? selectionColors.background : rowBackground,
-                                    }}
-                                  />
-                                )}
-                              </Button>
-                            )
-                          })}
-                        </box>
-                      )
-                    })}
+                    {queryGridRows.map((gridRow, rowIndex) => (
+                      <DatabaseGridRowView
+                        key={gridRow.id}
+                        gridRow={gridRow}
+                        rowIndex={rowIndex}
+                        idPrefix={`database-query-${tabId}`}
+                        rowIdSegment="result-row"
+                        columns={visibleColumns}
+                        columnOffset={columnOffset}
+                        cellWidth={queryCellWidth}
+                        separateCells={false}
+                        selectedColumnIndex={
+                          resultPane === "grid" && rowIndex === selectedResultRowIndex
+                            ? selectedResultGridColumnIndex
+                            : -1
+                        }
+                        batchSelected={resultBatchRowIds.has(
+                          databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                        )}
+                        selectionForeground={selectionColors.foreground}
+                        selectionBackground={selectionColors.background}
+                        onToggleBatch={selectResultBatchRow}
+                        onSelectCell={selectResultGridCell}
+                      />
+                    ))}
                   </scrollbox>
                 </box>
               ) : null}

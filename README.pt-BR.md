@@ -740,9 +740,10 @@ Comandos principais:
 | `bun run benchmark:runner:execution` | Medir a política de reinício e a persistência opcional de logs no Runner montado |
 | `bun run benchmark:runner:flow` | Medir execução, reinício e parada de um fluxo real pela interface nativa do Runner |
 | `bun run benchmark:http:response` | Medir a conclusão e o cancelamento de downloads na resposta HTTP montada |
-| `bun run benchmark:git:ui` | Medir stage parcial e stage, unstage e descarte de pasta na interface Git nativa |
-| `bun run benchmark:git:remote:ui` | Medir o carregamento e a atualização das listas de PRs e issues na interface Git nativa |
-| `bun run benchmark:git:inbox:ui` | Medir o carregamento e a atualização da lista do Inbox na interface Git nativa |
+| `bun run benchmark:git:ui` | Medir grafo, log, layout de diff, stage parcial e ações em pastas na interface Git nativa |
+| `bun run benchmark:git:remote:ui` | Medir listas, detalhes, paginação e atualização de PRs e issues na interface nativa |
+| `bun run benchmark:git:inbox:ui` | Medir lista, paginação e atualização do Inbox na interface nativa |
+| `bun run benchmark:git:pr` | Medir seleção, mesclagem de cache, Markdown e parsing de diff com PRs grandes |
 | `bun run benchmark:http:ui` | Medir Enviar, busca na resposta, navegação JSON, download e cancelamento na interface HTTP nativa |
 | `bun run benchmark:database:ui` | Medir abertura do catálogo, navegação na grade e execução SQL na interface nativa do Banco |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
