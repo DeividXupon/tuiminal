@@ -8,6 +8,7 @@ import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import {
   type AgentMessageHistoryEntry,
   agentMessageElapsedLabel,
+  agentMessageHistoryNeedsClock,
   agentMessageModelLabel,
   agentMessageStatusLabel,
 } from "../model/agent-message-history"
@@ -114,6 +115,7 @@ export function AgentMessageHistoryPanel({
   const panelFocused = useRenderableFocus(panel)
   const shortcutColor = terminalShortcutColor(active, panelFocused)
   const selectedEntry = rows.find((entry) => entry.id === selectedId) ?? rows[0] ?? null
+  const hasLiveMessages = agentMessageHistoryNeedsClock(messages)
 
   const openDetail = (view: AgentMessageDetailView) => {
     if (!selectedEntry) return
@@ -141,10 +143,10 @@ export function AgentMessageHistoryPanel({
     previousNewestId.current = newestId
   }, [rows])
   useEffect(() => {
-    if (!active || !messages.length) return
+    if (!active || !hasLiveMessages) return
     const timer = setInterval(() => setNow(Date.now()), 1_000)
     return () => clearInterval(timer)
-  }, [active, messages.length])
+  }, [active, hasLiveMessages])
   useEffect(() => {
     if (selectedId) list.current?.scrollChildIntoView(`agent-message-${sessionId}-${selectedId}`)
   }, [selectedId, sessionId])

@@ -8,10 +8,13 @@ import { testRender } from "@opentui/react/test-utils"
 import { act, createElement } from "react"
 import { App } from "../apps/cli/src/App"
 import { updateUiSettings } from "../packages/core/src/settings/theme"
+import * as codexServer from "../packages/feature-terminal/src/services/codex-app-server"
 import * as terminalProcesses from "../packages/feature-terminal/src/services/terminal"
 import { stopAllFreeTerminalProcesses } from "../packages/feature-terminal/src/services/terminal-resources"
 import { type BenchmarkCase, defineBenchmark, measureBenchmark } from "./benchmarks/harness"
 import { tuiActionBenchmarks } from "./benchmarks/tui-actions"
+
+const BENCHMARK_KEYPRESS_LISTENER_BUDGET = 16
 
 function benchmarkCounts() {
   const samples = Number(process.env.BENCHMARK_SAMPLES ?? 20)
@@ -73,6 +76,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
   writeFileSync(join(project, "benchmark.http"), "GET http://127.0.0.1:1/fixture\n")
   updateUiSettings({ language: "en" })
   let terminalPid = 900_000
+  let codexEvents: codexServer.CodexAppServerEvents | undefined
   const terminalStart = spyOn(terminalProcesses, "startFreeTerminalProcess").mockImplementation(
     () => ({
       pid: ++terminalPid,
@@ -81,7 +85,21 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
       stop: async () => undefined,
     }),
   )
+  const codexStart = spyOn(codexServer, "startCodexAppServerTerminal").mockImplementation(
+    async (_options, events) => {
+      codexEvents = events
+      return {
+        pid: ++terminalPid,
+        backend: "native",
+        write: () => undefined,
+        resize: () => undefined,
+        stop: async () => undefined,
+      }
+    },
+  )
+  const codexRefresh = spyOn(codexServer, "refreshCodexResumeThreads").mockResolvedValue([])
   const tui = await act(async () => testRender(createElement(App), { width: 160, height: 40 }))
+  tui.renderer.keyInput.setMaxListeners(BENCHMARK_KEYPRESS_LISTENER_BUDGET)
   try {
     const destinations = [
       { tool: "database", key: "1", label: "Database" },
@@ -114,7 +132,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
     }
     async function waitForUi(condition: () => boolean, action: string) {
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        await tui.renderOnce()
+        await act(async () => tui.renderOnce())
         if (condition()) return tui.captureCharFrame()
         await act(async () => Bun.sleep(5))
       }
@@ -206,7 +224,17 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
         },
       }),
     )
-    cases.push(...tuiActionBenchmarks({ tui, switchTo, clickTab, waitForUi, focus, click }))
+    cases.push(
+      ...tuiActionBenchmarks({
+        tui,
+        switchTo,
+        clickTab,
+        waitForUi,
+        focus,
+        click,
+        codexEvents: () => codexEvents,
+      }),
+    )
     const results = []
     for (const benchmark of cases) {
       const result = await measureBenchmark(benchmark, samples, warmup)
@@ -214,6 +242,10 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
       console.log(
         `${result.id.padEnd(22)} p50 ${result.p50Ms.toFixed(3)} ms  p95 ${result.p95Ms.toFixed(3)} ms`,
       )
+    }
+    const keypressListeners = tui.renderer.keyInput.listenerCount("keypress")
+    if (keypressListeners > BENCHMARK_KEYPRESS_LISTENER_BUDGET) {
+      throw new Error(`TUI benchmark exceeded its keypress listener budget: ${keypressListeners}`)
     }
     if (process.env.BENCHMARK_OUTPUT) {
       writeFileSync(
@@ -238,6 +270,8 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
     })
     await stopAllFreeTerminalProcesses()
     terminalStart.mockRestore()
+    codexStart.mockRestore()
+    codexRefresh.mockRestore()
     if (previousOnlyTab === undefined) delete process.env.TUIMINAL_ONLY_TAB
     else process.env.TUIMINAL_ONLY_TAB = previousOnlyTab
     if (previousHome === undefined) delete process.env.HOME

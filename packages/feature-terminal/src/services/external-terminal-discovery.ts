@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process"
 import { readlink } from "node:fs/promises"
 import { getUiSettings } from "@xupon/tuiminal-core/settings/theme"
-import { identifyAgent, type ProcessIdentity } from "../model/agent-detection"
+import type { ProcessIdentity } from "../model/agent-detection"
 import type { AgentIdentity } from "../model/agent-state"
+import { terminalProcessSnapshot } from "../model/process-title"
 import { cleanTerminalName } from "../model/sessions"
-import { terminalProcessPresentation } from "../model/process-title"
 import { readTerminalProcesses } from "./agent-processes"
 
 export type TerminalProcessGroup = {
@@ -104,8 +104,7 @@ export function externalTerminalsFromProcesses(
     })
     const root = byPid.get(rootEntry.pid)
     if (!root) return []
-    const presentation = terminalProcessPresentation(root.pid, terminalProcesses, configuredAgents)
-    const agent = identifyAgent(root.pid, terminalProcesses, configuredAgents)
+    const presentation = terminalProcessSnapshot(root.pid, terminalProcesses, configuredAgents)
     const fallback = cleanTerminalName(
       root.executable
         .replace(/\\/g, "/")
@@ -121,7 +120,7 @@ export function externalTerminalsFromProcesses(
             pid: root.pid,
             title,
             busy: presentation.busy,
-            agent,
+            agent: presentation.agent,
           },
         ]
       : []

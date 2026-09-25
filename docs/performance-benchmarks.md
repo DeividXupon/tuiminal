@@ -5,6 +5,7 @@ Run the offline latency suite with Bun 1.4.2 from `.bun-version`:
 ```bash
 bun run benchmark
 bun run benchmark:all
+bun run benchmark:terminal
 bun run benchmark:all --samples 30 --warmup 5 --startup-samples 5 --output all-result.json
 bun run benchmark --suite database,git --samples 30 --warmup 5
 bun run benchmark --json --output benchmark-result.json
@@ -71,10 +72,11 @@ the samples. The server returns deterministic rows, uses no real database or
 credentials, and is stopped with its owning client.
 
 `benchmark:tui` uses the native OpenTUI test renderer and measures input to a
-rendered frame. Ten cases cover `[Alt+1–5]` and mouse tab switches. Fourteen more
+rendered frame. Ten cases cover `[Alt+1–5]` and mouse tab switches. Twenty-two more
 measure the Terminal Master Key, session creation, mouse and keyboard folder
 folding, pinning and unpinning the sidebar, activation from another tool, session
-navigation and splitting,
+navigation, splitting, rename, custom commands, close, spatial focus selection,
+sent-message history, Live Diff, Codex resume and live resize,
 Database catalog search focus, Git commit graph, Runner multi view and project picker,
 and HTTP help overlay. It uses a disposable project,
 local Git repository and SQLite database with isolated configuration. Defaults are
@@ -201,15 +203,16 @@ can change results. The command does not enforce a universal latency budget.
 
 ## Current coverage
 
-The default service suite has 163 portable cases across the five tools, plus one
-live Runner port-discovery case on POSIX hosts with `lsof`. The native TUI suite
-has 24 cases; the mounted Git Diffs suite has ten cases; the complete HTTP and
+The default service suite has 178 portable cases across the five tools, plus one
+live Runner port-discovery case on POSIX hosts with `lsof` and one isolated live
+Terminal mirror case when `tmux` is available. The native TUI suite
+has 32 cases; the mounted Git Diffs suite has ten cases; the complete HTTP and
 Database UI suites have seven each; the mounted Git PR/Issue remote UI suite has
 eight and the Inbox UI suite has three; the mounted HTTP response suite has three; the Runner execution
 suite has four; the complete Runner flow UI suite adds three cases; and cold
 startup adds five tool-specific measurements. The twelve maintained offline suites
-cover 241 portable cases, plus the live Runner port case on POSIX hosts with
-`lsof`. The opt-in native database
+cover 264 portable cases, plus the live Runner port case on POSIX hosts with
+`lsof` and the live Terminal mirror case on hosts with `tmux`. The opt-in native database
 matrix adds 30 more when Docker is available. Remote Git responses come from
 a disposable `gh` fixture process, so those cases include
 process launch and JSON parsing without network latency.
@@ -220,7 +223,7 @@ process launch and JSON parsing without network latency.
 | Git | Local status/history, diff, branch comparison, stage/unstage, partial-stage patch load/apply, single-line stage and reverse removal, bidirectional line exchange, mounted partial-stage opening and line transfer in both directions, mounted folder stage/unstage and exact-target discard confirmation/completion, tracked and untracked discard, file tree and patch parsing, PR/Issue query suggestions, fake `gh` PR/Issue and Inbox pagination, two-page PR/Issue refresh, mounted PR/Issue and Inbox list loading and refresh, PR/Issue details and detail pagination, PR workflow runs, simulated CI watch transition and real fake-`gh` check polling through notification, all 22 direct PR/Issue mutation kinds including guarded checkout, comment and close coordination through authentication/write/reconciliation, uncertain network-write classification, PR list merge and description rendering, Issue sort, Inbox merge |
 | Runner | Project discovery/context, dependency planning/transitions, simulated and process-backed three-stage flows, owned process-plan restart, mounted four-command flow execution and restart from visible controls through rendered success, mounted stop through real child retirement, mounted automatic policy restart and optional history-log persistence, YAML parse, bounded log buffering/filtering/rendering/export, completed-history roundtrips with metadata only and 1,200 opted-in logs, listening-port parsing and live discovery when `lsof` is available, healthy/unhealthy/cancelled local probes, disposable process and PTY launch/exit and stop |
 | HTTP | `.http` parse and project scan, request preparation/auth/variables, loopback GET/POST/multipart/file/redirect, finite and continuous chunked capture, continuous-stream truncation and midstream cancellation with transport retirement, complete 128 KiB GET download with protected publication, name collision, redirect, midstream cancellation, 404 and unsafe POST rejection, mounted response-hook completion, duplicate suppression, cancellation and owner-close abort, input-driven keyboard/mouse Send, response search, Pretty JSON collapse and visible complete download, approved cross-origin redirect with credential stripping, timeout and cancellation, bounded response capture, single-request collection run, a three-request dependency/extraction/assertion chain with redacted report, ten-row dataset execution with four workers both alone and combined with dependency chains, response inspection/diff, cookie jar, history body budget and persisted roundtrip, Postman and OpenAPI import preview/apply |
-| Free Terminal | PTY output/title processing, native PTY launch and retirement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based agent detection and state transitions, section navigation grouping and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch |
+| Free Terminal | Native/custom/Codex command construction, PTY output/title processing, native PTY launch and retirement/restart, serialized launch replacement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based and screen-based agent detection, task titles and state transitions, external-terminal grouping, Codex app-server event classification, resume threads and sent-message history parsing/merge/publication, section navigation grouping, spatial focus, Master Key shortcut ordering and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch/merge/preview preparation |
 
 The older `scripts/benchmark-free-terminal.ts` remains available for its larger,
 specialized terminal workload.
@@ -228,13 +231,13 @@ specialized terminal workload.
 ## Coverage still to add
 
 The service suite measures model and service response time; the TUI suite measures
-warm keyboard and mouse tab switches plus fourteen individual tool actions. The dedicated
+warm keyboard and mouse tab switches plus twenty-two individual tool actions. The dedicated
 Database UI suite adds catalog, grid, and SQL timings. The suites do not yet measure
 most TUI actions, other mouse interactions,
 installation, or physical terminal display
 latency. Add those scenarios before treating this as full user-perceived latency
-coverage. A run that visited all five tabs also produced an OpenTUI warning at 11
-`keypress` listeners; investigate that count while expanding the UI suite.
+coverage. The native fixture permits the application's stable 15-listener baseline
+and asserts that the count stays bounded at 16 across repeated samples.
 
 - Database: other MCP controls and mounted UI, native-driver cancellation, schema
   caches, and later SQL result windows on the external drivers. The opt-in Docker matrix still needs a
@@ -247,9 +250,11 @@ coverage. A run that visited all five tabs also produced an OpenTUI warning at 1
 - HTTP: Postman account sync and other mounted request-builder and response
   interactions. The complete-download and cancellation controls now have UI
   timings; owner-close timing remains in the response-hook suite.
-- Free Terminal: live resize, live tmux
-  discovery and mirror capture against an isolated server, full folder operations and
-  other mounted sidebar interactions.
+- Free Terminal: the portable service suite has representative coverage for every
+  current model/service feature family, the native renderer suite covers the maintained
+  local dialogs, companion panels and live resize, and an isolated server exercises
+  live tmux capture when `tmux` is installed. Host-terminal display latency and
+  discovery of terminals owned outside the benchmark remain environment-dependent.
 
 External database and service cases remain opt-in and use owned disposable
 resources. Never benchmark against real user credentials or projects by default.

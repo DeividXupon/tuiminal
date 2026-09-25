@@ -262,9 +262,29 @@ export function identifyAgent(
   processes: readonly ProcessIdentity[],
   configured: readonly string[] = [],
 ): AgentIdentity | null {
-  for (const process of descendantProcesses(root, processes)) {
-    const identity = identifyProcessAgent(process, configured)
-    if (identity) return identity
+  const children = new Map<number, ProcessIdentity[]>()
+  const byPid = new Map<number, ProcessIdentity>()
+  for (const process of processes) {
+    byPid.set(process.pid, process)
+    const siblings = children.get(process.parentPid)
+    if (siblings) siblings.push(process)
+    else children.set(process.parentPid, [process])
+  }
+  const visited = new Set<number>()
+  const pending = [root]
+  while (pending.length) {
+    const pid = pending.pop()
+    if (pid === undefined || visited.has(pid)) continue
+    visited.add(pid)
+    const process = byPid.get(pid)
+    if (process) {
+      const identity = identifyProcessAgent(process, configured)
+      if (identity) return identity
+    }
+    const descendants = children.get(pid)
+    if (descendants) {
+      for (const child of descendants) pending.push(child.pid)
+    }
   }
   return null
 }

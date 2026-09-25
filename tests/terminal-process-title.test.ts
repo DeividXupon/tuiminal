@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
+  type ProcessIdentity,
   parsePosixProcesses,
   parseWindowsProcesses,
-  type ProcessIdentity,
 } from "../packages/feature-terminal/src/model/agent-detection"
 import {
   terminalProcessPresentation,
+  terminalProcessSnapshot,
   terminalProcessTitle,
 } from "../packages/feature-terminal/src/model/process-title"
 
@@ -106,6 +107,11 @@ describe("automatic terminal names", () => {
       "100 1 Ss zsh zsh\n101 100 S+ lazygit lazygit\n102 101 S+ MainThread node /opt/@openai/codex/bin/codex.js\n",
     )
     expect(terminalProcessTitle(100, tree)).toBe("lazygit")
+    expect(terminalProcessSnapshot(100, tree)).toEqual({
+      title: "lazygit",
+      busy: true,
+      agent: { key: "102:/opt/@openai/codex/bin/codex.js", label: "Codex", profile: "codex" },
+    })
   })
 
   test("supports incomplete snapshots, nested shells and cyclic parent links", () => {

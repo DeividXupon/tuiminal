@@ -1,4 +1,5 @@
 import { descendantProcesses, identifyProcessAgent, type ProcessIdentity } from "./agent-detection"
+import type { AgentIdentity } from "./agent-state"
 import { cleanTerminalName } from "./sessions"
 
 function executableName(value: string) {
@@ -37,12 +38,11 @@ function fallbackShell(process: ProcessIdentity | undefined) {
 }
 
 /** Prefer the foreground tool over its shell and its short-lived helper processes. */
-export function terminalProcessTitle(
+function terminalProcessTitleFromTree(
   root: number,
-  processes: readonly ProcessIdentity[],
+  tree: readonly ProcessIdentity[],
   configured: readonly string[] = [],
 ) {
-  const tree = descendantProcesses(root, processes)
   const byPid = new Map(tree.map((process) => [process.pid, process]))
   const children = new Map<number, number[]>()
   for (const process of tree) {
@@ -65,6 +65,14 @@ export function terminalProcessTitle(
   return shell ?? fallbackShell(byPid.get(root))
 }
 
+export function terminalProcessTitle(
+  root: number,
+  processes: readonly ProcessIdentity[],
+  configured: readonly string[] = [],
+) {
+  return terminalProcessTitleFromTree(root, descendantProcesses(root, processes), configured)
+}
+
 export function terminalProcessPresentation(
   root: number,
   processes: readonly ProcessIdentity[],
@@ -72,4 +80,20 @@ export function terminalProcessPresentation(
 ) {
   const title = terminalProcessTitle(root, processes, configured)
   return { title, busy: Boolean(title && !isShell(title)) }
+}
+
+/** Resolve presentation and agent identity from one process-tree traversal. */
+export function terminalProcessSnapshot(
+  root: number,
+  processes: readonly ProcessIdentity[],
+  configured: readonly string[] = [],
+) {
+  const tree = descendantProcesses(root, processes)
+  const title = terminalProcessTitleFromTree(root, tree, configured)
+  let agent: AgentIdentity | null = null
+  for (const process of tree) {
+    agent = identifyProcessAgent(process, configured)
+    if (agent) break
+  }
+  return { title, busy: Boolean(title && !isShell(title)), agent }
 }

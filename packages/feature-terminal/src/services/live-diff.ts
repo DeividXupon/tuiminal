@@ -114,9 +114,9 @@ export async function readLiveDiffRoot(root: string, signal: AbortSignal) {
   const headExists = await runGit(root, ["rev-parse", "--verify", "HEAD"], signal)
     .then(() => true)
     .catch(() => false)
-  const detected = headExists
-    ? parseLiveDiffNameStatus(
-        await runGit(
+  const [nameStatusOutput, numstatOutput] = headExists
+    ? await Promise.all([
+        runGit(
           root,
           [
             "diff",
@@ -130,11 +130,7 @@ export async function readLiveDiffRoot(root: string, signal: AbortSignal) {
           ],
           signal,
         ),
-      )
-    : new Map<string, { code: string; originalPath?: string }>()
-  const numstat = headExists
-    ? parseLiveDiffNumstat(
-        await runGit(
+        runGit(
           root,
           [
             "diff",
@@ -150,8 +146,10 @@ export async function readLiveDiffRoot(root: string, signal: AbortSignal) {
           ],
           signal,
         ),
-      )
-    : new Map<string, { additions: number | null; deletions: number | null }>()
+      ])
+    : ["", ""]
+  const detected = parseLiveDiffNameStatus(nameStatusOutput)
+  const numstat = parseLiveDiffNumstat(numstatOutput)
   const files: Omit<LiveDiffFile, "changedAt">[] = []
   const limited = status.slice(0, MAX_FILE_ENTRIES)
   for (let offset = 0; offset < limited.length; offset += 8) {

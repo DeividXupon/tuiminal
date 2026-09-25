@@ -1,6 +1,7 @@
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { act } from "react"
 import { terminalSidebarSnapshot } from "../../packages/feature-terminal/src/model/pinned-sidebar"
+import type { CodexAppServerEvents } from "../../packages/feature-terminal/src/services/codex-app-server"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 import { tuiTerminalActionBenchmarks } from "./tui-terminal-actions"
 
@@ -11,6 +12,7 @@ type TuiActionContext = {
   waitForUi: (condition: () => boolean, action: string) => Promise<string>
   focus: (id: string) => Promise<void>
   click: (id: string) => Promise<void>
+  codexEvents: () => CodexAppServerEvents | undefined
 }
 
 export function tuiActionBenchmarks({
@@ -20,6 +22,7 @@ export function tuiActionBenchmarks({
   waitForUi,
   focus,
   click,
+  codexEvents,
 }: TuiActionContext): BenchmarkCase[] {
   const cases: BenchmarkCase[] = []
   cases.push(
@@ -219,9 +222,10 @@ export function tuiActionBenchmarks({
   cases.push(
     ...tuiTerminalActionBenchmarks({
       tui,
-      switchTo,
+      clickTab,
       waitForUi,
       click,
+      codexEvents,
       closeRunnerProjectPickerIfOpen: async () => {
         if (!projectPickerOpen) return
         await switchTo("3", "Runner")

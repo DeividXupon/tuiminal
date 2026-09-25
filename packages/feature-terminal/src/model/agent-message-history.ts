@@ -66,6 +66,12 @@ export const EMPTY_AGENT_MESSAGE_TURN_DETAIL: AgentMessageTurnDetail = {
   turnDiff: "",
 }
 
+export function agentMessageHistoryNeedsClock(
+  messages: readonly Pick<AgentMessageHistoryEntry, "status">[],
+) {
+  return messages.some((message) => message.status === "queued" || message.status === "inProgress")
+}
+
 function mergeUniqueText(previous: readonly string[], incoming: readonly string[]) {
   return [...new Set([...previous, ...incoming])]
 }

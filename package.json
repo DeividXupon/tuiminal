@@ -15,6 +15,7 @@
   "scripts": {
     "benchmark": "bun scripts/benchmark.ts",
     "benchmark:all": "bun scripts/benchmark-all.ts",
+    "benchmark:terminal": "bun scripts/benchmark.ts --suite terminal",
     "benchmark:database:drivers": "bun scripts/benchmark.ts --suite database --external-database",
     "benchmark:startup": "bun scripts/benchmark-startup.ts",
     "benchmark:tui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-tui.test.ts",

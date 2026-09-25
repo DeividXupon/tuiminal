@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { COLORS } from "../packages/core/src/settings/theme"
 import {
   agentMessageElapsedLabel,
+  agentMessageHistoryNeedsClock,
   agentMessageModelLabel,
   cleanAgentMessage,
   EMPTY_AGENT_MESSAGE_TURN_DETAIL,
@@ -68,6 +69,12 @@ describe("Free Terminal presentation", () => {
       "hello right-to-left world",
     )
     expect(cleanAgentMessage("a".repeat(4_001))).toHaveLength(4_000)
+    expect(agentMessageHistoryNeedsClock([{ status: "completed" }, { status: "failed" }])).toBe(
+      false,
+    )
+    expect(agentMessageHistoryNeedsClock([{ status: "completed" }, { status: "queued" }])).toBe(
+      true,
+    )
     expect(
       agentMessageModelLabel({
         id: "message-1",

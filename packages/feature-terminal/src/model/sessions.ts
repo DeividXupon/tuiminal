@@ -48,6 +48,7 @@ export const DEFAULT_FOLDER = "terminal"
 export const DEFAULT_FOLDER_NAME = "Tuiminais"
 export const EXTERNAL_FOLDER = "others"
 export const EXTERNAL_FOLDER_NAME = "Outros"
+const terminalNameGraphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 export function isRunningAgent(session: TerminalSession) {
   return session.status === "running" && session.agent !== null
@@ -124,9 +125,7 @@ export function cleanTerminalName(value: string) {
   const clean = value.replace(/[\p{Cc}\u202a-\u202e\u2066-\u2069]/gu, "").trim()
   let name = ""
   let count = 0
-  for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
-    clean,
-  )) {
+  for (const { segment } of terminalNameGraphemes.segment(clean)) {
     if (count++ === 80) break
     name += segment
   }
