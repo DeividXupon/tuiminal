@@ -8,6 +8,7 @@ export type ConfigurationSection =
   | "gitRepositories"
   | "gitBrowser"
   | "terminal"
+  | "remoteConnection"
   | "colorMode"
   | "palette"
   | "layout"
@@ -80,6 +81,7 @@ export function configurationSectionsForContext(context: ConfigurationContext) {
   if (context === "terminal")
     return [
       "terminal",
+      "remoteConnection",
       ...GLOBAL_CONFIGURATION_SECTIONS.filter((section) => section !== "layout"),
     ] as ConfigurationSection[]
   if (context === "installer")
@@ -104,10 +106,12 @@ export function activateConfigurationSection(
     startTutorial: () => void
     openHistory: () => void
     openSensitive: () => void
+    focusRemoteConnection: () => void
   },
 ) {
   if (section === "features") return actions.openFeatures()
   if (section === "tutorial") return actions.startTutorial()
   if (section === "history") return actions.openHistory()
   if (section === "sensitive") return actions.openSensitive()
+  if (section === "remoteConnection") return actions.focusRemoteConnection()
 }

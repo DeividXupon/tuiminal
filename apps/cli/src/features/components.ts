@@ -45,3 +45,8 @@ export const listDatabaseQueryHistory: FeatureModules["database"]["listDatabaseQ
 ) => requireFeature("database").listDatabaseQueryHistory(...args)
 export const databaseQueryHistoryCanRerun: FeatureModules["database"]["databaseQueryHistoryCanRerun"] =
   (...args) => requireFeature("database").databaseQueryHistoryCanRerun(...args)
+export const testRemoteCodexConnection: FeatureModules["terminal"]["testRemoteCodexConnection"] = (
+  ...args
+) => requireFeature("terminal").testRemoteCodexConnection(...args)
+export const checkRemoteServerReadiness: FeatureModules["terminal"]["checkRemoteServerReadiness"] =
+  (...args) => requireFeature("terminal").checkRemoteServerReadiness(...args)

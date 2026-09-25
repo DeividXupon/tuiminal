@@ -15,7 +15,7 @@ import {
 function focusTargetFromRenderable(renderable: Renderable | null) {
   for (let current = renderable; current; current = current.parent) {
     if (current.id === "terminal-sidebar") return TERMINAL_SIDEBAR_FOCUS_TARGET
-    for (const kind of ["terminal", "history", "live-diff"] as const) {
+    for (const kind of ["terminal", "history", "live-diff", "setup"] as const) {
       const prefix = `terminal-focus-target-${kind}-`
       if (current.id?.startsWith(prefix))
         return terminalFocusTargetKey(kind, current.id.slice(prefix.length))
@@ -155,12 +155,13 @@ export function useTerminalFocusSelection({
     queueMicrotask(() => {
       if (kind === "sidebar") renderer.root.findDescendantById("terminal-sidebar")?.focus()
       else if (kind === "terminal") focusTerminal(sessionId)
-      else
+      else if (kind === "history" || kind === "live-diff")
         renderer.root
           .findDescendantById(
             kind === "history" ? `agent-message-history-${sessionId}` : `live-diff-${sessionId}`,
           )
           ?.focus()
+      else renderer.root.findDescendantById(`remote-server-setup-${sessionId}`)?.focus()
     })
   }, [focusTerminal, renderer, selectedTarget])
 

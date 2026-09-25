@@ -107,6 +107,47 @@ Settings opened from Terminal contain a Terminal category with the persisted
 The global layout selector is hidden in this context because Terminal is always
 compact. Other tools retain their layout preference.
 
+The Terminal settings context exposes a separate **Remote Connection** category
+beside **Terminal**. A profile persists a display name, SSH user, host, port,
+and private-key path. The settings file stores only the path to the key; it never
+copies key contents. Saving a profile does not connect.
+**Test connection** runs one bounded, non-interactive `ssh` probe with argument-array
+spawning, `BatchMode=yes`, the configured identity and port, the user's normal
+`known_hosts` verification, and a constant remote `printf` marker. The probe reports
+invalid or missing configuration, unknown host keys, authentication failures,
+unreachable hosts, timeouts, cancellation, and a missing SSH client without exposing
+command output. Leaving the screen cancels its owned probe. **Check server** runs two
+read-only probes through the same SSH profile: GitHub SSH authentication with
+`ssh -T git@github.com`, then Codex CLI installation and account state with
+`codex login status`. Each remote script is fixed and returns only a bounded result
+marker.
+
+**Configure server** is one generic action, not a GitHub-specific action. It closes
+settings and opens an interactive SSH shell in a new Terminal section. A setup guide
+under that terminal checks both barriers on entry, selects the first one that failed,
+and shows commands for the user to run manually. **Confirm configuration** rechecks
+only the current barrier and advances only after success. Tuiminal does not create
+keys, install software, register GitHub keys, authenticate accounts, copy projects,
+or run tutorial commands automatically. This flow does not launch a remote
+`codex app-server`, expose remote conversations, or change the existing localhost
+Codex flow; remote-agent execution is not implemented yet. Selecting the category
+renders a read-only summary of saved profiles. `[Enter]`
+then switches the detail pane to the focused form navigator with the first field
+selected, or the first saved profile selected when profiles exist. `[J/K/↑/↓]`
+moves through saved profiles and fields. `[Enter]` on a profile loads it and selects
+its first field; `[Enter]` on a field focuses its input for editing, and `[Esc]`
+returns from the input to field navigation. Field navigation highlights the complete
+label-and-input block with a subdued tint derived from the Terminal accent; only an
+input that owns the editing cursor receives the accent label and that same tinted
+surface. A later `[Esc]` returns to the selected summary; another closes settings.
+`[A]` marks the loaded or cursor-selected profile as the single active remote profile;
+that choice is persisted. Every saved profile shows an explicit localized
+`ACTIVE`/`INACTIVE` label, and the profile loaded into the form also shows `EDITING`.
+The saved-profile list and field list scroll independently, while readiness, status,
+and actions remain fixed at the bottom of the detail pane. Short terminals switch
+fields to a one-line layout, collapse readiness to one row, and restrict the profile
+list so the selected value and every action remain visible.
+
 The Master Key opens a centered, mouse-accessible modal up to 120 columns wide without
 dimming or changing the embedded terminal geometry. It contains solid, borderless
 side-by-side Actions and Agents boxes inside the modal's single outer border;
@@ -155,7 +196,7 @@ changing the sidebar's geometry. The custom-command dialog remains
 available from a sidebar button.
 
 Master Key then `[M]` closes the action modal and enters box-selection mode for
-the visible sidebar, terminal panes, sent-message history, and Live Diff panels. The box
+the visible sidebar, terminal panes, remote setup guides, sent-message history, and Live Diff panels. The box
 that owned focus before the Master Key opens is selected first, receives a
 translucent blue background, and shows `Press [Enter] to focus` on its own solid,
 theme-aware surface with a blue border. Every other selectable box receives a

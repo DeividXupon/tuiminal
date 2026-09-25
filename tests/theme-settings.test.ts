@@ -52,7 +52,7 @@ describe("UI settings", () => {
         const compactSelection = theme.databaseSelectionColors();
         const compactFocusedPanel = theme.focusedPanelBorder(true, "#123456");
         const compactInactivePanel = theme.focusedPanelBorder(false, "#123456");
-        const updated = theme.updateUiSettings({ sensitiveTerms: ["internal code", "token"], terminalMasterKey: "Ctrl+A", terminalAgentCommands: [" Acme ", "acme", "team.assistant"] });
+        const updated = theme.updateUiSettings({ sensitiveTerms: ["internal code", "token"], terminalMasterKey: "Ctrl+A", terminalAgentCommands: [" Acme ", "acme", "team.assistant"], terminalRemoteCodexProfiles: [{ id: "oracle", name: "Oracle VPS", host: "203.0.113.10", user: "ubuntu", port: 22, identityFile: "~/Documents/keys/oracle.key" }] });
         const light = theme.updateUiSettings({ colorMode: "light" });
         const lightColors = { canvas: theme.COLORS.canvas, text: theme.COLORS.text };
         const lightString = syntaxStyle.getStyle("string")?.fg?.toInts();
@@ -78,7 +78,11 @@ describe("UI settings", () => {
             terminalMasterKey: string
             terminalAgentCommands: string[]
           }
-          updated: { sensitiveTerms: string[] }
+          updated: {
+            sensitiveTerms: string[]
+            terminalRemoteCodexProfiles: Array<{ id: string }>
+            terminalRemoteCodexActiveProfileId: string | null
+          }
           light: { colorMode: string }
           lightColors: { canvas: string; text: string }
           darkString: number[]
@@ -95,6 +99,10 @@ describe("UI settings", () => {
         expect(output.initial.colorMode).toBe("dark")
         expect(output.initial.sensitiveTerms).toEqual([...DEFAULT_SENSITIVE_TERMS])
         expect(output.updated.sensitiveTerms).toEqual(["internal code", "token"])
+        expect(output.updated.terminalRemoteCodexProfiles).toEqual([
+          expect.objectContaining({ id: "oracle" }),
+        ])
+        expect(output.updated.terminalRemoteCodexActiveProfileId).toBe("oracle")
         expect(output.light.colorMode).toBe("light")
         expect(output.lightColors).toEqual({ canvas: "#eceff4", text: "#2e3440" })
         expect(output.darkString).toEqual([195, 232, 141, 255])

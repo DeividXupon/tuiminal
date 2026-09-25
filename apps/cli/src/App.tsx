@@ -1,51 +1,74 @@
-import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
-import { type ToolId as AppTab, TOOL_LABELS as TAB_LABELS, resolveToolLaunch } from "./tool-catalog"
-import {
-  focusedRenderableId,
-  ownsKeyboardFocus,
-  ownsInterrupt,
-} from "@xupon/tuiminal-core/keyboard/scope"
-import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Tabs } from "@tuiparts/react/tabs"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import {
+  focusedRenderableId,
+  ownsInterrupt,
+  ownsKeyboardFocus,
+} from "@xupon/tuiminal-core/keyboard/scope"
+import { withNotifications } from "@xupon/tuiminal-core/notifications/index"
+import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
+import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
+import type {
+  DatabaseQueryHistoryEntry,
+  DatabaseQueryRerunRequest,
+} from "@xupon/tuiminal-feature-database"
+import type { HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ConfigurationModal, type ConfigurationSection } from "./ui/ConfigurationModal"
+import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import {
   DatabaseQueryHistoryModal,
   DatabaseViewer,
+  databaseQueryHistoryCanRerun,
   FreeTerminal,
   GitViewer,
   HttpClient,
+  listDatabaseQueryHistory,
   PinnedTerminalSidebar,
   Runner,
-  databaseQueryHistoryCanRerun,
-  listDatabaseQueryHistory,
 } from "./features/components"
-import { withFeatures, useFeatureWorkspace, WorkspaceInstaller } from "./features/workspace"
 import { loadedFeature } from "./features/registry"
 import { useFeatureRetirement } from "./features/use-feature-retirement"
-import type { DatabaseQueryRerunRequest } from "@xupon/tuiminal-feature-database"
-import type { HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
-import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
-import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
-import type { DatabaseQueryHistoryEntry } from "@xupon/tuiminal-feature-database"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
-import { WorkspaceHeader } from "./ui/WorkspaceHeader"
-import { applicationExitLayer } from "./ui/application-exit-layer"
+import { useFeatureWorkspace, WorkspaceInstaller, withFeatures } from "./features/workspace"
+import { globalApplicationShortcut } from "./global-shortcuts"
 import { useApplicationExit } from "./hooks/use-application-exit"
 import { useConfigurationLayer } from "./hooks/use-configuration-layer"
 import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
-import { withNotifications } from "@xupon/tuiminal-core/notifications/index"
-import { globalApplicationShortcut } from "./global-shortcuts"
+import { useRemoteServerSetup } from "./hooks/use-remote-server-setup"
 import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
+import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } from "./tool-catalog"
+import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
+import { applicationExitLayer } from "./ui/application-exit-layer"
+import type { ConfigurationSection } from "./ui/ConfigurationModal"
+import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { withStartupAnimation } from "./ui/StartupAnimation"
-import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
+import { WorkspaceConfigurationOverlay } from "./ui/WorkspaceConfigurationOverlay"
+import { WorkspaceHeader } from "./ui/WorkspaceHeader"
+import { contextualRemoteSettingsOwnKey } from "./ui/terminal-remote-settings"
+
+function syncVisitedTools(
+  visited: Set<AppTab>,
+  installed: readonly AppTab[],
+  closed: ReadonlySet<AppTab>,
+  active: AppTab,
+) {
+  for (const id of visited) {
+    if (!installed.includes(id) || closed.has(id)) visited.delete(id)
+  }
+  if (installed.includes(active) && !closed.has(active) && loadedFeature(active))
+    visited.add(active)
+}
+
+function contextualSettingsOwnKey(focusedId: string | null | undefined, keyName: string) {
+  if (focusedId === "configuration-terminal-agent-input") return true
+  return contextualRemoteSettingsOwnKey(focusedId, keyName)
+}
 
 export function AppContent() {
   const features = useFeatureWorkspace()
@@ -57,15 +80,7 @@ export function AppContent() {
   const [activeTab, setActiveTab] = useState<AppTab>(features.initial ?? INITIAL_TAB)
   const visitedTabsRef = useRef(new Set<AppTab>())
   const { closed, retire, resume } = useFeatureRetirement()
-  for (const id of visitedTabsRef.current) {
-    if (!features.state.installed.includes(id) || closed.has(id)) visitedTabsRef.current.delete(id)
-  }
-  if (
-    features.state.installed.includes(activeTab) &&
-    !closed.has(activeTab) &&
-    loadedFeature(activeTab)
-  )
-    visitedTabsRef.current.add(activeTab)
+  syncVisitedTools(visitedTabsRef.current, features.state.installed, closed, activeTab)
   const [sensitiveTermsOpen, setSensitiveTermsOpen] = useState(false)
   const [queryHistoryOpen, setQueryHistoryOpen] = useState(false)
   const [queryHistoryEntries, setQueryHistoryEntries] = useState<DatabaseQueryHistoryEntry[]>([])
@@ -122,20 +137,14 @@ export function AppContent() {
   const {
     settings,
     open: settingsOpen,
-    section: configurationSection,
-    focusedSection: configurationCursor,
-    navigationActive: configurationNavigationActive,
-    notice: settingsNotice,
     applySettings,
     close: closeSettings,
-    focusNavigation,
-    selectSection: selectConfigurationSection,
-    focusSection: focusConfigurationSection,
-    reset: restoreDefaultSettings,
     openSettings: openConfiguration,
     openGit: openGitConfiguration,
     handleKey: handleConfigurationKey,
   } = configuration
+  const openTerminalForSetup = useCallback(() => void selectTab("terminal"), [selectTab])
+  const remoteSetup = useRemoteServerSetup(closeSettings, openTerminalForSetup)
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
   const modalBlocked = settingsOpen || tutorialOpen || exit.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
@@ -192,9 +201,11 @@ export function AppContent() {
         openFeatures,
         openHistory: openQueryHistory,
         openSensitive: () => setSensitiveTermsOpen(true),
+        focusRemoteConnection: () =>
+          renderer.root.findDescendantById("configuration-terminal-remote-view")?.focus(),
       })
     },
-    [openFeatures, openQueryHistory, startTutorial],
+    [openFeatures, openQueryHistory, renderer, startTutorial],
   )
 
   useKeyboard((key) => {
@@ -224,7 +235,7 @@ export function AppContent() {
       return
     }
 
-    if (settingsOpen && focusedId === "configuration-terminal-agent-input") return
+    if (settingsOpen && contextualSettingsOwnKey(focusedId, key.name)) return
     if (handleConfigurationKey(key, activateConfiguration)) return
 
     if (features.showInstaller && !(key.ctrl && key.name === "c") && key.name !== "q") return
@@ -286,37 +297,18 @@ export function AppContent() {
           }}
         />
       </MountWhen>
-      <MountWhen when={settingsOpen}>
-        <ConfigurationModal
-          open
-          settings={settings}
-          section={configurationSection}
-          focusedSection={configurationCursor}
-          navigationActive={configurationNavigationActive}
-          notice={settingsNotice}
-          onClose={closeSettings}
-          onSectionChange={selectConfigurationSection}
-          onSectionFocus={focusConfigurationSection}
-          onNavigationFocus={focusNavigation}
-          onTerminalAgentCommandsChange={(terminalAgentCommands) =>
-            applySettings({ terminalAgentCommands })
-          }
-          onTerminalMasterKeyChange={(terminalMasterKey) => applySettings({ terminalMasterKey })}
-          onPaletteChange={(palette) => applySettings({ palette })}
-          onColorModeChange={(colorMode) => applySettings({ colorMode })}
-          onLayoutChange={(layout) => applySettings({ layout })}
-          onLanguageChange={(language) => applySettings({ language })}
-          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-          onReset={restoreDefaultSettings}
-          onOpenQueryHistory={openQueryHistory}
-          onStartTutorial={startTutorial}
-          onOpenFeatures={openFeatures}
-          queryHistoryCount={queryHistoryEntries.length}
-          tutorialLabel={TAB_LABELS[tutorialScreen]}
-          context={configurationContext}
-          onGitConfigurationChanged={gitConfiguration.onChanged}
-        />
-      </MountWhen>
+      <WorkspaceConfigurationOverlay
+        configuration={configuration}
+        context={configurationContext}
+        tutorialScreen={tutorialScreen}
+        queryHistoryCount={queryHistoryEntries.length}
+        onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
+        onOpenQueryHistory={openQueryHistory}
+        onStartTutorial={startTutorial}
+        onOpenFeatures={openFeatures}
+        onGitConfigurationChanged={gitConfiguration.onChanged}
+        onConfigureRemoteServer={remoteSetup.configure}
+      />
       <MountWhen when={sensitiveTermsOpen}>
         <SensitiveTermsModal
           open
@@ -448,6 +440,8 @@ export function AppContent() {
                 <FreeTerminal
                   active={!interactionBlocked}
                   externalSidebarHost
+                  remoteSetupRequest={remoteSetup.request}
+                  onRemoteSetupRequestHandled={remoteSetup.handled}
                   onMasterKeyActiveChange={setTerminalMasterKeyActive}
                   onOpenSettings={openSettings}
                   onQuit={() => {
@@ -562,6 +556,8 @@ export function AppContent() {
                 <FreeTerminal
                   active={activeTab === "terminal" && !interactionBlocked}
                   externalSidebarHost
+                  remoteSetupRequest={remoteSetup.request}
+                  onRemoteSetupRequestHandled={remoteSetup.handled}
                   onMasterKeyActiveChange={setTerminalMasterKeyActive}
                   onOpenSettings={openSettings}
                   onSelectTool={(tool) => void selectTab(tool)}

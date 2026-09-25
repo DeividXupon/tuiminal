@@ -59,6 +59,8 @@ test.each(["constructor", "__proto__", "toString", "hasOwnProperty", "not-a-pale
           language: "en",
           terminalMasterKey: "Ctrl+B",
           terminalAgentCommands: [],
+          terminalRemoteCodexProfiles: [],
+          terminalRemoteCodexActiveProfileId: null,
           sensitiveTerms: ["fixture"],
         })
         expect(result.initialCanvas).toBe(paletteFor("prime", result.initial.colorMode).canvas)

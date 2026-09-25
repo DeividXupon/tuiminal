@@ -1,4 +1,4 @@
-export type TerminalFocusTargetKind = "sidebar" | "terminal" | "history" | "live-diff"
+export type TerminalFocusTargetKind = "sidebar" | "terminal" | "history" | "live-diff" | "setup"
 
 export type TerminalFocusTargetKey = `${TerminalFocusTargetKind}:${string}`
 

@@ -7,6 +7,7 @@ import { type TerminalFocusTargetKey, terminalFocusTargetKey } from "../model/fo
 import type { TerminalSession } from "../model/sessions"
 import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
 import { LiveDiffPanel } from "./LiveDiffPanel"
+import { RemoteServerSetupPanel } from "./RemoteServerSetupPanel"
 import { TerminalFocusSelection } from "./TerminalFocusSelection"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
@@ -158,6 +159,12 @@ function messageHistoryHeights(terminalAreaHeight: number, open: boolean, detail
     embeddedHeight: Math.max(1, terminalAreaHeight - historyHeight),
   }
 }
+function remoteSetupHeights(frameHeight: number, open: boolean) {
+  if (!open) return { setupHeight: 0, terminalHeight: "100%" as const }
+  if (!frameHeight) return { setupHeight: "40%" as const, terminalHeight: "60%" as const }
+  const setupHeight = Math.max(6, Math.min(10, frameHeight - 5))
+  return { setupHeight, terminalHeight: Math.max(1, frameHeight - setupHeight) }
+}
 function samePane(previous: PaneProps, next: PaneProps) {
   // Names and process/agent status belong to the sidebar; this pane only reads the session ID.
   return (
@@ -239,9 +246,13 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     Boolean(messageHistory),
     messageDetailOpen,
   )
+  const remoteSetup = session.remoteSetup
+  const setupHeights = remoteSetupHeights(frameHeight, Boolean(remoteSetup))
+  const embeddedTerminalHeight = remoteSetup ? setupHeights.terminalHeight : embeddedHeight
   const terminalFocusTarget = terminalFocusTargetKey("terminal", session.id)
   const historyFocusTarget = terminalFocusTargetKey("history", session.id)
   const liveDiffFocusTarget = terminalFocusTargetKey("live-diff", session.id)
+  const setupFocusTarget = terminalFocusTargetKey("setup", session.id)
   const borders: Array<"top" | "left"> = []
   if (layout.borderTop) borders.push("top")
   if (layout.borderLeft) borders.push("left")
@@ -259,12 +270,12 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     if (!messageHistory) setMessageDetailOpen(false)
   }, [messageHistory])
   useEffect(() => {
-    if (!liveDiff && !messageHistory) return
+    if (!liveDiff && !messageHistory && !remoteSetup) return
     const frame = frameRef.current
     if (!frame) return
     setFrameHeight((current) => (current === frame.height ? current : frame.height))
     setFrameWidth((current) => (current === frame.width ? current : frame.width))
-  }, [liveDiff, messageHistory])
+  }, [liveDiff, messageHistory, remoteSetup])
   return (
     <box
       visible={visible}
@@ -286,7 +297,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
         id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
         onSizeChange={function (this: BoxRenderable) {
-          if (!liveDiff && !messageHistory) return
+          if (!liveDiff && !messageHistory && !remoteSetup) return
           setFrameHeight((current) => (current === this.height ? current : this.height))
           setFrameWidth((current) => (current === this.width ? current : this.width))
         }}
@@ -317,7 +328,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
             id={`terminal-focus-target-terminal-${session.id}`}
             style={{
               width: "100%",
-              height: embeddedHeight,
+              height: embeddedTerminalHeight,
               minHeight: 1,
               flexShrink: 1,
               position: "relative",
@@ -366,6 +377,36 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
                 <TerminalFocusSelection
                   target={historyFocusTarget}
                   selected={focusSelection.selectedTarget === historyFocusTarget}
+                  onFocus={focusSelection.onFocus}
+                />
+              )}
+            </box>
+          )}
+          {remoteSetup && (
+            <box
+              id={`terminal-focus-target-setup-${session.id}`}
+              style={{
+                width: "100%",
+                height: setupHeights.setupHeight,
+                minHeight: 1,
+                flexShrink: 1,
+                position: "relative",
+                border: ["top"],
+                borderColor: COLORS.border,
+                backgroundColor: COLORS.panel,
+              }}
+            >
+              <RemoteServerSetupPanel
+                sessionId={session.id}
+                profile={remoteSetup.profile}
+                active={Boolean(toolActive && active)}
+                onActivateSession={() => onActivate(session.id)}
+                onReturnTerminal={() => onActivate(session.id)}
+              />
+              {focusSelection && (
+                <TerminalFocusSelection
+                  target={setupFocusTarget}
+                  selected={focusSelection.selectedTarget === setupFocusTarget}
                   onFocus={focusSelection.onFocus}
                 />
               )}

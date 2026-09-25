@@ -8,12 +8,14 @@ export function ConfigurationDetailHeader({
   section,
   notice,
   action = false,
+  hint,
   compact = false,
   contentWidth,
 }: {
   section: ConfigurationSection
   notice: string
   action?: boolean
+  hint?: string
   compact?: boolean
   contentWidth: number
 }) {
@@ -40,7 +42,7 @@ export function ConfigurationDetailHeader({
         )}
       </box>
       <ShortcutText
-        content={translateUi(action ? "[Enter] abrir" : "[H/L/←/→] alterar")}
+        content={translateUi(hint ?? (action ? "[Enter] abrir" : "[H/L/←/→] alterar"))}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
       <text

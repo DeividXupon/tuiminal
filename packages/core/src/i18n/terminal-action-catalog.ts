@@ -1,3 +1,5 @@
+import { TERMINAL_REMOTE_MESSAGES } from "./terminal-remote-catalog"
+
 export const TERMINAL_ACTION_MESSAGES = [
   [
     "[N] Novo terminal",
@@ -330,4 +332,5 @@ export const TERMINAL_ACTION_MESSAGES = [
     "[I] 其他智能体命令",
     "[I] 추가 에이전트 명령",
   ],
+  ...TERMINAL_REMOTE_MESSAGES,
 ] as const

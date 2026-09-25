@@ -1,6 +1,20 @@
 import type { AgentStatus } from "./agent-state"
 import type { TmuxPaneTarget, TmuxTerminalKind } from "./tmux"
 
+export type RemoteServerProfile = {
+  id: string
+  name: string
+  host: string
+  user: string
+  port: number
+  identityFile: string
+}
+
+export type RemoteServerSetupRequest = {
+  id: number
+  profile: RemoteServerProfile
+}
+
 export type FreeTerminalKind = TmuxTerminalKind
 export type FreeTerminalCommand = {
   kind: FreeTerminalKind
@@ -19,6 +33,8 @@ export type FreeTerminalCommand = {
   external?: { terminalId: string }
   /** Launch the official Codex TUI against an owned app-server. */
   codex?: { appServer: true; resumeThreadId?: string }
+  /** Interactive SSH shell paired with the read-only server setup guide. */
+  remoteSetup?: { profile: RemoteServerProfile }
 }
 export type TerminalSession = FreeTerminalCommand & {
   id: string

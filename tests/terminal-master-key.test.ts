@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import {
   isTerminalMasterKey,
   normalizeTerminalAgentCommands,
+  normalizeTerminalRemoteCodexProfiles,
   matchesTerminalMasterKey,
   terminalMasterKeyBytes,
 } from "../packages/core/src/settings/terminal"
@@ -13,6 +14,7 @@ import { getUiSettings } from "../packages/core/src/settings/theme"
 
 test("Master Key belongs to contextual Terminal settings without a layout switch", () => {
   expect(configurationSectionsForContext("terminal")[0]).toBe("terminal")
+  expect(configurationSectionsForContext("terminal")[1]).toBe("remoteConnection")
   expect(configurationSectionsForContext("terminal")).not.toContain("layout")
   expect(
     configurationSettingPatch("terminal", { ...getUiSettings(), terminalMasterKey: "Ctrl+B" }, 1),
@@ -39,4 +41,11 @@ test("additional agent identities normalize safely without accepting arbitrary d
     normalizeTerminalAgentCommands([" Acme ", "acme", "team.assistant", null, "\u001bsecret"]),
   ).toEqual(["acme", "team.assistant"])
   expect(normalizeTerminalAgentCommands("acme")).toEqual([])
+})
+
+test("remote Codex profiles are represented in Terminal settings without enabling a launch action", () => {
+  const settings = getUiSettings()
+  expect(settings.terminalRemoteCodexProfiles).toEqual([])
+  expect(settings.terminalRemoteCodexActiveProfileId).toBeNull()
+  expect(normalizeTerminalRemoteCodexProfiles("ubuntu@example.com")).toEqual([])
 })

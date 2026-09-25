@@ -51,6 +51,7 @@ import {
   MAX_TERMINALS_PER_SECTION,
   orderedRunningAgents,
   type TerminalFolder,
+  type RemoteServerSetupRequest,
   type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
@@ -63,6 +64,7 @@ import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
   createCodexAgentCommand,
   createFreeTerminalCommand,
+  createRemoteServerSetupCommand,
   createShellTerminalCommand,
   FREE_TERMINAL_WORKING_DIRECTORY,
 } from "./services/terminal"
@@ -141,6 +143,8 @@ export function FreeTerminal({
   onSelectTool,
   onQuit,
   onMasterKeyActiveChange,
+  remoteSetupRequest,
+  onRemoteSetupRequestHandled,
 }: {
   active: boolean
   externalSidebarHost?: boolean
@@ -148,6 +152,8 @@ export function FreeTerminal({
   onSelectTool?: (tool: "database" | "git" | "runner" | "http" | "terminal") => void
   onQuit?: () => void
   onMasterKeyActiveChange?: (active: boolean) => void
+  remoteSetupRequest?: RemoteServerSetupRequest | null
+  onRemoteSetupRequestHandled?: (id: number) => void
 }) {
   const { notify } = useNotifications()
   const renderer = useRenderer()
@@ -217,6 +223,7 @@ export function FreeTerminal({
   const runActionRef = useRef<(key: string) => void>(() => undefined)
   const resumeCodexThreadRef = useRef<(threadId: string) => void>(() => undefined)
   const handledTargetRevision = useRef(0)
+  const handledRemoteSetupRequest = useRef(0)
   const sidebarPinned = useSyncExternalStore(
     subscribeTerminalSidebar,
     terminalSidebarPinnedSnapshot,
@@ -272,6 +279,7 @@ export function FreeTerminal({
         (!session.agent || liveDiffTarget.agentKey === session.agent.key)
       const liveDiffCoversSession = liveDiffCoversTerminal && liveDiffVisible
       if (!liveDiffCoversSession) targets.push(terminalFocusTargetKey("terminal", session.id))
+      if (session.remoteSetup) targets.push(terminalFocusTargetKey("setup", session.id))
       if (
         !liveDiffCoversSession &&
         messageHistoryForSession(session, messageHistoryTargets.get(session.id), agentMessages)
@@ -500,16 +508,35 @@ export function FreeTerminal({
     setSplitRequest(null)
     if (restore) restoreFocus()
   }
-  const launchSection = (command: FreeTerminalCommand = createShellTerminalCommand()) => {
-    sequence.current += 1
-    launchCommand(command, {
-      sectionId: `section-${sequence.current}`,
-      row: 0,
-      column: 0,
-      folderId: DEFAULT_FOLDER,
-    })
-    setSelectedFolder(DEFAULT_FOLDER)
-  }
+  const launchSection = useCallback(
+    (command: FreeTerminalCommand = createShellTerminalCommand()) => {
+      sequence.current += 1
+      launchCommand(command, {
+        sectionId: `section-${sequence.current}`,
+        row: 0,
+        column: 0,
+        folderId: DEFAULT_FOLDER,
+      })
+      setSelectedFolder(DEFAULT_FOLDER)
+    },
+    [launchCommand],
+  )
+  useEffect(() => {
+    if (!remoteSetupRequest || handledRemoteSetupRequest.current === remoteSetupRequest.id) return
+    handledRemoteSetupRequest.current = remoteSetupRequest.id
+    const existing = sessionsRef.current.find(
+      (session) =>
+        (session.status === "starting" || session.status === "running") &&
+        session.remoteSetup?.profile.id === remoteSetupRequest.profile.id &&
+        session.remoteSetup.profile.host === remoteSetupRequest.profile.host &&
+        session.remoteSetup.profile.user === remoteSetupRequest.profile.user &&
+        session.remoteSetup.profile.port === remoteSetupRequest.profile.port &&
+        session.remoteSetup.profile.identityFile === remoteSetupRequest.profile.identityFile,
+    )
+    if (existing) selectSession(existing.id)
+    else launchSection(createRemoteServerSetupCommand(remoteSetupRequest.profile))
+    onRemoteSetupRequestHandled?.(remoteSetupRequest.id)
+  }, [launchSection, onRemoteSetupRequestHandled, remoteSetupRequest, selectSession, sessionsRef])
   const resumeCodexThread = (threadId: string) => {
     if (sessions.length >= MAX_SESSIONS) {
       setNotice("O limite de terminais foi atingido.")

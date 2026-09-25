@@ -6,6 +6,7 @@ import {
   CodeRenderable,
   type DiffRenderable,
   type EmbeddedTerminalRenderable,
+  type InputRenderable,
   LineNumberRenderable,
   RGBA,
   type ScrollBoxRenderable,
@@ -1238,6 +1239,9 @@ test("session folders collapse, persist per project, and omit empty folders", as
 test("changing Master Key in contextual settings takes effect and keeps shell input intact", async () => {
   await mount(true)
   await click("tutorial-settings-button")
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-section-remoteConnection"),
+  ).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("configuration-section-terminal")).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("configuration-section-layout")).toBeUndefined()
   await click("configuration-terminal-Ctrl+A")
@@ -2004,6 +2008,211 @@ test("settings agent-command input consumes typing and its own Escape", async ()
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
   await key("escape")
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
+})
+
+test("Remote connection navigator selects a saved profile before editing its fields", async () => {
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [
+      {
+        id: "remote-first",
+        name: "Primeira VPS",
+        user: "ubuntu",
+        host: "192.0.2.10",
+        port: 22,
+        identityFile: "/keys/first.key",
+      },
+      {
+        id: "remote-second",
+        name: "Segunda VPS",
+        user: "opc",
+        host: "192.0.2.20",
+        port: 2222,
+        identityFile: "/keys/second.key",
+      },
+    ],
+  })
+  await mount(true)
+  await click("tutorial-settings-button")
+  await click("configuration-section-remoteConnection")
+  await key("enter")
+  expect(renderable("configuration-terminal-remote-profile-remote-first")).toBeDefined()
+  expect(renderable("configuration-terminal-remote-profile-remote-second")).toBeDefined()
+  await arrow("down")
+  await key("enter")
+
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-view")
+  expect((renderable("configuration-terminal-remote-name") as InputRenderable).value).toBe(
+    "Segunda VPS",
+  )
+  await key("a")
+  expect(getUiSettings().terminalRemoteCodexActiveProfileId).toBe("remote-second")
+  const activatedFrame = tui?.captureCharFrame() ?? ""
+  expect(activatedFrame).toContain("○ INATIVO")
+  expect(activatedFrame).toContain("● ATIVO")
+  expect(activatedFrame).toContain("◆ EDITANDO")
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-name")
+})
+
+test("Terminal settings save and test an SSH profile without launching remote Codex", async () => {
+  await mount(true)
+  await click("tutorial-settings-button")
+  await click("configuration-section-remoteConnection")
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-terminal-remote-preview"),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-terminal-remote-name"),
+  ).toBeUndefined()
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-view")
+  expect(tui?.renderer.root.findDescendantById("configuration-terminal-remote-form")).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-terminal-remote-remoteDirectory"),
+  ).toBeUndefined()
+  const nameField = tui?.renderer.root.findDescendantById(
+    "configuration-terminal-remote-field-name",
+  ) as BoxRenderable
+  const nameInput = tui?.renderer.root.findDescendantById(
+    "configuration-terminal-remote-name",
+  ) as InputRenderable
+  const fieldHighlight = nameField.backgroundColor.toInts()
+  expect(fieldHighlight).not.toEqual(RGBA.fromHex(COLORS.panelRaised).toInts())
+  expect(fieldHighlight).not.toEqual(RGBA.fromHex(COLORS.panel).toInts())
+  expect(nameInput.backgroundColor.equals(RGBA.fromHex(COLORS.panel))).toBe(true)
+  await arrow("down")
+  const userField = tui?.renderer.root.findDescendantById(
+    "configuration-terminal-remote-field-user",
+  ) as BoxRenderable
+  const userInput = tui?.renderer.root.findDescendantById(
+    "configuration-terminal-remote-user",
+  ) as InputRenderable
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-user")
+  expect(userField.backgroundColor.equals(RGBA.fromHex(COLORS.panel))).toBe(true)
+  expect(userInput.backgroundColor.toInts()).toEqual(fieldHighlight)
+  await key("escape")
+
+  const fill = async (id: string, value: string) => {
+    await click(id)
+    await act(async () => tui?.mockInput.typeText(value))
+    await tui?.renderOnce()
+  }
+  await fill("configuration-terminal-remote-name", "Oracle VPS")
+  await fill("configuration-terminal-remote-host", "203.0.113.10")
+  await fill("configuration-terminal-remote-identityFile", "/missing/oracle.key")
+  await click("configuration-terminal-remote-save")
+
+  expect(getUiSettings().terminalRemoteCodexProfiles).toEqual([
+    expect.objectContaining({
+      name: "Oracle VPS",
+      host: "203.0.113.10",
+      user: "ubuntu",
+      port: 22,
+      identityFile: "/missing/oracle.key",
+    }),
+  ])
+  expect(commands).toEqual([])
+
+  await click("configuration-terminal-remote-test")
+  expect(tui?.captureCharFrame()).toContain("A chave privada não foi encontrada.")
+  expect(commands).toEqual([])
+
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-section-remoteConnection")
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-terminal-remote-preview"),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById("configuration-terminal-remote-name"),
+  ).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeDefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
+})
+
+test("Remote connection keeps actions visible while a short form reaches its last field", async () => {
+  await mount(true, 58, 18)
+  await click("tutorial-settings-button")
+  await arrow("down")
+  await key("enter")
+  for (let index = 0; index < 4; index++) await arrow("down")
+
+  const frame = tui?.captureCharFrame() ?? ""
+  expect(frame).toContain("Chave privada")
+  expect(frame).toContain("[A] Tornar ativo")
+  expect(frame).toContain("[T] Testar conexão")
+})
+
+test("Remote server configuration opens SSH above a guided barrier flow", async () => {
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [
+      {
+        id: "remote-setup",
+        name: "Oracle VPS",
+        user: "ubuntu",
+        host: "203.0.113.10",
+        port: 22,
+        identityFile: "/missing/oracle.key",
+      },
+    ],
+  })
+  await mount(true, 120, 32)
+  await click("tutorial-settings-button")
+  await click("configuration-section-remoteConnection")
+  await key("enter")
+
+  expect(renderable("configuration-terminal-remote-readiness")).toBeDefined()
+  expect(renderable("configuration-terminal-remote-verify")).toBeDefined()
+  expect(renderable("configuration-terminal-remote-configure")).toBeDefined()
+  await click("configuration-terminal-remote-verify")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("○ GitHub via SSH: A chave")
+  expect(tui?.captureCharFrame()).toContain("O servidor precisa ser configurado.")
+  expect(commands).toEqual([])
+  await click("configuration-terminal-remote-configure")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
+  expect(commands[0]).toEqual([
+    "ssh",
+    "-tt",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-i",
+    "/missing/oracle.key",
+    "-p",
+    "22",
+    "ubuntu@203.0.113.10",
+  ])
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  const setup = renderable(`remote-server-setup-${sessionId}`)
+  expect(setup.screenY).toBeGreaterThan(terminal.screenY)
+  expect(tui?.captureCharFrame()).toContain("PREPARAR SERVIDOR")
+  expect(tui?.captureCharFrame()).toContain("GitHub via SSH")
+  expect(tui?.captureCharFrame()).toContain("Confirmar configuração")
+
+  await leader("m")
+  await key("j")
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-focus-selection-tint-setup-${sessionId}`),
+  ).toBeDefined()
+  await key("enter")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`remote-server-setup-${sessionId}`)
+  await key("escape")
+  expect(focusedTerminal()).toBe(terminal)
+
+  await click(`remote-server-setup-${sessionId}-confirm`)
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("A chave privada local não foi encontrada.")
+  expect(tui?.captureCharFrame()).toContain("GitHub via SSH")
+  expect(commands).toHaveLength(1)
 })
 
 test("sidebar navigation switches among live sections without relaunching their processes", async () => {

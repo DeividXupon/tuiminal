@@ -1,7 +1,7 @@
-import { TerminalSettingsDetail } from "./TerminalSettingsDetail"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { GitConfigurationView } from "../features/components"
 import type { ConfigurationSection } from "../model/configuration-context"
 import {
   gitConfigurationTabForSection,
@@ -15,7 +15,8 @@ import {
 } from "./ConfigurationAppearanceDetails"
 import { ConfigurationDetailHeader } from "./ConfigurationDetailHeader"
 import type { ConfigurationModalProps } from "./configuration-modal-types"
-import { GitConfigurationView } from "../features/components"
+import { TerminalRemoteSettingsDetail } from "./TerminalRemoteSettingsDetail"
+import { TerminalSettingsDetail } from "./TerminalSettingsDetail"
 
 function ActionDetail({
   section,
@@ -70,8 +71,14 @@ type ConfigurationDetailProps = Pick<
   | "section"
   | "navigationActive"
   | "notice"
+  | "onClose"
   | "onNavigationFocus"
   | "onTerminalAgentCommandsChange"
+  | "onTerminalRemoteProfilesChange"
+  | "onTerminalRemoteActiveProfileChange"
+  | "onTerminalRemoteProfileTest"
+  | "onTerminalRemoteReadinessCheck"
+  | "onConfigureRemoteServer"
   | "onTerminalMasterKeyChange"
   | "onPaletteChange"
   | "onColorModeChange"
@@ -95,6 +102,11 @@ export function ConfigurationDetail({
   queryHistoryCount,
   tutorialLabel,
   onTerminalAgentCommandsChange,
+  onTerminalRemoteProfilesChange,
+  onTerminalRemoteActiveProfileChange,
+  onTerminalRemoteProfileTest,
+  onTerminalRemoteReadinessCheck,
+  onConfigureRemoteServer,
   onTerminalMasterKeyChange,
   onPaletteChange,
   onColorModeChange,
@@ -117,6 +129,29 @@ export function ConfigurationDetail({
         contentWidth={contentWidth}
         onChange={onTerminalMasterKeyChange}
         onAgentCommandsChange={onTerminalAgentCommandsChange}
+      />
+    )
+  if (
+    section === "remoteConnection" &&
+    onTerminalRemoteProfilesChange &&
+    onTerminalRemoteActiveProfileChange &&
+    onTerminalRemoteProfileTest &&
+    onTerminalRemoteReadinessCheck &&
+    onConfigureRemoteServer
+  )
+    return (
+      <TerminalRemoteSettingsDetail
+        profiles={settings.terminalRemoteCodexProfiles}
+        activeProfileId={settings.terminalRemoteCodexActiveProfileId}
+        notice={notice}
+        compact={compact}
+        contentWidth={contentWidth}
+        onBack={onNavigationFocus}
+        onChange={onTerminalRemoteProfilesChange}
+        onActiveProfileChange={onTerminalRemoteActiveProfileChange}
+        onTest={onTerminalRemoteProfileTest}
+        onCheckReadiness={onTerminalRemoteReadinessCheck}
+        onConfigureServer={onConfigureRemoteServer}
       />
     )
   if (section === "colorMode")

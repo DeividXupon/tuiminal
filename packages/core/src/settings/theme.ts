@@ -1,29 +1,35 @@
 export {
-  TERMINAL_MASTER_KEYS,
   isTerminalMasterKey,
   matchesTerminalMasterKey,
+  TERMINAL_MASTER_KEYS,
+  type TerminalMasterKey,
+  type TerminalRemoteCodexProfile,
   terminalMasterKeyBytes,
-  type TerminalMasterKey,
+  terminalRemoteProfileValidationError,
 } from "./terminal"
-import {
-  DEFAULT_TERMINAL_MASTER_KEY,
-  isTerminalMasterKey,
-  normalizeTerminalAgentCommands,
-  type TerminalMasterKey,
-} from "./terminal"
+
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { DEFAULT_LANGUAGE, isLanguage, setLanguage, type LanguageId } from "../i18n/index"
+import { DEFAULT_LANGUAGE, isLanguage, type LanguageId, setLanguage } from "../i18n/index"
 import {
   DEFAULT_SENSITIVE_TERMS,
   normalizeSensitiveTerms,
   setActiveSensitiveTerms,
 } from "../security/sensitive-data"
+import { atomicWriteFileSync, fileContentHash } from "../storage/atomic-file"
 import { DARK_PALETTES } from "./dark-palettes"
 import { LIGHT_PALETTES } from "./light-palettes"
+import {
+  DEFAULT_TERMINAL_MASTER_KEY,
+  isTerminalMasterKey,
+  normalizeTerminalAgentCommands,
+  normalizeTerminalRemoteActiveProfileId,
+  normalizeTerminalRemoteCodexProfiles,
+  type TerminalMasterKey,
+  type TerminalRemoteCodexProfile,
+} from "./terminal"
 import type { ColorPalette, PaletteId } from "./theme-types"
-import { atomicWriteFileSync, fileContentHash } from "../storage/atomic-file"
 
 export type { ColorPalette, PaletteId } from "./theme-types"
 export type LayoutMode = "framed" | "compact"
@@ -36,6 +42,8 @@ export type UiSettings = {
   language: LanguageId
   terminalAgentCommands: string[]
   terminalMasterKey: TerminalMasterKey
+  terminalRemoteCodexProfiles: TerminalRemoteCodexProfile[]
+  terminalRemoteCodexActiveProfileId: string | null
   sensitiveTerms: string[]
 }
 
@@ -62,6 +70,8 @@ const DEFAULT_SETTINGS: UiSettings = {
   language: DEFAULT_LANGUAGE,
   terminalMasterKey: DEFAULT_TERMINAL_MASTER_KEY,
   terminalAgentCommands: [],
+  terminalRemoteCodexProfiles: [],
+  terminalRemoteCodexActiveProfileId: null,
   sensitiveTerms: [...DEFAULT_SENSITIVE_TERMS],
 }
 
@@ -98,6 +108,9 @@ function loadSettings(): UiSettings {
     const parsed = JSON.parse(source) as Partial<UiSettings>
     settingsSourceHash = fileContentHash(source)
     settingsLoadError = ""
+    const terminalRemoteCodexProfiles = normalizeTerminalRemoteCodexProfiles(
+      parsed.terminalRemoteCodexProfiles,
+    )
     return {
       colorMode: isColorMode(parsed.colorMode) ? parsed.colorMode : DEFAULT_SETTINGS.colorMode,
       palette: isPalette(parsed.palette) ? parsed.palette : DEFAULT_SETTINGS.palette,
@@ -107,6 +120,11 @@ function loadSettings(): UiSettings {
       terminalMasterKey: isTerminalMasterKey(parsed.terminalMasterKey)
         ? parsed.terminalMasterKey
         : DEFAULT_TERMINAL_MASTER_KEY,
+      terminalRemoteCodexProfiles,
+      terminalRemoteCodexActiveProfileId: normalizeTerminalRemoteActiveProfileId(
+        parsed.terminalRemoteCodexActiveProfileId,
+        terminalRemoteCodexProfiles,
+      ),
       sensitiveTerms: normalizeSensitiveTerms(parsed.sensitiveTerms),
     }
   } catch (error) {
@@ -212,6 +230,9 @@ export function getUiSettings(): UiSettings {
   return {
     ...currentSettings,
     terminalAgentCommands: [...currentSettings.terminalAgentCommands],
+    terminalRemoteCodexProfiles: currentSettings.terminalRemoteCodexProfiles.map((profile) => ({
+      ...profile,
+    })),
     sensitiveTerms: [...currentSettings.sensitiveTerms],
   }
 }
@@ -238,6 +259,10 @@ export function updateUiSettings(
   settings: UiSettings
   error: string | null
 } {
+  const terminalRemoteCodexProfiles =
+    patch.terminalRemoteCodexProfiles === undefined
+      ? currentSettings.terminalRemoteCodexProfiles.map((profile) => ({ ...profile }))
+      : normalizeTerminalRemoteCodexProfiles(patch.terminalRemoteCodexProfiles)
   const next: UiSettings = {
     colorMode: isColorMode(patch.colorMode) ? patch.colorMode : currentSettings.colorMode,
     palette: isPalette(patch.palette) ? patch.palette : currentSettings.palette,
@@ -250,6 +275,13 @@ export function updateUiSettings(
     terminalMasterKey: isTerminalMasterKey(patch.terminalMasterKey)
       ? patch.terminalMasterKey
       : currentSettings.terminalMasterKey,
+    terminalRemoteCodexProfiles,
+    terminalRemoteCodexActiveProfileId: normalizeTerminalRemoteActiveProfileId(
+      patch.terminalRemoteCodexActiveProfileId === undefined
+        ? currentSettings.terminalRemoteCodexActiveProfileId
+        : patch.terminalRemoteCodexActiveProfileId,
+      terminalRemoteCodexProfiles,
+    ),
     sensitiveTerms:
       patch.sensitiveTerms === undefined
         ? [...currentSettings.sensitiveTerms]
@@ -269,6 +301,9 @@ export function updateUiSettings(
       settings: {
         ...next,
         terminalAgentCommands: [...next.terminalAgentCommands],
+        terminalRemoteCodexProfiles: next.terminalRemoteCodexProfiles.map((profile) => ({
+          ...profile,
+        })),
         sensitiveTerms: [...next.sensitiveTerms],
       },
       error: null,
@@ -279,6 +314,9 @@ export function updateUiSettings(
       settings: {
         ...next,
         terminalAgentCommands: [...next.terminalAgentCommands],
+        terminalRemoteCodexProfiles: next.terminalRemoteCodexProfiles.map((profile) => ({
+          ...profile,
+        })),
         sensitiveTerms: [...next.sensitiveTerms],
       },
       error: `Não foi possível salvar a configuração: ${message}`,

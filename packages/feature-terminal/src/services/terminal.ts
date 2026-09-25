@@ -7,10 +7,12 @@ import {
   signalOwnedProcessGroup,
 } from "@xupon/tuiminal-core/process/owned-process"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 
 import type { FreeTerminalCommand } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { registerTerminalResource } from "./terminal-resources"
+import { resolveRemoteIdentityFile } from "./remote-codex-connection"
 export { stopAllFreeTerminalProcesses } from "./terminal-resources"
 export type { FreeTerminalCommand, FreeTerminalKind } from "../model/sessions"
 
@@ -117,6 +119,33 @@ export function createCodexAgentCommand(resumeThreadId?: string): FreeTerminalCo
     accent: COLORS.terminal,
     workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
     codex: { appServer: true, ...(resumeThreadId ? { resumeThreadId } : {}) },
+  }
+}
+
+export function createRemoteServerSetupCommand(
+  profile: TerminalRemoteCodexProfile,
+): FreeTerminalCommand {
+  return {
+    kind: "custom",
+    label: profile.name,
+    shortLabel: "SSH",
+    displayCommand: `${profile.user}@${profile.host}:${profile.port}`,
+    command: [
+      "ssh",
+      "-tt",
+      "-o",
+      "ServerAliveInterval=30",
+      "-o",
+      "ServerAliveCountMax=3",
+      "-i",
+      resolveRemoteIdentityFile(profile.identityFile),
+      "-p",
+      String(profile.port),
+      `${profile.user}@${profile.host}`,
+    ],
+    accent: COLORS.terminal,
+    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    remoteSetup: { profile },
   }
 }
 

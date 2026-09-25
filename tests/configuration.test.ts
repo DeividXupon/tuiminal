@@ -77,13 +77,15 @@ describe("contextual settings", () => {
       startTutorial: () => opened.push("tutorial"),
       openHistory: () => opened.push("history"),
       openSensitive: () => opened.push("sensitive"),
+      focusRemoteConnection: () => opened.push("remoteConnection"),
     }
 
     activateConfigurationSection("palette", actions)
     activateConfigurationSection("layout", actions)
     activateConfigurationSection("gitDiffs", actions)
+    activateConfigurationSection("remoteConnection", actions)
     activateConfigurationSection("features", actions)
 
-    expect(opened).toEqual(["features"])
+    expect(opened).toEqual(["remoteConnection", "features"])
   })
 })

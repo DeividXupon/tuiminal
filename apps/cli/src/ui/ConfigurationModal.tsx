@@ -1,13 +1,14 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
-import { useEffect, useRef } from "react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
+import { useEffect, useRef } from "react"
 import {
+  type ConfigurationSection,
   configurationSectionsForContext,
   isGitConfigurationSection,
 } from "../model/configuration-context"
@@ -19,11 +20,17 @@ import {
 } from "./configuration-modal-types"
 
 export {
-  configurationSectionsForContext,
-  normalizeConfigurationSectionForContext,
   type ConfigurationContext,
   type ConfigurationSection,
+  configurationSectionsForContext,
+  normalizeConfigurationSectionForContext,
 } from "../model/configuration-context"
+
+function configurationDetailLayout(section: ConfigurationSection) {
+  return section === "remoteConnection"
+    ? { height: "100%" as const, flexGrow: 1 }
+    : { flexShrink: 0 }
+}
 
 export function ConfigurationModal({
   open,
@@ -37,6 +44,11 @@ export function ConfigurationModal({
   onSectionFocus,
   onNavigationFocus,
   onTerminalAgentCommandsChange,
+  onTerminalRemoteProfilesChange,
+  onTerminalRemoteActiveProfileChange,
+  onTerminalRemoteProfileTest,
+  onTerminalRemoteReadinessCheck,
+  onConfigureRemoteServer,
   onTerminalMasterKeyChange,
   onPaletteChange,
   onColorModeChange,
@@ -186,10 +198,16 @@ export function ConfigurationModal({
               settings={settings}
               navigationActive={navigationActive}
               notice={notice}
+              onClose={onClose}
               onNavigationFocus={onNavigationFocus}
               queryHistoryCount={queryHistoryCount}
               tutorialLabel={tutorialLabel}
               onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
+              onTerminalRemoteProfilesChange={onTerminalRemoteProfilesChange}
+              onTerminalRemoteActiveProfileChange={onTerminalRemoteActiveProfileChange}
+              onTerminalRemoteProfileTest={onTerminalRemoteProfileTest}
+              onTerminalRemoteReadinessCheck={onTerminalRemoteReadinessCheck}
+              onConfigureRemoteServer={onConfigureRemoteServer}
               onTerminalMasterKeyChange={onTerminalMasterKeyChange}
               onPaletteChange={onPaletteChange}
               onColorModeChange={onColorModeChange}
@@ -208,7 +226,7 @@ export function ConfigurationModal({
           // biome-ignore lint/a11y/noStaticElementInteractions: Detail clicks transfer settings keyboard ownership.
           <scrollbox
             id="configuration-detail"
-            scrollY
+            scrollY={section !== "remoteConnection"}
             onMouseDown={() => {
               if (navigationActive) onSectionChange(section)
             }}
@@ -225,17 +243,27 @@ export function ConfigurationModal({
           >
             <box
               id={`configuration-detail-${section}`}
-              style={{ width: "100%", flexShrink: 0, paddingTop: 1 }}
+              style={{
+                width: "100%",
+                ...configurationDetailLayout(section),
+                paddingTop: 1,
+              }}
             >
               <ConfigurationDetail
                 section={section}
                 settings={settings}
                 navigationActive={navigationActive}
                 notice={notice}
+                onClose={onClose}
                 onNavigationFocus={onNavigationFocus}
                 queryHistoryCount={queryHistoryCount}
                 tutorialLabel={tutorialLabel}
                 onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
+                onTerminalRemoteProfilesChange={onTerminalRemoteProfilesChange}
+                onTerminalRemoteActiveProfileChange={onTerminalRemoteActiveProfileChange}
+                onTerminalRemoteProfileTest={onTerminalRemoteProfileTest}
+                onTerminalRemoteReadinessCheck={onTerminalRemoteReadinessCheck}
+                onConfigureRemoteServer={onConfigureRemoteServer}
                 onTerminalMasterKeyChange={onTerminalMasterKeyChange}
                 onPaletteChange={onPaletteChange}
                 onColorModeChange={onColorModeChange}
