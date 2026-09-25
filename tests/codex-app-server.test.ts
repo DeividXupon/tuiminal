@@ -300,6 +300,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
               result: {
                 thread: {
                   id: "thread-1",
+                  name: "Existing login task",
                   turns: [
                     {
                       id: "turn-old",
@@ -581,7 +582,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
         },
       },
     ])
-    expect(titles).toEqual(["Fix login"])
+    expect(titles).toEqual(["Fix login", "Existing login task"])
     expect(userMessages).toEqual(["Fix login"])
     expect(userMessageIds).toEqual(["request:number:4"])
     expect(userMessageConfigurations).toEqual([

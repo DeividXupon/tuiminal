@@ -22,6 +22,7 @@ export type PinnedTerminalSelection =
   | { sessionId: string }
   | { resumeThreadId: string }
   | { folderId: string }
+  | { focusTarget: TerminalFocusTargetKey }
   | { action: string }
 
 export type PinnedTerminalSidebarView = {
@@ -58,7 +59,11 @@ export type PinnedTerminalSidebarReplica = Pick<
   | "activeSessionId"
   | "masterKey"
   | "recentThreads"
-> & { theme: Record<string, string>; language: string }
+> & {
+  theme: Record<string, string>
+  language: string
+  focusSelectionTarget: TerminalFocusTargetKey | null
+}
 
 export type PinnedTerminalSidebarSnapshot = {
   pinned: boolean
@@ -92,6 +97,10 @@ export function terminalSidebarSnapshot() {
 
 export function terminalSidebarPinnedSnapshot() {
   return snapshot.pinned
+}
+
+export function terminalSidebarTmuxHostSnapshot() {
+  return snapshot.tmuxHostSidebar
 }
 
 export function terminalSidebarRequestRevision() {
@@ -157,6 +166,7 @@ export function terminalSidebarReplica(
     activeSessionId: view.activeSessionId,
     masterKey: view.masterKey,
     recentThreads: view.recentThreads,
+    focusSelectionTarget: view.focusSelection?.selectedTarget ?? null,
     theme,
     language,
   }

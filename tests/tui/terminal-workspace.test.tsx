@@ -29,6 +29,8 @@ import {
 } from "../../packages/feature-terminal/src/model/codex-resume-threads"
 import {
   resetPinnedTerminalSidebarForTests,
+  setTmuxHostSidebar,
+  terminalSidebarReplica,
   terminalSidebarSnapshot,
 } from "../../packages/feature-terminal/src/model/pinned-sidebar"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
@@ -42,7 +44,10 @@ import {
   terminalWorkspaceStatePath,
 } from "../../packages/feature-terminal/src/services/terminal-workspace-state"
 import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
-import { terminalActionKey } from "../../packages/feature-terminal/src/ui/TerminalActions"
+import {
+  TerminalActions,
+  terminalActionKey,
+} from "../../packages/feature-terminal/src/ui/TerminalActions"
 
 const originalSettings = getUiSettings()
 const originalOnlyTab = process.env.TUIMINAL_ONLY_TAB
@@ -202,6 +207,52 @@ test("Master Key action parsing accepts Alt tool keys and ignores unrelated modi
   expect(terminalActionKey({ name: "6", meta: true })).toBeNull()
   expect(terminalActionKey({ name: "q", ctrl: true })).toBeNull()
   expect(terminalActionKey({ name: "," })).toBe(",")
+})
+
+test("tmux helper Master Key uses compact Actions and Agents tabs", async () => {
+  tui = await testRender(
+    <TerminalActions
+      compact
+      width={34}
+      height={28}
+      recentThreads={[
+        {
+          id: "compact-agent",
+          title: "Agente compacto",
+          preview: "Continue a tarefa",
+          lastResponse: "Pronto para continuar.",
+          cwd: "/workspace/project",
+          updatedAt: Date.now(),
+          state: "idle",
+        },
+      ]}
+      onAction={() => undefined}
+      onSelectThread={() => undefined}
+      disabled={() => false}
+    />,
+    { width: 34, height: 28 },
+  )
+  await tui.renderOnce()
+
+  const modal = renderable("terminal-actions") as BoxRenderable
+  expect(modal.width).toBe(34)
+  expect(modal.height).toBe(24)
+  expect(modal.screenX).toBe(0)
+  expect(modal.screenY + modal.height).toBe(28)
+  expect(modal.border).toEqual([])
+  expect(tui.renderer.root.findDescendantById("terminal-action-tab-actions")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-action-tab-agents")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeUndefined()
+
+  await arrow("right")
+  expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-resume-thread-compact-agent")).toBeDefined()
+
+  await click("terminal-action-tab-actions")
+  expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeUndefined()
 })
 
 test("Master Key opens the official Codex TUI connected to app-server", async () => {
@@ -826,6 +877,22 @@ test("Master Key M can select the pinned global sidebar", async () => {
   ).toBeDefined()
   await key("enter")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
+})
+
+test("Master Key M selects the pinned tmux helper outside the app renderer", async () => {
+  await mount(true)
+  await leader("n")
+  await leader("b")
+  await act(async () => setTmuxHostSidebar(true))
+  await tui?.renderOnce()
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar")).toBeUndefined()
+
+  await leader("m")
+  await arrow("left")
+
+  expect(terminalSidebarReplica()?.focusSelectionTarget).toBe("sidebar:main")
+  await key("enter")
+  expect(terminalSidebarReplica()?.focusSelectionTarget).toBeNull()
 })
 
 test("pinned sidebar keeps the custom command dialog accessible", async () => {

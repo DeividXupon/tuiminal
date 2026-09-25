@@ -7,6 +7,7 @@ import {
   TERMINAL_SIDEBAR_FOCUS_TARGET,
   type TerminalFocusDirection,
   type TerminalFocusTargetKey,
+  type TerminalFocusTargetRect,
   terminalFocusTargetKey,
   terminalFocusTargetRenderableId,
 } from "../model/focus-selection"
@@ -51,6 +52,7 @@ function focusSelectionKeyAction(key: KeyEvent): FocusSelectionKeyAction {
 function focusTargetRects(
   targets: readonly TerminalFocusTargetKey[],
   findRenderable: (id: string) => Renderable | null | undefined,
+  virtualTargets: readonly TerminalFocusTargetRect[],
 ) {
   return targets.flatMap((target) => {
     const renderable = findRenderable(terminalFocusTargetRenderableId(target))
@@ -64,7 +66,7 @@ function focusTargetRects(
             height: renderable.height,
           },
         ]
-      : []
+      : virtualTargets.filter((candidate) => candidate.key === target)
   })
 }
 
@@ -75,6 +77,7 @@ export function useTerminalFocusSelection({
   workspaceRef,
   focusTerminal,
   onActivateRef,
+  virtualTargets = [],
 }: {
   active: boolean
   activeSessionId: string | null
@@ -82,6 +85,7 @@ export function useTerminalFocusSelection({
   workspaceRef: RefObject<BoxRenderable | null>
   focusTerminal: (id: string | null) => void
   onActivateRef: RefObject<(target: TerminalFocusTargetKey) => void>
+  virtualTargets?: readonly TerminalFocusTargetRect[]
 }) {
   const renderer = useRenderer()
   const originRef = useRef<TerminalFocusTargetKey | null>(null)
@@ -166,7 +170,11 @@ export function useTerminalFocusSelection({
     key.stopPropagation()
     const action = focusSelectionKeyAction(key)
     if (action.type === "move") {
-      const rects = focusTargetRects(targets, (id) => renderer.root.findDescendantById(id))
+      const rects = focusTargetRects(
+        targets,
+        (id) => renderer.root.findDescendantById(id),
+        virtualTargets,
+      )
       setSelectedTarget(nextTerminalFocusTarget(rects, selectedTarget, action.direction))
     } else if (action.type === "focus") {
       focus(selectedTarget)

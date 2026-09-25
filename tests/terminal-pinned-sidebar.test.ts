@@ -26,7 +26,10 @@ import {
   restorePinnedSidebarMouse,
   waitForPinnedTmuxSidebarFocus,
 } from "../packages/feature-terminal/src/services/pinned-sidebar-focus"
-import { routePinnedTerminalToTuiminal } from "../packages/feature-terminal/src/services/pinned-sidebar-navigation"
+import {
+  pinnedTmuxMasterKey,
+  routePinnedTerminalToTuiminal,
+} from "../packages/feature-terminal/src/services/pinned-sidebar-navigation"
 import { waitForPinnedSidebarTerminalReady } from "../packages/feature-terminal/src/services/pinned-sidebar-terminal"
 import {
   reconcilePinnedTmuxSidebars,
@@ -98,6 +101,12 @@ test("pinned navigation routes terminals through Tuiminal before opening its hos
     ),
   ).toBe(false)
   expect(events).toEqual([])
+})
+
+test("pinned tmux actions translate the configured Master Key for direct host input", () => {
+  expect(pinnedTmuxMasterKey("Ctrl+B")).toBe("C-b")
+  expect(pinnedTmuxMasterKey("Ctrl+Space")).toBe("C-Space")
+  expect(pinnedTmuxMasterKey("Ctrl+T")).toBe("C-t")
 })
 
 test("publishing the same sidebar view does not notify subscribers twice", () => {
@@ -355,6 +364,7 @@ test.skipIf(process.platform === "win32")(
       activeSessionId: null,
       masterKey: "Ctrl+B" as const,
       recentThreads: [],
+      focusSelectionTarget: "sidebar:main" as const,
       theme: { canvas: "#000000" },
       language: "pt-BR",
     }
@@ -371,12 +381,16 @@ test.skipIf(process.platform === "win32")(
       expect(await sendPinnedSidebarTarget(control!.endpoint, { folderId: "terminal" })).toBe(true)
       expect(await sendPinnedSidebarTarget(control!.endpoint, { action: "n" })).toBe(true)
       expect(
+        await sendPinnedSidebarTarget(control!.endpoint, { focusTarget: "sidebar:main" }),
+      ).toBe(true)
+      expect(
         await sendPinnedSidebarTarget(control!.endpoint, { resumeThreadId: "thread-123" }),
       ).toBe(true)
       expect(selected).toEqual([
         { sessionId: "shell-123-1" },
         { folderId: "terminal" },
         { action: "n" },
+        { focusTarget: "sidebar:main" },
         { resumeThreadId: "thread-123" },
       ])
     } finally {

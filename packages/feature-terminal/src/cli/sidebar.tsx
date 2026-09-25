@@ -26,6 +26,7 @@ import {
 } from "../services/pinned-sidebar-control"
 import { waitForPinnedTmuxSidebarFocus } from "../services/pinned-sidebar-focus"
 import {
+  activatePinnedTmuxHostAction,
   routePinnedTerminalToTuiminal,
   selectPinnedTmuxHost,
 } from "../services/pinned-sidebar-navigation"
@@ -135,6 +136,7 @@ function SidebarApp({
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     const scan = async () => {
+      let delay = 1000
       try {
         const content = await readSidebarContent(
           endpoint,
@@ -144,12 +146,14 @@ function SidebarApp({
         )
         if (controller.signal.aborted) return
         setReplica(content.replica)
-        if (content.replica) applyReplicaAppearance(content.replica)
-        else setRows(content.rows)
+        if (content.replica) {
+          delay = 250
+          applyReplicaAppearance(content.replica)
+        } else setRows(content.rows)
       } catch {
         // A transient server or process snapshot failure keeps the previous rows.
       } finally {
-        if (!controller.signal.aborted) timer = setTimeout(() => void scan(), 1000)
+        if (!controller.signal.aborted) timer = setTimeout(() => void scan(), delay)
       }
     }
     void scan()
@@ -286,16 +290,31 @@ function SidebarApp({
         if (target) await activate(target.id)
         return
       }
+      if (key === "m") {
+        const delivered = await activatePinnedTmuxHostAction(sourceSocket, hostPane, masterKey, key)
+        if (!delivered) setFocusRequest((current) => current + 1)
+        return
+      }
       const delivered = await sendPinnedSidebarTarget(endpoint, { action: key })
       if (!delivered) {
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["v", "h", "e", "s", "m", ",", "q"].includes(key))
+      if (mode === "app" || ["v", "h", "e", "s", ",", "q"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },
-    [activate, disabled, endpoint, focusSidebar, hostPane, mode, numberedSections, sourceSocket],
+    [
+      activate,
+      disabled,
+      endpoint,
+      focusSidebar,
+      hostPane,
+      masterKey,
+      mode,
+      numberedSections,
+      sourceSocket,
+    ],
   )
   useSidebarKeyboard({
     masterKey,
@@ -325,6 +344,14 @@ function SidebarApp({
         borderRight={false}
         masterKey={masterKey}
         masterKeyActive={leaderActive}
+        focusSelection={
+          replica?.focusSelectionTarget
+            ? {
+                selectedTarget: replica.focusSelectionTarget,
+                onFocus: (focusTarget) => void sendPinnedSidebarTarget(endpoint, { focusTarget }),
+              }
+            : undefined
+        }
         onSelectFolder={(id) => void selectFolder(id)}
         onToggleFolder={() => undefined}
         onActivate={(id) => void activate(id)}
@@ -335,6 +362,7 @@ function SidebarApp({
       />
       {leaderActive && (
         <TerminalActions
+          compact
           width={dimensions.width}
           height={dimensions.height}
           recentThreads={recentThreads}

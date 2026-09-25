@@ -118,6 +118,9 @@ classify agent-only features, general features, terminal operations, sidebar ope
 navigation, and application actions. Agent-only features may show both feature and agent
 tags. Actions are ordered by those purposes. `[C]`, `[R]`, and `[G]` are not Master Key
 actions.
+Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
+sheet. Actions and Agents become clickable tabs, `[←/→]` switches tabs, and only the
+active tab's content is rendered.
 Agents shows up to six conversations from the owned localhost Codex app-server's
 `thread/list`, with the current-directory scope and recency ordering used by Codex
 `/resume`. A short-lived owned app-server loads the list and bounded public

@@ -18,6 +18,7 @@ import {
 import { CodexMessagePublisher } from "./codex-message-publisher"
 
 export type CodexMessageHistoryEvents = {
+  onTitle: (title: string) => void
   onUserMessage: (message: CodexObservedUserMessage) => void
   onUserMessageHistory: (messages: readonly CodexObservedUserMessage[], replace: boolean) => void
 }
@@ -162,6 +163,7 @@ export class CodexMessageHistoryObserver {
     if (!["thread/start", "thread/resume", "thread/fork"].includes(request.method)) return false
     const thread = object(result.thread)
     if (typeof thread?.id !== "string") return true
+    if (typeof thread.name === "string") events.onTitle(thread.name)
     this.currentThreadId = thread.id
     this.currentModel =
       typeof result.model === "string"

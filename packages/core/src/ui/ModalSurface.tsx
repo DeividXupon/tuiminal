@@ -18,6 +18,8 @@ export type ModalSurfaceProps = {
   dialogFocusable?: boolean
   layerId?: string
   layerFocusable?: boolean
+  border?: boolean
+  placement?: "center" | "bottom"
 }
 
 /** Shared visual shell only; the owning feature keeps focus and keyboard policy. */
@@ -37,6 +39,8 @@ export function ModalSurface({
   dialogFocusable = true,
   layerId,
   layerFocusable = false,
+  border = true,
+  placement = "center",
 }: ModalSurfaceProps) {
   const backdropLayerId = layerId ?? `${id}-layer`
   return (
@@ -66,7 +70,7 @@ export function ModalSurface({
         height="100%"
         zIndex={zIndex + 1}
         alignItems="center"
-        justifyContent="center"
+        justifyContent={placement === "bottom" ? "flex-end" : "center"}
         onMouseDown={(event) => {
           if (event.button !== 0 || event.target?.id !== backdropLayerId) return
           event.preventDefault()
@@ -78,11 +82,11 @@ export function ModalSurface({
           {...(dialogRef === undefined ? {} : { ref: dialogRef })}
           id={id}
           focusable={dialogFocusable}
+          border={border ? true : []}
           style={{
             ...(positionRelative ? { position: "relative" as const } : {}),
             width,
             height,
-            border: true,
             borderStyle: "rounded",
             borderColor,
             backgroundColor,

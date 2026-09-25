@@ -2,10 +2,11 @@ import type { BoxRenderable, InputRenderable, KeyEvent, ScrollBoxRenderable } fr
 import { useKeyboard } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { CodexResumeThread } from "../model/codex-resume-threads"
-import { TERMINAL_ACTIONS, TERMINAL_ACTION_TAG_LABELS } from "../model/terminal-actions"
+import { TERMINAL_ACTION_TAG_LABELS, TERMINAL_ACTIONS } from "../model/terminal-actions"
 import { TerminalActionRow } from "./TerminalActionRow"
 import { TerminalAgentResponsePanel, TerminalResumeThreadRow } from "./TerminalResumeThreads"
 import { TerminalShortcutText } from "./TerminalShortcut"
@@ -57,6 +58,56 @@ function isSlashKey(key: KeyEvent) {
   return key.name === "/" || key.sequence === "/" || key.raw === "/"
 }
 
+type TerminalActionPanel = "actions" | "agents"
+
+function TerminalActionTabs({
+  visible,
+  activePanel,
+  onSelect,
+}: {
+  visible: boolean
+  activePanel: TerminalActionPanel
+  onSelect: (panel: TerminalActionPanel) => void
+}) {
+  if (!visible) return null
+  return (
+    <box id="terminal-master-key-tabs" style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+      <InlineButton
+        id="terminal-action-tab-actions"
+        label="AÇÕES"
+        selected={activePanel === "actions"}
+        accent={COLORS.terminal}
+        onPress={() => onSelect("actions")}
+      />
+      <InlineButton
+        id="terminal-action-tab-agents"
+        label="AGENTES"
+        selected={activePanel === "agents"}
+        accent={COLORS.terminal}
+        onPress={() => onSelect("agents")}
+      />
+    </box>
+  )
+}
+
+function TerminalPanelHeading({
+  visible,
+  active,
+  label,
+}: {
+  visible: boolean
+  active: boolean
+  label: string
+}) {
+  if (!visible) return null
+  return (
+    <text
+      content={`${active ? "›" : " "} ${translateUi(label)}`}
+      style={{ height: 1, flexShrink: 0, fg: active ? COLORS.focus : COLORS.muted }}
+    />
+  )
+}
+
 export function TerminalActions({
   width,
   height,
@@ -64,6 +115,7 @@ export function TerminalActions({
   onAction,
   onSelectThread,
   disabled,
+  compact = false,
 }: {
   width: number
   height: number
@@ -71,13 +123,14 @@ export function TerminalActions({
   onAction: (key: string) => void
   onSelectThread?: (id: string) => void
   disabled: (key: string) => boolean
+  compact?: boolean
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const input = useRef<InputRenderable | null>(null)
   const actionList = useRef<ScrollBoxRenderable | null>(null)
   const agentList = useRef<ScrollBoxRenderable | null>(null)
   const [query, setQuery] = useState("")
-  const [activePanel, setActivePanel] = useState<"actions" | "agents">("actions")
+  const [activePanel, setActivePanel] = useState<TerminalActionPanel>("actions")
   const [selectedAction, setSelectedAction] = useState(0)
   const [selectedAgent, setSelectedAgent] = useState(0)
   const [now, setNow] = useState(() => Date.now())
@@ -104,9 +157,12 @@ export function TerminalActions({
     [query, recentThreads],
   )
   const selectedThread = activePanel === "agents" ? threads[selectedAgent] : undefined
-  const dialogWidth = Math.max(1, Math.min(120, width - 2))
-  const dialogHeight = Math.max(1, Math.min(30, height - 2))
-  const panelContentWidth = Math.max(1, Math.floor((dialogWidth - 9) / 2))
+  const dialogWidth = compact ? width : Math.max(1, Math.min(120, width - 2))
+  const dialogHeight = Math.max(1, Math.min(compact ? 24 : 30, height - 2))
+  const panelContentWidth = Math.max(
+    1,
+    compact ? dialogWidth - 4 : Math.floor((dialogWidth - 9) / 2),
+  )
   const actionPanelBackground = activePanel === "actions" ? COLORS.panelAlt : COLORS.panel
   const agentPanelBackground = activePanel === "agents" ? COLORS.panelAlt : COLORS.panel
 
@@ -188,6 +244,8 @@ export function TerminalActions({
       width={dialogWidth}
       height={dialogHeight}
       borderColor={COLORS.terminal}
+      border={!compact}
+      placement={compact ? "bottom" : "center"}
       backgroundColor={COLORS.canvas}
       backdropOpacity={0}
       zIndex={780}
@@ -215,104 +273,108 @@ export function TerminalActions({
           focusedTextColor: COLORS.text,
         }}
       />
+      <TerminalActionTabs visible={compact} activePanel={activePanel} onSelect={setActivePanel} />
       <box
         id="terminal-master-key-panels"
         style={{ flexGrow: 1, minHeight: 1, flexDirection: "row", gap: 1 }}
       >
-        <box
-          id="terminal-action-panel"
-          style={{
-            flexGrow: 1,
-            flexBasis: 0,
-            minWidth: 1,
-            backgroundColor: actionPanelBackground,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`${activePanel === "actions" ? "›" : " "} ${translateUi("AÇÕES")}`}
+        {(!compact || activePanel === "actions") && (
+          <box
+            id="terminal-action-panel"
             style={{
-              height: 1,
-              flexShrink: 0,
-              fg: activePanel === "actions" ? COLORS.focus : COLORS.muted,
+              flexGrow: 1,
+              flexBasis: 0,
+              minWidth: 1,
+              backgroundColor: actionPanelBackground,
+              paddingLeft: 1,
+              paddingRight: 1,
             }}
-          />
-          <scrollbox ref={actionList} id="terminal-action-results" scrollY style={{ flexGrow: 1 }}>
-            {actions.map((action, index) => {
-              const active = activePanel === "actions" && selectedAction === index
-              const actionDisabled = disabled(action.key)
-              return (
-                <TerminalActionRow
-                  key={action.key}
-                  action={action}
-                  active={active}
-                  disabled={actionDisabled}
-                  backgroundColor={actionPanelBackground}
-                  descriptionWidth={panelContentWidth}
-                  onSelect={() => {
-                    setActivePanel("actions")
-                    setSelectedAction(index)
-                    if (!actionDisabled) onAction(action.key)
+          >
+            <TerminalPanelHeading
+              visible={!compact}
+              active={activePanel === "actions"}
+              label="AÇÕES"
+            />
+            <scrollbox
+              ref={actionList}
+              id="terminal-action-results"
+              scrollY
+              style={{ flexGrow: 1 }}
+            >
+              {actions.map((action, index) => {
+                const active = activePanel === "actions" && selectedAction === index
+                const actionDisabled = disabled(action.key)
+                return (
+                  <TerminalActionRow
+                    key={action.key}
+                    action={action}
+                    active={active}
+                    disabled={actionDisabled}
+                    backgroundColor={actionPanelBackground}
+                    descriptionWidth={panelContentWidth}
+                    onSelect={() => {
+                      setActivePanel("actions")
+                      setSelectedAction(index)
+                      if (!actionDisabled) onAction(action.key)
+                    }}
+                  />
+                )
+              })}
+              {query.trim() && actions.length === 0 && (
+                <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
+              )}
+            </scrollbox>
+          </box>
+        )}
+        {(!compact || activePanel === "agents") && (
+          <box
+            id="terminal-agent-panel"
+            style={{
+              flexGrow: 1,
+              flexBasis: 0,
+              minWidth: 1,
+              backgroundColor: agentPanelBackground,
+              paddingLeft: 1,
+              paddingRight: 1,
+            }}
+          >
+            <TerminalPanelHeading
+              visible={!compact}
+              active={activePanel === "agents"}
+              label="AGENTES · CODEX /RESUME"
+            />
+            <scrollbox ref={agentList} id="terminal-agent-results" scrollY style={{ flexGrow: 1 }}>
+              {threads.map((thread, index) => (
+                <TerminalResumeThreadRow
+                  key={thread.id}
+                  thread={thread}
+                  active={activePanel === "agents" && selectedAgent === index}
+                  width={panelContentWidth}
+                  now={now}
+                  backgroundColor={agentPanelBackground}
+                  onSelect={(id) => {
+                    setActivePanel("agents")
+                    setSelectedAgent(index)
+                    onSelectThread?.(id)
                   }}
                 />
-              )
-            })}
-            {query.trim() && actions.length === 0 && (
-              <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
-            )}
-          </scrollbox>
-        </box>
-        <box
-          id="terminal-agent-panel"
-          style={{
-            flexGrow: 1,
-            flexBasis: 0,
-            minWidth: 1,
-            backgroundColor: agentPanelBackground,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`${activePanel === "agents" ? "›" : " "} ${translateUi("AGENTES · CODEX /RESUME")}`}
-            style={{
-              height: 1,
-              flexShrink: 0,
-              fg: activePanel === "agents" ? COLORS.focus : COLORS.muted,
-            }}
-          />
-          <scrollbox ref={agentList} id="terminal-agent-results" scrollY style={{ flexGrow: 1 }}>
-            {threads.map((thread, index) => (
-              <TerminalResumeThreadRow
-                key={thread.id}
-                thread={thread}
-                active={activePanel === "agents" && selectedAgent === index}
-                width={panelContentWidth}
-                now={now}
-                backgroundColor={agentPanelBackground}
-                onSelect={(id) => {
-                  setActivePanel("agents")
-                  setSelectedAgent(index)
-                  onSelectThread?.(id)
-                }}
-              />
-            ))}
-            {!query.trim() && recentThreads.length === 0 && (
-              <text
-                content={translateUi("Nenhuma conversa disponível no /resume do Codex local.")}
-                style={{ fg: COLORS.muted }}
-              />
-            )}
-            {query.trim() && threads.length === 0 && (
-              <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
-            )}
-          </scrollbox>
-          {selectedThread && <TerminalAgentResponsePanel thread={selectedThread} now={now} />}
-        </box>
+              ))}
+              {!query.trim() && recentThreads.length === 0 && (
+                <text
+                  content={translateUi("Nenhuma conversa disponível no /resume do Codex local.")}
+                  style={{ fg: COLORS.muted }}
+                />
+              )}
+              {query.trim() && threads.length === 0 && (
+                <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
+              )}
+            </scrollbox>
+            {selectedThread && <TerminalAgentResponsePanel thread={selectedThread} now={now} />}
+          </box>
+        )}
       </box>
       <TerminalShortcutText
-        content="[←/→] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
+        content={`[←/→] ${compact ? "aba" : "painel"} · [↑/↓] navegar · [Enter] abrir · [Esc] fechar`}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </ModalSurface>

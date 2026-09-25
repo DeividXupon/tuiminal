@@ -202,6 +202,8 @@ tmux, and external agents do not offer this structured history.
 
 For integrated Codex sessions, `turn/completed` determines completion and public
 item events determine the visible activity. Silence does not complete a task.
+Starting, resuming, or forking a thread hydrates its task title from the returned
+public thread name; later `thread/name/updated` events replace it.
 Unseen completion persists until viewed or a later turn starts. Native and tmux
 agents without an authoritative integration continue to use the bounded screen
 observation rules above.

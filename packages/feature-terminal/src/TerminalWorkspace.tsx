@@ -37,6 +37,7 @@ import {
   terminalSidebarPinnedSnapshot,
   terminalSidebarRequestRevision,
   terminalSidebarSnapshot,
+  terminalSidebarTmuxHostSnapshot,
   toggleTerminalSidebarPinned,
 } from "./model/pinned-sidebar"
 import {
@@ -221,6 +222,11 @@ export function FreeTerminal({
     terminalSidebarPinnedSnapshot,
     terminalSidebarPinnedSnapshot,
   )
+  const tmuxHostSidebar = useSyncExternalStore(
+    subscribeTerminalSidebar,
+    terminalSidebarTmuxHostSnapshot,
+    terminalSidebarTmuxHostSnapshot,
+  )
   const requestedTargetRevision = useSyncExternalStore(
     subscribeTerminalSidebar,
     terminalSidebarRequestRevision,
@@ -284,6 +290,21 @@ export function FreeTerminal({
     sessions,
     sidebarWidth,
   ])
+  const virtualFocusTargets = useMemo(
+    () =>
+      tmuxHostSidebar
+        ? [
+            {
+              key: TERMINAL_SIDEBAR_FOCUS_TARGET,
+              left: -sidebarWidth,
+              top: 0,
+              width: sidebarWidth,
+              height: Math.max(1, dimensions.height),
+            },
+          ]
+        : [],
+    [dimensions.height, sidebarWidth, tmuxHostSidebar],
+  )
   const {
     busyRef: boxFocusBusyRef,
     focus: focusBox,
@@ -297,6 +318,7 @@ export function FreeTerminal({
     workspaceRef,
     focusTerminal,
     onActivateRef: activateFocusTargetRef,
+    virtualTargets: virtualFocusTargets,
   })
   useEffect(() => {
     onMasterKeyActiveChange?.(leaderActive)
@@ -887,6 +909,11 @@ export function FreeTerminal({
   useEffect(() => {
     const target = terminalSidebarSnapshot().requestedTarget
     if (!target || handledTargetRevision.current === requestedTargetRevision) return
+    if ("focusTarget" in target) {
+      handledTargetRevision.current = requestedTargetRevision
+      focusBox(target.focusTarget)
+      return
+    }
     if ("action" in target) {
       handledTargetRevision.current = requestedTargetRevision
       runActionRef.current(target.action)
@@ -948,6 +975,7 @@ export function FreeTerminal({
     selectSession,
     launchCommand,
     folderForTmuxPane,
+    focusBox,
     notify,
     toggleFolder,
   ])

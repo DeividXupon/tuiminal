@@ -28,6 +28,7 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
     sessionId?: string
     resumeThreadId?: string
     folderId?: string
+    focusTarget?: string
     action?: string
   }
   const validId = (id: string | undefined) =>
@@ -37,6 +38,8 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
       validId(target.sessionId) ||
       validId(target.resumeThreadId) ||
       validId(target.folderId) ||
+      (validId(target.focusTarget) &&
+        /^(?:sidebar|terminal|history|live-diff):/.test(target.focusTarget ?? "")) ||
       validId(target.action),
   )
 }
@@ -174,6 +177,10 @@ export async function requestPinnedSidebarSnapshot(endpoint: string) {
     !snapshot.collapsedFolderIds.every((id) => typeof id === "string") ||
     typeof snapshot.selectedFolder !== "string" ||
     (snapshot.activeSessionId !== null && typeof snapshot.activeSessionId !== "string") ||
+    (snapshot.focusSelectionTarget !== null &&
+      snapshot.focusSelectionTarget !== undefined &&
+      (typeof snapshot.focusSelectionTarget !== "string" ||
+        !/^(?:sidebar|terminal|history|live-diff):/.test(snapshot.focusSelectionTarget))) ||
     !isTerminalMasterKey(snapshot.masterKey) ||
     !snapshot.theme ||
     typeof snapshot.theme !== "object" ||
