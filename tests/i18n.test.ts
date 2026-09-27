@@ -7,6 +7,7 @@ import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-cata
 import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
 import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
+import { TERMINAL_REMOTE_SETUP_MESSAGES } from "../packages/core/src/i18n/terminal-remote-setup-catalog"
 import {
   displayWidth,
   formatUiDateTime,
@@ -151,6 +152,17 @@ describe("internationalization", () => {
       for (const catalog of GIT_COMPARE_TUTORIAL_MESSAGES) {
         const expected = catalog[index]
         if (!expected) throw new Error(`Missing Git Compare tutorial translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every remote server setup message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of TERMINAL_REMOTE_SETUP_MESSAGES) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing remote setup translation for ${language}`)
         expect(translateUi(catalog[0], language)).toBe(expected)
       }
     },

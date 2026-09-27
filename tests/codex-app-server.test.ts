@@ -424,35 +424,31 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       },
     },
   })
-  const relay = startCodexAppServerRelay(
-    `ws://127.0.0.1:${appServer.port}`,
-    {
-      onActivity: (activity) => activities.push(activity),
-      onState: (state) => states.push(state),
-      onTitle: (title) => titles.push(title),
-      onUserMessage: (message) => {
-        userMessages.push(message.text)
-        userMessageIds.push(message.id)
-        userMessageConfigurations.push({
-          status: message.status,
-          hasImage: message.hasImage,
-          hasAudio: message.hasAudio,
-          hasSkill: message.hasSkill,
-          model: message.model,
-          effort: message.effort,
-          serviceTier: message.serviceTier,
-        })
-      },
-      onUserMessageHistory: (messages, replace) => {
-        historicalMessages.push(messages.map((message) => message.text))
-        historicalMessageIds.push(messages.map((message) => message.id))
-        historicalMessageDetails.push(...messages)
-        historicalReplacements.push(replace)
-      },
-      onError: (message) => errors.push(message),
+  const relay = startCodexAppServerRelay(`ws://127.0.0.1:${appServer.port}`, {
+    onActivity: (activity) => activities.push(activity),
+    onState: (state) => states.push(state),
+    onTitle: (title) => titles.push(title),
+    onUserMessage: (message) => {
+      userMessages.push(message.text)
+      userMessageIds.push(message.id)
+      userMessageConfigurations.push({
+        status: message.status,
+        hasImage: message.hasImage,
+        hasAudio: message.hasAudio,
+        hasSkill: message.hasSkill,
+        model: message.model,
+        effort: message.effort,
+        serviceTier: message.serviceTier,
+      })
     },
-    "/workspace/project",
-  )
+    onUserMessageHistory: (messages, replace) => {
+      historicalMessages.push(messages.map((message) => message.text))
+      historicalMessageIds.push(messages.map((message) => message.id))
+      historicalMessageDetails.push(...messages)
+      historicalReplacements.push(replace)
+    },
+    onError: (message) => errors.push(message),
+  })
   const client = new WebSocket(relay.url)
   client.addEventListener("message", (event) => {
     const message = JSON.parse(String(event.data)) as Record<string, unknown>
@@ -552,9 +548,9 @@ test("Codex TUI frames and approvals pass through while public activity is obser
         limit: 6,
         sortKey: "recency_at",
         sortDirection: "desc",
-        cwd: "/workspace/project",
       },
     })
+    expect(internalResumeRequests[0]?.params).not.toHaveProperty("cwd")
     expect(
       internalHistoryRequests.map((message) => ({
         method: message.method,

@@ -8,8 +8,12 @@ import {
   type TerminalRemoteCodexProfile,
   terminalRemoteProfileValidationError,
 } from "../packages/core/src/settings/terminal"
+import { remoteServerSetupInstructions } from "../packages/feature-terminal/src/services/remote-server-setup"
+import { refreshRemoteCodexResumeThreads } from "../packages/feature-terminal/src/services/codex-resume"
 import {
+  remoteCodexAppServerSshCommand,
   remoteCodexSshTestCommand,
+  remoteInteractiveSshCommand,
   testRemoteCodexConnection,
 } from "../packages/feature-terminal/src/services/remote-codex-connection"
 import {
@@ -18,7 +22,10 @@ import {
   nextRemoteServerBarrier,
   remoteServerBarrierCheckCommand,
 } from "../packages/feature-terminal/src/services/remote-server-readiness"
-import { createRemoteServerSetupCommand } from "../packages/feature-terminal/src/services/terminal"
+import {
+  createRemoteCodexAgentCommand,
+  createRemoteServerSetupCommand,
+} from "../packages/feature-terminal/src/services/terminal"
 
 const roots: string[] = []
 
@@ -258,6 +265,34 @@ test("remote readiness keeps the current barrier when verification fails", async
   ).resolves.toEqual({ id: "codex", ready: false, code: "codexMissing" })
 })
 
+test("Codex setup activates the standalone install in the current SSH session before login", () => {
+  const report = {
+    githubSsh: { id: "githubSsh", ready: true, code: "ready" },
+    codex: { id: "codex", ready: false, code: "codexMissing" },
+  } as const
+
+  expect(remoteServerSetupInstructions("codex", report)).toEqual([
+    "1. Instale: curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+    '2. Ative nesta sessão: export PATH="$HOME/.local/bin:$PATH"',
+    "3. Verifique: command -v codex && codex --version",
+    "4. Conecte sua conta: codex login --device-auth",
+    "5. No navegador local, conclua o acesso e aguarde o sucesso neste terminal",
+    "6. Confirme o login: codex login status",
+  ])
+  expect(
+    remoteServerSetupInstructions("codex", {
+      ...report,
+      codex: { id: "codex", ready: false, code: "codexUnauthenticated" },
+    }),
+  ).toEqual([
+    '1. Ative nesta sessão: export PATH="$HOME/.local/bin:$PATH"',
+    "2. Verifique: command -v codex && codex --version",
+    "3. Conecte sua conta: codex login --device-auth",
+    "4. No navegador local, conclua o acesso e aguarde o sucesso neste terminal",
+    "5. Confirme o login: codex login status",
+  ])
+})
+
 test("remote setup advances only after the current barrier is ready", () => {
   const waitingForGithub = {
     githubSsh: { id: "githubSsh" as const, ready: false, code: "authentication" as const },
@@ -297,4 +332,87 @@ test("remote server setup opens an interactive SSH shell without embedding a set
   ])
   expect(command.displayCommand).toBe("ubuntu@203.0.113.10:22")
   expect(command.remoteSetup).toEqual({ profile: target })
+})
+
+test("remote Codex uses an SSH stdio app-server in the selected directory", () => {
+  const target = profile("/tmp/oracle key")
+  const ssh = remoteCodexAppServerSshCommand(target, "/srv/project with 'quote'")
+
+  expect(ssh.slice(0, -1)).toEqual([
+    "ssh",
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-i",
+    "/tmp/oracle key",
+    "-p",
+    "22",
+    "ubuntu@203.0.113.10",
+  ])
+  expect(ssh.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
+  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server --listen stdio://')
+  expect(remoteInteractiveSshCommand(target)[1]).toBe("-tt")
+
+  expect(
+    createRemoteCodexAgentCommand({ profile: target, workingDirectory: "/srv/project" }),
+  ).toMatchObject({
+    label: "Codex · Oracle VPS",
+    workingDirectory: "/srv/project",
+    codex: {
+      appServer: true,
+      remote: { profile: target, workingDirectory: "/srv/project" },
+    },
+  })
+  expect(() => remoteCodexAppServerSshCommand(target, "relative/project")).toThrow()
+})
+
+test("remote Codex refresh lists and hydrates agents through SSH stdio", async () => {
+  const root = fixtureRoot()
+  const appServer = join(root, "remote-app-server.js")
+  writeFileSync(
+    appServer,
+    [
+      'let buffered = ""',
+      'process.stdin.setEncoding("utf8")',
+      'process.stdin.on("data", (chunk) => {',
+      "  buffered += chunk",
+      '  let newline = buffered.indexOf("\\n")',
+      "  while (newline >= 0) {",
+      "    const request = JSON.parse(buffered.slice(0, newline))",
+      "    buffered = buffered.slice(newline + 1)",
+      '    if (request.method === "initialize")',
+      "      process.stdout.write(JSON.stringify({ id: request.id, result: {} }) + '\\n')",
+      '    else if (request.method === "thread/list")',
+      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ id: 'remote-1', name: 'Agente remoto', preview: 'Projeto remoto', cwd: '/srv/project', recencyAt: 10, status: { type: 'notLoaded' } }] } }) + '\\n')",
+      '    else if (request.method === "thread/turns/list")',
+      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ items: [{ type: 'agentMessage', phase: 'final_answer', text: 'Concluído remotamente.' }] }] } }) + '\\n')",
+      '    newline = buffered.indexOf("\\n")',
+      "  }",
+      "})",
+    ].join("\n"),
+  )
+  const controller = new AbortController()
+  const threads = await refreshRemoteCodexResumeThreads(
+    profile("/tmp/oracle.key"),
+    controller.signal,
+    { executable: [process.execPath, appServer] },
+  )
+
+  expect(threads).toEqual([
+    {
+      id: "remote-1",
+      title: "Agente remoto",
+      preview: "Projeto remoto",
+      lastResponse: "Concluído remotamente.",
+      cwd: "/srv/project",
+      updatedAt: 10,
+      state: "idle",
+      remoteProfileId: "oracle-vps",
+      remoteProfileName: "Oracle VPS",
+    },
+  ])
 })

@@ -6,15 +6,16 @@ import {
   processStopDeadlineError,
   signalOwnedProcessGroup,
 } from "@xupon/tuiminal-core/process/owned-process"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 
-import type { FreeTerminalCommand } from "../model/sessions"
+import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
+import { remoteInteractiveSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
-import { resolveRemoteIdentityFile } from "./remote-codex-connection"
-export { stopAllFreeTerminalProcesses } from "./terminal-resources"
+
 export type { FreeTerminalCommand, FreeTerminalKind } from "../model/sessions"
+export { stopAllFreeTerminalProcesses } from "./terminal-resources"
 
 export type FreeTerminalExit = {
   code: number | null
@@ -109,7 +110,10 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
 }
 
 /** Opens or resumes the official Codex TUI backed by a Tuiminal-owned local app-server. */
-export function createCodexAgentCommand(resumeThreadId?: string): FreeTerminalCommand {
+export function createCodexAgentCommand(
+  resumeThreadId?: string,
+  workingDirectory = FREE_TERMINAL_WORKING_DIRECTORY,
+): FreeTerminalCommand {
   return {
     kind: "custom",
     label: "Codex",
@@ -117,8 +121,26 @@ export function createCodexAgentCommand(resumeThreadId?: string): FreeTerminalCo
     displayCommand: resumeThreadId ? `codex resume ${resumeThreadId} --remote` : "codex --remote",
     command: ["codex"],
     accent: COLORS.terminal,
-    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    workingDirectory,
     codex: { appServer: true, ...(resumeThreadId ? { resumeThreadId } : {}) },
+  }
+}
+
+export function createRemoteCodexAgentCommand(
+  remote: RemoteCodexTarget,
+  resumeThreadId?: string,
+): FreeTerminalCommand {
+  return {
+    kind: "custom",
+    label: `Codex · ${remote.profile.name}`,
+    shortLabel: "Codex",
+    displayCommand: resumeThreadId
+      ? `codex resume ${resumeThreadId} --remote · ${remote.profile.name}`
+      : `codex --remote · ${remote.profile.name}`,
+    command: ["codex"],
+    accent: COLORS.terminal,
+    workingDirectory: remote.workingDirectory,
+    codex: { appServer: true, remote, ...(resumeThreadId ? { resumeThreadId } : {}) },
   }
 }
 
@@ -130,19 +152,7 @@ export function createRemoteServerSetupCommand(
     label: profile.name,
     shortLabel: "SSH",
     displayCommand: `${profile.user}@${profile.host}:${profile.port}`,
-    command: [
-      "ssh",
-      "-tt",
-      "-o",
-      "ServerAliveInterval=30",
-      "-o",
-      "ServerAliveCountMax=3",
-      "-i",
-      resolveRemoteIdentityFile(profile.identityFile),
-      "-p",
-      String(profile.port),
-      `${profile.user}@${profile.host}`,
-    ],
+    command: remoteInteractiveSshCommand(profile),
     accent: COLORS.terminal,
     workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
     remoteSetup: { profile },

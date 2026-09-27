@@ -77,7 +77,11 @@ export function TerminalResumeThreadRow({
   onSelect?: (id: string) => void
 }) {
   const presentation = resumeThreadPresentation(thread.state)
-  const detail = thread.preview || thread.cwd || translateUi("Sem mensagens enviadas")
+  const origin = thread.remoteProfileId
+    ? `${translateUi("Remoto")} • ${thread.remoteProfileName || thread.remoteProfileId}`
+    : translateUi("Local")
+  const summary = thread.preview || thread.cwd || translateUi("Sem mensagens enviadas")
+  const detail = `${origin} · ${summary}`
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: row selection is also available through arrows and Enter.
     <box

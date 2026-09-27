@@ -2,8 +2,8 @@ import { existsSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { resolve } from "node:path"
 import {
-  terminalRemoteProfileValidationError,
   type TerminalRemoteCodexProfile,
+  terminalRemoteProfileValidationError,
 } from "@xupon/tuiminal-core/settings/theme"
 
 const SSH_TEST_MARKER = "TUIMINAL_SSH_OK"
@@ -28,6 +28,52 @@ export type RemoteCodexConnectionTestResult = {
 type RemoteCodexConnectionTestOptions = {
   executable?: string | readonly string[]
   timeoutMs?: number
+}
+
+function remoteSshPrefix(profile: TerminalRemoteCodexProfile, tty: boolean) {
+  return [
+    "ssh",
+    tty ? "-tt" : "-T",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-i",
+    resolveRemoteIdentityFile(profile.identityFile),
+    "-p",
+    String(profile.port),
+    `${profile.user}@${profile.host}`,
+  ]
+}
+
+export function remoteInteractiveSshCommand(profile: TerminalRemoteCodexProfile) {
+  return remoteSshPrefix(profile, true)
+}
+
+function shellQuote(value: string) {
+  return `'${value.replaceAll("'", `'"'"'`)}'`
+}
+
+export function remoteCodexAppServerSshCommand(
+  profile: TerminalRemoteCodexProfile,
+  workingDirectory: string,
+) {
+  if (
+    !workingDirectory.startsWith("/") ||
+    workingDirectory.length > 4_096 ||
+    /[\p{Cc}\p{Cf}]/u.test(workingDirectory)
+  )
+    throw new Error("O diretório remoto selecionado é inválido.")
+  const command = [
+    "codex_command=$(command -v codex 2>/dev/null || true)",
+    'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
+    'if [ -z "$codex_command" ]; then exit 127; fi',
+    `cd ${shellQuote(workingDirectory)} || exit 72`,
+    'exec "$codex_command" app-server --listen stdio://',
+  ].join("; ")
+  const ssh = remoteSshPrefix(profile, false)
+  ssh.splice(2, 0, "-o", "BatchMode=yes")
+  return [...ssh, command]
 }
 
 export function resolveRemoteIdentityFile(value: string) {

@@ -43,8 +43,8 @@ export const TERMINAL_ACTIONS = [
   },
   {
     key: "n",
-    label: "[N] Novo terminal",
-    description: "Abre um shell em uma nova seção.",
+    label: "[N] Nova sessão",
+    description: "Abre uma sessão local ou remota em nova seção.",
     tags: ["terminal"],
   },
   {

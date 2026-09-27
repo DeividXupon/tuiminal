@@ -8,9 +8,12 @@ export type CodexResumeThread = {
   cwd: string
   updatedAt: number
   state: CodexResumeThreadState
+  remoteProfileId?: string
+  remoteProfileName?: string
 }
 
 let threads: readonly CodexResumeThread[] = []
+const sources = new Map<string, readonly CodexResumeThread[]>()
 const listeners = new Set<() => void>()
 
 export function codexResumeThreadsSnapshot() {
@@ -22,12 +25,21 @@ export function subscribeCodexResumeThreads(listener: () => void) {
   return () => listeners.delete(listener)
 }
 
-export function publishCodexResumeThreads(next: readonly CodexResumeThread[]) {
+export function publishCodexResumeThreads(
+  next: readonly CodexResumeThread[],
+  remoteProfileId?: string,
+) {
   const previous = new Map(threads.map((thread) => [thread.id, thread.lastResponse]))
-  const merged = next.map((thread) => ({
+  const sourceThreads = next.map((thread) => ({
     ...thread,
     lastResponse: thread.lastResponse || previous.get(thread.id) || "",
   }))
+  const sourceProfileId =
+    remoteProfileId ?? next.find((thread) => thread.remoteProfileId)?.remoteProfileId
+  sources.set(sourceProfileId ? `remote:${sourceProfileId}` : "local", sourceThreads)
+  const merged = [...sources.values()]
+    .flat()
+    .sort((left, right) => right.updatedAt - left.updatedAt || left.id.localeCompare(right.id))
   if (JSON.stringify(merged) === JSON.stringify(threads)) return
   threads = merged
   for (const listener of listeners) listener()
@@ -53,5 +65,7 @@ export function updateCodexResumeThreadResponse(id: string, value: string) {
 }
 
 export function resetCodexResumeThreadsForTests() {
-  publishCodexResumeThreads([])
+  sources.clear()
+  threads = []
+  for (const listener of listeners) listener()
 }

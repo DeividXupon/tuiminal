@@ -1,11 +1,11 @@
 export const TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES = [
   [
-    "Abre um shell em uma nova seção.",
-    "Opens a shell in a new section.",
-    "Abre un shell en una sección nueva.",
-    "新しいセクションでシェルを開きます。",
-    "在新分区中打开 shell。",
-    "새 섹션에서 셸을 엽니다.",
+    "Abre uma sessão local ou remota em nova seção.",
+    "Opens a local or remote session in a new section.",
+    "Abre una sesión local o remota en una sección nueva.",
+    "ローカルまたはリモートセッションを新しいセクションで開きます。",
+    "在新分区中打开本地或远程会话。",
+    "새 섹션에서 로컬 또는 원격 세션을 엽니다.",
   ],
   [
     "Cria uma seção independente com um terminal.",

@@ -5,6 +5,7 @@ import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, type TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { remoteServerSetupInstructions } from "../services/remote-server-setup"
 import {
   checkRemoteServerBarrier,
   checkRemoteServerReadiness,
@@ -37,22 +38,6 @@ function resultMessage(code: RemoteServerBarrierCode) {
     failed: "A verificação falhou.",
   }
   return messages[code]
-}
-
-function instructions(id: RemoteServerBarrierId, report: RemoteServerReadinessReport | null) {
-  if (id === "githubSsh")
-    return [
-      '1. Crie uma chave: ssh-keygen -t ed25519 -C "seu-email-do-github"',
-      "2. Mostre a chave: cat ~/.ssh/id_ed25519.pub",
-      "3. Adicione a chave pública no GitHub: Settings → SSH and GPG keys",
-      "4. Teste no terminal: ssh -T git@github.com",
-    ]
-  return report?.codex.code === "codexUnauthenticated"
-    ? ["1. Conecte sua conta: codex login --device-auth"]
-    : [
-        "1. Instale: curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-        "2. Conecte sua conta: codex login --device-auth",
-      ]
 }
 
 export function RemoteServerSetupPanel({
@@ -164,7 +149,7 @@ export function RemoteServerSetupPanel({
   const step = current
     ? REMOTE_SERVER_BARRIER_ORDER.indexOf(current) + 1
     : REMOTE_SERVER_BARRIER_ORDER.length
-  const tutorial = current ? instructions(current, report) : []
+  const tutorial = current ? remoteServerSetupInstructions(current, report) : []
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes own keyboard focus and mouse activation.
     <box

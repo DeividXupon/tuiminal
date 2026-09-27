@@ -113,6 +113,10 @@ describe("Free Terminal presentation", () => {
       displayCommand: "codex resume thread-123 --remote",
       codex: { appServer: true, resumeThreadId: "thread-123" },
     })
+    expect(createCodexAgentCommand(undefined, "/workspace/chosen")).toMatchObject({
+      workingDirectory: "/workspace/chosen",
+      codex: { appServer: true },
+    })
   })
   test("derives agent state from public app-server events", () => {
     expect(codexAppServerState({ method: "turn/started" })).toBe("working")
@@ -282,12 +286,43 @@ describe("Free Terminal presentation", () => {
       agentIntegration: "codex-app-server",
       backend: "native",
     })
+    const remoteCodex = session("remote-codex", {
+      agent,
+      agentIntegration: "codex-app-server",
+      backend: "native",
+      codex: {
+        appServer: true,
+        remote: {
+          profile: {
+            id: "work",
+            name: "Work",
+            host: "example.test",
+            user: "ubuntu",
+            port: 22,
+            identityFile: "/tmp/work.key",
+          },
+          workingDirectory: "/srv/project",
+        },
+      },
+    })
 
     expect(
-      orderedRunningAgents([localhost, remoteTmux, native, remoteExternal, ownedTmux]).map(
-        ({ id }) => id,
-      ),
-    ).toEqual(["remote-tmux", "native", "remote-external", "owned-tmux", "localhost"])
+      orderedRunningAgents([
+        remoteCodex,
+        localhost,
+        remoteTmux,
+        native,
+        remoteExternal,
+        ownedTmux,
+      ]).map(({ id }) => id),
+    ).toEqual([
+      "remote-tmux",
+      "native",
+      "remote-external",
+      "owned-tmux",
+      "localhost",
+      "remote-codex",
+    ])
   })
   test("limits Master Key labels to its nine direct keys", () => {
     expect(masterKeyShortcutLabel(0)).toBe("[1]")

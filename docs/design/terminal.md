@@ -126,11 +126,28 @@ marker.
 settings and opens an interactive SSH shell in a new Terminal section. A setup guide
 under that terminal checks both barriers on entry, selects the first one that failed,
 and shows commands for the user to run manually. **Confirm configuration** rechecks
-only the current barrier and advances only after success. Tuiminal does not create
-keys, install software, register GitHub keys, authenticate accounts, copy projects,
-or run tutorial commands automatically. This flow does not launch a remote
-`codex app-server`, expose remote conversations, or change the existing localhost
-Codex flow; remote-agent execution is not implemented yet. Selecting the category
+only the current barrier and advances only after success. Codex installation guidance
+must add `$HOME/.local/bin` to the current SSH session's `PATH` and verify
+`codex --version` before asking the user to authenticate. Device-code guidance tells
+the user to complete the flow in a local browser, wait for success in the remote
+terminal, and verify the saved session with `codex login status`; browser success alone
+does not advance the guide. The explicit `PATH` step remains necessary when the
+readiness probe finds the standalone binary directly but the interactive shell has not
+reloaded its startup file. Tuiminal does not create keys, install software,
+register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
+automatically. After a profile is active, Master Key `[N]` asks whether the new
+section is local or remote. Both choices open an interactive shell modal where the
+user runs `cd` manually; Local uses the local login shell and Remote uses SSH.
+Repeating the configured Master Key confirms the shell's absolute working directory;
+`exit` or `[Esc]` cancels. Tuiminal then starts
+`codex app-server --listen stdio://` through `ssh -T` in that directory and bridges
+its JSONL stream to the local official Codex TUI through a loopback-only relay. No
+remote TCP listener is exposed. The SSH process, relay, and TUI share one owned
+lifecycle. Public app-server events provide integrated activity, sent-message history,
+and remote `/resume` entries. Those entries retain the source profile and remote cwd,
+so resuming never silently falls back to the local machine. Remote integrated agents
+are grouped under `Remote • <profile>`. Local filesystem Live Diff remains unavailable
+for remote sessions. Selecting the category
 renders a read-only summary of saved profiles. `[Enter]`
 then switches the detail pane to the focused form navigator with the first field
 selected, or the first saved profile selected when profiles exist. `[J/K/↑/↓]`
@@ -162,9 +179,12 @@ actions.
 Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
 sheet. Actions and Agents become clickable tabs, `[←/→]` switches tabs, and only the
 active tab's content is rendered.
-Agents shows up to six conversations from the owned localhost Codex app-server's
-`thread/list`, with the current-directory scope and recency ordering used by Codex
-`/resume`. A short-lived owned app-server loads the list and bounded public
+Agents merges up to six local conversations with up to six conversations from the
+active remote profile. Both `thread/list` queries omit `cwd`, so the local list covers
+recent conversations across the local host and the remote list covers recent
+conversations across that SSH host. Each source refreshes independently, remote rows
+show their profile, and one source never erases the other. A short-lived owned local app-server loads the
+local list and bounded public
 `thread/turns/list` results when Terminal becomes active, even before a Codex pane
 exists; integrated panes keep it current afterward. An agent row shows `[Enter]`, its
 name, prompt preview and live state. Idle rows append the elapsed time since their last
@@ -260,7 +280,7 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 
 | Key after the Master Key | Action |
 | --- | --- |
-| `[N]` / `[C]` | New terminal / new section |
+| `[N]` / `[C]` | With an active SSH profile, choose a directory for local or remote Codex / open a new local section |
 | `[A]` | Open the Codex terminal interface connected to app-server in a new section |
 | `[V]` / `[H]` | Choose a new shell or an existing agent, then split right / below |
 | `[S]` | Open or focus sent-message history for an integrated Codex session |

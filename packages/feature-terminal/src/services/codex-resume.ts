@@ -1,5 +1,7 @@
-import { createServer } from "node:net"
+import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { type CodexResumeThread, publishCodexResumeThreads } from "../model/codex-resume-threads"
+import { unusedCodexLoopbackPort, waitForCodexAppServer } from "./codex-app-server-connection"
+import { remoteCodexAppServerSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
 
 type RecordValue = Record<string, unknown>
@@ -53,7 +55,11 @@ export function codexResumeLastResponse(message: unknown) {
 }
 
 /** Parses the same public thread summaries used by the Codex `/resume` picker. */
-export function codexResumeThreads(message: unknown): CodexResumeThread[] {
+export function codexResumeThreads(
+  message: unknown,
+  remoteProfileId?: string,
+  remoteProfileName?: string,
+): CodexResumeThread[] {
   const result = object(object(message)?.result)
   if (!Array.isArray(result?.data)) return []
   return result.data
@@ -78,6 +84,8 @@ export function codexResumeThreads(message: unknown): CodexResumeThread[] {
           cwd,
           updatedAt,
           state: threadState(thread.status),
+          ...(remoteProfileId ? { remoteProfileId } : {}),
+          ...(remoteProfileName ? { remoteProfileName } : {}),
         },
       ]
     })
@@ -85,7 +93,7 @@ export function codexResumeThreads(message: unknown): CodexResumeThread[] {
     .slice(0, 6)
 }
 
-export function resumeListFrame(id: string, cwd: string | undefined) {
+export function resumeListFrame(id: string) {
   return JSON.stringify({
     id,
     method: "thread/list",
@@ -94,7 +102,6 @@ export function resumeListFrame(id: string, cwd: string | undefined) {
       limit: 6,
       sortKey: "recency_at",
       sortDirection: "desc",
-      ...(cwd ? { cwd } : {}),
     },
   })
 }
@@ -111,41 +118,6 @@ export function resumeTurnsFrame(id: string, threadId: string) {
       itemsView: "full",
     },
   })
-}
-
-export async function unusedCodexLoopbackPort() {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", resolve)
-  })
-  const address = server.address()
-  const port = address && typeof address !== "string" ? address.port : 0
-  await new Promise<void>((resolve) => server.close(() => resolve()))
-  if (!port) throw new Error("Não foi possível reservar uma porta para o Codex app-server.")
-  return port
-}
-
-export async function waitForCodexAppServer(
-  url: string,
-  server: { exitCode: number | null },
-  signal: AbortSignal,
-) {
-  const deadline = Date.now() + 5000
-  while (Date.now() < deadline) {
-    signal.throwIfAborted()
-    if (server.exitCode !== null)
-      throw new Error("O Codex app-server encerrou durante a inicialização.")
-    const status = await fetch(`${url.replace("ws:", "http:")}/readyz`, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(500)]),
-    }).then(
-      (response) => response.ok,
-      () => false,
-    )
-    if (status) return
-    await Bun.sleep(50)
-  }
-  throw new Error("O Codex app-server não ficou pronto para a interface do Codex.")
 }
 
 function waitForOpen(socket: WebSocket, signal: AbortSignal) {
@@ -254,7 +226,7 @@ export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal
     await waitForResponse(connectedSocket, initializeId, deadline)
     connectedSocket.send(JSON.stringify({ method: "initialized", params: {} }))
     const listId = "tuiminal-resume-list"
-    connectedSocket.send(resumeListFrame(listId, cwd))
+    connectedSocket.send(resumeListFrame(listId))
     const threads = codexResumeThreads(await waitForResponse(connectedSocket, listId, deadline))
     publishCodexResumeThreads(threads)
     const lastResponses = await Promise.all(
@@ -273,6 +245,136 @@ export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal
     publishCodexResumeThreads(hydrated)
     return hydrated
   } finally {
+    await stop()
+  }
+}
+
+type JsonlReader = {
+  reader: ReadableStreamDefaultReader<Uint8Array>
+  decoder: TextDecoder
+  buffered: string
+}
+
+async function nextJsonlMessage(state: JsonlReader, signal: AbortSignal): Promise<RecordValue> {
+  while (true) {
+    signal.throwIfAborted()
+    const newline = state.buffered.indexOf("\n")
+    if (newline >= 0) {
+      const line = state.buffered.slice(0, newline).replace(/\r$/, "")
+      state.buffered = state.buffered.slice(newline + 1)
+      try {
+        const message = object(JSON.parse(line))
+        if (message) return message
+      } catch {
+        // Ignore shell startup output and wait for a JSONL protocol frame.
+      }
+      continue
+    }
+    const chunk = await state.reader.read()
+    if (chunk.done) throw new Error("Codex app-server remoto desconectou durante a consulta.")
+    state.buffered += state.decoder.decode(chunk.value, { stream: true })
+    if (state.buffered.length > 16 * 1024 * 1024)
+      throw new Error("A resposta remota do Codex excedeu o limite permitido.")
+  }
+}
+
+async function nextJsonlResponse(state: JsonlReader, id: string, signal: AbortSignal) {
+  while (true) {
+    const message = await nextJsonlMessage(state, signal)
+    if (message.id === id) return message
+  }
+}
+
+function writeJsonl(
+  stdin: { write(value: string | Uint8Array): number | Promise<number> },
+  message: string,
+) {
+  return Promise.resolve(stdin.write(`${message}\n`))
+}
+
+/** Loads the active SSH host's recent threads without opening a visible Codex pane. */
+export async function refreshRemoteCodexResumeThreads(
+  profile: TerminalRemoteCodexProfile,
+  signal: AbortSignal,
+  options: { executable?: readonly string[] } = {},
+) {
+  signal.throwIfAborted()
+  const sshCommand = remoteCodexAppServerSshCommand(profile, "/")
+  const command = options.executable ? [...options.executable, ...sshCommand.slice(1)] : sshCommand
+  const server = Bun.spawn(command, {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "ignore",
+  })
+  const stdout = server.stdout as ReadableStream<Uint8Array>
+  const stdin = server.stdin as {
+    write(value: string | Uint8Array): number | Promise<number>
+    end(): void
+  }
+  const state: JsonlReader = {
+    reader: stdout.getReader(),
+    decoder: new TextDecoder(),
+    buffered: "",
+  }
+  let stopping: Promise<void> | null = null
+  let unregister: () => void = () => undefined
+  const stop = () => {
+    if (stopping) return stopping
+    stopping = (async () => {
+      try {
+        stdin.end()
+        server.kill()
+        await server.exited
+      } finally {
+        unregister()
+      }
+    })()
+    return stopping
+  }
+  unregister = registerTerminalResource({ stop })
+  const abort = () => void stop()
+  const abortDeadline = () => void stop()
+  let deadline: AbortSignal | null = null
+  signal.addEventListener("abort", abort, { once: true })
+  try {
+    deadline = AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+    deadline.addEventListener("abort", abortDeadline, { once: true })
+    const initializeId = `tuiminal-remote-resume-initialize:${profile.id}`
+    await writeJsonl(
+      stdin,
+      JSON.stringify({
+        id: initializeId,
+        method: "initialize",
+        params: {
+          clientInfo: { name: "tuiminal", title: "Tuiminal", version: "1" },
+          capabilities: null,
+        },
+      }),
+    )
+    await nextJsonlResponse(state, initializeId, deadline)
+    await writeJsonl(stdin, JSON.stringify({ method: "initialized", params: {} }))
+    const listId = `tuiminal-remote-resume-list:${profile.id}`
+    await writeJsonl(stdin, resumeListFrame(listId))
+    const threads = codexResumeThreads(
+      await nextJsonlResponse(state, listId, deadline),
+      profile.id,
+      profile.name,
+    )
+    publishCodexResumeThreads(threads, profile.id)
+    const hydrated: CodexResumeThread[] = []
+    for (const [index, thread] of threads.entries()) {
+      const id = `tuiminal-remote-resume-turns:${profile.id}:${index}`
+      await writeJsonl(stdin, resumeTurnsFrame(id, thread.id))
+      const response = await nextJsonlResponse(state, id, deadline)
+      hydrated.push({ ...thread, lastResponse: codexResumeLastResponse(response) })
+    }
+    deadline.throwIfAborted()
+    publishCodexResumeThreads(hydrated, profile.id)
+    return hydrated
+  } finally {
+    signal.removeEventListener("abort", abort)
+    deadline?.removeEventListener("abort", abortDeadline)
+    state.reader.releaseLock()
     await stop()
   }
 }

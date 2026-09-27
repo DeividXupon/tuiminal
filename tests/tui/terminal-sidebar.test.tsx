@@ -1,16 +1,16 @@
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
-import { act, useState } from "react"
 import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
+import { act, useState } from "react"
 import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import type { AgentState } from "../../packages/feature-terminal/src/model/agent-state"
+import type { TerminalSession } from "../../packages/feature-terminal/src/model/sessions"
 import {
   TerminalSidebar,
   terminalSidebarFocusSweep,
 } from "../../packages/feature-terminal/src/ui/TerminalSidebar"
-import type { TerminalSession } from "../../packages/feature-terminal/src/model/sessions"
-import type { AgentState } from "../../packages/feature-terminal/src/model/agent-state"
 
 let tui: TestRendererSetup | undefined
 const originalSettings = getUiSettings()
@@ -146,10 +146,26 @@ test("agent list separates terminal and localhost sessions", async () => {
   updateUiSettings({ language: "pt-BR" })
   const localhost = session("Localhost", "idle")
   localhost.agentIntegration = "codex-app-server"
+  const remote = session("Remote", "working")
+  remote.agentIntegration = "codex-app-server"
+  remote.codex = {
+    appServer: true,
+    remote: {
+      profile: {
+        id: "work",
+        name: "Trabalho",
+        host: "example.test",
+        user: "ubuntu",
+        port: 22,
+        identityFile: "/tmp/work.key",
+      },
+      workingDirectory: "/srv/project",
+    },
+  }
   const terminal = session("Terminal", "unknown")
   tui = await testRender(
     <TerminalSidebar
-      sessions={[localhost, terminal]}
+      sessions={[remote, localhost, terminal]}
       folders={[{ id: "terminal", name: "Terminal" }]}
       selectedFolder="terminal"
       activeSessionId="Terminal"
@@ -167,14 +183,17 @@ test("agent list separates terminal and localhost sessions", async () => {
 
   const terminalGroup = tui.renderer.root.findDescendantById("terminal-agent-group-term")!
   const localhostGroup = tui.renderer.root.findDescendantById("terminal-agent-group-localhost")!
+  const remoteGroup = tui.renderer.root.findDescendantById("terminal-agent-group-remote-work")!
   const terminalRow = tui.renderer.root.findDescendantById("terminal-agent-Terminal")!
   const localhostRow = tui.renderer.root.findDescendantById("terminal-agent-Localhost")!
   const frame = tui.captureCharFrame()
   expect(frame).toContain("Local • term")
   expect(frame).toContain("Local • localhost")
+  expect(frame).toContain("Remoto • Trabalho")
   expect(terminalGroup.screenY).toBeLessThan(terminalRow.screenY)
   expect(terminalRow.screenY).toBeLessThan(localhostGroup.screenY)
   expect(localhostGroup.screenY).toBeLessThan(localhostRow.screenY)
+  expect(localhostRow.screenY).toBeLessThan(remoteGroup.screenY)
 })
 
 test("Master Key labels only the visible agents and terminals in sidebar order", async () => {

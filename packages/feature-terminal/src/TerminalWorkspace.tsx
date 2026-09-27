@@ -12,16 +12,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAgentDetection } from "./hooks/use-agent-detection"
 import { useAgentNotifications } from "./hooks/use-agent-notifications"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
+import { useCodexResumeThreads } from "./hooks/use-codex-resume-threads"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
 import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
-import type { AgentMessageHistoryEntry } from "./model/agent-message-history"
-import {
-  codexResumeThreadsSnapshot,
-  subscribeCodexResumeThreads,
-} from "./model/codex-resume-threads"
 import {
   parseTerminalFocusTargetKey,
   TERMINAL_SIDEBAR_FOCUS_TARGET,
@@ -50,17 +46,23 @@ import {
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   orderedRunningAgents,
-  type TerminalFolder,
   type RemoteServerSetupRequest,
+  type TerminalFolder,
   type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
-import { refreshCodexResumeThreads } from "./services/codex-app-server"
+import {
+  liveDiffCoversActiveSplit,
+  messageHistoryForSession,
+  type MessageHistoryTarget,
+  type SplitRequest,
+} from "./rendering/terminal-workspace-presentation"
 import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
+import { resolveCodexResumeCommand } from "./services/codex-resume-command"
 import {
   createCodexAgentCommand,
   createFreeTerminalCommand,
@@ -76,10 +78,11 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
+import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
-import { liveDiffCoversSplitPane, TerminalPanes } from "./ui/TerminalPanes"
+import { TerminalPanes } from "./ui/TerminalPanes"
 import { TerminalShortcutAnimation } from "./ui/TerminalShortcut"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
 import { TerminalSplitDialog } from "./ui/TerminalSplitDialog"
@@ -90,50 +93,12 @@ const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
   { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
 ]
 
-type MessageHistoryTarget = {
-  sessionId: string
-  startedAt: number
-  focusRequest: number
-}
-
 type LiveDiffTarget = {
   sessionId: string
   agentKey: string
   startedAt: number
   manualDirectories: readonly string[]
   focusRequest: number
-}
-
-type SplitRequest = {
-  sourceSessionId: string
-  sectionId: string
-  folderId: string
-  down: boolean
-}
-
-function messageHistoryForSession(
-  session: TerminalSession,
-  target: MessageHistoryTarget | undefined,
-  messages: ReadonlyMap<string, readonly AgentMessageHistoryEntry[]>,
-) {
-  if (!target || target.sessionId !== session.id || target.startedAt !== session.startedAt)
-    return undefined
-  return { messages: messages.get(session.id) ?? [], focusRequest: target.focusRequest }
-}
-
-function liveDiffCoversActiveSplit(
-  sessions: readonly TerminalSession[],
-  availableWidth: number,
-  availableHeight: number,
-  sidebarWidth: number,
-) {
-  if (sessions.length !== MAX_TERMINALS_PER_SECTION) return false
-  return liveDiffCoversSplitPane({
-    availableWidth,
-    availableHeight,
-    sidebarWidth,
-    splitDown: sessions.some((session) => session.row === 1),
-  })
 }
 
 export function FreeTerminal({
@@ -204,6 +169,7 @@ export function FreeTerminal({
   const dialogRef = useRef<TerminalDialogKind | null>(null)
   const [splitRequest, setSplitRequest] = useState<SplitRequest | null>(null)
   const splitRequestRef = useRef<SplitRequest | null>(null)
+  const [agentLaunchStep, setAgentLaunchStep] = useState<AgentLaunchStep | null>(null)
   const [liveDiffTargets, setLiveDiffTargets] = useState<ReadonlyMap<string, LiveDiffTarget>>(
     () => new Map(),
   )
@@ -371,19 +337,7 @@ export function FreeTerminal({
   const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
   const canSplit = hasSplitRoom && (canCreateSplitTerminal || splitAgents.length > 0)
   const sidebarHeight = dimensions.height - 1
-  const recentThreads = useSyncExternalStore(
-    subscribeCodexResumeThreads,
-    codexResumeThreadsSnapshot,
-    codexResumeThreadsSnapshot,
-  )
-  useEffect(() => {
-    if (!active || process.env.TUIMINAL_TERMINAL_CODEX_RESUME === "0") return
-    const controller = new AbortController()
-    void refreshCodexResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, controller.signal).catch(
-      () => undefined,
-    )
-    return () => controller.abort()
-  }, [active])
+  const { recentThreads, refreshRemoteThreads } = useCodexResumeThreads(active)
   const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
     "\u0000",
   )
@@ -391,7 +345,12 @@ export function FreeTerminal({
   seenAgents.current = useMemo(
     () =>
       new Set(
-        active && !dialog && !splitRequest && !leaderActive && !selectedBoxFocusTarget
+        active &&
+          !dialog &&
+          !splitRequest &&
+          !agentLaunchStep &&
+          !leaderActive &&
+          !selectedBoxFocusTarget
           ? sessions
               .filter((session) => session.sectionId === activeSession?.sectionId)
               .map((session) => session.id)
@@ -402,6 +361,7 @@ export function FreeTerminal({
       activeSession?.sectionId,
       dialog,
       leaderActive,
+      agentLaunchStep,
       selectedBoxFocusTarget,
       sessions,
       splitRequest,
@@ -487,9 +447,10 @@ export function FreeTerminal({
       return
     }
     rememberBoxFocusOrigin()
+    refreshRemoteThreads()
     leaderRef.current = true
     setLeaderActive(true)
-  }, [rememberBoxFocusOrigin, restoreFocus])
+  }, [refreshRemoteThreads, rememberBoxFocusOrigin, restoreFocus])
   const setLeader = (open: boolean) => {
     leaderRef.current = open
     setLeaderActive(open)
@@ -543,7 +504,16 @@ export function FreeTerminal({
       return
     }
     setLeader(false)
-    launchSection(createCodexAgentCommand(threadId))
+    const { command, error } = resolveCodexResumeCommand(
+      threadId,
+      recentThreads,
+      getUiSettings().terminalRemoteCodexProfiles,
+    )
+    if (error) {
+      setNotice(error)
+      return
+    }
+    if (command) launchSection(command)
   }
   resumeCodexThreadRef.current = resumeCodexThread
   const requestSplit = (down: boolean) => {
@@ -611,7 +581,9 @@ export function FreeTerminal({
     if (key === "q") return !onQuit
     if (key === "d")
       return !(
-        (activeSession?.status === "running" && activeSession.agent) ||
+        (activeSession?.status === "running" &&
+          activeSession.agent &&
+          !activeSession.codex?.remote) ||
         (activeSessionId && liveDiffTargets.has(activeSessionId))
       )
     return ["x", "e", "m"].includes(key) && !activeSession
@@ -704,7 +676,14 @@ export function FreeTerminal({
     if (!["e", "l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
     switch (key) {
       case "n":
-        launchSection()
+        {
+          const settings = getUiSettings()
+          const profile = settings.terminalRemoteCodexProfiles.find(
+            (candidate) => candidate.id === settings.terminalRemoteCodexActiveProfileId,
+          )
+          if (profile) setAgentLaunchStep({ kind: "location", profile })
+          else launchSection()
+        }
         break
       case "a":
         launchSection(createCodexAgentCommand())
@@ -753,7 +732,7 @@ export function FreeTerminal({
     }
   }
   runActionRef.current = runAction
-  const openSidebarTerminal = useCallback(() => runActionRef.current("n"), [])
+  const openSidebarTerminal = useCallback(() => launchSection(), [launchSection])
   const openSidebarCommand = useCallback(() => {
     dialogRef.current = "command"
     setDialog("command")
@@ -872,11 +851,13 @@ export function FreeTerminal({
       setDialog(null)
       splitRequestRef.current = null
       setSplitRequest(null)
+      setAgentLaunchStep(null)
       liveDiffProjectSearch.current?.abort()
       setLiveDiffProjectPicker(null)
     } else if (
       dialogRef.current ||
       splitRequestRef.current ||
+      agentLaunchStep ||
       liveDiffProjectPicker ||
       leaderRef.current ||
       boxFocusBusyRef.current
@@ -884,7 +865,14 @@ export function FreeTerminal({
       return
     else if (activeSessionId) focusTerminal(activeSessionId)
     else workspaceRef.current?.focus()
-  }, [active, activeSessionId, boxFocusBusyRef, focusTerminal, liveDiffProjectPicker])
+  }, [
+    active,
+    activeSessionId,
+    boxFocusBusyRef,
+    focusTerminal,
+    liveDiffProjectPicker,
+    agentLaunchStep,
+  ])
 
   const sidebarView = useMemo(
     () => ({
@@ -1067,6 +1055,7 @@ export function FreeTerminal({
       !active ||
       dialogRef.current ||
       splitRequestRef.current ||
+      agentLaunchStep ||
       liveDiffProjectPicker ||
       key.defaultPrevented
     )
@@ -1164,6 +1153,15 @@ export function FreeTerminal({
             onCreateTerminal={createSplitTerminal}
             onSelectAgent={placeSplitAgent}
             onClose={closeSplitDialog}
+          />
+        )}
+        {agentLaunchStep && (
+          <AgentLaunchDialog
+            step={agentLaunchStep}
+            masterKey={masterKey}
+            onStepChange={setAgentLaunchStep}
+            onLaunch={launchSection}
+            onClose={restoreFocus}
           />
         )}
         {liveDiffProjectPicker && (

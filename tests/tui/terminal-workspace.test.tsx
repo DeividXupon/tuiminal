@@ -62,6 +62,9 @@ let codexSpy:
 let codexResumeSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "refreshCodexResumeThreads">>
   | undefined
+let remoteCodexResumeSpy:
+  | ReturnType<typeof spyOn<typeof codexServer, "refreshRemoteCodexResumeThreads">>
+  | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 const liveDiffSpies: Array<{ mockRestore: () => void }> = []
@@ -76,6 +79,7 @@ afterEach(() => {
   spawnSpy?.mockRestore()
   codexSpy?.mockRestore()
   codexResumeSpy?.mockRestore()
+  remoteCodexResumeSpy?.mockRestore()
   codexEvents = undefined
   inspectionSpy?.mockRestore()
   for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
@@ -137,6 +141,7 @@ async function mount(
     },
   )
   codexResumeSpy = spyOn(codexServer, "refreshCodexResumeThreads").mockResolvedValue([])
+  remoteCodexResumeSpy = spyOn(codexServer, "refreshRemoteCodexResumeThreads").mockResolvedValue([])
   if (app) process.env.TUIMINAL_ONLY_TAB = "terminal"
   if (fullApp) {
     delete process.env.TUIMINAL_ONLY_TAB
@@ -264,6 +269,89 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
+test("Master Key N chooses a remote server directory and launches Codex through SSH", async () => {
+  await mount()
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+
+  await leader("n")
+  expect(tui?.renderer.root.findDescendantById("terminal-location-dialog")).toBeDefined()
+  await arrow("down")
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeDefined()
+  expect(commands[0]).toEqual([
+    "ssh",
+    "-tt",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-i",
+    "/tmp/work-server.key",
+    "-p",
+    "22",
+    "ubuntu@203.0.113.12",
+  ])
+
+  await key("b", true)
+  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
+  expect(marker).toBeDefined()
+  await act(async () =>
+    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/srv/project\r\n`)),
+  )
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeUndefined()
+  expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(starts.at(-1)).toMatchObject({
+    remote: { profile, workingDirectory: "/srv/project" },
+  })
+})
+
+test("Master Key N chooses a local directory before launching local Codex", async () => {
+  await mount()
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+
+  await leader("n")
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeDefined()
+  expect(commands[0]).toEqual(processes.createShellTerminalCommand().command)
+
+  await key("b", true)
+  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
+  expect(marker).toBeDefined()
+  await act(async () =>
+    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/workspace/local-project\r\n`)),
+  )
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeUndefined()
+  expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(starts.at(-1)).toMatchObject({ cwd: "/workspace/local-project" })
+  expect(starts.at(-1)).not.toHaveProperty("remote")
+})
+
 test("Master Key lists and resumes conversations from the local Codex /resume list", async () => {
   await mount(false, 140, 36)
   await leader("a")
@@ -339,6 +427,99 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
     "--remote",
     "ws://127.0.0.1:4500",
   ])
+})
+
+test("Master Key Agents merges local and remote Codex conversations", async () => {
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+  await mount(false, 140, 36)
+  await act(async () => {
+    publishCodexResumeThreads([
+      {
+        id: "local-thread",
+        title: "Agente local",
+        preview: "Projeto local",
+        lastResponse: "Local pronto.",
+        cwd: "/workspace/local",
+        updatedAt: Date.now(),
+        state: "idle",
+      },
+    ])
+    publishCodexResumeThreads(
+      [
+        {
+          id: "remote-thread",
+          title: "Agente remoto",
+          preview: "Projeto remoto",
+          lastResponse: "Remoto pronto.",
+          cwd: "/srv/project",
+          updatedAt: Date.now() - 1,
+          state: "idle",
+          remoteProfileId: profile.id,
+          remoteProfileName: profile.name,
+        },
+      ],
+      profile.id,
+    )
+  })
+  await tui?.renderOnce()
+  await key("b", true)
+  await arrow("right")
+
+  expect(tui?.captureCharFrame()).toContain("Agente local")
+  expect(tui?.captureCharFrame()).toContain("Agente remoto")
+  expect(tui?.captureCharFrame()).toContain("Remoto • Servidor do trabalho")
+})
+
+test("a remote Codex conversation resumes through its original SSH profile", async () => {
+  await mount(false, 140, 36)
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+  await act(async () =>
+    publishCodexResumeThreads([
+      {
+        id: "remote-thread",
+        title: "Continuar no servidor",
+        preview: "Projeto remoto",
+        lastResponse: "Pronto.",
+        cwd: "/srv/project",
+        updatedAt: Date.now(),
+        state: "idle",
+        remoteProfileId: profile.id,
+      },
+    ]),
+  )
+  await tui?.renderOnce()
+
+  await key("b", true)
+  await arrow("right")
+  await key("enter")
+
+  expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(starts.at(-1)).toMatchObject({
+    resumeThreadId: "remote-thread",
+    remote: { profile, workingDirectory: "/srv/project" },
+  })
 })
 
 test("Master Key idle time uses the light palette's primary text color", async () => {
@@ -679,7 +860,7 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(agentPanel?.screenX).toBeGreaterThan(actionPanel?.screenX ?? 0)
   expect(tui?.renderer.root.findDescendantById("terminal-actions-backdrop")).toBeUndefined()
   expect(terminal.height).toBe(height)
-  expect(tui?.captureCharFrame()).toContain("Abre um shell em uma nova seção.")
+  expect(tui?.captureCharFrame()).toContain("Abre uma sessão local ou remota em nova seção.")
   const newCodex = renderable("terminal-action-a")
   const sentMessages = renderable("terminal-action-s")
   const liveDiff = renderable("terminal-action-d")

@@ -4,9 +4,10 @@ Current contract: [Terminal workspace](../design/terminal.md#master-key-and-focu
 
 - The Terminal settings context exposes Remote Connection as its own category. It may
   persist Remote Codex SSH profiles, test them, inspect server readiness, and open an
-  interactive SSH setup shell. Remote agent execution is not implemented. Store only
-  bounded connection metadata and a private-key path, never key contents. Validate
-  every field before persistence or spawn.
+  interactive SSH setup shell. An active, ready profile also enables remote Codex
+  launches from Master Key `[N]`. Store only bounded connection metadata and a
+  private-key path, never key contents. Validate every field before persistence or
+  spawn.
 - Run the test as one owned, abortable, time-bounded `ssh` child with an argument
   array, batch mode, normal `known_hosts` verification and a constant remote marker.
   Never interpolate a shell command, weaken host-key checking, log SSH output, or
@@ -25,6 +26,24 @@ Current contract: [Terminal workspace](../design/terminal.md#master-key-and-focu
   only after a ready result. Never type commands, create keys, install software, add
   GitHub keys, or authenticate accounts on the user's behalf. Completing the guide
   confirms prerequisites only; it does not start a remote agent or move a project.
+- With an active profile, `[N]` first asks for Local or Remote. Both choices open an
+  owned interactive shell modal where the user changes directory manually; Local uses
+  the normal local login shell and Remote uses `ssh -tt`. Repeating the configured
+  Master Key asks that shell for its absolute working directory, then starts Codex in
+  that directory. `exit` or `[Esc]` cancels. Never infer or copy a project.
+- Launch the remote `codex app-server --listen stdio://` through an owned `ssh -T`
+  child in the confirmed directory. Bridge its JSONL stdio only to a loopback WebSocket
+  used by the local official Codex TUI. Do not listen on a remote TCP interface. Drain
+  stderr, bound incomplete stdout, discard non-JSON stdout, and retire SSH, relay, and
+  TUI together. Public app-server events drive the same activity, history, and resume
+  integration as local sessions. Tag listed threads with their source profile so a
+  resume uses that profile and remote cwd; never fall back to local when the profile is
+  missing. Remote sessions appear under `Remote • <profile>`.
+- When Terminal activates, query both the local app-server and the single active SSH
+  profile for recent `thread/list` entries. Both queries omit `cwd` so each list can
+  show recent work across its complete host. Keep local and remote sources
+  independently and merge them for the Master Key Agents panel; a refresh from one
+  source must not erase the other. Label each remote row with its profile.
 - Selecting the category shows a read-only profile summary. `[Enter]` replaces that
   summary with the focused form navigator. When profiles exist, begin navigation on
   the first saved profile. `[J/K/↑/↓]` traverses profiles and fields; `[Enter]` on

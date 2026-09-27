@@ -6,6 +6,7 @@ import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { useEffect, useRef } from "react"
 import {
   isLocalhostAgentSession,
+  isRemoteAgentSession,
   orderedRunningAgents,
   type TerminalSession,
 } from "../model/sessions"
@@ -161,11 +162,22 @@ export function TerminalAgentList({
   onActivate: (id: string) => void
 }) {
   const agents = orderedRunningAgents(sessions)
-  const terminalAgents = agents.filter((session) => !isLocalhostAgentSession(session))
+  const terminalAgents = agents.filter(
+    (session) => !isLocalhostAgentSession(session) && !isRemoteAgentSession(session),
+  )
   const localhostAgents = agents.filter(isLocalhostAgentSession)
+  const remoteAgents = Map.groupBy(
+    agents.filter(isRemoteAgentSession),
+    (session) => session.codex?.remote?.profile.id ?? "remote",
+  )
   const groups = [
     { id: "term", label: translateUi("Local • term"), sessions: terminalAgents },
     { id: "localhost", label: translateUi("Local • localhost"), sessions: localhostAgents },
+    ...[...remoteAgents].map(([profileId, profileSessions]) => ({
+      id: `remote-${profileId}`,
+      label: `${translateUi("Remoto")} • ${profileSessions[0]?.codex?.remote?.profile.name ?? profileId}`,
+      sessions: profileSessions,
+    })),
   ].filter((group) => group.sessions.length > 0)
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const visibleCursor = agents.some((session) => session.id === cursorSessionId)

@@ -2,12 +2,12 @@ import { TERMINAL_REMOTE_MESSAGES } from "./terminal-remote-catalog"
 
 export const TERMINAL_ACTION_MESSAGES = [
   [
-    "[N] Novo terminal",
-    "[N] New terminal",
-    "[N] Nuevo terminal",
-    "[N] 新規ターミナル",
-    "[N] 新建终端",
-    "[N] 새 터미널",
+    "[N] Nova sessão",
+    "[N] New session",
+    "[N] Nueva sesión",
+    "[N] 新規セッション",
+    "[N] 新建会话",
+    "[N] 새 세션",
   ],
   [
     "[A] Novo Codex",

@@ -15,6 +15,11 @@ export type RemoteServerSetupRequest = {
   profile: RemoteServerProfile
 }
 
+export type RemoteCodexTarget = {
+  profile: RemoteServerProfile
+  workingDirectory: string
+}
+
 export type FreeTerminalKind = TmuxTerminalKind
 export type FreeTerminalCommand = {
   kind: FreeTerminalKind
@@ -31,8 +36,8 @@ export type FreeTerminalCommand = {
   autoMirror?: boolean
   /** Read-only reference to a native terminal owned by another application. */
   external?: { terminalId: string }
-  /** Launch the official Codex TUI against an owned app-server. */
-  codex?: { appServer: true; resumeThreadId?: string }
+  /** Launch the official Codex TUI against an owned local or SSH-hosted app-server. */
+  codex?: { appServer: true; resumeThreadId?: string; remote?: RemoteCodexTarget }
   /** Interactive SSH shell paired with the read-only server setup guide. */
   remoteSetup?: { profile: RemoteServerProfile }
 }
@@ -72,14 +77,21 @@ export function isRunningAgent(session: TerminalSession) {
 
 /** Integrated agents connect to an app-server owned on this machine's localhost. */
 export function isLocalhostAgentSession(session: TerminalSession) {
-  return session.agentIntegration === "codex-app-server"
+  return session.agentIntegration === "codex-app-server" && !session.codex?.remote
+}
+
+export function isRemoteAgentSession(session: TerminalSession) {
+  return session.agentIntegration === "codex-app-server" && Boolean(session.codex?.remote)
 }
 
 export function orderedRunningAgents(sessions: readonly TerminalSession[]) {
   const agents = sessions.filter(isRunningAgent)
   return [
-    ...agents.filter((session) => !isLocalhostAgentSession(session)),
+    ...agents.filter(
+      (session) => !isLocalhostAgentSession(session) && !isRemoteAgentSession(session),
+    ),
     ...agents.filter(isLocalhostAgentSession),
+    ...agents.filter(isRemoteAgentSession),
   ]
 }
 

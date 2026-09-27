@@ -213,8 +213,11 @@ async function launchTerminal(
     })
   }
   const options = {
-    cwd: FREE_TERMINAL_WORKING_DIRECTORY,
+    cwd: command.codex?.remote
+      ? FREE_TERMINAL_WORKING_DIRECTORY
+      : (command.workingDirectory ?? FREE_TERMINAL_WORKING_DIRECTORY),
     ...(command.codex?.resumeThreadId ? { resumeThreadId: command.codex.resumeThreadId } : {}),
+    ...(command.codex?.remote ? { remote: command.codex.remote } : {}),
     ...size,
     onData(data: Uint8Array) {
       if (!launch.isCurrent()) return
