@@ -5,9 +5,10 @@ export async function collectLiveDiffSnapshot(
   roots: readonly string[],
   previous: readonly LiveDiffFile[],
   signal: AbortSignal,
+  readRoot = readLiveDiffRoot,
 ) {
   const key = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
-  const results = await Promise.allSettled(roots.map((root) => readLiveDiffRoot(root, signal)))
+  const results = await Promise.allSettled(roots.map((root) => readRoot(root, signal)))
   const failed = results.some((result) => result.status === "rejected")
   const truncated = results.some(
     (result) => result.status === "fulfilled" && result.value.truncated,

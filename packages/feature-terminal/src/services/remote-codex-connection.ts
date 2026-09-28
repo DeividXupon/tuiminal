@@ -46,6 +46,15 @@ function remoteSshPrefix(profile: TerminalRemoteCodexProfile, tty: boolean) {
   ]
 }
 
+export function remoteNonInteractiveSshCommand(
+  profile: TerminalRemoteCodexProfile,
+  command: string,
+) {
+  const ssh = remoteSshPrefix(profile, false)
+  ssh.splice(2, 0, "-o", "BatchMode=yes")
+  return [...ssh, command]
+}
+
 export function remoteInteractiveSshCommand(profile: TerminalRemoteCodexProfile) {
   return remoteSshPrefix(profile, true)
 }
@@ -69,11 +78,27 @@ export function remoteCodexAppServerSshCommand(
     'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
     'if [ -z "$codex_command" ]; then exit 127; fi',
     `cd ${shellQuote(workingDirectory)} || exit 72`,
-    'exec "$codex_command" app-server --listen stdio://',
+    '"$codex_command" app-server daemon start >/dev/null || exit 73',
+    'exec "$codex_command" app-server proxy',
   ].join("; ")
-  const ssh = remoteSshPrefix(profile, false)
-  ssh.splice(2, 0, "-o", "BatchMode=yes")
-  return [...ssh, command]
+  return remoteNonInteractiveSshCommand(profile, command)
+}
+
+/** Connects the local official TUI to the persistent remote daemon in its remote cwd. */
+export function remoteCodexTuiCommand(
+  relayUrl: string,
+  workingDirectory: string,
+  resumeThreadId?: string,
+) {
+  if (
+    !workingDirectory.startsWith("/") ||
+    workingDirectory.length > 4_096 ||
+    /[\p{Cc}\p{Cf}]/u.test(workingDirectory)
+  )
+    throw new Error("O diretório remoto selecionado é inválido.")
+  return resumeThreadId
+    ? ["codex", "resume", resumeThreadId, "--remote", relayUrl, "-C", workingDirectory]
+    : ["codex", "--remote", relayUrl, "-C", workingDirectory]
 }
 
 export function resolveRemoteIdentityFile(value: string) {

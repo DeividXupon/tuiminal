@@ -176,6 +176,7 @@ export function readinessCodeMessage(code: RemoteServerBarrierCode) {
     authentication: "O GitHub não aceitou a chave SSH do servidor.",
     unreachable: "O servidor não conseguiu alcançar o GitHub.",
     codexMissing: "O Codex CLI não está instalado.",
+    codexDaemonUnavailable: "Esta versão do Codex não oferece o daemon persistente.",
     codexUnauthenticated: "A conta do Codex ainda não está conectada.",
     invalidProfile: "O perfil remoto é inválido.",
     identityMissing: "A chave privada não foi encontrada.",

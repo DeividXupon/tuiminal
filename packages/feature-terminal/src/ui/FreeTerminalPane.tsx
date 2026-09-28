@@ -40,6 +40,7 @@ type PaneProps = {
   liveDiff?:
     | {
         agentKey: string
+        remote?: NonNullable<TerminalSession["codex"]>["remote"]
         manualDirectories: readonly string[]
         stacked: boolean
         coversTerminal: boolean
@@ -433,6 +434,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               sessionId={session.id}
               agentKey={liveDiff.agentKey}
               initialDirectory={session.workingDirectory ?? ""}
+              {...(liveDiff.remote ? { remote: liveDiff.remote } : {})}
               manualDirectories={liveDiff.manualDirectories}
               running={liveDiff.running}
               active={Boolean(toolActive && active)}

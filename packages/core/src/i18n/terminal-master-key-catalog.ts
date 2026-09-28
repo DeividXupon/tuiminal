@@ -1,11 +1,11 @@
 export const TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES = [
   [
-    "Abre uma sessão local ou remota em nova seção.",
-    "Opens a local or remote session in a new section.",
-    "Abre una sesión local o remota en una sección nueva.",
-    "ローカルまたはリモートセッションを新しいセクションで開きます。",
-    "在新分区中打开本地或远程会话。",
-    "새 섹션에서 로컬 또는 원격 세션을 엽니다.",
+    "Abre um terminal local em uma nova seção.",
+    "Opens a local terminal in a new section.",
+    "Abre un terminal local en una sección nueva.",
+    "ローカルターミナルを新しいセクションで開きます。",
+    "在新分区中打开本地终端。",
+    "새 섹션에서 로컬 터미널을 엽니다.",
   ],
   [
     "Cria uma seção independente com um terminal.",
@@ -16,12 +16,12 @@ export const TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES = [
     "터미널이 있는 독립 섹션을 만듭니다.",
   ],
   [
-    "Inicia o Codex integrado ao app-server local.",
-    "Starts Codex connected to the local app-server.",
-    "Inicia Codex conectado al app-server local.",
-    "ローカル app-server に接続した Codex を起動します。",
-    "启动连接到本地 app-server 的 Codex。",
-    "로컬 app-server에 연결된 Codex를 시작합니다.",
+    "Inicia o Codex local ou remoto em uma nova seção.",
+    "Starts local or remote Codex in a new section.",
+    "Inicia Codex local o remoto en una sección nueva.",
+    "ローカルまたはリモートの Codex を新しいセクションで起動します。",
+    "在新分区中启动本地或远程 Codex。",
+    "새 섹션에서 로컬 또는 원격 Codex를 시작합니다.",
   ],
   [
     "Divide a seção atual para a direita.",

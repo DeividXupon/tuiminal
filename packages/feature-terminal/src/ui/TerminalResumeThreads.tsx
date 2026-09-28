@@ -1,8 +1,6 @@
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { CodexResumeThread } from "../model/codex-resume-threads"
-import { terminalShortcutColor } from "../rendering/terminal-shortcut"
-import { TerminalShortcutText } from "./TerminalShortcut"
 
 function resumeThreadPresentation(state: CodexResumeThread["state"]) {
   switch (state) {
@@ -61,9 +59,16 @@ function ResumeThreadState({ thread, now }: { thread: CodexResumeThread; now: nu
   )
 }
 
+function resumeThreadStateWidth(thread: CodexResumeThread, now: number) {
+  const presentation = resumeThreadPresentation(thread.state)
+  const idle = thread.state === "idle" ? ` · ${idleDurationLabel(thread.updatedAt, now)}` : ""
+  return 1 + displayWidth(presentation.label) + displayWidth(idle)
+}
+
 export function TerminalResumeThreadRow({
   thread,
   active,
+  alternate,
   width,
   now,
   backgroundColor,
@@ -71,58 +76,135 @@ export function TerminalResumeThreadRow({
 }: {
   thread: CodexResumeThread
   active: boolean
+  alternate: boolean
   width: number
   now: number
   backgroundColor: string
   onSelect?: (id: string) => void
 }) {
   const presentation = resumeThreadPresentation(thread.state)
-  const origin = thread.remoteProfileId
-    ? `${translateUi("Remoto")} • ${thread.remoteProfileName || thread.remoteProfileId}`
-    : translateUi("Local")
-  const summary = thread.preview || thread.cwd || translateUi("Sem mensagens enviadas")
-  const detail = `${origin} · ${summary}`
+  const contentWidth = Math.max(1, width - 2)
+  const railColor = active ? COLORS.terminal : alternate ? COLORS.panelRaised : COLORS.border
+  const remote = Boolean(thread.remoteProfileId)
+  const origin = translateUi(remote ? "Remoto" : "Local")
+  const summary =
+    thread.preview ||
+    (!thread.projectName ? thread.cwd : "") ||
+    translateUi("Sem mensagens enviadas")
+  const project = [
+    remote ? thread.remoteProfileName || thread.remoteProfileId : "",
+    thread.projectName,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  const metadataWidth = Math.max(1, contentWidth - displayWidth(origin) - 3)
+  const branch = thread.gitBranch ? `⎇ ${thread.gitBranch}` : ""
+  const branchWidth = branch
+    ? Math.min(displayWidth(branch), Math.max(1, Math.floor(metadataWidth / 2)))
+    : 0
+  const projectWidth = Math.max(1, metadataWidth - branchWidth - (branch ? 2 : 0))
+  const stateWidth = resumeThreadStateWidth(thread, now)
+  const titleAndRuleWidth = Math.max(1, contentWidth - stateWidth - 2)
+  const titleWidth = Math.max(
+    3,
+    Math.min(displayWidth(thread.title) + 2, Math.max(3, titleAndRuleWidth - 3)),
+  )
+  const ruleWidth = Math.max(1, titleAndRuleWidth - titleWidth)
+  const rule =
+    ruleWidth >= 3 ? ` ${"─".repeat(Math.max(1, ruleWidth - 2))} ` : "─".repeat(ruleWidth)
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: row selection is also available through arrows and Enter.
     <box
       id={`terminal-resume-thread-${thread.id}`}
       onMouseDown={() => onSelect?.(thread.id)}
       style={{
-        height: 2,
+        height: 3,
         flexShrink: 0,
+        flexDirection: "row",
         backgroundColor: active ? COLORS.panelRaised : backgroundColor,
       }}
     >
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text
-          content={`${active ? "›" : " "} `}
-          wrapMode="none"
-          style={{ flexShrink: 0, fg: active ? COLORS.focus : COLORS.muted }}
-        />
-        <text
-          content={`${presentation.marker} `}
-          wrapMode="none"
-          style={{ flexShrink: 0, fg: presentation.color }}
-        />
-        <TerminalShortcutText
-          content="[Enter] "
-          shortcutColor={terminalShortcutColor(active)}
-          style={{ flexShrink: 0, fg: active ? COLORS.focus : COLORS.terminal }}
-        />
-        <text
-          id={`terminal-resume-title-${thread.id}`}
-          content={truncateDisplay(thread.title, Math.max(1, width - 22))}
-          wrapMode="none"
-          style={{ flexGrow: 1, fg: active ? COLORS.focus : presentation.titleColor }}
-        />
-        <ResumeThreadState thread={thread} now={now} />
+      <box
+        id={`terminal-resume-rail-${thread.id}`}
+        style={{ width: 2, height: 3, flexShrink: 0, flexDirection: "column" }}
+      >
+        {[0, 1, 2].map((line) => (
+          <text
+            key={line}
+            id={`terminal-resume-rail-${thread.id}-${line}`}
+            content="▌ "
+            wrapMode="none"
+            style={{ height: 1, flexShrink: 0, fg: railColor }}
+          />
+        ))}
       </box>
-      <text
-        id={`terminal-resume-detail-${thread.id}`}
-        content={`  ${truncateDisplay(detail, width)}`}
-        wrapMode="none"
-        style={{ height: 1, fg: active ? COLORS.text : COLORS.muted }}
-      />
+      <box style={{ height: 3, minWidth: 1, flexGrow: 1, flexDirection: "column" }}>
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          <text
+            id={`terminal-resume-marker-${thread.id}`}
+            content={`${presentation.marker} `}
+            wrapMode="none"
+            style={{ flexShrink: 0, fg: presentation.color }}
+          />
+          <text
+            id={`terminal-resume-title-${thread.id}`}
+            content={` ${truncateDisplay(thread.title, Math.max(1, titleWidth - 2))} `}
+            wrapMode="none"
+            style={{
+              flexShrink: 0,
+              fg: active ? COLORS.focus : presentation.titleColor,
+              bg: COLORS.panelRaised,
+            }}
+          />
+          <text
+            id={`terminal-resume-rule-${thread.id}`}
+            content={rule}
+            wrapMode="none"
+            style={{ flexShrink: 0, fg: COLORS.border }}
+          />
+          <ResumeThreadState thread={thread} now={now} />
+        </box>
+        <box style={{ height: 1, minWidth: 1, flexShrink: 0, flexDirection: "row" }}>
+          <text
+            id={`terminal-resume-connector-${thread.id}`}
+            content="└"
+            wrapMode="none"
+            style={{ flexShrink: 0, fg: COLORS.border }}
+          />
+          <text
+            id={`terminal-resume-detail-${thread.id}`}
+            content={`  ${truncateDisplay(summary, Math.max(1, contentWidth - 3))}`}
+            wrapMode="none"
+            style={{ minWidth: 1, flexGrow: 1, fg: COLORS.text }}
+          />
+        </box>
+        <box style={{ height: 1, minWidth: 1, flexDirection: "row" }}>
+          <text
+            id={`terminal-resume-origin-${thread.id}`}
+            content={` ${origin} `}
+            wrapMode="none"
+            style={{
+              flexShrink: 0,
+              fg: remote ? COLORS.database : COLORS.success,
+              bg: remote ? COLORS.databaseSelectionBg : COLORS.diffAddedBg,
+            }}
+          />
+          <text
+            id={`terminal-resume-project-${thread.id}`}
+            content={` ${truncateDisplay(project, projectWidth)}`}
+            wrapMode="none"
+            style={{ flexShrink: 0, fg: COLORS.text }}
+          />
+          {branch && (
+            <text
+              id={`terminal-resume-branch-${thread.id}`}
+              content={`  ${truncateDisplay(branch, branchWidth)}`}
+              wrapMode="none"
+              style={{ flexShrink: 0, fg: COLORS.git }}
+            />
+          )}
+        </box>
+      </box>
     </box>
   )
 }

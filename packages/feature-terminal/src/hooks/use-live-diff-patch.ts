@@ -48,6 +48,7 @@ export function useLiveDiffPatch(
   shimmerColor: string,
   preview: RenderRef<ScrollBoxRenderable>,
   diff: RenderRef<DiffRenderable>,
+  readPatch = readLiveDiffPatch,
 ) {
   const previousPatch = useRef<{ key: string; patch: string } | null>(null)
   const patchHistory = useRef(new Map<string, LiveDiffPatchHistory>())
@@ -102,7 +103,7 @@ export function useLiveDiffPatch(
       setScrollTarget(null)
       setHighlightedPatch(null)
     }
-    void readLiveDiffPatch(selected, controller.signal)
+    void readPatch(selected, controller.signal)
       .then((rawPatch) => {
         if (controller.signal.aborted) return
         const prepared = prepareLiveDiffPatch(rawPatch)
@@ -135,7 +136,7 @@ export function useLiveDiffPatch(
         }
       })
     return () => controller.abort()
-  }, [selected, automatic, preview])
+  }, [selected, automatic, preview, readPatch])
 
   useEffect(() => {
     if (!scrollTarget || scrollTarget.patch !== patch || !automatic) return

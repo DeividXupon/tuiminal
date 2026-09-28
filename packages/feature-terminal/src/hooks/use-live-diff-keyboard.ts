@@ -40,7 +40,7 @@ function handleFileKey(
   preview: ScrollBoxRenderable | null,
   selected: boolean,
   onReturnTerminal: () => void,
-  onAddProject: () => void,
+  onAddProject: (() => void) | undefined,
   toggleProject: () => void,
   selectProjectRelative: (delta: number) => void,
   selectRelative: (delta: number) => void,
@@ -54,7 +54,7 @@ function handleFileKey(
   } else if (key.name === "n") {
     consume(key)
     toggleProject()
-  } else if (key.name === "a") {
+  } else if (key.name === "a" && onAddProject) {
     consume(key)
     onAddProject()
   } else if (["h", "left", "l", "right"].includes(key.name)) {
@@ -85,7 +85,7 @@ export function useLiveDiffKeyboard({
   selected: boolean
   onReturnTerminal: () => void
   onClose: () => void
-  onAddProject: () => void
+  onAddProject?: () => void
   toggleProject: () => void
   selectProjectRelative: (delta: number) => void
   onActivateDiffAuto: () => void

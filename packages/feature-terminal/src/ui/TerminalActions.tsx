@@ -152,7 +152,11 @@ export function TerminalActions({
     () =>
       recentThreads.filter(
         (thread) =>
-          !query.trim() || matchesQuery(`${thread.title} ${thread.preview} ${thread.cwd}`, query),
+          !query.trim() ||
+          matchesQuery(
+            `${thread.title} ${thread.preview} ${thread.cwd} ${thread.projectName} ${thread.gitBranch} ${thread.remoteProfileName ?? ""}`,
+            query,
+          ),
       ),
     [query, recentThreads],
   )
@@ -349,6 +353,7 @@ export function TerminalActions({
                   key={thread.id}
                   thread={thread}
                   active={activePanel === "agents" && selectedAgent === index}
+                  alternate={index % 2 === 1}
                   width={panelContentWidth}
                   now={now}
                   backgroundColor={agentPanelBackground}

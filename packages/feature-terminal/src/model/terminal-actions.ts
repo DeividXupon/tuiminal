@@ -20,7 +20,7 @@ export const TERMINAL_ACTIONS = [
   {
     key: "a",
     label: "[A] Novo Codex",
-    description: "Inicia o Codex integrado ao app-server local.",
+    description: "Inicia o Codex local ou remoto em uma nova seção.",
     tags: ["agent"],
   },
   {
@@ -43,8 +43,8 @@ export const TERMINAL_ACTIONS = [
   },
   {
     key: "n",
-    label: "[N] Nova sessão",
-    description: "Abre uma sessão local ou remota em nova seção.",
+    label: "[N] Novo terminal",
+    description: "Abre um terminal local em uma nova seção.",
     tags: ["terminal"],
   },
   {

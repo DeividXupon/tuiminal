@@ -17,21 +17,25 @@ import { useLiveDiffProjects } from "../hooks/use-live-diff-projects"
 import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import { descendantProcesses } from "../model/agent-detection"
 import { type LiveDiffFile, mergeLiveDiffFiles } from "../model/live-diff"
+import type { RemoteCodexTarget } from "../model/sessions"
 import { liveDiffUnwrappedHeight, liveDiffWrappedHeight } from "../rendering/live-diff-table"
 import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { readTerminalProcesses } from "../services/agent-processes"
 import {
   liveDiffRepositoryRoot,
   liveDiffWorktrees,
+  readLiveDiffPatch,
+  readLiveDiffRoot,
   readProcessDirectories,
 } from "../services/live-diff"
 import { collectLiveDiffSnapshot } from "../services/live-diff-snapshot"
+import { createRemoteLiveDiffSource, type LiveDiffSource } from "../services/remote-live-diff"
 import { LiveDiffFileTable } from "./LiveDiffFileTable"
 import { LiveDiffInfo } from "./LiveDiffInfo"
 
 const POLL_MS = 250
+const REMOTE_POLL_MS = 750
 const DISCOVERY_MS = 2000
-const DISCOVERY_ROUNDS = Math.max(1, Math.ceil(DISCOVERY_MS / POLL_MS))
 const MAX_ROOTS = 4
 
 const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
@@ -93,9 +97,10 @@ async function updateSnapshot(
   setFiles: (files: LiveDiffFile[]) => void,
   setLastProject: (root: string) => void,
   setError: (message: string) => void,
+  readRoot: LiveDiffSource["readRoot"] = readLiveDiffRoot,
 ) {
   if (!roots.length) return
-  const snapshot = await collectLiveDiffSnapshot(roots, filesRef.current, signal)
+  const snapshot = await collectLiveDiffSnapshot(roots, filesRef.current, signal, readRoot)
   if (signal.aborted) return
   if (snapshot.changedRoot) setLastProject(snapshot.changedRoot)
   if (snapshot.changed) {
@@ -117,6 +122,7 @@ export function LiveDiffPanel({
   sessionId,
   agentKey,
   initialDirectory,
+  remote,
   manualDirectories,
   running,
   active,
@@ -133,6 +139,7 @@ export function LiveDiffPanel({
   sessionId: string
   agentKey: string
   initialDirectory: string
+  remote?: RemoteCodexTarget
   manualDirectories: readonly string[]
   running: boolean
   active: boolean
@@ -163,14 +170,27 @@ export function LiveDiffPanel({
   const filesRef = useRef<LiveDiffFile[]>([])
   const observedRoots = useRef(new Set<string>())
   const directoryRef = useRef<string[]>([])
-  directoryRef.current = [initialDirectory, ...manualDirectories, ...processDirectories]
+  const remoteSource = useMemo(() => (remote ? createRemoteLiveDiffSource(remote) : null), [remote])
+  const repositoryRoot = remoteSource?.repositoryRoot ?? liveDiffRepositoryRoot
+  const readWorktrees = remoteSource?.worktrees ?? liveDiffWorktrees
+  const readRoot = remoteSource?.readRoot ?? readLiveDiffRoot
+  const readPatch = remoteSource?.readPatch ?? readLiveDiffPatch
+  const pollMs = remoteSource ? REMOTE_POLL_MS : POLL_MS
+  const discoveryRounds = Math.max(1, Math.ceil(DISCOVERY_MS / pollMs))
+  directoryRef.current = remoteSource
+    ? [initialDirectory]
+    : [initialDirectory, ...manualDirectories, ...processDirectories]
+  useEffect(() => () => remoteSource?.close(), [remoteSource])
+  useEffect(() => {
+    if (!running) remoteSource?.close()
+  }, [remoteSource, running])
   useLiveDiffFocus(panel, focusRequest)
   const panelFocused = useRenderableFocus(panel)
   const codeFocused = useRenderableFocus(preview)
   const shortcutColor = terminalShortcutColor(active, panelFocused || codeFocused)
 
   useEffect(() => {
-    if (!running) return
+    if (!running || remoteSource) return
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     const inspect = async () => {
@@ -194,7 +214,7 @@ export function LiveDiffPanel({
       controller.abort()
       clearTimeout(timer)
     }
-  }, [agentKey, running])
+  }, [agentKey, remoteSource, running])
 
   useEffect(() => {
     if (!running) return
@@ -204,16 +224,14 @@ export function LiveDiffPanel({
     let discoveryWarning = ""
     const discover = async () => {
       const candidates = await Promise.all(
-        directoryRef.current.map((directory) =>
-          liveDiffRepositoryRoot(directory, controller.signal),
-        ),
+        directoryRef.current.map((directory) => repositoryRoot(directory, controller.signal)),
       )
       const direct = [...new Set(candidates.filter((root): root is string => Boolean(root)))]
       discoveryWarning = manualDirectories.some((_, index) => !candidates[index + 1])
         ? translateUi("Projeto adicionado não é um repositório Git.")
         : ""
       const linked = await Promise.all(
-        direct.map((root) => liveDiffWorktrees(root, controller.signal).catch(() => [])),
+        direct.map((root) => readWorktrees(root, controller.signal).catch(() => [])),
       )
       const next = [...new Set([...direct, ...linked.flat()])].slice(0, MAX_ROOTS)
       if (controller.signal.aborted) return
@@ -231,7 +249,7 @@ export function LiveDiffPanel({
       if (busy || controller.signal.aborted) return
       busy = true
       try {
-        const shouldDiscover = scans++ % DISCOVERY_ROUNDS === 0
+        const shouldDiscover = scans++ % discoveryRounds === 0
         if (shouldDiscover) await discover()
         await updateSnapshot(
           rootsRef.current,
@@ -242,22 +260,38 @@ export function LiveDiffPanel({
           setFiles,
           setLastProject,
           setError,
+          readRoot,
         )
         if (!controller.signal.aborted) setSnapshotReady(true)
       } catch {
         if (!controller.signal.aborted)
-          setError(translateUi("Não foi possível atualizar o Live Diff."))
+          setError(
+            translateUi(
+              remoteSource
+                ? "Live Diff remoto desconectado; tentando novamente."
+                : "Não foi possível atualizar o Live Diff.",
+            ),
+          )
       } finally {
         busy = false
       }
     }
     void poll()
-    const timer = setInterval(() => void poll(), POLL_MS)
+    const timer = setInterval(() => void poll(), pollMs)
     return () => {
       controller.abort()
       clearInterval(timer)
     }
-  }, [manualDirectories, running])
+  }, [
+    discoveryRounds,
+    manualDirectories,
+    pollMs,
+    readRoot,
+    readWorktrees,
+    remoteSource,
+    repositoryRoot,
+    running,
+  ])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -284,6 +318,7 @@ export function LiveDiffPanel({
     COLORS.text,
     preview,
     diff,
+    readPatch,
   )
   const { canvas, diffAddedBg, diffGutterBg, diffRecentBg, diffRemovedBg, panel: panelBg } = COLORS
   const diffAppearance = [
@@ -342,7 +377,7 @@ export function LiveDiffPanel({
     selected: Boolean(selected),
     onReturnTerminal,
     onClose: () => onClose(sessionId),
-    onAddProject: () => onAddProject(sessionId, roots),
+    ...(remoteSource ? {} : { onAddProject: () => onAddProject(sessionId, roots) }),
     toggleProject,
     selectProjectRelative,
     onActivateDiffAuto: activateDiffAuto,
@@ -414,6 +449,9 @@ export function LiveDiffPanel({
       >
         <text wrapMode="none">
           <span fg={COLORS.terminal}>{translateUi("Live Diff")}</span>
+          {remote && (
+            <span fg={COLORS.focus}>{` · ${translateUi("Remoto")} · ${remote.profile.name}`}</span>
+          )}
           <span fg={COLORS.muted}>{` · ${translateUi("Show auto")}: `}</span>
           <span fg={showDiffAuto ? COLORS.success : COLORS.warning}>
             {showDiffAuto ? "true" : "false"}
@@ -490,7 +528,7 @@ export function LiveDiffPanel({
           selectProject(root)
           focusPanel(event)
         }}
-        onAddProject={() => onAddProject(sessionId, roots)}
+        {...(remoteSource ? {} : { onAddProject: () => onAddProject(sessionId, roots) })}
         lastProject={lastProject}
         error={error}
         showDiffAuto={showDiffAuto}

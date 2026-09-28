@@ -118,9 +118,9 @@ invalid or missing configuration, unknown host keys, authentication failures,
 unreachable hosts, timeouts, cancellation, and a missing SSH client without exposing
 command output. Leaving the screen cancels its owned probe. **Check server** runs two
 read-only probes through the same SSH profile: GitHub SSH authentication with
-`ssh -T git@github.com`, then Codex CLI installation and account state with
-`codex login status`. Each remote script is fixed and returns only a bounded result
-marker.
+`ssh -T git@github.com`, then Codex CLI installation, persistent-daemon support through
+`codex app-server daemon` plus `codex app-server proxy`, and account state with
+`codex login status`. Each remote script is fixed and returns only a bounded result marker.
 
 **Configure server** is one generic action, not a GitHub-specific action. It closes
 settings and opens an interactive SSH shell in a new Terminal section. A setup guide
@@ -135,20 +135,33 @@ does not advance the guide. The explicit `PATH` step remains necessary when the
 readiness probe finds the standalone binary directly but the interactive shell has not
 reloaded its startup file. Tuiminal does not create keys, install software,
 register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
-automatically. After a profile is active, Master Key `[N]` asks whether the new
-section is local or remote. Both choices open an interactive shell modal where the
-user runs `cd` manually; Local uses the local login shell and Remote uses SSH.
-Repeating the configured Master Key confirms the shell's absolute working directory;
-`exit` or `[Esc]` cancels. Tuiminal then starts
-`codex app-server --listen stdio://` through `ssh -T` in that directory and bridges
-its JSONL stream to the local official Codex TUI through a loopback-only relay. No
-remote TCP listener is exposed. The SSH process, relay, and TUI share one owned
-lifecycle. Public app-server events provide integrated activity, sent-message history,
+automatically. Master Key `[N]` always opens a local terminal section, independently
+of the active remote profile. After a profile is active, Master Key `[A]` asks whether
+the new Codex section is local or remote. Both choices open an interactive shell modal
+where the user runs `cd` manually; Local uses the local login shell and Remote uses
+SSH. Repeating the configured Master Key confirms the shell's absolute working
+directory; `exit` or `[Esc]` cancels. Tuiminal then starts or reuses the official
+shared daemon with `codex app-server daemon start` and connects `codex app-server
+proxy` through `ssh -T`. Before opening the local interface, a bounded probe validates
+the SSH connection, selected remote directory, daemon startup, and the app-server's
+`initialize` response. Its `userAgent` identifies the daemon version actually serving
+the request; Tuiminal compares it with the local CLI and accepts the same major, plus
+the same minor while Codex remains `0.x`. Patch-only differences are compatible. The
+probe closes its proxy after `initialized`, and only then does the separate JSONL
+stream reach the local official Codex TUI through a loopback-only relay. Authentication,
+host identity, reachability, missing Codex, missing directory, daemon startup,
+protocol, version, and timeout failures remain distinct and do not open the TUI. The
+TUI receives the selected remote directory through `-C`. No remote TCP listener is
+exposed. The SSH proxy, relay, and TUI share one owned lifecycle, while closing them
+leaves the remote daemon and active turns running for later resume. Tuiminal never
+issues `codex app-server daemon stop`. Public app-server
+events provide integrated activity, sent-message history,
 and remote `/resume` entries. Those entries retain the source profile and remote cwd,
 so resuming never silently falls back to the local machine. Remote integrated agents
-are grouped under `Remote • <profile>`. Local filesystem Live Diff remains unavailable
-for remote sessions. Selecting the category
-renders a read-only summary of saved profiles. `[Enter]`
+are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
+working directory and linked worktrees through a separate owned SSH channel; it never
+falls back to a same-named local path. Selecting the category renders a read-only summary of saved
+profiles. `[Enter]`
 then switches the detail pane to the focused form navigator with the first field
 selected, or the first saved profile selected when profiles exist. `[J/K/↑/↓]`
 moves through saved profiles and fields. `[Enter]` on a profile loads it and selects
@@ -182,8 +195,20 @@ active tab's content is rendered.
 Agents merges up to six local conversations with up to six conversations from the
 active remote profile. Both `thread/list` queries omit `cwd`, so the local list covers
 recent conversations across the local host and the remote list covers recent
-conversations across that SSH host. Each source refreshes independently, remote rows
-show their profile, and one source never erases the other. A short-lived owned local app-server loads the
+conversations across that SSH host. Each source refreshes independently, and one
+source never erases the other. Every row presents Local or Remote as a colored tag
+with its own palette-aware background; remote rows keep their profile name beside the
+tag as user data. Each item has three lines: name and state; the prompt preview in the
+palette's primary black-or-white text color, introduced by a border-colored `└` aligned
+directly below the state marker; then origin, optional remote profile, the project name
+derived from the final `cwd` segment, and the Git-colored optional `gitInfo.branch`. The
+title uses the low-contrast raised-panel background, and a
+border-colored horizontal rule fills the space between it and the right-aligned state.
+Three `▌` cells form a rail beside the item: unselected rows alternate subdued border
+and raised-panel colors, while the selected row uses the brighter Terminal accent.
+The modal footer provides the single `[Enter]` hint instead of repeating it in every
+item. Project and branch also participate in filtering. A
+short-lived owned local app-server loads the
 local list and bounded public
 `thread/turns/list` results when Terminal becomes active, even before a Codex pane
 exists; integrated panes keep it current afterward. An agent row shows `[Enter]`, its
@@ -280,8 +305,8 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 
 | Key after the Master Key | Action |
 | --- | --- |
-| `[N]` / `[C]` | With an active SSH profile, choose a directory for local or remote Codex / open a new local section |
-| `[A]` | Open the Codex terminal interface connected to app-server in a new section |
+| `[N]` | Open a new local terminal section |
+| `[A]` | Open local Codex, or choose Local / Remote when an SSH profile is active |
 | `[V]` / `[H]` | Choose a new shell or an existing agent, then split right / below |
 | `[S]` | Open or focus sent-message history for an integrated Codex session |
 | `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
@@ -375,13 +400,13 @@ open; opening, focusing, adding projects to, or closing one Live Diff does not r
 or mutate another session's panel.
 The focused file list supports `[J/K]` / `[↑/↓]` to select a file, `[Enter]` to
 focus its code preview, `[H/L]` / `[←/→]` to highlight a monitored project,
-`[N]` to show or hide that project's files, `[A]` to open a searchable picker of nearby Git projects, `[X]` to close Live Diff, and `[Esc]` to
+`[N]` to show or hide that project's files, `[A]` in local sessions to open a searchable picker of nearby Git projects, `[X]` to close Live Diff, and `[Esc]` to
 return focus to the terminal. In the code preview, `[J/K]` / `[↑/↓]` scroll by
 one rendered row and `[H/L]` / `[←/→]` by half a viewport; `[Esc]` re-enables
 automatic follow, selects the newest file and returns to file navigation without
 leaving Live Diff. Clicking the preview focuses it, while
 clicking a file returns to file navigation. Clicking a project chip highlights it;
-the close control and the `[A]` Add project button in the bottom shortcut area are also clickable. The Master Key's `[N]` still creates a terminal; it is not captured
+the close control and, for local sessions, the `[A]` Add project button in the bottom shortcut area are also clickable. Remote sessions monitor their selected directory and linked worktrees without exposing the local project picker. The Master Key's `[N]` still creates a terminal; it is not captured
 by Live Diff.
 
 All bracketed Live Diff shortcuts use a blue brand base with a smooth per-character
@@ -448,20 +473,26 @@ files are included; binary, oversized, and mode-only changes have unknown line
 counts instead of false zeroes. A repository without a commit treats present
 files as additions. Very large patches show a non-text preview fallback.
 
-On activation and every two seconds, discovery checks the launch/tmux path,
+For local sessions, activation and discovery every two seconds check the launch/tmux path,
 the recognized agent's process tree cwd where the OS exposes it, and Git-linked
 worktrees. A path entered through Add project is resolved locally and need not be linked
 to the launch repository. Up to four canonical roots are monitored. On macOS cwd
 inspection uses `lsof`; on Linux it uses `/proc/<pid>/cwd`; Windows falls back
-to known launch/tmux/manual paths. Remote SSH/container filesystems require an
-explicit accessible local path. The file list is limited to the first 1,000
+to known launch/tmux/manual paths. A remote integrated Codex session instead starts
+from its tagged remote working directory and discovers linked worktrees on that host.
+It never inspects a local path with the same text. The file list is limited to the first 1,000
 changed paths per root and visibly warns when truncated.
 
 While its agent is running, one non-overlapping read-only Git round starts at
-most every 250 ms. A separate one-second display timer advances elapsed labels
+most every 250 ms locally or 750 ms remotely. A separate one-second display timer advances elapsed labels
 without rereading Git. Git commands use argv, bounded output/time, disable
 optional index locks and external diff/textconv, and never stage, restore, commit,
-write project files or read credentials. Closing the companion aborts its reads.
+write project files or read credentials. Remote reads use one persistent, batch-mode
+SSH helper per open panel. Its framed protocol accepts only fixed operations, treats
+encoded roots and paths as data, bounds responses, retries after transport failure,
+and is stopped when the panel closes. It carries Git metadata and patch text only;
+the project is not copied and the Codex app-server stream remains independent.
+Closing the companion aborts its reads.
 Agent exit stops the polling but retains the last visible snapshot; terminal
 close, restart, or agent identity replacement releases that snapshot. These are
 *observed repository changes*, not proof that the agent made them: pre-existing

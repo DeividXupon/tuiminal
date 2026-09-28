@@ -1,8 +1,8 @@
+import { unusedCodexLoopbackPort, waitForCodexAppServer } from "./codex-app-server-connection"
 import {
   codexAppServerUserMessage,
   codexAppServerUserMessageHistory,
 } from "./codex-message-history"
-import { unusedCodexLoopbackPort, waitForCodexAppServer } from "./codex-app-server-connection"
 import {
   type CodexAppServerEvents,
   type CodexRelay,
@@ -10,19 +10,20 @@ import {
   inspectClientFrame,
   inspectUpstreamFrame,
 } from "./codex-relay-observer"
-import { remoteCodexAppServerSshCommand } from "./remote-codex-connection"
+import { remoteCodexAppServerSshCommand, remoteCodexTuiCommand } from "./remote-codex-connection"
+import { handshakeRemoteCodex } from "./remote-codex-handshake"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
+export type { CodexObservedUserMessage } from "./codex-message-history"
+export type { CodexAppServerEvents } from "./codex-relay-observer"
+export { codexAppServerActivity, codexAppServerState } from "./codex-relay-observer"
 export {
   codexResumeLastResponse,
   codexResumeThreads,
   refreshCodexResumeThreads,
   refreshRemoteCodexResumeThreads,
 } from "./codex-resume"
-export { codexAppServerActivity, codexAppServerState } from "./codex-relay-observer"
-export type { CodexObservedUserMessage } from "./codex-message-history"
-export type { CodexAppServerEvents } from "./codex-relay-observer"
 export { codexAppServerUserMessage, codexAppServerUserMessageHistory }
 
 type TerminalOptions = Parameters<typeof startFreeTerminalProcess>[1]
@@ -252,6 +253,8 @@ async function startRemoteCodexAppServerTerminal(
   signal.throwIfAborted()
   const { remote, resumeThreadId, cwd: _localCwd, ...terminalOptions } = options
   void _localCwd
+  await handshakeRemoteCodex(remote.profile, remote.workingDirectory, signal)
+  signal.throwIfAborted()
   const server = Bun.spawn(
     remoteCodexAppServerSshCommand(remote.profile, remote.workingDirectory),
     { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
@@ -276,9 +279,7 @@ async function startRemoteCodexAppServerTerminal(
   let terminal: FreeTerminalProcessHandle | null = null
   try {
     signal.throwIfAborted()
-    const command = resumeThreadId
-      ? ["codex", "resume", resumeThreadId, "--remote", relay.url]
-      : ["codex", "--remote", relay.url]
+    const command = remoteCodexTuiCommand(relay.url, remote.workingDirectory, resumeThreadId)
     const ownedTerminal = startFreeTerminalProcess(command, {
       ...terminalOptions,
       onExit(result) {

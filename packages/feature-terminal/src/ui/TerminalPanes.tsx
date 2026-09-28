@@ -107,6 +107,7 @@ function paneLiveDiff(
   if (!matchesLiveDiffTarget(session, target)) return undefined
   return {
     agentKey: target.agentKey,
+    ...(session.codex?.remote ? { remote: session.codex.remote } : {}),
     manualDirectories: target.manualDirectories,
     stacked,
     coversTerminal,

@@ -1,5 +1,5 @@
 import "./setup"
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, mock, spyOn, test } from "bun:test"
 import { rmSync } from "node:fs"
 import {
   type BoxRenderable,
@@ -10,6 +10,7 @@ import {
   LineNumberRenderable,
   RGBA,
   type ScrollBoxRenderable,
+  type TextRenderable,
 } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
@@ -38,6 +39,7 @@ import * as inspection from "../../packages/feature-terminal/src/services/agent-
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
+import * as remoteLiveDiff from "../../packages/feature-terminal/src/services/remote-live-diff"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
 import {
   loadTerminalWorkspaceState,
@@ -133,8 +135,20 @@ async function mount(
       codexEvents = events
       commands.push(
         options.resumeThreadId
-          ? ["codex", "resume", options.resumeThreadId, "--remote", "ws://127.0.0.1:4500"]
-          : ["codex", "--remote", "ws://127.0.0.1:4500"],
+          ? [
+              "codex",
+              "resume",
+              options.resumeThreadId,
+              "--remote",
+              "ws://127.0.0.1:4500",
+              ...(options.remote ? ["-C", options.remote.workingDirectory] : []),
+            ]
+          : [
+              "codex",
+              "--remote",
+              "ws://127.0.0.1:4500",
+              ...(options.remote ? ["-C", options.remote.workingDirectory] : []),
+            ],
       )
       starts.push(options)
       return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
@@ -194,6 +208,14 @@ function spanColor(text: string, line?: number) {
   if (!span) throw new Error(`Missing colored text ${text}\n${tui?.captureCharFrame()}`)
   return span.fg.toInts()
 }
+function spanBackground(text: string, line?: number) {
+  const lines = tui?.captureSpans().lines ?? []
+  const span = (line === undefined ? lines : lines.slice(line, line + 1))
+    .flatMap((entry) => entry.spans)
+    .find((entry) => entry.text.includes(text))
+  if (!span) throw new Error(`Missing background text ${text}\n${tui?.captureCharFrame()}`)
+  return span.bg.toInts()
+}
 function renderable(id: string) {
   const target = tui?.renderer.root.findDescendantById(id)
   if (!target) throw new Error(`Missing ${id}`)
@@ -228,6 +250,8 @@ test("tmux helper Master Key uses compact Actions and Agents tabs", async () => 
           preview: "Continue a tarefa",
           lastResponse: "Pronto para continuar.",
           cwd: "/workspace/project",
+          projectName: "project",
+          gitBranch: "main",
           updatedAt: Date.now(),
           state: "idle",
         },
@@ -269,7 +293,7 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
-test("Master Key N chooses a remote server directory and launches Codex through SSH", async () => {
+test("Master Key A chooses a remote server directory and launches Codex through SSH", async () => {
   await mount()
   const profile = {
     id: "work-server",
@@ -284,7 +308,7 @@ test("Master Key N chooses a remote server directory and launches Codex through 
     terminalRemoteCodexActiveProfileId: profile.id,
   })
 
-  await leader("n")
+  await leader("a")
   expect(tui?.renderer.root.findDescendantById("terminal-location-dialog")).toBeDefined()
   await arrow("down")
   await key("enter")
@@ -313,12 +337,19 @@ test("Master Key N chooses a remote server directory and launches Codex through 
 
   expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeUndefined()
   expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(commands.at(-1)).toEqual([
+    "codex",
+    "--remote",
+    "ws://127.0.0.1:4500",
+    "-C",
+    "/srv/project",
+  ])
   expect(starts.at(-1)).toMatchObject({
     remote: { profile, workingDirectory: "/srv/project" },
   })
 })
 
-test("Master Key N chooses a local directory before launching local Codex", async () => {
+test("Master Key A chooses a local directory before launching local Codex", async () => {
   await mount()
   const profile = {
     id: "work-server",
@@ -333,7 +364,7 @@ test("Master Key N chooses a local directory before launching local Codex", asyn
     terminalRemoteCodexActiveProfileId: profile.id,
   })
 
-  await leader("n")
+  await leader("a")
   await key("enter")
   expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeDefined()
   expect(commands[0]).toEqual(processes.createShellTerminalCommand().command)
@@ -352,6 +383,84 @@ test("Master Key N chooses a local directory before launching local Codex", asyn
   expect(starts.at(-1)).not.toHaveProperty("remote")
 })
 
+test("remote Codex opens Live Diff through its remote source without the local project picker", async () => {
+  await mount(false, 140, 36)
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+  const repositoryRoot = mock(async () => "/srv/project")
+  const worktrees = mock(async () => ["/srv/project"])
+  const readRoot = mock(async () => ({ truncated: false, files: [] }))
+  const readPatch = mock(async () => "")
+  const close = mock(() => undefined)
+  const source = spyOn(remoteLiveDiff, "createRemoteLiveDiffSource").mockReturnValue({
+    repositoryRoot,
+    worktrees,
+    readRoot,
+    readPatch,
+    close,
+  })
+  liveDiffSpies.push(source)
+
+  await leader("a")
+  await arrow("down")
+  await key("enter")
+  await key("b", true)
+  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
+  expect(marker).toBeDefined()
+  await act(async () =>
+    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/srv/project\r\n`)),
+  )
+  await tui?.renderOnce()
+
+  const sessionId = focusedTerminal().id.replace("free-terminal-", "")
+  await leader("d")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
+
+  expect(source).toHaveBeenCalledWith({ profile, workingDirectory: "/srv/project" })
+  expect(repositoryRoot).toHaveBeenCalledWith("/srv/project", expect.any(AbortSignal))
+  expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Live Diff · Remoto · Servidor")
+  expect(tui?.renderer.root.findDescendantById(`live-diff-add-${sessionId}`)).toBeUndefined()
+  await key("a")
+  expect(tui?.renderer.root.findDescendantById("live-diff-project-picker")).toBeUndefined()
+  await key("x")
+  expect(close).toHaveBeenCalledTimes(1)
+})
+
+test("Master Key N opens a local terminal even when an SSH profile is active", async () => {
+  await mount()
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "203.0.113.12",
+    user: "ubuntu",
+    port: 22,
+    identityFile: "/tmp/work-server.key",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+
+  await leader("n")
+  expect(commands[0]).toEqual(processes.createShellTerminalCommand().command)
+  expect(codexSpy).not.toHaveBeenCalled()
+  expect(tui?.renderer.root.findDescendantById("terminal-location-dialog")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeUndefined()
+})
+
 test("Master Key lists and resumes conversations from the local Codex /resume list", async () => {
   await mount(false, 140, 36)
   await leader("a")
@@ -363,6 +472,8 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
         preview: "Corrija o fluxo de login do projeto",
         lastResponse: "O login foi corrigido e os testes passaram.",
         cwd: "/workspace/project",
+        projectName: "project",
+        gitBranch: "feature/login",
         updatedAt: Date.now(),
         state: "working",
       },
@@ -372,6 +483,8 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
         preview: "Confira o fluxo de login em telas pequenas",
         lastResponse: "A experiência mobile foi revisada.",
         cwd: "/workspace/project",
+        projectName: "project",
+        gitBranch: "feature/login-mobile",
         updatedAt: Date.now() - 125_000,
         state: "idle",
       },
@@ -389,8 +502,12 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
   await tui?.renderOnce()
   expect(tui?.captureCharFrame()).toContain("AGENTES · CODEX /RESUME")
   expect(tui?.captureCharFrame()).toContain("Revisar autenticação")
-  expect(tui?.captureCharFrame()).toContain("Corrija o fluxo de login")
+  expect(tui?.captureCharFrame()).toContain("└  Corrija o fluxo de login do projeto")
+  expect(tui?.captureCharFrame()).toContain("Local  project  ⎇ feature/login")
   expect(spanColor("Revisar autenticação")).toEqual(RGBA.fromHex(COLORS.terminal).toInts())
+  expect(spanBackground("Revisar autenticação")).toEqual(RGBA.fromHex(COLORS.panelRaised).toInts())
+  const threadTitle = renderable("terminal-resume-title-0199-resume-login")
+  expect(spanColor("──", threadTitle.screenY)).toEqual(RGBA.fromHex(COLORS.border).toInts())
   await key("escape")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
   await arrow("right")
@@ -451,6 +568,8 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
         preview: "Projeto local",
         lastResponse: "Local pronto.",
         cwd: "/workspace/local",
+        projectName: "local",
+        gitBranch: "feature/local",
         updatedAt: Date.now(),
         state: "idle",
       },
@@ -463,6 +582,8 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
           preview: "Projeto remoto",
           lastResponse: "Remoto pronto.",
           cwd: "/srv/project",
+          projectName: "project",
+          gitBranch: "main",
           updatedAt: Date.now() - 1,
           state: "idle",
           remoteProfileId: profile.id,
@@ -478,7 +599,56 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
 
   expect(tui?.captureCharFrame()).toContain("Agente local")
   expect(tui?.captureCharFrame()).toContain("Agente remoto")
-  expect(tui?.captureCharFrame()).toContain("Remoto • Servidor do trabalho")
+  expect(tui?.captureCharFrame()).toContain("Projeto remoto")
+  expect(tui?.captureCharFrame()).toContain("Projeto local")
+  expect(tui?.captureCharFrame()).toContain("Remoto  Servidor do trabalho · project  ⎇ main")
+  expect(tui?.captureCharFrame()).toContain("Local  local  ⎇ feature/local")
+  const localOrigin = renderable("terminal-resume-origin-local-thread")
+  const remoteOrigin = renderable("terminal-resume-origin-remote-thread")
+  const localMarker = renderable("terminal-resume-marker-local-thread")
+  const remoteMarker = renderable("terminal-resume-marker-remote-thread")
+  const localConnector = renderable("terminal-resume-connector-local-thread")
+  const remoteConnector = renderable("terminal-resume-connector-remote-thread")
+  const localDetail = renderable("terminal-resume-detail-local-thread")
+  const remoteDetail = renderable("terminal-resume-detail-remote-thread")
+  const localProject = renderable("terminal-resume-project-local-thread")
+  const remoteProject = renderable("terminal-resume-project-remote-thread")
+  const localRail = renderable("terminal-resume-rail-local-thread-0") as TextRenderable
+  const localRailMiddle = renderable("terminal-resume-rail-local-thread-1")
+  const localRailBottom = renderable("terminal-resume-rail-local-thread-2")
+  const remoteRail = renderable("terminal-resume-rail-remote-thread-0") as TextRenderable
+  expect(localDetail.screenY).toBe(localOrigin.screenY - 1)
+  expect(remoteDetail.screenY).toBe(remoteOrigin.screenY - 1)
+  expect(localConnector.screenX).toBe(localMarker.screenX)
+  expect(remoteConnector.screenX).toBe(remoteMarker.screenX)
+  expect(localOrigin.screenX).toBe(localMarker.screenX)
+  expect(remoteOrigin.screenX).toBe(remoteMarker.screenX)
+  expect(localProject.screenY).toBe(localOrigin.screenY)
+  expect(remoteProject.screenY).toBe(remoteOrigin.screenY)
+  expect(localRailMiddle.screenX).toBe(localRail.screenX)
+  expect(localRailBottom.screenX).toBe(localRail.screenX)
+  expect(localRailMiddle.screenY).toBe(localRail.screenY + 1)
+  expect(localRailBottom.screenY).toBe(localRail.screenY + 2)
+  expect(localRail.fg.toInts()).toEqual(RGBA.fromHex(COLORS.terminal).toInts())
+  expect(remoteRail.fg.toInts()).toEqual(RGBA.fromHex(COLORS.panelRaised).toInts())
+  expect(spanColor("└", localConnector.screenY)).toEqual(RGBA.fromHex(COLORS.border).toInts())
+  expect(spanColor("Projeto local", localDetail.screenY)).toEqual(
+    RGBA.fromHex(COLORS.text).toInts(),
+  )
+  expect(spanColor("Projeto remoto", remoteDetail.screenY)).toEqual(
+    RGBA.fromHex(COLORS.text).toInts(),
+  )
+  expect(spanColor("Local", localOrigin.screenY)).toEqual(RGBA.fromHex(COLORS.success).toInts())
+  expect(spanBackground("Local", localOrigin.screenY)).toEqual(
+    RGBA.fromHex(COLORS.diffAddedBg).toInts(),
+  )
+  expect(spanColor("Remoto", remoteOrigin.screenY)).toEqual(RGBA.fromHex(COLORS.database).toInts())
+  expect(spanBackground("Remoto", remoteOrigin.screenY)).toEqual(
+    RGBA.fromHex(COLORS.databaseSelectionBg).toInts(),
+  )
+  await arrow("down")
+  expect(localRail.fg.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
+  expect(remoteRail.fg.toInts()).toEqual(RGBA.fromHex(COLORS.terminal).toInts())
 })
 
 test("a remote Codex conversation resumes through its original SSH profile", async () => {
@@ -503,6 +673,8 @@ test("a remote Codex conversation resumes through its original SSH profile", asy
         preview: "Projeto remoto",
         lastResponse: "Pronto.",
         cwd: "/srv/project",
+        projectName: "project",
+        gitBranch: "main",
         updatedAt: Date.now(),
         state: "idle",
         remoteProfileId: profile.id,
@@ -516,6 +688,15 @@ test("a remote Codex conversation resumes through its original SSH profile", asy
   await key("enter")
 
   expect(codexSpy).toHaveBeenCalledTimes(1)
+  expect(commands.at(-1)).toEqual([
+    "codex",
+    "resume",
+    "remote-thread",
+    "--remote",
+    "ws://127.0.0.1:4500",
+    "-C",
+    "/srv/project",
+  ])
   expect(starts.at(-1)).toMatchObject({
     resumeThreadId: "remote-thread",
     remote: { profile, workingDirectory: "/srv/project" },
@@ -533,6 +714,8 @@ test("Master Key idle time uses the light palette's primary text color", async (
         preview: "Última tarefa concluída",
         lastResponse: "A tarefa foi concluída.",
         cwd: "/workspace/project",
+        projectName: "project",
+        gitBranch: "main",
         updatedAt: Date.now() - 125_000,
         state: "idle",
       },
@@ -544,6 +727,10 @@ test("Master Key idle time uses the light palette's primary text color", async (
 
   expect(tui?.captureCharFrame()).toContain("Ocioso · 2m")
   expect(spanColor("· 2m")).toEqual(RGBA.fromHex(paletteFor("prime", "light").text).toInts())
+  const idleTitle = renderable("terminal-resume-title-0199-resume-light-idle")
+  expect(spanBackground("Agente ocioso", idleTitle.screenY)).toEqual(
+    RGBA.fromHex(paletteFor("prime", "light").panelRaised).toInts(),
+  )
   await arrow("left")
   const actionTitle = renderable("terminal-action-title-a")
   expect(spanColor("Novo Codex", actionTitle.screenY)).toEqual(
@@ -860,7 +1047,8 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(agentPanel?.screenX).toBeGreaterThan(actionPanel?.screenX ?? 0)
   expect(tui?.renderer.root.findDescendantById("terminal-actions-backdrop")).toBeUndefined()
   expect(terminal.height).toBe(height)
-  expect(tui?.captureCharFrame()).toContain("Abre uma sessão local ou remota em nova seção.")
+  expect(tui?.captureCharFrame()).toContain("Inicia o Codex local ou remoto em uma nova seção.")
+  expect(tui?.captureCharFrame()).toContain("Abre um terminal local em uma nova seção.")
   const newCodex = renderable("terminal-action-a")
   const sentMessages = renderable("terminal-action-s")
   const liveDiff = renderable("terminal-action-d")

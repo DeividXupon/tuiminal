@@ -128,6 +128,8 @@ test("mirror dimensions follow the real viewport after the sidebar, splits and w
   expect(pane.width).toBe(120 - sidebar.width)
   expect(mirrorResize.mock.calls.at(-1)).toEqual([pane.width, pane.height])
   await leader("v")
+  await act(async () => tui?.mockInput.pressKey("n"))
+  await tui?.renderOnce()
   expect(pane.width).toBeLessThan(viewport.width)
   expect(mirrorResize.mock.calls.at(-1)).toEqual([pane.width, pane.height])
   await act(async () => tui?.resize(90, 24))

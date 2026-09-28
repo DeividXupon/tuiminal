@@ -22,6 +22,12 @@ function cleanThreadText(value: unknown, limit: number) {
     .join("")
 }
 
+function threadProjectName(cwd: string) {
+  const path = cwd.replace(/[\\/]+$/g, "")
+  if (!path) return cwd
+  return path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1)
+}
+
 function threadState(value: unknown): CodexResumeThread["state"] {
   const status = object(value)
   if (status?.type === "systemError") return "failed"
@@ -69,6 +75,7 @@ export function codexResumeThreads(
       const preview = cleanThreadText(thread.preview, 240)
       const name = cleanThreadText(thread.name, 120)
       const cwd = cleanThreadText(thread.cwd, 400)
+      const gitBranch = cleanThreadText(object(thread.gitInfo)?.branch, 160)
       const updatedAt =
         typeof thread.recencyAt === "number"
           ? thread.recencyAt
@@ -82,6 +89,8 @@ export function codexResumeThreads(
           preview,
           lastResponse: "",
           cwd,
+          projectName: threadProjectName(cwd),
+          gitBranch,
           updatedAt,
           state: threadState(thread.status),
           ...(remoteProfileId ? { remoteProfileId } : {}),

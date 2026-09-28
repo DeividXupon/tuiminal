@@ -1,3 +1,5 @@
+import { TERMINAL_REMOTE_DAEMON_MESSAGES } from "./terminal-remote-daemon-catalog"
+import { TERMINAL_REMOTE_HANDSHAKE_MESSAGES } from "./terminal-remote-handshake-catalog"
 import { TERMINAL_REMOTE_SETUP_MESSAGES } from "./terminal-remote-setup-catalog"
 
 export const TERMINAL_REMOTE_MESSAGES = [
@@ -330,5 +332,7 @@ export const TERMINAL_REMOTE_MESSAGES = [
     "无法向远程 Codex 发送数据。",
     "원격 Codex로 데이터를 보낼 수 없습니다.",
   ],
+  ...TERMINAL_REMOTE_DAEMON_MESSAGES,
+  ...TERMINAL_REMOTE_HANDSHAKE_MESSAGES,
   ...TERMINAL_REMOTE_SETUP_MESSAGES,
 ] as const

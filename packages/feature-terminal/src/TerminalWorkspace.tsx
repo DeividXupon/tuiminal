@@ -581,9 +581,7 @@ export function FreeTerminal({
     if (key === "q") return !onQuit
     if (key === "d")
       return !(
-        (activeSession?.status === "running" &&
-          activeSession.agent &&
-          !activeSession.codex?.remote) ||
+        (activeSession?.status === "running" && activeSession.agent) ||
         (activeSessionId && liveDiffTargets.has(activeSessionId))
       )
     return ["x", "e", "m"].includes(key) && !activeSession
@@ -676,17 +674,17 @@ export function FreeTerminal({
     if (!["e", "l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
     switch (key) {
       case "n":
+        launchSection()
+        break
+      case "a":
         {
           const settings = getUiSettings()
           const profile = settings.terminalRemoteCodexProfiles.find(
             (candidate) => candidate.id === settings.terminalRemoteCodexActiveProfileId,
           )
           if (profile) setAgentLaunchStep({ kind: "location", profile })
-          else launchSection()
+          else launchSection(createCodexAgentCommand())
         }
-        break
-      case "a":
-        launchSection(createCodexAgentCommand())
         break
       case "v":
         requestSplit(false)
@@ -765,6 +763,7 @@ export function FreeTerminal({
   const addLiveDiffProject = useCallback(
     (id: string, roots: readonly string[]) => {
       const session = sessionsRef.current.find((candidate) => candidate.id === id)
+      if (session?.codex?.remote) return
       const seeds = [session?.workingDirectory ?? "", ...roots]
       liveDiffProjectSearch.current?.abort()
       const controller = new AbortController()

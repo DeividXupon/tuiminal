@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
+import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-catalog"
+import { GIT_COMPARE_MESSAGES } from "../packages/core/src/i18n/git-compare-catalog"
 import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "../packages/core/src/i18n/git-configuration-catalog"
-import { GIT_COMPARE_MESSAGES } from "../packages/core/src/i18n/git-compare-catalog"
-import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-catalog"
 import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
 import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
-import { TERMINAL_REMOTE_SETUP_MESSAGES } from "../packages/core/src/i18n/terminal-remote-setup-catalog"
 import {
   displayWidth,
   formatUiDateTime,
@@ -18,6 +17,9 @@ import {
   translateUi,
   truncateDisplay,
 } from "../packages/core/src/i18n/index"
+import { TERMINAL_REMOTE_DAEMON_MESSAGES } from "../packages/core/src/i18n/terminal-remote-daemon-catalog"
+import { TERMINAL_REMOTE_HANDSHAKE_MESSAGES } from "../packages/core/src/i18n/terminal-remote-handshake-catalog"
+import { TERMINAL_REMOTE_SETUP_MESSAGES } from "../packages/core/src/i18n/terminal-remote-setup-catalog"
 
 afterEach(() => setLanguage("pt-BR"))
 
@@ -160,7 +162,11 @@ describe("internationalization", () => {
     "translates every remote server setup message into %s",
     (language) => {
       const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
-      for (const catalog of TERMINAL_REMOTE_SETUP_MESSAGES) {
+      for (const catalog of [
+        ...TERMINAL_REMOTE_SETUP_MESSAGES,
+        ...TERMINAL_REMOTE_DAEMON_MESSAGES,
+        ...TERMINAL_REMOTE_HANDSHAKE_MESSAGES,
+      ]) {
         const expected = catalog[index]
         if (!expected) throw new Error(`Missing remote setup translation for ${language}`)
         expect(translateUi(catalog[0], language)).toBe(expected)

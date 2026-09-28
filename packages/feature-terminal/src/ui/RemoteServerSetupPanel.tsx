@@ -29,6 +29,7 @@ function resultMessage(code: RemoteServerBarrierCode) {
     authentication: "O GitHub ainda não aceitou a chave SSH deste servidor.",
     unreachable: "O servidor não conseguiu alcançar o GitHub.",
     codexMissing: "O Codex CLI ainda não está instalado.",
+    codexDaemonUnavailable: "Esta versão do Codex não oferece o daemon persistente.",
     codexUnauthenticated: "A conta do Codex ainda não está conectada.",
     invalidProfile: "O perfil remoto é inválido.",
     identityMissing: "A chave privada local não foi encontrada.",

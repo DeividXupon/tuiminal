@@ -157,13 +157,22 @@ Tuiminal can access its reasoning.
 
 ## Integrated Codex sessions
 
-`[A] New Codex`, and the empty workspace's matching action, start one owned
-`codex app-server` on localhost and launch the official Codex terminal UI with
-`codex --remote` in a native PTY. The user composes tasks and handles approvals in
-Codex's own interface. A localhost WebSocket relay passes the CLI protocol through
-unchanged while Tuiminal reads public thread, turn, and item events from the server
-stream. It never submits agent input or approvals, and never reads private reasoning.
-The app-server, relay, and PTY are stopped together when the session closes.
+Without an active remote profile, `[A] New Codex`, and the empty workspace's matching
+action, start one owned `codex app-server` on localhost and launch the official Codex
+terminal UI with `codex --remote` in a native PTY. With an active profile, the same
+action first asks Local or Remote and collects that side's working directory before
+launching. The user composes tasks and handles approvals in Codex's own interface. A
+localhost WebSocket relay passes the CLI protocol through unchanged while Tuiminal
+reads public thread, turn, and item events from the server stream. It never submits
+agent input or approvals, and never reads private reasoning. The app-server, relay,
+and PTY are stopped together when a local session closes. A remote session instead
+first probes the official shared Codex daemon on its SSH host. The bounded probe must
+validate the directory, receive a valid `initialize` response, and confirm the local
+CLI is protocol-compatible with the responding daemon before any TUI is opened. The
+probe closes only its proxy, then the session reconnects through `codex app-server
+proxy`; closing the pane stops the local PTY, relay, and SSH proxy without stopping
+that daemon or its active turns. A later remote resume reconnects to the same shared
+daemon and passes the tagged remote cwd explicitly.
 
 Master Key then `[S]` opens an in-memory history of messages sent by the user in
 the selected thread. The relay combines text inputs on the public outbound requests

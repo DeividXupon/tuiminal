@@ -168,7 +168,7 @@ function failTerminalStart(
   const message = error instanceof Error ? error.message : "Não foi possível iniciar a sessão."
   terminal.write(`\u001b[38;2;255;107;107m× ${translateUi(message)}\u001b[0m\r\n`)
   context.updateSession(id, { status: "failed", pid: null, exitCode: 1 })
-  context.setNotice(`Erro: ${message}`)
+  context.setNotice(`${translateUi("Erro")}: ${translateUi(message)}`)
 }
 
 async function launchTerminal(

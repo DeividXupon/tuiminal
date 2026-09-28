@@ -6,6 +6,8 @@ export type CodexResumeThread = {
   preview: string
   lastResponse: string
   cwd: string
+  projectName: string
+  gitBranch: string
   updatedAt: number
   state: CodexResumeThreadState
   remoteProfileId?: string

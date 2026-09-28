@@ -702,6 +702,8 @@ export function tuiTerminalActionBenchmarks({
               preview: "Continue benchmark coverage",
               lastResponse: "Ready to continue.",
               cwd: process.env.TUIMINAL_WORKDIR ?? "",
+              projectName: "benchmark",
+              gitBranch: "main",
               updatedAt: Date.now(),
               state: "idle",
             },

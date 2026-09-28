@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -13,6 +13,7 @@ import { refreshRemoteCodexResumeThreads } from "../packages/feature-terminal/sr
 import {
   remoteCodexAppServerSshCommand,
   remoteCodexSshTestCommand,
+  remoteCodexTuiCommand,
   remoteInteractiveSshCommand,
   testRemoteCodexConnection,
 } from "../packages/feature-terminal/src/services/remote-codex-connection"
@@ -231,7 +232,16 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
     ssh,
     '#!/bin/sh\nprintf "Hi fixture! You\'ve successfully authenticated, but GitHub does not provide shell access.\\n" >&2\nexit 1\n',
   )
-  writeFileSync(codex, '#!/bin/sh\n[ "$1 $2" = "login status" ]\n')
+  writeFileSync(
+    codex,
+    [
+      "#!/bin/sh",
+      'case "$*" in',
+      '  "login status"|"app-server daemon --help"|"app-server proxy --help") exit 0 ;;',
+      "  *) exit 1 ;;",
+      "esac",
+    ].join("\n"),
+  )
   chmodSync(git, 0o700)
   chmodSync(ssh, 0o700)
   chmodSync(codex, 0o700)
@@ -248,6 +258,21 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
     expect(exitCode).toBe(0)
     expect(stdout).toContain(`TUIMINAL_REMOTE_READY:${id}:ready`)
   }
+
+  writeFileSync(codex, '#!/bin/sh\n[ "$1 $2" = "login status" ]\n')
+  const outdatedScript = remoteServerBarrierCheckCommand(profile(identityFile), "codex").at(-1)
+  if (!outdatedScript) throw new Error("Missing remote Codex readiness script")
+  const outdated = Bun.spawn(["/bin/sh", "-c", outdatedScript], {
+    env: { HOME: root, PATH: root, LC_ALL: "C" },
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [outdatedExit, outdatedOutput] = await Promise.all([
+    outdated.exited,
+    new Response(outdated.stdout).text(),
+  ])
+  expect(outdatedExit).toBe(0)
+  expect(outdatedOutput).toContain("TUIMINAL_REMOTE_READY:codex:codexDaemonUnavailable")
 })
 
 test("remote readiness keeps the current barrier when verification fails", async () => {
@@ -290,6 +315,16 @@ test("Codex setup activates the standalone install in the current SSH session be
     "3. Conecte sua conta: codex login --device-auth",
     "4. No navegador local, conclua o acesso e aguarde o sucesso neste terminal",
     "5. Confirme o login: codex login status",
+  ])
+  expect(
+    remoteServerSetupInstructions("codex", {
+      ...report,
+      codex: { id: "codex", ready: false, code: "codexDaemonUnavailable" },
+    }),
+  ).toEqual([
+    "1. Atualize: curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+    '2. Ative nesta sessão: export PATH="$HOME/.local/bin:$PATH"',
+    "3. Verifique: codex app-server daemon --help && codex app-server proxy --help",
   ])
 })
 
@@ -334,7 +369,7 @@ test("remote server setup opens an interactive SSH shell without embedding a set
   expect(command.remoteSetup).toEqual({ profile: target })
 })
 
-test("remote Codex uses an SSH stdio app-server in the selected directory", () => {
+test("remote Codex uses a persistent daemon through an SSH stdio proxy", () => {
   const target = profile("/tmp/oracle key")
   const ssh = remoteCodexAppServerSshCommand(target, "/srv/project with 'quote'")
 
@@ -354,8 +389,27 @@ test("remote Codex uses an SSH stdio app-server in the selected directory", () =
     "ubuntu@203.0.113.10",
   ])
   expect(ssh.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
-  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server --listen stdio://')
+  expect(ssh.at(-1)).toContain('"$codex_command" app-server daemon start >/dev/null')
+  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server proxy')
+  expect(ssh.at(-1)).not.toContain("--listen stdio://")
   expect(remoteInteractiveSshCommand(target)[1]).toBe("-tt")
+
+  expect(remoteCodexTuiCommand("ws://127.0.0.1:4500", "/srv/project")).toEqual([
+    "codex",
+    "--remote",
+    "ws://127.0.0.1:4500",
+    "-C",
+    "/srv/project",
+  ])
+  expect(remoteCodexTuiCommand("ws://127.0.0.1:4500", "/srv/project", "thread-1")).toEqual([
+    "codex",
+    "resume",
+    "thread-1",
+    "--remote",
+    "ws://127.0.0.1:4500",
+    "-C",
+    "/srv/project",
+  ])
 
   expect(
     createRemoteCodexAgentCommand({ profile: target, workingDirectory: "/srv/project" }),
@@ -368,6 +422,48 @@ test("remote Codex uses an SSH stdio app-server in the selected directory", () =
     },
   })
   expect(() => remoteCodexAppServerSshCommand(target, "relative/project")).toThrow()
+  expect(() => remoteCodexTuiCommand("ws://127.0.0.1:4500", "relative/project")).toThrow()
+})
+
+test("closing the remote stdio proxy does not stop its persistent daemon", async () => {
+  const root = fixtureRoot()
+  const codex = join(root, "codex")
+  const calls = join(root, "calls")
+  const daemon = join(root, "daemon-running")
+  writeFileSync(
+    codex,
+    [
+      "#!/bin/sh",
+      'printf "%s\\n" "$*" >> "$TUIMINAL_TEST_CALLS"',
+      'case "$*" in',
+      '  "app-server daemon start") : > "$TUIMINAL_TEST_DAEMON" ;;',
+      '  "app-server proxy") while IFS= read -r line; do printf "%s\\n" "$line"; done ;;',
+      "  *) exit 1 ;;",
+      "esac",
+    ].join("\n"),
+  )
+  chmodSync(codex, 0o700)
+  const command = remoteCodexAppServerSshCommand(profile("/tmp/oracle.key"), root).at(-1)
+  if (!command) throw new Error("Missing persistent remote command")
+  const child = Bun.spawn(["/bin/sh", "-c", command], {
+    env: {
+      HOME: root,
+      PATH: root,
+      TUIMINAL_TEST_CALLS: calls,
+      TUIMINAL_TEST_DAEMON: daemon,
+    },
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  child.stdin.write('{"id":"fixture"}\n')
+  child.stdin.end()
+  const [exitCode, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()])
+
+  expect(exitCode).toBe(0)
+  expect(stdout).toBe('{"id":"fixture"}\n')
+  expect(existsSync(daemon)).toBe(true)
+  expect(readFileSync(calls, "utf8")).toBe("app-server daemon start\napp-server proxy\n")
 })
 
 test("remote Codex refresh lists and hydrates agents through SSH stdio", async () => {
@@ -387,7 +483,7 @@ test("remote Codex refresh lists and hydrates agents through SSH stdio", async (
       '    if (request.method === "initialize")',
       "      process.stdout.write(JSON.stringify({ id: request.id, result: {} }) + '\\n')",
       '    else if (request.method === "thread/list")',
-      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ id: 'remote-1', name: 'Agente remoto', preview: 'Projeto remoto', cwd: '/srv/project', recencyAt: 10, status: { type: 'notLoaded' } }] } }) + '\\n')",
+      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ id: 'remote-1', name: 'Agente remoto', preview: 'Projeto remoto', cwd: '/srv/project', gitInfo: { branch: 'feature/remote' }, recencyAt: 10, status: { type: 'notLoaded' } }] } }) + '\\n')",
       '    else if (request.method === "thread/turns/list")',
       "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ items: [{ type: 'agentMessage', phase: 'final_answer', text: 'Concluído remotamente.' }] }] } }) + '\\n')",
       '    newline = buffered.indexOf("\\n")',
@@ -409,6 +505,8 @@ test("remote Codex refresh lists and hydrates agents through SSH stdio", async (
       preview: "Projeto remoto",
       lastResponse: "Concluído remotamente.",
       cwd: "/srv/project",
+      projectName: "project",
+      gitBranch: "feature/remote",
       updatedAt: 10,
       state: "idle",
       remoteProfileId: "oracle-vps",

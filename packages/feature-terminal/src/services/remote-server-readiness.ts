@@ -17,6 +17,7 @@ export type RemoteServerBarrierCode =
   | "authentication"
   | "unreachable"
   | "codexMissing"
+  | "codexDaemonUnavailable"
   | "codexUnauthenticated"
   | "invalidProfile"
   | "identityMissing"
@@ -65,6 +66,7 @@ const CODEX_CHECK = [
   "codex_command=$(command -v codex 2>/dev/null || true)",
   'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
   `if [ -z "$codex_command" ]; then printf '${RESULT_PREFIX}:codex:codexMissing\\n'; exit 0; fi`,
+  `if ! "$codex_command" app-server daemon --help >/dev/null 2>&1 || ! "$codex_command" app-server proxy --help >/dev/null 2>&1; then printf '${RESULT_PREFIX}:codex:codexDaemonUnavailable\\n'; exit 0; fi`,
   `if "$codex_command" login status >/dev/null 2>&1; then printf '${RESULT_PREFIX}:codex:ready\\n'; else printf '${RESULT_PREFIX}:codex:codexUnauthenticated\\n'; fi`,
 ].join("; ")
 
@@ -137,6 +139,7 @@ function parseBarrierResult(id: RemoteServerBarrierId, stdout: string) {
     "authentication",
     "unreachable",
     "codexMissing",
+    "codexDaemonUnavailable",
     "codexUnauthenticated",
     "failed",
   ]

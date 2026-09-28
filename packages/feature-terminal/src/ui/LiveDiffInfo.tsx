@@ -53,7 +53,7 @@ export function LiveDiffInfo({
   selectedProject: string | null
   hiddenRoots: readonly string[]
   onSelectProject: (root: string, event: { stopPropagation: () => void }) => void
-  onAddProject: () => void
+  onAddProject?: () => void
   lastProject: string
   error: string
   showDiffAuto: boolean
@@ -67,8 +67,9 @@ export function LiveDiffInfo({
   const projectsHeight = rows.length
   const hintLabel = translateUi("[H/L] projeto · [N] visibilidade · [X] Fechar")
   const addLabel = translateUi("[A] Adicionar projeto")
-  const sharedFooter = !error && displayWidth(hintLabel) + displayWidth(addLabel) + 3 <= width
-  const footerHeight = sharedFooter ? 1 : 2
+  const sharedFooter =
+    Boolean(onAddProject) && !error && displayWidth(hintLabel) + displayWidth(addLabel) + 3 <= width
+  const footerHeight = !onAddProject || sharedFooter ? 1 : 2
   const totalsWidth = displayWidth(
     `${totals.files} ${translateUi("arquivos")} · +${totals.additions} −${totals.deletions}${totals.unknown > 0 ? " · —" : ""}`,
   )
@@ -172,7 +173,7 @@ export function LiveDiffInfo({
             style={{ fg: COLORS.muted }}
           />
         )}
-        {sharedFooter && !codeFocused && (
+        {sharedFooter && !codeFocused && onAddProject && (
           <TerminalInlineButton
             compact
             id={`live-diff-add-${sessionId}`}
@@ -182,7 +183,7 @@ export function LiveDiffInfo({
           />
         )}
       </box>
-      {!codeFocused && !sharedFooter && (
+      {!codeFocused && !sharedFooter && onAddProject && (
         <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
           <TerminalInlineButton
             compact
