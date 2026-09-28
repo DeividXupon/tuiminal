@@ -6,7 +6,8 @@ import { basename, dirname, join, posix, relative, resolve, sep } from "node:pat
 import type { RemoteCodexTarget } from "../model/sessions"
 import { remoteNonInteractiveSshCommand } from "./remote-codex-connection"
 
-const MANIFEST_TIMEOUT_MS = 15_000
+const MANIFEST_TIMEOUT_MS = 60_000
+const SYNC_MANIFEST_TIMEOUT_MS = 5 * 60_000
 const MAX_MANIFEST_BYTES = 32 * 1024 * 1024
 const MAX_MANIFEST_ENTRIES = 250_000
 
@@ -15,6 +16,10 @@ root=$1
 cd "$root" || exit 72
 canonical=$(pwd -P) || exit 72
 printf 'TUIMINAL_ROOT\000%s\000' "$canonical"
+if find . -maxdepth 0 -printf '' >/dev/null 2>&1; then
+  find . -mindepth 1 -printf 'TUIMINAL_ENTRY\000%P\000%y\000%m|%s|%T@\000%l\000' || exit 74
+  exit 0
+fi
 find . -mindepth 1 -exec sh -c '
   for item do
     path=${"$"}{item#./}
@@ -43,7 +48,6 @@ export class RemoteProjectSyncError extends Error {}
 export class RemoteProjectSyncCollisionError extends RemoteProjectSyncError {}
 export class RemoteProjectSyncLocalChangesError extends RemoteProjectSyncError {}
 export class RemoteProjectSyncLocalRaceError extends RemoteProjectSyncError {}
-
 type Manifest = {
   fingerprint: string
   canonicalPath: string
@@ -153,7 +157,7 @@ function parseRemoteManifest(buffer: Buffer): Manifest {
     const metadata = fields[index++] ?? ""
     const target = fields[index++] ?? ""
     validateManifestEntry(path, type, target)
-    hasUnsupported ||= type === "x"
+    hasUnsupported ||= type !== "f" && type !== "d" && type !== "l"
     hasSymlink ||= type === "l"
     entries.push(JSON.stringify([path, type, metadata, target]))
     if (entries.length > MAX_MANIFEST_ENTRIES)
@@ -176,26 +180,24 @@ function validateManifestEntry(path: string, type: string, target: string) {
 export async function readRemoteProjectFingerprint(
   remote: RemoteCodexTarget,
   signal: AbortSignal,
-  options: { command?: readonly string[] } = {},
+  options: { command?: readonly string[] | undefined; timeoutMs?: number } = {},
 ): Promise<Manifest> {
   const output = await collectProcess(
     options.command ?? syncCommand(remote, REMOTE_MANIFEST_SCRIPT),
     signal,
     {
-      timeoutMs: MANIFEST_TIMEOUT_MS,
+      timeoutMs: options.timeoutMs ?? MANIFEST_TIMEOUT_MS,
       maximumBytes: MAX_MANIFEST_BYTES,
     },
   )
   return parseRemoteManifest(output)
 }
 
-export function localRemoteProjectManifestCommand(path: string) {
-  return ["sh", "-c", REMOTE_MANIFEST_SCRIPT, "tuiminal-project-sync", path]
-}
+export const localRemoteProjectManifestCommand = (path: string) =>
+  ["sh", "-c", REMOTE_MANIFEST_SCRIPT, "tuiminal-project-sync", path] as const
 
-export function localRemoteProjectArchiveCommand(path: string) {
-  return ["sh", "-c", REMOTE_ARCHIVE_SCRIPT, "tuiminal-project-sync", path]
-}
+export const localRemoteProjectArchiveCommand = (path: string) =>
+  ["sh", "-c", REMOTE_ARCHIVE_SCRIPT, "tuiminal-project-sync", path] as const
 
 function localType(metadata: Awaited<ReturnType<typeof lstat>>) {
   if (metadata.isSymbolicLink()) return "l"
@@ -356,7 +358,10 @@ export async function synchronizeRemoteProject(options: {
   commands?: { manifest: readonly string[]; archive: readonly string[] }
 }) {
   const { remote, destination, signal } = options
-  const manifestOptions = options.commands ? { command: options.commands.manifest } : {}
+  const manifestOptions = {
+    command: options.commands?.manifest,
+    timeoutMs: SYNC_MANIFEST_TIMEOUT_MS,
+  }
   await mkdir(dirname(destination), { recursive: true })
   for (let attempt = 0; attempt < 2; attempt++) {
     signal.throwIfAborted()

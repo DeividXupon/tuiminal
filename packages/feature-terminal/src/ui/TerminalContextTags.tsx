@@ -1,6 +1,6 @@
 import { displayWidth, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalRepositoryContext } from "../model/terminal-context"
 import {
@@ -32,6 +32,7 @@ export function TerminalContextTags({
   context,
   sync,
   masterKey,
+  active = true,
   availableWidth,
   onActivate,
 }: {
@@ -39,11 +40,23 @@ export function TerminalContextTags({
   context?: TerminalRepositoryContext | undefined
   sync?: RemoteProjectSyncStatus | undefined
   masterKey: string
+  active?: boolean
   availableWidth: number
   onActivate: () => void
 }) {
+  const [syncFrame, setSyncFrame] = useState(0)
+  const animating = active && (sync?.kind === "checking" || sync?.kind === "syncing")
+  useEffect(() => {
+    setSyncFrame(0)
+    if (!animating || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return
+    const timer = setInterval(
+      () => setSyncFrame((current) => current + 1),
+      sync?.kind === "checking" ? 180 : 100,
+    )
+    return () => clearInterval(timer)
+  }, [animating, sync?.kind])
   const contentWidth = Math.max(0, availableWidth - 1)
-  const tags = terminalContextTags(context, contentWidth, sync, masterKey)
+  const tags = terminalContextTags(context, contentWidth, sync, masterKey, syncFrame)
   const [hovered, setHovered] = useState<TerminalContextTag["kind"] | null>(null)
   if (!tags.length) return null
   const tagsWidth = tags.reduce(

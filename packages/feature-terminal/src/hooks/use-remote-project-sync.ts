@@ -21,6 +21,7 @@ import {
 } from "../services/remote-project-sync-state"
 
 const STATUS_INTERVAL_MS = 10_000
+const STATUS_TIMEOUT_MS = 60_000
 
 function mappedBySource(mappings: readonly RemoteProjectSyncMapping[]) {
   return new Map(mappings.map((mapping) => [remoteProjectSyncMappingKey(mapping), mapping]))
@@ -40,7 +41,7 @@ async function inspectProjectSync(
   signal.addEventListener("abort", cancel, { once: true })
   const timeout = setTimeout(
     () => inspection.abort(new Error("A verificação do projeto excedeu o tempo limite.")),
-    15_000,
+    STATUS_TIMEOUT_MS,
   )
   try {
     const localPresent = await pathExists(mapping.localPath)

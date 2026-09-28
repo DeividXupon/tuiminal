@@ -145,6 +145,32 @@ test("remote sync status has priority and uses the configured Master Key", () =>
   ).toBe("Sincronizado")
 })
 
+test("remote sync transient states use stable-width animation frames", () => {
+  const checking = { kind: "checking" as const, localPath: "/local/project-sync" }
+  const syncing = { kind: "syncing" as const, localPath: "/local/project-sync" }
+  expect(terminalContextTags(undefined, 80, checking, "Ctrl+B", 0)[0]?.label).toBe(
+    "◐ Verificando sync…",
+  )
+  expect(terminalContextTags(undefined, 80, checking, "Ctrl+B", 1)[0]?.label).toBe(
+    "◓ Verificando sync…",
+  )
+  expect(terminalContextTags(undefined, 80, syncing, "Ctrl+B", 0)[0]?.label).toBe(
+    "⠋ Sincronizando…",
+  )
+  expect(terminalContextTags(undefined, 80, syncing, "Ctrl+B", 1)[0]?.label).toBe(
+    "⠙ Sincronizando…",
+  )
+  expect(
+    terminalContextTags(
+      undefined,
+      80,
+      { kind: "synced", localPath: "/local/project-sync" },
+      "Ctrl+B",
+      9,
+    )[0]?.label,
+  ).toBe("Sincronizado")
+})
+
 test("remote terminal context uses the bounded helper for branch and cleanliness", async () => {
   const directory = repository()
   const remote = {

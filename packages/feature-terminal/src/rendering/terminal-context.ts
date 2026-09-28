@@ -1,6 +1,7 @@
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalRepositoryContext } from "../model/terminal-context"
+import { AGENT_WORKING_FRAMES } from "./agent-presentation"
 
 export type TerminalContextTag = {
   kind: "directory" | "branch" | "state" | "sync"
@@ -9,6 +10,7 @@ export type TerminalContextTag = {
 
 const MAX_DIRECTORY_WIDTH = 24
 const MAX_BRANCH_WIDTH = 28
+const SYNC_CHECKING_FRAMES = ["◐", "◓", "◑", "◒"] as const
 
 function cleanLabel(value: string) {
   return value.replace(/[\p{Cc}\p{Cf}]/gu, "").trim()
@@ -62,13 +64,19 @@ export function terminalContextTooltip(
   return translateUi("A pasta atual não é um repositório Git.")
 }
 
-function syncTag(status: RemoteProjectSyncStatus | undefined, masterKey: string) {
+function syncTag(status: RemoteProjectSyncStatus | undefined, masterKey: string, frame: number) {
   if (!status) return null
   if (status.kind === "synced") return { kind: "sync" as const, label: translateUi("Sincronizado") }
   if (status.kind === "checking")
-    return { kind: "sync" as const, label: translateUi("Verificando sync…") }
+    return {
+      kind: "sync" as const,
+      label: `${SYNC_CHECKING_FRAMES[frame % SYNC_CHECKING_FRAMES.length]} ${translateUi("Verificando sync…")}`,
+    }
   if (status.kind === "syncing")
-    return { kind: "sync" as const, label: translateUi("Sincronizando…") }
+    return {
+      kind: "sync" as const,
+      label: `${AGENT_WORKING_FRAMES[frame % AGENT_WORKING_FRAMES.length]} ${translateUi("Sincronizando…")}`,
+    }
   const label =
     status.kind === "unmapped"
       ? translateUi("Não sincronizado")
@@ -84,9 +92,10 @@ export function terminalContextTags(
   availableWidth: number,
   sync?: RemoteProjectSyncStatus,
   masterKey = "Ctrl+B",
+  syncFrame = 0,
 ): TerminalContextTag[] {
   const selected: TerminalContextTag[] = []
-  const synchronization = syncTag(sync, masterKey)
+  const synchronization = syncTag(sync, masterKey, syncFrame)
   if (synchronization) {
     if (fits([synchronization], availableWidth)) selected.push(synchronization)
     else return []

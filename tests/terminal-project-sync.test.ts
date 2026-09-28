@@ -71,6 +71,22 @@ test("fingerprints complete local and remote trees, including hidden content", a
   ).not.toBe(inspected.fingerprint)
 })
 
+test("uses the caller deadline for remote project verification", async () => {
+  const delayedManifest = ["sh", "-c", "sleep 0.05; printf 'TUIMINAL_ROOT\\000/tmp\\000'"] as const
+  await expect(
+    readRemoteProjectFingerprint(remote("/tmp"), new AbortController().signal, {
+      command: delayedManifest,
+      timeoutMs: 10,
+    }),
+  ).rejects.toThrow("A verificação do projeto excedeu o tempo limite.")
+  expect(
+    await readRemoteProjectFingerprint(remote("/tmp"), new AbortController().signal, {
+      command: delayedManifest,
+      timeoutMs: 1_000,
+    }),
+  ).toMatchObject({ canonicalPath: "/tmp" })
+})
+
 test("publishes a complete replacement and removes stale local files", async () => {
   const root = temporaryRoot()
   const source = join(root, "source")

@@ -192,11 +192,15 @@ function paneContextWidth(
     ? terminalWidth
     : Math.max(1, frameWidth - (borderLeft ? 1 : 0))
 }
+function paneContextActive(toolActive: boolean | undefined, visible: boolean) {
+  return Boolean(toolActive && visible)
+}
 function PaneContextOverlay({
   sessionId,
   context,
   syncStatus,
   masterKey,
+  active,
   covered,
   availableWidth,
   onActivate,
@@ -205,6 +209,7 @@ function PaneContextOverlay({
   context: PaneProps["context"]
   syncStatus: PaneProps["syncStatus"]
   masterKey: string
+  active: boolean
   covered: boolean
   availableWidth: number
   onActivate: () => void
@@ -216,6 +221,7 @@ function PaneContextOverlay({
       context={context}
       sync={syncStatus}
       masterKey={masterKey}
+      active={active}
       availableWidth={availableWidth}
       onActivate={onActivate}
     />
@@ -420,6 +426,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               context={context}
               syncStatus={syncStatus}
               masterKey={masterKey}
+              active={paneContextActive(toolActive, visible)}
               covered={Boolean(liveDiff?.coversTerminal)}
               availableWidth={paneContextWidth(
                 liveDiff,
