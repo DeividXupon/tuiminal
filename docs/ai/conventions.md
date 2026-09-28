@@ -1,83 +1,65 @@
 # Cross-tool conventions
 
-## Product direction
+Use for shared UI, keyboard/focus, i18n, tutorials and documentation.
+The [control contract](../design/ui-controls.md) owns component geometry, settings,
+clipboard and notification behavior; [architecture](../architecture.md) owns
+initialization and dependency boundaries.
 
-- Tuiminal is a polished, modular developer workspace built with Bun, OpenTUI, React, and tuiparts. It should feel like one integrated terminal application, not a collection of disconnected demos.
-- Database, Git, Runner, HTTP, Free Terminal, and future product capabilities remain first-party features maintained inside Tuiminal. There is no planned public plugin SDK, community plugin loader, or marketplace.
-- The minimal npm installation downloads version-matched official feature payloads on demand. Those payloads remain internal implementation components managed by Tuiminal, use a private contract that may change with the core, and must never install into or modify the user's opened project.
-- It must work from any project directory. Git, Runner, and Free Terminal use the directory passed to the CLI or the current directory; they must not be tied to this repository.
-- The primary tools are Database, Git, Runner, HTTP, and Free Terminal. New substantial tools belong in their own top-level tab instead of being forced into an unrelated tab.
-- Keep the interface dense and responsive so useful content, especially code, diffs, tables, logs, and PTYs, receives most of the available space.
+## UI and keyboard
 
-## Maintaining these notes
+- Keep content dense, responsive and mouse-accessible. Reuse core controls when
+  ownership matches; features retain keyboard scopes, focus stacks and write guards.
+- Use `InlineButton`, `DirectionalButton`, `ShortcutText` and `ModalSurface` for
+  their documented roles. Selectable rows may use native buttons. Bracketed hints
+  use the fixed brand accent; data branches disable hint highlighting.
+- Contextual creation uses `[N]` unless the local editor requires a modifier.
+  Primary horizontal strips use `[A←]`/`[F→]`; nested strips use
+  `[Z←]`/`[V→]`. Show and handle actions only in their owning focus scope.
+- Global `[Alt+1–5]` selects tools; `[,]` opens settings. Accept OpenTUI
+  `meta` and `option`, Kitty escapes and traditional Alt fallback. Plain
+  numbers belong to tools. Inputs, editors, PTYs, pickers and modals retain keys.
+- `[Esc]` unwinds autocomplete/input, modal, then workspace. Consume it with
+  `preventDefault()` and `stopPropagation()`; Database's global exit must wait
+  for local handlers. Register modal focus IDs in feature `keyboard.ts` and
+  the app guard, including empty dialogs.
+- Closed dialogs must not retain keyboard/dimension listeners. Retained SQL/HTTP
+  editor trees preserve state but inactive trees cannot handle input. Bound renderer
+  selection listeners by documented mounted-editor limits; test resize/key leaks.
+- Preserve native refs, buffers and focus across theme, language and layout changes.
+  Never key tab trees by appearance. Use `LAYOUT.workspaceBackground` for outer
+  surfaces; Free Terminal always uses compact geometry.
+- Password fields use core `PasswordInput` with runtime registration. Mask the
+  full rendered width and expose only mask text to selection APIs, including
+  Unicode, resize, scrolling and clearing.
+- Loading plasma keeps usable content mounted; incremental refresh stays inline.
+  Use bounded native text documents and clocks, not per-cell React nodes.
+  Notifications never take focus; timers belong only to retained cards.
 
-- GitHub release titles and notes use English. Translating an existing release preserves its technical claims, commands, version tag, prerelease status, and attached artifacts.
-- English is the canonical language for maintained Markdown documentation. Keep `README.md` in English and `README.pt-BR.md` as its Brazilian Portuguese counterpart, with reciprocal language links. Update both READMEs in the same change when shared content changes; other guides, specifications, plans, and agent notes remain in English. Preserve executable examples, configuration keys, API identifiers, quoted UI labels, fixture data, and third-party license text when translating prose.
-- Update the narrowest relevant agent note or maintained specification whenever a task establishes a reusable UI rule, architectural decision, important workflow, or non-obvious implementation constraint. Keep `AGENTS.md` and `docs/ai/index.md` as maps.
-- Record information that will still matter in future tasks. Do not add temporary progress, debugging logs, secrets, credentials, or machine-specific transient paths.
-- Keep one maintained specification per completed feature under `docs/design/`. Consolidate durable contracts there before removing completed plans, handoffs or dated review reports; preserve unresolved release checks in `ALPHA_READINESS_PLAN.md`. Keep future-facing plans distinct from current behavior, and update incoming links when removing a document.
-- When adding or substantially changing a feature, update its agent note and maintained specification; update both READMEs when user-facing behavior or documented shortcuts changed.
-- The public README keeps one animated demo for each top-level tool under `docs/media/`. Regenerate them with `bun run docs:demos` after material layout or workflow changes. The generator must use simulated data or disposable local fixtures, never user credentials, repositories, databases, network services, or persistent configuration.
-- Documentation captures must set temporary config/data/project paths before dynamically importing any app runtime, including the installer; static UI imports can capture the real settings path before fixture setup. Keep the generator's settings-path assertion before its first settings update.
-- SVG demo captures position non-whitespace text runs by terminal display columns, including wide graphemes. Do not rely on `xml:space` alone: some rasterizers collapse indentation and break ASCII icons. Paint all backgrounds before foreground text on each row so progress/color boundaries cannot erase glyph edges.
-- Keep existing user work intact. The worktree may contain intentional uncommitted changes from ongoing development.
-- Do not commit, push, publish, change repository visibility, or kill user processes unless the user explicitly requests that action.
+## Initialization and text
 
-## Global navigation and CLI
+- Initialize settings at bootstrap before importing color-capturing feature UI.
+  Importing theme must not read preferences or change global language/masking.
+  Version queries avoid UI/settings imports; help retains language behavior.
+- Resolve CLI aliases through own-property lookup; inherited object names remain
+  directory arguments. Isolated mode initializes only the requested feature.
+- Fixed text uses `translateUi` and the [catalog](../../packages/core/src/i18n/index.ts).
+  Keep all six languages complete; never translate child output, code or user data.
+- Preserve catalog precedence, whitespace and markers. Index message tuples once;
+  process nested prefixes iteratively without truncation or repeated suffix scans.
+- Measure/truncate by grapheme display width and iterate visible prefixes lazily.
+  Validate saved palette IDs as own registry keys without rewriting on read.
 
-- Global tabs use `[Alt+1]` Database, `[Alt+2]` Git, `[Alt+3]` Runner, `[Alt+4]` HTTP, and `[Alt+5]` Free Terminal. Accept both OpenTUI `meta` and `option` modifier fields, keep Kitty `allKeysAsEscapes` enabled for supporting terminals, and retain the traditional escape-prefixed Alt fallback. Plain number keys remain available for local actions inside tools. Runner is the default when installed; otherwise choose the first installed tool, or the official feature installer when none are available. Unknown tool IDs use that same fallback.
-- `[,]` opens global settings. All top-level tabs, buttons, lists, fields, commits, diffs, and scrollable areas should remain usable with the mouse.
-- The CLI accepts an optional project directory and isolated-tool subcommands. Supported aliases include `banco`/`database`/`db`, `git`, `runner`/`run`, `http`, and `terminal`/`term`/`tty`.
-- Resolve CLI tool aliases once using own-property membership. Inherited object names such as `constructor` or `__proto__` are ordinary directory arguments, never tool IDs.
-- `--version` / `-v` reads bundled package metadata without importing UI settings, translation catalogs or feature runtime. Help keeps precedence when both flags are present and still honors the configured language. Keep a public CLI subprocess regression for this import boundary rather than a timing threshold.
-- `tuiminal <tool> [directory]` mounts only the requested tool. Do not initialize hidden tools or their processes in isolated mode.
-- The global CLI entry is `apps/cli/bin/tuiminal.ts` and runs directly through Bun; source changes do not require a separate compilation step. After local global-link testing, ensure `~/.bun/bin/tuiminal` still targets this entrypoint.
+## Documentation and demos
 
-## UI and interaction conventions
-
-- Every visible keyboard activation must be enclosed in brackets. Use `[Esc]`, `[Enter]`, `[Ctrl+S]`, `[↑/↓]`, and `[E/Enter]`; never show bare shortcut names in help text or action labels.
-- Generic contextual actions for creating or adding an item use `[N]`, never a plus-symbol shortcut. If creation already requires a modifier because plain `[N]` belongs to the focused editor or subpanel, show the real shortcut such as `[Ctrl+N]`. Contextual `[N]` controls appear and act only while their owning panel or subpanel has focus.
-- Contextual previous/next controls use plain `[A←]` and `[F→]` globally. Render the bracket plus letter in the fixed blue brand accent and the semantic arrow in the surrounding neutral/action color; keep the same controls mouse-accessible and do not retain legacy `<`/`>` shortcuts for these actions.
-- Horizontal navigation follows a hierarchy across tools: focused primary section strips use `[A←]`/`[F→]`, while a horizontal strip nested inside the selected section uses `[Z←]`/`[V→]`. Only controls owned by the focused panel are visible and active. Vertical sibling subpanels use `[J/K]` or `[↑/↓]` instead.
-- The TUIMINAL wordmark and bracketed keyboard hints share the fixed brand accent `#4B75FF` across palettes. Use `ShortcutText` for UI hints (`InlineButton` already uses it); only key tokens change color, while labels retain their semantic/focus colors. Never apply hint styling to logs, SQL, commands, PTY output or arbitrary user data. Use `highlight={false}` for data branches of mixed hint/data text.
-- Use `InlineButton` for one-line actions and `ModalSurface` for centered dimmed dialogs that share its geometry. Keep modal keyboard handling, focus stacks, and write guards in the owning feature; see `docs/design/ui-controls.md`. Raw tuiparts buttons remain appropriate for selectable rows and non-inline controls.
-- Real interactive launches begin with a short responsive brand animation: the four `#4B75FF` logo blocks fall and settle one at a time from the lower-right block upward, with the top bar landing last, then the Tuiminal wordmark appears. Keep tools unmounted until it completes, allow `[Enter]`/`[Esc]` or a mouse click to skip it, and use the compact mark on constrained terminals. Headless HTTP commands never mount it; automated workspace tests may explicitly bypass it.
-- Keyboard actions exposed in the interface should also have a mouse-accessible control whenever practical.
-- Native text selection is copied with the secondary mouse button through the shared `SelectionClipboard` boundary. Keep primary-button selection, local mouse ownership and keyboard interrupts intact; masked inputs must expose only mask text to selection/clipboard APIs. See `docs/design/ui-controls.md` for failure and selection behavior.
-- `[Esc]` closes only the topmost active layer. A modal must consume the event with `preventDefault()` and `stopPropagation()` and must not allow the same keypress to close its parent screen or the application.
-- Application-level Database exit on `[Esc]` must wait for local workspace handlers to consume the event. Grid/query batch selection uses `[Esc]` to clear itself even when no modal input owns focus; never quit synchronously before checking `defaultPrevented`.
-- Any focusable modal control must be recognized by its feature's `keyboard.ts` scope, consumed by the application-level guard in `apps/cli/src/App.tsx`, including empty modal states where the dialog itself receives focus. Preserve local Escape handling and event consumption.
-- Do not mount closed modal components that subscribe through `useKeyboard` or `useTerminalDimensions`. Render them only while open so hidden tools and dialogs do not accumulate global OpenTUI listeners; mounted inactive SQL tabs are the deliberate exception because their editor/result state must survive tab switches.
-- OpenTUI adds one renderer `selection` listener per mounted scrollbox. Workspaces that intentionally retain several editor trees, such as HTTP's six documents, must configure a bounded renderer listener budget derived from their documented limits; keep separate regressions for leak-sensitive `resize` and `keypress` listener counts.
-- Text inputs follow a focus stack: `[Esc]` first dismisses autocomplete or unfocuses the active input, a later `[Esc]` closes its containing screen, and only the final global action may exit the app.
-- Masked password/secret inputs use the shared `packages/core/src/ui/PasswordInput.ts` native renderable. Keep its module registration imported at runtime, not only its TypeScript type. The mask overwrites the complete input row so Unicode-width differences cannot leave a plaintext suffix in the terminal buffer; cover focused/unfocused editing, horizontal movement, resize and clearing without altering the actual input value.
-- Never let global shortcuts fire while a text input, SQL editor, terminal, picker, or modal owns the keyboard.
-- Free Terminal always uses compact workspace geometry and a single-row application header, independently of the saved layout. Its contextual settings omit the layout selector. Terminal panes reach every edge of their available area with no outer borders, margins, padding or gaps at any size; retain only shared split separators. Other tools keep both layout modes as first-class: `framed` uses gaps and full borders, with `LAYOUT.workspaceBackground` matching `COLORS.panel` so the application backdrop, padding, and inter-panel gaps form one continuous surface. `compact` maps that shared workspace background to `COLORS.canvas`, removes gaps and full panel borders, separates panels through subtle background differences, and gives the focused workspace panel a single left rail in that tool's accent color. Inactive compact panels do not gain a focus rail. Use the shared layout value for top-level workspaces, loading/installer screens, and tutorial workspaces; retain direct palette colors for intentional internal surfaces such as editors, code, logs, inputs, dimmers, and raised panels.
-- Settings are contextual and use a category/detail center. Wide terminals keep a fixed category sidebar grouped by domain, appearance, and general settings; narrow terminals replace it with previous/next category controls. Database alone exposes sensitive-data terms and SQL history. Standard settings do not split keyboard focus between category and detail: `[J/K]` and `[↑/↓]` select and render a category immediately, while `[H/L]` and `[←/→]` change its value without `[Enter]`. Git alone uses the two-focus model for five separate, unnumbered rows: Diffs under `GIT`, and Pull Requests, Issues, Repositories, and Browser under `GITHUB`. Moving among those rows renders their detail immediately, only the focused Git row shows a blue `[Enter]`, and `[Enter]` or `[L]` transfers keyboard focus to the detail pane. Their pickers and section editors replace that pane instead of opening another settings modal. Inside a Git detail, `[J/K]` changes its item and `[Esc]` returns to category navigation; do not advertise conventional movement or return shortcuts in the detail footer. Git Diffs changes only the selected row with `[Enter]`, with no `[P]`/`[B]` aliases. PR and Issue order remains mouse-accessible without `Alt+arrow` shortcuts. Never focus a category hidden by the current tool context. Mark only the focused Git row or Git detail with a fixed blue left rail, scroll the focused Git row into view on short terminals, and keep mouse access for every row and choice.
-- Avoid decorative boxes around every element. Prefer simple `─` and `│` separators where maximizing content space matters.
-- Animations and appearance changes must not remount inputs, reset focus, or make syntax highlighting flicker. Keep editor/renderable refs stable and update highlights in place. In particular, never key a mounted `Tabs.List` or its tab tree by palette, language, or layout: tuiparts requires each live tab value to stay unique while React reconciles the update.
-- Full-panel loading states use the shared animated ASCII plasma surface behind a readable status card and dissolve in place over roughly 220 ms when content becomes ready. Keep the normal panel mounted under the transition so content does not jump. Render the plasma as one bounded styled text document at a capped frame rate, never as one React node per cell. Incremental pagination and background refreshes stay inline and must not cover content that is already usable.
-- Keep selected/focused states obvious through accent color and background, not only through a subtle border.
-- Relevant information, success, warning, and error events from every top-level tool use the shared floating notification center. Anchor its stack at the top right and keep the compact four-row card with one left accent rail in both layout modes. Information uses the fixed brand blue, success uses green, warnings use yellow, and errors use red. Keep at most three cards and show only the newest cards when height is constrained. Notifications must not steal keyboard focus or own `[Esc]`; retain local inline feedback when it provides useful context.
-- Every notification auto-dismisses. Errors receive the longest finite duration; no severity is persistent. A thin `─` line along the bottom represents remaining time, coloring only its remaining portion with the notification accent. Horizontal entrance and exit animations preserve the mounted card until departure completes. Hovering any visible card pauses and freezes every visible countdown line; leaving the stack resumes them together. Keep the mouse-accessible `×` control for early dismissal.
-- Notification timers belong only to retained cards, not every incoming event. Reconcile timers after batched/deduplicated updates, preserve elapsed and paused time, and cancel dwell, departure, and frame timers when cards disappear or the provider unmounts. Burst regressions must cover replacement and cleanup, not only the visible three-card limit.
-- In compact layout, inactive inline controls inherit the surrounding panel instead of painting `panel` rectangles. Active Database cells and inspector fields use the palette's dark `databaseSelectionBg` with normal text; reserve the bright database accent as a solid selection background for framed layout so 256-color terminals keep states distinct.
-
-## Appearance, language, and tutorial
-
-- Settings persist in `~/.config/tuiminal/settings.json`. Color mode defaults to dark and can switch independently to light; both modes support the Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, and Tokyo Night palettes. Current layouts are framed and compact. The same file stores the user-configurable sensitive column-name terms.
-- Palette IDs from persisted settings or update patches must be own keys of the palette registry. Invalid values fall back to Prime on load or retain the current palette on update, without discarding unrelated valid preferences or rewriting the file merely by reading it.
-- Supported UI languages are Brazilian Portuguese, English, Spanish, Japanese, Simplified Chinese, and Korean.
-- All fixed user-facing text must go through `translateUi` and have an entry or pattern in `packages/core/src/i18n/index.ts`. Changing language must update the complete interface, not only navigation labels.
-- Index translation sources once, retaining each complete message tuple and selecting its language column at lookup time. Do not build a duplicate source-key map per language or rebuild the index when language changes. Preserve the existing last-definition-wins behavior, whitespace, marker handling and pattern precedence.
-- Translate nested error/warning prefixes iteratively, without a recursion-depth limit or truncating the message. Exact catalog entries keep priority; warning-specific patterns remain a fallback when the inner text is unchanged. Avoid hashing an entire long suffix when it exceeds the longest catalog key, and allocate prefix bookkeeping only for wrapped messages.
-- Unicode width and truncation must remain grapheme-aware so Asian text does not break borders or alignment.
-- Iterate graphemes lazily when taking a visible prefix; do not materialize the unused suffix of a large string. Plasma animation calculations that are constant per frame, row or column stay outside the per-cell loop; optimization must preserve the rendered characters and tones.
-- The tutorial is a settings option. Its floating card is anchored to the item being explained, resizes/repositions between steps, highlights the current target, and dims unrelated areas.
-- Keep each tour focused on the active tool; do not add global navigation or settings steps. Every tutorial target and every translation entry must have regression coverage so stale anchors are caught before release.
-- Tutorials must demonstrate stateful or visual behavior in the simulated workspace, not merely describe or outline the shortcut that triggers it. When a step explains an expanded view, alternate layout, modal, selection mode, or similar state, make the demo enter that exact state while the step is active, move the tutorial target from the trigger to the visible result, and restore the normal demo for the following step. Keep the discovered step list stable while these targets swap; mark a step as `stateful` when its target exists only after the simulated state is entered. Use deterministic simulated data only, never touch a real project or external service, and test both the rendered result and the absence of real I/O.
-- The Git tutorial covers both local modes inside `[1]`. Its Diffs phase presents the repository/branch header, changed-file tree, mini commit graph, diff, contextual actions, Git command terminal and shortcut footer, then demonstrates local configuration through `[Ctrl+P]`, file/folder stage with `[Space]`, full graph with `[G]`, detailed Log with `[O]`, diff layouts with `[V]`, partial staging with `[S]`, safe discard with `[D]`, and focus navigation. Its Compare phase must visibly enter `[C] Compare`, show the shared local project configuration, separate base and compared ref pickers with local and already-known remote refs, explain the `base...compared` direction, and render the resulting summary, grouped file tree, selected diff, `[V]` layout and tree/diff navigation before returning with `[C]` or `[Esc]`. Modal and layout steps target the visible result rather than only the trigger. Keep both phases fully simulated: do not scan a real project, run Git, fetch refs, or access GitHub, and do not mix PR, Issues or Inbox content into the tour.
-- Keep the transparent mouse hit area over the current tutorial target paintless. Giving that overlay even a nearly transparent background erases wide Asian glyphs in OpenTUI; the surrounding dim regions provide the visual treatment.
-- Draw tutorial target outlines only on sides that have a free terminal cell outside the target. Never clamp an outline onto the target itself; one-row controls such as shortcut footers must remain fully readable when they touch a terminal edge.
-- The Database tutorial uses simulated hardcoded catalog, table, row, and write-state data so every step remains demonstrable without a configured database. Do not access a real database from tutorial mode.
-- The Database demo must cover table history, sort/search, batch row selection, export, staged single/batch writes, review, the row inspector, and sliding-window navigation. Selected demo rows use the same `○`/`●` gutter language as the real grid.
+- Keep current contracts in their owning specification; update it when behavior
+  changes. Preserve commands, identifiers, fixtures and license text when translating.
+  Release prose is English; translation must retain claims and release metadata.
+- Regenerate README demos with `bun run docs:demos` after material UI/workflow
+  changes. Set isolated config/data/project paths before runtime imports, retaining
+  the settings-path assertion. SVG captures position text by display columns and
+  paint backgrounds before foregrounds.
+- Tutorials simulate only the active tool. Enter the demonstrated state, target its
+  visible result, then restore the demo; keep step discovery stable and mark
+  state-dependent targets `stateful`. Cover targets, translations and absence of I/O.
+- Tutorial hit overlays stay paintless; outlines occupy only free cells outside
+  targets. Preserve wide glyphs and edge-aligned one-row controls.

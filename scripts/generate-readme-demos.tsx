@@ -37,6 +37,12 @@ const OUTPUT_ROOT = join(ROOT, "docs", "media")
 const CAPTURE_ROOT = mkdtempSync(join(tmpdir(), "tuiminal-readme-demos-"))
 const PROJECT_ROOT = join(CAPTURE_ROOT, "workspace")
 
+const DEMO_HOME = join(CAPTURE_ROOT, "home")
+mkdirSync(join(DEMO_HOME, "Projects", "api"), { recursive: true })
+mkdirSync(join(DEMO_HOME, "Projects", "dashboard"), { recursive: true })
+process.env.HOME = DEMO_HOME
+process.env.USERPROFILE = DEMO_HOME
+
 process.env.XDG_CONFIG_HOME = join(CAPTURE_ROOT, "config")
 process.env.TUIMINAL_TERMINAL_BACKEND = "native"
 process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = "0"
@@ -45,6 +51,7 @@ process.env.TUIMINAL_TERMINAL_RESTORE = "0"
 process.env.TUIMINAL_TERMINAL_PINNED_TMUX = "0"
 process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "0"
 process.env.TUIMINAL_TERMINAL_CODEX_RESUME = "0"
+process.env.TUIMINAL_TEST_SSH_CONFIG_PATH = join(CAPTURE_ROOT, "ssh-config")
 process.env.XDG_DATA_HOME = join(CAPTURE_ROOT, "data")
 process.env.TUIMINAL_WORKDIR = PROJECT_ROOT
 process.env.TUIMINAL_HTTP_HOME = PROJECT_ROOT
@@ -200,6 +207,7 @@ async function pressKey(
   act(() => {
     if (name === "enter") tui.mockInput.pressEnter()
     else if (name === "space") tui.mockInput.pressKey(" ")
+    else if (name === "tab") tui.mockInput.pressTab()
     else if (name === "escape") tui.mockInput.pressEscape()
     else if (name === "down") tui.mockInput.pressArrow("down")
     else if (name === "up") tui.mockInput.pressArrow("up")
@@ -584,6 +592,43 @@ async function nativeTerminalFrames() {
   try {
     await settle(tui)
     const frames = [snapshot(tui, "Terminal · sessões e agentes na sidebar", undefined, 140)]
+    await prefix("a")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("terminal-dialog-project-picker")),
+    )
+    await settle(tui, () => !tui.captureCharFrame().includes("Procurando projetos Git"))
+    frames.push(
+      snapshot(
+        tui,
+        "Novo agente · recentes e projetos Git do ambiente escolhido",
+        "terminal-dialog-project-picker",
+        220,
+      ),
+    )
+    await pressKey(tui, "p")
+    await settle(
+      tui,
+      () =>
+        tui.captureCharFrame().includes("Projects/") &&
+        !tui.captureCharFrame().includes("Carregando pastas"),
+    )
+    await pressKey(tui, "tab")
+    await settle(
+      tui,
+      () =>
+        tui.captureCharFrame().includes("dashboard/") &&
+        !tui.captureCharFrame().includes("Carregando pastas"),
+    )
+    frames.push(
+      snapshot(
+        tui,
+        "[P] procurar pasta · sugestões ao digitar e [Tab] autocomplete",
+        "terminal-dialog-folder-browser",
+        220,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await pressKey(tui, "escape")
     await clickRenderable(tui, "terminal-sidebar-command")
     await typeInto(
       tui,
@@ -593,6 +638,31 @@ async function nativeTerminalFrames() {
     await pressKey(tui, "enter")
     await settle(tui, () => tui.captureCharFrame().includes("API shell ready"))
     frames.push(snapshot(tui, "Pastas organizam as seções abertas"))
+    const contextSessionId = tui.renderer.currentFocusedRenderable?.id?.replace(
+      "free-terminal-",
+      "",
+    )
+    await settle(
+      tui,
+      () =>
+        Boolean(tui.renderer.root.findDescendantById(`terminal-context-state-${contextSessionId}`)),
+      400,
+    )
+    const contextState = tui.renderer.root.findDescendantById(
+      `terminal-context-state-${contextSessionId}`,
+    )
+    if (!contextState) throw new Error("Terminal context state tag did not render")
+    await act(async () => tui.mockMouse.moveTo(contextState.screenX + 1, contextState.screenY))
+    await tui.renderOnce()
+    frames.push(
+      snapshot(
+        tui,
+        "Passe o mouse nas tags para entender pasta, branch e estado Git",
+        `terminal-context-tooltip-${contextSessionId}`,
+        180,
+      ),
+    )
+    await act(async () => tui.mockMouse.moveTo(0, TERMINAL_ROWS - 1))
     await clickRenderable(tui, "terminal-sidebar-folder-terminal")
     frames.push(
       snapshot(

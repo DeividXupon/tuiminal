@@ -1,68 +1,80 @@
-import type {
-  TerminalMasterKey,
-  TerminalRemoteCodexProfile,
-} from "@xupon/tuiminal-core/settings/theme"
-import type { FreeTerminalCommand } from "../model/sessions"
-import { createCodexAgentCommand, createRemoteCodexAgentCommand } from "../services/terminal"
-import { AgentDirectoryDialog } from "./AgentDirectoryDialog"
-import { TerminalLocationDialog } from "./TerminalLocationDialog"
+import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
+import { useCallback, useEffect, useRef, useState } from "react"
+import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
+import type { AgentProjectTarget } from "../services/agent-project-directories"
+import { projectSource } from "../services/agent-project-recents"
+import { listSshConfigProfiles } from "../services/ssh-config"
+import { AgentProjectEnvironmentDialog } from "./AgentProjectEnvironmentDialog"
+import { AgentProjectPicker } from "./AgentProjectPicker"
 
-export type AgentLaunchStep =
-  | { kind: "location"; profile: TerminalRemoteCodexProfile }
-  | { kind: "directory"; target: { kind: "local" } }
-  | {
-      kind: "directory"
-      target: { kind: "remote"; profile: TerminalRemoteCodexProfile }
-    }
+export type AgentLaunchStep = { kind: "projects" }
 
 export function AgentLaunchDialog({
-  step,
-  masterKey,
-  onStepChange,
   onLaunch,
   onClose,
+  onCancelLaunch,
+  sessions,
 }: {
-  step: AgentLaunchStep
-  masterKey: TerminalMasterKey
-  onStepChange: (step: AgentLaunchStep | null) => void
-  onLaunch: (command: FreeTerminalCommand) => void
+  onLaunch: (command: FreeTerminalCommand) => string | undefined
   onClose: () => void
+  onCancelLaunch: (id: string) => void
+  sessions: readonly TerminalSession[]
 }) {
-  const close = () => {
-    onStepChange(null)
-    onClose()
-  }
-  if (step.kind === "location")
-    return (
-      <TerminalLocationDialog
-        profile={step.profile}
-        onLocal={() => onStepChange({ kind: "directory", target: { kind: "local" } })}
-        onRemote={() =>
-          onStepChange({
-            kind: "directory",
-            target: { kind: "remote", profile: step.profile },
-          })
+  const [target, setTarget] = useState<AgentProjectTarget>({ kind: "local" })
+  const [environments, setEnvironments] = useState(false)
+  const [profiles, setProfiles] = useState<TerminalRemoteCodexProfile[]>([])
+  const [profilesLoading, setProfilesLoading] = useState(true)
+  const [error, setError] = useState("")
+  const discovery = useRef<AbortController | null>(null)
+  const loadProfiles = useCallback(() => {
+    discovery.current?.abort()
+    const controller = new AbortController()
+    discovery.current = controller
+    setError("")
+    setProfilesLoading(true)
+    void listSshConfigProfiles({ signal: controller.signal }).then(
+      (values) => {
+        if (!controller.signal.aborted) {
+          setProfiles(values)
+          setProfilesLoading(false)
         }
-        onClose={close}
-      />
+      },
+      (cause) => {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : "Nenhum alias SSH encontrado.")
+          setProfilesLoading(false)
+        }
+      },
     )
-
+  }, [])
+  useEffect(() => {
+    loadProfiles()
+    return () => discovery.current?.abort()
+  }, [loadProfiles])
   return (
-    <AgentDirectoryDialog
-      {...(step.target.kind === "remote" ? { profile: step.target.profile } : {})}
-      masterKey={masterKey}
-      onConfirm={(workingDirectory) => {
-        onStepChange(null)
-        onLaunch(
-          step.target.kind === "remote"
-            ? createRemoteCodexAgentCommand({
-                profile: step.target.profile,
-                workingDirectory,
-              })
-            : createCodexAgentCommand(undefined, workingDirectory),
-        )
-      }}
-      onClose={close}
-    />
+    <>
+      <AgentProjectPicker
+        key={projectSource(target)}
+        target={target}
+        sessions={sessions}
+        inactive={environments}
+        onEnvironment={() => setEnvironments(true)}
+        onLaunch={onLaunch}
+        onCancelLaunch={onCancelLaunch}
+        onClose={onClose}
+      />
+      {environments && (
+        <AgentProjectEnvironmentDialog
+          profiles={profiles}
+          loading={profilesLoading}
+          error={error}
+          onClose={() => setEnvironments(false)}
+          onSelect={(next) => {
+            if (projectSource(next) !== projectSource(target)) setTarget(next)
+            setEnvironments(false)
+          }}
+        />
+      )}
+    </>
   )
 }

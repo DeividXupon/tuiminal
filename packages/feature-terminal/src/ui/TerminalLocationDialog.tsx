@@ -85,7 +85,7 @@ export function TerminalLocationDialog({
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
       {row("local", "Nesta máquina", translateUi("Escolha a pasta local antes de iniciar."))}
-      {row("remote", "Servidor remoto", `${profile.name} · ${profile.user}@${profile.host}`)}
+      {row("remote", "Servidor remoto", `${profile.name} · ~/.ssh/config`)}
     </ModalSurface>
   )
 }

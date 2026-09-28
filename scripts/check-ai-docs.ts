@@ -16,16 +16,25 @@ const guideNames = [
   "validation",
 ]
 const files = [entry, ...guideNames.map((name) => resolve(guideDirectory, `${name}.md`))]
+for (const name of new Bun.Glob("**/*.md").scanSync(guideDirectory)) {
+  const file = resolve(guideDirectory, name)
+  if (!files.includes(file)) files.push(file)
+}
 const problems: string[] = []
+let totalBytes = 0
 
 for (const file of files) {
   if (!existsSync(file)) {
     problems.push(`Missing agent guide: ${file}`)
     continue
   }
-  const limit = file === entry ? 8 * 1024 : 32 * 1024
-  if (statSync(file).size > limit) {
-    problems.push(`${file}: exceeds ${limit / 1024} KiB; split or shorten the guidance`)
+  const limit = file === entry || file === resolve(guideDirectory, "index.md") ? 3 * 1024 : 8 * 1024
+  const size = statSync(file).size
+  totalBytes += size
+  if (size > limit) {
+    problems.push(
+      `${file}: exceeds ${limit / 1024} KiB; shorten or link to the owning specification`,
+    )
   }
   const markdown = readFileSync(file, "utf8")
   for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
@@ -37,6 +46,11 @@ for (const file of files) {
   }
 }
 
+if (totalBytes > 48 * 1024) {
+  problems.push("Agent guidance exceeds 48 KiB total; remove duplication before adding more notes")
+}
 for (const problem of problems) console.error(problem)
-console.log(`Agent guidance: ${files.length} files, ${problems.length} problems`)
+console.log(
+  `Agent guidance: ${files.length} files, ${totalBytes} bytes, ${problems.length} problems`,
+)
 process.exitCode = problems.length ? 1 : 0

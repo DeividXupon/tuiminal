@@ -4,7 +4,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { TerminalRemoteCodexProfile } from "../packages/core/src/settings/theme"
 import {
-  codexVersionsCompatible,
   handshakeRemoteCodex,
   RemoteCodexHandshakeError,
 } from "../packages/feature-terminal/src/services/remote-codex-handshake"
@@ -24,11 +23,8 @@ function fixtureRoot() {
 function profile(): TerminalRemoteCodexProfile {
   return {
     id: "work-server",
-    name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
+    name: "work-server",
+    host: "work-server",
   }
 }
 
@@ -67,15 +63,7 @@ function handshakeServer(result: string) {
   return { command: [process.execPath, script, requests], requests }
 }
 
-test("Codex compatibility follows stable major and pre-1 minor versions", () => {
-  expect(codexVersionsCompatible("codex-cli 0.157.1", "codex_cli_rs/0.157.9")).toBe(true)
-  expect(codexVersionsCompatible("0.157.1", "0.158.0")).toBe(false)
-  expect(codexVersionsCompatible("1.2.0", "1.9.4")).toBe(true)
-  expect(codexVersionsCompatible("1.2.0", "2.0.0")).toBe(false)
-  expect(codexVersionsCompatible("unknown", "1.2.0")).toBe(false)
-})
-
-test("remote handshake waits for initialize and reads the responding daemon version", async () => {
+test("remote handshake waits for initialize and reads the responding app-server version", async () => {
   const remote = handshakeServer(
     'result: { userAgent: "codex_cli_rs/0.157.8", codexHome: "/home/ubuntu/.codex", platformFamily: "unix", platformOs: "linux" }',
   )
@@ -100,18 +88,17 @@ test("remote handshake waits for initialize and reads the responding daemon vers
   })
 })
 
-test("remote handshake rejects protocol and Codex version incompatibilities", async () => {
-  const incompatible = handshakeServer(
+test("remote handshake accepts version skew after initialize and rejects protocol errors", async () => {
+  const skewed = handshakeServer(
     'result: { userAgent: "codex_cli_rs/0.158.0", codexHome: "/tmp", platformFamily: "unix", platformOs: "linux" }',
   )
   await expect(
     handshakeRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
-      remoteCommand: incompatible.command,
+      remoteCommand: skewed.command,
       localVersionCommand: localVersionCommand(),
       timeoutMs: 1_000,
     }),
-  ).rejects.toMatchObject({
-    code: "versionIncompatible",
+  ).resolves.toMatchObject({
     localVersion: "0.157.1",
     remoteVersion: "0.158.0",
   })
@@ -135,14 +122,14 @@ test("remote handshake rejects protocol and Codex version incompatibilities", as
   ).rejects.toMatchObject({ code: "initializeRejected" })
 })
 
-test("remote handshake maps SSH, directory, Codex and daemon startup failures", async () => {
+test("remote handshake maps SSH, directory, Codex and app-server startup failures", async () => {
   const failures = [
     { code: 255, stderr: "Host key verification failed", expected: "hostKey" },
     { code: 255, stderr: "Permission denied (publickey)", expected: "authentication" },
     { code: 255, stderr: "ssh: connect to host: Connection timed out", expected: "unreachable" },
     { code: 127, stderr: "", expected: "codexMissing" },
     { code: 72, stderr: "cd: can't cd to /srv/missing", expected: "directoryMissing" },
-    { code: 73, stderr: "daemon failed", expected: "appServerStartFailed" },
+    { code: 73, stderr: "app-server failed", expected: "appServerStartFailed" },
   ] as const
 
   for (const failure of failures) {

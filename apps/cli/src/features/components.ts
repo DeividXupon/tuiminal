@@ -50,3 +50,6 @@ export const testRemoteCodexConnection: FeatureModules["terminal"]["testRemoteCo
 ) => requireFeature("terminal").testRemoteCodexConnection(...args)
 export const checkRemoteServerReadiness: FeatureModules["terminal"]["checkRemoteServerReadiness"] =
   (...args) => requireFeature("terminal").checkRemoteServerReadiness(...args)
+export const listSshConfigProfiles: FeatureModules["terminal"]["listSshConfigProfiles"] = (
+  ...args
+) => requireFeature("terminal").listSshConfigProfiles(...args)

@@ -1,9 +1,7 @@
-import { existsSync, statSync } from "node:fs"
 import {
   terminalRemoteProfileValidationError,
   type TerminalRemoteCodexProfile,
 } from "@xupon/tuiminal-core/settings/theme"
-import { resolveRemoteIdentityFile } from "./remote-codex-connection"
 
 const RESULT_PREFIX = "TUIMINAL_REMOTE_READY"
 
@@ -17,10 +15,9 @@ export type RemoteServerBarrierCode =
   | "authentication"
   | "unreachable"
   | "codexMissing"
-  | "codexDaemonUnavailable"
+  | "codexAppServerUnavailable"
   | "codexUnauthenticated"
   | "invalidProfile"
-  | "identityMissing"
   | "timeout"
   | "cancelled"
   | "sshUnavailable"
@@ -66,7 +63,7 @@ const CODEX_CHECK = [
   "codex_command=$(command -v codex 2>/dev/null || true)",
   'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
   `if [ -z "$codex_command" ]; then printf '${RESULT_PREFIX}:codex:codexMissing\\n'; exit 0; fi`,
-  `if ! "$codex_command" app-server daemon --help >/dev/null 2>&1 || ! "$codex_command" app-server proxy --help >/dev/null 2>&1; then printf '${RESULT_PREFIX}:codex:codexDaemonUnavailable\\n'; exit 0; fi`,
+  `if ! "$codex_command" app-server --help >/dev/null 2>&1; then printf '${RESULT_PREFIX}:codex:codexAppServerUnavailable\\n'; exit 0; fi`,
   `if "$codex_command" login status >/dev/null 2>&1; then printf '${RESULT_PREFIX}:codex:ready\\n'; else printf '${RESULT_PREFIX}:codex:codexUnauthenticated\\n'; fi`,
 ].join("; ")
 
@@ -94,11 +91,7 @@ export function remoteServerBarrierCheckCommand(
     `ConnectTimeout=${timeoutSeconds}`,
     "-o",
     "ConnectionAttempts=1",
-    "-i",
-    resolveRemoteIdentityFile(profile.identityFile),
-    "-p",
-    String(profile.port),
-    `${profile.user}@${profile.host}`,
+    profile.host,
     BARRIER_COMMANDS[barrier],
   ]
 }
@@ -139,7 +132,7 @@ function parseBarrierResult(id: RemoteServerBarrierId, stdout: string) {
     "authentication",
     "unreachable",
     "codexMissing",
-    "codexDaemonUnavailable",
+    "codexAppServerUnavailable",
     "codexUnauthenticated",
     "failed",
   ]
@@ -173,13 +166,6 @@ export async function checkRemoteServerBarrier(
   options: RemoteServerReadinessOptions = {},
 ): Promise<RemoteServerBarrierResult> {
   if (terminalRemoteProfileValidationError(profile)) return result(id, "invalidProfile")
-  const identityFile = resolveRemoteIdentityFile(profile.identityFile)
-  try {
-    if (!existsSync(identityFile) || !statSync(identityFile).isFile())
-      return result(id, "identityMissing")
-  } catch {
-    return result(id, "identityMissing")
-  }
   if (signal?.aborted) return result(id, "cancelled")
 
   const timeoutMs = options.timeoutMs ?? 10_000

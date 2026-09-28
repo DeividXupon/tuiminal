@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -9,7 +9,9 @@ import {
   terminalRemoteProfileValidationError,
 } from "../packages/core/src/settings/terminal"
 import { remoteServerSetupInstructions } from "../packages/feature-terminal/src/services/remote-server-setup"
+import { listSshConfigProfiles } from "../packages/feature-terminal/src/services/ssh-config"
 import { refreshRemoteCodexResumeThreads } from "../packages/feature-terminal/src/services/codex-resume"
+import { handshakeRemoteCodex } from "../packages/feature-terminal/src/services/remote-codex-handshake"
 import {
   remoteCodexAppServerSshCommand,
   remoteCodexSshTestCommand,
@@ -40,19 +42,16 @@ function fixtureRoot() {
   return root
 }
 
-function profile(identityFile: string): TerminalRemoteCodexProfile {
+function profile(): TerminalRemoteCodexProfile {
   return {
     id: "oracle-vps",
-    name: "Oracle VPS",
-    host: "203.0.113.10",
-    user: "ubuntu",
-    port: 22,
-    identityFile,
+    name: "oracle-vps",
+    host: "oracle-vps",
   }
 }
 
-test("remote Codex profiles normalize bounded SSH configuration", () => {
-  const valid = profile("~/.ssh/oracle.key")
+test("remote Codex profiles retain only bounded OpenSSH Host aliases", () => {
+  const valid = profile()
   expect(
     normalizeTerminalRemoteCodexProfiles([
       valid,
@@ -62,16 +61,21 @@ test("remote Codex profiles normalize bounded SSH configuration", () => {
   expect(
     normalizeTerminalRemoteCodexProfiles([
       { ...valid, id: "bad-host", host: "-oProxyCommand=unsafe" },
-      { ...valid, id: "bad-port", port: 0 },
+      { ...valid, id: "pattern", host: "*.example.test" },
       { ...valid, id: "control", name: "bad\u001b" },
     ]),
   ).toEqual([])
   expect(terminalRemoteProfileValidationError(valid)).toBeNull()
-  expect(terminalRemoteProfileValidationError({ ...valid, identityFile: "" })).toBe("identityFile")
+  expect(terminalRemoteProfileValidationError({ ...valid, host: "" })).toBe("host")
+  expect(
+    normalizeTerminalRemoteCodexProfiles([
+      { ...valid, user: "ubuntu", port: 22, identityFile: "~/.ssh/id_ed25519" },
+    ]),
+  ).toEqual([])
 })
 
 test("remote Codex profiles keep exactly one valid active profile", () => {
-  const first = profile("~/.ssh/first.key")
+  const first = profile()
   const second = { ...first, id: "second-vps", name: "Second VPS" }
   const profiles = [first, second]
 
@@ -81,8 +85,37 @@ test("remote Codex profiles keep exactly one valid active profile", () => {
   expect(normalizeTerminalRemoteActiveProfileId(null, [])).toBeNull()
 })
 
+test("SSH config discovery lists explicit Host aliases from bounded Includes", async () => {
+  const root = fixtureRoot()
+  const ssh = join(root, ".ssh")
+  const includes = join(ssh, "config.d")
+  mkdirSync(includes, { recursive: true })
+  writeFileSync(
+    join(ssh, "config"),
+    [
+      "Include config.d/*.conf",
+      "Host work-vps github-* !blocked",
+      "  HostName 203.0.113.10",
+      "  IdentityFile ~/.ssh/work.key",
+      "Host *",
+      "  User default-user",
+    ].join("\n"),
+  )
+  writeFileSync(join(includes, "oracle.conf"), "Host=oracle-vps\n  User opc\n")
+
+  await expect(listSshConfigProfiles({ homeDirectory: root })).resolves.toEqual([
+    { id: "oracle-vps", name: "oracle-vps", host: "oracle-vps" },
+    { id: "work-vps", name: "work-vps", host: "work-vps" },
+  ])
+})
+
+test("SSH config discovery returns no profiles when the user config does not exist", async () => {
+  const root = fixtureRoot()
+  await expect(listSshConfigProfiles({ homeDirectory: root })).resolves.toEqual([])
+})
+
 test("SSH connection test builds an argument array without opening a remote Codex server", () => {
-  const command = remoteCodexSshTestCommand(profile("/tmp/oracle.key"), {
+  const command = remoteCodexSshTestCommand(profile(), {
     executable: "/usr/bin/ssh",
     timeoutMs: 3_200,
   })
@@ -95,11 +128,7 @@ test("SSH connection test builds an argument array without opening a remote Code
     "ConnectTimeout=4",
     "-o",
     "ConnectionAttempts=1",
-    "-i",
-    "/tmp/oracle.key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.10",
+    "oracle-vps",
     "printf TUIMINAL_SSH_OK",
   ])
   expect(command.join(" ")).not.toContain("app-server")
@@ -107,54 +136,42 @@ test("SSH connection test builds an argument array without opening a remote Code
 
 test("SSH connection test reports success and authentication failure without real network access", async () => {
   const root = fixtureRoot()
-  const identityFile = join(root, "oracle.key")
   const success = join(root, "ssh-success.js")
   const denied = join(root, "ssh-denied.js")
-  writeFileSync(identityFile, "fixture")
   writeFileSync(success, 'process.stdout.write("TUIMINAL_SSH_OK")\n')
   writeFileSync(
     denied,
     'process.stderr.write("Permission denied (publickey).\\n")\nprocess.exit(255)\n',
   )
-  chmodSync(identityFile, 0o600)
 
   await expect(
-    testRemoteCodexConnection(profile(identityFile), undefined, {
+    testRemoteCodexConnection(profile(), undefined, {
       executable: [process.execPath, success],
       timeoutMs: 1_000,
     }),
   ).resolves.toEqual({ ok: true, code: "connected" })
   await expect(
-    testRemoteCodexConnection(profile(identityFile), undefined, {
+    testRemoteCodexConnection(profile(), undefined, {
       executable: [process.execPath, denied],
       timeoutMs: 1_000,
     }),
   ).resolves.toMatchObject({ ok: false, code: "authentication" })
 })
 
-test("SSH connection test rejects a missing identity before spawning", async () => {
-  await expect(testRemoteCodexConnection(profile("/missing/oracle.key"))).resolves.toEqual({
-    ok: false,
-    code: "identityMissing",
-  })
-})
-
 test("SSH connection test owns its timeout and cancellation lifecycle", async () => {
   const root = fixtureRoot()
-  const identityFile = join(root, "oracle.key")
   const hanging = join(root, "ssh-hanging.js")
-  writeFileSync(identityFile, "fixture")
   writeFileSync(hanging, "setInterval(() => {}, 1_000)\n")
 
   await expect(
-    testRemoteCodexConnection(profile(identityFile), undefined, {
+    testRemoteCodexConnection(profile(), undefined, {
       executable: [process.execPath, hanging],
       timeoutMs: 25,
     }),
   ).resolves.toEqual({ ok: false, code: "timeout" })
 
   const controller = new AbortController()
-  const result = testRemoteCodexConnection(profile(identityFile), controller.signal, {
+  const result = testRemoteCodexConnection(profile(), controller.signal, {
     executable: [process.execPath, hanging],
     timeoutMs: 1_000,
   })
@@ -163,7 +180,7 @@ test("SSH connection test owns its timeout and cancellation lifecycle", async ()
 })
 
 test("remote readiness checks use fixed scripts without interpolating profile data", () => {
-  const target = profile("/tmp/oracle key")
+  const target = profile()
   const github = remoteServerBarrierCheckCommand(target, "githubSsh", {
     executable: "/usr/bin/ssh",
     timeoutMs: 3_200,
@@ -182,23 +199,16 @@ test("remote readiness checks use fixed scripts without interpolating profile da
     "ConnectTimeout=4",
     "-o",
     "ConnectionAttempts=1",
-    "-i",
-    "/tmp/oracle key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.10",
+    "oracle-vps",
   ])
   expect(github.at(-1)).toContain("ssh -T")
   expect(codex.at(-1)).toContain("codex_command")
   expect(github.at(-1)).not.toContain(target.host)
-  expect(codex.at(-1)).not.toContain(target.identityFile)
 })
 
 test("remote readiness reports GitHub and Codex barriers without real network access", async () => {
   const root = fixtureRoot()
-  const identityFile = join(root, "oracle.key")
   const ready = join(root, "ssh-ready.js")
-  writeFileSync(identityFile, "fixture")
   writeFileSync(
     ready,
     [
@@ -207,10 +217,9 @@ test("remote readiness reports GitHub and Codex barriers without real network ac
       "process.stdout.write('TUIMINAL_REMOTE_READY:' + barrier + ':ready\\n')",
     ].join("\n"),
   )
-  chmodSync(identityFile, 0o600)
 
   await expect(
-    checkRemoteServerReadiness(profile(identityFile), undefined, {
+    checkRemoteServerReadiness(profile(), undefined, {
       executable: [process.execPath, ready],
       timeoutMs: 1_000,
     }),
@@ -222,11 +231,9 @@ test("remote readiness reports GitHub and Codex barriers without real network ac
 
 test("remote readiness shell probes recognize GitHub and Codex success markers", async () => {
   const root = fixtureRoot()
-  const identityFile = join(root, "oracle.key")
   const git = join(root, "git")
   const ssh = join(root, "ssh")
   const codex = join(root, "codex")
-  writeFileSync(identityFile, "fixture")
   writeFileSync(git, "#!/bin/sh\nexit 0\n")
   writeFileSync(
     ssh,
@@ -237,7 +244,7 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
     [
       "#!/bin/sh",
       'case "$*" in',
-      '  "login status"|"app-server daemon --help"|"app-server proxy --help") exit 0 ;;',
+      '  "login status"|"app-server --help") exit 0 ;;',
       "  *) exit 1 ;;",
       "esac",
     ].join("\n"),
@@ -247,7 +254,7 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
   chmodSync(codex, 0o700)
 
   for (const id of ["githubSsh", "codex"] as const) {
-    const script = remoteServerBarrierCheckCommand(profile(identityFile), id).at(-1)
+    const script = remoteServerBarrierCheckCommand(profile(), id).at(-1)
     if (!script) throw new Error("Missing remote readiness script")
     const child = Bun.spawn(["/bin/sh", "-c", script], {
       env: { HOME: root, PATH: root, LC_ALL: "C" },
@@ -260,7 +267,7 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
   }
 
   writeFileSync(codex, '#!/bin/sh\n[ "$1 $2" = "login status" ]\n')
-  const outdatedScript = remoteServerBarrierCheckCommand(profile(identityFile), "codex").at(-1)
+  const outdatedScript = remoteServerBarrierCheckCommand(profile(), "codex").at(-1)
   if (!outdatedScript) throw new Error("Missing remote Codex readiness script")
   const outdated = Bun.spawn(["/bin/sh", "-c", outdatedScript], {
     env: { HOME: root, PATH: root, LC_ALL: "C" },
@@ -272,18 +279,16 @@ test("remote readiness shell probes recognize GitHub and Codex success markers",
     new Response(outdated.stdout).text(),
   ])
   expect(outdatedExit).toBe(0)
-  expect(outdatedOutput).toContain("TUIMINAL_REMOTE_READY:codex:codexDaemonUnavailable")
+  expect(outdatedOutput).toContain("TUIMINAL_REMOTE_READY:codex:codexAppServerUnavailable")
 })
 
 test("remote readiness keeps the current barrier when verification fails", async () => {
   const root = fixtureRoot()
-  const identityFile = join(root, "oracle.key")
   const missing = join(root, "ssh-missing.js")
-  writeFileSync(identityFile, "fixture")
   writeFileSync(missing, 'process.stdout.write("TUIMINAL_REMOTE_READY:codex:codexMissing\\n")\n')
 
   await expect(
-    checkRemoteServerBarrier(profile(identityFile), "codex", undefined, {
+    checkRemoteServerBarrier(profile(), "codex", undefined, {
       executable: [process.execPath, missing],
       timeoutMs: 1_000,
     }),
@@ -319,12 +324,12 @@ test("Codex setup activates the standalone install in the current SSH session be
   expect(
     remoteServerSetupInstructions("codex", {
       ...report,
-      codex: { id: "codex", ready: false, code: "codexDaemonUnavailable" },
+      codex: { id: "codex", ready: false, code: "codexAppServerUnavailable" },
     }),
   ).toEqual([
     "1. Atualize: curl -fsSL https://chatgpt.com/codex/install.sh | sh",
     '2. Ative nesta sessão: export PATH="$HOME/.local/bin:$PATH"',
-    "3. Verifique: codex app-server daemon --help && codex app-server proxy --help",
+    "3. Verifique: codex app-server --help",
   ])
 })
 
@@ -349,7 +354,7 @@ test("remote setup advances only after the current barrier is ready", () => {
 })
 
 test("remote server setup opens an interactive SSH shell without embedding a setup command", () => {
-  const target = profile("/tmp/oracle key")
+  const target = profile()
   const command = createRemoteServerSetupCommand(target)
 
   expect(command.command).toEqual([
@@ -359,18 +364,14 @@ test("remote server setup opens an interactive SSH shell without embedding a set
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
-    "-i",
-    "/tmp/oracle key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.10",
+    "oracle-vps",
   ])
-  expect(command.displayCommand).toBe("ubuntu@203.0.113.10:22")
+  expect(command.displayCommand).toBe("ssh oracle-vps")
   expect(command.remoteSetup).toEqual({ profile: target })
 })
 
-test("remote Codex uses a persistent daemon through an SSH stdio proxy", () => {
-  const target = profile("/tmp/oracle key")
+test("remote Codex uses an owned app-server through SSH stdio", () => {
+  const target = profile()
   const ssh = remoteCodexAppServerSshCommand(target, "/srv/project with 'quote'")
 
   expect(ssh.slice(0, -1)).toEqual([
@@ -382,16 +383,12 @@ test("remote Codex uses a persistent daemon through an SSH stdio proxy", () => {
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
-    "-i",
-    "/tmp/oracle key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.10",
+    "oracle-vps",
   ])
   expect(ssh.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
-  expect(ssh.at(-1)).toContain('"$codex_command" app-server daemon start >/dev/null')
-  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server proxy')
-  expect(ssh.at(-1)).not.toContain("--listen stdio://")
+  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server --stdio')
+  expect(ssh.at(-1)).not.toContain("app-server daemon")
+  expect(ssh.at(-1)).not.toContain("app-server proxy")
   expect(remoteInteractiveSshCommand(target)[1]).toBe("-tt")
 
   expect(remoteCodexTuiCommand("ws://127.0.0.1:4500", "/srv/project")).toEqual([
@@ -414,7 +411,7 @@ test("remote Codex uses a persistent daemon through an SSH stdio proxy", () => {
   expect(
     createRemoteCodexAgentCommand({ profile: target, workingDirectory: "/srv/project" }),
   ).toMatchObject({
-    label: "Codex · Oracle VPS",
+    label: "Codex · oracle-vps",
     workingDirectory: "/srv/project",
     codex: {
       appServer: true,
@@ -425,45 +422,51 @@ test("remote Codex uses a persistent daemon through an SSH stdio proxy", () => {
   expect(() => remoteCodexTuiCommand("ws://127.0.0.1:4500", "relative/project")).toThrow()
 })
 
-test("closing the remote stdio proxy does not stop its persistent daemon", async () => {
+test("generated remote stdio command completes the app-server handshake", async () => {
   const root = fixtureRoot()
   const codex = join(root, "codex")
   const calls = join(root, "calls")
-  const daemon = join(root, "daemon-running")
+  const appServer = join(root, "app-server.js")
+  writeFileSync(
+    appServer,
+    [
+      'let buffered = ""',
+      'process.stdin.setEncoding("utf8")',
+      'process.stdin.on("data", (chunk) => {',
+      "  buffered += chunk",
+      '  let newline = buffered.indexOf("\\n")',
+      "  while (newline >= 0) {",
+      "    const request = JSON.parse(buffered.slice(0, newline))",
+      "    buffered = buffered.slice(newline + 1)",
+      '    if (request.method === "initialize")',
+      '      process.stdout.write(JSON.stringify({ id: request.id, result: { userAgent: "codex_cli_rs/0.158.0" } }) + "\\n")',
+      '    newline = buffered.indexOf("\\n")',
+      "  }",
+      "})",
+    ].join("\n"),
+  )
   writeFileSync(
     codex,
     [
       "#!/bin/sh",
       'printf "%s\\n" "$*" >> "$TUIMINAL_TEST_CALLS"',
       'case "$*" in',
-      '  "app-server daemon start") : > "$TUIMINAL_TEST_DAEMON" ;;',
-      '  "app-server proxy") while IFS= read -r line; do printf "%s\\n" "$line"; done ;;',
+      '  "app-server --stdio") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_APP_SERVER" ;;',
       "  *) exit 1 ;;",
       "esac",
     ].join("\n"),
   )
   chmodSync(codex, 0o700)
-  const command = remoteCodexAppServerSshCommand(profile("/tmp/oracle.key"), root).at(-1)
-  if (!command) throw new Error("Missing persistent remote command")
-  const child = Bun.spawn(["/bin/sh", "-c", command], {
-    env: {
-      HOME: root,
-      PATH: root,
-      TUIMINAL_TEST_CALLS: calls,
-      TUIMINAL_TEST_DAEMON: daemon,
-    },
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
+  const command = remoteCodexAppServerSshCommand(profile(), root).at(-1)
+  if (!command) throw new Error("Missing remote app-server command")
+  const environment = `HOME='${root}'; PATH='${root}'; TUIMINAL_TEST_CALLS='${calls}'; TUIMINAL_TEST_RUNTIME='${process.execPath}'; TUIMINAL_TEST_APP_SERVER='${appServer}'; export HOME PATH TUIMINAL_TEST_CALLS TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER;`
+  const result = await handshakeRemoteCodex(profile(), root, new AbortController().signal, {
+    remoteCommand: ["/bin/sh", "-c", `${environment} ${command}`],
+    localVersionCommand: [process.execPath, "-e", 'process.stdout.write("codex-cli 0.158.0\\n")'],
+    timeoutMs: 1_000,
   })
-  child.stdin.write('{"id":"fixture"}\n')
-  child.stdin.end()
-  const [exitCode, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()])
-
-  expect(exitCode).toBe(0)
-  expect(stdout).toBe('{"id":"fixture"}\n')
-  expect(existsSync(daemon)).toBe(true)
-  expect(readFileSync(calls, "utf8")).toBe("app-server daemon start\napp-server proxy\n")
+  expect(result).toMatchObject({ remoteVersion: "0.158.0" })
+  expect(readFileSync(calls, "utf8")).toBe("app-server --stdio\n")
 })
 
 test("remote Codex refresh lists and hydrates agents through SSH stdio", async () => {
@@ -492,11 +495,9 @@ test("remote Codex refresh lists and hydrates agents through SSH stdio", async (
     ].join("\n"),
   )
   const controller = new AbortController()
-  const threads = await refreshRemoteCodexResumeThreads(
-    profile("/tmp/oracle.key"),
-    controller.signal,
-    { executable: [process.execPath, appServer] },
-  )
+  const threads = await refreshRemoteCodexResumeThreads(profile(), controller.signal, {
+    executable: [process.execPath, appServer],
+  })
 
   expect(threads).toEqual([
     {
@@ -510,7 +511,7 @@ test("remote Codex refresh lists and hydrates agents through SSH stdio", async (
       updatedAt: 10,
       state: "idle",
       remoteProfileId: "oracle-vps",
-      remoteProfileName: "Oracle VPS",
+      remoteProfileName: "oracle-vps",
     },
   ])
 })

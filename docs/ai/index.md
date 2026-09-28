@@ -1,27 +1,34 @@
 # Agent guidance map
 
-`AGENTS.md` at the repository root is the entry point. This directory holds the
-durable, task-specific engineering constraints that previously lived in one large
-instruction file. Read the relevant document before changing that area; do not load
-the entire directory for an unrelated task. Product specifications and current code
-remain the source of truth when a note has drifted.
+Select the row for the task. Notes contain implementation constraints and entry
+points; follow specification links only for the behavior being changed. This is
+a routing map, not a required reading sequence.
 
-| Work area | Agent notes | Maintained specification or context |
-| --- | --- | --- |
-| Cross-tool UX, shortcuts, appearance, i18n, documentation | [Conventions](./conventions.md) | [Architecture](../architecture.md), [Shared controls](../design/ui-controls.md) |
-| Official payload installation and release boundary | [Feature installation](./feature-installation.md) | [Official feature installation](../design/official-feature-installation.md) |
-| Git Diffs, PR, Issues, Inbox | [Git](./git.md) | [PR](../design/git-pr-interface.md), [Issues](../design/git-issues-interface.md), [Inbox](../design/git-inbox-interface.md) |
-| Runner and process ownership | [Runner](./runner.md) | [Runner](../design/runner.md), [Architecture](../architecture.md) |
-| HTTP client, Postman account access, and headless execution | [HTTP](./http.md) | [Postman account](../design/postman-account.md); [HTTP_CLIENT_PLAN.md](../../HTTP_CLIENT_PLAN.md) for future-facing work |
-| Free Terminal, PTY, and remote connection profiles | [Terminal](./terminal.md), [Remote profiles](./terminal-remote.md) | [Terminal workspace](../design/terminal.md), [Agent activity](../design/terminal-agents.md), [Architecture](../architecture.md) |
-| Database and SQL | [Database](./database.md) | [Architecture](../architecture.md); [future priorities](../plans/database-next.md) |
-| Tests, packaging, CI, releases | [Validation](./validation.md) | [Release process](../release-process.md) |
+| Task | Read |
+| --- | --- |
+| Shared UI, focus, shortcuts, i18n, tutorials or documentation | [Conventions](conventions.md) |
+| Package boundaries, exports or initialization | [Architecture](../architecture.md), [workspaces](../design/internal-workspaces.md) |
+| Official payload build, install, load or uninstall | [Feature installation](feature-installation.md) |
+| Local Git, PR, Issues or Inbox | [Git](git.md) |
+| Command discovery, execution, YAML or process ownership | [Runner](runner.md) |
+| Interactive/headless HTTP or Postman | [HTTP](http.md) |
+| PTY, tmux, sidebar, agent observation or Live Diff | [Terminal](terminal.md) |
+| SSH aliases, readiness or remote Codex transport | [Remote Terminal](terminal-remote.md) |
+| Connections, SQL, grids or staged writes | [Database](database.md) |
+| Tests, static gates, CI, packaging or releases | [Validation](validation.md) |
 
-Keep this map and the root `AGENTS.md` short. Add a new durable rule to the narrowest
-relevant note or maintained specification, and update links when a document moves.
-Do not duplicate a rule in multiple agent notes. If a change is user-facing, update
-both language versions of the README in the same change.
+## Maintaining guidance
 
-The [shared control contract](../design/ui-controls.md) and
-[architecture](../architecture.md) record the completed code-consistency audit
-and its intentional ownership boundaries.
+- Root `AGENTS.md`: repository-wide rules. These notes: area-specific pitfalls.
+  `docs/design/`: current contracts. `docs/adr/`: decisions and rationale.
+- Write short, actionable rules with a concrete scope. Link to the owning code,
+  test or specification instead of copying behavior catalogs or procedures.
+- Add a rule only when it prevents a recurring mistake not already covered.
+  Replace obsolete guidance; omit progress logs, incident narratives and secrets.
+- Keep future work in plans: [HTTP](../../HTTP_CLIENT_PLAN.md),
+  [Database](../plans/database-next.md), [alpha readiness](../../ALPHA_READINESS_PLAN.md).
+  They do not override implemented behavior.
+- Run `bun run check:ai-docs` after guidance edits. Repository budgets are 3 KiB
+  for the root/map, 8 KiB per note and 48 KiB total; these are ceilings, not targets.
+
+Rationale and external references: [ADR 0002](../adr/0002-agent-guidance-map.md).

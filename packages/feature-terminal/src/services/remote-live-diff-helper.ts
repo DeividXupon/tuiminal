@@ -40,6 +40,35 @@ while IFS='|' read -r request_id operation field_a field_b field_c field_d; do
   output_limit=4194304
 
   case "$operation" in
+    context)
+      git --no-optional-locks -c core.fsmonitor=false -C "$initial_directory" \
+        rev-parse --show-toplevel > "$scratch_file" 2> "$error_file"
+      status=$?
+      if [ "$status" -eq 0 ]; then
+        root=$(sed -n '1p' "$scratch_file")
+        if valid_root "$root" && cd "$root" 2> "$error_file"; then
+          root=$(pwd -P)
+          branch=$(git --no-optional-locks -c core.fsmonitor=false -C "$root" \
+            symbolic-ref --short -q HEAD 2>/dev/null || true)
+          if [ -z "$branch" ]; then
+            hash=$(git --no-optional-locks -c core.fsmonitor=false -C "$root" \
+              rev-parse --short HEAD 2>/dev/null || true)
+            branch=HEAD
+            if [ -n "$hash" ]; then branch=HEAD@$hash; fi
+          fi
+          git --no-optional-locks -c core.fsmonitor=false -C "$root" \
+            status --porcelain=v1 -z --untracked-files=normal > "$paths_file" 2> "$error_file"
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            repository_state=clean
+            if [ -s "$paths_file" ]; then repository_state=dirty; fi
+            printf '%s\000%s\000%s' "$root" "$branch" "$repository_state" > "$output_file"
+          fi
+        else
+          status=64
+        fi
+      fi
+      ;;
     root)
       git --no-optional-locks -c core.fsmonitor=false -C "$initial_directory" \
         rev-parse --show-toplevel > "$scratch_file" 2> "$error_file"

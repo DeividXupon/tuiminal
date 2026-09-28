@@ -1,6 +1,5 @@
-import { type KeyEvent, RGBA } from "@opentui/core"
-import { COLORS, type TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
-import { blendTextColor } from "@xupon/tuiminal-core/ui/text-shimmer"
+import type { KeyEvent } from "@opentui/core"
+import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import type {
   RemoteCodexConnectionTestResult,
   RemoteServerBarrierCode,
@@ -11,30 +10,13 @@ export function contextualRemoteSettingsOwnKey(
   focusedId: string | null | undefined,
   keyName: string,
 ) {
-  if (/^configuration-terminal-remote-(?:name|user|host|port|identityFile)$/.test(focusedId ?? ""))
-    return true
   return (
     (focusedId?.startsWith("configuration-terminal-remote-") ?? false) &&
-    [
-      "escape",
-      "a",
-      "c",
-      "n",
-      "s",
-      "t",
-      "v",
-      "enter",
-      "return",
-      "up",
-      "down",
-      "j",
-      "k",
-      "tab",
-    ].includes(keyName)
+    ["escape", "a", "c", "r", "t", "v", "enter", "return", "up", "down", "j", "k", "tab"].includes(
+      keyName,
+    )
   )
 }
-
-export type RemoteProfileDraft = Omit<TerminalRemoteCodexProfile, "port"> & { port: string }
 
 export type TerminalRemoteSettingsDetailProps = {
   profiles: TerminalRemoteCodexProfile[]
@@ -43,8 +25,8 @@ export type TerminalRemoteSettingsDetailProps = {
   compact: boolean
   contentWidth: number
   onBack: () => void
-  onActiveProfileChange: (profileId: string) => void
-  onChange: (profiles: TerminalRemoteCodexProfile[]) => void
+  onListProfiles: (signal?: AbortSignal) => Promise<TerminalRemoteCodexProfile[]>
+  onActivateProfile: (profile: TerminalRemoteCodexProfile) => void
   onTest: (
     profile: TerminalRemoteCodexProfile,
     signal?: AbortSignal,
@@ -56,106 +38,49 @@ export type TerminalRemoteSettingsDetailProps = {
   onConfigureServer: (profile: TerminalRemoteCodexProfile) => void
 }
 
-export function remoteFieldHighlight() {
-  return blendTextColor(RGBA.fromHex(COLORS.panel), RGBA.fromHex(COLORS.terminal), 0.22)
-}
-
-export const FIELD_IDS = ["name", "user", "host", "port", "identityFile"] as const
-export type FieldId = (typeof FIELD_IDS)[number]
-
-type RemoteFormKeyAction =
+export type RemoteProfileKeyAction =
   | "activate"
-  | "blur"
   | "close"
-  | "edit"
   | "previous"
   | "next"
-  | "new"
-  | "save"
+  | "reload"
   | "test"
   | "verify"
   | "configure"
 
-const REMOTE_FORM_KEY_ACTIONS: Record<string, RemoteFormKeyAction | undefined> = {
+const REMOTE_PROFILE_KEY_ACTIONS: Record<string, RemoteProfileKeyAction | undefined> = {
   a: "activate",
   escape: "close",
-  enter: "edit",
-  return: "edit",
+  enter: "activate",
+  return: "activate",
   up: "previous",
   k: "previous",
   down: "next",
   j: "next",
   tab: "next",
-  n: "new",
-  s: "save",
+  r: "reload",
   t: "test",
   v: "verify",
   c: "configure",
 }
 
-const MODIFIER_FREE_ACTIONS = new Set<RemoteFormKeyAction>([
-  "activate",
-  "new",
-  "save",
-  "test",
-  "verify",
-  "configure",
-])
-
-export function remoteFormKeyAction(key: KeyEvent, inputFocused: boolean, busy: boolean) {
-  if (inputFocused) return key.name === "escape" ? "blur" : undefined
-  const action = REMOTE_FORM_KEY_ACTIONS[key.name]
+export function remoteProfileKeyAction(key: KeyEvent, busy: boolean) {
+  const action = REMOTE_PROFILE_KEY_ACTIONS[key.name]
   if (!action) return undefined
   if (key.name === "tab" && key.shift) return "previous"
-  if (MODIFIER_FREE_ACTIONS.has(action) && (key.ctrl || key.meta)) return undefined
-  if (busy && ["test", "verify", "configure"].includes(action)) return undefined
+  if (
+    ["activate", "reload", "test", "verify", "configure"].includes(action) &&
+    (key.ctrl || key.meta)
+  )
+    return undefined
+  if (busy && ["reload", "test", "verify", "configure"].includes(action)) return undefined
   return action
-}
-
-export function runRemoteFormKeyAction(
-  action: RemoteFormKeyAction,
-  handlers: Record<RemoteFormKeyAction, () => void>,
-) {
-  handlers[action]()
-}
-
-export const FIELD_LABELS: Record<FieldId, string> = {
-  name: "Nome do perfil",
-  user: "Usuário SSH",
-  host: "Host ou IP",
-  port: "Porta SSH",
-  identityFile: "Chave privada",
-}
-
-export const FIELD_PLACEHOLDERS: Record<FieldId, string> = {
-  name: "Oracle VPS",
-  user: "ubuntu",
-  host: "203.0.113.10",
-  port: "22",
-  identityFile: "~/.ssh/id_ed25519",
-}
-
-export function createDraft(profile?: TerminalRemoteCodexProfile): RemoteProfileDraft {
-  if (profile) return { ...profile, port: String(profile.port) }
-  return {
-    id: `remote-${crypto.randomUUID()}`,
-    name: "",
-    host: "",
-    user: "ubuntu",
-    port: "22",
-    identityFile: "",
-  }
-}
-
-export function profileFromDraft(draft: RemoteProfileDraft): TerminalRemoteCodexProfile {
-  return { ...draft, port: Number(draft.port) }
 }
 
 export function resultMessage(result: RemoteCodexConnectionTestResult) {
   const messages: Record<RemoteCodexConnectionTestResult["code"], string> = {
     connected: "Conexão SSH confirmada.",
-    invalidProfile: "Preencha todos os campos com valores válidos.",
-    identityMissing: "A chave privada não foi encontrada.",
+    invalidProfile: "O alias SSH selecionado é inválido.",
     hostKey: "A identidade do servidor ainda não foi confirmada no known_hosts.",
     authentication: "A autenticação SSH foi recusada.",
     unreachable: "Não foi possível alcançar o servidor SSH.",
@@ -176,10 +101,9 @@ export function readinessCodeMessage(code: RemoteServerBarrierCode) {
     authentication: "O GitHub não aceitou a chave SSH do servidor.",
     unreachable: "O servidor não conseguiu alcançar o GitHub.",
     codexMissing: "O Codex CLI não está instalado.",
-    codexDaemonUnavailable: "Esta versão do Codex não oferece o daemon persistente.",
+    codexAppServerUnavailable: "Esta versão do Codex não oferece o app-server.",
     codexUnauthenticated: "A conta do Codex ainda não está conectada.",
-    invalidProfile: "O perfil remoto é inválido.",
-    identityMissing: "A chave privada não foi encontrada.",
+    invalidProfile: "O alias SSH selecionado é inválido.",
     timeout: "A verificação excedeu o tempo limite.",
     cancelled: "Verificação cancelada.",
     sshUnavailable: "O cliente SSH local não está disponível.",

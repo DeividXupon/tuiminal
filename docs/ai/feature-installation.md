@@ -1,12 +1,38 @@
 # Official feature installation
 
-## Official feature installation
+Use for payload building, verification, loading and removal.
+Contract: [official installation](../design/official-feature-installation.md).
+Entry points: [CLI feature host](../../apps/cli/src/features/),
+[packaging](../design/internal-workspaces.md#packaging).
 
-- Installed feature rows expose mouse-accessible `[D] Uninstall` beside Open. Confirm the exact tool with `[Y]`; `[Esc]` cancels only that dialog, which must synchronously guard global shortcuts even before native focus settles. Unmount the tool and await its owned resource shutdown before deleting only its current version/hash payload. Keep projects, settings, sibling tools and other cached versions; failed retirement/removal must not automatically remount a closed workspace. Serialize removal with installs/opens, allow explicit reinstall, and keep the installer visible when the last or isolated tool is removed.
-- The installer shows detailed localized descriptions and one recognizable animated icon for the hovered or keyboard-selected feature: a database cylinder that fills with data, Git branch, execution/play icon that progresses to completion, HTTP client/server request and response, and terminal window. Animation motion must communicate the tool’s function; avoid unrelated orbiting dots or replacing HTTP with a generic globe. Keep geometry grapheme-width-safe, including non-emoji arrows and data marks. Keep illustrations independent of feature runtime and all real I/O, with a single bounded clock that pauses behind settings and is cleared on unmount. Hover changes selection without scrolling a row away from a pending click; reveal keyboard selection after React commits and native layout completes. Wide terminals show the icon beside the list without a preview heading, while narrow/short terminals retain descriptions and use a two-row icon. Do not remount list rows or animation renderables on animation ticks. The downloading row has a subdued background fill proportional to actual received/total bytes; unknown progress, cancellation, errors, and completion must not retain a fabricated or stale fill.
-- `docs/design/official-feature-installation.md` owns the installation contract. Empty installations open its screen; settings always offers feature management. Keep installed-only tabs with fixed Alt numbering and retain mounted tool state while the installer owns input. Isolated startup must not initialize another tool when the requested one is missing; other tools can be installed there, but only the requested tool can be opened in isolated mode.
-- `bun run dev`/`start` build local payloads and exercise the installer in a separate `dev-features` data directory. Rebuild/reinstall snapshots after feature edits. `TUIMINAL_SOURCE_FEATURES=1` is only an explicit repository-test shortcut: the release build stubs that loader and rejects feature source imports in the minimal binary graph.
-- Trust only the catalog embedded at build time. Check compressed and per-file hashes, exact versions, sizes and flat allowed filenames; publish complete directories atomically, reverify bytes at load, and import those bytes through Bun Blob URLs. Never run npm or install scripts in the user's project. Mirrors cannot override hashes. Download cancellation belongs to its controller; no replay or implicit download on feature activation.
-- Official payloads bind to the host’s exact React/OpenTUI/Tuiparts/core module instances through a private contract. Shared values keep stable references; expose changing state through functions or mutate stable objects instead of reassigning exported bindings. No duplicate UI runtime, public extension API, live code replacement, or feature-to-feature import is allowed. Publish the five canonical assets on the matching GitHub release before exposing the npm launcher version. Publish a prepared directory before considering repair of an existing payload; a competing installer may have just completed it, so an earlier missing/invalid read cannot justify moving a valid winner aside.
-- Every shared module imported by a payload must be registered in `apps/cli/src/features/host-modules.ts`, including new core UI controls. Keep `tests/tui/feature-payloads.test.tsx` on the real build, verification, import and host path: source-loader tests alone cannot detect missing bindings. Unexpected loading errors must not prescribe `build:features`, which cannot repair a missing host binding.
-- Keep hidden feature helpers in the artifact's fixed filename allowlist. Terminal's tmux sidebar uses `terminal-sidebar.mjs` through the version-matched internal CLI entrypoint and the private feature host; it is never resolved from or installed into the opened project.
+- Trust only the embedded catalog: exact version, sizes, compressed/per-file
+  hashes and flat filename allowlist. Publish complete directories atomically,
+  reverify at load and import verified bytes through Bun Blob URLs.
+- Never run npm/install scripts in the opened project. Mirrors cannot override
+  hashes; activation cannot download implicitly. Cancellation belongs to its
+  controller and does not replay work.
+- A competing installer may already have published a valid payload. Publish the
+  prepared directory before considering repair; a stale invalid read does not
+  authorize replacing a valid winner.
+- Payloads bind to the host's exact React/OpenTUI/Tuiparts/core instances. Register
+  shared imports in `apps/cli/src/features/host-modules.ts`. Keep exported values'
+  references stable; expose changing state through functions or stable objects.
+- Hidden helpers use fixed allowlisted payload names and internal host entrypoints,
+  never project-local executables. No duplicate runtime or live code replacement.
+- Uninstall confirms the exact tool, retires its resources, then deletes only its
+  current version/hash payload. Serialize with install/open; retain settings,
+  projects and other versions. Failed retirement/removal does not remount the tool.
+- Keep installed-only tabs and fixed Alt numbering. Isolated mode may install
+  other tools but open only its requested tool. Retain mounted state behind the
+  installer while suspending underlying keyboard input.
+- Installer illustrations use no feature runtime or real I/O. One bounded clock
+  pauses behind settings; animation cannot remount rows. Progress reflects actual
+  received/total bytes and clears on cancel/error/completion.
+
+`bun run dev`/`start` builds local payloads in separate `dev-features` storage;
+rebuild/reinstall snapshots after feature edits. `TUIMINAL_SOURCE_FEATURES=1` is
+an explicit test shortcut, stubbed out of releases.
+
+Verify with [real payload TUI tests](../../tests/tui/feature-payloads.test.tsx);
+source-loader tests cannot prove host bindings. Release checks and publication
+order belong to [validation](validation.md#packaging-and-release).

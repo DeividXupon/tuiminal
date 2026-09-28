@@ -22,11 +22,11 @@ export function remoteServerSetupInstructions(
     "5. Confirme o login: codex login status",
   ]
   if (report?.codex.code === "codexUnauthenticated") return prepareCurrentSession
-  if (report?.codex.code === "codexDaemonUnavailable")
+  if (report?.codex.code === "codexAppServerUnavailable")
     return [
       "1. Atualize: curl -fsSL https://chatgpt.com/codex/install.sh | sh",
       `2. Ative nesta sessão: ${activateCodexPath}`,
-      "3. Verifique: codex app-server daemon --help && codex app-server proxy --help",
+      "3. Verifique: codex app-server --help",
     ]
 
   return [

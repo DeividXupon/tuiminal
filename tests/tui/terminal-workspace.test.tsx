@@ -35,12 +35,17 @@ import {
   terminalSidebarReplica,
   terminalSidebarSnapshot,
 } from "../../packages/feature-terminal/src/model/pinned-sidebar"
+import * as gitProjects from "../../packages/feature-terminal/src/services/agent-git-projects"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
+import * as projectDirectories from "../../packages/feature-terminal/src/services/agent-project-directories"
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
 import * as remoteLiveDiff from "../../packages/feature-terminal/src/services/remote-live-diff"
+import * as remoteReadiness from "../../packages/feature-terminal/src/services/remote-server-readiness"
+import * as remoteTerminalContext from "../../packages/feature-terminal/src/services/remote-terminal-context"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
+import * as repositoryContext from "../../packages/feature-terminal/src/services/terminal-repository-context"
 import {
   loadTerminalWorkspaceState,
   saveTerminalWorkspaceState,
@@ -69,6 +74,9 @@ let remoteCodexResumeSpy:
   | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
+let repositoryContextSpy:
+  | ReturnType<typeof spyOn<typeof repositoryContext, "readTerminalRepositoryContext">>
+  | undefined
 const liveDiffSpies: Array<{ mockRestore: () => void }> = []
 const inputs: string[][] = []
 const starts: Parameters<typeof processes.startFreeTerminalProcess>[1][] = []
@@ -84,6 +92,7 @@ afterEach(() => {
   remoteCodexResumeSpy?.mockRestore()
   codexEvents = undefined
   inspectionSpy?.mockRestore()
+  repositoryContextSpy = undefined
   for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
   inputs.length = 0
   starts.length = 0
@@ -154,6 +163,37 @@ async function mount(
       return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
     },
   )
+  liveDiffSpies.push(
+    spyOn(gitProjects, "discoverAgentGitProjects").mockResolvedValue({
+      paths: [],
+      truncated: false,
+    }),
+  )
+  liveDiffSpies.push(
+    spyOn(projectDirectories, "readProjectDirectory").mockImplementation(
+      async (target, path, base) => ({
+        path:
+          target.kind === "remote" && path.startsWith("~")
+            ? "/srv/project"
+            : path.startsWith("/")
+              ? path
+              : `${base}/${path}`,
+        directories: [],
+        truncated: false,
+      }),
+    ),
+  )
+  repositoryContextSpy = spyOn(
+    repositoryContext,
+    "readTerminalRepositoryContext",
+  ).mockRejectedValue(new Error("Context disabled in the shared TUI fixture."))
+  liveDiffSpies.push(repositoryContextSpy)
+  liveDiffSpies.push(
+    spyOn(remoteTerminalContext, "createRemoteTerminalContextSource").mockImplementation(() => ({
+      read: async () => Promise.reject(new Error("Remote context disabled in this fixture.")),
+      close: () => undefined,
+    })),
+  )
   codexResumeSpy = spyOn(codexServer, "refreshCodexResumeThreads").mockResolvedValue([])
   remoteCodexResumeSpy = spyOn(codexServer, "refreshRemoteCodexResumeThreads").mockResolvedValue([])
   if (app) process.env.TUIMINAL_ONLY_TAB = "terminal"
@@ -185,6 +225,41 @@ async function arrow(direction: "up" | "down" | "left" | "right") {
 async function leader(action: string) {
   await key("b", true)
   await key(action)
+}
+async function selectProjectRemote() {
+  await key("e")
+  for (
+    let attempt = 0;
+    attempt < 100 &&
+    !tui?.renderer.root.findDescendantById("terminal-dialog-project-environment-5");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(1))
+    await tui?.renderOnce()
+  }
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-dialog-project-environment-5"),
+  ).toBeDefined()
+  for (let index = 0; index < 5; index++) await arrow("down")
+  await key("enter")
+}
+async function waitForFolderResults() {
+  for (
+    let attempt = 0;
+    attempt < 100 && tui?.captureCharFrame().includes("Carregando pastas");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(5))
+    await tui?.renderOnce()
+  }
+  expect(tui?.captureCharFrame()).not.toContain("Carregando pastas")
+}
+async function launchAgent(remote = false) {
+  await leader("a")
+  if (remote) {
+    await selectProjectRemote()
+  }
+  await click("terminal-dialog-project-launch")
 }
 async function split(action: "v" | "h") {
   await leader(action)
@@ -287,98 +362,72 @@ test("tmux helper Master Key uses compact Actions and Agents tabs", async () => 
 
 test("Master Key opens the official Codex TUI connected to app-server", async () => {
   await mount()
-  await leader("a")
+  await launchAgent()
   expect(commands[0]).toEqual(["codex", "--remote", "ws://127.0.0.1:4500"])
   expect(codexSpy).toHaveBeenCalledTimes(1)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
-test("Master Key A chooses a remote server directory and launches Codex through SSH", async () => {
+test("Master Key A chooses an SSH alias inside the picker and launches the exact remote directory", async () => {
   await mount()
-  const profile = {
-    id: "work-server",
-    name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
-  }
-  updateUiSettings({
-    terminalRemoteCodexProfiles: [profile],
-    terminalRemoteCodexActiveProfileId: profile.id,
-  })
-
-  await leader("a")
-  expect(tui?.renderer.root.findDescendantById("terminal-location-dialog")).toBeDefined()
-  await arrow("down")
-  await key("enter")
-  expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeDefined()
-  expect(commands[0]).toEqual([
-    "ssh",
-    "-tt",
-    "-o",
-    "ServerAliveInterval=30",
-    "-o",
-    "ServerAliveCountMax=3",
-    "-i",
-    "/tmp/work-server.key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.12",
-  ])
-
-  await key("b", true)
-  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
-  expect(marker).toBeDefined()
-  await act(async () =>
-    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/srv/project\r\n`)),
-  )
-  await tui?.renderOnce()
-
-  expect(tui?.renderer.root.findDescendantById("remote-agent-directory-dialog")).toBeUndefined()
+  await launchAgent(true)
   expect(codexSpy).toHaveBeenCalledTimes(1)
-  expect(commands.at(-1)).toEqual([
-    "codex",
-    "--remote",
-    "ws://127.0.0.1:4500",
-    "-C",
-    "/srv/project",
-  ])
   expect(starts.at(-1)).toMatchObject({
-    remote: { profile, workingDirectory: "/srv/project" },
+    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
   })
+  expect(getUiSettings().terminalRemoteCodexActiveProfileId).toBe(
+    originalSettings.terminalRemoteCodexActiveProfileId,
+  )
 })
 
-test("Master Key A chooses a local directory before launching local Codex", async () => {
+test("Master Key R offers a local destination only for the active remote Codex", async () => {
   await mount()
-  const profile = {
-    id: "work-server",
-    name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
-  }
-  updateUiSettings({
-    terminalRemoteCodexProfiles: [profile],
-    terminalRemoteCodexActiveProfileId: profile.id,
-  })
-
-  await leader("a")
-  await key("enter")
-  expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeDefined()
-  expect(commands[0]).toEqual(processes.createShellTerminalCommand().command)
-
+  await launchAgent()
   await key("b", true)
-  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
-  expect(marker).toBeDefined()
-  await act(async () =>
-    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/workspace/local-project\r\n`)),
-  )
-  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("[R] Sincronizar remoto")
+  await key("r")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("escape")
 
-  expect(tui?.renderer.root.findDescendantById("local-agent-directory-dialog")).toBeUndefined()
-  expect(codexSpy).toHaveBeenCalledTimes(1)
+  await launchAgent(true)
+  await leader("r")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Destino da sincronização")
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeUndefined()
+})
+
+test("project environment picker has a single navigation footer without reload", async () => {
+  await mount()
+  await leader("a")
+  await key("e")
+  const frame = tui?.captureCharFrame() ?? ""
+  expect(frame).toContain("[↑/↓] navegar · [Enter] selecionar · [Esc] cancelar")
+  expect(frame).not.toContain("[R] Recarregar")
+  await key("r")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-dialog-project-environments"),
+  ).toBeDefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+})
+
+test("Master Key A chooses a local directory without a shell or configured SSH profile", async () => {
+  await mount()
+  await leader("a")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+  expect(commands).toHaveLength(0)
+  await key("p")
+  await act(async () => {
+    const input = tui?.renderer.root.findDescendantById(
+      "terminal-dialog-project-path",
+    ) as InputRenderable
+    input.value = "/workspace/local-project"
+  })
+  await waitForFolderResults()
+  await key("enter")
+  await click("terminal-dialog-project-launch")
   expect(starts.at(-1)).toMatchObject({ cwd: "/workspace/local-project" })
   expect(starts.at(-1)).not.toHaveProperty("remote")
 })
@@ -387,11 +436,8 @@ test("remote Codex opens Live Diff through its remote source without the local p
   await mount(false, 140, 36)
   const profile = {
     id: "work-server",
-    name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
+    name: "work-server",
+    host: "work-server",
   }
   updateUiSettings({
     terminalRemoteCodexProfiles: [profile],
@@ -411,16 +457,7 @@ test("remote Codex opens Live Diff through its remote source without the local p
   })
   liveDiffSpies.push(source)
 
-  await leader("a")
-  await arrow("down")
-  await key("enter")
-  await key("b", true)
-  const marker = inputs[0]?.join("").match(/(TUIMINAL_AGENT_CWD_[a-f\d]+):%s/)?.[1]
-  expect(marker).toBeDefined()
-  await act(async () =>
-    starts[0]?.onData(new TextEncoder().encode(`\r\n${marker}:/srv/project\r\n`)),
-  )
-  await tui?.renderOnce()
+  await launchAgent(true)
 
   const sessionId = focusedTerminal().id.replace("free-terminal-", "")
   await leader("d")
@@ -430,7 +467,7 @@ test("remote Codex opens Live Diff through its remote source without the local p
   expect(source).toHaveBeenCalledWith({ profile, workingDirectory: "/srv/project" })
   expect(repositoryRoot).toHaveBeenCalledWith("/srv/project", expect.any(AbortSignal))
   expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeDefined()
-  expect(tui?.captureCharFrame()).toContain("Live Diff · Remoto · Servidor")
+  expect(tui?.captureCharFrame()).toContain("Live Diff · Remoto · work-server")
   expect(tui?.renderer.root.findDescendantById(`live-diff-add-${sessionId}`)).toBeUndefined()
   await key("a")
   expect(tui?.renderer.root.findDescendantById("live-diff-project-picker")).toBeUndefined()
@@ -443,10 +480,7 @@ test("Master Key N opens a local terminal even when an SSH profile is active", a
   const profile = {
     id: "work-server",
     name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
+    host: "work-server",
   }
   updateUiSettings({
     terminalRemoteCodexProfiles: [profile],
@@ -463,7 +497,7 @@ test("Master Key N opens a local terminal even when an SSH profile is active", a
 
 test("Master Key lists and resumes conversations from the local Codex /resume list", async () => {
   await mount(false, 140, 36)
-  await leader("a")
+  await launchAgent()
   await act(async () => {
     publishCodexResumeThreads([
       {
@@ -550,10 +584,7 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
   const profile = {
     id: "work-server",
     name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
+    host: "work-server",
   }
   updateUiSettings({
     terminalRemoteCodexProfiles: [profile],
@@ -656,10 +687,7 @@ test("a remote Codex conversation resumes through its original SSH profile", asy
   const profile = {
     id: "work-server",
     name: "Servidor do trabalho",
-    host: "203.0.113.12",
-    user: "ubuntu",
-    port: 22,
-    identityFile: "/tmp/work-server.key",
+    host: "work-server",
   }
   updateUiSettings({
     terminalRemoteCodexProfiles: [profile],
@@ -740,7 +768,7 @@ test("Master Key idle time uses the light palette's primary text color", async (
 
 test("Master Key S opens a navigable sent-message history below the agent terminal", async () => {
   await mount(false, 140, 36)
-  await leader("a")
+  await launchAgent()
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
   await act(async () => {
@@ -1052,11 +1080,13 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   const newCodex = renderable("terminal-action-a")
   const sentMessages = renderable("terminal-action-s")
   const liveDiff = renderable("terminal-action-d")
+  const remoteSync = renderable("terminal-action-r")
   const chooseBox = renderable("terminal-action-m")
   expect(sentMessages.screenY).toBe(newCodex.screenY + 2)
   expect(liveDiff.screenY).toBe(sentMessages.screenY + 2)
-  expect(chooseBox.screenY).toBe(liveDiff.screenY + 2)
-  for (const action of ["c", "r", "g"])
+  expect(remoteSync.screenY).toBe(liveDiff.screenY + 2)
+  expect(chooseBox.screenY).toBe(remoteSync.screenY + 2)
+  for (const action of ["c", "g"])
     expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
   expect(spanColor("Novo Codex", newCodex.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
   const featureTag = renderable("terminal-action-tag-d-feature")
@@ -1472,7 +1502,7 @@ test("split confirmation can create a second pane and a third split is refused",
 
 test("split confirmation moves an existing agent without restarting it", async () => {
   await mount()
-  await leader("a")
+  await launchAgent()
   const agent = focusedTerminal()
   await leader("n")
   const shell = focusedTerminal()
@@ -1684,7 +1714,7 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
 test("removed Master Key actions are absent while new terminals stay in Tuiminais", async () => {
   await mount()
   await key("b", true)
-  for (const action of ["t", "tab", "p", "f", "o", "c", "r", "g"])
+  for (const action of ["t", "tab", "p", "f", "o", "c", "g"])
     expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-action-a")).toBeDefined()
   await key("c")
@@ -1725,7 +1755,7 @@ test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (dire
     spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
   )
   await mount()
-  await leader("a")
+  await launchAgent()
   const agentTerminal = focusedTerminal()
   const sessionId = agentTerminal.id.replace("free-terminal-", "")
   await split(direction)
@@ -1787,7 +1817,7 @@ test("Live Diff covers its split pane only when the terminal is very small", asy
     spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
   )
   await mount(false, 76, 18)
-  await leader("a")
+  await launchAgent()
   const agentTerminal = focusedTerminal()
   const sessionId = agentTerminal.id.replace("free-terminal-", "")
   await split("v")
@@ -1818,9 +1848,9 @@ test("split agents keep independent Live Diff panels", async () => {
     spyOn(liveDiff, "readLiveDiffPatch").mockResolvedValue(""),
   )
   await mount()
-  await leader("a")
+  await launchAgent()
   const firstId = focusedTerminal().id.replace("free-terminal-", "")
-  await leader("a")
+  await launchAgent()
   const secondId = focusedTerminal().id.replace("free-terminal-", "")
   await leader("v")
   await click("terminal-split-option-1")
@@ -1844,9 +1874,9 @@ test("split agents keep independent Live Diff panels", async () => {
 
 test("split Codex agents keep independent sent-message histories", async () => {
   await mount()
-  await leader("a")
+  await launchAgent()
   const firstId = focusedTerminal().id.replace("free-terminal-", "")
-  await leader("a")
+  await launchAgent()
   const secondId = focusedTerminal().id.replace("free-terminal-", "")
   await leader("v")
   await click("terminal-split-option-1")
@@ -2379,24 +2409,18 @@ test("settings agent-command input consumes typing and its own Escape", async ()
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
 })
 
-test("Remote connection navigator selects a saved profile before editing its fields", async () => {
+test("Remote connection lists ~/.ssh/config aliases and activates the selected Host", async () => {
   updateUiSettings({
     terminalRemoteCodexProfiles: [
       {
         id: "remote-first",
         name: "Primeira VPS",
-        user: "ubuntu",
-        host: "192.0.2.10",
-        port: 22,
-        identityFile: "/keys/first.key",
+        host: "remote-first",
       },
       {
         id: "remote-second",
         name: "Segunda VPS",
-        user: "opc",
-        host: "192.0.2.20",
-        port: 2222,
-        identityFile: "/keys/second.key",
+        host: "remote-second",
       },
     ],
   })
@@ -2404,26 +2428,27 @@ test("Remote connection navigator selects a saved profile before editing its fie
   await click("tutorial-settings-button")
   await click("configuration-section-remoteConnection")
   await key("enter")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
   expect(renderable("configuration-terminal-remote-profile-remote-first")).toBeDefined()
   expect(renderable("configuration-terminal-remote-profile-remote-second")).toBeDefined()
   await arrow("down")
   await key("enter")
 
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-view")
-  expect((renderable("configuration-terminal-remote-name") as InputRenderable).value).toBe(
-    "Segunda VPS",
-  )
-  await key("a")
   expect(getUiSettings().terminalRemoteCodexActiveProfileId).toBe("remote-second")
+  expect(getUiSettings().terminalRemoteCodexProfiles).toEqual([
+    { id: "remote-second", name: "remote-second", host: "remote-second" },
+  ])
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
   const activatedFrame = tui?.captureCharFrame() ?? ""
   expect(activatedFrame).toContain("○ INATIVO")
   expect(activatedFrame).toContain("● ATIVO")
-  expect(activatedFrame).toContain("◆ EDITANDO")
-  await key("enter")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-name")
+  expect(activatedFrame).toContain("remote-second")
 })
 
-test("Terminal settings save and test an SSH profile without launching remote Codex", async () => {
+test("Terminal settings expose no SSH connection or private-key inputs", async () => {
   await mount(true)
   await click("tutorial-settings-button")
   await click("configuration-section-remoteConnection")
@@ -2434,57 +2459,21 @@ test("Terminal settings save and test an SSH profile without launching remote Co
     tui?.renderer.root.findDescendantById("configuration-terminal-remote-name"),
   ).toBeUndefined()
   await key("enter")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-view")
   expect(tui?.renderer.root.findDescendantById("configuration-terminal-remote-form")).toBeDefined()
-  expect(
-    tui?.renderer.root.findDescendantById("configuration-terminal-remote-remoteDirectory"),
-  ).toBeUndefined()
-  const nameField = tui?.renderer.root.findDescendantById(
-    "configuration-terminal-remote-field-name",
-  ) as BoxRenderable
-  const nameInput = tui?.renderer.root.findDescendantById(
-    "configuration-terminal-remote-name",
-  ) as InputRenderable
-  const fieldHighlight = nameField.backgroundColor.toInts()
-  expect(fieldHighlight).not.toEqual(RGBA.fromHex(COLORS.panelRaised).toInts())
-  expect(fieldHighlight).not.toEqual(RGBA.fromHex(COLORS.panel).toInts())
-  expect(nameInput.backgroundColor.equals(RGBA.fromHex(COLORS.panel))).toBe(true)
-  await arrow("down")
-  const userField = tui?.renderer.root.findDescendantById(
-    "configuration-terminal-remote-field-user",
-  ) as BoxRenderable
-  const userInput = tui?.renderer.root.findDescendantById(
-    "configuration-terminal-remote-user",
-  ) as InputRenderable
-  await key("enter")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("configuration-terminal-remote-user")
-  expect(userField.backgroundColor.equals(RGBA.fromHex(COLORS.panel))).toBe(true)
-  expect(userInput.backgroundColor.toInts()).toEqual(fieldHighlight)
-  await key("escape")
-
-  const fill = async (id: string, value: string) => {
-    await click(id)
-    await act(async () => tui?.mockInput.typeText(value))
-    await tui?.renderOnce()
-  }
-  await fill("configuration-terminal-remote-name", "Oracle VPS")
-  await fill("configuration-terminal-remote-host", "203.0.113.10")
-  await fill("configuration-terminal-remote-identityFile", "/missing/oracle.key")
-  await click("configuration-terminal-remote-save")
-
+  for (const field of ["name", "user", "host", "port", "identityFile"])
+    expect(
+      tui?.renderer.root.findDescendantById(`configuration-terminal-remote-${field}`),
+    ).toBeUndefined()
+  expect(tui?.captureCharFrame()).toContain("usuário,")
+  expect(tui?.captureCharFrame()).toContain("porta e identidade ficam no OpenSSH")
+  await click("configuration-terminal-remote-profile-oracle-vps")
+  await click("configuration-terminal-remote-activate")
   expect(getUiSettings().terminalRemoteCodexProfiles).toEqual([
-    expect.objectContaining({
-      name: "Oracle VPS",
-      host: "203.0.113.10",
-      user: "ubuntu",
-      port: 22,
-      identityFile: "/missing/oracle.key",
-    }),
+    { id: "oracle-vps", name: "oracle-vps", host: "oracle-vps" },
   ])
-  expect(commands).toEqual([])
-
-  await click("configuration-terminal-remote-test")
-  expect(tui?.captureCharFrame()).toContain("A chave privada não foi encontrada.")
   expect(commands).toEqual([])
 
   await key("escape")
@@ -2500,15 +2489,17 @@ test("Terminal settings save and test an SSH profile without launching remote Co
   expect(tui?.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
 })
 
-test("Remote connection keeps actions visible while a short form reaches its last field", async () => {
+test("Remote connection keeps alias actions visible in a short layout", async () => {
   await mount(true, 58, 18)
   await click("tutorial-settings-button")
   await arrow("down")
   await key("enter")
-  for (let index = 0; index < 4; index++) await arrow("down")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
 
   const frame = tui?.captureCharFrame() ?? ""
-  expect(frame).toContain("Chave privada")
+  expect(frame).toContain("remote-first")
+  expect(frame).not.toContain("Chave privada")
   expect(frame).toContain("[A] Tornar ativo")
   expect(frame).toContain("[T] Testar conexão")
 })
@@ -2518,29 +2509,39 @@ test("Remote server configuration opens SSH above a guided barrier flow", async 
     terminalRemoteCodexProfiles: [
       {
         id: "remote-setup",
-        name: "Oracle VPS",
-        user: "ubuntu",
-        host: "203.0.113.10",
-        port: 22,
-        identityFile: "/missing/oracle.key",
+        name: "remote-setup",
+        host: "remote-setup",
       },
     ],
   })
+  liveDiffSpies.push(
+    spyOn(remoteReadiness, "checkRemoteServerReadiness").mockResolvedValue({
+      githubSsh: { id: "githubSsh", ready: false, code: "authentication" },
+      codex: { id: "codex", ready: false, code: "codexMissing" },
+    }),
+    spyOn(remoteReadiness, "checkRemoteServerBarrier").mockResolvedValue({
+      id: "githubSsh",
+      ready: false,
+      code: "authentication",
+    }),
+  )
   await mount(true, 120, 32)
   await click("tutorial-settings-button")
   await click("configuration-section-remoteConnection")
   await key("enter")
+  await act(async () => Bun.sleep(20))
+  await tui?.renderOnce()
 
   expect(renderable("configuration-terminal-remote-readiness")).toBeDefined()
   expect(renderable("configuration-terminal-remote-verify")).toBeDefined()
   expect(renderable("configuration-terminal-remote-configure")).toBeDefined()
-  await click("configuration-terminal-remote-verify")
+  await key("v")
   await act(async () => Bun.sleep(20))
   await tui?.renderOnce()
-  expect(tui?.captureCharFrame()).toContain("○ GitHub via SSH: A chave")
+  expect(tui?.captureCharFrame()).toContain("O GitHub não aceitou a chave SSH")
   expect(tui?.captureCharFrame()).toContain("O servidor precisa ser configurado.")
   expect(commands).toEqual([])
-  await click("configuration-terminal-remote-configure")
+  await key("c")
   await act(async () => Bun.sleep(20))
   await tui?.renderOnce()
 
@@ -2552,11 +2553,7 @@ test("Remote server configuration opens SSH above a guided barrier flow", async 
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
-    "-i",
-    "/missing/oracle.key",
-    "-p",
-    "22",
-    "ubuntu@203.0.113.10",
+    "remote-setup",
   ])
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
@@ -2579,7 +2576,7 @@ test("Remote server configuration opens SSH above a guided barrier flow", async 
   await click(`remote-server-setup-${sessionId}-confirm`)
   await act(async () => Bun.sleep(20))
   await tui?.renderOnce()
-  expect(tui?.captureCharFrame()).toContain("A chave privada local não foi encontrada.")
+  expect(tui?.captureCharFrame()).toContain("O GitHub ainda não aceitou a chave SSH")
   expect(tui?.captureCharFrame()).toContain("GitHub via SSH")
   expect(commands).toHaveLength(1)
 })
@@ -2623,4 +2620,436 @@ test("terminals fill every available edge at all sizes without replacing the nat
   expect(focusedTerminal()).toBe(terminal)
   expectFullArea()
   expect(starts).toHaveLength(1)
+})
+
+test("terminal context tags overlay the PTY and keep state when width becomes narrow", async () => {
+  await mount(false, 120, 30)
+  repositoryContextSpy?.mockImplementation(async (directory) => ({
+    directory,
+    projectName: "project",
+    branch: "main",
+    state: "clean",
+  }))
+  await leader("n")
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.root.findDescendantById(`terminal-context-${sessionId}`);
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(1))
+    await tui?.renderOnce()
+  }
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-directory-${sessionId}`),
+  ).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-branch-${sessionId}`),
+  ).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById(`terminal-context-state-${sessionId}`)).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("project   main   Limpo")
+  expect(spanColor("Limpo")).toEqual(RGBA.fromHex(COLORS.success).toInts())
+  expect(terminal.width).toBe(panes.width)
+  expect(terminal.height).toBe(panes.height)
+
+  for (const [kind, explanation] of [
+    ["directory", "Pasta do projeto atual."],
+    ["branch", "Branch Git atual."],
+    ["state", "Repositório Git sem alterações."],
+  ] as const) {
+    const tag = tui!.renderer.root.findDescendantById(`terminal-context-${kind}-${sessionId}`)!
+    await act(async () => tui?.mockMouse.moveTo(tag.screenX + 1, tag.screenY))
+    await tui?.renderOnce()
+    expect(
+      tui?.renderer.root.findDescendantById(`terminal-context-tooltip-${sessionId}`),
+    ).toBeDefined()
+    expect(tui?.captureCharFrame()).toContain(explanation)
+  }
+  await act(async () => tui?.mockMouse.moveTo(terminal.screenX + 1, terminal.screenY + 4))
+  await tui?.renderOnce()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-tooltip-${sessionId}`),
+  ).toBeUndefined()
+
+  await act(async () => {
+    await tui?.resize(38, 18)
+    await Bun.sleep(120)
+    await tui?.renderOnce()
+  })
+  for (
+    let attempt = 0;
+    attempt < 100 &&
+    tui?.renderer.root.findDescendantById(`terminal-context-directory-${sessionId}`);
+    attempt++
+  ) {
+    await act(async () => {
+      await Bun.sleep(2)
+      await tui?.renderOnce()
+    })
+  }
+  expect(focusedTerminal()).toBe(terminal)
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-directory-${sessionId}`),
+  ).toBeUndefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-branch-${sessionId}`),
+  ).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById(`terminal-context-state-${sessionId}`)).toBeDefined()
+  expect(terminal.width).toBe(tui!.renderer.root.findDescendantById("terminal-panes")!.width)
+})
+
+test("project picker launches a clicked remote project from the selected origin", async () => {
+  await mount()
+  const thread = {
+    title: "Task",
+    preview: "",
+    lastResponse: "",
+    projectName: "",
+    gitBranch: "",
+    updatedAt: 100,
+    state: "idle" as const,
+  }
+  publishCodexResumeThreads([{ ...thread, id: "local-project-thread", cwd: "/local/only-local" }])
+  publishCodexResumeThreads(
+    [
+      {
+        ...thread,
+        id: "remote-project-thread",
+        cwd: "/srv/only-remote",
+        remoteProfileId: "work-server",
+      },
+    ],
+    "work-server",
+  )
+  await leader("a")
+  expect(tui?.captureCharFrame()).toContain("only-local")
+  expect(tui?.captureCharFrame()).not.toContain("only-remote")
+  await selectProjectRemote()
+  expect(tui?.captureCharFrame()).toContain("only-remote")
+  expect(tui?.captureCharFrame()).not.toContain("only-local")
+  await click("terminal-dialog-project-row-0")
+  expect(starts.at(-1)).toMatchObject({ remote: { workingDirectory: "/srv/only-remote" } })
+})
+
+test("project picker retains the destination on launch error and retries once", async () => {
+  await mount()
+  codexSpy?.mockRejectedValueOnce(new Error("Não foi possível alcançar o servidor remoto."))
+  await launchAgent()
+  expect(tui?.captureCharFrame()).toContain("Não foi possível alcançar")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+  await click("terminal-dialog-project-launch")
+  expect(codexSpy).toHaveBeenCalledTimes(2)
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(focusedTerminal().id).toStartWith("free-terminal-")
+})
+
+test("folder browsing opens a focused home input and Escape restores the existing PTY", async () => {
+  await mount(true)
+  await leader("n")
+  const original = focusedTerminal()
+  const count = commands.length
+  await leader("a")
+  await key("p")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-dialog-project-path")
+  expect((tui?.renderer.currentFocusedRenderable as InputRenderable | undefined)?.value).toBe("~/")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(commands).toHaveLength(count)
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(focusedTerminal()).toBe(original)
+  expect(inputs[0]?.join("")).toBe("")
+})
+
+test("project picker cancels stale directory reads when leaving folder search", async () => {
+  await mount()
+  let finish: ((result: projectDirectories.ProjectDirectory) => void) | undefined
+  let querySignal: AbortSignal | undefined
+  const query = spyOn(projectDirectories, "readProjectDirectory").mockImplementationOnce(
+    async (_target, _path, _base, signal) => {
+      querySignal = signal
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    },
+  )
+  liveDiffSpies.push(query)
+  await leader("a")
+  await key("p")
+  for (let attempt = 0; attempt < 100 && !querySignal; attempt++)
+    await act(async () => Bun.sleep(5))
+  await key("escape")
+  expect(querySignal?.aborted).toBe(true)
+  await selectProjectRemote()
+  await act(async () =>
+    finish?.({ path: "/stale/local-result", directories: [], truncated: false }),
+  )
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).not.toContain("stale/local-result")
+  expect(tui?.captureCharFrame()).toContain("Remoto")
+  expect(commands).toHaveLength(0)
+})
+
+test("project picker keeps destination and launch visible in a short terminal", async () => {
+  await mount(false, 70, 12)
+  await leader("a")
+  expect(tui?.captureCharFrame()).toContain("Iniciar agente")
+  expect(tui?.captureCharFrame()).toContain("Local")
+  const launch = tui?.renderer.root.findDescendantById("terminal-dialog-project-launch")
+  expect(launch?.screenY).toBeLessThan(12)
+  await key("escape")
+  expect(commands).toHaveLength(0)
+})
+
+for (const width of [70, 110])
+  test(`project and folder picker actions share one visible footer row at ${width} columns`, async () => {
+    await mount(false, width, 24)
+    await leader("a")
+    const assertFooter = (ids: string[]) => {
+      const controls = ids.map((id) => tui?.renderer.root.findDescendantById(id))
+      const y = controls[0]?.screenY
+      expect(y).toBeDefined()
+      for (const control of controls) {
+        expect(control).toBeDefined()
+        expect(control?.screenY).toBe(y)
+        expect(control?.height).toBe(1)
+        expect((control?.screenX ?? width) + (control?.width ?? width)).toBeLessThan(width - 1)
+      }
+    }
+    assertFooter([
+      "terminal-dialog-project-browse",
+      "terminal-dialog-project-launch",
+      "terminal-dialog-project-back",
+    ])
+    await key("p")
+    await waitForFolderResults()
+    assertFooter([
+      "terminal-dialog-folder-hints",
+      "terminal-dialog-folder-choose",
+      "terminal-dialog-folder-back",
+    ])
+    const footer = tui
+      ?.captureCharFrame()
+      .split("\n")
+      .find((line) => line.includes("[Tab]"))
+    expect(footer).toContain("[↑/↓]")
+    expect(footer).toContain("[Enter] Usar pasta")
+    expect(footer).toContain("[Esc] Voltar")
+    expect(tui?.captureCharFrame()).not.toContain("[F2]")
+    await key("escape")
+    expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+    expect(commands).toHaveLength(0)
+  })
+
+test("cancelling an agent startup retires only the pending session and cannot launch twice", async () => {
+  await mount()
+  await leader("n")
+  const original = focusedTerminal()
+  let finish: ((handle: processes.FreeTerminalProcessHandle) => void) | undefined
+  const stopped = mock(async () => undefined)
+  codexSpy?.mockImplementationOnce(
+    async () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  await launchAgent()
+  expect(tui?.captureCharFrame()).toContain("Iniciando agente")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-project-launch-loader-pattern"),
+  ).toBeDefined()
+  await key("enter")
+  expect(codexSpy).toHaveBeenCalledTimes(1)
+  await key("escape")
+  await act(async () => finish?.({ pid: 1234, write() {}, resize() {}, stop: stopped }))
+  await tui?.renderOnce()
+  expect(stopped).toHaveBeenCalledTimes(1)
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(focusedTerminal()).toBe(original)
+})
+
+for (const remote of [false, true])
+  test(`folder input autocompletes ${remote ? "remote" : "local"} paths while retaining focus`, async () => {
+    await mount()
+    const root = remote ? "/home/remote" : "/home/local"
+    const query = spyOn(projectDirectories, "readProjectDirectory").mockImplementation(
+      async (target, path, _base, _signal, list = true) => {
+        expect(target.kind).toBe(remote ? "remote" : "local")
+        const canonical = path.replace(/^~(?=\/|$)/u, root).replace(/\/$/u, "")
+        return {
+          path: canonical,
+          directories:
+            list && canonical === root
+              ? [
+                  `${root}/Projects`,
+                  `${root}/Próximo projeto`,
+                  `${root}/Documents`,
+                  `${root}/.hidden`,
+                ]
+              : list
+                ? [`${canonical}/child-folder`]
+                : [],
+          truncated: false,
+        }
+      },
+    )
+    liveDiffSpies.push(query)
+    await leader("a")
+    if (remote) await selectProjectRemote()
+    await key("p")
+    await waitForFolderResults()
+    const input = tui?.renderer.root.findDescendantById(
+      "terminal-dialog-project-path",
+    ) as InputRenderable
+    expect(tui?.renderer.currentFocusedRenderable).toBe(input)
+    expect(input.value).toBe("~/")
+    const calls = query.mock.calls.length
+    await act(async () => tui?.mockInput.typeText("Pr"))
+    await tui?.renderOnce()
+    expect(input.value).toBe("~/Pr")
+    expect(tui?.captureCharFrame()).toContain("Projects/")
+    expect(tui?.captureCharFrame()).not.toContain("Documents/")
+    expect(query.mock.calls.length).toBe(calls)
+    await arrow("down")
+    await key("tab")
+    expect(input.value).toBe("~/Próximo projeto/")
+    expect(tui?.renderer.currentFocusedRenderable).toBe(input)
+    await waitForFolderResults()
+    expect(commands).toHaveLength(0)
+    await key("enter")
+    expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeUndefined()
+    expect(tui?.captureCharFrame()).toContain("Próximo projeto")
+    await key("enter")
+    expect(starts.at(-1)).toMatchObject(
+      remote
+        ? { remote: { workingDirectory: `${root}/Próximo projeto` } }
+        : { cwd: `${root}/Próximo projeto` },
+    )
+  })
+
+test("project picker adds discovered Git repositories without duplicating recents or mixing hosts", async () => {
+  await mount()
+  const discovery = spyOn(gitProjects, "discoverAgentGitProjects").mockImplementation(
+    async (target) => ({
+      paths:
+        target.kind === "local" ? ["/local/recent", "/local/discovered-git"] : ["/srv/remote-git"],
+      truncated: false,
+    }),
+  )
+  liveDiffSpies.push(discovery)
+  await act(async () =>
+    publishCodexResumeThreads([
+      {
+        id: "recent",
+        title: "Task",
+        cwd: "/local/recent",
+        preview: "",
+        lastResponse: "",
+        projectName: "recent",
+        gitBranch: "",
+        updatedAt: 100,
+        state: "idle",
+      },
+    ]),
+  )
+  await leader("a")
+  expect(tui?.captureCharFrame()).toContain("Projetos recentes")
+  expect(tui?.captureCharFrame()).toContain("Projetos Git encontrados")
+  expect(tui?.captureCharFrame()).toContain("discovered-git")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-row-3")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-search")).toBeUndefined()
+  await selectProjectRemote()
+  expect(tui?.captureCharFrame()).toContain("remote-git")
+  expect(tui?.captureCharFrame()).not.toContain("discovered-git")
+  await click("terminal-dialog-project-launch")
+  expect(starts.at(-1)).toMatchObject({ remote: { workingDirectory: "/srv/remote-git" } })
+})
+
+test("editing a folder parent aborts its old query and ignores a delayed reply", async () => {
+  await mount()
+  let oldSignal: AbortSignal | undefined
+  let finishOld: ((value: projectDirectories.ProjectDirectory) => void) | undefined
+  const query = spyOn(projectDirectories, "readProjectDirectory").mockImplementation(
+    async (_target, path, _base, signal) => {
+      if (path === "~/") {
+        oldSignal = signal
+        return new Promise((resolve) => {
+          finishOld = resolve
+        })
+      }
+      return { path: "/new", directories: ["/new/current-folder"], truncated: false }
+    },
+  )
+  liveDiffSpies.push(query)
+  await leader("a")
+  await key("p")
+  for (let attempt = 0; attempt < 100 && !oldSignal; attempt++) await act(async () => Bun.sleep(5))
+  const input = tui?.renderer.root.findDescendantById(
+    "terminal-dialog-project-path",
+  ) as InputRenderable
+  await act(async () => {
+    input.value = "/new/"
+  })
+  await tui?.renderOnce()
+  expect(oldSignal?.aborted).toBe(true)
+  await waitForFolderResults()
+  await act(async () =>
+    finishOld?.({ path: "/old", directories: ["/old/stale-folder"], truncated: false }),
+  )
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("current-folder/")
+  expect(tui?.captureCharFrame()).not.toContain("stale-folder")
+  expect(input.value).toBe("/new/")
+  expect(commands).toHaveLength(0)
+})
+
+test("folder validation shows its loader, preserves the path on failure, and returns focus", async () => {
+  await mount()
+  const validation = Promise.withResolvers<projectDirectories.ProjectDirectory>()
+  const query = spyOn(projectDirectories, "readProjectDirectory").mockImplementation(
+    async (_target, _path, _base, _signal, list = true) => {
+      if (!list) return validation.promise
+      return { path: "/fixture/home", directories: [], truncated: false }
+    },
+  )
+  liveDiffSpies.push(query)
+  await leader("a")
+  await key("p")
+  await waitForFolderResults()
+  await click("terminal-dialog-folder-choose")
+  expect(tui?.renderer.root.findDescendantById("terminal-folder-open-loader-pattern")).toBeDefined()
+  await act(async () => {
+    validation.reject(new Error("Não foi possível acessar a pasta selecionada."))
+    await Bun.sleep(0)
+  })
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("Não foi possível acessar")
+  expect(
+    tui?.renderer.root.findDescendantById("terminal-folder-open-loader-pattern"),
+  ).toBeUndefined()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-dialog-project-path")
+  expect((tui?.renderer.currentFocusedRenderable as InputRenderable | undefined)?.value).toBe("~/")
+  expect(commands).toHaveLength(0)
+})
+
+test("autocomplete uses the native input buffer when typing and Tab arrive in one packet", async () => {
+  await mount()
+  const query = spyOn(projectDirectories, "readProjectDirectory").mockResolvedValue({
+    path: "/fixture/home",
+    directories: ["/fixture/home/Library", "/fixture/home/Projects"],
+    truncated: false,
+  })
+  liveDiffSpies.push(query)
+  await leader("a")
+  await key("p")
+  await waitForFolderResults()
+  await act(async () => tui?.mockInput.pressKey("Pr\t"))
+  await tui?.renderOnce()
+  const input = tui?.renderer.currentFocusedRenderable as InputRenderable
+  expect(input.id).toBe("terminal-dialog-project-path")
+  expect(input.value).toBe("~/Projects/")
+  expect(commands).toHaveLength(0)
 })

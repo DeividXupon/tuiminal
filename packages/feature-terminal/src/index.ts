@@ -4,8 +4,11 @@ export { PinnedTerminalSidebar } from "./ui/PinnedTerminalSidebar"
 export { terminalKeyboardScope } from "./keyboard"
 export { createRemoteServerSetupCommand, stopAllFreeTerminalProcesses } from "./services/terminal"
 export {
+  listSshConfigProfiles,
+  type SshConfigDiscoveryOptions,
+} from "./services/ssh-config"
+export {
   remoteCodexSshTestCommand,
-  resolveRemoteIdentityFile,
   testRemoteCodexConnection,
   type RemoteCodexConnectionTestCode,
   type RemoteCodexConnectionTestResult,

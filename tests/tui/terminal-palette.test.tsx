@@ -9,6 +9,7 @@ import {
 import { useRenderer } from "@opentui/react"
 import { testRender } from "@opentui/react/test-utils"
 import { act, type ReactNode, useLayoutEffect } from "react"
+import { COLORS } from "../../packages/core/src/settings/theme"
 import { useTerminalPalette } from "../../packages/feature-terminal/src/hooks/use-terminal-palette"
 import type { TerminalSession } from "../../packages/feature-terminal/src/model/sessions"
 import { FreeTerminalPane } from "../../packages/feature-terminal/src/ui/FreeTerminalPane"
@@ -123,6 +124,61 @@ test("embedded terminal loads and updates host colors without changing RGB outpu
     expect(colorOf("T")?.fg.toInts()).toEqual(RGBA.fromInts(9, 8, 7).toInts())
     expect(colorOf("D")?.fg.toInts()).toEqual(RGBA.fromHex("#abcdef").toInts())
     expect(colorOf("D")?.bg.toInts()).toEqual(RGBA.fromHex("#202122").toInts())
+  } finally {
+    act(() => tui.renderer.destroy())
+  }
+})
+
+test("integrated agent startup covers the empty terminal with the shared loader", async () => {
+  const session: TerminalSession = {
+    id: "starting-agent",
+    sectionId: "section",
+    folderId: "terminal",
+    row: 0,
+    column: 0,
+    title: "Codex",
+    status: "starting",
+    pid: null,
+    exitCode: null,
+    startedAt: 1,
+    agent: null,
+    kind: "custom",
+    label: "Codex",
+    shortLabel: "Codex",
+    displayCommand: "codex --remote",
+    command: ["codex"],
+    accent: COLORS.terminal,
+    codex: { appServer: true },
+  }
+  const tui = await testRender(
+    <FreeTerminalPane
+      session={session}
+      active
+      visible
+      appearanceKey="test"
+      paletteSequence=""
+      layout={{
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        borderTop: false,
+        borderLeft: false,
+      }}
+      onActivate={() => {}}
+      onReady={() => {}}
+      onGone={() => {}}
+      onInput={() => {}}
+      onResize={() => {}}
+    />,
+    { width: 48, height: 10 },
+  )
+  try {
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).toContain("Iniciando agente…")
+    expect(
+      tui.renderer.root.findDescendantById("terminal-pane-start-loader-starting-agent-pattern"),
+    ).toBeDefined()
   } finally {
     act(() => tui.renderer.destroy())
   }

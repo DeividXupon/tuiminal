@@ -36,6 +36,12 @@ export const TERMINAL_ACTIONS = [
     tags: ["feature", "agent"],
   },
   {
+    key: "r",
+    label: "[R] Sincronizar remoto",
+    description: "Copia o projeto do agente remoto para uma pasta local.",
+    tags: ["feature", "agent"],
+  },
+  {
     key: "m",
     label: "[M] Escolher box",
     description: "Navega visualmente entre os boxes abertos.",

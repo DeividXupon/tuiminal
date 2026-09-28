@@ -5,9 +5,6 @@ export type RemoteServerProfile = {
   id: string
   name: string
   host: string
-  user: string
-  port: number
-  identityFile: string
 }
 
 export type RemoteServerSetupRequest = {
@@ -50,6 +47,7 @@ export type TerminalSession = FreeTerminalCommand & {
   title: string
   /** Manual names survive process changes and explicit restarts. */
   titleMode?: "automatic" | "manual"
+  startError?: string
   status: "starting" | "running" | "exited" | "failed"
   /** A foreground tool is running instead of the interactive shell waiting for input. */
   busy?: boolean

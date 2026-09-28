@@ -2,8 +2,15 @@
 
 Free Terminal is a generic PTY multiplexer for shells and arbitrary CLIs. Its
 workspace always uses compact geometry, regardless of the global framed/compact
-preference. There is no tool header, working-directory label, command strip,
-per-pane title bar, running counter, pager, or permanent footer. The application
+preference. There is no tool header, command strip, per-pane title bar, running
+counter, pager, or permanent footer. A compact overlay at the top-right of each
+visible PTY shows its project folder, Git branch and localized Clean/Changed state;
+outside a repository it shows the current folder and No Git. The overlay follows
+local and tmux working-directory changes without changing PTY geometry. Integrated
+remote Codex panes inspect their selected remote project through a bounded SSH helper;
+generic interactive SSH panes do not claim remote Git context. Hovering each tag opens
+a localized one-line explanation directly below the metadata and leaving it closes the
+tooltip. The application
 navigation stays available in a single row. The sidebar contains names and status;
 the remaining area belongs to the PTYs. The layout follows the visual hierarchy of
 [Herdr's terminal workspace](https://github.com/herdrdev/herdr/blob/d59d0603d53bb88c5320ea508a4fb9858b61af68/assets/screenshot.png):
@@ -12,6 +19,9 @@ the remaining workspace up to every edge, without outer borders, margins, paddin
 or gaps at any terminal size. A split uses only one shared separator column or row.
 The sidebar highlights the active terminal, and split separators use the active
 accent when applicable. Resizing preserves the embedded terminal and its process.
+When an overlay cannot fit, it retains repository state first, then branch, then
+folder. Metadata polling is read-only, limited to visible panes and stops when a pane
+is hidden or retired.
 
 ## Sections and folders
 
@@ -108,18 +118,24 @@ The global layout selector is hidden in this context because Terminal is always
 compact. Other tools retain their layout preference.
 
 The Terminal settings context exposes a separate **Remote Connection** category
-beside **Terminal**. A profile persists a display name, SSH user, host, port,
-and private-key path. The settings file stores only the path to the key; it never
-copies key contents. Saving a profile does not connect.
+beside **Terminal**. Tuiminal discovers explicit `Host` aliases from the user's
+`~/.ssh/config` and bounded files reached through `Include`; wildcard and negated
+patterns do not become selectable rows. The settings file persists only the selected
+alias reference. SSH user, endpoint, port, identity, agent, proxy, jump-host, and
+other connection options remain exclusively in OpenSSH configuration and never
+appear in Tuiminal inputs. Legacy profiles containing connection details are rejected
+rather than reused with different authentication behavior. Selecting an alias does
+not connect.
 **Test connection** runs one bounded, non-interactive `ssh` probe with argument-array
-spawning, `BatchMode=yes`, the configured identity and port, the user's normal
-`known_hosts` verification, and a constant remote `printf` marker. The probe reports
-invalid or missing configuration, unknown host keys, authentication failures,
+spawning, `BatchMode=yes`, the selected alias, the user's normal `known_hosts`
+verification, and a constant remote `printf` marker. It does not pass `-i`, `-p`, or
+a synthesized `user@host`; OpenSSH resolves the complete connection. The probe reports
+an invalid alias, unknown host keys, authentication failures,
 unreachable hosts, timeouts, cancellation, and a missing SSH client without exposing
 command output. Leaving the screen cancels its owned probe. **Check server** runs two
 read-only probes through the same SSH profile: GitHub SSH authentication with
-`ssh -T git@github.com`, then Codex CLI installation, persistent-daemon support through
-`codex app-server daemon` plus `codex app-server proxy`, and account state with
+`ssh -T git@github.com`, then Codex CLI installation, `codex app-server` support,
+and account state with
 `codex login status`. Each remote script is fixed and returns only a bounded result marker.
 
 **Configure server** is one generic action, not a GitHub-specific action. It closes
@@ -136,47 +152,79 @@ readiness probe finds the standalone binary directly but the interactive shell h
 reloaded its startup file. Tuiminal does not create keys, install software,
 register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
 automatically. Master Key `[N]` always opens a local terminal section, independently
-of the active remote profile. After a profile is active, Master Key `[A]` asks whether
-the new Codex section is local or remote. Both choices open an interactive shell modal
-where the user runs `cd` manually; Local uses the local login shell and Remote uses
-SSH. Repeating the configured Master Key confirms the shell's absolute working
-directory; `exit` or `[Esc]` cancels. Tuiminal then starts or reuses the official
-shared daemon with `codex app-server daemon start` and connects `codex app-server
-proxy` through `ssh -T`. Before opening the local interface, a bounded probe validates
-the SSH connection, selected remote directory, daemon startup, and the app-server's
-`initialize` response. Its `userAgent` identifies the daemon version actually serving
-the request; Tuiminal compares it with the local CLI and accepts the same major, plus
-the same minor while Codex remains `0.x`. Patch-only differences are compatible. The
-probe closes its proxy after `initialized`, and only then does the separate JSONL
+of the active remote profile. Master Key `[A]` and **New Codex** always open the
+project selector, including when no remote alias is active. It starts in Local;
+`[E]` opens a list of explicit SSH aliases discovered from `~/.ssh/config`.
+Choosing an alias applies to this launch without changing the active settings alias.
+Recent projects combine that origin's public Codex conversations and successful
+selector launches. They are deduplicated by absolute path, ordered by last use,
+and limited to 20 per origin. Successful launches are stored atomically in
+`terminal/agent-projects.json` under Tuiminal's user data directory, outside projects.
+Choosing a recent project prepares a new conversation; existing resume actions
+still resume the original thread and resolve its original SSH alias.
+
+The starting screen is a keyboard-navigable list grouped into recent projects,
+discovered Git projects and the starting folder. Repositories already present in
+recents are not repeated. Read-only discovery runs in the background, scoped to the
+selected host. Local discovery scans the CLI project, its parent and the user's
+home (or explicit `TUIMINAL_PROJECT_ROOTS`); remote discovery scans the SSH user's
+home. Both detect `.git` directories and worktree `.git` files, skip hidden and
+dependency/build directories, and do not descend through symlinks or repositories.
+Discovery is limited to five levels, 600 directories, 200 projects and ten seconds;
+reaching a limit is visible and never disables manual folder selection. Permission
+or discovery failures leave the recent list usable. No project contents are read.
+
+`[P]` opens a separate folder-search screen with a single, focused `~/` input.
+The list updates while typing: the final path segment filters directory suggestions,
+and changing its parent triggers a cancellable query after 150 ms. Up to 20 parent
+listings are cached for this screen's lifetime, so typing a prefix does not create
+an SSH connection per keystroke. `[↑/↓]` highlights a suggestion; `[Tab]` completes
+it in the input and enters that folder, retaining `~/` notation and focus. Hidden
+folders appear when the final segment begins with a dot. Absolute paths and Windows
+local separators are supported. `[Enter]` or **Use folder** validates the typed
+directory and returns it as the selected project.
+Git is not required. `[Esc]` returns to the project list without starting an agent.
+
+Folder queries list only one level, including directory symlinks, with a limit of
+2,000 entries. Remote discovery and folder queries use fixed read-only scripts
+through batch-mode SSH, quoted path arguments, bounded output and a ten-second
+timeout. Switching host, editing the parent path or leaving the screen cancels
+owned queries and ignores stale replies. No interactive shell or project writes
+are involved. `[Tab]` completes paths; it never moves between inputs.
+
+In the project list, arrows or `[J/K]` select a row, and `[Enter]` or **Start agent**
+validates and starts a new conversation in that visible origin/directory. Mouse
+selection starts the project directly. Startup failures keep the chosen destination
+available for retry. Cancelling retires only the pending owned session.
+`[Esc]` closes the list and restores terminal focus. Headers and actions remain
+visible while the lists scroll. Each screen keeps its hints, confirmation and
+`[Esc]` together in one footer row. Tuiminal starts an owned `codex app-server
+--stdio` through `ssh -T` and bridges its JSONL stream to the local interface.
+Before opening it, a ten-second probe validates the SSH connection, selected remote
+directory, app-server startup, and its `initialize` response. Its `userAgent`
+identifies the remote version actually serving
+the request. Tuiminal records it with the local CLI version for diagnostics, but a
+valid `initialize` response remains authoritative when those versions differ. The
+probe closes its process after `initialized`, and only then does the separate JSONL
 stream reach the local official Codex TUI through a loopback-only relay. Authentication,
-host identity, reachability, missing Codex, missing directory, daemon startup,
-protocol, version, and timeout failures remain distinct and do not open the TUI. The
+host identity, reachability, missing Codex, missing directory, app-server startup,
+protocol and timeout failures remain distinct and do not open the TUI. The
 TUI receives the selected remote directory through `-C`. No remote TCP listener is
-exposed. The SSH proxy, relay, and TUI share one owned lifecycle, while closing them
-leaves the remote daemon and active turns running for later resume. Tuiminal never
-issues `codex app-server daemon stop`. Public app-server
+exposed. The SSH app-server, relay, and TUI share one owned lifecycle. Public app-server
 events provide integrated activity, sent-message history,
 and remote `/resume` entries. Those entries retain the source profile and remote cwd,
 so resuming never silently falls back to the local machine. Remote integrated agents
 are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
 working directory and linked worktrees through a separate owned SSH channel; it never
-falls back to a same-named local path. Selecting the category renders a read-only summary of saved
-profiles. `[Enter]`
-then switches the detail pane to the focused form navigator with the first field
-selected, or the first saved profile selected when profiles exist. `[J/K/↑/↓]`
-moves through saved profiles and fields. `[Enter]` on a profile loads it and selects
-its first field; `[Enter]` on a field focuses its input for editing, and `[Esc]`
-returns from the input to field navigation. Field navigation highlights the complete
-label-and-input block with a subdued tint derived from the Terminal accent; only an
-input that owns the editing cursor receives the accent label and that same tinted
-surface. A later `[Esc]` returns to the selected summary; another closes settings.
-`[A]` marks the loaded or cursor-selected profile as the single active remote profile;
-that choice is persisted. Every saved profile shows an explicit localized
-`ACTIVE`/`INACTIVE` label, and the profile loaded into the form also shows `EDITING`.
-The saved-profile list and field list scroll independently, while readiness, status,
-and actions remain fixed at the bottom of the detail pane. Short terminals switch
-fields to a one-line layout, collapse readiness to one row, and restrict the profile
-list so the selected value and every action remain visible.
+falls back to a same-named local path. Selecting the category renders a read-only
+summary of the active SSH alias. `[Enter]` switches the detail pane to a focused list
+loaded from `~/.ssh/config`. `[J/K/↑/↓]` moves through aliases, `[Enter]` or `[A]`
+activates the cursor-selected alias, `[R]` reloads the config, and `[Esc]` returns to
+the summary; another `[Esc]` closes settings. Every alias shows an explicit localized
+`ACTIVE`/`INACTIVE` label. The alias list scrolls while readiness, status, and actions
+remain fixed at the bottom of the detail pane. Short terminals restrict the alias list
+to one row and collapse readiness while keeping the actions visible. No SSH connection
+field or private-key path is editable or displayed.
 
 The Master Key opens a centered, mouse-accessible modal up to 120 columns wide without
 dimming or changing the embedded terminal geometry. It contains solid, borderless
@@ -187,8 +235,9 @@ The name uses the palette's primary text color so it stays light in dark mode an
 in light mode. Colored, localized tags align at the opposite end of the title row and
 classify agent-only features, general features, terminal operations, sidebar operations,
 navigation, and application actions. Agent-only features may show both feature and agent
-tags. Actions are ordered by those purposes. `[C]`, `[R]`, and `[G]` are not Master Key
-actions.
+tags. Actions are ordered by those purposes. `[C]` and `[G]` are not Master Key
+actions. `[R]` is enabled only for the selected integrated remote Codex session and
+synchronizes its project to a protected local copy.
 Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
 sheet. Actions and Agents become clickable tabs, `[←/→]` switches tabs, and only the
 active tab's content is rendered.
@@ -316,10 +365,27 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | `[L]` | Focus the visible sidebar |
 | `[E]` | Rename selected terminal |
 | `[D]` | Open Live Diff for a recognized agent, or focus it when already open |
-| `[R]` / `[X]` | Restart / close selected terminal |
+| `[R]` | Synchronize the selected integrated remote Codex project to its local copy |
+| `[X]` | Close selected terminal |
 | `[,]` | Open settings |
 | `[Q]` | Quit Tuiminal |
 | `[Esc]` | Cancel without changing terminal focus |
+
+An integrated remote Codex pane also carries a project synchronization tag. Before
+the first copy it says **Not synced** and exposes the configured Master Key followed
+by `[R]`. The first synchronization asks for a local parent and derives
+`<remote-basename>-sync`; for example, remote `/tui` becomes `tui-sync` inside the
+selected parent. A pre-existing destination that is not a saved mapping is never
+adopted or replaced. Successful mappings are persisted outside the project and later
+syncs reuse the same destination. While a mapped remote pane is visible, bounded
+checks update the tag through checking, out-of-sync, syncing, synced and error states.
+
+Synchronization is a complete one-way remote-to-local replacement, including hidden,
+ignored, dependency and `.git` content. It transfers into a sibling staging directory,
+rejects unsafe entries, verifies that the remote tree stayed stable and publishes the
+new copy atomically. If the known local copy changed after the last successful sync,
+the user must explicitly confirm replacement; a local change during the operation
+aborts publication. Failures retain the previous copy and its saved mapping.
 
 ## Sent-message history
 
@@ -666,6 +732,11 @@ Independent native observers follow the live screen even while the actual pane i
 hidden or scrolled. No agent hooks, credentials, project files or integration
 settings are changed. Recognition and activity are heuristic; registration of an
 additional agent command gives it an identity, not a lifecycle profile.
+
+The Terminal workspace uses the shared plasma loading surface only for blocking waits:
+integrated agent startup, selected-directory validation, SSH alias loading, and initial
+Live Diff project discovery. Background Git discovery and directory autocomplete stay
+interactive and use inline status instead of covering their results.
 
 ## Resource ownership
 

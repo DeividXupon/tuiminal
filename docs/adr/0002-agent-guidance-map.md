@@ -23,9 +23,24 @@ them. Agents read the notes for the areas they touch. We do not create tool-spec
 boundaries, and guidance in an unrelated directory would not be automatically
 discovered for a root-started session.
 
-The original 13 sections were preserved verbatim during the mechanical split,
-apart from updating two maintenance instructions to point to the new ownership.
-`bun run check:ai-docs` guards root size, guide size, and local links in CI.
+The initial mechanical split preserved the original 13 sections. On 2026-09-28,
+the root and notes had grown to 165,191 bytes, largely through repeated product
+contracts and regression narratives. The follow-up revision condenses all agent
+notes into task scope, entry points, essential constraints and verification links.
+Existing specifications and tests retain detailed behavior; no duplicate archive
+is added to the reading path.
+
+Reading is conditional on the task: use the map to choose an area and the relevant
+specification section when changing its contract. A prose-only edit does not
+require unrelated feature notes. This follows OpenAI's guidance on
+[scoped instructions and progressive disclosure](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra).
+These are authoring practices, not a universal Markdown size standard.
+
+`bun run check:ai-docs` discovers every Markdown note under `docs/ai/`, checks
+required entry points and local link targets, and enforces repository budgets:
+3 KiB for the root/map, 8 KiB per note and 48 KiB total. Budgets are ceilings, not
+targets; splitting a long note cannot bypass the aggregate limit. File bytes are
+a reproducible size measure, not an exact token count or actual context usage.
 
 ## Consequences
 

@@ -24,10 +24,12 @@ export type ConfigurationModalProps = {
   onSectionFocus: (section: ConfigurationSection) => void
   onNavigationFocus: () => void
   onTerminalAgentCommandsChange?: ((commands: string[]) => void) | undefined
-  onTerminalRemoteProfilesChange?:
-    | ((profiles: UiSettings["terminalRemoteCodexProfiles"]) => void)
+  onTerminalRemoteProfilesList?:
+    | ((signal?: AbortSignal) => Promise<UiSettings["terminalRemoteCodexProfiles"]>)
     | undefined
-  onTerminalRemoteActiveProfileChange?: ((profileId: string) => void) | undefined
+  onTerminalRemoteProfileActivate?:
+    | ((profile: UiSettings["terminalRemoteCodexProfiles"][number]) => void)
+    | undefined
   onTerminalRemoteProfileTest?:
     | ((
         profile: UiSettings["terminalRemoteCodexProfiles"][number],

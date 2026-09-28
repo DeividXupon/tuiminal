@@ -3,6 +3,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
+import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LiveDiffProject } from "../services/live-diff-projects"
 import { TerminalInlineButton } from "./TerminalShortcut"
@@ -98,48 +99,55 @@ export function LiveDiffProjectPicker({
           focusedTextColor: COLORS.text,
         }}
       />
-      <scrollbox ref={list} id="live-diff-project-options" scrollY style={{ flexGrow: 1 }}>
-        {filtered.map((project, index) => (
-          // biome-ignore lint/a11y/noStaticElementInteractions: rows are selectable with arrows and Enter.
-          <box
-            key={project.path}
-            id={`live-diff-project-option-${index}`}
-            onMouseDown={() => onSelect(project.path)}
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              backgroundColor: index === selected ? COLORS.panelRaised : COLORS.canvas,
-            }}
-          >
+      <box style={{ position: "relative", flexGrow: 1, minHeight: 0 }}>
+        <scrollbox ref={list} id="live-diff-project-options" scrollY style={{ flexGrow: 1 }}>
+          {filtered.map((project, index) => (
+            // biome-ignore lint/a11y/noStaticElementInteractions: rows are selectable with arrows and Enter.
+            <box
+              key={project.path}
+              id={`live-diff-project-option-${index}`}
+              onMouseDown={() => onSelect(project.path)}
+              style={{
+                height: 1,
+                flexShrink: 0,
+                flexDirection: "row",
+                backgroundColor: index === selected ? COLORS.panelRaised : COLORS.canvas,
+              }}
+            >
+              <text
+                content={`${index === selected ? "›" : " "} ${truncateDisplay(project.name, Math.max(1, width - 24))}`}
+                wrapMode="none"
+                style={{ flexGrow: 1, fg: index === selected ? COLORS.focus : COLORS.text }}
+              />
+              <text
+                content={truncateDisplay(project.parent, 18)}
+                wrapMode="none"
+                style={{ flexShrink: 0, fg: COLORS.muted }}
+              />
+            </box>
+          ))}
+          {!filtered.length && !loading && (
             <text
-              content={`${index === selected ? "›" : " "} ${truncateDisplay(project.name, Math.max(1, width - 24))}`}
-              wrapMode="none"
-              style={{ flexGrow: 1, fg: index === selected ? COLORS.focus : COLORS.text }}
-            />
-            <text
-              content={truncateDisplay(project.parent, 18)}
-              wrapMode="none"
-              style={{ flexShrink: 0, fg: COLORS.muted }}
-            />
-          </box>
-        ))}
-        {!filtered.length && (
-          <text
-            content={
-              error ||
-              translateUi(
-                loading
-                  ? "Procurando projetos Git…"
-                  : projects.length
+              content={
+                error ||
+                translateUi(
+                  projects.length
                     ? "Nenhum projeto corresponde à pesquisa."
                     : "Nenhum projeto Git encontrado.",
-              )
-            }
-            style={{ fg: error ? COLORS.warning : COLORS.muted }}
-          />
-        )}
-      </scrollbox>
+                )
+              }
+              style={{ fg: error ? COLORS.warning : COLORS.muted }}
+            />
+          )}
+        </scrollbox>
+        <PlasmaLoadingOverlay
+          id="live-diff-project-loader"
+          active={loading}
+          label="Procurando projetos Git…"
+          accent={COLORS.terminal}
+          background={COLORS.canvas}
+        />
+      </box>
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <TerminalInlineButton
           compact

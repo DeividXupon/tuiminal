@@ -24,7 +24,11 @@ Object.assign(Bun, {
 // Applied even by plain `bun test`, before any module can access user settings.
 const testRoot = mkdtempSync(join(tmpdir(), "tuiminal-tests-"))
 const projectRoot = join(testRoot, "project")
+const testHome = join(testRoot, "home")
+const originalHome = process.env.HOME
+const originalUserProfile = process.env.USERPROFILE
 mkdirSync(projectRoot)
+mkdirSync(join(testHome, ".ssh"), { recursive: true })
 writeFileSync(
   join(projectRoot, "package.json"),
   JSON.stringify({
@@ -32,6 +36,13 @@ writeFileSync(
     scripts: { test: "echo fixture" },
   }),
 )
+writeFileSync(
+  join(testHome, ".ssh", "config"),
+  "Host remote-first remote-second oracle-vps remote-setup work-server\n",
+)
+process.env.TUIMINAL_TEST_SSH_CONFIG_PATH = join(testHome, ".ssh", "config")
+process.env.HOME = testHome
+process.env.USERPROFILE = testHome
 process.env.XDG_DATA_HOME = join(testRoot, "data")
 process.env.TUIMINAL_SOURCE_FEATURES = "1"
 process.env.XDG_CONFIG_HOME = join(testRoot, "config")
@@ -52,5 +63,10 @@ for (const name of ["DATABASE_URL", "MYSQL_URL", "POSTGRES_URL", "TUIMINAL_MYSQL
 }
 afterAll(() => {
   Object.assign(Bun, { secrets: originalSecrets })
+  if (originalHome === undefined) delete process.env.HOME
+  else process.env.HOME = originalHome
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = originalUserProfile
+  delete process.env.TUIMINAL_TEST_SSH_CONFIG_PATH
   rmSync(testRoot, { recursive: true, force: true })
 })

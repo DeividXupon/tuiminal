@@ -74,7 +74,12 @@ export function codexResumeThreads(
       if (typeof thread?.id !== "string") return []
       const preview = cleanThreadText(thread.preview, 240)
       const name = cleanThreadText(thread.name, 120)
-      const cwd = cleanThreadText(thread.cwd, 400)
+      const cwd =
+        typeof thread.cwd === "string" &&
+        thread.cwd.length <= 4_096 &&
+        !/[\p{Cc}\p{Cf}]/u.test(thread.cwd)
+          ? thread.cwd
+          : ""
       const gitBranch = cleanThreadText(object(thread.gitInfo)?.branch, 160)
       const updatedAt =
         typeof thread.recencyAt === "number"

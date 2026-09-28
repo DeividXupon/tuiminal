@@ -266,6 +266,7 @@ export function useTerminalSessions(active: boolean) {
         setNotice(`Abrindo ${command.displayCommand}…`)
         focusTerminal(session.id)
       }
+      return session.id
     },
     [activateSession, focusTerminal, startSession],
   )

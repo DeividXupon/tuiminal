@@ -1,29 +1,18 @@
-import type { BoxRenderable, InputRenderable, ScrollBoxRenderable } from "@opentui/core"
+import { RGBA, type BoxRenderable, type ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
-import {
-  COLORS,
-  type TerminalRemoteCodexProfile,
-  terminalRemoteProfileValidationError,
-} from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, type TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
+import { blendTextColor } from "@xupon/tuiminal-core/ui/text-shimmer"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ConfigurationDetailHeader } from "./ConfigurationDetailHeader"
 import { TerminalRemoteActionBar, type TerminalRemoteStatus } from "./TerminalRemoteActionBar"
-import { TerminalRemoteProfileForm } from "./TerminalRemoteProfileForm"
 import { TerminalRemoteProfileList } from "./TerminalRemoteProfileList"
 import { TerminalRemoteReadinessPanel } from "./TerminalRemoteReadinessPanel"
 import { TerminalRemoteSettingsPreview } from "./TerminalRemoteSettingsPreview"
 import {
-  createDraft,
-  FIELD_IDS,
-  type FieldId,
-  profileFromDraft,
-  type RemoteProfileDraft,
-  remoteFieldHighlight,
-  remoteFormKeyAction,
+  remoteProfileKeyAction,
   resultMessage,
-  runRemoteFormKeyAction,
   type TerminalRemoteSettingsDetailProps,
 } from "./terminal-remote-settings"
 
@@ -34,8 +23,8 @@ export function TerminalRemoteSettingsDetail({
   compact,
   contentWidth,
   onBack,
-  onActiveProfileChange,
-  onChange,
+  onListProfiles,
+  onActivateProfile,
   onTest,
   onCheckReadiness,
   onConfigureServer,
@@ -43,19 +32,15 @@ export function TerminalRemoteSettingsDetail({
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const dense = terminal.height <= 20
-  const [selectedId, setSelectedId] = useState(profiles[0]?.id ?? "")
-  const [selectedProfileCursor, setSelectedProfileCursor] = useState<string | null>(
-    profiles[0]?.id ?? null,
-  )
-  const [selectedField, setSelectedField] = useState<FieldId>("name")
-  const [draft, setDraft] = useState<RemoteProfileDraft>(() => createDraft(profiles[0]))
+  const [availableProfiles, setAvailableProfiles] = useState(profiles)
+  const [selectedId, setSelectedId] = useState(activeProfileId ?? profiles[0]?.id ?? "")
   const [status, setStatus] = useState<TerminalRemoteStatus>(null)
+  const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [checkingReadiness, setCheckingReadiness] = useState(false)
   const [readiness, setReadiness] = useState<Awaited<ReturnType<typeof onCheckReadiness>> | null>(
     null,
   )
-  const [editingField, setEditingField] = useState<FieldId | null>(null)
   const [formFocused, setFormFocused] = useState(
     () =>
       focusedRenderableId(renderer.currentFocusedRenderable)?.startsWith(
@@ -63,22 +48,68 @@ export function TerminalRemoteSettingsDetail({
       ) ?? false,
   )
   const view = useRef<BoxRenderable | null>(null)
-  const inputs = useRef(new Map<FieldId, InputRenderable>())
   const profileScroll = useRef<ScrollBoxRenderable | null>(null)
-  const fieldScroll = useRef<ScrollBoxRenderable | null>(null)
+  const loadController = useRef<AbortController | null>(null)
   const operationController = useRef<AbortController | null>(null)
   const formOwnedFocus = useRef(formFocused)
   const enteringForm = useRef(false)
-  const fieldHighlight = remoteFieldHighlight()
+  const highlight = blendTextColor(RGBA.fromHex(COLORS.panel), RGBA.fromHex(COLORS.terminal), 0.22)
+
+  const cancelOperation = useCallback(() => {
+    operationController.current?.abort()
+    operationController.current = null
+    setTesting(false)
+    setCheckingReadiness(false)
+  }, [])
+  const loadProfiles = useCallback(async () => {
+    loadController.current?.abort()
+    cancelOperation()
+    const controller = new AbortController()
+    loadController.current = controller
+    setLoading(true)
+    setStatus({ message: translateUi("Carregando ~/.ssh/config…") })
+    setReadiness(null)
+    try {
+      const discovered = await onListProfiles(controller.signal)
+      if (controller.signal.aborted) return
+      setAvailableProfiles(discovered)
+      setSelectedId((current) =>
+        discovered.some((profile) => profile.id === current)
+          ? current
+          : (discovered.find((profile) => profile.id === activeProfileId)?.id ??
+            discovered[0]?.id ??
+            ""),
+      )
+      setStatus(
+        discovered.length
+          ? { message: translateUi("Hosts SSH carregados de ~/.ssh/config."), ok: true }
+          : {
+              message: translateUi("Nenhum Host explícito foi encontrado em ~/.ssh/config."),
+            },
+      )
+    } catch {
+      if (!controller.signal.aborted)
+        setStatus({ message: translateUi("Não foi possível ler ~/.ssh/config."), ok: false })
+    } finally {
+      if (loadController.current === controller) {
+        loadController.current = null
+        setLoading(false)
+      }
+    }
+  }, [activeProfileId, cancelOperation, onListProfiles])
 
   useEffect(() => {
-    const selected = profiles.find((profile) => profile.id === selectedId)
-    if (selected) setDraft(createDraft(selected))
-  }, [profiles, selectedId])
+    void loadProfiles()
+    return () => {
+      loadController.current?.abort()
+      operationController.current?.abort()
+    }
+  }, [loadProfiles])
   useEffect(() => {
-    fieldScroll.current?.scrollChildIntoView(`configuration-terminal-remote-field-${selectedField}`)
-  }, [selectedField])
-  useEffect(() => () => operationController.current?.abort(), [])
+    profileScroll.current?.scrollChildIntoView(
+      `configuration-terminal-remote-profile-${selectedId}`,
+    )
+  }, [selectedId])
   useEffect(() => {
     const update = () => {
       const focusedId = focusedRenderableId(renderer.currentFocusedRenderable)
@@ -87,9 +118,6 @@ export function TerminalRemoteSettingsDetail({
         enteringForm.current = true
       formOwnedFocus.current = ownsForm
       setFormFocused(ownsForm)
-      setEditingField(
-        FIELD_IDS.find((field) => focusedId === `configuration-terminal-remote-${field}`) ?? null,
-      )
     }
     update()
     renderer.on("focused_renderable", update)
@@ -98,27 +126,8 @@ export function TerminalRemoteSettingsDetail({
     }
   }, [renderer])
 
-  const selectField = useCallback((field: FieldId) => {
-    setSelectedProfileCursor(null)
-    setSelectedField(field)
-  }, [])
-  const focusField = useCallback(
-    (field: FieldId) => {
-      selectField(field)
-      inputs.current.get(field)?.focus()
-    },
-    [selectField],
-  )
-  const focusView = useCallback(() => {
-    for (const input of inputs.current.values()) input.blur()
-    view.current?.focus()
-  }, [])
-  const cancelOperation = useCallback(() => {
-    operationController.current?.abort()
-    operationController.current = null
-    setTesting(false)
-    setCheckingReadiness(false)
-  }, [])
+  const selectedProfile = availableProfiles.find((profile) => profile.id === selectedId) ?? null
+  const focusView = useCallback(() => view.current?.focus(), [])
   const leaveForm = useCallback(() => {
     cancelOperation()
     onBack()
@@ -127,41 +136,47 @@ export function TerminalRemoteSettingsDetail({
       renderer.root.findDescendantById("configuration-category-open")
     navigationTarget?.focus()
   }, [cancelOperation, onBack, renderer])
-  const updateField = useCallback(
-    (field: FieldId, value: string) => {
+  const selectProfile = useCallback(
+    (profile: TerminalRemoteCodexProfile) => {
       cancelOperation()
-      setDraft((current) => ({ ...current, [field]: value }))
+      setSelectedId(profile.id)
       setStatus(null)
       setReadiness(null)
+      focusView()
     },
-    [cancelOperation],
+    [cancelOperation, focusView],
   )
-  const save = useCallback(() => {
-    const profile = profileFromDraft(draft)
-    const invalid = terminalRemoteProfileValidationError(profile)
-    if (invalid) {
-      setStatus({
-        message: translateUi("Preencha todos os campos com valores válidos."),
-        ok: false,
-      })
-      focusField(invalid)
-      return
-    }
-    onChange([...profiles.filter((item) => item.id !== profile.id), profile])
-    setSelectedId(profile.id)
-    setStatus({ message: translateUi("Perfil remoto salvo."), ok: true })
-  }, [draft, focusField, onChange, profiles])
+  const moveProfile = useCallback(
+    (direction: -1 | 1) => {
+      if (!availableProfiles.length) return
+      const current = Math.max(
+        0,
+        availableProfiles.findIndex((profile) => profile.id === selectedId),
+      )
+      const next =
+        availableProfiles[
+          (current + direction + availableProfiles.length) % availableProfiles.length
+        ]
+      if (next) setSelectedId(next.id)
+    },
+    [availableProfiles, selectedId],
+  )
+  const activateProfile = useCallback(() => {
+    if (!selectedProfile) return
+    onActivateProfile(selectedProfile)
+    setStatus({ message: translateUi("Perfil remoto ativo."), ok: true })
+  }, [onActivateProfile, selectedProfile])
   const test = useCallback(async () => {
+    if (!selectedProfile) return
     operationController.current?.abort()
-    focusView()
     const controller = new AbortController()
     operationController.current = controller
     setTesting(true)
     setStatus({ message: translateUi("Testando conexão SSH…") })
     try {
-      const result = await onTest(profileFromDraft(draft), controller.signal)
-      if (controller.signal.aborted) return
-      setStatus({ message: translateUi(resultMessage(result)), ok: result.ok })
+      const result = await onTest(selectedProfile, controller.signal)
+      if (!controller.signal.aborted)
+        setStatus({ message: translateUi(resultMessage(result)), ok: result.ok })
     } catch {
       if (!controller.signal.aborted)
         setStatus({ message: translateUi("O teste de conexão SSH falhou."), ok: false })
@@ -171,26 +186,16 @@ export function TerminalRemoteSettingsDetail({
         setTesting(false)
       }
     }
-  }, [draft, focusView, onTest])
+  }, [onTest, selectedProfile])
   const verifyReadiness = useCallback(async () => {
-    const profile = profileFromDraft(draft)
-    const invalid = terminalRemoteProfileValidationError(profile)
-    if (invalid) {
-      setStatus({
-        message: translateUi("Preencha todos os campos com valores válidos."),
-        ok: false,
-      })
-      focusField(invalid)
-      return
-    }
+    if (!selectedProfile) return
     operationController.current?.abort()
-    focusView()
     const controller = new AbortController()
     operationController.current = controller
     setCheckingReadiness(true)
     setStatus({ message: translateUi("Verificando servidor…") })
     try {
-      const report = await onCheckReadiness(profile, controller.signal)
+      const report = await onCheckReadiness(selectedProfile, controller.signal)
       if (controller.signal.aborted) return
       setReadiness(report)
       const ready = report.githubSsh.ready && report.codex.ready
@@ -209,71 +214,12 @@ export function TerminalRemoteSettingsDetail({
         setCheckingReadiness(false)
       }
     }
-  }, [draft, focusField, focusView, onCheckReadiness])
+  }, [onCheckReadiness, selectedProfile])
   const configureServer = useCallback(() => {
-    const profile = profileFromDraft(draft)
-    const invalid = terminalRemoteProfileValidationError(profile)
-    if (invalid) {
-      setStatus({
-        message: translateUi("Preencha todos os campos com valores válidos."),
-        ok: false,
-      })
-      focusField(invalid)
-      return
-    }
+    if (!selectedProfile) return
     cancelOperation()
-    onConfigureServer(profile)
-  }, [cancelOperation, draft, focusField, onConfigureServer])
-  const createNew = useCallback(() => {
-    cancelOperation()
-    setSelectedId("")
-    setDraft(createDraft())
-    setStatus(null)
-    setReadiness(null)
-    setTimeout(() => focusField("name"), 0)
-  }, [cancelOperation, focusField])
-  const selectProfile = useCallback(
-    (profile: TerminalRemoteCodexProfile) => {
-      cancelOperation()
-      setSelectedId(profile.id)
-      setDraft(createDraft(profile))
-      setStatus(null)
-      setReadiness(null)
-      selectField("name")
-      focusView()
-    },
-    [cancelOperation, focusView, selectField],
-  )
-  const moveField = useCallback(
-    (direction: -1 | 1) => {
-      const items = [...profiles.map((profile) => profile.id), ...FIELD_IDS]
-      const current = items.indexOf(selectedProfileCursor ?? selectedField)
-      const next = items[(current + direction + items.length) % items.length]
-      const profile = profiles.find((candidate) => candidate.id === next)
-      if (profile) {
-        setSelectedProfileCursor(profile.id)
-        profileScroll.current?.scrollChildIntoView(
-          `configuration-terminal-remote-profile-${profile.id}`,
-        )
-      } else if (next) selectField(next as FieldId)
-    },
-    [profiles, selectField, selectedField, selectedProfileCursor],
-  )
-  const activateSelection = useCallback(() => {
-    const profile = profiles.find((candidate) => candidate.id === selectedProfileCursor)
-    if (profile) selectProfile(profile)
-    else focusField(selectedField)
-  }, [focusField, profiles, selectProfile, selectedField, selectedProfileCursor])
-  const activateProfile = useCallback(() => {
-    const profileId = selectedProfileCursor ?? selectedId
-    if (!profiles.some((profile) => profile.id === profileId)) return
-    onActiveProfileChange(profileId)
-    setStatus({ message: translateUi("Perfil remoto ativo."), ok: true })
-  }, [onActiveProfileChange, profiles, selectedId, selectedProfileCursor])
-  const registerInput = useCallback((field: FieldId, input: InputRenderable | null) => {
-    if (input) inputs.current.set(field, input)
-    else inputs.current.delete(field)
-  }, [])
+    onConfigureServer(selectedProfile)
+  }, [cancelOperation, onConfigureServer, selectedProfile])
 
   useKeyboard((key) => {
     if (key.defaultPrevented || !formFocused) return
@@ -281,27 +227,21 @@ export function TerminalRemoteSettingsDetail({
       enteringForm.current = false
       if (key.name === "enter" || key.name === "return") return
     }
-    const action = remoteFormKeyAction(
-      key,
-      [...inputs.current.values()].some((input) => input.focused),
-      testing || checkingReadiness,
-    )
+    const action = remoteProfileKeyAction(key, loading || testing || checkingReadiness)
     if (!action) return
     key.preventDefault()
     key.stopPropagation()
-    runRemoteFormKeyAction(action, {
+    const handlers: Record<typeof action, () => void> = {
       activate: activateProfile,
-      blur: focusView,
       close: leaveForm,
-      edit: activateSelection,
-      previous: () => moveField(-1),
-      next: () => moveField(1),
-      new: createNew,
-      save,
+      previous: () => moveProfile(-1),
+      next: () => moveProfile(1),
+      reload: () => void loadProfiles(),
       test: () => void test(),
       verify: () => void verifyReadiness(),
       configure: configureServer,
-    })
+    }
+    handlers[action]()
   })
 
   return (
@@ -315,7 +255,7 @@ export function TerminalRemoteSettingsDetail({
         <ConfigurationDetailHeader
           section="remoteConnection"
           notice={notice}
-          hint="[J/K/↑/↓] navegar · [Enter] editar · [Esc] desfocar"
+          hint="[J/K/↑/↓] navegar · [Enter/A] ativar · [Esc] voltar"
           compact={compact}
           contentWidth={contentWidth}
         />
@@ -333,41 +273,23 @@ export function TerminalRemoteSettingsDetail({
           id="configuration-terminal-remote-form"
           style={{ width: "100%", flexGrow: 1, minHeight: 1 }}
         >
-          <TerminalRemoteProfileList
-            profiles={profiles}
-            activeProfileId={activeProfileId}
-            loadedProfileId={selectedId}
-            cursorProfileId={selectedProfileCursor}
-            contentWidth={contentWidth}
-            dense={dense}
-            highlight={fieldHighlight}
-            scrollRef={profileScroll}
-            onSelect={selectProfile}
-          />
           {dense ? null : (
             <text
-              id="configuration-terminal-remote-loaded"
-              content={truncateDisplay(
-                selectedId
-                  ? `${translateUi("EDITANDO")}: ${draft.name}`
-                  : translateUi("NOVO PERFIL"),
-                contentWidth,
+              content={translateUi(
+                "O Tuiminal usa aliases Host de ~/.ssh/config; usuário, porta e identidade ficam no OpenSSH.",
               )}
-              style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
+              style={{ flexShrink: 0, fg: COLORS.muted }}
             />
           )}
-          <TerminalRemoteProfileForm
-            draft={draft}
-            compact={compact}
+          <TerminalRemoteProfileList
+            profiles={availableProfiles}
+            activeProfileId={activeProfileId}
+            cursorProfileId={selectedId}
+            loading={loading}
             dense={dense}
-            selectedField={selectedField}
-            editingField={editingField}
-            highlight={fieldHighlight}
-            scrollRef={fieldScroll}
-            registerInput={registerInput}
-            onSelectField={focusField}
-            onChange={updateField}
-            onSubmitLast={save}
+            highlight={highlight}
+            scrollRef={profileScroll}
+            onSelect={selectProfile}
           />
           <TerminalRemoteReadinessPanel
             report={readiness}
@@ -378,13 +300,12 @@ export function TerminalRemoteSettingsDetail({
             contentWidth={contentWidth}
             dense={dense}
             status={status}
+            loading={loading}
             testing={testing}
             checkingReadiness={checkingReadiness}
-            canActivate={Boolean(selectedProfileCursor || selectedId)}
-            canConfigure={!terminalRemoteProfileValidationError(profileFromDraft(draft))}
+            hasSelection={Boolean(selectedProfile)}
             onBack={leaveForm}
-            onNew={createNew}
-            onSave={save}
+            onReload={() => void loadProfiles()}
             onActivate={activateProfile}
             onTest={() => void test()}
             onVerify={() => void verifyReadiness()}

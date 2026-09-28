@@ -1,10 +1,18 @@
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
-import { checkRemoteServerReadiness, testRemoteCodexConnection } from "../features/components"
+import {
+  checkRemoteServerReadiness,
+  listSshConfigProfiles,
+  testRemoteCodexConnection,
+} from "../features/components"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import type { useConfigurationLayer } from "../hooks/use-configuration-layer"
 import type { ConfigurationContext } from "../model/configuration-context"
 import { TOOL_LABELS, type ToolId } from "../tool-catalog"
 import { ConfigurationModal } from "./ConfigurationModal"
+
+function listTerminalSshConfigProfiles(signal?: AbortSignal) {
+  return listSshConfigProfiles(signal ? { signal } : undefined)
+}
 
 export function WorkspaceConfigurationOverlay({
   configuration,
@@ -59,11 +67,12 @@ export function WorkspaceConfigurationOverlay({
         onTerminalAgentCommandsChange={(terminalAgentCommands) =>
           applySettings({ terminalAgentCommands })
         }
-        onTerminalRemoteProfilesChange={(terminalRemoteCodexProfiles) =>
-          applySettings({ terminalRemoteCodexProfiles })
-        }
-        onTerminalRemoteActiveProfileChange={(terminalRemoteCodexActiveProfileId) =>
-          applySettings({ terminalRemoteCodexActiveProfileId })
+        onTerminalRemoteProfilesList={listTerminalSshConfigProfiles}
+        onTerminalRemoteProfileActivate={(profile) =>
+          applySettings({
+            terminalRemoteCodexProfiles: [profile],
+            terminalRemoteCodexActiveProfileId: profile.id,
+          })
         }
         onTerminalRemoteProfileTest={testRemoteCodexConnection}
         onTerminalRemoteReadinessCheck={checkRemoteServerReadiness}

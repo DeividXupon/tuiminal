@@ -7,35 +7,19 @@ import type { RefObject } from "react"
 function TerminalRemoteProfileRow({
   profile,
   active,
-  loaded,
   cursor,
-  activeLabel,
-  inactiveLabel,
-  editingLabel,
   stateWidth,
-  editingWidth,
-  availableDetailsWidth,
-  nameWidth,
-  showEndpoint,
   highlight,
   onSelect,
 }: {
   profile: TerminalRemoteCodexProfile
   active: boolean
-  loaded: boolean
   cursor: boolean
-  activeLabel: string
-  inactiveLabel: string
-  editingLabel: string
   stateWidth: number
-  editingWidth: number
-  availableDetailsWidth: number
-  nameWidth: number
-  showEndpoint: boolean
   highlight: RGBA
   onSelect: (profile: TerminalRemoteCodexProfile) => void
 }) {
-  const endpoint = `${profile.user}@${profile.host}:${profile.port}`
+  const state = active ? `● ${translateUi("ATIVO")}` : `○ ${translateUi("INATIVO")}`
   return (
     <Button
       id={`configuration-terminal-remote-profile-${profile.id}`}
@@ -61,7 +45,7 @@ function TerminalRemoteProfileRow({
           />
           <text
             id={`configuration-terminal-remote-profile-status-${profile.id}`}
-            content={active ? activeLabel : inactiveLabel}
+            content={state}
             style={{
               width: stateWidth,
               flexShrink: 0,
@@ -69,23 +53,9 @@ function TerminalRemoteProfileRow({
             }}
           />
           <text
-            id={`configuration-terminal-remote-profile-editing-${profile.id}`}
-            content={loaded ? editingLabel : ""}
-            style={{ width: editingWidth, flexShrink: 0, fg: COLORS.terminal }}
+            content={truncateDisplay(profile.host, Math.max(1, 80 - stateWidth))}
+            style={{ flexGrow: 1, fg: COLORS.text }}
           />
-          <text
-            content={truncateDisplay(profile.name, nameWidth)}
-            style={{ width: nameWidth + 1, flexShrink: 0, fg: COLORS.text }}
-          />
-          {showEndpoint ? (
-            <text
-              content={truncateDisplay(
-                endpoint,
-                Math.max(1, availableDetailsWidth - nameWidth - 1),
-              )}
-              style={{ flexGrow: 1, fg: COLORS.muted }}
-            />
-          ) : null}
         </box>
       )}
     </Button>
@@ -95,9 +65,8 @@ function TerminalRemoteProfileRow({
 export function TerminalRemoteProfileList({
   profiles,
   activeProfileId,
-  loadedProfileId,
   cursorProfileId,
-  contentWidth,
+  loading,
   dense,
   highlight,
   scrollRef,
@@ -105,36 +74,31 @@ export function TerminalRemoteProfileList({
 }: {
   profiles: TerminalRemoteCodexProfile[]
   activeProfileId: string | null
-  loadedProfileId: string
   cursorProfileId: string | null
-  contentWidth: number
+  loading: boolean
   dense: boolean
   highlight: RGBA
   scrollRef: RefObject<ScrollBoxRenderable | null>
   onSelect: (profile: TerminalRemoteCodexProfile) => void
 }) {
-  const listHeight = dense ? 1 : Math.max(1, Math.min(3, profiles.length))
   const activeLabel = `● ${translateUi("ATIVO")}`
   const inactiveLabel = `○ ${translateUi("INATIVO")}`
-  const editingLabel = `◆ ${translateUi("EDITANDO")}`
   const stateWidth = Math.max(displayWidth(activeLabel), displayWidth(inactiveLabel)) + 1
-  const editingWidth = displayWidth(editingLabel) + 1
-  const availableDetailsWidth = Math.max(1, contentWidth - stateWidth - editingWidth - 4)
-  const showEndpoint = availableDetailsWidth >= 18
-  const nameWidth = showEndpoint
-    ? Math.max(8, Math.min(20, Math.floor(availableDetailsWidth * 0.46)))
-    : availableDetailsWidth
+  const listHeight = dense ? 1 : Math.max(2, Math.min(8, profiles.length))
   return (
-    <box id="configuration-terminal-remote-profiles" style={{ flexShrink: 0 }}>
+    <box
+      id="configuration-terminal-remote-profiles"
+      style={{ flexGrow: 1, minHeight: dense ? 1 : 2 }}
+    >
       {dense ? null : (
-        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-          <text content={translateUi("Perfis Codex remotos")} style={{ fg: COLORS.terminal }} />
-          {contentWidth < 60 ? null : (
-            <text content={`  ${translateUi("▶ cursor")}`} style={{ fg: COLORS.muted }} />
-          )}
-        </box>
+        <text
+          content={translateUi("Hosts SSH configurados")}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
+        />
       )}
-      {profiles.length ? (
+      {loading ? (
+        <text content={translateUi("Carregando ~/.ssh/config…")} style={{ fg: COLORS.muted }} />
+      ) : profiles.length ? (
         <scrollbox
           ref={scrollRef}
           scrollY
@@ -148,16 +112,8 @@ export function TerminalRemoteProfileList({
               key={profile.id}
               profile={profile}
               active={profile.id === activeProfileId}
-              loaded={profile.id === loadedProfileId}
               cursor={profile.id === cursorProfileId}
-              activeLabel={activeLabel}
-              inactiveLabel={inactiveLabel}
-              editingLabel={editingLabel}
               stateWidth={stateWidth}
-              editingWidth={editingWidth}
-              availableDetailsWidth={availableDetailsWidth}
-              nameWidth={nameWidth}
-              showEndpoint={showEndpoint}
               highlight={highlight}
               onSelect={onSelect}
             />
@@ -165,8 +121,8 @@ export function TerminalRemoteProfileList({
         </scrollbox>
       ) : (
         <text
-          content={translateUi("Nenhum perfil remoto salvo.")}
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+          content={translateUi("Nenhum Host explícito foi encontrado em ~/.ssh/config.")}
+          style={{ flexShrink: 0, fg: COLORS.muted }}
         />
       )}
     </box>

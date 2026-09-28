@@ -295,11 +295,8 @@ describe("Free Terminal presentation", () => {
         remote: {
           profile: {
             id: "work",
-            name: "Work",
-            host: "example.test",
-            user: "ubuntu",
-            port: 22,
-            identityFile: "/tmp/work.key",
+            name: "work-server",
+            host: "work-server",
           },
           workingDirectory: "/srv/project",
         },

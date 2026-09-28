@@ -223,14 +223,6 @@ export const TERMINAL_REMOTE_SETUP_MESSAGES = [
     "Codex CLI가 아직 설치되어 있지 않습니다.",
   ],
   [
-    "A chave privada local não foi encontrada.",
-    "The local private key was not found.",
-    "No se encontró la clave privada local.",
-    "ローカルの秘密鍵が見つかりません。",
-    "未找到本地私钥。",
-    "로컬 개인 키를 찾을 수 없습니다.",
-  ],
-  [
     "A verificação falhou.",
     "The check failed.",
     "La verificación falló.",

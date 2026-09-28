@@ -44,8 +44,8 @@ export function ConfigurationModal({
   onSectionFocus,
   onNavigationFocus,
   onTerminalAgentCommandsChange,
-  onTerminalRemoteProfilesChange,
-  onTerminalRemoteActiveProfileChange,
+  onTerminalRemoteProfilesList,
+  onTerminalRemoteProfileActivate,
   onTerminalRemoteProfileTest,
   onTerminalRemoteReadinessCheck,
   onConfigureRemoteServer,
@@ -203,8 +203,8 @@ export function ConfigurationModal({
               queryHistoryCount={queryHistoryCount}
               tutorialLabel={tutorialLabel}
               onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
-              onTerminalRemoteProfilesChange={onTerminalRemoteProfilesChange}
-              onTerminalRemoteActiveProfileChange={onTerminalRemoteActiveProfileChange}
+              onTerminalRemoteProfilesList={onTerminalRemoteProfilesList}
+              onTerminalRemoteProfileActivate={onTerminalRemoteProfileActivate}
               onTerminalRemoteProfileTest={onTerminalRemoteProfileTest}
               onTerminalRemoteReadinessCheck={onTerminalRemoteReadinessCheck}
               onConfigureRemoteServer={onConfigureRemoteServer}
@@ -259,8 +259,8 @@ export function ConfigurationModal({
                 queryHistoryCount={queryHistoryCount}
                 tutorialLabel={tutorialLabel}
                 onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
-                onTerminalRemoteProfilesChange={onTerminalRemoteProfilesChange}
-                onTerminalRemoteActiveProfileChange={onTerminalRemoteActiveProfileChange}
+                onTerminalRemoteProfilesList={onTerminalRemoteProfilesList}
+                onTerminalRemoteProfileActivate={onTerminalRemoteProfileActivate}
                 onTerminalRemoteProfileTest={onTerminalRemoteProfileTest}
                 onTerminalRemoteReadinessCheck={onTerminalRemoteReadinessCheck}
                 onConfigureRemoteServer={onConfigureRemoteServer}

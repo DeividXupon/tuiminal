@@ -40,12 +40,12 @@ export const TERMINAL_REMOTE_HANDSHAKE_MESSAGES = [
     "선택한 폴더가 원격 서버에 없습니다.",
   ],
   [
-    "O daemon do Codex não iniciou no servidor remoto.",
-    "The Codex daemon did not start on the remote server.",
-    "El daemon de Codex no se inició en el servidor remoto.",
-    "リモートサーバーで Codex デーモンを起動できませんでした。",
-    "Codex 守护进程未能在远程服务器上启动。",
-    "원격 서버에서 Codex 데몬이 시작되지 않았습니다.",
+    "O app-server do Codex não iniciou no servidor remoto.",
+    "Codex app-server did not start on the remote server.",
+    "El app-server de Codex no se inició en el servidor remoto.",
+    "リモートサーバーで Codex app-server を起動できませんでした。",
+    "Codex app-server 未能在远程服务器上启动。",
+    "원격 서버에서 Codex app-server가 시작되지 않았습니다.",
   ],
   [
     "O Codex remoto rejeitou o handshake initialize.",
@@ -62,14 +62,6 @@ export const TERMINAL_REMOTE_HANDSHAKE_MESSAGES = [
     "リモート Codex の initialize 応答に互換性がありません。",
     "远程 Codex 的 initialize 响应不兼容。",
     "원격 Codex의 initialize 응답이 호환되지 않습니다.",
-  ],
-  [
-    "As versões local e remota do Codex são incompatíveis.",
-    "The local and remote Codex versions are incompatible.",
-    "Las versiones local y remota de Codex son incompatibles.",
-    "ローカルとリモートの Codex バージョンに互換性がありません。",
-    "本地和远程 Codex 版本不兼容。",
-    "로컬 및 원격 Codex 버전이 호환되지 않습니다.",
   ],
   [
     "Não foi possível verificar a versão local do Codex.",

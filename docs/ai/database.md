@@ -1,59 +1,74 @@
-# Database workspace
+# Database
 
-## Database workspace
+Use for connections, SQL, grid state, privacy and staged writes.
+Code: [feature](../../packages/feature-database/src/).
+[Architecture](../architecture.md#existing-separations) maps ownership;
+[Database priorities](../plans/database-next.md) describe future work only.
 
-- No database is configured by default. The empty Database screen offers connection creation instead of silently connecting through MCP or any developer-specific service.
-- Supported connection drivers are MySQL/MariaDB, PostgreSQL, SQLite, and optional MySQL-compatible MCP. MCP is opt-in and read-only; never imply that MCP is the default database path.
-- Saved connections can be created, switched, edited, tested, and deleted. Environment URLs may be discovered, but are not persisted as editable saved profiles.
-- Temporary connection tests close their exact native/MCP client on both success and failure; MCP connect/tool-discovery failures also release the newly created client. Cleanup failures must not replace an original query failure. Decode URL passwords once and replace/clear the environment profile's session password when rediscovering it; never reuse an earlier URL's password for a passwordless or invalid replacement.
-- The connection form is fully keyboard reachable: `[Tab]`/`[Shift+Tab]` traverse drivers, fields, toggles, and actions; `[Ctrl+D]` changes driver, `[Ctrl+T]` TLS, `[Ctrl+K]` keychain, `[Ctrl+W]` access, `[Ctrl+R]` tests, and `[Ctrl+S]` saves. `[Esc]` first blurs an input and only then returns/closes.
-- Connection metadata and saved queries live in `~/.config/tuiminal/databases.json` with restricted permissions. Passwords belong in the operating-system credential manager and must never be written to that JSON file, logs, tests, or fixtures.
-- Password masking must overwrite the full rendered input width, not only one cell per character: native text containing wide Unicode glyphs can otherwise leave a plaintext suffix visible. Cover keyboard editing, horizontal movement, clearing and resize with synthetic values.
-- SQLite paths must support absolute paths and explicit local files. TLS configuration passed to native clients must use the client's expected boolean/object shape.
-- Database write access is opt-in per saved connection. The UI must clearly show read-only versus read/write state.
-- The main Database layout has three keyboard-focusable panes: catalog/tree, table/query grid, and the selected-row inspector. Pane focus can change without destroying selection or editor state.
-- Keep the main data grid free of redundant title/status chrome: table history or actions begin at the top instead of repeating `schema.table`, driver, and RO/RW. The inactive row inspector does not show navigation hints, and the table-search modal omits explanatory `%text%` copy so both areas give their space to data and controls.
-- Horizontal navigation is contextual in Database, with `[H]`/`[L]` as exact aliases for `[←]`/`[→]`: it performs the pane's local horizontal action first, then crosses to the adjacent pane when that direction has no remaining local action. For example, `[L]` or `[→]` moves catalog to grid, both pairs traverse grid columns until an edge, and `[H]` or `[←]` moves inspector back to grid. Text inputs retain their own cursor navigation.
-- The catalog groups tables and views by schema in a folder tree. The main view has `[1] Dados`, `[2] Colunas`, `[3] Índices`, and `[4] Schema`; the right inspector shows all values of the selected row vertically. Schema view includes DDL, constraints, indexes, incoming/outgoing foreign keys, their rules, and related tables. `[G]` toggles between those details and a one-hop ASCII diagram centered on the selected table. Draw incoming foreign keys on the left and outgoing keys on the right, with source-to-target arrows and column pairs; stack source/target boxes on narrow terminals and keep self-references local. The diagram uses the already loaded schema metadata and must not trigger another database read.
-- In catalog search, `[/]` focuses the filter input. `[Enter]` there moves focus to the filtered table list without opening anything, with the first matching table selected when the current table is absent. `[Enter]` in the list opens its selected table; clicking a table in the list still opens it directly.
-- Table tabs are unique per database connection and keep at most six tables. Reopening a listed table focuses its existing tab instead of adding a duplicate.
-- Table-tab navigation uses `[A←]` and `[F→]` visually and plain `A` and `F` on the keyboard. `[W]` opens the SQL workspace and `[O]` cycles table sort so the directional keys remain unambiguous. Number keys remain reserved for `[1] Dados`, `[2] Colunas`, and `[3] Índices`.
-- The table-history strip is visually separated from `[1] Dados`, `[2] Colunas`, and `[3] Índices`: table tabs sit on a horizontal rule and a second full-width rule closes the strip below them.
-- Table history is session-local unless persistence is explicitly added later. Never duplicate `x` in `x → y → x`; select the existing `x` tab.
-- The catalog list flexes to the rendered sidebar height. The main table grid uses the same 50-row sliding window and 40-row increments as SQL results, without pagination controls. Horizontal column navigation preserves readable cell widths, and mouse scrolling/selecting works in table and inspector panes. Resizing preserves the selected record and its scroll position.
-- Database plasma loader insets must match the visible table-history and view/action rows so the absolute overlay covers only the dynamic catalog/table/query body and never obscures usable chrome.
-- Below 100 columns the catalog narrows before starving the grid; database action bars split into two rows, or three below a 42-column data area. Never let controls overwrite borders or neighboring help text.
-- Sensitive columns start visible in the grid, inspector, and ad-hoc SQL results. `[V]` explicitly masks them; revealing masked values requires confirmation. The control is red only while values remain masked, and changing visibility must not mutate stored data.
-- Sensitive matching uses configurable literal column-name fragments, ignoring case and common separators. Preserve the existing default terms, allow an explicitly empty list to disable automatic masking, and refresh open table/query results after this setting changes.
-- `[A]` opens or returns to the SQL workspace and `[Ctrl+A]` executes only the semicolon-delimited statement containing the cursor. Statement detection must ignore delimiters inside quotes, comments, backticks, and PostgreSQL dollar quotes. The textarea has a native, scroll-synchronized line-number gutter plus stable SQL syntax highlighting and autocomplete for keywords, functions, tables, and table columns.
-- The SQL workspace supports up to six mounted editor/result tabs. `[Ctrl+N]` creates, `[Ctrl+W]` closes, number buttons select, and `[Alt+←/→]` cycles them. Each tab preserves its own editor, result, error, selection, and layout state when the workspace is hidden or a table is opened; inactive tabs must not intercept keyboard input. Switching database connections may clear tabs to prevent cross-database execution.
-- Keep the native SQL editor mounted while results are maximized; hide its container instead of conditionally removing it. Database ancestor panels must not be keyed by layout. Regressions must preserve editor identity, buffer, cursor and existing results across compact/framed changes, including inactive SQL tabs.
-- `[Ctrl+↑/↓]` changes the editor/result split in stable increments. `[F10]` maximizes the focused editor or result and restores the split; all layout controls remain mouse-accessible.
-- A running editor query exposes `[Ctrl+X] Cancelar`. MySQL/PostgreSQL use the native Bun SQL query handle; SQLite editor queries run in an exact tracked child process because native SQLite execution can block the UI thread. Reuse an idle SQLite query child for nearby executions, expire it after 30 seconds of inactivity, and destroy only the executing child on cancellation. Application shutdown must terminate every child created by Tuiminal and must not leave a CPU-consuming query behind.
-- The main service and bundled SQLite query child use the same pure `model/query-result-metadata.ts` normalization for result columns and affected-row counts. Keep the service's existing exports for consumers and include the helper in the built worker payload.
-- Keep schema inspection lightweight: fetch independent metadata concurrently and avoid per-index/per-table N+1 queries. Leaving the Indexes or Schema view must stop its loading animation so hidden views do not trigger background rerenders.
-- Concurrent requests for the same table schema share one in-flight read. The completed schema cache is LRU-bounded to 256 tables; writes and connection shutdown invalidate both completed and pending entries so a stale read cannot repopulate the cache.
-- A simple single-table `SELECT` reuses the main grid's staged row controls and selected-row inspector. Ambiguous or derived query results remain read-only, and update/delete require every primary-key field in the result.
-- Editable SQL results require a dialect-aware, direct, unique projection from one unambiguous catalog relation. Expressions, renamed/duplicate fields, mixed wildcards, executable comments, unknown syntax, and mismatched result/schema fields must fail closed for single-row, batch, and insert controls. A result column label alone never proves provenance.
-- Run native PostgreSQL reads in a pinned `READ ONLY` transaction. MySQL/MariaDB additionally need a session-level READ ONLY default on that same connection because DDL implicitly commits transactions; restore the exact prior default before reuse and invalidate/close the pool if restoration fails. SQLite editor reads use a readonly handle, including reads on RW profiles. Classify unknown routines, state-changing PRAGMAs, executable comments and effectful EXPLAIN as requiring RW and confirmation. The app is not a sandbox for server routines; use least-privilege credentials and require the optional MCP server to enforce read-only access.
-- SQL results and main-table records keep a sliding window of at most 50 fetched rows. Repeating `[J/↓]` on the last row loads 40 rows forward and repeating `[K/↑]` on the first row loads 40 rows backward; retain the 10-row overlap, discard 40 rows from the opposite edge, keep incremental loading inline, and do not create another history entry for that fetch. Preserve the next absolute row as the selection across either boundary. Row navigation must compute scroll position from the selected row and the rendered viewport so the first and last records remain reachable. While the grid is focused, `[J/K]` and `[↑/↓]` move the active row; the scrollbox only follows that selection and must not consume those keys as free scrolling. At the first SQL result column, `[H/←]` returns to the catalog and hides the query workspace without discarding its mounted tab state; `[A]` reopens it.
-- Keep main-table and SQL-result row subtrees memoized behind stable column arrays and action callbacks. Moving the active cell should rerender only the previously selected and newly selected rows; loading, sorting, masking, or staging data must still invalidate every affected row without changing focus, mouse, batch-selection, or alternating-row behavior.
-- At dispatch of an initial or incremental main-table SELECT, notify with a syntax-colored two-line preview derived from the actual SQL. Show the table and actual `LIMIT`/`OFFSET` (which include a one-row look-ahead), abbreviate projection and search predicates so the notification stays readable and does not expose search literals, and keep stale/unmounted fetches from notifying. Notification rendering must not block the read. This preview is not executable SQL and is not a new history entry.
-- `[Esc]` in the SQL editor first unfocuses it. `[Esc]` in the saved-query modal closes only that modal and returns focus to the SQL editor.
-- Saved queries are isolated by the saved connection and its actual target, so a query from one database cannot appear in another database.
-- `[Ctrl+S]` saves/updates a favorite query and `[Ctrl+F]` opens favorites. Favorites can be loaded and deleted by keyboard or mouse.
-- An active favorite shows a dirty indicator when editor SQL differs from the saved query. Favorite timestamps follow the configured UI language rather than the host's default locale.
-- Executed SQL history opens from Database settings and persists only target, timestamp, command class, read/write classification, duration, counts and success/error metadata for new executions. Raw SQL, server diagnostics and all parameter values stay in a volatile cache bounded to 200 entries and 2 MB of UTF-8 JSON; cache eviction or shutdown leaves non-rerunnable metadata, never executable redacted SQL. Retain metadata for the latest 100 reads and 184 days of writes. `[S]` hides/shows reads without deleting them. In-session staged parameters remain labeled, sensitive fields use the two-step `[V]` reveal, and staged changes cannot rerun from history. Ad-hoc in-session reruns must resolve the same original connection/target and require normal write confirmation. Record editor/table-page/search/staged executions, not catalog discovery. Preserve legacy content on load; `[D]` opens and `[Y]` separately confirms irreversible cleanup of old SQL/parameters/errors while retaining metadata and favorites, and `[Esc]` cancels that confirmation first. Ignore repeat events on approval and explain that backups are not erased. Favorites are a separate explicit action that still saves full SQL; never imply they are metadata-only.
-- Resolve the connection target once per history filter or history append batch, not once per entry. Settings snapshots clone their contents, so a lookup inside the row loop makes large histories quadratic. Keep connection/target filtering and metadata-only persistence unchanged.
-- In the data grid, `[F]` cycles the selected column through normal, ascending, and descending order. `[S]` opens a compact table-wide search input; it performs a case-insensitive `%text%` match across every column. Search and sort state are session-local and isolated per connection/table. `[Enter]` applies search, `[Ctrl+L]` clears it, and `[Esc]` follows the normal input focus stack.
-- Database writes remain staged until the user reviews and explicitly applies them. Cell edits are orange, pending deletions are red, and new rows are blue.
-- Editing works from the grid and row inspector. `[Enter]`/`[E]` edits, `[dd]` stages deletion, `[Ctrl+A]` stages a new row, `[U]` undoes a staged row change, and `[Ctrl+S]` opens review.
-- Main-table and editable SQL-result grids support multi-row selection. `[Space]` toggles the current row; `[Alt+Space]` anchors a contiguous range that `[↑/↓]` expands or shrinks between the anchor and current row, replacing the active selection like an Excel range. Do not assign a distinct action to `[Shift+Space]`: legacy terminal input commonly reports it as plain Space. Mouse-accessible `○`/`●` row gutters and the `◇`/`◆` range control mirror both actions, and `[Esc]` clears the selection and range mode before leaving the screen. Never restore visible-page select-all. Main-table selections persist by connection/table across window shifts, but shifting windows ends active range mode; query-result selections are local to their mounted SQL tab and reset with a new result.
-- With rows selected, `[E]` stages the selected-column value for every identified row, `[dd]` stages per-primary-key deletes, `[U]` undoes staged changes for the selected set, and `[X]` opens CSV/TSV/JSON copy/export. Rows without a primary key remain selectable/exportable but batch writes are blocked. Keep one review item per row and apply approved items through the existing single native transaction.
-- Batch staging builds a scoped primary-key index once per operation; avoid searching the entire staged list for every selected row. Preserve ordering, original snapshots, IDs and approval reset, including first-match handling of duplicate targets. In-memory key fingerprints preserve exact `BigInt` values and distinguish them from strings.
-- Batch exports contain only the current result columns, copy through OSC52, and save protected files under `tuiminal-exports/` in the launch directory. Clear selection immediately when sensitive-data visibility changes so stale revealed snapshots cannot be exported.
-- Batch export previews serialize only enough leading rows for their visible line budget and must exactly match the complete CSV/TSV/JSON prefix. Copy/save serialize the complete selected set only on explicit activation. Render preview data without UI translation or shortcut highlighting; column names and values are data, not labels.
-- Cell editor values are coerced and validated from schema types for integers, decimals, booleans, and JSON; textual types remain strings.
-- Exact decimal types (`DECIMAL`/`NUMERIC`, their `DEC`/`FIXED` aliases, and `MONEY`) must retain decimal strings through staging and native parameter binding; never round them through JavaScript `Number`. Expand scientific notation with string operations, while `REAL`/`FLOAT`/`DOUBLE` remain approximate numbers. Database precision/scale and SQLite NUMERIC affinity still apply at storage time; use a TEXT fixture to test binding preservation and native-driver fixtures to test exact numeric storage.
-- Applying staged changes shows the exact SQL operations and requires a second approval. Approved changes are isolated by connection and execute in one native transaction; any failure rolls the complete approved batch back.
-- SQL execution and staged-write confirmation acquire a synchronous in-flight guard before dispatch. React busy state alone cannot prevent repeated keys in the same event batch from issuing duplicate writes. Release the guard after completion/failure, and keep approval controls immutable by keyboard and mouse while that transaction is running.
+## Connections and reads
+
+- Start unconfigured. Native MySQL/MariaDB, PostgreSQL and SQLite are supported;
+  optional MCP is explicitly opt-in/read-only. Environment URLs are discovered
+  session profiles, not editable saved connections.
+- Store connection metadata/favorites in restricted `databases.json`; passwords
+  belong in the OS credential store. Decode URL passwords once and clear stale
+  session passwords on rediscovery. Temporary test clients close on every path;
+  cleanup failures do not replace the original error.
+- Read/write access is opt-in per connection. PostgreSQL reads use a pinned READ
+  ONLY transaction; MySQL/MariaDB also set the same session's READ ONLY default
+  because DDL can commit. Restore the exact default or invalidate the pool.
+  SQLite editor reads always use readonly handles.
+- Unknown routines/syntax, effectful EXPLAIN, executable comments and state-changing
+  PRAGMAs require RW plus confirmation. The app is not a sandbox for server routines;
+  use least-privilege credentials and MCP-enforced read-only access.
+- SQLite editor queries run in an owned child, reused while idle up to 30 seconds.
+  Cancellation kills only the executing child; shutdown awaits all owned children.
+  Keep worker and service result metadata normalization shared.
+- Schema reads share pending work and an LRU of at most 256 tables. Writes/close
+  invalidate completed and pending generations; stale reads cannot repopulate it.
+  Use loaded schema for diagrams and avoid N+1 metadata queries.
+
+## Writes and privacy
+
+- Editable results require a direct, unique projection from one unambiguous catalog
+  relation. Expressions, renames, duplicate fields, mixed wildcards or mismatched
+  metadata fail closed. Update/delete require every primary-key field.
+- Stage writes until review and explicit second approval of exact SQL; apply the
+  approved connection-scoped batch in one native transaction with full rollback.
+  Acquire synchronous in-flight guards before dispatch, not React busy state alone.
+- Batch selection may export rows without keys, but cannot write them. Index staged
+  targets once by connection/table/primary key, preserving original snapshots,
+  order and approval reset. Distinguish exact BigInt keys from strings.
+- Preserve DECIMAL/NUMERIC/DEC/FIXED/MONEY as decimal strings through staging and
+  binding; never round through Number. REAL/FLOAT/DOUBLE remain approximate.
+- Sensitive values start visible; masking is explicit and revealing needs approval.
+  Matching uses literal normalized column fragments; an empty list disables it.
+  Clear selected snapshots on visibility changes before any export.
+- New SQL history persists metadata only. SQL, diagnostics and parameters stay
+  in the bounded volatile cache (200 entries/2 MB); favorites explicitly save SQL.
+  Preserve target isolation and normal write approval on rerun; staged changes
+  cannot rerun. Legacy cleanup needs its own confirmation and does not erase backups.
+- Retain the latest 100 read metadata entries and 184 days of writes. Resolve
+  targets outside history loops; never persist redacted SQL as executable text.
+- Exports use current columns, bounded preview serialization and protected files
+  under launch-directory `tuiminal-exports/` only on explicit action. Data is
+  neither UI-translated nor shortcut-highlighted. Query notifications hide literals.
+
+## UI and verification
+
+- Table history and SQL editors each keep at most six tabs. Preserve mounted SQL
+  buffers/cursors/results across hiding, maximizing and appearance changes;
+  inactive tabs do not own keys. Connection switches cannot execute old-target SQL.
+- Statement-at-cursor parsing respects quotes, comments, backticks and dollar quotes.
+  Keep SQL highlighting/autocomplete independent of service I/O.
+- Table/query grids retain 50 rows, shifting 40 with 10-row overlap. Preserve
+  absolute selection, readable columns and inline loading; grid keys move selection
+  rather than independent scroll. Masking, sorting and staging invalidate affected
+  memoized rows without remounting editors.
+- Range selection uses `[Alt+Space]`, not `[Shift+Space]`; `[Esc]` clears
+  selection before leaving. Do not restore visible-page select-all. Layered
+  horizontal navigation performs local movement before crossing pane boundaries.
+
+Tests: `tests/database-*.test.ts`, `tests/sql-*.test.ts` and Database TUI suites.
+Prioritize read-policy, result provenance, history privacy and transaction tests;
+use the opt-in [native driver matrix](validation.md#checks) for driver changes.

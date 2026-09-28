@@ -13,6 +13,7 @@ import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { remoteInteractiveSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
+import { readProcessWorkingDirectory } from "./terminal-working-directory"
 
 export type { FreeTerminalCommand, FreeTerminalKind } from "../model/sessions"
 export { stopAllFreeTerminalProcesses } from "./terminal-resources"
@@ -29,6 +30,8 @@ export type FreeTerminalProcessHandle = {
   tmux?: TmuxPaneTarget
   /** The tmux client is not the parent of the shell running in its server. */
   readAgentPid?: (signal?: AbortSignal) => Promise<number | null>
+  /** Read-only best effort cwd for metadata; never used to reconstruct a command. */
+  readWorkingDirectory?: (signal?: AbortSignal) => Promise<string | null>
   write: (data: string | Uint8Array) => void
   resize: (columns: number, rows: number) => void
   stop: () => Promise<void>
@@ -151,7 +154,7 @@ export function createRemoteServerSetupCommand(
     kind: "custom",
     label: profile.name,
     shortLabel: "SSH",
-    displayCommand: `${profile.user}@${profile.host}:${profile.port}`,
+    displayCommand: `ssh ${profile.host}`,
     command: remoteInteractiveSshCommand(profile),
     accent: COLORS.terminal,
     workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
@@ -233,6 +236,7 @@ export function startFreeTerminalProcess(
 
   const handle: FreeTerminalProcessHandle = {
     pid: subprocess.pid,
+    readWorkingDirectory: (signal) => readProcessWorkingDirectory(subprocess.pid, signal),
     write(data) {
       if (closed) return
       terminal.write(data)

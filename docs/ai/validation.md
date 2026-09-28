@@ -1,37 +1,66 @@
 # Validation and release
 
-## Validation
+Use for tests, gates, CI and packaging. Scripts in [package.json](../../package.json)
+are authoritative; install with `bun install --frozen-lockfile`.
 
-- Release-readiness reviews must distinguish the source checkout, the remote tag, and the actual installed npm artifacts. Record the exact SHA, executed platform/driver matrix, skipped checks, and unresolved risks; a green source-only gate is not a security certification or proof that every advertised binary works. Keep proposed fixes and release approval separate from an analysis-only task.
-- Public releases use SemVer prereleases and keep the root development package private. `bun run build:release` creates ignored artifacts under `dist/npm`: a Node launcher package named `tuiminal` plus one public `@xupon/tuiminal-<platform>-<arch>` package for each macOS, Linux glibc, and Windows x64/ARM64 target. The platform package contains the minimal compiled `tuiminal` executable so end users need Node/npm for installation but do not need Bun. Publish alpha prereleases with the npm `alpha` dist-tag and mark the matching GitHub release as a prerelease; never publish the private repository root directly.
-- Alpha publication uses `publish-release.yml` only on protected `main` in the `npm` environment, bound by npm Trusted Publishing. Require the exact successful candidate and normal quality runs; reuse their immutable artifacts, publish verified public feature assets first, then six platform packages and the launcher last under `alpha`. Reconcile uncertain writes before proceeding and never replace an accepted version or asset. Native registry smoke jobs compare installed bytes to the candidate.
-- Parse `npm pack --json` through the shared release helper: npm 12 returns a package-name-keyed object, while earlier versions return an array. Both formats must describe exactly one expected package/version, a safe matching tarball filename, SHA-512 integrity and a file list; keep downstream content and candidate checks intact.
-- GitHub's release-by-tag endpoint only returns published releases. Before creating a release, reconcile drafts through the authenticated paginated release listing; retain the accepted creation response and refresh an identified draft by its release ID. Immediate list/tag reads can lag a write and must never justify replaying creation. When retargeting an inspected empty draft, explicitly preserve its `tag_name` as well as `target_commitish`.
-- The repository and every generated npm package use Apache-2.0. Keep the canonical root `LICENSE`, the package manifests, release packaging, README, and contribution terms aligned; generated packages must carry their own copy of `LICENSE`.
-- The source CLI may continue reading package metadata through a bundled JSON import. Installed SQLite query sessions use the host executable’s IPC-only internal entrypoint and a verified downloaded worker; emitted/source packages retain their adjacent-helper or JavaScript/TypeScript fallback. Test the host binary, the helper IPC path, package contents, and a clean npm installation before publishing each release. Native release smoke tests also open and close all five downloaded UI modules through the installed launcher in an empty disposable project; source-only rendering cannot prove the host/payload runtime binding.
-- Use Bun 1.4.2 from `.bun-version`; Windows ARM64 requires its working native FFI support. Install with `bun install --frozen-lockfile`. `bun run typecheck` explicitly uses the native TypeScript 7 compiler; the TypeScript 6 dev dependency is the AST API required by dependency-cruiser, not the production runtime or primary compiler.
-- Architecture uses Bun workspaces for first-party internal features: `apps/cli`, `packages/core`, and `packages/feature-{git,database,runner,http,terminal}`. See `docs/architecture.md` and `docs/design/internal-workspaces.md`. CLI imports features through their exported `index.ts` surface (plus HTTP headless CLI exports); features must not import one another or the CLI; core must not import features/CLI. Cross-package imports use package names and declared exports, never relative paths that escape their workspace. Model modules must not import UI, IO or service modules, including type-only dependencies. Do not add barrels that reintroduce cycles or treat internal boundaries as a public extension API.
-- All seven workspace versions follow the root version. Source manifests remain private; `build:packages` emits six independently packable JavaScript/declaration packages under `dist/packages`, including exact internal dependency versions, repository directory metadata and licenses. `test:packages` installs real npm tarballs in an isolated consumer and verifies exports, types and localized native rendering. The standalone release embeds only the host and a trusted catalog, with no feature implementations or separate full-runtime SQLite binary. `build:features` emits five verified gzip/JSON payloads; all native builds must use one canonical set through `TUIMINAL_RELEASE_FEATURES_DIR`.
-- Keep the hoisted Bun linker explicit. The host overrides React to 19.2.8 and OpenTUI to 0.5.9 because Tuiparts 0.0.6 still declares older OpenTUI peers; the isolated package test must reproduce and exercise this exact supported host combination. Do not silently permit duplicate React/OpenTUI runtimes or suppress peer validation. After changing linker strategy locally, stale generated nested node_modules links may need replacement; never modify unrelated user installations.
-- Isolated package consumers pin their test runtime/type dependencies to the installed lockfile versions, including `@types/node`; Bun's type package otherwise resolves its wildcard Node types independently. Native packaged UI checks use an actual terminal emulator and forward protocol responses. Searching stripped ANSI output cannot validate text assembled by incremental redraws or plasma transitions.
-- Initialize UI settings explicitly at CLI/bootstrap boundaries, before dynamically importing feature components that capture syntax styles. Merely importing `theme.ts` must not load user settings or set global language/sensitive-data state.
-- Pure transitions belong in feature models. Use small reducers for related state (Runner log preferences are the initial example), and use callbacks/contracts to connect tools through the app. Keep native refs and process lifetimes stable during extraction; a giant catch-all hook is not an acceptable decomposition.
-- `bun run format` applies Biome formatting. `bun run check:architecture` must analyze every source module and fail closed on incomplete analysis; normalize platform path separators from both the source glob and dependency-cruiser report before comparing coverage. Apply the same path normalization when `bun run check:maintainability` compares current metrics with its reviewed baseline: new files normally stay within 400 lines and functions within cognitive complexity 20; existing debt cannot grow past its recorded budget. Baseline changes require a written reason and review, not automatic regeneration to make checks pass.
-- `bunfig.toml` preloads `tests/setup.ts` to isolate even plain `bun test`. TUI tests reuse that same Runner fixture so cached service constants and mounted UI agree on the launch directory. Keep production credentials, real user sessions and foreign processes out of all test fixtures.
-- Run the offline unit suite with `--max-concurrency=1` under the pinned Bun runtime. The full suite includes shell and PTY lifecycle tests that can leave a child pending when run at Bun's default test concurrency; isolated tests still pass. Keep the complete suite enabled and investigate a safe concurrency increase separately.
+## Checks
 
-- Automated tests are part of the project workflow from now on. Every bug fix must add a regression test whenever the behavior can be automated, and every new or changed logic path must add or update its unit/integration coverage.
-- Run focused automated tests and checks during implementation so regressions are found near the change that caused them. Broaden validation according to the affected surface, and avoid repeating unchanged checks without a reason.
-- When the user explicitly requests a commit, run `bun run check` once after the final code changes. It is the required local commit gate and includes typechecking, lint, static checks, and the complete automated test suite; do not redundantly run its individual checks first. Run `git diff --check` and any task-specific required gate in that same pre-commit phase. CI and release gates retain their own complete validation requirements.
-- The required GitHub Actions quality gate runs the complete suite on Linux and macOS plus a separate Windows x64 job pinned to `windows-2025`, matching the x64 release-candidate runner. Configure the Windows checkout with `core.autocrlf=false` before `actions/checkout` so Biome validates the canonical LF sources. The Windows job runs every static gate and `bun run test:windows`, an explicit portable suite covering CLI, direct process lifecycle, parsers, models, and other deterministic cross-platform behavior; expand it only with tests proven on the native runner rather than hiding failures with per-test skips.
-- `bun run test:database:drivers` is the opt-in heavy database matrix. It starts isolated MySQL, MariaDB, and PostgreSQL Docker containers on random loopback ports, exercises catalog/data/schema/write/cancellation behavior, and removes only those exact containers. Keep it out of the normal offline gate and never embed durable test passwords.
-- Keep tests deterministic and isolated. Use temporary directories, local ephemeral servers, and disposable databases; never read or mutate the user's real config, credentials, database, network services, or unrelated processes.
-- TUI tests must await data-dependent content before asserting or interacting with asynchronously loaded panels. Partial-stage headings and empty panes appear before the Git reads finish; wait for a loaded hunk on every open/reopen, and retain the real Git index/worktree assertions instead of adding fixed delays.
-- When testing notification expiration, render the card before delivering its actual scheduled callback; do not race the initial native render against a tiny wall-clock lifetime. Retain timer ownership/cleanup checks and leave unrelated renderer timers running.
-- After HTTP document creation, await the committed tab list and the reused omnibar's empty value before editing a new scratch; focus alone can still refer to the previous document. Collection mutation tests must wait for both the resulting tree row and closure of the action form before sending the next keyboard action: watcher refresh can publish the row before the mutation callback retires its input. Split-drag tests must await the resulting native pane geometry, including when pointer events arrive in one batch.
-- The native TUI fixture disables optional React User Timing telemetry before loading the reconciler. Its development profiler recursively serializes large response buffers from component props, which can dominate the test and exhaust CI deadlines. Keep the development reconciler, real native renderer/input, `performance.now()` and application timers intact; packaged UI checks still exercise the production build.
-- Register temporary fixture roots immediately after creation and remove those exact roots in `afterEach`/`finally`, after owned subprocesses and I/O finish. Cleanup must also run when assertions fail; never sweep pre-existing temporary directories by prefix or glob.
-- Atomic settings writes flush the temporary file before rename on every platform and propagate file-flush failures. Directory flushing after rename is POSIX-only: Windows rejects the read-only directory handle with `EPERM`, which previously crashed Runner startup after saving its session. Windows retains atomic replacement, backups and conflict checks, but does not gain POSIX directory-fsync crash durability. Keep real native storage and empty-Runner UI regressions in the Windows candidate gate.
-- Do not delete, skip, weaken, or over-mock a meaningful assertion just to make the suite pass. Fix the implementation or document a genuine environment limitation.
-- For interactive regressions, launch an isolated Tuiminal instance with a temporary `XDG_CONFIG_HOME` and the demo SQLite database. Stop only that exact test session afterward.
-- When changing focus, modal, mouse behavior, terminal input, or keyboard propagation, test the real TUI sequence in addition to the automated regression test whenever the behavior is automatable.
+| Affected surface | Check |
+| --- | --- |
+| Agent Markdown | `bun run check:ai-docs`, `git diff --check` |
+| Logic | Focused `bun test tests/<file>.test.ts`; update automated regression coverage |
+| Native UI | `bun test --preload ./tests/tui/setup.ts tests/tui/<file>.test.tsx` |
+| Whole source / requested commit | `bun run check` (includes full unit/TUI suite and static gates) |
+| Internal package exports/runtime | `bun run test:packages` |
+| Database drivers | `bun run test:database:drivers` (opt-in isolated Docker matrix) |
+| Release artifacts | [Release process](../release-process.md) and native candidate matrix |
+
+Run focused checks during implementation, broadening for affected boundaries.
+Avoid repeating unchanged checks or running all constituent gates before check.
+The offline unit script uses `--max-concurrency=1` for shell/PTY lifecycles.
+`typecheck` uses native TypeScript 7; TypeScript 6 supplies dependency-cruiser's AST.
+`bun run format` applies Biome.
+
+## Test isolation and reliability
+
+- `tests/setup.ts` is preloaded even for plain bun test. TUI setup shares its
+  launch fixture. Register temporary roots immediately, clean those exact paths
+  in finally/afterEach after owned I/O/process retirement, including assertion failure.
+- Use local ephemeral servers/disposable databases, never real settings, credentials
+  or foreign processes. For manual TUI regressions use isolated XDG config and the
+  demo SQLite database. Terminal also needs its [discovery overrides](terminal.md#validation).
+- Changed focus/modal/mouse/PTY/key propagation needs the real interaction sequence
+  as well as automated coverage where automatable. Await loaded data and native
+  geometry instead of sleeps. Do not weaken assertions or mock away the behavior.
+- Notification tests render before invoking the actual scheduled callback and
+  retain timer-cleanup assertions. Native TUI fixtures disable only optional React
+  User Timing telemetry; preserve real renderer/input, clocks and reconciler.
+- Static architecture coverage fails closed. Normalize path separators consistently.
+  Maintainability budgets normally allow 400 lines/file and complexity 20;
+  existing debt cannot grow. Baseline edits need a written reason and review.
+- Settings writes flush files before atomic rename everywhere; directory fsync is
+  POSIX-only. Preserve backups/conflict detection and native Windows storage tests.
+
+## Packaging and release
+
+Read [workspaces](../design/internal-workspaces.md) for package contracts and
+[release process](../release-process.md) for the full candidate/publication gates.
+
+- All seven source workspaces stay private and version-aligned. Public artifacts
+  are the launcher plus six native platform packages, with Apache-2.0 licenses.
+  Preserve the hoisted linker and exact shared host UI runtime/lockfile versions.
+- Use one canonical feature catalog via `TUIMINAL_RELEASE_FEATURES_DIR` for all
+  targets. Source UI tests cannot prove installed host/payload bindings or SQLite
+  worker IPC; test real tarballs, clean installation and all downloaded tools.
+- CI runs full Unix suites and the maintained portable Windows suite on
+  windows-2025 with LF checkout. Native platform/driver evidence is separate
+  from source-only checks; report exact SHA, covered/skipped targets and risks.
+- Alpha publication uses protected main/npm environment, Trusted Publishing and
+  immutable successful candidate/quality artifacts. Feature assets precede
+  platform packages and launcher. Reconcile uncertain writes; never overwrite
+  accepted versions/assets or infer publication authority from green checks.
+- Parse npm pack JSON through the shared helper (array and npm 12 keyed formats),
+  validating one exact package/version, filename, integrity and contents.
+- Reconcile GitHub drafts through authenticated paginated listings; retain write
+  responses and refresh identified drafts by ID. Eventual-consistency reads never
+  justify replaying creation; retargeting preserves tag_name and target_commitish.

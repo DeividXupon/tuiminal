@@ -1,6 +1,8 @@
+import { TERMINAL_PROJECT_MESSAGES } from "./terminal-project-catalog"
 import { TERMINAL_REMOTE_DAEMON_MESSAGES } from "./terminal-remote-daemon-catalog"
 import { TERMINAL_REMOTE_HANDSHAKE_MESSAGES } from "./terminal-remote-handshake-catalog"
 import { TERMINAL_REMOTE_SETUP_MESSAGES } from "./terminal-remote-setup-catalog"
+import { TERMINAL_SSH_CONFIG_MESSAGES } from "./terminal-ssh-config-catalog"
 
 export const TERMINAL_REMOTE_MESSAGES = [
   ["Remoto", "Remote", "Remoto", "リモート", "远程", "원격"],
@@ -21,6 +23,8 @@ export const TERMINAL_REMOTE_MESSAGES = [
     "远程连接",
     "원격 연결",
   ],
+  ...TERMINAL_SSH_CONFIG_MESSAGES,
+  ...TERMINAL_PROJECT_MESSAGES,
   [
     "[N] Novo perfil",
     "[N] New profile",
@@ -96,7 +100,6 @@ export const TERMINAL_REMOTE_MESSAGES = [
   ["Usuário SSH", "SSH user", "Usuario SSH", "SSH ユーザー", "SSH 用户", "SSH 사용자"],
   ["Host ou IP", "Host or IP", "Host o IP", "ホストまたは IP", "主机或 IP", "호스트 또는 IP"],
   ["Porta SSH", "SSH port", "Puerto SSH", "SSH ポート", "SSH 端口", "SSH 포트"],
-  ["Chave privada", "Private key", "Clave privada", "秘密鍵", "私钥", "개인 키"],
   ["[S] Salvar", "[S] Save", "[S] Guardar", "[S] 保存", "[S] 保存", "[S] 저장"],
   [
     "[T] Testar conexão",
@@ -146,14 +149,6 @@ export const TERMINAL_REMOTE_MESSAGES = [
     "SSH 接続を確認しました。",
     "SSH 连接已确认。",
     "SSH 연결을 확인했습니다.",
-  ],
-  [
-    "A chave privada não foi encontrada.",
-    "The private key was not found.",
-    "No se encontró la clave privada.",
-    "秘密鍵が見つかりません。",
-    "未找到私钥。",
-    "개인 키를 찾을 수 없습니다.",
   ],
   [
     "A identidade do servidor ainda não foi confirmada no known_hosts.",

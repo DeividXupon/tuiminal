@@ -15,6 +15,7 @@ import { runTmux } from "./tmux-command"
 import { sendTmuxInput } from "./tmux-input"
 import { TmuxMirrorRefresh } from "./tmux-mirror-refresh"
 import { fitTmuxMirror } from "./tmux-mirror-size"
+import { readTmuxPaneWorkingDirectory } from "./tmux-pane-context"
 import { TerminalRetirementError } from "./terminal-lifecycle"
 
 type Options = Parameters<typeof startFreeTerminalProcess>[1]
@@ -126,6 +127,7 @@ export async function startTmuxPaneMirror(
       if (failures) throw new Error("Não foi possível ler o painel tmux.")
       return screen.dead ? null : screen.pid
     },
+    readWorkingDirectory: (signal) => readTmuxPaneWorkingDirectory(target, signal),
     write(data) {
       if (closed || screen.dead) return
       const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data.slice()

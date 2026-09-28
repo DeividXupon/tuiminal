@@ -72,6 +72,7 @@ function beginAgentOutput(id: string, size: TerminalSize, context: LaunchContext
     ...(context.commands.current.get(id)?.codex ? {} : { agent: null }),
     busy: false,
     status: "starting",
+    startError: "",
     pid: null,
     exitCode: null,
     startedAt: Date.now(),
@@ -167,7 +168,7 @@ function failTerminalStart(
   if (!isCurrent() || launch.signal.aborted) return
   const message = error instanceof Error ? error.message : "Não foi possível iniciar a sessão."
   terminal.write(`\u001b[38;2;255;107;107m× ${translateUi(message)}\u001b[0m\r\n`)
-  context.updateSession(id, { status: "failed", pid: null, exitCode: 1 })
+  context.updateSession(id, { status: "failed", pid: null, exitCode: 1, startError: message })
   context.setNotice(`${translateUi("Erro")}: ${translateUi(message)}`)
 }
 

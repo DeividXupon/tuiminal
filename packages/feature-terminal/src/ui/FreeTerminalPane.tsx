@@ -1,13 +1,17 @@
 import { type BoxRenderable, EmbeddedTerminalRenderable } from "@opentui/core"
 import { extend } from "@opentui/react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { memo, useEffect, useRef, useState } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { type TerminalFocusTargetKey, terminalFocusTargetKey } from "../model/focus-selection"
+import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
+import type { TerminalRepositoryContext } from "../model/terminal-context"
 import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
 import { LiveDiffPanel } from "./LiveDiffPanel"
 import { RemoteServerSetupPanel } from "./RemoteServerSetupPanel"
+import { TerminalContextTags } from "./TerminalContextTags"
 import { TerminalFocusSelection } from "./TerminalFocusSelection"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
@@ -31,6 +35,9 @@ type PaneProps = {
   visible: boolean
   appearanceKey: string
   paletteSequence: string
+  context?: TerminalRepositoryContext | undefined
+  syncStatus?: RemoteProjectSyncStatus | undefined
+  masterKey?: string
   layout: FreeTerminalPaneLayout
   onActivate: (id: string) => void
   onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
@@ -166,15 +173,67 @@ function remoteSetupHeights(frameHeight: number, open: boolean) {
   const setupHeight = Math.max(6, Math.min(10, frameHeight - 5))
   return { setupHeight, terminalHeight: Math.max(1, frameHeight - setupHeight) }
 }
+function measuresPane(
+  liveDiff: PaneProps["liveDiff"],
+  messageHistory: PaneProps["messageHistory"],
+  remoteSetup: TerminalSession["remoteSetup"],
+  context: PaneProps["context"],
+  syncStatus: PaneProps["syncStatus"],
+) {
+  return Boolean(liveDiff || messageHistory || remoteSetup || context || syncStatus)
+}
+function paneContextWidth(
+  liveDiff: PaneProps["liveDiff"],
+  frameWidth: number,
+  terminalWidth: number,
+  borderLeft: boolean,
+) {
+  return liveDiff && !liveDiff.stacked && frameWidth
+    ? terminalWidth
+    : Math.max(1, frameWidth - (borderLeft ? 1 : 0))
+}
+function PaneContextOverlay({
+  sessionId,
+  context,
+  syncStatus,
+  masterKey,
+  covered,
+  availableWidth,
+  onActivate,
+}: {
+  sessionId: string
+  context: PaneProps["context"]
+  syncStatus: PaneProps["syncStatus"]
+  masterKey: string
+  covered: boolean
+  availableWidth: number
+  onActivate: () => void
+}) {
+  if ((!context && !syncStatus) || covered) return null
+  return (
+    <TerminalContextTags
+      sessionId={sessionId}
+      context={context}
+      sync={syncStatus}
+      masterKey={masterKey}
+      availableWidth={availableWidth}
+      onActivate={onActivate}
+    />
+  )
+}
 function samePane(previous: PaneProps, next: PaneProps) {
-  // Names and process/agent status belong to the sidebar; this pane only reads the session ID.
+  // Names and live agent activity belong to the sidebar; lifecycle status drives the startup loader.
   return (
     previous.session.id === next.session.id &&
+    previous.session.status === next.session.status &&
     previous.active === next.active &&
     previous.toolActive === next.toolActive &&
     previous.visible === next.visible &&
     previous.appearanceKey === next.appearanceKey &&
     previous.paletteSequence === next.paletteSequence &&
+    previous.context === next.context &&
+    previous.syncStatus === next.syncStatus &&
+    previous.masterKey === next.masterKey &&
     previous.layout.top === next.layout.top &&
     previous.layout.left === next.layout.left &&
     previous.layout.width === next.layout.width &&
@@ -210,6 +269,9 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   toolActive,
   visible,
   paletteSequence,
+  context,
+  syncStatus,
+  masterKey = "Ctrl+B",
   layout,
   onActivate,
   onReady,
@@ -248,6 +310,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     messageDetailOpen,
   )
   const remoteSetup = session.remoteSetup
+  const measureFrame = measuresPane(liveDiff, messageHistory, remoteSetup, context, syncStatus)
   const setupHeights = remoteSetupHeights(frameHeight, Boolean(remoteSetup))
   const embeddedTerminalHeight = remoteSetup ? setupHeights.terminalHeight : embeddedHeight
   const terminalFocusTarget = terminalFocusTargetKey("terminal", session.id)
@@ -271,12 +334,12 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     if (!messageHistory) setMessageDetailOpen(false)
   }, [messageHistory])
   useEffect(() => {
-    if (!liveDiff && !messageHistory && !remoteSetup) return
+    if (!measureFrame) return
     const frame = frameRef.current
     if (!frame) return
     setFrameHeight((current) => (current === frame.height ? current : frame.height))
     setFrameWidth((current) => (current === frame.width ? current : frame.width))
-  }, [liveDiff, messageHistory, remoteSetup])
+  }, [measureFrame])
   return (
     <box
       visible={visible}
@@ -298,7 +361,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
         id={`terminal-pane-frame-${session.id}`}
         onMouseDown={() => onActivate(session.id)}
         onSizeChange={function (this: BoxRenderable) {
-          if (!liveDiff && !messageHistory && !remoteSetup) return
+          if (!measureFrame) return
           setFrameHeight((current) => (current === this.height ? current : this.height))
           setFrameWidth((current) => (current === this.width ? current : this.width))
         }}
@@ -344,6 +407,27 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
               onMouseDown={() => onActivate(session.id)}
               style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
+            />
+            <PlasmaLoadingOverlay
+              id={`terminal-pane-start-loader-${session.id}`}
+              active={session.status === "starting" && Boolean(session.codex)}
+              label="Iniciando agente…"
+              accent={COLORS.terminal}
+              background={COLORS.canvas}
+            />
+            <PaneContextOverlay
+              sessionId={session.id}
+              context={context}
+              syncStatus={syncStatus}
+              masterKey={masterKey}
+              covered={Boolean(liveDiff?.coversTerminal)}
+              availableWidth={paneContextWidth(
+                liveDiff,
+                frameWidth,
+                terminalWidth,
+                layout.borderLeft,
+              )}
+              onActivate={() => onActivate(session.id)}
             />
             {focusSelection && (
               <TerminalFocusSelection

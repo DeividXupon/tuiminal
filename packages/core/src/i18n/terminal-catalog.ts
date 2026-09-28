@@ -1,13 +1,58 @@
 import { TERMINAL_ACTION_MESSAGES } from "./terminal-action-catalog"
 import { TERMINAL_LIVE_DIFF_MESSAGES } from "./terminal-live-diff-catalog"
 import { TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES } from "./terminal-master-key-catalog"
+import { TERMINAL_PROJECT_SYNC_MESSAGES } from "./terminal-project-sync-catalog"
 import { TERMINAL_TMUX_MESSAGES } from "./terminal-tmux-catalog"
 
 export const TERMINAL_MESSAGES = [
   ...TERMINAL_TMUX_MESSAGES,
   ...TERMINAL_LIVE_DIFF_MESSAGES,
+  ...TERMINAL_PROJECT_SYNC_MESSAGES,
   ["Tuiminais", "Tuiminals", "Tuiminales", "Tuiminal", "Tuiminal", "Tuiminal"],
   ["Outros", "Others", "Otros", "その他", "其他", "기타"],
+  ["Limpo", "Clean", "Limpio", "クリーン", "干净", "깨끗함"],
+  ["Alterado", "Changed", "Modificado", "変更あり", "有更改", "변경됨"],
+  ["Sem Git", "No Git", "Sin Git", "Git なし", "非 Git", "Git 아님"],
+  [
+    "Pasta do projeto atual.",
+    "Current project folder.",
+    "Carpeta actual del proyecto.",
+    "現在のプロジェクトフォルダー。",
+    "当前项目文件夹。",
+    "현재 프로젝트 폴더입니다.",
+  ],
+  [
+    "Branch Git atual.",
+    "Current Git branch.",
+    "Rama Git actual.",
+    "現在の Git ブランチ。",
+    "当前 Git 分支。",
+    "현재 Git 브랜치입니다.",
+  ],
+  [
+    "Repositório Git sem alterações.",
+    "Git repository has no changes.",
+    "El repositorio Git no tiene cambios.",
+    "Git リポジトリに変更はありません。",
+    "Git 仓库没有更改。",
+    "Git 저장소에 변경 사항이 없습니다.",
+  ],
+  [
+    "Repositório Git com alterações.",
+    "Git repository has changes.",
+    "El repositorio Git tiene cambios.",
+    "Git リポジトリに変更があります。",
+    "Git 仓库有更改。",
+    "Git 저장소에 변경 사항이 있습니다.",
+  ],
+  [
+    "A pasta atual não é um repositório Git.",
+    "The current folder is not a Git repository.",
+    "La carpeta actual no es un repositorio Git.",
+    "現在のフォルダーは Git リポジトリではありません。",
+    "当前文件夹不是 Git 仓库。",
+    "현재 폴더는 Git 저장소가 아닙니다.",
+  ],
   [
     "Terminal externo: use a janela original.",
     "External terminal: use its original window.",

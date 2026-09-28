@@ -13,7 +13,6 @@ export type RemoteCodexHandshakeErrorCode =
   | "appServerStartFailed"
   | "initializeRejected"
   | "protocolIncompatible"
-  | "versionIncompatible"
   | "localCodexUnavailable"
   | "timeout"
   | "disconnected"
@@ -25,21 +24,18 @@ const ERROR_MESSAGES: Record<RemoteCodexHandshakeErrorCode, string> = {
   unreachable: "Não foi possível alcançar o servidor remoto.",
   codexMissing: "O Codex não está instalado no servidor remoto.",
   directoryMissing: "A pasta selecionada não existe no servidor remoto.",
-  appServerStartFailed: "O daemon do Codex não iniciou no servidor remoto.",
+  appServerStartFailed: "O app-server do Codex não iniciou no servidor remoto.",
   initializeRejected: "O Codex remoto rejeitou o handshake initialize.",
   protocolIncompatible: "A resposta initialize do Codex remoto é incompatível.",
-  versionIncompatible: "As versões local e remota do Codex são incompatíveis.",
   localCodexUnavailable: "Não foi possível verificar a versão local do Codex.",
   timeout: "O handshake remoto do Codex excedeu o tempo limite.",
   disconnected: "O Codex remoto encerrou antes de responder ao handshake.",
 }
 
+export const REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS = 10_000
+
 export class RemoteCodexHandshakeError extends Error {
-  constructor(
-    readonly code: RemoteCodexHandshakeErrorCode,
-    readonly localVersion?: string,
-    readonly remoteVersion?: string,
-  ) {
+  constructor(readonly code: RemoteCodexHandshakeErrorCode) {
     super(ERROR_MESSAGES[code])
     this.name = "RemoteCodexHandshakeError"
   }
@@ -52,8 +48,6 @@ type RemoteCodexHandshakeOptions = {
 }
 
 type ParsedVersion = {
-  major: number
-  minor: number
   value: string
 }
 
@@ -76,18 +70,8 @@ function parseCodexVersion(value: string): ParsedVersion | null {
   const match = value.match(/(?:^|[^\d])(\d+)\.(\d+)\.(\d+)(?:[-+][\d.A-Za-z-]+)?/u)
   if (!match?.[1] || !match[2] || !match[3]) return null
   return {
-    major: Number.parseInt(match[1], 10),
-    minor: Number.parseInt(match[2], 10),
     value: `${match[1]}.${match[2]}.${match[3]}`,
   }
-}
-
-/** Codex 0.x may change protocol by minor; stable releases follow major compatibility. */
-export function codexVersionsCompatible(local: string, remote: string) {
-  const localVersion = parseCodexVersion(local)
-  const remoteVersion = parseCodexVersion(remote)
-  if (!localVersion || !remoteVersion || localVersion.major !== remoteVersion.major) return false
-  return localVersion.major !== 0 || localVersion.minor === remoteVersion.minor
 }
 
 async function readBoundedText(stream: ReadableStream<Uint8Array>, maximumBytes = 64 * 1024) {
@@ -221,7 +205,7 @@ async function stopHandshakeProcess(process: HandshakeProcess, stderr: Promise<s
   try {
     process.stdin.end()
   } catch {
-    // The remote proxy may already have closed stdin.
+    // The remote app-server may already have closed stdin.
   }
   if (process.exitCode === null) process.kill()
   await Promise.allSettled([process.exited, stderr])
@@ -255,8 +239,6 @@ async function exchangeInitialize(
   if (typeof userAgent !== "string") throw new RemoteCodexHandshakeError("protocolIncompatible")
   const remote = parseCodexVersion(userAgent)?.value
   if (!remote) throw new RemoteCodexHandshakeError("protocolIncompatible")
-  if (!codexVersionsCompatible(local, remote))
-    throw new RemoteCodexHandshakeError("versionIncompatible", local, remote)
   await Promise.resolve(
     process.stdin.write(`${JSON.stringify({ method: "initialized", params: {} })}\n`),
   )
@@ -284,7 +266,7 @@ async function throwHandshakeFailure(
   }
 }
 
-/** Proves the remote daemon can answer the local CLI before the official TUI is opened. */
+/** Proves the remote app-server can answer the local CLI before the official TUI is opened. */
 export async function handshakeRemoteCodex(
   profile: TerminalRemoteCodexProfile,
   workingDirectory: string,
@@ -300,7 +282,7 @@ export async function handshakeRemoteCodex(
   const timer = setTimeout(() => {
     timedOut = true
     timeout.abort(new DOMException("Remote Codex handshake timed out", "TimeoutError"))
-  }, options.timeoutMs ?? 10_000)
+  }, options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS)
   const deadline = AbortSignal.any([signal, timeout.signal])
 
   let process: HandshakeProcess

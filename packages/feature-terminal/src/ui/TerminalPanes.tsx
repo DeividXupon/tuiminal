@@ -2,7 +2,9 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { ComponentProps } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import type { TerminalFocusTargetKey } from "../model/focus-selection"
+import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
+import type { TerminalRepositoryContext } from "../model/terminal-context"
 import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./FreeTerminalPane"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
@@ -56,6 +58,9 @@ type TerminalPanesProps = {
   toolActive: boolean
   appearanceKey: string
   paletteSequence: string
+  contexts: ReadonlyMap<string, TerminalRepositoryContext>
+  syncStatuses: ReadonlyMap<string, RemoteProjectSyncStatus>
+  masterKey: string
   availableWidth: number
   availableHeight: number
   sidebarWidth: number
@@ -163,6 +168,9 @@ function TerminalPaneItem({
       visible={visible}
       appearanceKey={panes.appearanceKey}
       paletteSequence={panes.paletteSequence}
+      context={panes.contexts.get(session.id)}
+      syncStatus={panes.syncStatuses.get(session.id)}
+      masterKey={panes.masterKey}
       layout={paneLayout(session, visible, splitSection, down)}
       onActivate={panes.onActivate}
       onReady={panes.onReady}

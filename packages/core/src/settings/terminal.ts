@@ -16,9 +16,6 @@ export type TerminalRemoteCodexProfile = {
   id: string
   name: string
   host: string
-  user: string
-  port: number
-  identityFile: string
 }
 
 const TERMINAL_REMOTE_PROFILE_LIMIT = 16
@@ -37,17 +34,10 @@ function normalizedProfileText(value: unknown, maximumLength: number) {
 
 export function terminalRemoteProfileValidationError(
   profile: TerminalRemoteCodexProfile,
-): "name" | "host" | "user" | "port" | "identityFile" | null {
+): "name" | "host" | null {
   if (!normalizedProfileText(profile.name, 80)) return "name"
-  if (
-    !normalizedProfileText(profile.host, 255) ||
-    !/^(?:[a-z\d](?:[a-z\d.-]*[a-z\d])?|[\da-f:]+)$/iu.test(profile.host)
-  )
+  if (!normalizedProfileText(profile.host, 255) || !/^[a-z\d_][a-z\d_.-]*$/iu.test(profile.host))
     return "host"
-  if (!normalizedProfileText(profile.user, 64) || !/^[a-z_][a-z\d_.-]*\$?$/iu.test(profile.user))
-    return "user"
-  if (!Number.isInteger(profile.port) || profile.port < 1 || profile.port > 65_535) return "port"
-  if (!normalizedProfileText(profile.identityFile, 4_096)) return "identityFile"
   return null
 }
 
@@ -57,13 +47,14 @@ export function normalizeTerminalRemoteCodexProfiles(value: unknown): TerminalRe
   for (const item of value) {
     if (!item || typeof item !== "object") continue
     const candidate = item as Partial<TerminalRemoteCodexProfile>
+    // Legacy profiles stored connection details directly. Their host cannot be
+    // assumed to name an OpenSSH config entry, so selecting a config alias again
+    // is safer than silently changing how they authenticate.
+    if ("user" in candidate || "port" in candidate || "identityFile" in candidate) continue
     const profile: TerminalRemoteCodexProfile = {
       id: normalizedProfileText(candidate.id, 80),
       name: normalizedProfileText(candidate.name, 80),
       host: normalizedProfileText(candidate.host, 255),
-      user: normalizedProfileText(candidate.user, 64),
-      port: typeof candidate.port === "number" ? candidate.port : Number.NaN,
-      identityFile: normalizedProfileText(candidate.identityFile, 4_096),
     }
     if (!profile.id || terminalRemoteProfileValidationError(profile)) continue
     profiles.set(profile.id, profile)

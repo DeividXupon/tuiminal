@@ -1,6 +1,3 @@
-import { existsSync, statSync } from "node:fs"
-import { homedir } from "node:os"
-import { resolve } from "node:path"
 import {
   type TerminalRemoteCodexProfile,
   terminalRemoteProfileValidationError,
@@ -11,7 +8,6 @@ const SSH_TEST_MARKER = "TUIMINAL_SSH_OK"
 export type RemoteCodexConnectionTestCode =
   | "connected"
   | "invalidProfile"
-  | "identityMissing"
   | "hostKey"
   | "authentication"
   | "unreachable"
@@ -38,11 +34,7 @@ function remoteSshPrefix(profile: TerminalRemoteCodexProfile, tty: boolean) {
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
-    "-i",
-    resolveRemoteIdentityFile(profile.identityFile),
-    "-p",
-    String(profile.port),
-    `${profile.user}@${profile.host}`,
+    profile.host,
   ]
 }
 
@@ -78,13 +70,12 @@ export function remoteCodexAppServerSshCommand(
     'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
     'if [ -z "$codex_command" ]; then exit 127; fi',
     `cd ${shellQuote(workingDirectory)} || exit 72`,
-    '"$codex_command" app-server daemon start >/dev/null || exit 73',
-    'exec "$codex_command" app-server proxy',
+    'exec "$codex_command" app-server --stdio',
   ].join("; ")
   return remoteNonInteractiveSshCommand(profile, command)
 }
 
-/** Connects the local official TUI to the persistent remote daemon in its remote cwd. */
+/** Connects the local official TUI to an owned remote app-server in its remote cwd. */
 export function remoteCodexTuiCommand(
   relayUrl: string,
   workingDirectory: string,
@@ -99,12 +90,6 @@ export function remoteCodexTuiCommand(
   return resumeThreadId
     ? ["codex", "resume", resumeThreadId, "--remote", relayUrl, "-C", workingDirectory]
     : ["codex", "--remote", relayUrl, "-C", workingDirectory]
-}
-
-export function resolveRemoteIdentityFile(value: string) {
-  if (value === "~") return homedir()
-  if (value.startsWith("~/")) return resolve(homedir(), value.slice(2))
-  return resolve(value)
 }
 
 export function remoteCodexSshTestCommand(
@@ -124,11 +109,7 @@ export function remoteCodexSshTestCommand(
     `ConnectTimeout=${timeoutSeconds}`,
     "-o",
     "ConnectionAttempts=1",
-    "-i",
-    resolveRemoteIdentityFile(profile.identityFile),
-    "-p",
-    String(profile.port),
-    `${profile.user}@${profile.host}`,
+    profile.host,
     `printf ${SSH_TEST_MARKER}`,
   ]
 }
@@ -175,13 +156,6 @@ export async function testRemoteCodexConnection(
   options: RemoteCodexConnectionTestOptions = {},
 ): Promise<RemoteCodexConnectionTestResult> {
   if (terminalRemoteProfileValidationError(profile)) return { ok: false, code: "invalidProfile" }
-  const identityFile = resolveRemoteIdentityFile(profile.identityFile)
-  try {
-    if (!existsSync(identityFile) || !statSync(identityFile).isFile())
-      return { ok: false, code: "identityMissing" }
-  } catch {
-    return { ok: false, code: "identityMissing" }
-  }
   if (signal?.aborted) return { ok: false, code: "cancelled" }
 
   const timeoutMs = options.timeoutMs ?? 8_000

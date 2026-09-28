@@ -30,11 +30,8 @@ function remote(root: string): RemoteCodexTarget {
   return {
     profile: {
       id: "fixture",
-      name: "Fixture",
-      host: "203.0.113.20",
-      user: "developer",
-      port: 22,
-      identityFile: "/tmp/fixture.key",
+      name: "fixture-vps",
+      host: "fixture-vps",
     },
     workingDirectory: root,
   }
@@ -133,11 +130,7 @@ test("remote Live Diff SSH command uses the selected profile and keeps the direc
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
-    "-i",
-    "/tmp/fixture.key",
-    "-p",
-    "22",
-    "developer@203.0.113.20",
+    "fixture-vps",
   ])
   expect(command.at(-1)).toContain("tuiminal-live-diff '/srv/project with '")
   expect(command.at(-1)).not.toContain("git -C '/srv/project with")

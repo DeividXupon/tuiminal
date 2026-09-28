@@ -154,10 +154,7 @@ test("agent list separates terminal and localhost sessions", async () => {
       profile: {
         id: "work",
         name: "Trabalho",
-        host: "example.test",
-        user: "ubuntu",
-        port: 22,
-        identityFile: "/tmp/work.key",
+        host: "work-server",
       },
       workingDirectory: "/srv/project",
     },

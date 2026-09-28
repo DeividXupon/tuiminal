@@ -9,6 +9,7 @@ import { TerminalRetirementError } from "./terminal-lifecycle"
 import { registerTerminalResource } from "./terminal-resources"
 import { runTmux } from "./tmux-command"
 import { startTmuxPaneMirror } from "./tmux-mirror"
+import { readTmuxPaneWorkingDirectory } from "./tmux-pane-context"
 import { createOwnedTmuxWindow } from "./tmux-owned-session"
 
 type Options = Parameters<typeof startFreeTerminalProcess>[1]
@@ -206,6 +207,7 @@ export async function startTmuxTerminal(
         // Each owned window contains a single command pane.
         return !pane.dead && pane.panes === 1 ? pane.pid : null
       },
+      readWorkingDirectory: (signal) => readTmuxPaneWorkingDirectory(target, signal),
       stop: () => finish({ code: null, signal: null, stopped: true }),
       close: async () => {
         await finish({ code: null, signal: null, stopped: true })

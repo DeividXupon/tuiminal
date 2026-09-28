@@ -74,8 +74,8 @@ type ConfigurationDetailProps = Pick<
   | "onClose"
   | "onNavigationFocus"
   | "onTerminalAgentCommandsChange"
-  | "onTerminalRemoteProfilesChange"
-  | "onTerminalRemoteActiveProfileChange"
+  | "onTerminalRemoteProfilesList"
+  | "onTerminalRemoteProfileActivate"
   | "onTerminalRemoteProfileTest"
   | "onTerminalRemoteReadinessCheck"
   | "onConfigureRemoteServer"
@@ -102,8 +102,8 @@ export function ConfigurationDetail({
   queryHistoryCount,
   tutorialLabel,
   onTerminalAgentCommandsChange,
-  onTerminalRemoteProfilesChange,
-  onTerminalRemoteActiveProfileChange,
+  onTerminalRemoteProfilesList,
+  onTerminalRemoteProfileActivate,
   onTerminalRemoteProfileTest,
   onTerminalRemoteReadinessCheck,
   onConfigureRemoteServer,
@@ -133,8 +133,8 @@ export function ConfigurationDetail({
     )
   if (
     section === "remoteConnection" &&
-    onTerminalRemoteProfilesChange &&
-    onTerminalRemoteActiveProfileChange &&
+    onTerminalRemoteProfilesList &&
+    onTerminalRemoteProfileActivate &&
     onTerminalRemoteProfileTest &&
     onTerminalRemoteReadinessCheck &&
     onConfigureRemoteServer
@@ -147,8 +147,8 @@ export function ConfigurationDetail({
         compact={compact}
         contentWidth={contentWidth}
         onBack={onNavigationFocus}
-        onChange={onTerminalRemoteProfilesChange}
-        onActiveProfileChange={onTerminalRemoteActiveProfileChange}
+        onListProfiles={onTerminalRemoteProfilesList}
+        onActivateProfile={onTerminalRemoteProfileActivate}
         onTest={onTerminalRemoteProfileTest}
         onCheckReadiness={onTerminalRemoteReadinessCheck}
         onConfigureServer={onConfigureRemoteServer}
