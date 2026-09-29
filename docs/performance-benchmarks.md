@@ -92,10 +92,10 @@ native PTY launch and retirement are measured in the service suite.
 `benchmark:terminal:sync` creates two disposable local trees and exercises the same
 complete-tree manifest, digest, archive, journal and verification path used by remote
 project synchronization. It reports the first full sync, an unchanged verification,
-a small-delta comparison and the delta sync, including file-transfer counts. The
-fixture includes `.git` and ignored cache content; `TUIMINAL_SYNC_BENCHMARK_FILES`
-sets its file count. SSH network latency is intentionally outside this filesystem and
-protocol benchmark.
+a small-delta comparison and the delta sync, including file-transfer and SSH-connection
+counts. A disposable fake `ssh` executes the real remote protocol locally. The fixture
+includes `.git` and ignored cache content; `TUIMINAL_SYNC_BENCHMARK_FILES` sets its file
+count. SSH network latency is intentionally outside this filesystem and protocol benchmark.
 
 `benchmark:runner:execution` mounts the production Runner execution hook in the
 native test renderer. Three cases measure the failure-to-restart path with one

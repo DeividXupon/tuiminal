@@ -397,9 +397,10 @@ time or change time moved.
 Only new or content-changed regular-file bytes cross SSH. A separate installed helper
 performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal
 renderer remains responsive. The focused progress dialog owns `[Esc]` cancellation,
-and the review pages large change lists instead of mounting the full manifest. Tuiminal
-validates received bytes, creates native symbolic links, rechecks the reviewed trees and
-applies a journaled path delta. Each replacement/removal has a sibling backup; error,
+and the review pages large change lists instead of mounting the full manifest. Hash and
+archive path lists are NUL-delimited over stdin, keeping each phase to one SSH connection
+regardless of tree size. Tuiminal validates received bytes, creates native symbolic links,
+rechecks the reviewed trees and applies a journaled path delta. Each replacement/removal has a sibling backup; error,
 cancellation or an incomplete owned journal rolls back without rebuilding the complete
 destination. A source change after review requires a fresh review.
 

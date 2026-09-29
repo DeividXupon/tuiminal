@@ -26,6 +26,7 @@ import {
   remoteProjectSyncDestination,
   synchronizeRemoteProject,
 } from "../packages/feature-terminal/src/services/remote-project-sync"
+import { collectProjectSyncProcess } from "../packages/feature-terminal/src/services/remote-project-sync-manifest"
 import {
   loadRemoteProjectSyncMappings,
   loadRemoteProjectSyncSnapshot,
@@ -175,6 +176,20 @@ test("uses the caller deadline for remote project verification", async () => {
       timeoutMs: 1_000,
     }),
   ).toMatchObject({ canonicalPath: "/tmp" })
+})
+
+test("reports an actionable error when SSH resets during verification", async () => {
+  await expect(
+    collectProjectSyncProcess(
+      [
+        "sh",
+        "-c",
+        "printf 'kex_exchange_identification: read: Connection reset by peer\\n' >&2; exit 255",
+      ],
+      new AbortController().signal,
+      { timeoutMs: 1_000, maximumBytes: 1_024 },
+    ),
+  ).rejects.toThrow("A conexão SSH foi encerrada; verifique o perfil remoto e tente novamente.")
 })
 
 test("publishes a complete replacement and removes stale local files", async () => {

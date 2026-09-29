@@ -10,7 +10,7 @@ import type {
 import type { RemoteCodexTarget } from "../model/sessions"
 import { remoteNonInteractiveSshCommand } from "./remote-codex-connection"
 import { projectSyncEntriesEqual } from "./remote-project-sync-diff"
-import { RemoteProjectSyncError } from "./remote-project-sync-errors"
+import { RemoteProjectSyncError, remoteProjectSyncProcessError } from "./remote-project-sync-errors"
 import { remoteProjectScriptCommand } from "./remote-project-sync-manifest"
 
 const ARCHIVE_COMMAND_BYTES = 24 * 1024
@@ -22,6 +22,13 @@ shift
 cd "$root" || exit 72
 command -v tar >/dev/null 2>&1 || exit 127
 exec tar -cf - -- "$@"
+`
+
+const REMOTE_SELECTED_ARCHIVE_STDIN_SCRIPT = `
+root=$1
+cd "$root" || exit 72
+command -v tar >/dev/null 2>&1 || exit 127
+exec tar -cf - --null -T -
 `
 
 export type RemoteProjectArchiveCommand =
@@ -100,15 +107,15 @@ function archiveCommand(
   paths: readonly string[],
   override: RemoteProjectArchiveCommand,
 ) {
-  if (typeof override === "function") return override(paths)
-  if (override) return override
-  return remoteNonInteractiveSshCommand(
-    remote.profile,
-    remoteProjectScriptCommand(REMOTE_SELECTED_ARCHIVE_SCRIPT, [
-      remotePath,
-      ...paths.map((path) => `./${path}`),
-    ]),
-  )
+  if (typeof override === "function") return { command: override(paths) }
+  if (override) return { command: override }
+  return {
+    command: remoteNonInteractiveSshCommand(
+      remote.profile,
+      remoteProjectScriptCommand(REMOTE_SELECTED_ARCHIVE_STDIN_SCRIPT, [remotePath]),
+    ),
+    input: Buffer.from(`${paths.map((path) => `./${path}`).join("\0")}\0`, "utf8"),
+  }
 }
 
 function abortedError(signal: AbortSignal) {
@@ -120,11 +127,12 @@ async function writeRemoteArchive(
   path: string,
   signal: AbortSignal,
   onBytes: (bytes: number) => void,
+  input?: Buffer,
 ) {
   signal.throwIfAborted()
   const [executable, ...args] = command
   if (!executable) throw new RemoteProjectSyncError("Comando de sincronização ausente.")
-  const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+  const child = spawn(executable, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
   const output = createWriteStream(path, { flags: "wx", mode: 0o600 })
   let stderr = ""
   let timedOut = false
@@ -141,6 +149,8 @@ async function writeRemoteArchive(
     stderr = `${stderr}${chunk}`.slice(-16_384)
     refreshTimeout()
   })
+  child.stdin.on("error", () => undefined)
+  child.stdin.end(input)
   child.stdout.on("data", (chunk: Buffer) => {
     refreshTimeout()
     onBytes(chunk.length)
@@ -166,7 +176,7 @@ async function writeRemoteArchive(
     if (timedOut)
       throw new RemoteProjectSyncError("A transferência ficou sem progresso e foi cancelada.")
     if (exitCode !== 0)
-      throw new RemoteProjectSyncError(stderr.trim() || "Não foi possível copiar o projeto remoto.")
+      throw remoteProjectSyncProcessError(stderr, "Não foi possível copiar o projeto remoto.")
   } finally {
     if (idleTimer) clearTimeout(idleTimer)
     signal.removeEventListener("abort", stop)
@@ -214,7 +224,11 @@ async function transferFiles(options: {
   archiveOverride: RemoteProjectArchiveCommand
   onProgress: (progress: number) => void
 }) {
-  const batches = archiveBatches(options.entries)
+  const batches = options.archiveOverride
+    ? archiveBatches(options.entries)
+    : options.entries.length
+      ? [options.entries]
+      : []
   const totalBytes = Math.max(
     1,
     options.entries.reduce((sum, entry) => sum + Math.max(1, entry.size), 0),
@@ -224,13 +238,14 @@ async function transferFiles(options: {
     const archivePath = join(options.transaction, `project-${index}.tar`)
     const batchBytes = batch.reduce((sum, entry) => sum + Math.max(1, entry.size), 0)
     let receivedBytes = 0
+    const archive = archiveCommand(
+      options.remote,
+      options.remotePath,
+      batch.map((entry) => entry.path),
+      options.archiveOverride,
+    )
     await writeRemoteArchive(
-      archiveCommand(
-        options.remote,
-        options.remotePath,
-        batch.map((entry) => entry.path),
-        options.archiveOverride,
-      ),
+      archive.command,
       archivePath,
       options.signal,
       (bytes) => {
@@ -238,6 +253,7 @@ async function transferFiles(options: {
         const transferred = completedBytes + Math.min(batchBytes, receivedBytes)
         options.onProgress(0.15 + (transferred / totalBytes) * 0.7)
       },
+      archive.input,
     )
     await extractArchive(archivePath, options.staging, options.signal)
     await rm(archivePath, { force: true })

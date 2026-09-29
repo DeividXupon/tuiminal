@@ -8,6 +8,7 @@ import type {
 } from "../model/remote-project-sync"
 import type { RemoteCodexTarget } from "../model/sessions"
 import { remoteNonInteractiveSshCommand } from "./remote-codex-connection"
+import { remoteProjectSyncProcessError } from "./remote-project-sync-errors"
 
 const MANIFEST_TIMEOUT_MS = 60_000
 const DETAILED_MANIFEST_TIMEOUT_MS = 5 * 60_000
@@ -53,6 +54,14 @@ command -v git >/dev/null 2>&1 || exit 127
 exec git hash-object --no-filters -- "$@"
 `
 
+const REMOTE_HASH_STDIN_SCRIPT = `
+root=$1
+cd "$root" || exit 72
+command -v git >/dev/null 2>&1 || exit 127
+command -v xargs >/dev/null 2>&1 || exit 127
+exec xargs -0 git hash-object --no-filters --
+`
+
 function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
@@ -72,12 +81,12 @@ function abortedError(signal: AbortSignal) {
 export async function collectProjectSyncProcess(
   command: readonly string[],
   signal: AbortSignal,
-  options: { timeoutMs: number; maximumBytes: number },
+  options: { timeoutMs: number; maximumBytes: number; input?: Buffer | undefined },
 ) {
   signal.throwIfAborted()
   const [executable, ...args] = command
   if (!executable) throw new Error("Comando de sincronização ausente.")
-  const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+  const child = spawn(executable, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
   const chunks: Buffer[] = []
   let size = 0
   let stderr = ""
@@ -94,6 +103,8 @@ export async function collectProjectSyncProcess(
   child.stderr.on("data", (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-16_384)
   })
+  child.stdin.on("error", () => undefined)
+  child.stdin.end(options.input)
   const stop = () => child.kill()
   signal.addEventListener("abort", stop, { once: true })
   const timer = setTimeout(() => {
@@ -109,7 +120,7 @@ export async function collectProjectSyncProcess(
     if (limited) throw new Error("O projeto excede o limite de verificação.")
     if (timedOut) throw new Error("A verificação do projeto excedeu o tempo limite.")
     if (exitCode !== 0)
-      throw new Error(stderr.trim() || "Não foi possível verificar o projeto remoto.")
+      throw remoteProjectSyncProcessError(stderr, "Não foi possível verificar o projeto remoto.")
     return Buffer.concat(chunks)
   } finally {
     clearTimeout(timer)
@@ -296,12 +307,16 @@ async function readRemoteHashes(options: {
   hashCommand?: ((paths: readonly string[]) => readonly string[]) | undefined
   timeoutMs?: number | undefined
 }) {
-  const command =
-    options.hashCommand?.(options.paths) ??
-    remoteCommand(options.remote, REMOTE_HASH_SCRIPT, [options.canonicalPath, ...options.paths])
+  const input = options.hashCommand
+    ? undefined
+    : Buffer.from(`${options.paths.join("\0")}\0`, "utf8")
+  const command = options.hashCommand
+    ? options.hashCommand(options.paths)
+    : remoteCommand(options.remote, REMOTE_HASH_STDIN_SCRIPT, [options.canonicalPath])
   const output = await collectProjectSyncProcess(command, options.signal, {
     timeoutMs: options.timeoutMs ?? DETAILED_MANIFEST_TIMEOUT_MS,
     maximumBytes: Math.max(1_024, options.paths.length * 48),
+    input,
   })
   const hashes = output.toString("utf8").trim().split(/\r?\n/u)
   if (hashes.length !== options.paths.length || hashes.some((hash) => !/^[a-f\d]{40}$/u.test(hash)))
@@ -336,7 +351,8 @@ export async function readRemoteProjectManifest(
       digests.set(entry.path, previous.digest)
     else pending.push(entry.path)
   }
-  for (const paths of pathBatches(pending)) {
+  const batches = options.hashCommand ? pathBatches(pending) : pending.length ? [pending] : []
+  for (const paths of batches) {
     const hashes = await readRemoteHashes({
       remote,
       signal,

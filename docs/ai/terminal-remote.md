@@ -87,9 +87,11 @@ failure and stop only the helper on panel close; show the profile in the heading
   per bounded argument batch. During publication, rehash transferred bytes but reuse
   verified digests for unchanged local copies.
 - Copy remote to local in one direction. Transfer only new or content-changed
-  regular-file bytes over fixed argv SSH/tar commands. Apply the reviewed delta
-  in place with a durable sibling journal and path-level backups; rollback on
-  cancellation/failure and recover incomplete owned journals before another run.
+  regular-file bytes over fixed argv SSH/tar commands. Send NUL-delimited hash
+  and archive path lists through stdin so each phase uses one SSH connection;
+  batch argv only inside the remote process. Apply the reviewed delta in place
+  with a durable sibling journal and path-level backups; rollback on cancellation/
+  failure and recover incomplete owned journals before another run.
 - Run enumeration, hashing, snapshot work, transfer and publication in the
   installed Terminal sync worker. Keep only bounded progress and paged review
   rows in the renderer. A focused progress modal owns `[Esc]` cancellation.

@@ -9,11 +9,16 @@ import { RemoteProjectSyncWorkerClient } from "../packages/feature-terminal/src/
 
 const roots: string[] = []
 const previousPath = process.env.PATH
+const previousSshDelay = process.env.TUIMINAL_TEST_SSH_DELAY
+const previousSshLog = process.env.TUIMINAL_TEST_SSH_LOG
 
 afterEach(() => {
   if (previousPath === undefined) delete process.env.PATH
   else process.env.PATH = previousPath
-  delete process.env.TUIMINAL_TEST_SSH_DELAY
+  if (previousSshDelay === undefined) delete process.env.TUIMINAL_TEST_SSH_DELAY
+  else process.env.TUIMINAL_TEST_SSH_DELAY = previousSshDelay
+  if (previousSshLog === undefined) delete process.env.TUIMINAL_TEST_SSH_LOG
+  else process.env.TUIMINAL_TEST_SSH_LOG = previousSshLog
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -23,7 +28,7 @@ function fakeSsh(root: string, delay = false) {
   const ssh = join(bin, "ssh")
   writeFileSync(
     ssh,
-    `#!/bin/sh\n${delay ? 'sleep "$TUIMINAL_TEST_SSH_DELAY"\n' : ""}command=\nfor argument in "$@"; do command=$argument; done\nexec sh -c "$command"\n`,
+    `#!/bin/sh\n${delay ? 'sleep "$TUIMINAL_TEST_SSH_DELAY"\n' : ""}if [ -n "$TUIMINAL_TEST_SSH_LOG" ]; then printf 'ssh\\n' >> "$TUIMINAL_TEST_SSH_LOG"; fi\ncommand=\nfor argument in "$@"; do command=$argument; done\nexec sh -c "$command"\n`,
   )
   chmodSync(ssh, 0o755)
   process.env.PATH = `${bin}${delimiter}${previousPath ?? ""}`
@@ -91,6 +96,38 @@ test("sync worker cancellation stops its owned SSH verification", async () => {
     await expect(syncing).rejects.toThrow("Operação cancelada.")
     expect(performance.now() - started).toBeLessThan(2_000)
     expect(statuses.some((status) => status.kind === "cancelling")).toBe(true)
+  } finally {
+    client.dispose()
+  }
+})
+
+test("initial sync uses one SSH connection per phase for a large tree", async () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-project-sync-worker-hashes-"))
+  roots.push(root)
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  const log = join(root, "ssh.log")
+  await mkdir(source)
+  for (let index = 0; index < 600; index++)
+    writeFileSync(
+      join(source, `project-${index}-${"long-name-".repeat(12)}.txt`),
+      `project ${index}\n`,
+    )
+  writeFileSync(join(source, "line\nbreak.txt"), "newline path\n")
+  fakeSsh(root)
+  process.env.TUIMINAL_TEST_SSH_LOG = log
+  const client = new RemoteProjectSyncWorkerClient(destination, () => undefined)
+  try {
+    const mapping = await client.synchronize(
+      {
+        profile: { id: "fixture", name: "Fixture", host: "fixture" },
+        workingDirectory: source,
+      },
+      undefined,
+    )
+    expect(mapping.localPath).toBe(destination)
+    expect(readFileSync(join(destination, "line\nbreak.txt"), "utf8")).toBe("newline path\n")
+    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(4)
   } finally {
     client.dispose()
   }

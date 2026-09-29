@@ -350,6 +350,14 @@ export const TERMINAL_PROJECT_SYNC_MESSAGES = [
     "无法解压远程项目。",
     "원격 프로젝트를 추출할 수 없습니다.",
   ],
+  [
+    "A conexão SSH foi encerrada; verifique o perfil remoto e tente novamente.",
+    "The SSH connection was closed; check the remote profile and try again.",
+    "La conexión SSH se cerró; comprueba el perfil remoto e inténtalo de nuevo.",
+    "SSH 接続が終了しました。リモートプロファイルを確認して再試行してください。",
+    "SSH 连接已关闭；请检查远程配置并重试。",
+    "SSH 연결이 종료되었습니다. 원격 프로필을 확인하고 다시 시도하세요.",
+  ],
   ...TERMINAL_PROJECT_SYNC_PROGRESS_MESSAGES,
   ...TERMINAL_PROJECT_SYNC_PREVIEW_MESSAGES,
 ] as const
