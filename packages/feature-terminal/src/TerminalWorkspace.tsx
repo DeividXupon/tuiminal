@@ -15,6 +15,7 @@ import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
 import { useCodexResumeThreads } from "./hooks/use-codex-resume-threads"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { useRemoteProjectAutoSync } from "./hooks/use-remote-project-auto-sync"
 import { useRemoteProjectSync } from "./hooks/use-remote-project-sync"
 import { useTerminalContexts } from "./hooks/use-terminal-contexts"
 import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
@@ -234,7 +235,20 @@ export function FreeTerminal({
         : [],
     [activeSession, sessions],
   )
-  const projectSync = useRemoteProjectSync(visibleSessions, sessions)
+  const projectSync = useRemoteProjectSync(visibleSessions, sessions, {
+    onAutomaticFailure(session, error) {
+      notify({
+        source: `terminal-project-sync:${session.id}`,
+        kind: "error",
+        title: translateUi("Falha na sincronização automática"),
+        message:
+          error instanceof Error
+            ? translateUi(error.message)
+            : translateUi("Não foi possível sincronizar."),
+      })
+    },
+  })
+  useRemoteProjectAutoSync(sessions, projectSync.requestAutomatic)
   const terminalContexts = useTerminalContexts(
     active,
     activeSession?.sectionId ?? null,
@@ -601,7 +615,9 @@ export function FreeTerminal({
     if (!activeSession?.codex?.remote || activeSession.agentIntegration !== "codex-app-server")
       return true
     const status = projectSync.statuses.get(activeSession.id)
-    return status?.kind === "checking" || status?.kind === "syncing"
+    return (
+      status?.kind === "checking" || status?.kind === "syncing" || status?.kind === "cancelling"
+    )
   }
   const disabled = (key: string) => {
     if (["v", "h"].includes(key)) return !canSplit
@@ -776,6 +792,21 @@ export function FreeTerminal({
           : current,
       )
     })
+  }
+  const toggleAutomaticProjectSync = (session: TerminalSession) => {
+    try {
+      projectSync.toggleAutomatic(session)
+    } catch (error) {
+      notify({
+        source: `terminal-project-sync:${session.id}`,
+        kind: "error",
+        title: translateUi("Falha na sincronização automática"),
+        message:
+          error instanceof Error
+            ? translateUi(error.message)
+            : translateUi("Não foi possível salvar a preferência de sincronização automática."),
+      })
+    }
   }
   const chooseProjectSyncParent = async (session: TerminalSession, parent: string) => {
     const remote = session.codex?.remote
@@ -1347,6 +1378,8 @@ export function FreeTerminal({
           flow={projectSyncFlow}
           sessions={sessions}
           statuses={projectSync.statuses}
+          automaticFor={projectSync.automaticFor}
+          onToggleAutomatic={toggleAutomaticProjectSync}
           onSelectParent={(owner, parent) => void chooseProjectSyncParent(owner, parent)}
           onSync={runProjectSync}
           onPage={pageProjectSyncReview}

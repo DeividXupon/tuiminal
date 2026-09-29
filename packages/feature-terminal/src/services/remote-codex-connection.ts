@@ -4,6 +4,10 @@ import {
 } from "@xupon/tuiminal-core/settings/theme"
 
 const SSH_TEST_MARKER = "TUIMINAL_SSH_OK"
+const REMOTE_CODEX_HEARTBEAT_PREFIX = "__TUIMINAL_CODEX_HEARTBEAT__"
+const REMOTE_CODEX_WATCHDOG_INTERVAL_SECONDS = 10
+const REMOTE_CODEX_WATCHDOG_MISSES = 12
+const REMOTE_CODEX_TERMINATE_GRACE_SECONDS = 2
 
 export type RemoteCodexConnectionTestCode =
   | "connected"
@@ -55,9 +59,28 @@ function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-export function remoteCodexAppServerSshCommand(
+type RemoteCodexWatchdogOptions = {
+  leaseId?: string
+  intervalSeconds?: number
+  missedIntervals?: number
+  terminateGraceSeconds?: number
+}
+
+function positiveInteger(value: number | undefined, fallback: number) {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : fallback
+}
+
+function remoteCodexLeaseId(value?: string) {
+  const leaseId = value ?? crypto.randomUUID().replaceAll("-", "")
+  if (!/^[A-Za-z0-9_-]{1,64}$/u.test(leaseId))
+    throw new Error("O identificador da sessão remota é inválido.")
+  return leaseId
+}
+
+export function createRemoteCodexAppServerLaunch(
   profile: TerminalRemoteCodexProfile,
   workingDirectory: string,
+  options: RemoteCodexWatchdogOptions = {},
 ) {
   if (
     !workingDirectory.startsWith("/") ||
@@ -65,14 +88,61 @@ export function remoteCodexAppServerSshCommand(
     /[\p{Cc}\p{Cf}]/u.test(workingDirectory)
   )
     throw new Error("O diretório remoto selecionado é inválido.")
+  const leaseId = remoteCodexLeaseId(options.leaseId)
+  const heartbeatLine = `${REMOTE_CODEX_HEARTBEAT_PREFIX}:${leaseId}`
+  const intervalSeconds = positiveInteger(
+    options.intervalSeconds,
+    REMOTE_CODEX_WATCHDOG_INTERVAL_SECONDS,
+  )
+  const missedIntervals = positiveInteger(options.missedIntervals, REMOTE_CODEX_WATCHDOG_MISSES)
+  const terminateGraceSeconds = positiveInteger(
+    options.terminateGraceSeconds,
+    REMOTE_CODEX_TERMINATE_GRACE_SECONDS,
+  )
   const command = [
     "codex_command=$(command -v codex 2>/dev/null || true)",
     'if [ -z "$codex_command" ]; then for candidate in "$HOME/.local/bin/codex" "$HOME/.bun/bin/codex" "$HOME/.npm-global/bin/codex"; do if [ -x "$candidate" ]; then codex_command=$candidate; break; fi; done; fi',
     'if [ -z "$codex_command" ]; then exit 127; fi',
     `cd ${shellQuote(workingDirectory)} || exit 72`,
-    'exec "$codex_command" app-server --stdio',
+    "umask 077",
+    `lease_id=${shellQuote(leaseId)}`,
+    `heartbeat_line=${shellQuote(heartbeatLine)}`,
+    `lease_dir="\${TMPDIR:-/tmp}/tuiminal-codex-$lease_id"`,
+    'lease_fifo="$lease_dir/stdin"',
+    'lease_activity="$lease_dir/activity"',
+    'lease_next="$lease_dir/activity.next"',
+    'mkdir "$lease_dir" || exit 73',
+    'mkfifo "$lease_fifo" || { rmdir "$lease_dir"; exit 73; }',
+    'printf "0\\n" > "$lease_activity" || { rm -f "$lease_fifo"; rmdir "$lease_dir"; exit 73; }',
+    "wrapper_pid=$$",
+    "app_pid=",
+    "watchdog_pid=",
+    'cleanup() { trap - 0 HUP INT TERM; if [ -n "$watchdog_pid" ]; then kill -TERM "$watchdog_pid" 2>/dev/null || true; wait "$watchdog_pid" 2>/dev/null || true; fi; if [ -n "$app_pid" ] && kill -0 "$app_pid" 2>/dev/null; then kill -TERM "$app_pid" 2>/dev/null || true; remaining=' +
+      `${terminateGraceSeconds}` +
+      '; while [ "$remaining" -gt 0 ] && kill -0 "$app_pid" 2>/dev/null; do sleep 1; remaining=$((remaining - 1)); done; if kill -0 "$app_pid" 2>/dev/null; then kill -KILL "$app_pid" 2>/dev/null || true; fi; wait "$app_pid" 2>/dev/null || true; fi; rm -f "$lease_fifo" "$lease_activity" "$lease_next"; rmdir "$lease_dir" 2>/dev/null || true; }',
+    "trap cleanup 0 HUP INT TERM",
+    '"$codex_command" app-server --stdio < "$lease_fifo" & app_pid=$!',
+    'exec 3> "$lease_fifo" || exit 73',
+    '( trap - 0; watcher_stopping=0; watcher_sleep_pid=; stop_watchdog() { watcher_stopping=1; if [ -n "$watcher_sleep_pid" ]; then kill -TERM "$watcher_sleep_pid" 2>/dev/null || true; fi; }; trap stop_watchdog HUP INT TERM; last_activity=$(cat "$lease_activity" 2>/dev/null || printf "0"); missed=0; while kill -0 "$app_pid" 2>/dev/null; do sleep ' +
+      `${intervalSeconds}` +
+      ' & watcher_sleep_pid=$!; wait "$watcher_sleep_pid" 2>/dev/null || true; watcher_sleep_pid=; if [ "$watcher_stopping" -ne 0 ]; then exit 0; fi; current_activity=$(cat "$lease_activity" 2>/dev/null || printf ""); if [ "$current_activity" = "$last_activity" ]; then missed=$((missed + 1)); else last_activity=$current_activity; missed=0; fi; if [ "$missed" -ge ' +
+      `${missedIntervals}` +
+      ' ]; then trap - HUP INT TERM; kill -TERM "$wrapper_pid" 2>/dev/null || true; exit 0; fi; done; trap - HUP INT TERM; kill -TERM "$wrapper_pid" 2>/dev/null || true ) & watchdog_pid=$!',
+    "activity_sequence=0",
+    'while IFS= read -r line; do activity_sequence=$((activity_sequence + 1)); if printf "%s\\n" "$activity_sequence" > "$lease_next"; then mv -f "$lease_next" "$lease_activity" || break; else break; fi; if [ "$line" = "$heartbeat_line" ]; then continue; fi; printf "%s\\n" "$line" >&3 || break; done',
+    "exit 0",
   ].join("; ")
-  return remoteNonInteractiveSshCommand(profile, command)
+  return {
+    command: remoteNonInteractiveSshCommand(profile, command),
+    heartbeatLine,
+  }
+}
+
+export function remoteCodexAppServerSshCommand(
+  profile: TerminalRemoteCodexProfile,
+  workingDirectory: string,
+) {
+  return createRemoteCodexAppServerLaunch(profile, workingDirectory).command
 }
 
 /** Connects the local official TUI to an owned remote app-server in its remote cwd. */

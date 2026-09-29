@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -13,6 +22,7 @@ import { listSshConfigProfiles } from "../packages/feature-terminal/src/services
 import { refreshRemoteCodexResumeThreads } from "../packages/feature-terminal/src/services/codex-resume"
 import { handshakeRemoteCodex } from "../packages/feature-terminal/src/services/remote-codex-handshake"
 import {
+  createRemoteCodexAppServerLaunch,
   remoteCodexAppServerSshCommand,
   remoteCodexSshTestCommand,
   remoteCodexTuiCommand,
@@ -386,7 +396,8 @@ test("remote Codex uses an owned app-server through SSH stdio", () => {
     "oracle-vps",
   ])
   expect(ssh.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
-  expect(ssh.at(-1)).toContain('exec "$codex_command" app-server --stdio')
+  expect(ssh.at(-1)).toContain('"$codex_command" app-server --stdio < "$lease_fifo" &')
+  expect(ssh.at(-1)).toContain("mkfifo")
   expect(ssh.at(-1)).not.toContain("app-server daemon")
   expect(ssh.at(-1)).not.toContain("app-server proxy")
   expect(remoteInteractiveSshCommand(target)[1]).toBe("-tt")
@@ -459,7 +470,7 @@ test("generated remote stdio command completes the app-server handshake", async 
   chmodSync(codex, 0o700)
   const command = remoteCodexAppServerSshCommand(profile(), root).at(-1)
   if (!command) throw new Error("Missing remote app-server command")
-  const environment = `HOME='${root}'; PATH='${root}'; TUIMINAL_TEST_CALLS='${calls}'; TUIMINAL_TEST_RUNTIME='${process.execPath}'; TUIMINAL_TEST_APP_SERVER='${appServer}'; export HOME PATH TUIMINAL_TEST_CALLS TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER;`
+  const environment = `HOME='${root}'; PATH='${root}:/usr/bin:/bin'; TUIMINAL_TEST_CALLS='${calls}'; TUIMINAL_TEST_RUNTIME='${process.execPath}'; TUIMINAL_TEST_APP_SERVER='${appServer}'; export HOME PATH TUIMINAL_TEST_CALLS TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER;`
   const result = await handshakeRemoteCodex(profile(), root, new AbortController().signal, {
     remoteCommand: ["/bin/sh", "-c", `${environment} ${command}`],
     localVersionCommand: [process.execPath, "-e", 'process.stdout.write("codex-cli 0.158.0\\n")'],
@@ -468,6 +479,104 @@ test("generated remote stdio command completes the app-server handshake", async 
   expect(result).toMatchObject({ remoteVersion: "0.158.0" })
   expect(readFileSync(calls, "utf8")).toBe("app-server --stdio\n")
 })
+
+test("remote watchdog consumes heartbeats and retires an abandoned app-server", async () => {
+  const root = fixtureRoot()
+  const temporary = join(root, "tmp")
+  const codex = join(root, "codex")
+  const appServer = join(root, "watchdog-app-server.js")
+  const started = join(root, "started")
+  const stopped = join(root, "stopped")
+  const received = join(root, "received")
+  mkdirSync(temporary)
+  writeFileSync(
+    appServer,
+    [
+      'import { appendFileSync, writeFileSync } from "node:fs"',
+      "writeFileSync(process.env.TUIMINAL_TEST_STARTED, String(process.pid))",
+      'process.on("SIGTERM", () => {',
+      '  writeFileSync(process.env.TUIMINAL_TEST_STOPPED, "term")',
+      "})",
+      'process.stdin.on("data", (chunk) => appendFileSync(process.env.TUIMINAL_TEST_RECEIVED, chunk))',
+      "process.stdin.resume()",
+    ].join("\n"),
+  )
+  writeFileSync(
+    codex,
+    [
+      "#!/bin/sh",
+      'case "$*" in',
+      '  "app-server --stdio") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_APP_SERVER" ;;',
+      "  *) exit 1 ;;",
+      "esac",
+    ].join("\n"),
+  )
+  chmodSync(codex, 0o700)
+  const launch = createRemoteCodexAppServerLaunch(profile(), root, {
+    leaseId: "watchdog-test",
+    intervalSeconds: 1,
+    missedIntervals: 2,
+    terminateGraceSeconds: 1,
+  })
+  const command = launch.command.at(-1)
+  if (!command) throw new Error("Missing remote app-server command")
+  const environment = [
+    `HOME='${root}'`,
+    `TMPDIR='${temporary}'`,
+    `PATH='${root}:/usr/bin:/bin'`,
+    `TUIMINAL_TEST_RUNTIME='${process.execPath}'`,
+    `TUIMINAL_TEST_APP_SERVER='${appServer}'`,
+    `TUIMINAL_TEST_STARTED='${started}'`,
+    `TUIMINAL_TEST_STOPPED='${stopped}'`,
+    `TUIMINAL_TEST_RECEIVED='${received}'`,
+  ].join("; ")
+  const wrapper = Bun.spawn(
+    [
+      "/bin/sh",
+      "-c",
+      `${environment}; export HOME TMPDIR PATH TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER TUIMINAL_TEST_STARTED TUIMINAL_TEST_STOPPED TUIMINAL_TEST_RECEIVED; ${command}`,
+    ],
+    {
+      stdin: "pipe",
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  )
+  const neighbor = Bun.spawn(["/bin/sh", "-c", "while :; do sleep 1; done"], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  })
+  try {
+    for (let attempt = 0; attempt < 50 && !existsSync(started); attempt += 1) await Bun.sleep(20)
+    expect(existsSync(started)).toBe(true)
+    wrapper.stdin.write(`${launch.heartbeatLine}\n`)
+    wrapper.stdin.write('{"id":1,"method":"thread/list"}\n')
+    for (let attempt = 0; attempt < 50 && !existsSync(received); attempt += 1) await Bun.sleep(20)
+    expect(readFileSync(received, "utf8")).toBe('{"id":1,"method":"thread/list"}\n')
+
+    await Bun.sleep(1_100)
+    wrapper.stdin.write(`${launch.heartbeatLine}\n`)
+    await Bun.sleep(1_100)
+    expect(wrapper.exitCode).toBeNull()
+    await Promise.race([
+      wrapper.exited,
+      Bun.sleep(4_000).then(() => {
+        throw new Error("Remote watchdog did not retire its app-server")
+      }),
+    ])
+    expect(existsSync(stopped)).toBe(true)
+    expect(neighbor.exitCode).toBeNull()
+    expect(readdirSync(temporary)).toEqual([])
+    const appServerPid = Number(readFileSync(started, "utf8"))
+    expect(() => process.kill(appServerPid, 0)).toThrow()
+  } finally {
+    if (wrapper.exitCode === null) wrapper.kill("SIGKILL")
+    if (neighbor.exitCode === null) neighbor.kill("SIGTERM")
+    await wrapper.exited.catch(() => undefined)
+    await neighbor.exited.catch(() => undefined)
+  }
+}, 10_000)
 
 test("remote Codex refresh lists and hydrates agents through SSH stdio", async () => {
   const root = fixtureRoot()

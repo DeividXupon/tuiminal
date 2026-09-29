@@ -40,13 +40,19 @@ Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts
   JSONL stream to a loopback WebSocket for the local official TUI. Pass remote
   cwd with `-C`; no remote TCP listener or copied socket.
   Bound stdout, discard non-JSON, drain stderr.
+- Wrap each owned remote app-server in a private POSIX lease. Serialize protocol
+  writes, consume a local heartbeat every 20 seconds without forwarding it, and
+  count ordinary input as activity. After roughly two minutes without activity,
+  stop only that app-server and its wrapper so an abandoned SSH transport cannot
+  retain the conversation lock. The server-side SSH session may age out later.
 - Before the TUI, a separate ten-second cancellable probe verifies SSH, cwd,
   app-server startup and initialize. Record the remote `userAgent` and local CLI
   versions for diagnostics, but accept version skew after a valid initialize response.
   Distinguish host/key/network/directory/app-server/protocol/timeout failures.
   A failed probe never opens the TUI.
 - Close only the owned local TUI, relay, SSH processes and remote app-server,
-  including the probe process after initialized.
+  including the probe process after initialized. Stop heartbeat timers before
+  closing stdin, and remove only the exact private lease directory.
 - Recent-thread reads query local and the active remote source independently,
   omit cwd, and merge without erasing the other source. Tag threads with profile,
   remote cwd and optional branch. Resume uses that exact source; a missing profile
@@ -62,48 +68,32 @@ failure and stop only the helper on panel close; show the profile in the heading
 
 ## Remote project synchronization
 
-- Only the active integrated remote Codex session offers Master Key `[R]`. Its
-  pane tag shows the last known not-synced, checking, out-of-sync, syncing,
-  synced or error state and includes the configured Master Key plus `[R]`
-  whenever user action is useful. Run full comparison only on explicit `[R]`;
-  never poll a project tree in the background.
-- On first sync, choose a local parent directory and derive a sibling named
-  `<remote-basename>-sync`. Never adopt or replace an existing unknown path;
-  require another parent. Persist the profile, canonical remote cwd, local
-  destination, successful fingerprints and detailed baseline manifest outside
-  the opened project.
-- For a saved mapping, Master Key `[R]` performs a detailed comparison before
-  transferring. Show a brief notification when nothing differs; otherwise show
-  one review of new, changed, removed and conflicting paths. A conflict is a path
-  that also changed locally since the baseline. Require one explicit destructive
-  confirmation when any local change would be replaced.
-- Always compare the complete tree, including hidden and ignored paths,
-  dependencies, caches and `.git`. Git status/diff is not authoritative for this
-  mirror because it omits ignored content.
-- Make repeat comparisons metadata-first. Reuse saved content digests only when
-  size, mode, modification time and change time still match the same side of the
-  successful snapshot; hash new or changed candidates only. Enumerate local
-  metadata with bounded concurrency and hash remote candidates with one Git process
-  per bounded argument batch. During publication, rehash transferred bytes but reuse
-  verified digests for unchanged local copies.
-- Copy remote to local in one direction. Transfer only new or content-changed
-  regular-file bytes over fixed argv SSH/tar commands. Send NUL-delimited hash
-  and archive path lists through stdin so each phase uses one SSH connection;
-  batch argv only inside the remote process. Apply the reviewed delta in place
-  with a durable sibling journal and path-level backups; rollback on cancellation/
-  failure and recover incomplete owned journals before another run.
-- Run enumeration, hashing, snapshot work, transfer and publication in the
-  installed Terminal sync worker. Keep only bounded progress and paged review
-  rows in the renderer. A focused progress modal owns `[Esc]` cancellation.
-- Load, validate and compress detailed snapshots asynchronously in bounded
-  batches so large saved manifests do not stall the terminal renderer.
-- Recheck the reviewed remote and local trees before mutation, verify received
-  content and the complete result, and do not silently retry a race. Publication
-  is a journaled path transaction rather than a whole-directory replacement.
-  A later sync reuses the persisted destination without reopening the parent picker.
-- Animate the synchronization tag itself: an indeterminate background sweep while
-  checking and a determinate background fill from actual delta progress while
-  syncing. Keep its text and width stable.
+- Only active integrated remote Codex sessions offer Master Key `[R]`. Keep the
+  last state in the pane tag; sweep it while checking and fill it with measured
+  progress while syncing. Only project-facing changes settle as out-of-sync.
+- First sync derives `<remote-basename>-sync` under a chosen local parent. Never
+  adopt an unknown existing path. Persist the profile/canonical cwd, destination,
+  fingerprints, validated compressed baseline and automatic preference outside
+  the project; retain a first-transfer preference until its mapping succeeds.
+- Saved mappings compare before manual transfer. Notify when unchanged; otherwise
+  page new, changed, removed and conflicting paths and require one destructive
+  confirmation for local changes. The checking, review and transfer states expose
+  `[A]` with `OFF`/`ON`; toggling never confirms the current review.
+- Enabled automatic sync runs remote-to-local after successful app-server turns
+  and is standing permission to replace conflicts. It stays in the background,
+  updates the tag and notifies only on failure. Failed/interrupted turns do not
+  trigger it. Serialize per project, prioritize manual work, coalesce completions
+  while busy, drop pending work when disabled and retry failures only next turn.
+- Compare the complete tree, including hidden/ignored paths, dependencies, caches
+  and `.git`; never poll on a timer. Repeat comparisons are metadata-first and
+  reuse digests only when size, mode, mtime and ctime still match. Bound local
+  enumeration and remote hash batches. Quiet paths still synchronize normally.
+- Transfer only new/content-changed regular-file bytes over fixed argv SSH/tar
+  commands with NUL-delimited stdin paths. Recheck both reviewed trees, verify
+  received bytes and the full result, and never silently retry a race.
+- Keep enumeration, hashing, snapshot I/O, transfer and journaled publication in
+  the installed worker. Use path backups, recover/rollback incomplete work, keep
+  IPC bounded to progress and paged rows, and let the focused modal own `[Esc]`.
 
 Tests: `tests/terminal-remote-*.test.ts`, relevant settings tests and Terminal TUI
 suites, plus `tests/terminal-project-sync.test.ts`. Use fake SSH/app-server

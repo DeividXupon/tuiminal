@@ -63,6 +63,7 @@ function validMapping(value: unknown): value is RemoteProjectSyncMapping {
     validProjectPath(mapping.sourcePath, true) &&
     validProjectPath(mapping.remotePath, true) &&
     validProjectPath(mapping.localPath) &&
+    (mapping.automatic === undefined || typeof mapping.automatic === "boolean") &&
     typeof mapping.remoteFingerprint === "string" &&
     /^[a-f\d]{64}$/u.test(mapping.remoteFingerprint) &&
     typeof mapping.localFingerprint === "string" &&

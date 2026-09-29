@@ -101,6 +101,71 @@ test("sync worker cancellation stops its owned SSH verification", async () => {
   }
 })
 
+test("sync worker retains an automatic preference changed during synchronization", async () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-project-sync-worker-automatic-"))
+  roots.push(root)
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "project.txt"), "project\n")
+  fakeSsh(root, true)
+  process.env.TUIMINAL_TEST_SSH_DELAY = "0.05"
+  const statuses: RemoteProjectSyncStatus[] = []
+  const client = new RemoteProjectSyncWorkerClient(destination, (status) => statuses.push(status))
+  try {
+    const syncing = client.synchronize(
+      {
+        profile: { id: "fixture", name: "Fixture", host: "fixture" },
+        workingDirectory: source,
+      },
+      undefined,
+    )
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (statuses.some((status) => status.kind === "checking")) break
+      await Bun.sleep(10)
+    }
+    client.setAutomatic(true)
+    expect((await syncing).automatic).toBe(true)
+  } finally {
+    client.dispose()
+  }
+})
+
+test("direct worker synchronization replaces local conflicts for automatic runs", async () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-project-sync-worker-conflict-"))
+  roots.push(root)
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "project.txt"), "initial\n")
+  fakeSsh(root)
+  const first = new RemoteProjectSyncWorkerClient(destination, () => undefined)
+  const mapping = await first.synchronize(
+    {
+      profile: { id: "fixture", name: "Fixture", host: "fixture" },
+      workingDirectory: source,
+    },
+    undefined,
+  )
+  await first.finished
+  writeFileSync(join(destination, "project.txt"), "local\n")
+  writeFileSync(join(source, "project.txt"), "remote\n")
+  const automatic = new RemoteProjectSyncWorkerClient(destination, () => undefined)
+  try {
+    const saved = await automatic.synchronize(
+      {
+        profile: { id: "fixture", name: "Fixture", host: "fixture" },
+        workingDirectory: source,
+      },
+      { ...mapping, automatic: true },
+    )
+    expect(saved.automatic).toBe(true)
+    expect(readFileSync(join(destination, "project.txt"), "utf8")).toBe("remote\n")
+  } finally {
+    automatic.dispose()
+  }
+})
+
 test("initial sync uses one SSH connection per phase for a large tree", async () => {
   const root = mkdtempSync(join(tmpdir(), "tuiminal-project-sync-worker-hashes-"))
   roots.push(root)

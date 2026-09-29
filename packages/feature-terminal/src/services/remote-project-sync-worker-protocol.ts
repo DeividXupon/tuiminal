@@ -18,6 +18,7 @@ export type RemoteProjectSyncWorkerRequest =
     }
   | { id: string; kind: "page"; offset: number }
   | { id: string; kind: "apply" }
+  | { id: string; kind: "automatic"; enabled: boolean }
   | { id: string; kind: "cancel" }
 
 export type RemoteProjectSyncWorkerResponse =

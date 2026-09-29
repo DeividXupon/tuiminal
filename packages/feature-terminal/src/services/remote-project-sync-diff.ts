@@ -1,11 +1,66 @@
 import { resolve } from "node:path"
 import type {
+  RemoteProjectSyncChange,
   RemoteProjectSyncEntry,
+  RemoteProjectSyncIndicator,
   RemoteProjectSyncManifest,
   RemoteProjectSyncMapping,
   RemoteProjectSyncPreview,
   RemoteProjectSyncSnapshot,
 } from "../model/remote-project-sync"
+
+const QUIET_SYNC_DIRECTORIES = new Set([
+  ".cache",
+  ".git",
+  ".gradle",
+  ".next",
+  ".nuxt",
+  ".parcel-cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".svelte-kit",
+  ".turbo",
+  ".venv",
+  ".vite",
+  "__pycache__",
+  "build",
+  "cache",
+  "caches",
+  "coverage",
+  "dist",
+  "node_modules",
+  "target",
+  "vendor",
+  "venv",
+])
+
+const QUIET_SYNC_FILES = new Set([".DS_Store", "Thumbs.db"])
+
+export function projectSyncPathAffectsIndicator(path: string) {
+  const parts = path.split("/")
+  const name = parts.at(-1)
+  return (
+    !parts.some((part) => QUIET_SYNC_DIRECTORIES.has(part)) && !QUIET_SYNC_FILES.has(name ?? "")
+  )
+}
+
+export function projectSyncIndicator(
+  changes: readonly RemoteProjectSyncChange[],
+): RemoteProjectSyncIndicator {
+  const visible = changes.filter((change) => projectSyncPathAffectsIndicator(change.path))
+  const localChanged = visible.some((change) => change.localChanged)
+  const remoteChanged = visible.some((change) => change.remoteChanged)
+  return {
+    changeCount: visible.length,
+    difference: visible.length
+      ? localChanged && remoteChanged
+        ? "both"
+        : localChanged
+          ? "local"
+          : "remote"
+      : null,
+  }
+}
 
 export function emptyLocalProjectManifest(
   path: string,
@@ -91,6 +146,7 @@ export function createRemoteProjectSyncPreview(options: {
     remote,
     local,
     changes,
+    indicator: projectSyncIndicator(changes),
     hasLocalChanges: legacyLocalChanges || changes.some((change) => change.localChanged),
     legacyLocalChanges,
   }

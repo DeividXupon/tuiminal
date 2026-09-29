@@ -15,6 +15,7 @@ import {
 } from "./remote-project-sync"
 import {
   loadRemoteProjectSyncSnapshot,
+  saveRemoteProjectSyncMapping,
   saveRemoteProjectSyncSnapshot,
 } from "./remote-project-sync-state"
 import {
@@ -28,6 +29,7 @@ let preview: RemoteProjectSyncPreview | null = null
 let remote: RemoteCodexTarget | null = null
 let destination = ""
 let mapping: RemoteProjectSyncMapping | undefined
+let automatic = false
 let jobId = ""
 let activeRequestId = ""
 
@@ -45,6 +47,7 @@ function nextMapping(snapshot: RemoteProjectSyncSnapshot) {
     sourcePath: remote.workingDirectory,
     remotePath: snapshot.remote.canonicalPath,
     localPath: destination,
+    automatic,
     remoteFingerprint: snapshot.remote.fingerprint,
     localFingerprint: snapshot.local.fingerprint,
     syncedAt: Date.now(),
@@ -77,6 +80,7 @@ function reviewPage(value: RemoteProjectSyncPreview, offset = 0) {
         : value.hasLocalChanges
           ? ("local" as const)
           : ("remote" as const),
+    indicator: value.indicator,
     ...(mapping ? { mapping } : {}),
     offset: safeOffset,
     pageSize: REMOTE_PROJECT_SYNC_PAGE_SIZE,
@@ -156,6 +160,7 @@ async function start(
   remote = request.remote
   destination = request.destination
   mapping = request.mapping
+  automatic = Boolean(request.mapping?.automatic)
   jobId = randomUUID()
   if (!mapping && (await pathExists(destination)))
     throw new RemoteProjectSyncCollisionError("A pasta de sincronização já existe.")
@@ -168,6 +173,14 @@ async function start(
 }
 
 async function handle(request: RemoteProjectSyncWorkerRequest) {
+  if (request.kind === "automatic") {
+    automatic = request.enabled
+    if (mapping) {
+      mapping = { ...mapping, automatic }
+      saveRemoteProjectSyncMapping(mapping)
+    }
+    return
+  }
   if (request.kind === "cancel") {
     if (controller?.signal.aborted) return
     await send({ id: activeRequestId || request.id, kind: "progress", state: "cancelling" })
@@ -207,7 +220,8 @@ process.on("message", (request: RemoteProjectSyncWorkerRequest) => {
         })
     })
     .finally(() => {
-      if (request.kind === "page" || request.kind === "cancel") return
+      if (request.kind === "page" || request.kind === "cancel" || request.kind === "automatic")
+        return
       activeRequestId = ""
       if (request.kind === "synchronize" || request.kind === "apply" || controller?.signal.aborted)
         process.disconnect?.()

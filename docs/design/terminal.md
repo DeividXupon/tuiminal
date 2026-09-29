@@ -215,10 +215,13 @@ host identity, reachability, missing Codex, missing directory, app-server startu
 protocol and timeout failures remain distinct and do not open the TUI. The
 TUI receives the selected remote directory through `-C`. No remote TCP listener is
 exposed. The SSH app-server, relay, and TUI share one owned lifecycle. Public app-server
-events provide integrated activity, sent-message history,
-and remote `/resume` entries. Those entries retain the source profile and remote cwd,
-so resuming never silently falls back to the local machine. Remote integrated agents
-are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
+input renews a private lease, including a heartbeat every 20 seconds while idle. If
+the remote wrapper receives no activity for roughly two minutes, it stops only its
+app-server and releases the conversation lock; the abandoned SSH transport may age
+out independently. Public app-server events provide integrated activity,
+sent-message history, and remote `/resume` entries. Those entries retain the source
+profile and remote cwd, so resuming never silently falls back to the local machine.
+Remote integrated agents are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
 working directory and linked worktrees through a separate owned SSH channel; it never
 falls back to a same-named local path. Selecting the category renders a read-only
 summary of the active SSH alias. `[Enter]` switches the detail pane to a focused list
@@ -383,9 +386,22 @@ selected parent. A pre-existing destination that is not a saved mapping is never
 adopted or replaced. Successful mappings are persisted outside the project and later
 syncs reuse the same destination. The tag retains the last known state; an explicit
 `[R]` comparison updates it through checking, out-of-sync, syncing, synced and error
-states without polling the complete project tree in the background.
+states without polling the complete project tree in the background. Only changes to
+project-facing paths make the settled tag out-of-sync; `.git`, dependency/cache trees
+and generated outputs remain quiet in that indicator.
 The checking state sweeps the tag background, while synchronization fills that
 background with measured delta progress without changing the tag text.
+
+The checking, review and transfer states also expose `[A]` **Automatic sync** with
+an `OFF` or `ON` state. Its value is saved per remote-project mapping. When
+enabled, every successfully completed Codex turn starts a background remote-to-local
+sync without opening or focusing a modal; the pane tag carries its progress and only
+failures notify. This is standing authorization to replace local changes with the
+remote result. Enabling it during an open review does not confirm that review, while
+enabling it during the first transfer is saved as soon as the initial mapping succeeds.
+Manual work remains first in line, and completions received while a sync is busy
+collapse into one pending run. Disabling removes that pending run; a failure waits for
+another completed turn instead of retrying immediately.
 
 For a saved mapping, Master Key `[R]` first compares detailed remote, local and last
 successful manifests. If nothing differs, it shows a brief notification. Otherwise a
@@ -396,7 +412,8 @@ replaced. Every comparison covers the complete remote and local trees, including
 hidden and ignored content, dependencies, caches and `.git`; Git status cannot define
 the mirror because it omits ignored paths. Metadata is enumerated first and content
 digests from the last successful snapshot are reused unless size, mode, modification
-time or change time moved.
+time or change time moved. Quiet paths still appear in the review and are synchronized
+normally; the distinction affects only the settled pane tag.
 
 Only new or content-changed regular-file bytes cross SSH. A separate installed helper
 performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal

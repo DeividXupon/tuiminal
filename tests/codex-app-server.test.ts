@@ -6,8 +6,46 @@ import {
   codexResumeThreads,
   startCodexAppServerRelay,
 } from "../packages/feature-terminal/src/services/codex-app-server"
+import { startRemoteCodexHeartbeat } from "../packages/feature-terminal/src/services/remote-codex-heartbeat"
 
 type MockSocket = { send: (data: string) => unknown }
+
+test("remote heartbeat serializes protocol frames and stops without late writes", async () => {
+  const writes: string[] = []
+  const firstWrite = Promise.withResolvers<number>()
+  let ended = false
+  let errors = 0
+  const heartbeat = startRemoteCodexHeartbeat(
+    {
+      write(value) {
+        writes.push(String(value))
+        if (writes.length === 1) return firstWrite.promise
+        return String(value).length
+      },
+      end() {
+        ended = true
+      },
+    },
+    "heartbeat",
+    () => {
+      errors += 1
+    },
+    { intervalMs: 5 },
+  )
+  heartbeat.write('{"id":1}')
+  await Bun.sleep(15)
+  expect(writes).toEqual(["heartbeat\n"])
+
+  firstWrite.resolve("heartbeat\n".length)
+  for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) await Bun.sleep(5)
+  expect(writes.slice(0, 2)).toEqual(["heartbeat\n", '{"id":1}\n'])
+  heartbeat.stop()
+  const stoppedAt = writes.length
+  await Bun.sleep(20)
+  expect(writes).toHaveLength(stoppedAt)
+  expect(ended).toBe(true)
+  expect(errors).toBe(0)
+})
 
 function replyToResumeListRequest(
   socket: MockSocket,

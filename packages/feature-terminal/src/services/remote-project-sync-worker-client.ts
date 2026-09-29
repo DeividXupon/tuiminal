@@ -41,6 +41,7 @@ function responseError(response: Extract<RemoteProjectSyncWorkerResponse, { kind
 export class RemoteProjectSyncWorkerClient {
   private readonly pending = new Map<string, PendingRequest>()
   private readonly process
+  readonly finished: Promise<void>
   private cancelTimer: ReturnType<typeof setTimeout> | undefined
   private cancelling = false
   private closed = false
@@ -58,7 +59,7 @@ export class RemoteProjectSyncWorkerClient {
       serialization: "advanced",
       ipc: (message: RemoteProjectSyncWorkerResponse) => this.receive(message),
     })
-    void this.process.exited.then((code) => {
+    this.finished = this.process.exited.then((code) => {
       if (this.cancelTimer) clearTimeout(this.cancelTimer)
       this.closed = true
       const error = this.cancelling
@@ -146,6 +147,19 @@ export class RemoteProjectSyncWorkerClient {
     const response = await this.request({ kind: "page", offset })
     if (response.kind !== "page") throw new Error("Resposta de sincronização inválida.")
     return { offset: response.offset, changes: response.changes }
+  }
+
+  setAutomatic(enabled: boolean) {
+    if (this.closed) return
+    try {
+      this.process.send({
+        id: randomUUID(),
+        kind: "automatic",
+        enabled,
+      } satisfies RemoteProjectSyncWorkerRequest)
+    } catch {
+      // The worker may have finished between the state update and this notification.
+    }
   }
 
   cancel() {

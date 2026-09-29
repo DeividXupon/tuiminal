@@ -20,6 +20,8 @@ export function RemoteProjectSyncFlow({
   onPage,
   onClose,
   statuses,
+  automaticFor,
+  onToggleAutomatic,
 }: {
   flow: RemoteProjectSyncFlowState | null
   sessions: readonly TerminalSession[]
@@ -28,6 +30,8 @@ export function RemoteProjectSyncFlow({
   onPage: (session: TerminalSession, offset: number) => void
   onClose: () => void
   statuses: ReadonlyMap<string, RemoteProjectSyncStatus>
+  automaticFor: (session: TerminalSession) => boolean
+  onToggleAutomatic: (session: TerminalSession) => void
 }) {
   if (!flow) return null
   const owner = sessions.find((session) => session.id === flow.sessionId)
@@ -55,12 +59,16 @@ export function RemoteProjectSyncFlow({
       <RemoteProjectSyncProgressDialog
         localPath={flow.localPath}
         status={statuses.get(owner.id)}
+        automatic={automaticFor(owner)}
+        onToggleAutomatic={() => onToggleAutomatic(owner)}
         onCancel={onClose}
       />
     )
   return (
     <RemoteProjectSyncPreviewDialog
       review={flow.review}
+      automatic={automaticFor(owner)}
+      onToggleAutomatic={() => onToggleAutomatic(owner)}
       onPage={(offset) => onPage(owner, offset)}
       onConfirm={() => onSync(owner, undefined, flow.review)}
       onClose={onClose}

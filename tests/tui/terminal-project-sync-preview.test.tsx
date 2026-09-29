@@ -16,6 +16,7 @@ afterEach(() => {
 
 test("sync progress keeps focus and cancels with Escape", async () => {
   let cancels = 0
+  let automaticToggles = 0
   tui = await testRender(
     <RemoteProjectSyncProgressDialog
       localPath="/local/project-sync"
@@ -24,6 +25,10 @@ test("sync progress keeps focus and cancels with Escape", async () => {
         localPath: "/local/project-sync",
         phase: "transferring",
         progress: 0.5,
+      }}
+      automatic={false}
+      onToggleAutomatic={() => {
+        automaticToggles += 1
       }}
       onCancel={() => {
         cancels += 1
@@ -42,7 +47,10 @@ test("sync progress keeps focus and cancels with Escape", async () => {
   await tui.renderOnce()
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("terminal-project-sync-progress")
   expect(tui.captureCharFrame()).toContain("50%")
+  expect(tui.captureCharFrame()).toContain("[A] Sincronização automática OFF")
   expect(tui.captureCharFrame()).toContain("[Esc] Cancelar")
+  act(() => tui?.mockInput.pressKey("a"))
+  expect(automaticToggles).toBe(1)
   act(() => tui?.mockInput.pressEscape())
   await act(async () => Bun.sleep(60))
   await tui.renderOnce()
@@ -52,6 +60,7 @@ test("sync progress keeps focus and cancels with Escape", async () => {
 test("sync preview lists actions and uses one explicit destructive confirmation", async () => {
   let confirms = 0
   let closes = 0
+  let automaticToggles = 0
   let requestedPage = -1
   const review: RemoteProjectSyncReview = {
     jobId: "fixture",
@@ -61,6 +70,7 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
     hasLocalChanges: true,
     legacyLocalChanges: false,
     difference: "both",
+    indicator: { changeCount: 3, difference: "both" },
     offset: 0,
     pageSize: 200,
     changes: [
@@ -90,6 +100,10 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   tui = await testRender(
     <RemoteProjectSyncPreviewDialog
       review={review}
+      automatic
+      onToggleAutomatic={() => {
+        automaticToggles += 1
+      }}
       onPage={(offset) => {
         requestedPage = offset
       }}
@@ -116,6 +130,8 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   expect(frame).toContain("ITENS FORA DE SINCRONIA")
   expect(frame).toContain("src/new.ts")
   expect(frame).toContain("Conflito")
+  expect(frame).toContain("[A] Sincronização automática ON")
+  expect(frame).toContain("O remoto substituirá alterações locais")
   expect(frame).toContain("[Enter] Substituir e sincronizar")
   const next = tui.renderer.root.findDescendantById("terminal-project-sync-next-page")
   if (!next) throw new Error("Sync preview next-page action did not mount")
@@ -124,6 +140,10 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   const confirm = tui.renderer.root.findDescendantById("terminal-project-sync-confirm-changes")
   const cancel = tui.renderer.root.findDescendantById("terminal-project-sync-cancel-changes")
   if (!confirm || !cancel) throw new Error("Sync preview actions did not mount")
+  const automatic = tui.renderer.root.findDescendantById("terminal-project-sync-automatic")
+  if (!automatic) throw new Error("Automatic sync action did not mount")
+  await act(async () => tui?.mockMouse.click(automatic.screenX + 1, automatic.screenY))
+  expect(automaticToggles).toBe(1)
   await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))
   expect(confirms).toBe(1)
   await act(async () => tui?.mockMouse.click(cancel.screenX + 1, cancel.screenY))

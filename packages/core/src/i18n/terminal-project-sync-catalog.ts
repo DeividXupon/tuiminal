@@ -1,7 +1,9 @@
+import { TERMINAL_PROJECT_SYNC_AUTOMATIC_MESSAGES } from "./terminal-project-sync-automatic-catalog"
 import { TERMINAL_PROJECT_SYNC_PREVIEW_MESSAGES } from "./terminal-project-sync-preview-catalog"
 import { TERMINAL_PROJECT_SYNC_PROGRESS_MESSAGES } from "./terminal-project-sync-progress-catalog"
 
 export const TERMINAL_PROJECT_SYNC_MESSAGES = [
+  ...TERMINAL_PROJECT_SYNC_AUTOMATIC_MESSAGES,
   [
     "[R] Sincronizar remoto",
     "[R] Sync remote",

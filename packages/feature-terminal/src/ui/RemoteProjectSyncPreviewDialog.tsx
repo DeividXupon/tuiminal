@@ -5,6 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef, useState } from "react"
 import type { RemoteProjectSyncChange, RemoteProjectSyncReview } from "../model/remote-project-sync"
+import { RemoteProjectSyncAutomaticControl } from "./RemoteProjectSyncAutomaticControl"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
 function consume(key: KeyEvent) {
@@ -32,11 +33,15 @@ function displayPath(path: string, width: number) {
 
 export function RemoteProjectSyncPreviewDialog({
   review,
+  automatic,
+  onToggleAutomatic,
   onPage,
   onConfirm,
   onClose,
 }: {
   review: RemoteProjectSyncReview
+  automatic: boolean
+  onToggleAutomatic: () => void
   onPage: (offset: number) => void
   onConfirm: () => void
   onClose: () => void
@@ -55,7 +60,10 @@ export function RemoteProjectSyncPreviewDialog({
   useEffect(() => dialog.current?.focus(), [])
   useKeyboard((key) => {
     const name = key.name.toLowerCase()
-    if (name === "escape") {
+    if (name === "a") {
+      consume(key)
+      onToggleAutomatic()
+    } else if (name === "escape") {
       consume(key)
       onClose()
     } else if (name === "enter" || name === "return") {
@@ -143,6 +151,7 @@ export function RemoteProjectSyncPreviewDialog({
         wrapMode="none"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
+      <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <TerminalInlineButton
           id="terminal-project-sync-confirm-changes"

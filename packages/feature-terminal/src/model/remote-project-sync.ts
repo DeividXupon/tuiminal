@@ -42,11 +42,17 @@ export type RemoteProjectSyncChange = {
   transferBytes: number
 }
 
+export type RemoteProjectSyncIndicator = {
+  changeCount: number
+  difference: RemoteProjectSyncDifference | null
+}
+
 export type RemoteProjectSyncPreview = {
   localPath: string
   remote: RemoteProjectSyncManifest
   local: RemoteProjectSyncManifest
   changes: RemoteProjectSyncChange[]
+  indicator: RemoteProjectSyncIndicator
   hasLocalChanges: boolean
   legacyLocalChanges: boolean
 }
@@ -59,6 +65,7 @@ export type RemoteProjectSyncReview = {
   hasLocalChanges: boolean
   legacyLocalChanges: boolean
   difference: RemoteProjectSyncDifference
+  indicator: RemoteProjectSyncIndicator
   mapping?: RemoteProjectSyncMapping | undefined
   offset: number
   pageSize: number
@@ -88,11 +95,24 @@ export type RemoteProjectSyncStatus =
   | { kind: "out-of-sync"; localPath: string; difference: RemoteProjectSyncDifference }
   | { kind: "error"; localPath?: string; message: string }
 
+export function remoteProjectSyncReviewStatus(
+  review: Pick<RemoteProjectSyncPreview, "localPath" | "indicator">,
+): RemoteProjectSyncStatus {
+  return review.indicator.difference
+    ? {
+        kind: "out-of-sync",
+        localPath: review.localPath,
+        difference: review.indicator.difference,
+      }
+    : { kind: "synced", localPath: review.localPath }
+}
+
 export type RemoteProjectSyncMapping = {
   profileId: string
   sourcePath: string
   remotePath: string
   localPath: string
+  automatic?: boolean | undefined
   remoteFingerprint: string
   localFingerprint: string
   snapshotId?: string | undefined

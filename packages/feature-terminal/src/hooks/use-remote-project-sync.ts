@@ -5,11 +5,20 @@ import {
   type RemoteProjectSyncStatus,
   remoteProjectSyncKey,
   remoteProjectSyncMappingKey,
+  remoteProjectSyncReviewStatus,
 } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
 import { RemoteProjectSyncLocalChangesError } from "../services/remote-project-sync-errors"
-import { loadRemoteProjectSyncMappings } from "../services/remote-project-sync-state"
+import {
+  loadRemoteProjectSyncMappings,
+  saveRemoteProjectSyncMapping,
+} from "../services/remote-project-sync-state"
 import { RemoteProjectSyncWorkerClient } from "../services/remote-project-sync-worker-client"
+import { shouldReportRemoteProjectAutoSyncFailure } from "./use-remote-project-auto-sync"
+
+type RemoteProjectSyncOptions = {
+  onAutomaticFailure?: ((session: TerminalSession, error: unknown) => void) | undefined
+}
 
 function mappedBySource(mappings: readonly RemoteProjectSyncMapping[]) {
   return new Map(mappings.map((mapping) => [remoteProjectSyncMappingKey(mapping), mapping]))
@@ -46,35 +55,64 @@ function synchronizationFailureStatus(
   return wasCancelled ? undefined : failureStatus(localPath, error)
 }
 
+function cancelledSynchronizationStatus(
+  localPath: string,
+  mapping: RemoteProjectSyncMapping | undefined,
+  review: RemoteProjectSyncReview | undefined,
+): RemoteProjectSyncStatus {
+  if (review) return remoteProjectSyncReviewStatus(review)
+  return mapping ? { kind: "out-of-sync", localPath, difference: "remote" } : { kind: "unmapped" }
+}
+
 export function useRemoteProjectSync(
   visibleSessions: readonly TerminalSession[],
   allSessions: readonly TerminalSession[],
+  options: RemoteProjectSyncOptions = {},
 ) {
   const [mappings, setMappings] = useState(() => mappedBySource(loadRemoteProjectSyncMappings()))
   const mappingsRef = useRef(mappings)
   mappingsRef.current = mappings
+  const [automaticKeys, setAutomaticKeys] = useState(
+    () => new Set([...mappings].filter(([, mapping]) => mapping.automatic).map(([key]) => key)),
+  )
+  const automaticKeysRef = useRef(automaticKeys)
+  automaticKeysRef.current = automaticKeys
   const [statuses, setStatuses] = useState<ReadonlyMap<string, RemoteProjectSyncStatus>>(
     () => new Map(),
   )
+  const statusesRef = useRef(statuses)
+  statusesRef.current = statuses
   const clients = useRef(new Map<string, RemoteProjectSyncWorkerClient>())
   const cancelled = useRef(new Set<string>())
   const running = useRef(new Set<string>())
+  const pendingAutomatic = useRef(new Map<string, TerminalSession>())
+  const automaticRunning = useRef(new Set<string>())
+  const allSessionsRef = useRef(allSessions)
+  allSessionsRef.current = allSessions
+  const lifecycleActive = useRef(true)
+  const onAutomaticFailureRef = useRef(options.onAutomaticFailure)
+  onAutomaticFailureRef.current = options.onAutomaticFailure
+  const drainAutomaticRef = useRef((_key: string) => {})
 
   const updateStatus = useCallback((key: string, status: RemoteProjectSyncStatus) => {
     setStatuses((current) => {
       const next = new Map(current)
       next.set(key, status)
+      statusesRef.current = next
       return next
     })
   }, [])
 
   const retainMapping = useCallback((key: string, mapping: RemoteProjectSyncMapping) => {
+    const configured = { ...mapping, automatic: automaticKeysRef.current.has(key) }
+    if (configured.automatic !== mapping.automatic) saveRemoteProjectSyncMapping(configured)
     setMappings((current) => {
       const next = new Map(current)
-      next.set(key, mapping)
+      next.set(key, configured)
       mappingsRef.current = next
       return next
     })
+    drainAutomaticRef.current(key)
   }, [])
 
   const cancelKey = useCallback(
@@ -83,30 +121,39 @@ export function useRemoteProjectSync(
       if (!client) return
       cancelled.current.add(key)
       client.cancel()
-      clients.current.delete(key)
-      if (!running.current.has(key)) {
-        const mapping = mappingsRef.current.get(key)
-        updateStatus(
-          key,
-          mapping
-            ? { kind: "out-of-sync", localPath: mapping.localPath, difference: "remote" }
-            : { kind: "unmapped" },
-        )
-      }
+      void client.finished.finally(() => {
+        if (clients.current.get(key) === client) clients.current.delete(key)
+        if (!running.current.has(key)) {
+          const mapping = mappingsRef.current.get(key)
+          const previous = statusesRef.current.get(key)
+          updateStatus(
+            key,
+            previous?.kind === "synced" || previous?.kind === "out-of-sync"
+              ? previous
+              : mapping
+                ? { kind: "out-of-sync", localPath: mapping.localPath, difference: "remote" }
+                : { kind: "unmapped" },
+          )
+          cancelled.current.delete(key)
+        }
+        drainAutomaticRef.current(key)
+      })
     },
     [updateStatus],
   )
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    lifecycleActive.current = true
+    return () => {
+      lifecycleActive.current = false
       for (const [key, client] of clients.current) {
         cancelled.current.add(key)
         client.cancel()
       }
+      pendingAutomatic.current.clear()
       clients.current.clear()
-    },
-    [],
-  )
+    }
+  }, [])
 
   useEffect(() => {
     const retained = new Set(
@@ -116,6 +163,8 @@ export function useRemoteProjectSync(
       }),
     )
     for (const key of clients.current.keys()) if (!retained.has(key)) cancelKey(key)
+    for (const key of pendingAutomatic.current.keys())
+      if (!retained.has(key)) pendingAutomatic.current.delete(key)
   }, [allSessions, cancelKey])
 
   const createClient = useCallback(
@@ -147,11 +196,7 @@ export function useRemoteProjectSync(
           return review
         }
         keepClient = true
-        updateStatus(key, {
-          kind: "out-of-sync",
-          localPath: mapping.localPath,
-          difference: review.difference,
-        })
+        updateStatus(key, remoteProjectSyncReviewStatus(review))
         return review
       } catch (error) {
         if (!cancelled.current.has(key)) updateStatus(key, failureStatus(mapping.localPath, error))
@@ -160,6 +205,7 @@ export function useRemoteProjectSync(
         if (!keepClient) {
           clients.current.delete(key)
           client.dispose()
+          drainAutomaticRef.current(key)
         }
       }
     },
@@ -197,12 +243,8 @@ export function useRemoteProjectSync(
         clients.current.delete(key)
         client.dispose()
         if (cancelled.current.delete(key))
-          updateStatus(
-            key,
-            mapping
-              ? { kind: "out-of-sync", localPath, difference: "remote" }
-              : { kind: "unmapped" },
-          )
+          updateStatus(key, cancelledSynchronizationStatus(localPath, mapping, options.review))
+        drainAutomaticRef.current(key)
       }
     },
     [createClient, retainMapping, updateStatus],
@@ -222,6 +264,85 @@ export function useRemoteProjectSync(
     },
     [cancelKey],
   )
+
+  const drainAutomatic = useCallback(
+    (key: string) => {
+      if (
+        automaticRunning.current.has(key) ||
+        clients.current.has(key) ||
+        !pendingAutomatic.current.has(key)
+      )
+        return
+      if (!automaticKeysRef.current.has(key)) {
+        pendingAutomatic.current.delete(key)
+        return
+      }
+      if (!mappingsRef.current.has(key)) return
+      const queued = pendingAutomatic.current.get(key)
+      const session = allSessionsRef.current.find(
+        (candidate) => candidate.id === queued?.id && candidate.startedAt === queued.startedAt,
+      )
+      if (!session) {
+        pendingAutomatic.current.delete(key)
+        return
+      }
+      pendingAutomatic.current.delete(key)
+      automaticRunning.current.add(key)
+      void synchronize(session)
+        .catch((error) => {
+          if (
+            shouldReportRemoteProjectAutoSyncFailure({
+              active: lifecycleActive.current,
+              enabled: automaticKeysRef.current.has(key),
+              sessions: allSessionsRef.current,
+              session,
+            })
+          )
+            onAutomaticFailureRef.current?.(session, error)
+        })
+        .finally(() => {
+          automaticRunning.current.delete(key)
+          drainAutomaticRef.current(key)
+        })
+    },
+    [synchronize],
+  )
+  drainAutomaticRef.current = drainAutomatic
+
+  const requestAutomatic = useCallback((session: TerminalSession) => {
+    const remote = remoteSession(session)
+    if (!remote) return
+    const key = remoteProjectSyncKey(remote)
+    if (!automaticKeysRef.current.has(key)) return
+    pendingAutomatic.current.set(key, session)
+    drainAutomaticRef.current(key)
+  }, [])
+
+  const toggleAutomatic = useCallback((session: TerminalSession) => {
+    const remote = remoteSession(session)
+    if (!remote) return false
+    const key = remoteProjectSyncKey(remote)
+    const enabled = !automaticKeysRef.current.has(key)
+    const mapping = mappingsRef.current.get(key)
+    if (mapping) {
+      const configured = { ...mapping, automatic: enabled }
+      saveRemoteProjectSyncMapping(configured)
+      const nextMappings = new Map(mappingsRef.current)
+      nextMappings.set(key, configured)
+      mappingsRef.current = nextMappings
+      setMappings(nextMappings)
+    }
+    const nextAutomaticKeys = new Set(automaticKeysRef.current)
+    if (enabled) nextAutomaticKeys.add(key)
+    else {
+      nextAutomaticKeys.delete(key)
+      pendingAutomatic.current.delete(key)
+    }
+    automaticKeysRef.current = nextAutomaticKeys
+    setAutomaticKeys(nextAutomaticKeys)
+    clients.current.get(key)?.setAutomatic(enabled)
+    return enabled
+  }, [])
 
   const sessionStatuses = useMemo(() => {
     const result = new Map<string, RemoteProjectSyncStatus>()
@@ -244,5 +365,23 @@ export function useRemoteProjectSync(
     return remote ? mappingsRef.current.get(remoteProjectSyncKey(remote)) : undefined
   }, [])
 
-  return { statuses: sessionStatuses, mappingFor, inspect, synchronize, page, cancel }
+  const automaticFor = useCallback(
+    (session: TerminalSession) => {
+      const remote = remoteSession(session)
+      return remote ? automaticKeys.has(remoteProjectSyncKey(remote)) : false
+    },
+    [automaticKeys],
+  )
+
+  return {
+    statuses: sessionStatuses,
+    mappingFor,
+    automaticFor,
+    toggleAutomatic,
+    requestAutomatic,
+    inspect,
+    synchronize,
+    page,
+    cancel,
+  }
 }

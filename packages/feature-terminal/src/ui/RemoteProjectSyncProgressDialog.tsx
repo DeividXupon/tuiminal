@@ -5,6 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef } from "react"
 import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
+import { RemoteProjectSyncAutomaticControl } from "./RemoteProjectSyncAutomaticControl"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
 function consume(key: KeyEvent) {
@@ -31,10 +32,14 @@ function phaseLabel(status: RemoteProjectSyncStatus | undefined) {
 export function RemoteProjectSyncProgressDialog({
   localPath,
   status,
+  automatic,
+  onToggleAutomatic,
   onCancel,
 }: {
   localPath: string
   status?: RemoteProjectSyncStatus | undefined
+  automatic: boolean
+  onToggleAutomatic: () => void
   onCancel: () => void
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
@@ -44,16 +49,21 @@ export function RemoteProjectSyncProgressDialog({
   const cancelling = status?.kind === "cancelling"
   useEffect(() => dialog.current?.focus(), [])
   useKeyboard((key) => {
-    if (key.name !== "escape") return
-    consume(key)
-    if (!cancelling) onCancel()
+    const name = key.name.toLowerCase()
+    if (name === "a") {
+      consume(key)
+      onToggleAutomatic()
+    } else if (name === "escape") {
+      consume(key)
+      if (!cancelling) onCancel()
+    }
   })
   return (
     <ModalSurface
       dialogRef={dialog}
       id="terminal-project-sync-progress"
       width={width}
-      height={Math.max(1, Math.min(9, dimensions.height - 2))}
+      height={Math.max(1, Math.min(11, dimensions.height - 2))}
       borderColor={cancelling ? COLORS.warning : COLORS.terminal}
       zIndex={830}
       onBackdropPress={() => {
@@ -100,6 +110,7 @@ export function RemoteProjectSyncProgressDialog({
           style={{ position: "absolute", left: 0, top: 0, height: 1, fg: COLORS.text }}
         />
       </box>
+      <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <TerminalInlineButton
           id="terminal-project-sync-cancel-progress"

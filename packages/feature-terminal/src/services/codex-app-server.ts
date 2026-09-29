@@ -10,7 +10,8 @@ import {
   inspectClientFrame,
   inspectUpstreamFrame,
 } from "./codex-relay-observer"
-import { remoteCodexAppServerSshCommand, remoteCodexTuiCommand } from "./remote-codex-connection"
+import { createRemoteCodexAppServerLaunch, remoteCodexTuiCommand } from "./remote-codex-connection"
+import { startRemoteCodexHeartbeat } from "./remote-codex-heartbeat"
 import { handshakeRemoteCodex } from "./remote-codex-handshake"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
@@ -123,20 +124,6 @@ async function drainStream(stream: ReadableStream<Uint8Array>) {
   }
 }
 
-function writeStdioFrame(
-  process: StdioAppServerProcess,
-  value: string,
-  events: CodexAppServerEvents,
-) {
-  try {
-    void Promise.resolve(process.stdin.write(`${value}\n`)).catch(() =>
-      events.onError("Não foi possível enviar dados ao Codex remoto."),
-    )
-  } catch {
-    events.onError("Não foi possível enviar dados ao Codex remoto.")
-  }
-}
-
 function forwardStdioLine(
   value: string,
   relay: CodexRelay,
@@ -194,6 +181,7 @@ async function forwardStdioOutput(
 /** Bridges the remote JSONL stdio transport to the local official Codex TUI. */
 function startCodexStdioRelay(
   process: StdioAppServerProcess,
+  sendUpstream: (value: string) => void,
   events: CodexAppServerEvents,
   remoteProfileId: string,
   remoteProfileName: string,
@@ -205,7 +193,7 @@ function startCodexStdioRelay(
     close: ((code?: number, reason?: string) => void) | null
   } = { send: null, close: null }
   const relay = createCodexRelay({ id: remoteProfileId, name: remoteProfileName })
-  relay.sendUpstream = (value) => writeStdioFrame(process, value, events)
+  relay.sendUpstream = sendUpstream
   const server = Bun.serve<CodexRelay>({
     hostname: "127.0.0.1",
     port: 0,
@@ -255,18 +243,29 @@ async function startRemoteCodexAppServerTerminal(
   void _localCwd
   await handshakeRemoteCodex(remote.profile, remote.workingDirectory, signal)
   signal.throwIfAborted()
-  const server = Bun.spawn(
-    remoteCodexAppServerSshCommand(remote.profile, remote.workingDirectory),
-    { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
-  ) as unknown as StdioAppServerProcess
-  const relay = startCodexStdioRelay(server, events, remote.profile.id, remote.profile.name)
+  const launch = createRemoteCodexAppServerLaunch(remote.profile, remote.workingDirectory)
+  const server = Bun.spawn(launch.command, {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  }) as unknown as StdioAppServerProcess
+  const heartbeat = startRemoteCodexHeartbeat(server.stdin, launch.heartbeatLine, () =>
+    events.onError("Não foi possível enviar dados ao Codex remoto."),
+  )
+  const relay = startCodexStdioRelay(
+    server,
+    heartbeat.write,
+    events,
+    remote.profile.id,
+    remote.profile.name,
+  )
   let stopping: Promise<void> | null = null
   const stopServer = () => {
     if (stopping) return stopping
     stopping = (async () => {
       relay.stop()
+      heartbeat.stop()
       try {
-        server.stdin.end()
         server.kill()
         await server.exited
       } finally {

@@ -1,8 +1,8 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import {
-  mkdtempSync,
   lstatSync,
+  mkdtempSync,
   readFileSync,
   readlinkSync,
   realpathSync,
@@ -16,11 +16,12 @@ import {
 import { mkdir, rename } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { remoteProjectSyncReviewStatus } from "../packages/feature-terminal/src/model/remote-project-sync"
 import {
+  inspectRemoteProjectSync,
   localRemoteProjectArchiveCommand,
   localRemoteProjectHashCommand,
   localRemoteProjectManifestCommand,
-  inspectRemoteProjectSync,
   readLocalProjectFingerprint,
   readRemoteProjectFingerprint,
   remoteProjectSyncDestination,
@@ -107,7 +108,9 @@ test("always synchronizes the complete tree at a Git repository root", async () 
   const source = join(root, "source")
   const destination = join(root, "project-sync")
   await mkdir(join(source, "node_modules", "package"), { recursive: true })
+  await mkdir(join(source, ".cache"), { recursive: true })
   writeFileSync(join(source, ".gitignore"), "node_modules/\n")
+  writeFileSync(join(source, ".cache", "runtime.dat"), "cached\n")
   writeFileSync(join(source, "tracked.txt"), "tracked\n")
   writeFileSync(join(source, "untracked.txt"), "untracked\n")
   writeFileSync(join(source, "node_modules", "package", "ignored.js"), "ignored\n")
@@ -136,13 +139,16 @@ test("always synchronizes the complete tree at a Git repository root", async () 
   expect(readFileSync(join(destination, "tracked.txt"), "utf8")).toBe("tracked\n")
   expect(readFileSync(join(destination, "untracked.txt"), "utf8")).toBe("untracked\n")
   expect(readFileSync(join(destination, ".git", "HEAD"), "utf8").length).toBeGreaterThan(0)
+  expect(readFileSync(join(destination, ".cache", "runtime.dat"), "utf8")).toBe("cached\n")
   expect(readFileSync(join(destination, "node_modules", "package", "ignored.js"), "utf8")).toBe(
     "ignored\n",
   )
 
-  writeFileSync(join(source, "tracked.txt"), "changed\n")
+  const gitConfig = join(source, ".git", "config")
+  writeFileSync(gitConfig, `${readFileSync(gitConfig, "utf8")}\n# quiet change\n`)
+  writeFileSync(join(source, ".cache", "runtime.dat"), "cache change\n")
   writeFileSync(join(source, "node_modules", "package", "ignored.js"), "ignored change\n")
-  const preview = await inspectRemoteProjectSync({
+  const quietPreview = await inspectRemoteProjectSync({
     remote: remote(source),
     destination,
     mapping: {
@@ -158,8 +164,43 @@ test("always synchronizes the complete tree at a Git repository root", async () 
     signal: new AbortController().signal,
     commands: localCommands(source),
   })
+  expect(quietPreview.changes.map((change) => change.path)).toContain(".git/config")
+  expect(quietPreview.changes.map((change) => change.path)).toContain(".cache/runtime.dat")
+  expect(quietPreview.changes.map((change) => change.path)).toContain(
+    "node_modules/package/ignored.js",
+  )
+  expect(quietPreview.indicator).toEqual({ changeCount: 0, difference: null })
+  expect(remoteProjectSyncReviewStatus(quietPreview)).toEqual({
+    kind: "synced",
+    localPath: destination,
+  })
+
+  writeFileSync(join(source, "tracked.txt"), "changed\n")
+  writeFileSync(join(source, "node_modules", "package", "ignored.js"), "ignored again\n")
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 2,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
   expect(preview.changes.map((change) => change.path)).toContain("tracked.txt")
   expect(preview.changes.map((change) => change.path)).toContain("node_modules/package/ignored.js")
+  expect(preview.indicator).toEqual({ changeCount: 1, difference: "remote" })
+  expect(remoteProjectSyncReviewStatus(preview)).toEqual({
+    kind: "out-of-sync",
+    localPath: destination,
+    difference: "remote",
+  })
 })
 
 test("uses the caller deadline for remote project verification", async () => {
@@ -619,6 +660,9 @@ test("persists bounded project mappings outside the synchronized project", () =>
   }
   saveRemoteProjectSyncMapping(mapping, environment)
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([mapping])
+  const automaticMapping = { ...mapping, automatic: true, syncedAt: 2 }
+  saveRemoteProjectSyncMapping(automaticMapping, environment)
+  expect(loadRemoteProjectSyncMappings(environment)).toEqual([automaticMapping])
   rmSync(join(data, "tuiminal"), { recursive: true, force: true })
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([])
 })
