@@ -27,6 +27,22 @@ function tagColor(
   return COLORS.muted
 }
 
+export function terminalSyncTagProgress(
+  sync: RemoteProjectSyncStatus | undefined,
+  width: number,
+  frame: number,
+) {
+  if (sync?.kind === "syncing")
+    return { left: 0, width: Math.max(0, Math.min(width, Math.round(sync.progress * width))) }
+  if (sync?.kind !== "checking" || width <= 0) return null
+  const sweepWidth = Math.min(4, width)
+  const left = (frame % (width + sweepWidth)) - sweepWidth + 1
+  return {
+    left: Math.max(0, left),
+    width: Math.max(0, Math.min(width, left + sweepWidth) - Math.max(0, left)),
+  }
+}
+
 export function TerminalContextTags({
   sessionId,
   context,
@@ -45,16 +61,13 @@ export function TerminalContextTags({
   onActivate: () => void
 }) {
   const [syncFrame, setSyncFrame] = useState(0)
-  const animating = active && (sync?.kind === "checking" || sync?.kind === "syncing")
+  const animating = active && sync?.kind === "checking"
   useEffect(() => {
     setSyncFrame(0)
     if (!animating || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return
-    const timer = setInterval(
-      () => setSyncFrame((current) => current + 1),
-      sync?.kind === "checking" ? 180 : 100,
-    )
+    const timer = setInterval(() => setSyncFrame((current) => current + 1), 180)
     return () => clearInterval(timer)
-  }, [animating, sync?.kind])
+  }, [animating])
   const contentWidth = Math.max(0, availableWidth - 1)
   const tags = terminalContextTags(context, contentWidth, sync, masterKey, syncFrame)
   const [hovered, setHovered] = useState<TerminalContextTag["kind"] | null>(null)
@@ -97,21 +110,54 @@ export function TerminalContextTags({
           gap: 1,
         }}
       >
-        {tags.map((tag) => (
-          <TerminalShortcutText
-            key={tag.kind}
-            id={`terminal-context-${tag.kind}-${sessionId}`}
-            content={` ${tag.label} `}
-            wrapMode="none"
-            onMouseOver={() => setHovered(tag.kind)}
-            onMouseOut={() => setHovered((current) => (current === tag.kind ? null : current))}
-            style={{
-              flexShrink: 0,
-              fg: tagColor(tag, context, sync),
-              bg: COLORS.panelRaised,
-            }}
-          />
-        ))}
+        {tags.map((tag) => {
+          const width = displayWidth(tag.label) + 2
+          const progress =
+            tag.kind === "sync" ? terminalSyncTagProgress(sync, width, syncFrame) : null
+          return (
+            <box
+              key={tag.kind}
+              style={{
+                position: "relative",
+                width,
+                height: 1,
+                flexShrink: 0,
+                backgroundColor: COLORS.panelRaised,
+                overflow: "hidden",
+              }}
+            >
+              {progress && progress.width > 0 && (
+                <box
+                  style={{
+                    position: "absolute",
+                    left: progress.left,
+                    top: 0,
+                    width: progress.width,
+                    height: 1,
+                    backgroundColor: COLORS.terminal,
+                    opacity: 0.3,
+                  }}
+                />
+              )}
+              <TerminalShortcutText
+                id={`terminal-context-${tag.kind}-${sessionId}`}
+                content={` ${tag.label} `}
+                wrapMode="none"
+                onMouseOver={() => setHovered(tag.kind)}
+                onMouseOut={() => setHovered((current) => (current === tag.kind ? null : current))}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width,
+                  height: 1,
+                  fg: tagColor(tag, context, sync),
+                  bg: "transparent",
+                }}
+              />
+            </box>
+          )
+        })}
       </box>
       {tooltip && (
         <text

@@ -1,3 +1,5 @@
+import { TERMINAL_PROJECT_SYNC_PREVIEW_MESSAGES } from "./terminal-project-sync-preview-catalog"
+
 export const TERMINAL_PROJECT_SYNC_MESSAGES = [
   [
     "[R] Sincronizar remoto",
@@ -347,4 +349,5 @@ export const TERMINAL_PROJECT_SYNC_MESSAGES = [
     "无法解压远程项目。",
     "원격 프로젝트를 추출할 수 없습니다.",
   ],
+  ...TERMINAL_PROJECT_SYNC_PREVIEW_MESSAGES,
 ] as const

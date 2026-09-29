@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   type RemoteProjectSyncMapping,
+  type RemoteProjectSyncPreview,
+  type RemoteProjectSyncSnapshot,
   type RemoteProjectSyncStatus,
   remoteProjectSyncKey,
   remoteProjectSyncMappingKey,
 } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
 import {
+  inspectRemoteProjectSync,
   pathExists,
   RemoteProjectSyncCollisionError,
   RemoteProjectSyncLocalChangesError,
-  RemoteProjectSyncLocalRaceError,
   readLocalProjectFingerprint,
   readRemoteProjectFingerprint,
   synchronizeRemoteProject,
 } from "../services/remote-project-sync"
 import {
   loadRemoteProjectSyncMappings,
-  saveRemoteProjectSyncMapping,
+  loadRemoteProjectSyncSnapshot,
+  saveRemoteProjectSyncSnapshot,
 } from "../services/remote-project-sync-state"
 
 const STATUS_INTERVAL_MS = 10_000
@@ -31,7 +34,7 @@ function remoteSession(session: TerminalSession) {
   return session.agentIntegration === "codex-app-server" ? session.codex?.remote : undefined
 }
 
-async function inspectProjectSync(
+async function inspectProjectSyncStatus(
   remote: NonNullable<ReturnType<typeof remoteSession>>,
   mapping: RemoteProjectSyncMapping,
   signal: AbortSignal,
@@ -65,35 +68,90 @@ async function inspectProjectSync(
   }
 }
 
-async function currentLocalFingerprint(localPath: string, signal: AbortSignal) {
-  return (await pathExists(localPath)) ? readLocalProjectFingerprint(localPath, signal) : null
+function mappingFromSnapshot(
+  remote: NonNullable<ReturnType<typeof remoteSession>>,
+  localPath: string,
+  snapshot: RemoteProjectSyncSnapshot,
+) {
+  return {
+    profileId: remote.profile.id,
+    sourcePath: remote.workingDirectory,
+    remotePath: snapshot.remote.canonicalPath,
+    localPath,
+    remoteFingerprint: snapshot.remote.fingerprint,
+    localFingerprint: snapshot.local.fingerprint,
+    syncedAt: Date.now(),
+  } satisfies RemoteProjectSyncMapping
 }
 
-async function prepareLocalSync(
+function previewStatus(preview: RemoteProjectSyncPreview): RemoteProjectSyncStatus {
+  if (!preview.changes.length) return { kind: "synced", localPath: preview.localPath }
+  const remoteChanged = preview.changes.some((change) => change.remoteChanged)
+  const localChanged = preview.hasLocalChanges
+  const difference = remoteChanged && localChanged ? "both" : localChanged ? "local" : "remote"
+  return { kind: "out-of-sync", localPath: preview.localPath, difference }
+}
+
+function failureStatus(localPath: string, error: unknown): RemoteProjectSyncStatus {
+  return {
+    kind: "error",
+    localPath,
+    message: error instanceof Error ? error.message : "Não foi possível sincronizar.",
+  }
+}
+
+async function resolveSynchronizationPreview(options: {
+  remote: NonNullable<ReturnType<typeof remoteSession>>
+  localPath: string
+  mapping?: RemoteProjectSyncMapping | undefined
+  preview?: RemoteProjectSyncPreview | undefined
+  signal: AbortSignal
+}) {
+  if (options.preview) return options.preview
+  return inspectRemoteProjectSync({
+    remote: options.remote,
+    destination: options.localPath,
+    mapping: options.mapping,
+    snapshot: options.mapping ? loadRemoteProjectSyncSnapshot(options.mapping) : undefined,
+    signal: options.signal,
+  })
+}
+
+function synchronizationProgress(
+  key: string,
+  localPath: string,
+  updateStatus: (key: string, status: RemoteProjectSyncStatus) => void,
+) {
+  let lastProgress = -1
+  return (progress: number) => {
+    const rounded = Math.floor(progress * 100) / 100
+    if (rounded === lastProgress) return
+    lastProgress = rounded
+    updateStatus(key, { kind: "syncing", localPath, progress: rounded })
+  }
+}
+
+function reportSynchronizationFailure(
+  error: unknown,
+  aborted: boolean,
+  key: string,
+  localPath: string,
+  updateStatus: (key: string, status: RemoteProjectSyncStatus) => void,
+) {
+  if (error instanceof RemoteProjectSyncLocalChangesError) {
+    updateStatus(key, { kind: "out-of-sync", localPath, difference: "local" })
+    return
+  }
+  if (!aborted) updateStatus(key, failureStatus(localPath, error))
+}
+
+function synchronizationDestination(
   mapping: RemoteProjectSyncMapping | undefined,
-  localPath: string,
-  replaceLocalChanges: boolean,
-  signal: AbortSignal,
+  destination: string | undefined,
 ) {
-  const fingerprint = await currentLocalFingerprint(localPath, signal)
-  if (!mapping && fingerprint)
-    throw new RemoteProjectSyncCollisionError("A pasta de sincronização já existe.")
-  if (mapping && fingerprint !== mapping.localFingerprint && !replaceLocalChanges)
-    throw new RemoteProjectSyncLocalChangesError(
-      "A cópia local possui alterações que serão substituídas.",
-    )
-  return fingerprint
-}
-
-async function assertLocalUnchanged(
-  localPath: string,
-  expected: string | null,
-  signal: AbortSignal,
-) {
-  if ((await currentLocalFingerprint(localPath, signal)) !== expected)
-    throw new RemoteProjectSyncLocalRaceError(
-      "A cópia local mudou durante a sincronização; tente novamente.",
-    )
+  const localPath = mapping?.localPath ?? destination
+  if (!localPath) throw new Error("Escolha uma pasta local para sincronizar o projeto remoto.")
+  return localPath
 }
 
 export function useRemoteProjectSync(
@@ -117,6 +175,20 @@ export function useRemoteProjectSync(
     })
   }, [])
 
+  const retainMapping = useCallback(
+    (key: string, mapping: RemoteProjectSyncMapping, snapshot: RemoteProjectSyncSnapshot) => {
+      const saved = saveRemoteProjectSyncSnapshot(mapping, snapshot)
+      setMappings((current) => {
+        const updated = new Map(current)
+        updated.set(key, saved)
+        mappingsRef.current = updated
+        return updated
+      })
+      return saved
+    },
+    [],
+  )
+
   const check = useCallback(
     async (session: TerminalSession, signal: AbortSignal) => {
       const remote = remoteSession(session)
@@ -130,7 +202,7 @@ export function useRemoteProjectSync(
       }
       updateStatus(key, { kind: "checking", localPath: mapping.localPath })
       try {
-        const status = await inspectProjectSync(remote, mapping, signal)
+        const status = await inspectProjectSyncStatus(remote, mapping, signal)
         if (signal.aborted || jobs.current.has(key)) return
         updateStatus(key, status)
       } catch (error) {
@@ -188,69 +260,101 @@ export function useRemoteProjectSync(
     }
   }, [allSessions])
 
+  const inspect = useCallback(
+    async (session: TerminalSession) => {
+      const remote = remoteSession(session)
+      if (!remote) return null
+      const key = remoteProjectSyncKey(remote)
+      const mapping = mappingsRef.current.get(key)
+      if (!mapping || jobs.current.has(key)) return null
+      const controller = new AbortController()
+      jobs.current.set(key, controller)
+      updateStatus(key, { kind: "checking", localPath: mapping.localPath })
+      try {
+        const snapshot = loadRemoteProjectSyncSnapshot(mapping)
+        const preview = await inspectRemoteProjectSync({
+          remote,
+          destination: mapping.localPath,
+          mapping,
+          snapshot,
+          signal: controller.signal,
+        })
+        const status = previewStatus(preview)
+        if (
+          status.kind === "synced" &&
+          (!snapshot ||
+            preview.remote.fingerprint !== mapping.remoteFingerprint ||
+            preview.local.fingerprint !== mapping.localFingerprint)
+        ) {
+          const baseline = { version: 1, remote: preview.remote, local: preview.local } as const
+          retainMapping(key, mappingFromSnapshot(remote, mapping.localPath, baseline), baseline)
+        }
+        updateStatus(key, status)
+        return preview
+      } catch (error) {
+        if (!controller.signal.aborted) updateStatus(key, failureStatus(mapping.localPath, error))
+        throw error
+      } finally {
+        jobs.current.delete(key)
+      }
+    },
+    [retainMapping, updateStatus],
+  )
+
   const synchronize = useCallback(
     async (
       session: TerminalSession,
       destination?: string,
-      options: { replaceLocalChanges?: boolean } = {},
+      options: { replaceLocalChanges?: boolean; preview?: RemoteProjectSyncPreview } = {},
     ) => {
       const remote = remoteSession(session)
       if (!remote) return null
       const key = remoteProjectSyncKey(remote)
       if (jobs.current.has(key)) return null
       const mapping = mappingsRef.current.get(key)
-      const localPath = mapping?.localPath ?? destination
-      if (!localPath) throw new Error("Escolha uma pasta local para sincronizar o projeto remoto.")
+      const localPath = synchronizationDestination(mapping, destination)
       const controller = new AbortController()
       jobs.current.set(key, controller)
       try {
-        const localFingerprint = await prepareLocalSync(
-          mapping,
+        if (!mapping && (await pathExists(localPath)))
+          throw new RemoteProjectSyncCollisionError("A pasta de sincronização já existe.")
+        if (!options.preview) updateStatus(key, { kind: "checking", localPath })
+        const preview = await resolveSynchronizationPreview({
+          remote,
           localPath,
-          Boolean(options.replaceLocalChanges),
-          controller.signal,
-        )
-        updateStatus(key, { kind: "syncing", localPath })
+          mapping,
+          preview: options.preview,
+          signal: controller.signal,
+        })
+        if (!mapping && preview.local.fingerprint !== "")
+          throw new RemoteProjectSyncCollisionError("A pasta de sincronização já existe.")
+        if (preview.hasLocalChanges && !options.replaceLocalChanges)
+          throw new RemoteProjectSyncLocalChangesError(
+            "A cópia local possui alterações que serão substituídas.",
+          )
+        updateStatus(key, { kind: "syncing", localPath, progress: 0 })
         const result = await synchronizeRemoteProject({
           remote,
           destination: localPath,
+          preview,
           signal: controller.signal,
-          beforePublish: () => assertLocalUnchanged(localPath, localFingerprint, controller.signal),
+          onProgress: synchronizationProgress(key, localPath, updateStatus),
         })
-        const next: RemoteProjectSyncMapping = {
-          profileId: remote.profile.id,
-          sourcePath: remote.workingDirectory,
-          remotePath: result.remotePath,
-          localPath,
-          remoteFingerprint: result.remoteFingerprint,
-          localFingerprint: result.localFingerprint,
-          syncedAt: Date.now(),
-        }
-        saveRemoteProjectSyncMapping(next)
-        setMappings((current) => {
-          const updated = new Map(current)
-          updated.set(key, next)
-          mappingsRef.current = updated
-          return updated
-        })
+        const next = retainMapping(
+          key,
+          mappingFromSnapshot(remote, localPath, result.snapshot),
+          result.snapshot,
+        )
         updateStatus(key, { kind: "synced", localPath })
         return next
       } catch (error) {
-        if (error instanceof RemoteProjectSyncLocalChangesError) {
-          updateStatus(key, { kind: "out-of-sync", localPath, difference: "local" })
-        } else if (!controller.signal.aborted) {
-          updateStatus(key, {
-            kind: "error",
-            localPath,
-            message: error instanceof Error ? error.message : "Não foi possível sincronizar.",
-          })
-        }
+        reportSynchronizationFailure(error, controller.signal.aborted, key, localPath, updateStatus)
         throw error
       } finally {
         jobs.current.delete(key)
       }
     },
-    [updateStatus],
+    [retainMapping, updateStatus],
   )
 
   const sessionStatuses = useMemo(() => {
@@ -268,5 +372,5 @@ export function useRemoteProjectSync(
     return remote ? mappingsRef.current.get(remoteProjectSyncKey(remote)) : undefined
   }, [])
 
-  return { statuses: sessionStatuses, mappingFor, synchronize }
+  return { statuses: sessionStatuses, mappingFor, inspect, synchronize }
 }

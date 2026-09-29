@@ -66,7 +66,11 @@ export function terminalContextTooltip(
 
 function syncTag(status: RemoteProjectSyncStatus | undefined, masterKey: string, frame: number) {
   if (!status) return null
-  if (status.kind === "synced") return { kind: "sync" as const, label: translateUi("Sincronizado") }
+  if (status.kind === "synced")
+    return {
+      kind: "sync" as const,
+      label: `${translateUi("Sincronizado")} [${masterKey}] > [R]`,
+    }
   if (status.kind === "checking")
     return {
       kind: "sync" as const,

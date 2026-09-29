@@ -38,6 +38,7 @@ import {
   terminalSidebarTmuxHostSnapshot,
   toggleTerminalSidebarPinned,
 } from "./model/pinned-sidebar"
+import type { RemoteProjectSyncPreview } from "./model/remote-project-sync"
 import {
   cleanTerminalName,
   DEFAULT_FOLDER,
@@ -68,7 +69,6 @@ import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
   pathExists,
   RemoteProjectSyncCollisionError,
-  RemoteProjectSyncLocalChangesError,
   remoteProjectSyncDestination,
 } from "./services/remote-project-sync"
 import { listSshConfigProfiles } from "./services/ssh-config"
@@ -86,10 +86,9 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
-import { AgentFolderBrowser } from "./ui/AgentFolderBrowser"
 import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
-import { RemoteProjectSyncDialog } from "./ui/RemoteProjectSyncDialog"
+import { RemoteProjectSyncFlow, type RemoteProjectSyncFlowState } from "./ui/RemoteProjectSyncFlow"
 import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
 import { TerminalPanes } from "./ui/TerminalPanes"
@@ -110,10 +109,6 @@ type LiveDiffTarget = {
   manualDirectories: readonly string[]
   focusRequest: number
 }
-
-type ProjectSyncFlow =
-  | { kind: "browse"; sessionId: string }
-  | { kind: "destination" | "replace"; sessionId: string; localPath: string }
 
 export function FreeTerminal({
   active,
@@ -184,7 +179,7 @@ export function FreeTerminal({
   const [splitRequest, setSplitRequest] = useState<SplitRequest | null>(null)
   const splitRequestRef = useRef<SplitRequest | null>(null)
   const [agentLaunchStep, setAgentLaunchStep] = useState<AgentLaunchStep | null>(null)
-  const [projectSyncFlow, setProjectSyncFlow] = useState<ProjectSyncFlow | null>(null)
+  const [projectSyncFlow, setProjectSyncFlow] = useState<RemoteProjectSyncFlowState | null>(null)
   const [liveDiffTargets, setLiveDiffTargets] = useState<ReadonlyMap<string, LiveDiffTarget>>(
     () => new Map(),
   )
@@ -606,7 +601,7 @@ export function FreeTerminal({
     if (!activeSession?.codex?.remote || activeSession.agentIntegration !== "codex-app-server")
       return true
     const status = projectSync.statuses.get(activeSession.id)
-    return status?.kind === "checking" || status?.kind === "syncing" || status?.kind === "synced"
+    return status?.kind === "checking" || status?.kind === "syncing"
   }
   const disabled = (key: string) => {
     if (["v", "h"].includes(key)) return !canSplit
@@ -680,12 +675,15 @@ export function FreeTerminal({
   const runProjectSync = (
     session: TerminalSession,
     localPath?: string,
-    replaceLocalChanges = false,
+    preview?: RemoteProjectSyncPreview,
   ) => {
     setProjectSyncFlow(null)
     queueMicrotask(restoreFocus)
     void projectSync
-      .synchronize(session, localPath, { replaceLocalChanges })
+      .synchronize(session, localPath, {
+        ...(preview ? { preview } : {}),
+        replaceLocalChanges: Boolean(preview?.hasLocalChanges),
+      })
       .then((mapping) => {
         if (!mapping) return
         notify({
@@ -696,16 +694,6 @@ export function FreeTerminal({
         })
       })
       .catch((error) => {
-        if (error instanceof RemoteProjectSyncLocalChangesError) {
-          const mapping = projectSync.mappingFor(session)
-          if (mapping)
-            setProjectSyncFlow({
-              kind: "replace",
-              sessionId: session.id,
-              localPath: mapping.localPath,
-            })
-          return
-        }
         if (error instanceof RemoteProjectSyncCollisionError)
           setProjectSyncFlow({ kind: "browse", sessionId: session.id })
         notify({
@@ -721,8 +709,36 @@ export function FreeTerminal({
   }
   const requestProjectSync = (session: TerminalSession) => {
     const mapping = projectSync.mappingFor(session)
-    if (mapping) runProjectSync(session)
-    else setProjectSyncFlow({ kind: "browse", sessionId: session.id })
+    if (!mapping) {
+      setProjectSyncFlow({ kind: "browse", sessionId: session.id })
+      return
+    }
+    void projectSync
+      .inspect(session)
+      .then((preview) => {
+        if (!preview || activeSessionRef.current !== session.id) return
+        if (!preview.changes.length) {
+          notify({
+            source: `terminal-project-sync:${session.id}`,
+            kind: "info",
+            title: translateUi("Projeto já sincronizado"),
+            message: translateUi("Nenhum arquivo pendente."),
+          })
+          return
+        }
+        setProjectSyncFlow({ kind: "preview", sessionId: session.id, preview })
+      })
+      .catch((error) => {
+        notify({
+          source: `terminal-project-sync:${session.id}`,
+          kind: "error",
+          title: translateUi("Falha na sincronização"),
+          message:
+            error instanceof Error
+              ? translateUi(error.message)
+              : translateUi("Não foi possível verificar o projeto."),
+        })
+      })
   }
   const chooseProjectSyncParent = async (session: TerminalSession, parent: string) => {
     const remote = session.codex?.remote
@@ -1284,38 +1300,13 @@ export function FreeTerminal({
             onClose={closeLiveDiffProjectPicker}
           />
         )}
-        {projectSyncFlow?.kind === "browse" &&
-          (() => {
-            const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
-            return owner ? (
-              <AgentFolderBrowser
-                target={{ kind: "local" }}
-                origin={translateUi("Destino da sincronização")}
-                onSelect={(parent) => void chooseProjectSyncParent(owner, parent)}
-                onClose={closeProjectSyncFlow}
-              />
-            ) : null
-          })()}
-        {projectSyncFlow &&
-          projectSyncFlow.kind !== "browse" &&
-          (() => {
-            const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
-            if (!owner) return null
-            return (
-              <RemoteProjectSyncDialog
-                kind={projectSyncFlow.kind}
-                localPath={projectSyncFlow.localPath}
-                onConfirm={() =>
-                  runProjectSync(
-                    owner,
-                    projectSyncFlow.localPath,
-                    projectSyncFlow.kind === "replace",
-                  )
-                }
-                onClose={closeProjectSyncFlow}
-              />
-            )
-          })()}
+        <RemoteProjectSyncFlow
+          flow={projectSyncFlow}
+          sessions={sessions}
+          onSelectParent={(owner, parent) => void chooseProjectSyncParent(owner, parent)}
+          onSync={runProjectSync}
+          onClose={closeProjectSyncFlow}
+        />
       </box>
     </TerminalShortcutAnimation>
   )

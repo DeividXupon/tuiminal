@@ -8,6 +8,7 @@ import {
   terminalContextTags,
   terminalContextTooltip,
 } from "../packages/feature-terminal/src/rendering/terminal-context"
+import { terminalSyncTagProgress } from "../packages/feature-terminal/src/ui/TerminalContextTags"
 import { localRemoteLiveDiffHelperCommand } from "../packages/feature-terminal/src/services/remote-live-diff"
 import { createRemoteTerminalContextSource } from "../packages/feature-terminal/src/services/remote-terminal-context"
 import { readTerminalRepositoryContext } from "../packages/feature-terminal/src/services/terminal-repository-context"
@@ -142,12 +143,12 @@ test("remote sync status has priority and uses the configured Master Key", () =>
       { kind: "synced", localPath: "/local/project-sync" },
       "Ctrl+G",
     ).at(-1)?.label,
-  ).toBe("Sincronizado")
+  ).toBe("Sincronizado [Ctrl+G] > [R]")
 })
 
 test("remote sync transient states use stable-width animation frames", () => {
   const checking = { kind: "checking" as const, localPath: "/local/project-sync" }
-  const syncing = { kind: "syncing" as const, localPath: "/local/project-sync" }
+  const syncing = { kind: "syncing" as const, localPath: "/local/project-sync", progress: 0.5 }
   expect(terminalContextTags(undefined, 80, checking, "Ctrl+B", 0)[0]?.label).toBe(
     "◐ Verificando sync…",
   )
@@ -168,7 +169,10 @@ test("remote sync transient states use stable-width animation frames", () => {
       "Ctrl+B",
       9,
     )[0]?.label,
-  ).toBe("Sincronizado")
+  ).toBe("Sincronizado [Ctrl+B] > [R]")
+  expect(terminalSyncTagProgress(syncing, 20, 0)).toEqual({ left: 0, width: 10 })
+  expect(terminalSyncTagProgress(checking, 20, 0)).toEqual({ left: 0, width: 1 })
+  expect(terminalSyncTagProgress(checking, 20, 5)).toEqual({ left: 2, width: 4 })
 })
 
 test("remote terminal context uses the bounded helper for branch and cleanliness", async () => {

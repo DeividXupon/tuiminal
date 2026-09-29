@@ -1,12 +1,23 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs"
 import { mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   localRemoteProjectArchiveCommand,
+  localRemoteProjectHashCommand,
   localRemoteProjectManifestCommand,
+  inspectRemoteProjectSync,
   readLocalProjectFingerprint,
   readRemoteProjectFingerprint,
   remoteProjectSyncDestination,
@@ -14,7 +25,9 @@ import {
 } from "../packages/feature-terminal/src/services/remote-project-sync"
 import {
   loadRemoteProjectSyncMappings,
+  loadRemoteProjectSyncSnapshot,
   saveRemoteProjectSyncMapping,
+  saveRemoteProjectSyncSnapshot,
 } from "../packages/feature-terminal/src/services/remote-project-sync-state"
 
 const roots: string[] = []
@@ -33,6 +46,20 @@ function remote(path: string) {
   return {
     profile: { id: "fixture", name: "Fixture", host: "fixture" },
     workingDirectory: path,
+  }
+}
+
+function localCommands(source: string, transferred?: string[], hashed?: string[]) {
+  return {
+    manifest: localRemoteProjectManifestCommand(source),
+    hashes: (paths: readonly string[]) => {
+      hashed?.push(...paths)
+      return localRemoteProjectHashCommand(source, paths)
+    },
+    archive: (paths: readonly string[]) => {
+      transferred?.push(...paths)
+      return localRemoteProjectArchiveCommand(source, paths)
+    },
   }
 }
 
@@ -115,7 +142,147 @@ test("publishes a complete replacement and removes stale local files", async () 
   )
 })
 
-test("keeps the existing copy when the pre-publish guard rejects replacement", async () => {
+test("previews per-path changes and transfers only changed file contents", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "keep.txt"), "keep\n")
+  writeFileSync(join(source, "change.txt"), "before\n")
+  writeFileSync(join(source, "remove.txt"), "remove\n")
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  const originalTime = statSync(join(source, "change.txt")).mtime
+  await Bun.sleep(5)
+  writeFileSync(join(source, "change.txt"), "after!\n")
+  utimesSync(join(source, "change.txt"), originalTime, originalTime)
+  writeFileSync(join(source, "new.txt"), "new\n")
+  unlinkSync(join(source, "remove.txt"))
+  const mapping = {
+    profileId: "fixture",
+    sourcePath: source,
+    remotePath: first.remotePath,
+    localPath: destination,
+    remoteFingerprint: first.remoteFingerprint,
+    localFingerprint: first.localFingerprint,
+    syncedAt: 1,
+  }
+  const hashed: string[] = []
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping,
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source, undefined, hashed),
+  })
+  expect(hashed.sort()).toEqual(["change.txt", "new.txt"])
+  expect(
+    preview.changes.map(({ path, action, localChanged }) => ({
+      path,
+      action,
+      localChanged,
+    })),
+  ).toEqual([
+    { path: "change.txt", action: "update", localChanged: false },
+    { path: "new.txt", action: "add", localChanged: false },
+    { path: "remove.txt", action: "delete", localChanged: false },
+  ])
+  const transferred: string[] = []
+  const progress: number[] = []
+  await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    preview,
+    signal: new AbortController().signal,
+    commands: localCommands(source, transferred),
+    onProgress: (value) => progress.push(value),
+  })
+  expect(transferred.sort()).toEqual(["change.txt", "new.txt"])
+  expect(readFileSync(join(destination, "keep.txt"), "utf8")).toBe("keep\n")
+  expect(readFileSync(join(destination, "change.txt"), "utf8")).toBe("after!\n")
+  expect(() => readFileSync(join(destination, "remove.txt"))).toThrow()
+  expect(progress.at(-1)).toBe(1)
+  expect(progress.every((value, index) => index === 0 || value >= (progress[index - 1] ?? 0))).toBe(
+    true,
+  )
+})
+
+test("reuses snapshot digests when an existing mapping has not changed", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "one.txt"), "one\n")
+  writeFileSync(join(source, "two.txt"), "two\n")
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  const hashed: string[] = []
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source, undefined, hashed),
+  })
+  expect(preview.changes).toEqual([])
+  expect(hashed).toEqual([])
+})
+
+test("marks local edits as conflicts without misclassifying remote-only changes", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "local.txt"), "baseline\n")
+  writeFileSync(join(source, "remote.txt"), "baseline\n")
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  writeFileSync(join(destination, "local.txt"), "local edit\n")
+  writeFileSync(join(source, "remote.txt"), "remote edit\n")
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(preview.hasLocalChanges).toBe(true)
+  expect(preview.changes.find((change) => change.path === "local.txt")?.localChanged).toBe(true)
+  expect(preview.changes.find((change) => change.path === "remote.txt")?.localChanged).toBe(false)
+})
+
+test("keeps a local change made immediately before publication", async () => {
   const root = temporaryRoot()
   const source = join(root, "source")
   const destination = join(root, "project-sync")
@@ -133,11 +300,55 @@ test("keeps the existing copy when the pre-publish guard rejects replacement", a
         archive: localRemoteProjectArchiveCommand(source),
       },
       beforePublish: async () => {
-        throw new Error("local changed")
+        writeFileSync(join(destination, "local.txt"), "changed during sync\n")
       },
     }),
-  ).rejects.toThrow("local changed")
-  expect(readFileSync(join(destination, "local.txt"), "utf8")).toBe("keep\n")
+  ).rejects.toThrow("A cópia local mudou durante a sincronização")
+  expect(readFileSync(join(destination, "local.txt"), "utf8")).toBe("changed during sync\n")
+  expect(() => readFileSync(join(destination, "remote.txt"))).toThrow()
+})
+
+test("rejects local and remote changes made after the reviewed preview", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "remote.txt"), "reviewed\n")
+  const reviewed = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  await mkdir(destination)
+  await expect(
+    synchronizeRemoteProject({
+      remote: remote(source),
+      destination,
+      preview: reviewed,
+      signal: new AbortController().signal,
+      commands: localCommands(source),
+    }),
+  ).rejects.toThrow("A cópia local mudou durante a sincronização")
+  expect(() => readFileSync(join(destination, "remote.txt"))).toThrow()
+
+  rmSync(destination, { recursive: true, force: true })
+  const reviewedAgain = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  writeFileSync(join(source, "remote.txt"), "changed after review\n")
+  await expect(
+    synchronizeRemoteProject({
+      remote: remote(source),
+      destination,
+      preview: reviewedAgain,
+      signal: new AbortController().signal,
+      commands: localCommands(source),
+    }),
+  ).rejects.toThrow("O projeto remoto mudou durante a sincronização")
   expect(() => readFileSync(join(destination, "remote.txt"))).toThrow()
 })
 
@@ -161,4 +372,44 @@ test("persists bounded project mappings outside the synchronized project", () =>
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([mapping])
   rmSync(join(data, "tuiminal"), { recursive: true, force: true })
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([])
+})
+
+test("persists validated compressed sync snapshots and links them from the mapping", () => {
+  const data = temporaryRoot()
+  const environment = {
+    ...process.env,
+    XDG_DATA_HOME: data,
+    TUIMINAL_TERMINAL_WORKSPACE_STATE: "1",
+  }
+  const localPath = join(data, "tui-sync")
+  const mapping = {
+    profileId: "fixture",
+    sourcePath: "/srv/tui",
+    remotePath: "/srv/tui",
+    localPath,
+    remoteFingerprint: "a".repeat(64),
+    localFingerprint: "b".repeat(64),
+    syncedAt: 1,
+  }
+  const snapshot = {
+    version: 1 as const,
+    remote: {
+      fingerprint: mapping.remoteFingerprint,
+      canonicalPath: mapping.remotePath,
+      entries: [],
+      hasUnsupported: false,
+      hasSymlink: false,
+    },
+    local: {
+      fingerprint: mapping.localFingerprint,
+      canonicalPath: localPath,
+      entries: [],
+      hasUnsupported: false,
+      hasSymlink: false,
+    },
+  }
+  const saved = saveRemoteProjectSyncSnapshot(mapping, snapshot, environment)
+  expect(saved.snapshotId).toBeString()
+  expect(loadRemoteProjectSyncMappings(environment)).toEqual([saved])
+  expect(loadRemoteProjectSyncSnapshot(saved, environment)).toEqual(snapshot)
 })

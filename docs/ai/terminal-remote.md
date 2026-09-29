@@ -70,16 +70,32 @@ failure and stop only the helper on panel close; show the profile in the heading
 - On first sync, choose a local parent directory and derive a sibling named
   `<remote-basename>-sync`. Never adopt or replace an existing unknown path;
   require another parent. Persist the profile, canonical remote cwd, local
-  destination and both successful fingerprints outside the opened project.
+  destination, successful fingerprints and detailed baseline manifest outside
+  the opened project.
+- For a saved mapping, Master Key `[R]` performs a detailed comparison before
+  transferring. Show a brief notification when nothing differs; otherwise show
+  one review of new, changed, removed and conflicting paths. A conflict is a path
+  that also changed locally since the baseline. Require one explicit destructive
+  confirmation when any local change would be replaced.
+- Make repeat comparisons metadata-first. Reuse saved content digests only when
+  size, mode, modification time and change time still match the same side of the
+  successful snapshot; hash new or changed candidates only. Enumerate local
+  metadata with bounded concurrency and hash remote candidates with one Git process
+  per bounded argument batch. During publication, rehash transferred bytes but reuse
+  verified digests for unchanged local copies.
 - Copy remote to local in one direction and include the complete tree: hidden,
-  ignored, dependency and `.git` content. Transfer with fixed argv SSH/tar
-  commands into a sibling staging directory, validate paths and symlinks, verify
-  that the remote fingerprint stayed stable, then publish atomically. Retry one
-  remote race and preserve the previous destination on failure.
-- Before replacing a known destination, compare it with the last successful
-  local fingerprint. Require explicit confirmation if the local copy changed,
-  and abort if it changes again while synchronization is running. A later sync
-  reuses the persisted destination without reopening the parent picker.
+  ignored, dependency and `.git` content. Transfer only new or content-changed
+  regular-file bytes over fixed argv SSH/tar commands. Reuse equal files from the
+  known local copy, apply metadata-only changes locally in a sibling staging
+  directory, and validate paths and symlinks.
+- Recheck the remote tree, local tree and completed staging tree against the exact
+  reviewed manifests before atomic publication. Do not publish or silently retry
+  when either source changed after review; preserve the previous destination and
+  require a fresh review. A later sync reuses the persisted destination without
+  reopening the parent picker.
+- Animate the synchronization tag itself: an indeterminate background sweep while
+  checking and a determinate background fill from actual staging progress while
+  syncing. Keep its text and width stable.
 
 Tests: `tests/terminal-remote-*.test.ts`, relevant settings tests and Terminal TUI
 suites, plus `tests/terminal-project-sync.test.ts`. Use fake SSH/app-server
