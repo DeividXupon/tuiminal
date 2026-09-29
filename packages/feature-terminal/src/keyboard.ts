@@ -8,6 +8,7 @@ export const terminalKeyboardScope = {
     "terminal-action",
     "terminal-dialog",
     "terminal-split-",
+    "terminal-project-sync-",
   ],
   interruptPrefixes: ["free-terminal-", "terminal-action"],
   deferEscape: true,

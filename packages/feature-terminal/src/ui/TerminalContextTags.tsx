@@ -20,6 +20,7 @@ function tagColor(
   if (tag.kind === "sync") {
     if (sync?.kind === "synced") return COLORS.success
     if (sync?.kind === "syncing" || sync?.kind === "checking") return COLORS.terminal
+    if (sync?.kind === "cancelling") return COLORS.warning
     return COLORS.warning
   }
   if (context?.state === "clean") return COLORS.success

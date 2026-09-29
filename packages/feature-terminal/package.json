@@ -13,7 +13,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./cli/sidebar": "./src/cli/sidebar.tsx"
+    "./cli/sidebar": "./src/cli/sidebar.tsx",
+    "./cli/project-sync-worker": "./src/cli/project-sync-worker.ts"
   },
   "peerDependencies": {
     "@opentui/core": "^0.5.9",

@@ -35,9 +35,24 @@ function terminalSidebarCommand(args: string[]) {
       ]
 }
 
+function terminalProjectSyncWorkerCommand() {
+  return MINIMAL_BUILD
+    ? [process.execPath, "--internal-terminal-project-sync-worker"]
+    : [
+        process.execPath,
+        fileURLToPath(new URL("../../bin/tuiminal.ts", import.meta.url)),
+        "--internal-terminal-project-sync-worker",
+      ]
+}
+
 async function prepareHost() {
   const { prepareFeatureHost } = await import("./host-modules")
-  prepareFeatureHost(FEATURE_VERSION, sqliteWorkerCommand, terminalSidebarCommand)
+  prepareFeatureHost(
+    FEATURE_VERSION,
+    sqliteWorkerCommand,
+    terminalSidebarCommand,
+    terminalProjectSyncWorkerCommand,
+  )
 }
 
 async function loadEntry(id: FeatureId, name: string, withHost = true) {
@@ -102,4 +117,12 @@ export async function runInstalledTerminalSidebar(args: string[]) {
   if (sourceFeaturesEnabled()) return (await import("./source-loader")).sourceTerminalSidebar(args)
   const module = await loadEntry("terminal", "terminal-sidebar.mjs")
   return (module.runTerminalSidebarCli as (args: string[]) => Promise<number>)(args)
+}
+
+export async function runInstalledTerminalProjectSyncWorker() {
+  if (typeof process.send !== "function")
+    throw new Error("Terminal project sync worker requires an IPC channel")
+  if (sourceFeaturesEnabled())
+    return (await import("./source-loader")).sourceTerminalProjectSyncWorker()
+  await loadEntry("terminal", "project-sync-worker.mjs")
 }

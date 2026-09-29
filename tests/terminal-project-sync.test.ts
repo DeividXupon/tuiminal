@@ -2,15 +2,18 @@ import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import {
   mkdtempSync,
+  lstatSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   unlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs"
-import { mkdir } from "node:fs/promises"
+import { mkdir, rename } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -96,6 +99,66 @@ test("fingerprints complete local and remote trees, including hidden content", a
       })
     ).fingerprint,
   ).not.toBe(inspected.fingerprint)
+})
+
+test("always synchronizes the complete tree at a Git repository root", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(join(source, "node_modules", "package"), { recursive: true })
+  writeFileSync(join(source, ".gitignore"), "node_modules/\n")
+  writeFileSync(join(source, "tracked.txt"), "tracked\n")
+  writeFileSync(join(source, "untracked.txt"), "untracked\n")
+  writeFileSync(join(source, "node_modules", "package", "ignored.js"), "ignored\n")
+  expect(Bun.spawnSync(["git", "init", "-q", source]).exitCode).toBe(0)
+  expect(Bun.spawnSync(["git", "-C", source, "add", ".gitignore", "tracked.txt"]).exitCode).toBe(0)
+
+  const manifest = await readRemoteProjectFingerprint(
+    remote(source),
+    new AbortController().signal,
+    {
+      command: localRemoteProjectManifestCommand(source),
+    },
+  )
+  expect(manifest.scope).toBe("complete")
+  expect(manifest.entries.some((entry) => entry.path === ".git/HEAD")).toBe(true)
+  expect(manifest.entries.some((entry) => entry.path === "node_modules/package/ignored.js")).toBe(
+    true,
+  )
+
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(readFileSync(join(destination, "tracked.txt"), "utf8")).toBe("tracked\n")
+  expect(readFileSync(join(destination, "untracked.txt"), "utf8")).toBe("untracked\n")
+  expect(readFileSync(join(destination, ".git", "HEAD"), "utf8").length).toBeGreaterThan(0)
+  expect(readFileSync(join(destination, "node_modules", "package", "ignored.js"), "utf8")).toBe(
+    "ignored\n",
+  )
+
+  writeFileSync(join(source, "tracked.txt"), "changed\n")
+  writeFileSync(join(source, "node_modules", "package", "ignored.js"), "ignored change\n")
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(preview.changes.map((change) => change.path)).toContain("tracked.txt")
+  expect(preview.changes.map((change) => change.path)).toContain("node_modules/package/ignored.js")
 })
 
 test("uses the caller deadline for remote project verification", async () => {
@@ -194,6 +257,7 @@ test("previews per-path changes and transfers only changed file contents", async
   ])
   const transferred: string[] = []
   const progress: number[] = []
+  const keepInode = statSync(join(destination, "keep.txt")).ino
   await synchronizeRemoteProject({
     remote: remote(source),
     destination,
@@ -204,12 +268,124 @@ test("previews per-path changes and transfers only changed file contents", async
   })
   expect(transferred.sort()).toEqual(["change.txt", "new.txt"])
   expect(readFileSync(join(destination, "keep.txt"), "utf8")).toBe("keep\n")
+  expect(statSync(join(destination, "keep.txt")).ino).toBe(keepInode)
   expect(readFileSync(join(destination, "change.txt"), "utf8")).toBe("after!\n")
   expect(() => readFileSync(join(destination, "remove.txt"))).toThrow()
   expect(progress.at(-1)).toBe(1)
   expect(progress.every((value, index) => index === 0 || value >= (progress[index - 1] ?? 0))).toBe(
     true,
   )
+})
+
+test("rolls back a partially applied delta when synchronization is cancelled", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "one.txt"), "one before\n")
+  writeFileSync(join(source, "two.txt"), "two before\n")
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  writeFileSync(join(source, "one.txt"), "one after with a new size\n")
+  writeFileSync(join(source, "two.txt"), "two after with a new size\n")
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  const controller = new AbortController()
+  await expect(
+    synchronizeRemoteProject({
+      remote: remote(source),
+      destination,
+      preview,
+      signal: controller.signal,
+      commands: localCommands(source),
+      onProgress: (progress) => {
+        if (progress > 0.75) controller.abort(new Error("Operação cancelada."))
+      },
+    }),
+  ).rejects.toThrow("Operação cancelada.")
+  expect(readFileSync(join(destination, "one.txt"), "utf8")).toBe("one before\n")
+  expect(readFileSync(join(destination, "two.txt"), "utf8")).toBe("two before\n")
+})
+
+test("recovers an interrupted delta before the next inspection", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(source)
+  writeFileSync(join(source, "project.txt"), "original\n")
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  const transaction = join(root, ".project-sync.tuiminal-sync-interrupted")
+  await mkdir(join(transaction, "backup"), { recursive: true })
+  await rename(join(destination, "project.txt"), join(transaction, "backup", "project.txt"))
+  writeFileSync(join(destination, "project.txt"), "partial replacement\n")
+  writeFileSync(
+    join(transaction, "journal.jsonl"),
+    `${JSON.stringify({ kind: "backup", path: "project.txt" })}\n${JSON.stringify({ kind: "install", path: "project.txt" })}\n`,
+  )
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(preview.changes).toEqual([])
+  expect(readFileSync(join(destination, "project.txt"), "utf8")).toBe("original\n")
+  expect(() => statSync(transaction)).toThrow()
+})
+
+test("creates native file and directory symbolic links", async () => {
+  if (process.platform === "win32") return
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  await mkdir(join(source, "target-directory"), { recursive: true })
+  writeFileSync(join(source, "target.txt"), "target\n")
+  writeFileSync(join(source, "target-directory", "nested.txt"), "nested\n")
+  symlinkSync("target.txt", join(source, "file-link"))
+  symlinkSync("target-directory", join(source, "directory-link"))
+  await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(lstatSync(join(destination, "file-link")).isSymbolicLink()).toBe(true)
+  expect(readlinkSync(join(destination, "file-link"))).toBe("target.txt")
+  expect(lstatSync(join(destination, "directory-link")).isSymbolicLink()).toBe(true)
+  expect(readlinkSync(join(destination, "directory-link"))).toBe("target-directory")
 })
 
 test("reuses snapshot digests when an existing mapping has not changed", async () => {
@@ -374,7 +550,7 @@ test("persists bounded project mappings outside the synchronized project", () =>
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([])
 })
 
-test("persists validated compressed sync snapshots and links them from the mapping", () => {
+test("persists validated compressed sync snapshots and links them from the mapping", async () => {
   const data = temporaryRoot()
   const environment = {
     ...process.env,
@@ -408,8 +584,65 @@ test("persists validated compressed sync snapshots and links them from the mappi
       hasSymlink: false,
     },
   }
-  const saved = saveRemoteProjectSyncSnapshot(mapping, snapshot, environment)
+  const saved = await saveRemoteProjectSyncSnapshot(mapping, snapshot, environment)
   expect(saved.snapshotId).toBeString()
   expect(loadRemoteProjectSyncMappings(environment)).toEqual([saved])
-  expect(loadRemoteProjectSyncSnapshot(saved, environment)).toEqual(snapshot)
+  expect(await loadRemoteProjectSyncSnapshot(saved, environment)).toEqual(snapshot)
+})
+
+test("yields while validating and compressing a large synchronization snapshot", async () => {
+  const data = temporaryRoot()
+  const environment = {
+    ...process.env,
+    XDG_DATA_HOME: data,
+    TUIMINAL_TERMINAL_WORKSPACE_STATE: "1",
+  }
+  const localPath = join(data, "large-sync")
+  const entries = Array.from({ length: 4_097 }, (_, index) => ({
+    path: `src/file-${index}.ts`,
+    type: "file" as const,
+    mode: 0o644,
+    size: index,
+    modifiedAt: index,
+    changedAt: index,
+    target: "",
+    digest: index.toString(16).padStart(40, "0"),
+  }))
+  const snapshot = {
+    version: 1 as const,
+    remote: {
+      fingerprint: "a".repeat(64),
+      canonicalPath: "/srv/large",
+      scope: "git" as const,
+      entries,
+      hasUnsupported: false,
+      hasSymlink: false,
+    },
+    local: {
+      fingerprint: "b".repeat(64),
+      canonicalPath: localPath,
+      scope: "git" as const,
+      entries,
+      hasUnsupported: false,
+      hasSymlink: false,
+    },
+  }
+  const mapping = {
+    profileId: "fixture",
+    sourcePath: "/srv/large",
+    remotePath: "/srv/large",
+    localPath,
+    remoteFingerprint: snapshot.remote.fingerprint,
+    localFingerprint: snapshot.local.fingerprint,
+    syncedAt: 1,
+  }
+  let completed = false
+  const saving = saveRemoteProjectSyncSnapshot(mapping, snapshot, environment).then((value) => {
+    completed = true
+    return value
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(completed).toBe(false)
+  const saved = await saving
+  expect(await loadRemoteProjectSyncSnapshot(saved, environment)).toEqual(snapshot)
 })

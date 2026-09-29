@@ -129,8 +129,9 @@ and code execution. A private host binding supplies the actual shared React,
 OpenTUI, Tuiparts and core module instances; payloads cannot bundle another React
 runtime. Only the active/explicitly opened tool is imported. Imports are deduplicated.
 
-SQLite's downloaded worker runs through the same executable using an internal IPC-only
-entrypoint. The minimal npm package contains no separate full Bun SQLite executable.
+SQLite's downloaded worker and Terminal's project-sync worker run through the same
+executable using internal IPC-only entrypoints. The minimal npm package contains no
+separate full Bun helper executable.
 The emitted source packages retain their JavaScript helper fallback.
 
 ## Development and release

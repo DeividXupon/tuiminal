@@ -63,10 +63,10 @@ failure and stop only the helper on panel close; show the profile in the heading
 ## Remote project synchronization
 
 - Only the active integrated remote Codex session offers Master Key `[R]`. Its
-  pane tag shows not synced, checking, out of sync, syncing, synced or error and
-  includes the configured Master Key plus `[R]` whenever user action is useful.
-  Refresh status only while that remote pane is visible, with bounded,
-  non-overlapping checks.
+  pane tag shows the last known not-synced, checking, out-of-sync, syncing,
+  synced or error state and includes the configured Master Key plus `[R]`
+  whenever user action is useful. Run full comparison only on explicit `[R]`;
+  never poll a project tree in the background.
 - On first sync, choose a local parent directory and derive a sibling named
   `<remote-basename>-sync`. Never adopt or replace an existing unknown path;
   require another parent. Persist the profile, canonical remote cwd, local
@@ -77,24 +77,30 @@ failure and stop only the helper on panel close; show the profile in the heading
   one review of new, changed, removed and conflicting paths. A conflict is a path
   that also changed locally since the baseline. Require one explicit destructive
   confirmation when any local change would be replaced.
+- Always compare the complete tree, including hidden and ignored paths,
+  dependencies, caches and `.git`. Git status/diff is not authoritative for this
+  mirror because it omits ignored content.
 - Make repeat comparisons metadata-first. Reuse saved content digests only when
   size, mode, modification time and change time still match the same side of the
   successful snapshot; hash new or changed candidates only. Enumerate local
   metadata with bounded concurrency and hash remote candidates with one Git process
   per bounded argument batch. During publication, rehash transferred bytes but reuse
   verified digests for unchanged local copies.
-- Copy remote to local in one direction and include the complete tree: hidden,
-  ignored, dependency and `.git` content. Transfer only new or content-changed
-  regular-file bytes over fixed argv SSH/tar commands. Reuse equal files from the
-  known local copy, apply metadata-only changes locally in a sibling staging
-  directory, and validate paths and symlinks.
-- Recheck the remote tree, local tree and completed staging tree against the exact
-  reviewed manifests before atomic publication. Do not publish or silently retry
-  when either source changed after review; preserve the previous destination and
-  require a fresh review. A later sync reuses the persisted destination without
-  reopening the parent picker.
+- Copy remote to local in one direction. Transfer only new or content-changed
+  regular-file bytes over fixed argv SSH/tar commands. Apply the reviewed delta
+  in place with a durable sibling journal and path-level backups; rollback on
+  cancellation/failure and recover incomplete owned journals before another run.
+- Run enumeration, hashing, snapshot work, transfer and publication in the
+  installed Terminal sync worker. Keep only bounded progress and paged review
+  rows in the renderer. A focused progress modal owns `[Esc]` cancellation.
+- Load, validate and compress detailed snapshots asynchronously in bounded
+  batches so large saved manifests do not stall the terminal renderer.
+- Recheck the reviewed remote and local trees before mutation, verify received
+  content and the complete result, and do not silently retry a race. Publication
+  is a journaled path transaction rather than a whole-directory replacement.
+  A later sync reuses the persisted destination without reopening the parent picker.
 - Animate the synchronization tag itself: an indeterminate background sweep while
-  checking and a determinate background fill from actual staging progress while
+  checking and a determinate background fill from actual delta progress while
   syncing. Keep its text and width stable.
 
 Tests: `tests/terminal-remote-*.test.ts`, relevant settings tests and Terminal TUI

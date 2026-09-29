@@ -11,13 +11,16 @@ export type RemoteProjectSyncEntry = {
   size: number
   modifiedAt: number
   changedAt?: number | undefined
+  metadataKey?: string | undefined
   target: string
+  linkKind?: "file" | "directory" | undefined
   digest?: string | undefined
 }
 
 export type RemoteProjectSyncManifest = {
   fingerprint: string
   canonicalPath: string
+  scope?: "complete" | "git" | undefined
   entries: RemoteProjectSyncEntry[]
   hasUnsupported: boolean
   hasSymlink: boolean
@@ -48,10 +51,39 @@ export type RemoteProjectSyncPreview = {
   legacyLocalChanges: boolean
 }
 
+export type RemoteProjectSyncReview = {
+  jobId: string
+  localPath: string
+  changeCount: number
+  counts: { add: number; update: number; delete: number; conflict: number }
+  hasLocalChanges: boolean
+  legacyLocalChanges: boolean
+  difference: RemoteProjectSyncDifference
+  mapping?: RemoteProjectSyncMapping | undefined
+  offset: number
+  pageSize: number
+  changes: RemoteProjectSyncChange[]
+}
+
+export type RemoteProjectSyncPhase =
+  | "remote"
+  | "local"
+  | "comparing"
+  | "transferring"
+  | "applying"
+  | "verifying"
+  | "rolling-back"
+
 export type RemoteProjectSyncStatus =
   | { kind: "unmapped" }
-  | { kind: "checking"; localPath: string }
-  | { kind: "syncing"; localPath: string; progress: number }
+  | { kind: "checking"; localPath: string; phase?: RemoteProjectSyncPhase | undefined }
+  | {
+      kind: "syncing"
+      localPath: string
+      progress: number
+      phase?: RemoteProjectSyncPhase | undefined
+    }
+  | { kind: "cancelling"; localPath: string }
   | { kind: "synced"; localPath: string }
   | { kind: "out-of-sync"; localPath: string; difference: RemoteProjectSyncDifference }
   | { kind: "error"; localPath?: string; message: string }

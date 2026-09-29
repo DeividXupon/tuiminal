@@ -210,6 +210,45 @@ async function verifySqliteHelper(
   }
 }
 
+async function verifyProjectSyncHelper(
+  executable: string,
+  directory: string,
+  env: Record<string, string>,
+) {
+  let receive: (message: unknown) => void = () => undefined
+  const responsePromise = new Promise<unknown>((resolveResponse) => {
+    receive = (message) => {
+      if ((message as { kind?: string })?.kind === "cancelled") resolveResponse(message)
+    }
+  })
+  const helper = Bun.spawn({
+    cmd: [executable, "--internal-terminal-project-sync-worker"],
+    cwd: directory,
+    env: { ...process.env, ...env },
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "pipe",
+    serialization: "advanced",
+    ipc: (message) => receive(message),
+  })
+  helper.send({ id: "release-sync-smoke", kind: "cancel" })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const response = (await Promise.race([
+      responsePromise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Packaged project sync helper timed out")), 5_000)
+      }),
+    ])) as { id?: string; kind?: string }
+    if (response.id !== "release-sync-smoke" || response.kind !== "cancelled")
+      throw new Error("Packaged project sync helper returned an invalid response")
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (helper.exitCode === null) helper.kill()
+    await helper.exited
+  }
+}
+
 const temporaryRoot = mkdtempSync(join(tmpdir(), "Tuiminal release Ω "))
 try {
   await verifyChecksums()
@@ -343,6 +382,7 @@ try {
     if (!help.includes(tool)) throw new Error(`Installed help is missing ${tool}`)
   }
   await verifySqliteHelper(helper, installRoot, releaseEnvironment)
+  await verifyProjectSyncHelper(helper, installRoot, releaseEnvironment)
   await verifyPackagedUi(nodeExecutable, launcher, installRoot, releaseEnvironment)
 
   const server = Bun.serve({

@@ -17,11 +17,13 @@ const HASH_COMMAND_BYTES = 24 * 1024
 
 const REMOTE_MANIFEST_SCRIPT = String.raw`
 root=$1
+export LC_ALL=C
 cd "$root" || exit 72
 canonical=$(pwd -P) || exit 72
 printf 'TUIMINAL_ROOT\000%s\000' "$canonical"
+printf 'TUIMINAL_SCOPE\000complete\000'
 if find . -maxdepth 0 -printf '' >/dev/null 2>&1; then
-  find . -mindepth 1 -printf 'TUIMINAL_ENTRY\000%P\000%y\000%m|%s|%T@|%C@\000%l\000' || exit 74
+  find . -mindepth 1 -printf 'TUIMINAL_ENTRY\000%P\000%y\000%m|%s|%T@|%C@\000%l\000%Y\000' || exit 74
   exit 0
 fi
 find . -mindepth 1 -exec sh -c '
@@ -29,14 +31,16 @@ find . -mindepth 1 -exec sh -c '
     path=${"$"}{item#./}
     type=x
     target=
+    link_kind=
     if [ -L "$item" ]; then
       type=l
       target=$(readlink "$item") || exit 74
+      if [ -d "$item" ]; then link_kind=d; else link_kind=f; fi
     elif [ -d "$item" ]; then type=d
     elif [ -f "$item" ]; then type=f
     fi
     metadata=$(stat -c "%f|%s|%Y|%Z" -- "$item" 2>/dev/null || stat -f "%p|%z|%m|%c" -- "$item" 2>/dev/null) || exit 74
-    printf "TUIMINAL_ENTRY\000%s\000%s\000%s\000%s\000" "$path" "$type" "$metadata" "$target"
+    printf "TUIMINAL_ENTRY\000%s\000%s\000%s\000%s\000%s\000" "$path" "$type" "$metadata" "$target" "$link_kind"
   done
 ' sh {} +
 `
@@ -125,7 +129,7 @@ function digestEntries(entries: readonly string[]) {
 }
 
 function entryType(type: string): RemoteProjectSyncEntryType {
-  if (type === "f") return "file"
+  if (type === "f" || type === "regular file") return "file"
   if (type === "d") return "directory"
   if (type === "l") return "symlink"
   return "unsupported"
@@ -139,7 +143,9 @@ function parseRemoteMode(value: string) {
 
 function parseRemoteTimestamp(value: string) {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? Math.floor(parsed * 1_000) : Number.NaN
+  if (Number.isFinite(parsed)) return Math.floor(parsed * 1_000)
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : Number.NaN
 }
 
 function validateManifestEntry(path: string, type: string, target: string) {
@@ -151,11 +157,50 @@ function validateManifestEntry(path: string, type: string, target: string) {
     throw new Error("O projeto remoto contém um link simbólico inseguro.")
 }
 
+function parseRemoteEntry(fields: readonly string[], index: number) {
+  const path = fields[index] ?? ""
+  const rawType = fields[index + 1] ?? ""
+  const metadata = fields[index + 2] ?? ""
+  const target = fields[index + 3] ?? ""
+  const rawLinkKind = fields[index + 4] ?? ""
+  validateManifestEntry(path, rawType, target)
+  const [rawMode = "0", rawSize = "0", rawModifiedAt = "0", rawChangedAt = "0"] =
+    metadata.split("|")
+  const size = Number(rawSize)
+  const modifiedAt = parseRemoteTimestamp(rawModifiedAt)
+  const changedAt = parseRemoteTimestamp(rawChangedAt)
+  if (
+    !Number.isSafeInteger(size) ||
+    size < 0 ||
+    !Number.isFinite(modifiedAt) ||
+    !Number.isFinite(changedAt)
+  )
+    throw new Error("Manifesto remoto inválido.")
+  return {
+    entry: {
+      path,
+      type: entryType(rawType),
+      mode: parseRemoteMode(rawMode),
+      size,
+      modifiedAt,
+      changedAt,
+      metadataKey: metadata,
+      target,
+      ...(rawType === "l"
+        ? { linkKind: rawLinkKind === "d" ? ("directory" as const) : ("file" as const) }
+        : {}),
+    } satisfies RemoteProjectSyncEntry,
+    fingerprint: JSON.stringify([path, rawType, metadata, target, rawLinkKind]),
+    nextIndex: index + 5,
+  }
+}
+
 function parseRemoteManifest(buffer: Buffer): RemoteProjectSyncManifest {
   const fields = buffer.toString("utf8").split("\0")
   const fingerprintEntries: string[] = []
   const entries: RemoteProjectSyncEntry[] = []
   let canonicalPath = ""
+  let scope: RemoteProjectSyncManifest["scope"] = "complete"
   let index = 0
   while (index < fields.length - 1) {
     const marker = fields[index++]
@@ -163,43 +208,26 @@ function parseRemoteManifest(buffer: Buffer): RemoteProjectSyncManifest {
       canonicalPath = fields[index++] ?? ""
       continue
     }
+    if (marker === "TUIMINAL_SCOPE") {
+      const value = fields[index++] ?? ""
+      if (value !== "complete" && value !== "git") throw new Error("Manifesto remoto inválido.")
+      scope = value
+      continue
+    }
     if (marker !== "TUIMINAL_ENTRY") throw new Error("Manifesto remoto inválido.")
-    const path = fields[index++] ?? ""
-    const rawType = fields[index++] ?? ""
-    const metadata = fields[index++] ?? ""
-    const target = fields[index++] ?? ""
-    validateManifestEntry(path, rawType, target)
-    const [rawMode = "0", rawSize = "0", rawModifiedAt = "0", rawChangedAt = "0"] =
-      metadata.split("|")
-    const type = entryType(rawType)
-    const size = Number(rawSize)
-    const modifiedAt = parseRemoteTimestamp(rawModifiedAt)
-    const changedAt = parseRemoteTimestamp(rawChangedAt)
-    if (
-      !Number.isSafeInteger(size) ||
-      size < 0 ||
-      !Number.isFinite(modifiedAt) ||
-      !Number.isFinite(changedAt)
-    )
-      throw new Error("Manifesto remoto inválido.")
-    entries.push({
-      path,
-      type,
-      mode: parseRemoteMode(rawMode),
-      size,
-      modifiedAt,
-      changedAt,
-      target,
-    })
-    fingerprintEntries.push(JSON.stringify([path, rawType, metadata, target]))
+    const parsed = parseRemoteEntry(fields, index)
+    index = parsed.nextIndex
+    entries.push(parsed.entry)
+    fingerprintEntries.push(parsed.fingerprint)
     if (entries.length > MAX_MANIFEST_ENTRIES)
       throw new Error("O projeto excede o limite de verificação.")
   }
   if (!canonicalPath.startsWith("/"))
     throw new Error("O servidor retornou uma pasta de projeto inválida.")
   return {
-    fingerprint: digestEntries(fingerprintEntries),
+    fingerprint: digestEntries([`scope:${scope}`, ...fingerprintEntries]),
     canonicalPath,
+    scope,
     entries,
     hasUnsupported: entries.some((entry) => entry.type === "unsupported"),
     hasSymlink: entries.some((entry) => entry.type === "symlink"),
@@ -246,6 +274,41 @@ function pathBatches(paths: readonly string[]) {
   return batches
 }
 
+function remoteMetadataMatches(
+  previous: RemoteProjectSyncEntry | undefined,
+  entry: RemoteProjectSyncEntry,
+) {
+  if (previous?.metadataKey && entry.metadataKey) return previous.metadataKey === entry.metadataKey
+  return (
+    previous?.mode === entry.mode &&
+    previous?.size === entry.size &&
+    previous?.modifiedAt === entry.modifiedAt &&
+    previous?.changedAt !== undefined &&
+    previous.changedAt === entry.changedAt
+  )
+}
+
+async function readRemoteHashes(options: {
+  remote: RemoteCodexTarget
+  signal: AbortSignal
+  canonicalPath: string
+  paths: readonly string[]
+  hashCommand?: ((paths: readonly string[]) => readonly string[]) | undefined
+  timeoutMs?: number | undefined
+}) {
+  const command =
+    options.hashCommand?.(options.paths) ??
+    remoteCommand(options.remote, REMOTE_HASH_SCRIPT, [options.canonicalPath, ...options.paths])
+  const output = await collectProjectSyncProcess(command, options.signal, {
+    timeoutMs: options.timeoutMs ?? DETAILED_MANIFEST_TIMEOUT_MS,
+    maximumBytes: Math.max(1_024, options.paths.length * 48),
+  })
+  const hashes = output.toString("utf8").trim().split(/\r?\n/u)
+  if (hashes.length !== options.paths.length || hashes.some((hash) => !/^[a-f\d]{40}$/u.test(hash)))
+    throw new Error("Manifesto remoto inválido.")
+  return hashes
+}
+
 export async function readRemoteProjectManifest(
   remote: RemoteCodexTarget,
   signal: AbortSignal,
@@ -269,29 +332,19 @@ export async function readRemoteProjectManifest(
   const pending: string[] = []
   for (const entry of files) {
     const previous = baseline.get(entry.path)
-    if (
-      previous?.type === "file" &&
-      previous.digest &&
-      previous.mode === entry.mode &&
-      previous.size === entry.size &&
-      previous.modifiedAt === entry.modifiedAt &&
-      previous.changedAt !== undefined &&
-      previous.changedAt === entry.changedAt
-    )
+    if (previous?.type === "file" && previous.digest && remoteMetadataMatches(previous, entry))
       digests.set(entry.path, previous.digest)
     else pending.push(entry.path)
   }
   for (const paths of pathBatches(pending)) {
-    const command =
-      options.hashCommand?.(paths) ??
-      remoteCommand(remote, REMOTE_HASH_SCRIPT, [manifest.canonicalPath, ...paths])
-    const output = await collectProjectSyncProcess(command, signal, {
-      timeoutMs: options.timeoutMs ?? DETAILED_MANIFEST_TIMEOUT_MS,
-      maximumBytes: Math.max(1_024, paths.length * 48),
+    const hashes = await readRemoteHashes({
+      remote,
+      signal,
+      canonicalPath: manifest.canonicalPath,
+      paths,
+      hashCommand: options.hashCommand,
+      timeoutMs: options.timeoutMs,
     })
-    const hashes = output.toString("utf8").trim().split(/\r?\n/u)
-    if (hashes.length !== paths.length || hashes.some((hash) => !/^[a-f\d]{40}$/u.test(hash)))
-      throw new Error("Manifesto remoto inválido.")
     for (const [index, path] of paths.entries()) {
       const hash = hashes[index]
       if (hash) digests.set(path, hash)

@@ -38,7 +38,7 @@ import {
   terminalSidebarTmuxHostSnapshot,
   toggleTerminalSidebarPinned,
 } from "./model/pinned-sidebar"
-import type { RemoteProjectSyncPreview } from "./model/remote-project-sync"
+import type { RemoteProjectSyncReview } from "./model/remote-project-sync"
 import {
   cleanTerminalName,
   DEFAULT_FOLDER,
@@ -234,7 +234,7 @@ export function FreeTerminal({
         : [],
     [activeSession, sessions],
   )
-  const projectSync = useRemoteProjectSync(active, visibleSessions, sessions)
+  const projectSync = useRemoteProjectSync(visibleSessions, sessions)
   const terminalContexts = useTerminalContexts(
     active,
     activeSession?.sectionId ?? null,
@@ -669,23 +669,34 @@ export function FreeTerminal({
     })
   }
   const closeProjectSyncFlow = () => {
+    if (projectSyncFlow?.kind === "progress") {
+      const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
+      if (owner) projectSync.cancel(owner)
+      return
+    }
+    if (projectSyncFlow?.kind === "preview") {
+      const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
+      if (owner) projectSync.cancel(owner)
+    }
     setProjectSyncFlow(null)
     restoreFocus()
   }
   const runProjectSync = (
     session: TerminalSession,
     localPath?: string,
-    preview?: RemoteProjectSyncPreview,
+    review?: RemoteProjectSyncReview,
   ) => {
-    setProjectSyncFlow(null)
-    queueMicrotask(restoreFocus)
+    const destination = review?.localPath ?? localPath ?? projectSync.mappingFor(session)?.localPath
+    if (destination)
+      setProjectSyncFlow({ kind: "progress", sessionId: session.id, localPath: destination })
     void projectSync
       .synchronize(session, localPath, {
-        ...(preview ? { preview } : {}),
-        replaceLocalChanges: Boolean(preview?.hasLocalChanges),
+        ...(review ? { review } : {}),
       })
       .then((mapping) => {
         if (!mapping) return
+        setProjectSyncFlow(null)
+        queueMicrotask(restoreFocus)
         notify({
           source: `terminal-project-sync:${session.id}`,
           kind: "success",
@@ -696,15 +707,20 @@ export function FreeTerminal({
       .catch((error) => {
         if (error instanceof RemoteProjectSyncCollisionError)
           setProjectSyncFlow({ kind: "browse", sessionId: session.id })
-        notify({
-          source: `terminal-project-sync:${session.id}`,
-          kind: "error",
-          title: translateUi("Falha na sincronização"),
-          message:
-            error instanceof Error
-              ? translateUi(error.message)
-              : translateUi("Não foi possível sincronizar."),
-        })
+        else {
+          setProjectSyncFlow(null)
+          queueMicrotask(restoreFocus)
+        }
+        if (!(error instanceof Error && error.message === "Operação cancelada."))
+          notify({
+            source: `terminal-project-sync:${session.id}`,
+            kind: "error",
+            title: translateUi("Falha na sincronização"),
+            message:
+              error instanceof Error
+                ? translateUi(error.message)
+                : translateUi("Não foi possível sincronizar."),
+          })
       })
   }
   const requestProjectSync = (session: TerminalSession) => {
@@ -713,11 +729,19 @@ export function FreeTerminal({
       setProjectSyncFlow({ kind: "browse", sessionId: session.id })
       return
     }
+    setProjectSyncFlow({ kind: "progress", sessionId: session.id, localPath: mapping.localPath })
     void projectSync
       .inspect(session)
-      .then((preview) => {
-        if (!preview || activeSessionRef.current !== session.id) return
-        if (!preview.changes.length) {
+      .then((review) => {
+        if (!review) return
+        if (activeSessionRef.current !== session.id) {
+          projectSync.cancel(session)
+          setProjectSyncFlow(null)
+          return
+        }
+        if (!review.changeCount) {
+          setProjectSyncFlow(null)
+          queueMicrotask(restoreFocus)
           notify({
             source: `terminal-project-sync:${session.id}`,
             kind: "info",
@@ -726,19 +750,32 @@ export function FreeTerminal({
           })
           return
         }
-        setProjectSyncFlow({ kind: "preview", sessionId: session.id, preview })
+        setProjectSyncFlow({ kind: "preview", sessionId: session.id, review })
       })
       .catch((error) => {
-        notify({
-          source: `terminal-project-sync:${session.id}`,
-          kind: "error",
-          title: translateUi("Falha na sincronização"),
-          message:
-            error instanceof Error
-              ? translateUi(error.message)
-              : translateUi("Não foi possível verificar o projeto."),
-        })
+        setProjectSyncFlow(null)
+        queueMicrotask(restoreFocus)
+        if (!(error instanceof Error && error.message === "Operação cancelada."))
+          notify({
+            source: `terminal-project-sync:${session.id}`,
+            kind: "error",
+            title: translateUi("Falha na sincronização"),
+            message:
+              error instanceof Error
+                ? translateUi(error.message)
+                : translateUi("Não foi possível verificar o projeto."),
+          })
       })
+  }
+  const pageProjectSyncReview = (session: TerminalSession, offset: number) => {
+    void projectSync.page(session, offset).then((page) => {
+      if (!page) return
+      setProjectSyncFlow((current) =>
+        current?.kind === "preview" && current.sessionId === session.id
+          ? { kind: "preview", sessionId: session.id, review: { ...current.review, ...page } }
+          : current,
+      )
+    })
   }
   const chooseProjectSyncParent = async (session: TerminalSession, parent: string) => {
     const remote = session.codex?.remote
@@ -963,6 +1000,10 @@ export function FreeTerminal({
 
   useEffect(() => {
     if (!active) {
+      if (projectSyncFlow) {
+        const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
+        if (owner) projectSync.cancel(owner)
+      }
       leaderRef.current = false
       setLeaderActive(false)
       dialogRef.current = null
@@ -993,6 +1034,8 @@ export function FreeTerminal({
     liveDiffProjectPicker,
     agentLaunchStep,
     projectSyncFlow,
+    projectSync.cancel,
+    sessions,
   ])
 
   const sidebarView = useMemo(
@@ -1303,8 +1346,10 @@ export function FreeTerminal({
         <RemoteProjectSyncFlow
           flow={projectSyncFlow}
           sessions={sessions}
+          statuses={projectSync.statuses}
           onSelectParent={(owner, parent) => void chooseProjectSyncParent(owner, parent)}
           onSync={runProjectSync}
+          onPage={pageProjectSyncReview}
           onClose={closeProjectSyncFlow}
         />
       </box>

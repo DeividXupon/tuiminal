@@ -38,11 +38,13 @@ export function prepareFeatureHost(
   version: string,
   sqliteWorkerCommand: () => string[],
   terminalSidebarCommand?: (args: string[]) => string[],
+  terminalProjectSyncWorkerCommand?: () => string[],
 ) {
   registerFeatureHost({
     version,
     sqliteWorkerCommand,
     ...(terminalSidebarCommand ? { terminalSidebarCommand } : {}),
+    ...(terminalProjectSyncWorkerCommand ? { terminalProjectSyncWorkerCommand } : {}),
     modules: {
       react: shared0,
       "react/jsx-runtime": shared1,

@@ -7,10 +7,14 @@ import type {
   RemoteProjectSyncSnapshot,
 } from "../model/remote-project-sync"
 
-export function emptyLocalProjectManifest(path: string): RemoteProjectSyncManifest {
+export function emptyLocalProjectManifest(
+  path: string,
+  scope: RemoteProjectSyncManifest["scope"] = "complete",
+): RemoteProjectSyncManifest {
   return {
     fingerprint: "",
     canonicalPath: resolve(path),
+    scope,
     entries: [],
     hasUnsupported: false,
     hasSymlink: false,
@@ -23,7 +27,8 @@ export function projectSyncEntriesEqual(
 ) {
   if (!remote || !local || remote.type !== local.type) return remote === local
   if (remote.type === "unsupported") return false
-  if (remote.type === "symlink") return remote.target === local.target
+  if (remote.type === "symlink")
+    return remote.target === local.target && remote.linkKind === local.linkKind
   const modeEqual = process.platform === "win32" || remote.mode === local.mode
   if (remote.type === "directory") return modeEqual && remote.modifiedAt === local.modifiedAt
   return (

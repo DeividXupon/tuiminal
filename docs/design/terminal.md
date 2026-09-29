@@ -377,27 +377,31 @@ by `[R]`. The first synchronization asks for a local parent and derives
 `<remote-basename>-sync`; for example, remote `/tui` becomes `tui-sync` inside the
 selected parent. A pre-existing destination that is not a saved mapping is never
 adopted or replaced. Successful mappings are persisted outside the project and later
-syncs reuse the same destination. While a mapped remote pane is visible, bounded
-checks update the tag through checking, out-of-sync, syncing, synced and error states.
+syncs reuse the same destination. The tag retains the last known state; an explicit
+`[R]` comparison updates it through checking, out-of-sync, syncing, synced and error
+states without polling the complete project tree in the background.
 The checking state sweeps the tag background, while synchronization fills that
-background with measured staging progress without changing the tag text.
+background with measured delta progress without changing the tag text.
 
 For a saved mapping, Master Key `[R]` first compares detailed remote, local and last
 successful manifests. If nothing differs, it shows a brief notification. Otherwise a
 review lists every pending new, changed, removed or conflicting path before one
 confirmation starts the sync. A conflict means the local path also changed since the
 last successful sync, so its confirmation explicitly says that local changes will be
-replaced. The comparison enumerates metadata first and reuses content digests from the
-last successful snapshot; it reads file contents again only for new files or entries
-whose size, mode, modification time or change time moved.
+replaced. Every comparison covers the complete remote and local trees, including
+hidden and ignored content, dependencies, caches and `.git`; Git status cannot define
+the mirror because it omits ignored paths. Metadata is enumerated first and content
+digests from the last successful snapshot are reused unless size, mode, modification
+time or change time moved.
 
-Synchronization remains a complete one-way remote-to-local mirror, including hidden,
-ignored, dependency and `.git` content, but only new or content-changed regular-file
-bytes cross SSH. Equal files are reused from the known local copy, and metadata-only
-changes are applied locally in a sibling staging directory. Tuiminal rejects unsafe
-entries, rechecks both trees against the reviewed manifests and publishes the staged
-copy atomically. A change after review aborts publication and requires a fresh review;
-failures retain the previous copy and its saved mapping.
+Only new or content-changed regular-file bytes cross SSH. A separate installed helper
+performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal
+renderer remains responsive. The focused progress dialog owns `[Esc]` cancellation,
+and the review pages large change lists instead of mounting the full manifest. Tuiminal
+validates received bytes, creates native symbolic links, rechecks the reviewed trees and
+applies a journaled path delta. Each replacement/removal has a sibling backup; error,
+cancellation or an incomplete owned journal rolls back without rebuilding the complete
+destination. A source change after review requires a fresh review.
 
 ## Sent-message history
 

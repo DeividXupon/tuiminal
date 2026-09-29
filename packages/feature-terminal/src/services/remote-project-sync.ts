@@ -25,16 +25,22 @@ import {
 } from "./remote-project-sync-manifest"
 import {
   readLocalProjectFingerprint,
+  readLocalProjectFileDigest,
   readLocalProjectManifest,
   readLocalProjectMetadata,
 } from "./remote-project-sync-local-manifest"
 import {
+  downloadRemoteProjectSyncDelta,
   localRemoteProjectArchiveCommand,
-  prepareRemoteProjectSyncStaging,
-  publishRemoteProjectSyncStaging,
   type RemoteProjectArchiveCommand,
   remoteProjectSyncManifestsEqual,
 } from "./remote-project-sync-transfer"
+import {
+  applyRemoteProjectSyncDelta,
+  commitRemoteProjectSyncDelta,
+  recoverRemoteProjectSyncTransactions,
+  rollbackRemoteProjectSyncDelta,
+} from "./remote-project-sync-transaction"
 
 const SYNC_TIMEOUT_MS = 5 * 60_000
 
@@ -95,10 +101,6 @@ function detailedOptions(remote: RemoteCodexTarget, commands?: RemoteProjectSync
 function validateRemoteManifest(manifest: RemoteProjectSyncManifest) {
   if (manifest.hasUnsupported)
     throw new RemoteProjectSyncError("O projeto remoto contém um tipo de arquivo não suportado.")
-  if (process.platform === "win32" && manifest.hasSymlink)
-    throw new RemoteProjectSyncError(
-      "Este projeto contém links simbólicos não suportados no Windows.",
-    )
 }
 
 export async function inspectRemoteProjectSync(options: {
@@ -109,6 +111,7 @@ export async function inspectRemoteProjectSync(options: {
   snapshot?: RemoteProjectSyncSnapshot | undefined
   commands?: RemoteProjectSyncCommands | undefined
 }) {
+  await recoverRemoteProjectSyncTransactions(options.destination)
   const localPresent = await pathExists(options.destination)
   const [remoteMetadata, localMetadata] = await Promise.all([
     readRemoteProjectFingerprint(options.remote, options.signal, {
@@ -122,6 +125,7 @@ export async function inspectRemoteProjectSync(options: {
   validateRemoteManifest(remoteMetadata)
   const baseline =
     options.mapping &&
+    options.snapshot?.remote.scope !== "git" &&
     options.snapshot?.remote.fingerprint === options.mapping.remoteFingerprint &&
     options.snapshot.local.fingerprint === options.mapping.localFingerprint
       ? options.snapshot
@@ -153,16 +157,14 @@ export async function inspectRemoteProjectSync(options: {
   })
 }
 
-async function verifySyncState(options: {
+async function verifyReviewedState(options: {
   remote: RemoteCodexTarget
   destination: string
-  staging: string
   preview: RemoteProjectSyncPreview
-  transferredPaths: readonly string[]
   signal: AbortSignal
   commands?: RemoteProjectSyncCommands | undefined
 }) {
-  const [remote, local, staged] = await Promise.all([
+  const [remote, local] = await Promise.all([
     readRemoteProjectManifest(options.remote, options.signal, {
       ...detailedOptions(options.remote, options.commands),
       baseline: options.preview.remote,
@@ -174,11 +176,6 @@ async function verifySyncState(options: {
           })
         : emptyLocalProjectManifest(options.destination),
     ),
-    readLocalProjectManifest(options.staging, options.signal, {
-      baseline: options.preview.remote,
-      forceHashPaths: new Set(options.transferredPaths),
-      requireChangedAt: false,
-    }),
   ])
   if (!remoteProjectSyncManifestsEqual(options.preview.remote, remote))
     throw new RemoteProjectSyncError("O projeto remoto mudou durante a sincronização.")
@@ -189,27 +186,7 @@ async function verifySyncState(options: {
     throw new RemoteProjectSyncLocalRaceError(
       "A cópia local mudou durante a sincronização; tente novamente.",
     )
-  if (!remoteProjectSyncManifestsEqual(remote, staged))
-    throw new RemoteProjectSyncError("Não foi possível verificar a cópia local sincronizada.")
-  return { remote, staged }
-}
-
-async function verifyDetachedLocal(
-  previous: string | undefined,
-  destination: string,
-  preview: RemoteProjectSyncPreview,
-  signal: AbortSignal,
-) {
-  const local = previous
-    ? await readLocalProjectManifest(previous, signal, { baseline: preview.local })
-    : emptyLocalProjectManifest(destination)
-  if (
-    preview.local.fingerprint !== local.fingerprint ||
-    !remoteProjectSyncManifestsEqual(preview.local, local)
-  )
-    throw new RemoteProjectSyncLocalRaceError(
-      "A cópia local mudou durante a sincronização; tente novamente.",
-    )
+  return remote
 }
 
 export async function synchronizeRemoteProject(options: {
@@ -235,37 +212,61 @@ export async function synchronizeRemoteProject(options: {
     throw new RemoteProjectSyncError("O destino da sincronização mudou.")
   validateRemoteManifest(preview.remote)
   await mkdir(dirname(destination), { recursive: true })
-  const transaction = await mkdtemp(join(dirname(destination), ".tuiminal-project-sync-"))
-  const staging = join(transaction, "next")
+  await recoverRemoteProjectSyncTransactions(destination)
+  const transaction = await mkdtemp(
+    join(dirname(destination), `.${basename(destination)}.tuiminal-sync-`),
+  )
+  const incoming = join(transaction, "incoming")
   const report = (progress: number) => options.onProgress?.(Math.max(0, Math.min(1, progress)))
   try {
     report(0)
-    const transferredPaths = await prepareRemoteProjectSyncStaging({
+    const transferred = await downloadRemoteProjectSyncDelta({
       remote,
       preview,
-      staging,
+      incoming,
       transaction,
       signal,
       archiveOverride: options.commands?.archive,
-      onProgress: report,
+      onProgress: (progress) => report(progress * 0.6),
     })
-    report(0.9)
-    const { remote: remoteAfter, staged } = await verifySyncState({
+    for (const entry of transferred) {
+      signal.throwIfAborted()
+      const digest = await readLocalProjectFileDigest(
+        join(incoming, ...entry.path.split("/")),
+        entry.size,
+        signal,
+      )
+      if (digest !== entry.digest)
+        throw new RemoteProjectSyncError("O projeto remoto mudou durante a sincronização.")
+    }
+    report(0.65)
+    await options.beforePublish?.()
+    const remoteAfter = await verifyReviewedState({
       remote,
       destination,
-      staging,
       preview,
-      transferredPaths,
       signal,
       commands: options.commands,
     })
-    report(0.97)
-    await options.beforePublish?.()
-    await publishRemoteProjectSyncStaging(staging, destination, (previous) =>
-      verifyDetachedLocal(previous, destination, preview, signal),
-    )
+    report(0.72)
+    await applyRemoteProjectSyncDelta({
+      preview,
+      destination,
+      transaction,
+      incoming,
+      signal,
+      onProgress: (progress) => report(0.72 + progress * 0.2),
+    })
+    report(0.93)
+    const local = await readLocalProjectManifest(destination, signal, {
+      baseline: remoteAfter,
+      forceHashPaths: new Set(transferred.map((entry) => entry.path)),
+      requireChangedAt: false,
+    })
+    if (!remoteProjectSyncManifestsEqual(remoteAfter, local))
+      throw new RemoteProjectSyncError("Não foi possível verificar a cópia local sincronizada.")
+    await commitRemoteProjectSyncDelta(transaction)
     report(1)
-    const local = { ...staged, canonicalPath: destination }
     const snapshot: RemoteProjectSyncSnapshot = { version: 1, remote: remoteAfter, local }
     return {
       remotePath: remoteAfter.canonicalPath,
@@ -273,7 +274,9 @@ export async function synchronizeRemoteProject(options: {
       localFingerprint: local.fingerprint,
       snapshot,
     }
-  } finally {
+  } catch (error) {
+    await rollbackRemoteProjectSyncDelta(transaction, destination).catch(() => undefined)
     await rm(transaction, { recursive: true, force: true }).catch(() => undefined)
+    throw error
   }
 }

@@ -1,18 +1,7 @@
 import { spawn } from "node:child_process"
-import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
-import {
-  chmod,
-  copyFile,
-  lutimes,
-  mkdir,
-  rename,
-  rm,
-  stat,
-  symlink,
-  utimes,
-} from "node:fs/promises"
-import { basename, dirname, join, resolve } from "node:path"
+import { chmod, lutimes, mkdir, rm, symlink, utimes } from "node:fs/promises"
+import { join, resolve } from "node:path"
 import type {
   RemoteProjectSyncEntry,
   RemoteProjectSyncManifest,
@@ -25,6 +14,7 @@ import { RemoteProjectSyncError } from "./remote-project-sync-errors"
 import { remoteProjectScriptCommand } from "./remote-project-sync-manifest"
 
 const ARCHIVE_COMMAND_BYTES = 24 * 1024
+const TRANSFER_IDLE_TIMEOUT_MS = 90_000
 
 const REMOTE_SELECTED_ARCHIVE_SCRIPT = `
 root=$1
@@ -49,7 +39,7 @@ export const localRemoteProjectArchiveCommand = (path: string, paths: readonly s
     ...paths.map((entry) => (entry === "." ? entry : `./${entry}`)),
   ] as const
 
-function safeTreePath(root: string, path: string) {
+export function safeProjectSyncTreePath(root: string, path: string) {
   const target = resolve(root, ...path.split("/"))
   const separator = process.platform === "win32" ? "\\" : "/"
   if (target !== root && !target.startsWith(`${root}${separator}`))
@@ -57,14 +47,7 @@ function safeTreePath(root: string, path: string) {
   return target
 }
 
-function byDepth(entries: readonly RemoteProjectSyncEntry[], descending = false) {
-  return [...entries].sort((left, right) => {
-    const depth = left.path.split("/").length - right.path.split("/").length
-    return descending ? -depth : depth
-  })
-}
-
-async function applyEntryMetadata(path: string, entry: RemoteProjectSyncEntry) {
+export async function applyProjectSyncEntryMetadata(path: string, entry: RemoteProjectSyncEntry) {
   const modified = new Date(entry.modifiedAt)
   if (entry.type === "symlink") {
     await lutimes(path, modified, modified).catch(() => undefined)
@@ -78,42 +61,19 @@ function entryMap(manifest: RemoteProjectSyncManifest) {
   return new Map(manifest.entries.map((entry) => [entry.path, entry]))
 }
 
-async function prepareStaging(
-  preview: RemoteProjectSyncPreview,
-  staging: string,
-  signal: AbortSignal,
-  onProgress: (progress: number) => void,
-) {
-  await mkdir(staging)
-  const localEntries = entryMap(preview.local)
-  const directories = byDepth(preview.remote.entries.filter((entry) => entry.type === "directory"))
-  const others = preview.remote.entries.filter((entry) => entry.type !== "directory")
-  const total = Math.max(1, directories.length + others.length)
-  let completed = 0
-  for (const entry of directories) {
-    signal.throwIfAborted()
-    await mkdir(safeTreePath(staging, entry.path))
-    onProgress((++completed / total) * 0.15)
+function requiredDirectories(entries: readonly RemoteProjectSyncEntry[]) {
+  const directories = new Set(
+    entries.filter((entry) => entry.type === "directory").map((entry) => entry.path),
+  )
+  for (const entry of entries) {
+    const parts = entry.path.split("/")
+    parts.pop()
+    while (parts.length) {
+      directories.add(parts.join("/"))
+      parts.pop()
+    }
   }
-  const transfer: RemoteProjectSyncEntry[] = []
-  for (const entry of others) {
-    signal.throwIfAborted()
-    const target = safeTreePath(staging, entry.path)
-    const localEntry = localEntries.get(entry.path)
-    if (entry.type === "symlink") {
-      await symlink(entry.target, target)
-      await applyEntryMetadata(target, entry)
-    } else if (entry.type === "file") {
-      if (entry.digest === localEntry?.digest) {
-        const source = safeTreePath(preview.local.canonicalPath, entry.path)
-        await copyFile(source, target)
-        await applyEntryMetadata(target, entry)
-      } else transfer.push(entry)
-    } else
-      throw new RemoteProjectSyncError("O projeto remoto contém um tipo de arquivo não suportado.")
-    onProgress((++completed / total) * 0.15)
-  }
-  return { directories, transfer }
+  return [...directories].sort((left, right) => left.split("/").length - right.split("/").length)
 }
 
 function archiveBatches(entries: readonly RemoteProjectSyncEntry[]) {
@@ -167,13 +127,27 @@ async function writeRemoteArchive(
   const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
   const output = createWriteStream(path, { flags: "wx", mode: 0o600 })
   let stderr = ""
+  let timedOut = false
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  const refreshTimeout = () => {
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      timedOut = true
+      child.kill()
+    }, TRANSFER_IDLE_TIMEOUT_MS)
+  }
   child.stderr.setEncoding("utf8")
   child.stderr.on("data", (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-16_384)
+    refreshTimeout()
   })
-  child.stdout.on("data", (chunk: Buffer) => onBytes(chunk.length))
+  child.stdout.on("data", (chunk: Buffer) => {
+    refreshTimeout()
+    onBytes(chunk.length)
+  })
   const stop = () => child.kill()
   signal.addEventListener("abort", stop, { once: true })
+  refreshTimeout()
   child.stdout.pipe(output)
   try {
     const [exitCode] = await Promise.all([
@@ -189,9 +163,12 @@ async function writeRemoteArchive(
       }),
     ])
     if (signal.aborted) throw abortedError(signal)
+    if (timedOut)
+      throw new RemoteProjectSyncError("A transferência ficou sem progresso e foi cancelada.")
     if (exitCode !== 0)
       throw new RemoteProjectSyncError(stderr.trim() || "Não foi possível copiar o projeto remoto.")
   } finally {
+    if (idleTimer) clearTimeout(idleTimer)
     signal.removeEventListener("abort", stop)
     if (!output.closed) output.destroy()
   }
@@ -270,65 +247,58 @@ async function transferFiles(options: {
   if (!batches.length) options.onProgress(0.85)
 }
 
-export async function prepareRemoteProjectSyncStaging(options: {
+export async function createProjectSyncSymlink(entry: RemoteProjectSyncEntry, target: string) {
+  try {
+    await symlink(entry.target, target, entry.linkKind === "directory" ? "dir" : "file")
+  } catch (error) {
+    if (process.platform === "win32" && (error as NodeJS.ErrnoException).code === "EPERM")
+      throw new RemoteProjectSyncError(
+        "O Windows bloqueou um link simbólico; habilite o Modo de Desenvolvedor e tente novamente.",
+      )
+    throw error
+  }
+}
+
+export async function downloadRemoteProjectSyncDelta(options: {
   remote: RemoteCodexTarget
   preview: RemoteProjectSyncPreview
-  staging: string
+  incoming: string
   transaction: string
   signal: AbortSignal
   archiveOverride: RemoteProjectArchiveCommand
   onProgress: (progress: number) => void
 }) {
-  const { directories, transfer } = await prepareStaging(
-    options.preview,
-    options.staging,
-    options.signal,
-    options.onProgress,
+  const localEntries = entryMap(options.preview.local)
+  const transfer = options.preview.remote.entries.filter(
+    (entry) => entry.type === "file" && entry.digest !== localEntries.get(entry.path)?.digest,
   )
+  await mkdir(options.incoming, { recursive: true })
+  for (const directory of requiredDirectories(transfer))
+    await mkdir(safeProjectSyncTreePath(options.incoming, directory), { recursive: true })
   await transferFiles({
     remote: options.remote,
     remotePath: options.preview.remote.canonicalPath,
     entries: transfer,
-    staging: options.staging,
+    staging: options.incoming,
     transaction: options.transaction,
     signal: options.signal,
     archiveOverride: options.archiveOverride,
     onProgress: options.onProgress,
   })
   for (const entry of transfer)
-    await applyEntryMetadata(safeTreePath(options.staging, entry.path), entry)
-  for (const entry of byDepth(directories, true))
-    await applyEntryMetadata(safeTreePath(options.staging, entry.path), entry)
-  return transfer.map((entry) => entry.path)
+    await applyProjectSyncEntryMetadata(
+      safeProjectSyncTreePath(options.incoming, entry.path),
+      entry,
+    )
+  return transfer
 }
 
 export function remoteProjectSyncManifestsEqual(
   left: RemoteProjectSyncManifest,
   right: RemoteProjectSyncManifest,
 ) {
+  if ((left.scope ?? "complete") !== (right.scope ?? "complete")) return false
   if (left.entries.length !== right.entries.length) return false
   const rightEntries = entryMap(right)
   return left.entries.every((entry) => projectSyncEntriesEqual(entry, rightEntries.get(entry.path)))
-}
-
-export async function publishRemoteProjectSyncStaging(
-  staging: string,
-  destination: string,
-  verifyPrevious: (previous: string | undefined) => Promise<void>,
-) {
-  const parent = dirname(destination)
-  const backup = join(parent, `.${basename(destination)}.tuiminal-backup-${randomUUID()}`)
-  const existing = await stat(destination).then(
-    () => true,
-    () => false,
-  )
-  if (existing) await rename(destination, backup)
-  try {
-    await verifyPrevious(existing ? backup : undefined)
-    await rename(staging, destination)
-  } catch (error) {
-    if (existing) await rename(backup, destination).catch(() => undefined)
-    throw error
-  }
-  if (existing) await rm(backup, { recursive: true, force: true })
 }

@@ -39,6 +39,7 @@ function syncTooltip(sync: RemoteProjectSyncStatus | undefined) {
     return translateUi("Escolha uma pasta local para sincronizar o projeto remoto.")
   if (sync.kind === "checking") return translateUi("Verificando a cópia local e o projeto remoto.")
   if (sync.kind === "syncing") return translateUi("Copiando o projeto remoto para a pasta local.")
+  if (sync.kind === "cancelling") return translateUi("Cancelando a sincronização com segurança.")
   if (sync.kind === "error") return translateUi(sync.message)
   if (sync.kind === "synced") return `${translateUi("Cópia local sincronizada:")} ${sync.localPath}`
   const origin =
@@ -81,6 +82,8 @@ function syncTag(status: RemoteProjectSyncStatus | undefined, masterKey: string,
       kind: "sync" as const,
       label: `${AGENT_WORKING_FRAMES[frame % AGENT_WORKING_FRAMES.length]} ${translateUi("Sincronizando…")}`,
     }
+  if (status.kind === "cancelling")
+    return { kind: "sync" as const, label: translateUi("Cancelando sync…") }
   const label =
     status.kind === "unmapped"
       ? translateUi("Não sincronizado")

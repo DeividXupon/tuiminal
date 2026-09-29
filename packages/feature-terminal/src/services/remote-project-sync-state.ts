@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto"
-import { readFileSync, statSync, unlinkSync } from "node:fs"
+import { readFileSync, statSync } from "node:fs"
+import { readFile, stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
-import { gunzipSync, gzipSync } from "node:zlib"
+import { promisify } from "node:util"
+import { gunzip, gzip } from "node:zlib"
 import { atomicWriteFileSync, currentFileHash } from "@xupon/tuiminal-core/storage/atomic-file"
 import {
   type RemoteProjectSyncEntry,
@@ -17,6 +19,24 @@ const MAX_MAPPINGS = 256
 const MAX_STATE_BYTES = 2 * 1024 * 1024
 const MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024
 const MAX_SNAPSHOT_OUTPUT_BYTES = 128 * 1024 * 1024
+const gunzipAsync = promisify(gunzip)
+const gzipAsync = promisify(gzip)
+const snapshotCache = new Map<string, Promise<RemoteProjectSyncSnapshot | undefined>>()
+const MAX_CACHED_SNAPSHOTS = 2
+const SNAPSHOT_BATCH_SIZE = 2_048
+
+function yieldToInterface() {
+  return new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+function cacheSnapshot(path: string, snapshot: Promise<RemoteProjectSyncSnapshot | undefined>) {
+  snapshotCache.delete(path)
+  snapshotCache.set(path, snapshot)
+  while (snapshotCache.size > MAX_CACHED_SNAPSHOTS) {
+    const oldest = snapshotCache.keys().next().value
+    if (oldest) snapshotCache.delete(oldest)
+  }
+}
 
 export function remoteProjectSyncStatePath(environment: NodeJS.ProcessEnv = process.env) {
   return join(terminalWorkspaceStateDirectory(environment), "project-syncs.json")
@@ -124,88 +144,132 @@ function validEntry(value: unknown): value is RemoteProjectSyncEntry {
     entry.size >= 0 &&
     Number.isFinite(entry.modifiedAt) &&
     (entry.changedAt === undefined || Number.isFinite(entry.changedAt)) &&
+    (entry.metadataKey === undefined ||
+      (typeof entry.metadataKey === "string" && entry.metadataKey.length <= 512)) &&
     typeof entry.target === "string" &&
+    (entry.linkKind === undefined || entry.linkKind === "file" || entry.linkKind === "directory") &&
     (entry.type === "file"
       ? typeof entry.digest === "string" && /^[a-f\d]{40}$/u.test(entry.digest)
       : entry.digest === undefined)
   )
 }
 
-function validEntries(values: unknown[]) {
+async function validEntries(values: unknown[]) {
   const paths = new Set<string>()
-  for (const value of values) {
-    if (!validEntry(value) || paths.has(value.path)) return false
-    paths.add(value.path)
+  for (let offset = 0; offset < values.length; offset += SNAPSHOT_BATCH_SIZE) {
+    for (const value of values.slice(offset, offset + SNAPSHOT_BATCH_SIZE)) {
+      if (!validEntry(value) || paths.has(value.path)) return false
+      paths.add(value.path)
+    }
+    await yieldToInterface()
   }
   return true
 }
 
-function validManifest(value: unknown, remote: boolean): value is RemoteProjectSyncManifest {
+async function validManifest(value: unknown, remote: boolean) {
   if (!value || typeof value !== "object") return false
   const manifest = value as RemoteProjectSyncManifest
   return (
     typeof manifest.fingerprint === "string" &&
     (manifest.fingerprint === "" || /^[a-f\d]{64}$/u.test(manifest.fingerprint)) &&
     validProjectPath(manifest.canonicalPath, remote) &&
+    (manifest.scope === undefined || manifest.scope === "complete" || manifest.scope === "git") &&
     Array.isArray(manifest.entries) &&
     manifest.entries.length <= 250_000 &&
-    validEntries(manifest.entries) &&
+    (await validEntries(manifest.entries)) &&
     typeof manifest.hasUnsupported === "boolean" &&
     typeof manifest.hasSymlink === "boolean"
   )
 }
 
-function validSnapshot(value: unknown): value is RemoteProjectSyncSnapshot {
+async function validSnapshot(value: unknown) {
   if (!value || typeof value !== "object") return false
   const snapshot = value as RemoteProjectSyncSnapshot
   return (
     snapshot.version === 1 &&
-    validManifest(snapshot.remote, true) &&
-    validManifest(snapshot.local, false)
+    (await validManifest(snapshot.remote, true)) &&
+    (await validManifest(snapshot.local, false))
   )
 }
 
-export function loadRemoteProjectSyncSnapshot(
+async function serializeEntries(entries: readonly RemoteProjectSyncEntry[]) {
+  const chunks: string[] = []
+  for (let offset = 0; offset < entries.length; offset += SNAPSHOT_BATCH_SIZE) {
+    chunks.push(
+      entries
+        .slice(offset, offset + SNAPSHOT_BATCH_SIZE)
+        .map((entry) => JSON.stringify(entry))
+        .join(","),
+    )
+    await yieldToInterface()
+  }
+  return chunks.join(",")
+}
+
+async function serializeManifest(manifest: RemoteProjectSyncManifest) {
+  const metadata = JSON.stringify({
+    fingerprint: manifest.fingerprint,
+    canonicalPath: manifest.canonicalPath,
+    scope: manifest.scope,
+    hasUnsupported: manifest.hasUnsupported,
+    hasSymlink: manifest.hasSymlink,
+  })
+  return `${metadata.slice(0, -1)},"entries":[${await serializeEntries(manifest.entries)}]}`
+}
+
+async function serializeSnapshot(snapshot: RemoteProjectSyncSnapshot) {
+  const remote = await serializeManifest(snapshot.remote)
+  const local = await serializeManifest(snapshot.local)
+  return `{"version":1,"remote":${remote},"local":${local}}\n`
+}
+
+export async function loadRemoteProjectSyncSnapshot(
   mapping: RemoteProjectSyncMapping,
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   if (!mapping.snapshotId || environment.TUIMINAL_TERMINAL_WORKSPACE_STATE === "0") return undefined
-  try {
-    const path = remoteProjectSyncSnapshotPath(mapping.snapshotId, environment)
-    if (statSync(path).size > MAX_SNAPSHOT_BYTES) return undefined
-    const parsed = JSON.parse(
-      gunzipSync(readFileSync(path), { maxOutputLength: MAX_SNAPSHOT_OUTPUT_BYTES }).toString(
-        "utf8",
-      ),
-    )
-    return validSnapshot(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
+  const path = remoteProjectSyncSnapshotPath(mapping.snapshotId, environment)
+  const cached = snapshotCache.get(path)
+  if (cached) return cached
+  const pending = (async () => {
+    try {
+      if ((await stat(path)).size > MAX_SNAPSHOT_BYTES) return undefined
+      const content = await gunzipAsync(await readFile(path), {
+        maxOutputLength: MAX_SNAPSHOT_OUTPUT_BYTES,
+      })
+      const parsed = JSON.parse(content.toString("utf8"))
+      return (await validSnapshot(parsed)) ? (parsed as RemoteProjectSyncSnapshot) : undefined
+    } catch {
+      return undefined
+    }
+  })()
+  cacheSnapshot(path, pending)
+  return pending
 }
 
-export function saveRemoteProjectSyncSnapshot(
+export async function saveRemoteProjectSyncSnapshot(
   mapping: RemoteProjectSyncMapping,
   snapshot: RemoteProjectSyncSnapshot,
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   if (environment.TUIMINAL_TERMINAL_WORKSPACE_STATE === "0") return mapping
-  if (!validSnapshot(snapshot)) throw new Error("Snapshot de sincronização inválido.")
+  if (!(await validSnapshot(snapshot))) throw new Error("Snapshot de sincronização inválido.")
   const snapshotId = randomUUID()
-  const content = gzipSync(`${JSON.stringify(snapshot)}\n`)
+  const content = await gzipAsync(await serializeSnapshot(snapshot))
   if (content.byteLength > MAX_SNAPSHOT_BYTES)
     throw new Error("O projeto excede o limite de verificação.")
-  atomicWriteFileSync(remoteProjectSyncSnapshotPath(snapshotId, environment), content, {
+  const path = remoteProjectSyncSnapshotPath(snapshotId, environment)
+  atomicWriteFileSync(path, content, {
     expectedHash: null,
     mode: 0o600,
   })
+  cacheSnapshot(path, Promise.resolve(snapshot))
   const next = { ...mapping, snapshotId }
   saveRemoteProjectSyncMapping(next, environment)
-  if (mapping.snapshotId && mapping.snapshotId !== snapshotId)
-    try {
-      unlinkSync(remoteProjectSyncSnapshotPath(mapping.snapshotId, environment))
-    } catch {
-      // A missing or inaccessible old snapshot does not invalidate the new mapping.
-    }
+  if (mapping.snapshotId && mapping.snapshotId !== snapshotId) {
+    const previousPath = remoteProjectSyncSnapshotPath(mapping.snapshotId, environment)
+    await unlink(previousPath).catch(() => undefined)
+    snapshotCache.delete(previousPath)
+  }
   return next
 }

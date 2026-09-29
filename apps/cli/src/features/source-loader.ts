@@ -25,3 +25,6 @@ export async function sourceHttpCommand(command: "run" | "import" | "postman", a
 export async function sourceTerminalSidebar(args: string[]) {
   return (await import("@xupon/tuiminal-feature-terminal/cli/sidebar")).runTerminalSidebarCli(args)
 }
+export async function sourceTerminalProjectSyncWorker() {
+  await import("@xupon/tuiminal-feature-terminal/cli/project-sync-worker")
+}

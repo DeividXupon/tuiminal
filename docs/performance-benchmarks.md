@@ -15,6 +15,8 @@ bun run benchmark:startup --skip-animation --samples 5
 bun run benchmark:tui
 BENCHMARK_OUTPUT=tab-latency.json bun run benchmark:tui
 BENCHMARK_SAMPLES=30 BENCHMARK_WARMUP=5 bun run benchmark:tui
+bun run benchmark:terminal:sync
+TUIMINAL_SYNC_BENCHMARK_FILES=10000 bun run benchmark:terminal:sync
 bun run benchmark:runner:execution
 BENCHMARK_OUTPUT=runner-execution.json bun run benchmark:runner:execution
 bun run benchmark:runner:flow
@@ -86,6 +88,14 @@ warm interactions within one mounted application. Frame capture is included; a
 physical terminal's display latency is not measured. Terminal UI actions use a
 fixture process handle so asynchronous shell output does not perturb frame timing;
 native PTY launch and retirement are measured in the service suite.
+
+`benchmark:terminal:sync` creates two disposable local trees and exercises the same
+complete-tree manifest, digest, archive, journal and verification path used by remote
+project synchronization. It reports the first full sync, an unchanged verification,
+a small-delta comparison and the delta sync, including file-transfer counts. The
+fixture includes `.git` and ignored cache content; `TUIMINAL_SYNC_BENCHMARK_FILES`
+sets its file count. SSH network latency is intentionally outside this filesystem and
+protocol benchmark.
 
 `benchmark:runner:execution` mounts the production Runner execution hook in the
 native test renderer. Three cases measure the failure-to-restart path with one

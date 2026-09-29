@@ -31,6 +31,7 @@ beforeAll(async () => {
     build.catalog.version,
     () => [process.execPath, "--internal-sqlite-worker"],
     (args) => [process.execPath, "--internal-terminal-sidebar", ...args],
+    () => [process.execPath, "--internal-terminal-project-sync-worker"],
   )
 }, 30_000)
 
@@ -83,6 +84,11 @@ test.each([
 test("built Terminal payload exposes its verified tmux sidebar helper", async () => {
   const module = await loadPayload("terminal", "terminal-sidebar.mjs")
   expect(typeof module.runTerminalSidebarCli).toBe("function")
+})
+
+test("built Terminal payload includes its verified project sync worker", () => {
+  const terminal = build.catalog.artifacts.find((entry) => entry.id === "terminal")
+  expect(terminal?.files.map((file) => file.name)).toContain("project-sync-worker.mjs")
 })
 
 async function settle(until: () => boolean) {

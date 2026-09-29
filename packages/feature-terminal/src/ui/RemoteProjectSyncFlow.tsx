@@ -1,27 +1,33 @@
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import type { RemoteProjectSyncPreview } from "../model/remote-project-sync"
+import type { RemoteProjectSyncReview, RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
 import { AgentFolderBrowser } from "./AgentFolderBrowser"
 import { RemoteProjectSyncDialog } from "./RemoteProjectSyncDialog"
 import { RemoteProjectSyncPreviewDialog } from "./RemoteProjectSyncPreviewDialog"
+import { RemoteProjectSyncProgressDialog } from "./RemoteProjectSyncProgressDialog"
 
 export type RemoteProjectSyncFlowState =
   | { kind: "browse"; sessionId: string }
   | { kind: "destination"; sessionId: string; localPath: string }
-  | { kind: "preview"; sessionId: string; preview: RemoteProjectSyncPreview }
+  | { kind: "progress"; sessionId: string; localPath: string }
+  | { kind: "preview"; sessionId: string; review: RemoteProjectSyncReview }
 
 export function RemoteProjectSyncFlow({
   flow,
   sessions,
   onSelectParent,
   onSync,
+  onPage,
   onClose,
+  statuses,
 }: {
   flow: RemoteProjectSyncFlowState | null
   sessions: readonly TerminalSession[]
   onSelectParent: (session: TerminalSession, parent: string) => void
-  onSync: (session: TerminalSession, localPath?: string, preview?: RemoteProjectSyncPreview) => void
+  onSync: (session: TerminalSession, localPath?: string, review?: RemoteProjectSyncReview) => void
+  onPage: (session: TerminalSession, offset: number) => void
   onClose: () => void
+  statuses: ReadonlyMap<string, RemoteProjectSyncStatus>
 }) {
   if (!flow) return null
   const owner = sessions.find((session) => session.id === flow.sessionId)
@@ -44,10 +50,19 @@ export function RemoteProjectSyncFlow({
         onClose={onClose}
       />
     )
+  if (flow.kind === "progress")
+    return (
+      <RemoteProjectSyncProgressDialog
+        localPath={flow.localPath}
+        status={statuses.get(owner.id)}
+        onCancel={onClose}
+      />
+    )
   return (
     <RemoteProjectSyncPreviewDialog
-      preview={flow.preview}
-      onConfirm={() => onSync(owner, undefined, flow.preview)}
+      review={flow.review}
+      onPage={(offset) => onPage(owner, offset)}
+      onConfirm={() => onSync(owner, undefined, flow.review)}
       onClose={onClose}
     />
   )

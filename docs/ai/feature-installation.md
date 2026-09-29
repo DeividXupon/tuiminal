@@ -18,7 +18,8 @@ Entry points: [CLI feature host](../../apps/cli/src/features/),
   shared imports in `apps/cli/src/features/host-modules.ts`. Keep exported values'
   references stable; expose changing state through functions or stable objects.
 - Hidden helpers use fixed allowlisted payload names and internal host entrypoints,
-  never project-local executables. No duplicate runtime or live code replacement.
+  including the database worker and terminal project-sync worker; never run
+  project-local executables. No duplicate runtime or live code replacement.
 - Uninstall confirms the exact tool, retires its resources, then deletes only its
   current version/hash payload. Serialize with install/open; retain settings,
   projects and other versions. Failed retirement/removal does not remount the tool.

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { createReadStream } from "node:fs"
-import { lstat, opendir, readlink } from "node:fs/promises"
+import { lstat, opendir, readlink, stat } from "node:fs/promises"
 import { relative, resolve, sep } from "node:path"
 import type {
   RemoteProjectSyncEntry,
@@ -69,11 +69,20 @@ async function readLocalDirectory(directory: string, root: string, signal: Abort
           metadata,
           path: relative(root, absolute).split(sep).join("/"),
           target: type === "symlink" ? await readlink(absolute) : "",
+          linkKind:
+            type === "symlink"
+              ? await stat(absolute).then(
+                  (target) => (target.isDirectory() ? ("directory" as const) : ("file" as const)),
+                  () => "file" as const,
+                )
+              : undefined,
           type,
         }
       }),
     )
-    for (const { absolute, metadata, path, target, type } of values) {
+    for (const { absolute, metadata, path, target, linkKind, type } of values) {
+      if (type === "directory") directories.push(absolute)
+      const metadataKey = `${metadata.mode.toString(16)}|${metadata.size}|${metadata.mtimeMs}|${metadata.ctimeMs}`
       entries.push({
         path,
         type,
@@ -81,25 +90,24 @@ async function readLocalDirectory(directory: string, root: string, signal: Abort
         size: metadata.size,
         modifiedAt: Math.floor(metadata.mtimeMs),
         changedAt: Math.floor(metadata.ctimeMs),
+        metadataKey,
         target,
+        ...(linkKind ? { linkKind } : {}),
       })
-      fingerprints.push(
-        JSON.stringify([
-          path,
-          rawEntryType(type),
-          `${metadata.mode.toString(16)}|${metadata.size}|${Math.floor(metadata.mtimeMs)}|${Math.floor(metadata.ctimeMs)}`,
-          target,
-        ]),
-      )
-      if (type === "directory") directories.push(absolute)
+      fingerprints.push(JSON.stringify([path, rawEntryType(type), metadataKey, target, linkKind]))
     }
   }
   return { entries, fingerprints, directories }
 }
 
-export async function readLocalProjectMetadata(path: string, signal: AbortSignal) {
+export async function readLocalProjectMetadata(
+  path: string,
+  signal: AbortSignal,
+  options: { scope?: RemoteProjectSyncManifest["scope"] } = {},
+) {
   signal.throwIfAborted()
   const root = resolve(path)
+  const scope = options.scope ?? "complete"
   const entries: RemoteProjectSyncEntry[] = []
   const fingerprintEntries: string[] = []
   const pending = [root]
@@ -118,8 +126,9 @@ export async function readLocalProjectMetadata(path: string, signal: AbortSignal
       throw new Error("O projeto excede o limite de verificação.")
   }
   return {
-    fingerprint: digestEntries(fingerprintEntries),
+    fingerprint: digestEntries([`scope:${scope}`, ...fingerprintEntries]),
     canonicalPath: root,
+    scope,
     entries,
     hasUnsupported: entries.some((entry) => entry.type === "unsupported"),
     hasSymlink: entries.some((entry) => entry.type === "symlink"),
@@ -130,7 +139,7 @@ export async function readLocalProjectFingerprint(path: string, signal: AbortSig
   return (await readLocalProjectMetadata(path, signal)).fingerprint
 }
 
-async function gitBlobDigest(path: string, size: number, signal: AbortSignal) {
+export async function readLocalProjectFileDigest(path: string, size: number, signal: AbortSignal) {
   const hash = createHash("sha1")
   hash.update(`blob ${size}\0`)
   const stream = createReadStream(path)
@@ -157,22 +166,30 @@ export async function readLocalProjectManifest(
     requireChangedAt?: boolean | undefined
   } = {},
 ) {
-  const manifest = options.manifest ?? (await readLocalProjectMetadata(path, signal))
+  const manifest =
+    options.manifest ??
+    (await readLocalProjectMetadata(path, signal, {
+      scope: options.baseline?.scope,
+    }))
   const baseline = new Map(options.baseline?.entries.map((entry) => [entry.path, entry]) ?? [])
   const digests = new Map<string, string>()
   const pending: RemoteProjectSyncEntry[] = []
   for (const entry of manifest.entries) {
     if (entry.type !== "file") continue
     const previous = baseline.get(entry.path)
+    const sameMetadata =
+      options.requireChangedAt !== false && previous?.metadataKey && entry.metadataKey
+        ? previous.metadataKey === entry.metadataKey
+        : (process.platform === "win32" || previous?.mode === entry.mode) &&
+          previous?.size === entry.size &&
+          previous?.modifiedAt === entry.modifiedAt &&
+          (options.requireChangedAt === false ||
+            (previous?.changedAt !== undefined && previous.changedAt === entry.changedAt))
     if (
       !options.forceHashPaths?.has(entry.path) &&
       previous?.type === "file" &&
       previous.digest &&
-      (process.platform === "win32" || previous.mode === entry.mode) &&
-      previous.size === entry.size &&
-      previous.modifiedAt === entry.modifiedAt &&
-      (options.requireChangedAt === false ||
-        (previous.changedAt !== undefined && previous.changedAt === entry.changedAt))
+      sameMetadata
     )
       digests.set(entry.path, previous.digest)
     else pending.push(entry)
@@ -187,7 +204,7 @@ export async function readLocalProjectManifest(
         if (!entry) continue
         digests.set(
           entry.path,
-          await gitBlobDigest(
+          await readLocalProjectFileDigest(
             resolve(manifest.canonicalPath, ...entry.path.split("/")),
             entry.size,
             signal,

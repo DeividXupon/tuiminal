@@ -7,6 +7,7 @@ type FeatureHost = {
   modules: Record<string, unknown>
   sqliteWorkerCommand?: () => string[]
   terminalSidebarCommand?: (args: string[]) => string[]
+  terminalProjectSyncWorkerCommand?: () => string[]
 }
 
 const registry = globalThis as typeof globalThis & {
@@ -27,4 +28,8 @@ export function installedSqliteWorkerCommand() {
 
 export function installedTerminalSidebarCommand(args: string[]) {
   return registry[FEATURE_HOST_KEY]?.terminalSidebarCommand?.(args) ?? null
+}
+
+export function installedTerminalProjectSyncWorkerCommand() {
+  return registry[FEATURE_HOST_KEY]?.terminalProjectSyncWorkerCommand?.() ?? null
 }
