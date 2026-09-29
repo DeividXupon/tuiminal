@@ -1,5 +1,4 @@
-import { open } from "node:fs/promises"
-import { lstat, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises"
+import { lstat, mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import type { RemoteProjectSyncEntry, RemoteProjectSyncPreview } from "../model/remote-project-sync"
 import { projectSyncEntriesEqual } from "./remote-project-sync-diff"
@@ -48,6 +47,11 @@ function depth(path: string) {
   return path.split("/").length
 }
 
+function parentPath(path: string) {
+  const separator = path.lastIndexOf("/")
+  return separator === -1 ? "" : path.slice(0, separator)
+}
+
 function coveredBy(path: string, parents: readonly string[]) {
   return parents.some((parent) => path === parent || path.startsWith(`${parent}/`))
 }
@@ -75,6 +79,44 @@ function backupPaths(preview: RemoteProjectSyncPreview) {
     if (needsBackup(local.get(change.path), remote.get(change.path))) selected.push(change.path)
   }
   return selected
+}
+
+function installedRemoteEntry(
+  remote: RemoteProjectSyncEntry,
+  local: RemoteProjectSyncEntry | undefined,
+) {
+  if (remote.type === "directory") return local?.type !== "directory"
+  return !(
+    remote.type === "file" &&
+    local?.type === "file" &&
+    remote.digest === local.digest &&
+    !projectSyncEntriesEqual(remote, local)
+  )
+}
+
+function metadataDirectories(
+  backups: readonly string[],
+  changedRemote: readonly RemoteProjectSyncEntry[],
+  local: ReadonlyMap<string, RemoteProjectSyncEntry>,
+  remote: ReadonlyMap<string, RemoteProjectSyncEntry>,
+) {
+  const paths = new Set(
+    changedRemote.filter((entry) => entry.type === "directory").map((entry) => entry.path),
+  )
+  const addParent = (path: string) => {
+    const parent = parentPath(path)
+    if (parent && remote.get(parent)?.type === "directory") paths.add(parent)
+  }
+  for (const path of backups) addParent(path)
+  for (const entry of changedRemote) {
+    if (installedRemoteEntry(entry, local.get(entry.path))) addParent(entry.path)
+  }
+  return [...paths]
+    .flatMap((path) => {
+      const entry = remote.get(path)
+      return entry?.type === "directory" ? [entry] : []
+    })
+    .sort((left, right) => depth(left.path) - depth(right.path))
 }
 
 async function readOperations(transaction: string) {
@@ -190,11 +232,26 @@ export async function applyRemoteProjectSyncDelta(options: {
     const entry = remoteEntries.get(change.path)
     return entry ? [entry] : []
   })
+  const directories = changedRemote
+    .filter((entry) => entry.type === "directory")
+    .sort((left, right) => depth(left.path) - depth(right.path))
+  const directoriesWithMetadata = metadataDirectories(
+    backups,
+    changedRemote,
+    localEntries,
+    remoteEntries,
+  )
   const total = Math.max(1, backups.length + changedRemote.length)
   let completed = 0
   if (!(await pathPresent(destination))) {
     await mkdir(destination)
     await appendOperation(transaction, { kind: "root" })
+  }
+  for (const entry of directoriesWithMetadata) {
+    signal.throwIfAborted()
+    const local = localEntries.get(entry.path)
+    if (local?.type === "directory")
+      await appendOperation(transaction, { kind: "metadata", path: entry.path, entry: local })
   }
   const backup = join(transaction, "backup")
   for (const path of backups) {
@@ -210,16 +267,11 @@ export async function applyRemoteProjectSyncDelta(options: {
     await rename(source, target)
     options.onProgress(++completed / total)
   }
-  const directories = changedRemote
-    .filter((entry) => entry.type === "directory")
-    .sort((left, right) => depth(left.path) - depth(right.path))
   for (const entry of directories) {
     signal.throwIfAborted()
     const target = safeProjectSyncTreePath(destination, entry.path)
     const local = localEntries.get(entry.path)
-    if (local?.type === "directory") {
-      await appendOperation(transaction, { kind: "metadata", path: entry.path, entry: local })
-    } else {
+    if (local?.type !== "directory") {
       await appendOperation(transaction, { kind: "install", path: entry.path })
       await mkdir(target, { recursive: true })
     }
@@ -245,7 +297,7 @@ export async function applyRemoteProjectSyncDelta(options: {
     }
     options.onProgress(++completed / total)
   }
-  for (const entry of [...directories].reverse()) {
+  for (const entry of [...directoriesWithMetadata].reverse()) {
     signal.throwIfAborted()
     await applyProjectSyncEntryMetadata(safeProjectSyncTreePath(destination, entry.path), entry)
   }

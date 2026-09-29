@@ -292,21 +292,25 @@ test("previews per-path changes and transfers only changed file contents", async
   )
 })
 
-test("rolls back a partially applied delta when synchronization is cancelled", async () => {
+test("preserves parent directory metadata after replacing a nested file", async () => {
   const root = temporaryRoot()
   const source = join(root, "source")
   const destination = join(root, "project-sync")
-  await mkdir(source)
-  writeFileSync(join(source, "one.txt"), "one before\n")
-  writeFileSync(join(source, "two.txt"), "two before\n")
+  const sourceDirectory = join(source, "src")
+  const destinationDirectory = join(destination, "src")
+  await mkdir(sourceDirectory, { recursive: true })
+  writeFileSync(join(sourceDirectory, "nested.txt"), "before\n")
+  const directoryTime = new Date("2024-01-02T03:04:05.000Z")
+  utimesSync(sourceDirectory, directoryTime, directoryTime)
   const first = await synchronizeRemoteProject({
     remote: remote(source),
     destination,
     signal: new AbortController().signal,
     commands: localCommands(source),
   })
-  writeFileSync(join(source, "one.txt"), "one after with a new size\n")
-  writeFileSync(join(source, "two.txt"), "two after with a new size\n")
+  const expectedDirectoryTime = Math.floor(statSync(sourceDirectory).mtimeMs)
+  writeFileSync(join(sourceDirectory, "nested.txt"), "after with a new size\n")
+  expect(Math.floor(statSync(sourceDirectory).mtimeMs)).toBe(expectedDirectoryTime)
   const preview = await inspectRemoteProjectSync({
     remote: remote(source),
     destination,
@@ -323,6 +327,57 @@ test("rolls back a partially applied delta when synchronization is cancelled", a
     signal: new AbortController().signal,
     commands: localCommands(source),
   })
+  expect(preview.changes.map((change) => change.path)).toEqual(["src/nested.txt"])
+  await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    preview,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(readFileSync(join(destinationDirectory, "nested.txt"), "utf8")).toBe(
+    "after with a new size\n",
+  )
+  expect(Math.floor(statSync(destinationDirectory).mtimeMs)).toBe(expectedDirectoryTime)
+})
+
+test("rolls back a partially applied delta when synchronization is cancelled", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const destination = join(root, "project-sync")
+  const sourceDirectory = join(source, "nested")
+  const destinationDirectory = join(destination, "nested")
+  await mkdir(sourceDirectory, { recursive: true })
+  writeFileSync(join(sourceDirectory, "one.txt"), "one before\n")
+  writeFileSync(join(sourceDirectory, "two.txt"), "two before\n")
+  const directoryTime = new Date("2024-02-03T04:05:06.000Z")
+  utimesSync(sourceDirectory, directoryTime, directoryTime)
+  const first = await synchronizeRemoteProject({
+    remote: remote(source),
+    destination,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  const originalDirectory = statSync(destinationDirectory)
+  writeFileSync(join(sourceDirectory, "one.txt"), "one after with a new size\n")
+  writeFileSync(join(sourceDirectory, "two.txt"), "two after with a new size\n")
+  const preview = await inspectRemoteProjectSync({
+    remote: remote(source),
+    destination,
+    mapping: {
+      profileId: "fixture",
+      sourcePath: source,
+      remotePath: first.remotePath,
+      localPath: destination,
+      remoteFingerprint: first.remoteFingerprint,
+      localFingerprint: first.localFingerprint,
+      syncedAt: 1,
+    },
+    snapshot: first.snapshot,
+    signal: new AbortController().signal,
+    commands: localCommands(source),
+  })
+  expect(preview.changes.map((change) => change.path)).toEqual(["nested/one.txt", "nested/two.txt"])
   const controller = new AbortController()
   await expect(
     synchronizeRemoteProject({
@@ -332,12 +387,15 @@ test("rolls back a partially applied delta when synchronization is cancelled", a
       signal: controller.signal,
       commands: localCommands(source),
       onProgress: (progress) => {
-        if (progress > 0.75) controller.abort(new Error("Operação cancelada."))
+        if (progress > 0.9) controller.abort(new Error("Operação cancelada."))
       },
     }),
   ).rejects.toThrow("Operação cancelada.")
-  expect(readFileSync(join(destination, "one.txt"), "utf8")).toBe("one before\n")
-  expect(readFileSync(join(destination, "two.txt"), "utf8")).toBe("two before\n")
+  expect(readFileSync(join(destinationDirectory, "one.txt"), "utf8")).toBe("one before\n")
+  expect(readFileSync(join(destinationDirectory, "two.txt"), "utf8")).toBe("two before\n")
+  const restoredDirectory = statSync(destinationDirectory)
+  expect(restoredDirectory.mode & 0o7777).toBe(originalDirectory.mode & 0o7777)
+  expect(Math.floor(restoredDirectory.mtimeMs)).toBe(Math.floor(originalDirectory.mtimeMs))
 })
 
 test("recovers an interrupted delta before the next inspection", async () => {
