@@ -1,9 +1,8 @@
 import { RGBA, StyledText, type TextChunk } from "@opentui/core"
 import { BRAND_COLOR } from "./brand"
-import { blendTextColor, type TextShimmerAnimation, textShimmerIntensity } from "./text-shimmer"
+import { type TextShimmerAnimation, textShimmerChunks } from "./text-shimmer"
 
 const brandShortcutColor = RGBA.fromHex(BRAND_COLOR)
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 export type ShortcutAnimation = TextShimmerAnimation
 
@@ -12,13 +11,7 @@ function animatedShortcutChunks(
   color: RGBA,
   animation: ShortcutAnimation,
 ): TextChunk[] {
-  const segments = [...graphemes.segment(content)].map(({ segment }) => segment)
-  const shine = RGBA.fromHex(animation.shineColor)
-  return segments.map((text, index) => ({
-    __isChunk: true,
-    text,
-    fg: blendTextColor(color, shine, textShimmerIntensity(index, segments.length, animation)),
-  }))
+  return textShimmerChunks(content, color, animation)
 }
 
 function shortcutChunks(content: string, color: RGBA, animation?: ShortcutAnimation) {

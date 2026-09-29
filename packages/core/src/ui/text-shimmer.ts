@@ -1,4 +1,4 @@
-import { RGBA } from "@opentui/core"
+import { RGBA, type TextChunk } from "@opentui/core"
 
 export type TextShimmerAnimation = {
   frame: number
@@ -29,4 +29,21 @@ export function textShimmerIntensity(
   const band = -1.5 + progress * (Math.max(0, length) + 3)
   const proximity = Math.max(0, 1 - Math.abs(position - band) / 1.75)
   return proximity * proximity * (3 - 2 * proximity) * 0.78
+}
+
+const shimmerGraphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+
+/** Applies the shared traveling highlight to every grapheme in a fixed UI label. */
+export function textShimmerChunks(
+  content: string,
+  color: RGBA,
+  animation: TextShimmerAnimation,
+): TextChunk[] {
+  const segments = [...shimmerGraphemes.segment(content)].map(({ segment }) => segment)
+  const shine = RGBA.fromHex(animation.shineColor)
+  return segments.map((text, index) => ({
+    __isChunk: true,
+    text,
+    fg: blendTextColor(color, shine, textShimmerIntensity(index, segments.length, animation)),
+  }))
 }

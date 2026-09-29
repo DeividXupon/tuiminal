@@ -61,6 +61,7 @@ const originalSettings = getUiSettings()
 const originalOnlyTab = process.env.TUIMINAL_ONLY_TAB
 const originalInitialTab = process.env.TUIMINAL_INITIAL_TAB
 const originalWorkspaceState = process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE
+const originalStaticLoaders = process.env.TUIMINAL_TEST_STATIC_LOADERS
 let tui: TestRendererSetup | undefined
 let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
 let codexSpy:
@@ -107,6 +108,8 @@ afterEach(() => {
   else process.env.TUIMINAL_INITIAL_TAB = originalInitialTab
   if (originalWorkspaceState === undefined) delete process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE
   else process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = originalWorkspaceState
+  if (originalStaticLoaders === undefined) delete process.env.TUIMINAL_TEST_STATIC_LOADERS
+  else process.env.TUIMINAL_TEST_STATIC_LOADERS = originalStaticLoaders
   rmSync(terminalWorkspaceStatePath(processes.FREE_TERMINAL_WORKING_DIRECTORY), {
     force: true,
   })
@@ -296,6 +299,15 @@ function renderable(id: string) {
   if (!target) throw new Error(`Missing ${id}`)
   return target
 }
+async function waitForRenderable(id: string) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const target = tui?.renderer.root.findDescendantById(id)
+    if (target) return target
+    await act(async () => Bun.sleep(1))
+    await tui?.renderOnce()
+  }
+  return renderable(id)
+}
 async function text(value: string) {
   await act(async () => tui?.mockInput.typeText(value))
   await key("enter")
@@ -378,6 +390,58 @@ test("Master Key A chooses an SSH alias inside the picker and launches the exact
   expect(getUiSettings().terminalRemoteCodexActiveProfileId).toBe(
     originalSettings.terminalRemoteCodexActiveProfileId,
   )
+})
+
+test.each([
+  { remote: false, label: "Local", color: COLORS.success, background: COLORS.diffAddedBg },
+  {
+    remote: true,
+    label: "Remoto",
+    color: COLORS.database,
+    background: COLORS.databaseSelectionBg,
+  },
+])("agent metadata reserves a row for the $label origin", async (expected) => {
+  process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
+  await mount(false, 120, 30)
+  await launchAgent(expected.remote)
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  const origin = await waitForRenderable(`terminal-context-origin-${sessionId}`)
+  const frame = renderable(`terminal-pane-frame-${sessionId}`)
+
+  expect(origin.screenX).toBe(frame.screenX)
+  expect(origin.screenY).toBe(frame.screenY)
+  expect(terminal.screenY).toBe(origin.screenY + 1)
+  expect(terminal.height).toBe(frame.height - 1)
+  expect(spanColor(expected.label, origin.screenY)).toEqual(RGBA.fromHex(expected.color).toInts())
+  expect(spanBackground(expected.label, origin.screenY)).toEqual(
+    RGBA.fromHex(expected.background).toInts(),
+  )
+})
+
+test("agent origin text uses the shared Terminal shimmer", async () => {
+  process.env.TUIMINAL_TEST_STATIC_LOADERS = "0"
+  await mount(false, 120, 30)
+  await launchAgent()
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("free-terminal-", "")
+  const origin = await waitForRenderable(`terminal-context-origin-${sessionId}`)
+  const background = RGBA.fromHex(COLORS.diffAddedBg).toInts().join(",")
+  const frames = new Set<string>()
+
+  for (let attempt = 0; attempt < 8 && frames.size < 2; attempt++) {
+    await act(async () => Bun.sleep(60))
+    await tui?.renderOnce()
+    frames.add(
+      (tui?.captureSpans().lines[origin.screenY]?.spans ?? [])
+        .filter((span) => span.bg.toInts().join(",") === background)
+        .map((span) => span.fg.toInts().join(","))
+        .join("|"),
+    )
+  }
+
+  expect(tui?.captureCharFrame()).toContain("Local")
+  expect(frames.size).toBeGreaterThan(1)
 })
 
 test("Master Key R offers a local destination only for the active remote Codex", async () => {
@@ -1516,7 +1580,9 @@ test("split confirmation moves an existing agent without restarting it", async (
 
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(focusedTerminal()).toBe(agent)
-  expect(shell.screenY).toBe(agent.screenY)
+  const agentMetadata = renderable(`terminal-context-${agent.id.replace("free-terminal-", "")}`)
+  expect(shell.screenY).toBe(agentMetadata.screenY)
+  expect(agent.screenY).toBe(agentMetadata.screenY + 1)
   expect(shell.width + agent.width + 1).toBe(panes.width)
   expect(agent.screenX).toBe(shell.screenX + shell.width + 1)
   expect(starts).toHaveLength(2)
@@ -1766,8 +1832,8 @@ test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (dire
   const agentFrame = renderable(`terminal-pane-frame-${sessionId}`)
   const siblingFrame = renderable(`terminal-pane-frame-${siblingId}`)
   const agentPane = agentFrame.parent!
-  if (direction === "h")
-    expect(agentTerminal.height + siblingTerminal.height + 1).toBe(panes.height)
+  const siblingPane = siblingFrame.parent!
+  if (direction === "h") expect(agentPane.height + siblingPane.height).toBe(panes.height)
   else expect(agentTerminal.width + siblingTerminal.width + 1).toBe(panes.width)
 
   await leader("d")
@@ -1801,8 +1867,7 @@ test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (dire
   expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeUndefined()
   expect(focusedTerminal()).toBe(agentTerminal)
   expect(siblingFrame.parent?.visible).toBe(true)
-  if (direction === "h")
-    expect(agentTerminal.height + siblingTerminal.height + 1).toBe(panes.height)
+  if (direction === "h") expect(agentPane.height + siblingPane.height).toBe(panes.height)
   else expect(agentTerminal.width + siblingTerminal.width + 1).toBe(panes.width)
   expect(starts).toHaveLength(2)
 })
@@ -2622,7 +2687,7 @@ test("terminals fill every available edge at all sizes without replacing the nat
   expect(starts).toHaveLength(1)
 })
 
-test("terminal context tags overlay the PTY and keep state when width becomes narrow", async () => {
+test("terminal context tags reserve a row above the PTY and keep state when width becomes narrow", async () => {
   await mount(false, 120, 30)
   repositoryContextSpy?.mockImplementation(async (directory) => ({
     directory,
@@ -2651,8 +2716,15 @@ test("terminal context tags overlay the PTY and keep state when width becomes na
   expect(tui?.renderer.root.findDescendantById(`terminal-context-state-${sessionId}`)).toBeDefined()
   expect(tui?.captureCharFrame()).toContain("project   main   Limpo")
   expect(spanColor("Limpo")).toEqual(RGBA.fromHex(COLORS.success).toInts())
+  const metadata = renderable(`terminal-context-${sessionId}`)
+  expect(metadata.screenY).toBe(panes.screenY)
+  expect(terminal.screenY).toBe(metadata.screenY + 1)
   expect(terminal.width).toBe(panes.width)
-  expect(terminal.height).toBe(panes.height)
+  expect(terminal.height).toBe(panes.height - 1)
+  expect(terminal.screenY + terminal.height).toBe(panes.screenY + panes.height)
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-context-origin-${sessionId}`),
+  ).toBeUndefined()
 
   for (const [kind, explanation] of [
     ["directory", "Pasta do projeto atual."],
@@ -2666,6 +2738,7 @@ test("terminal context tags overlay the PTY and keep state when width becomes na
       tui?.renderer.root.findDescendantById(`terminal-context-tooltip-${sessionId}`),
     ).toBeDefined()
     expect(tui?.captureCharFrame()).toContain(explanation)
+    expect(renderable(`terminal-context-tooltip-${sessionId}`).screenY).toBe(terminal.screenY)
   }
   await act(async () => tui?.mockMouse.moveTo(terminal.screenX + 1, terminal.screenY + 4))
   await tui?.renderOnce()

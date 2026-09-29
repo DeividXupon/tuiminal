@@ -3,15 +3,29 @@ import { extend } from "@opentui/react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { memo, useEffect, useRef, useState } from "react"
-import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
-import { type TerminalFocusTargetKey, terminalFocusTargetKey } from "../model/focus-selection"
-import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
-import type { TerminalSession } from "../model/sessions"
-import type { TerminalRepositoryContext } from "../model/terminal-context"
+import { terminalFocusTargetKey } from "../model/focus-selection"
 import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
+import {
+  type FreeTerminalPaneProps,
+  liveDiffContainerStyle,
+  liveDiffHeights,
+  measuresPane,
+  messageHistoryHeights,
+  paneContextActive,
+  paneContextWidth,
+  paneLiveDiffWidths,
+  remoteSetupHeights,
+  sameTerminalPane,
+  terminalContentWidth,
+} from "./free-terminal-pane-layout"
 import { LiveDiffPanel } from "./LiveDiffPanel"
 import { RemoteServerSetupPanel } from "./RemoteServerSetupPanel"
-import { TerminalContextTags } from "./TerminalContextTags"
+import {
+  TerminalPaneMetadata,
+  terminalAgentOrigin,
+  terminalMetadataVisible,
+  terminalPaneAreaHeight,
+} from "./TerminalContextTags"
 import { TerminalFocusSelection } from "./TerminalFocusSelection"
 
 extend({ "embedded-terminal": EmbeddedTerminalRenderable })
@@ -20,255 +34,10 @@ declare module "@opentui/react" {
     "embedded-terminal": typeof EmbeddedTerminalRenderable
   }
 }
-export type FreeTerminalPaneLayout = {
-  top: 0 | "50%"
-  left: 0 | "50%"
-  width: "50%" | "100%"
-  height: "50%" | "100%"
-  borderTop: boolean
-  borderLeft: boolean
-}
-type PaneProps = {
-  session: TerminalSession
-  active: boolean
-  toolActive?: boolean
-  visible: boolean
-  appearanceKey: string
-  paletteSequence: string
-  context?: TerminalRepositoryContext | undefined
-  syncStatus?: RemoteProjectSyncStatus | undefined
-  masterKey?: string
-  layout: FreeTerminalPaneLayout
-  onActivate: (id: string) => void
-  onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
-  onGone: (id: string, terminal: EmbeddedTerminalRenderable) => void
-  onInput: (id: string, data: Uint8Array) => void
-  onResize: (id: string, columns: number, rows: number) => void
-  liveDiff?:
-    | {
-        agentKey: string
-        remote?: NonNullable<TerminalSession["codex"]>["remote"]
-        manualDirectories: readonly string[]
-        stacked: boolean
-        coversTerminal: boolean
-        sharesSplitPane: boolean
-        running: boolean
-        focusRequest: number
-      }
-    | undefined
-  onCloseLiveDiff?: (id: string) => void
-  onAddLiveDiffProject?: (id: string, roots: readonly string[]) => void
-  messageHistory?:
-    | {
-        messages: readonly AgentMessageHistoryEntry[]
-        focusRequest: number
-      }
-    | undefined
-  onCloseMessageHistory?: (id: string) => void
-  onReturnMessageHistoryTerminal?: (id: string) => void
-  focusSelection?:
-    | {
-        selectedTarget: TerminalFocusTargetKey
-        onFocus: (target: TerminalFocusTargetKey) => void
-      }
-    | undefined
-}
-function liveDiffWidths(frameWidth: number, borderLeft: boolean, stacked: boolean) {
-  const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
-  if (stacked)
-    return {
-      diffWidth: innerWidth,
-      stableContentWidth: innerWidth,
-      terminalWidth: innerWidth,
-    }
-  const originalDiffWidth = Math.round(innerWidth * 0.48)
-  const minimumDiffWidth = Math.min(27, innerWidth)
-  const normalDiffWidth = Math.max(minimumDiffWidth, originalDiffWidth - 14)
-  return {
-    diffWidth: normalDiffWidth,
-    stableContentWidth: Math.max(1, normalDiffWidth - 1),
-    terminalWidth: Math.max(1, innerWidth - normalDiffWidth),
-  }
-}
-function paneLiveDiffWidths(
-  frameWidth: number,
-  borderLeft: boolean,
-  liveDiff: PaneProps["liveDiff"],
-) {
-  if (liveDiff?.coversTerminal) {
-    const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
-    return { diffWidth: innerWidth, stableContentWidth: innerWidth, terminalWidth: innerWidth }
-  }
-  return liveDiffWidths(frameWidth, borderLeft, Boolean(liveDiff?.stacked))
-}
-function terminalContentWidth(
-  liveDiff: PaneProps["liveDiff"],
-  frameWidth: number,
-  terminalWidth: number,
-) {
-  return liveDiff && !liveDiff.coversTerminal && !liveDiff.stacked && frameWidth
-    ? terminalWidth
-    : "100%"
-}
-function liveDiffContainerStyle(
-  coversTerminal: boolean,
-  frameWidth: number,
-  diffWidth: number,
-  stacked: boolean,
-  diffHeight: number | "48%" | "100%",
-) {
-  if (coversTerminal)
-    return {
-      position: "absolute" as const,
-      top: 0,
-      left: 0,
-      width: "100%" as const,
-      height: "100%" as const,
-      zIndex: 2,
-      backgroundColor: COLORS.canvas,
-    }
-  return {
-    position: "relative" as const,
-    width: frameWidth ? diffWidth : stacked ? ("100%" as const) : ("48%" as const),
-    height: diffHeight,
-  }
-}
-function liveDiffHeights(
-  frameHeight: number,
-  borderTop: boolean,
-  stacked: boolean,
-  sharesSplitPane: boolean,
-) {
-  if (!stacked) return { terminalHeight: "100%" as const, diffHeight: "100%" as const }
-  if (!frameHeight) return { terminalHeight: "52%" as const, diffHeight: "48%" as const }
-  const innerHeight = Math.max(1, frameHeight - (borderTop ? 1 : 0))
-  if (sharesSplitPane) {
-    const diffHeight = Math.max(1, Math.round(innerHeight * 0.48))
-    return { terminalHeight: Math.max(1, innerHeight - diffHeight), diffHeight }
-  }
-  const diffHeight = Math.min(
-    Math.max(1, innerHeight - 1),
-    Math.max(16, Math.round(innerHeight * 0.48)),
-  )
-  return { terminalHeight: Math.max(1, innerHeight - diffHeight), diffHeight }
-}
-function messageHistoryHeights(terminalAreaHeight: number, open: boolean, detailOpen: boolean) {
-  if (!open) return { historyHeight: "32%" as const, embeddedHeight: "100%" as const }
-  if (!terminalAreaHeight)
-    return detailOpen
-      ? { historyHeight: "50%" as const, embeddedHeight: "50%" as const }
-      : { historyHeight: "32%" as const, embeddedHeight: "68%" as const }
-  const desiredHeight = detailOpen
-    ? Math.round(terminalAreaHeight * 0.5)
-    : Math.max(6, Math.round(terminalAreaHeight * 0.3))
-  const historyHeight = Math.max(1, Math.min(desiredHeight, Math.max(1, terminalAreaHeight - 5)))
-  return {
-    historyHeight,
-    embeddedHeight: Math.max(1, terminalAreaHeight - historyHeight),
-  }
-}
-function remoteSetupHeights(frameHeight: number, open: boolean) {
-  if (!open) return { setupHeight: 0, terminalHeight: "100%" as const }
-  if (!frameHeight) return { setupHeight: "40%" as const, terminalHeight: "60%" as const }
-  const setupHeight = Math.max(6, Math.min(10, frameHeight - 5))
-  return { setupHeight, terminalHeight: Math.max(1, frameHeight - setupHeight) }
-}
-function measuresPane(
-  liveDiff: PaneProps["liveDiff"],
-  messageHistory: PaneProps["messageHistory"],
-  remoteSetup: TerminalSession["remoteSetup"],
-  context: PaneProps["context"],
-  syncStatus: PaneProps["syncStatus"],
-) {
-  return Boolean(liveDiff || messageHistory || remoteSetup || context || syncStatus)
-}
-function paneContextWidth(
-  liveDiff: PaneProps["liveDiff"],
-  frameWidth: number,
-  terminalWidth: number,
-  borderLeft: boolean,
-) {
-  return liveDiff && !liveDiff.stacked && frameWidth
-    ? terminalWidth
-    : Math.max(1, frameWidth - (borderLeft ? 1 : 0))
-}
-function paneContextActive(toolActive: boolean | undefined, visible: boolean) {
-  return Boolean(toolActive && visible)
-}
-function PaneContextOverlay({
-  sessionId,
-  context,
-  syncStatus,
-  masterKey,
-  active,
-  covered,
-  availableWidth,
-  onActivate,
-}: {
-  sessionId: string
-  context: PaneProps["context"]
-  syncStatus: PaneProps["syncStatus"]
-  masterKey: string
-  active: boolean
-  covered: boolean
-  availableWidth: number
-  onActivate: () => void
-}) {
-  if ((!context && !syncStatus) || covered) return null
-  return (
-    <TerminalContextTags
-      sessionId={sessionId}
-      context={context}
-      sync={syncStatus}
-      masterKey={masterKey}
-      active={active}
-      availableWidth={availableWidth}
-      onActivate={onActivate}
-    />
-  )
-}
-function samePane(previous: PaneProps, next: PaneProps) {
-  // Names and live agent activity belong to the sidebar; lifecycle status drives the startup loader.
-  return (
-    previous.session.id === next.session.id &&
-    previous.session.status === next.session.status &&
-    previous.active === next.active &&
-    previous.toolActive === next.toolActive &&
-    previous.visible === next.visible &&
-    previous.appearanceKey === next.appearanceKey &&
-    previous.paletteSequence === next.paletteSequence &&
-    previous.context === next.context &&
-    previous.syncStatus === next.syncStatus &&
-    previous.masterKey === next.masterKey &&
-    previous.layout.top === next.layout.top &&
-    previous.layout.left === next.layout.left &&
-    previous.layout.width === next.layout.width &&
-    previous.layout.height === next.layout.height &&
-    previous.layout.borderTop === next.layout.borderTop &&
-    previous.layout.borderLeft === next.layout.borderLeft &&
-    previous.onActivate === next.onActivate &&
-    previous.onReady === next.onReady &&
-    previous.onGone === next.onGone &&
-    previous.onInput === next.onInput &&
-    previous.onResize === next.onResize &&
-    (!previous.liveDiff || previous.session.workingDirectory === next.session.workingDirectory) &&
-    previous.liveDiff?.agentKey === next.liveDiff?.agentKey &&
-    previous.liveDiff?.manualDirectories === next.liveDiff?.manualDirectories &&
-    previous.liveDiff?.stacked === next.liveDiff?.stacked &&
-    previous.liveDiff?.coversTerminal === next.liveDiff?.coversTerminal &&
-    previous.liveDiff?.sharesSplitPane === next.liveDiff?.sharesSplitPane &&
-    previous.liveDiff?.running === next.liveDiff?.running &&
-    previous.liveDiff?.focusRequest === next.liveDiff?.focusRequest &&
-    previous.onCloseLiveDiff === next.onCloseLiveDiff &&
-    previous.onAddLiveDiffProject === next.onAddLiveDiffProject &&
-    previous.messageHistory?.messages === next.messageHistory?.messages &&
-    previous.messageHistory?.focusRequest === next.messageHistory?.focusRequest &&
-    previous.onCloseMessageHistory === next.onCloseMessageHistory &&
-    previous.onReturnMessageHistoryTerminal === next.onReturnMessageHistoryTerminal &&
-    previous.focusSelection?.selectedTarget === next.focusSelection?.selectedTarget &&
-    previous.focusSelection?.onFocus === next.focusSelection?.onFocus
-  )
-}
+
+export type { FreeTerminalPaneLayout } from "./free-terminal-pane-layout"
+
+type PaneProps = FreeTerminalPaneProps
 export const FreeTerminalPane = memo(function FreeTerminalPane({
   session,
   active,
@@ -297,6 +66,13 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   const [frameHeight, setFrameHeight] = useState(0)
   const [frameWidth, setFrameWidth] = useState(0)
   const [messageDetailOpen, setMessageDetailOpen] = useState(false)
+  const agentOrigin = terminalAgentOrigin(session)
+  const contextRowVisible = terminalMetadataVisible(
+    Boolean(liveDiff?.coversTerminal),
+    context,
+    syncStatus,
+    agentOrigin,
+  )
   const { diffWidth, stableContentWidth, terminalWidth } = paneLiveDiffWidths(
     frameWidth,
     layout.borderLeft,
@@ -309,15 +85,22 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     Boolean(liveDiff?.stacked),
     Boolean(liveDiff?.sharesSplitPane),
   )
-  const terminalAreaHeight = typeof terminalHeight === "number" ? terminalHeight : frameHeight
+  const terminalAreaHeight = terminalPaneAreaHeight(terminalHeight, frameHeight, contextRowVisible)
   const { historyHeight, embeddedHeight } = messageHistoryHeights(
     terminalAreaHeight,
     Boolean(messageHistory),
     messageDetailOpen,
   )
   const remoteSetup = session.remoteSetup
-  const measureFrame = measuresPane(liveDiff, messageHistory, remoteSetup, context, syncStatus)
-  const setupHeights = remoteSetupHeights(frameHeight, Boolean(remoteSetup))
+  const measureFrame = measuresPane(
+    liveDiff,
+    messageHistory,
+    remoteSetup,
+    context,
+    syncStatus,
+    agentOrigin,
+  )
+  const setupHeights = remoteSetupHeights(terminalAreaHeight, Boolean(remoteSetup))
   const embeddedTerminalHeight = remoteSetup ? setupHeights.terminalHeight : embeddedHeight
   const terminalFocusTarget = terminalFocusTargetKey("terminal", session.id)
   const historyFocusTarget = terminalFocusTargetKey("history", session.id)
@@ -394,6 +177,22 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
             flexDirection: "column",
           }}
         >
+          <TerminalPaneMetadata
+            sessionId={session.id}
+            context={context}
+            sync={syncStatus}
+            agentOrigin={agentOrigin}
+            masterKey={masterKey}
+            active={paneContextActive(toolActive, visible)}
+            covered={Boolean(liveDiff?.coversTerminal)}
+            availableWidth={paneContextWidth(
+              liveDiff,
+              frameWidth,
+              terminalWidth,
+              layout.borderLeft,
+            )}
+            onActivate={() => onActivate(session.id)}
+          />
           <box
             id={`terminal-focus-target-terminal-${session.id}`}
             style={{
@@ -420,21 +219,6 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               label="Iniciando agente…"
               accent={COLORS.terminal}
               background={COLORS.canvas}
-            />
-            <PaneContextOverlay
-              sessionId={session.id}
-              context={context}
-              syncStatus={syncStatus}
-              masterKey={masterKey}
-              active={paneContextActive(toolActive, visible)}
-              covered={Boolean(liveDiff?.coversTerminal)}
-              availableWidth={paneContextWidth(
-                liveDiff,
-                frameWidth,
-                terminalWidth,
-                layout.borderLeft,
-              )}
-              onActivate={() => onActivate(session.id)}
             />
             {focusSelection && (
               <TerminalFocusSelection
@@ -553,4 +337,4 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
       </box>
     </box>
   )
-}, samePane)
+}, sameTerminalPane)

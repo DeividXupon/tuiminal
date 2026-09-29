@@ -3,14 +3,18 @@
 Free Terminal is a generic PTY multiplexer for shells and arbitrary CLIs. Its
 workspace always uses compact geometry, regardless of the global framed/compact
 preference. There is no tool header, command strip, per-pane title bar, running
-counter, pager, or permanent footer. A compact overlay at the top-right of each
+counter, pager, or permanent footer. A compact one-line metadata strip above each
 visible PTY shows its project folder, Git branch and localized Clean/Changed state;
-outside a repository it shows the current folder and No Git. The overlay follows
-local and tmux working-directory changes without changing PTY geometry. Integrated
-remote Codex panes inspect their selected remote project through a bounded SSH helper;
-generic interactive SSH panes do not claim remote Git context. Hovering each tag opens
-a localized one-line explanation directly below the metadata and leaving it closes the
-tooltip. The application
+outside a repository it shows the current folder and No Git. The strip has its own
+layout row and never covers permanent terminal content. A recognized agent also shows
+a left-aligned Local or Remote tag, using distinct semantic colors and the same
+traveling text shimmer as Terminal shortcut hints; only integrated remote Codex is
+classified as Remote. The remaining metadata stays right-aligned. The strip follows
+local and tmux working-directory changes. Integrated remote Codex panes inspect their
+selected remote project through a bounded SSH helper; generic interactive SSH panes do
+not claim remote Git context. Hovering each context tag opens a localized one-line
+explanation over the PTY directly below the metadata and leaving it closes the tooltip.
+The application
 navigation stays available in a single row. The sidebar contains names and status;
 the remaining area belongs to the PTYs. The layout follows the visual hierarchy of
 [Herdr's terminal workspace](https://github.com/herdrdev/herdr/blob/d59d0603d53bb88c5320ea508a4fb9858b61af68/assets/screenshot.png):

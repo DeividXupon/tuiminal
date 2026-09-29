@@ -1,7 +1,10 @@
+import { RGBA, StyledText } from "@opentui/core"
+import type { TextProps } from "@opentui/react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton, type InlineButtonProps } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { textShimmerChunks } from "@xupon/tuiminal-core/ui/text-shimmer"
 import {
   type ComponentProps,
   createContext,
@@ -60,6 +63,21 @@ function useShortcutAnimation(shortcutColor: string | undefined) {
   )
 }
 
+function useTextAnimation(active: boolean) {
+  const frame = useContext(TerminalShortcutFrame)
+  return useMemo(
+    () =>
+      active && frame !== null
+        ? {
+            frame,
+            frameCount: TERMINAL_SHORTCUT_FRAME_COUNT,
+            shineColor: COLORS.text,
+          }
+        : undefined,
+    [active, frame],
+  )
+}
+
 type TerminalShortcutTextProps = ComponentProps<typeof ShortcutText>
 
 export function TerminalShortcutText({ shortcutColor, ...props }: TerminalShortcutTextProps) {
@@ -80,4 +98,28 @@ export function TerminalInlineButton({ shortcutColor, ...props }: InlineButtonPr
       shortcutAnimation={useShortcutAnimation(shortcutColor)}
     />
   )
+}
+
+type TerminalShimmerTextProps = Omit<TextProps, "content" | "children"> & {
+  content: string
+  color: string
+  active?: boolean
+}
+
+/** Full-label shimmer for fixed Terminal UI text; user data must not use this component. */
+export function TerminalShimmerText({
+  content,
+  color,
+  active = true,
+  ...props
+}: TerminalShimmerTextProps) {
+  const animation = useTextAnimation(active)
+  const styled = useMemo(
+    () =>
+      animation
+        ? new StyledText(textShimmerChunks(content, RGBA.fromHex(color), animation))
+        : content,
+    [animation, color, content],
+  )
+  return <text {...props} content={styled} />
 }
