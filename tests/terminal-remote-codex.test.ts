@@ -5,7 +5,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs"
@@ -17,30 +16,34 @@ import {
   type TerminalRemoteCodexProfile,
   terminalRemoteProfileValidationError,
 } from "../packages/core/src/settings/terminal"
-import { remoteServerSetupInstructions } from "../packages/feature-terminal/src/services/remote-server-setup"
-import { listSshConfigProfiles } from "../packages/feature-terminal/src/services/ssh-config"
 import { refreshRemoteCodexResumeThreads } from "../packages/feature-terminal/src/services/codex-resume"
-import { handshakeRemoteCodex } from "../packages/feature-terminal/src/services/remote-codex-handshake"
 import {
   createRemoteCodexAppServerLaunch,
   remoteCodexAppServerSshCommand,
+  remoteCodexDaemonStartSshCommand,
+  remoteCodexPreflightSshCommand,
+  remoteCodexProxySshCommand,
   remoteCodexSshTestCommand,
   remoteCodexTuiCommand,
   remoteInteractiveSshCommand,
   testRemoteCodexConnection,
 } from "../packages/feature-terminal/src/services/remote-codex-connection"
+import { handshakeRemoteCodex } from "../packages/feature-terminal/src/services/remote-codex-handshake"
 import {
   checkRemoteServerBarrier,
   checkRemoteServerReadiness,
   nextRemoteServerBarrier,
   remoteServerBarrierCheckCommand,
 } from "../packages/feature-terminal/src/services/remote-server-readiness"
+import { remoteServerSetupInstructions } from "../packages/feature-terminal/src/services/remote-server-setup"
+import { listSshConfigProfiles } from "../packages/feature-terminal/src/services/ssh-config"
 import {
   createRemoteCodexAgentCommand,
   createRemoteServerSetupCommand,
 } from "../packages/feature-terminal/src/services/terminal"
 
 const roots: string[] = []
+const proxyFixture = join(import.meta.dir, "fixtures/codex-proxy-fixture.ts")
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -213,6 +216,7 @@ test("remote readiness checks use fixed scripts without interpolating profile da
   ])
   expect(github.at(-1)).toContain("ssh -T")
   expect(codex.at(-1)).toContain("codex_command")
+  expect(codex.at(-1)).toContain("$HOME/.codex/packages/standalone/current/bin/codex")
   expect(github.at(-1)).not.toContain(target.host)
 })
 
@@ -380,26 +384,50 @@ test("remote server setup opens an interactive SSH shell without embedding a set
   expect(command.remoteSetup).toEqual({ profile: target })
 })
 
-test("remote Codex uses an owned app-server through SSH stdio", () => {
+test("remote Codex starts a persistent daemon and connects through a disposable SSH proxy", () => {
   const target = profile()
-  const ssh = remoteCodexAppServerSshCommand(target, "/srv/project with 'quote'")
+  const directory = "/srv/project with 'quote'"
+  const launch = createRemoteCodexAppServerLaunch(target, directory)
+  const proxy = remoteCodexProxySshCommand(target, directory)
+  const daemon = remoteCodexDaemonStartSshCommand(target, directory)
+  const probe = remoteCodexPreflightSshCommand(target, directory)
+  const temporaryConnection = remoteCodexAppServerSshCommand(target, directory)
 
-  expect(ssh.slice(0, -1)).toEqual([
+  expect(proxy.slice(0, -1)).toEqual([
     "ssh",
     "-T",
     "-o",
     "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "ConnectionAttempts=1",
     "-o",
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
     "oracle-vps",
   ])
-  expect(ssh.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
-  expect(ssh.at(-1)).toContain('"$codex_command" app-server --stdio < "$lease_fifo" &')
-  expect(ssh.at(-1)).toContain("mkfifo")
-  expect(ssh.at(-1)).not.toContain("app-server daemon")
-  expect(ssh.at(-1)).not.toContain("app-server proxy")
+  expect(proxy.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
+  expect(proxy.at(-1)).toContain('exec "$codex_command" app-server proxy')
+  expect(daemon.at(-1)).toContain(
+    '"$codex_command" app-server daemon start </dev/null >/dev/null 2>&1 || exit 73',
+  )
+  expect(probe.at(-1)).toContain('"$codex_command" app-server daemon --help')
+  expect(probe.at(-1)).toContain('"$codex_command" app-server proxy --help')
+  expect(probe.at(-1)).toContain("$HOME/.codex/packages/standalone/current/bin/codex")
+  expect(probe.at(-1)).toContain('"$codex_command" login status')
+  expect(launch).toEqual({ daemonStartCommand: daemon, proxyCommand: proxy })
+  expect(temporaryConnection.at(-1)).toContain(
+    "app-server daemon start </dev/null >/dev/null 2>&1 || exit 73",
+  )
+  expect(temporaryConnection.at(-1)).toContain('exec "$codex_command" app-server proxy')
+  for (const command of [daemon.at(-1), proxy.at(-1), probe.at(-1), temporaryConnection.at(-1)]) {
+    expect(command).not.toContain("daemon stop")
+    expect(command).not.toContain("mkfifo")
+    expect(command).not.toContain("heartbeat")
+    expect(command).not.toContain("watchdog")
+  }
   expect(remoteInteractiveSshCommand(target)[1]).toBe("-tt")
 
   expect(remoteCodexTuiCommand("ws://127.0.0.1:4500", "/srv/project")).toEqual([
@@ -424,8 +452,9 @@ test("remote Codex uses an owned app-server through SSH stdio", () => {
   ).toMatchObject({
     label: "Codex · oracle-vps",
     workingDirectory: "/srv/project",
-    codex: {
-      appServer: true,
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
       remote: { profile: target, workingDirectory: "/srv/project" },
     },
   })
@@ -437,32 +466,14 @@ test("generated remote stdio command completes the app-server handshake", async 
   const root = fixtureRoot()
   const codex = join(root, "codex")
   const calls = join(root, "calls")
-  const appServer = join(root, "app-server.js")
-  writeFileSync(
-    appServer,
-    [
-      'let buffered = ""',
-      'process.stdin.setEncoding("utf8")',
-      'process.stdin.on("data", (chunk) => {',
-      "  buffered += chunk",
-      '  let newline = buffered.indexOf("\\n")',
-      "  while (newline >= 0) {",
-      "    const request = JSON.parse(buffered.slice(0, newline))",
-      "    buffered = buffered.slice(newline + 1)",
-      '    if (request.method === "initialize")',
-      '      process.stdout.write(JSON.stringify({ id: request.id, result: { userAgent: "codex_cli_rs/0.158.0" } }) + "\\n")',
-      '    newline = buffered.indexOf("\\n")',
-      "  }",
-      "})",
-    ].join("\n"),
-  )
   writeFileSync(
     codex,
     [
       "#!/bin/sh",
       'printf "%s\\n" "$*" >> "$TUIMINAL_TEST_CALLS"',
       'case "$*" in',
-      '  "app-server --stdio") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_APP_SERVER" ;;',
+      '  "app-server daemon start") exit 0 ;;',
+      '  "app-server proxy") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_APP_SERVER" handshake "$TUIMINAL_TEST_RESPONSE" ;;',
       "  *) exit 1 ;;",
       "esac",
     ].join("\n"),
@@ -470,142 +481,95 @@ test("generated remote stdio command completes the app-server handshake", async 
   chmodSync(codex, 0o700)
   const command = remoteCodexAppServerSshCommand(profile(), root).at(-1)
   if (!command) throw new Error("Missing remote app-server command")
-  const environment = `HOME='${root}'; PATH='${root}:/usr/bin:/bin'; TUIMINAL_TEST_CALLS='${calls}'; TUIMINAL_TEST_RUNTIME='${process.execPath}'; TUIMINAL_TEST_APP_SERVER='${appServer}'; export HOME PATH TUIMINAL_TEST_CALLS TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER;`
+  const response = JSON.stringify({ result: { userAgent: "codex_cli_rs/0.158.0" } })
+  const environment = `HOME='${root}'; PATH='${root}:/usr/bin:/bin'; TUIMINAL_TEST_CALLS='${calls}'; TUIMINAL_TEST_RUNTIME='${process.execPath}'; TUIMINAL_TEST_APP_SERVER='${proxyFixture}'; TUIMINAL_TEST_RESPONSE='${response}'; export HOME PATH TUIMINAL_TEST_CALLS TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER TUIMINAL_TEST_RESPONSE;`
   const result = await handshakeRemoteCodex(profile(), root, new AbortController().signal, {
     remoteCommand: ["/bin/sh", "-c", `${environment} ${command}`],
     localVersionCommand: [process.execPath, "-e", 'process.stdout.write("codex-cli 0.158.0\\n")'],
     timeoutMs: 1_000,
   })
   expect(result).toMatchObject({ remoteVersion: "0.158.0" })
-  expect(readFileSync(calls, "utf8")).toBe("app-server --stdio\n")
+  expect(readFileSync(calls, "utf8")).toBe("app-server daemon start\napp-server proxy\n")
 })
 
-test("remote watchdog consumes heartbeats and retires an abandoned app-server", async () => {
+test("closing a disposable proxy leaves the persistent remote daemon running", async () => {
   const root = fixtureRoot()
-  const temporary = join(root, "tmp")
   const codex = join(root, "codex")
-  const appServer = join(root, "watchdog-app-server.js")
+  const daemon = join(root, "daemon.js")
+  const proxy = join(root, "proxy.js")
   const started = join(root, "started")
-  const stopped = join(root, "stopped")
-  const received = join(root, "received")
-  mkdirSync(temporary)
   writeFileSync(
-    appServer,
+    daemon,
     [
-      'import { appendFileSync, writeFileSync } from "node:fs"',
+      'import { writeFileSync } from "node:fs"',
       "writeFileSync(process.env.TUIMINAL_TEST_STARTED, String(process.pid))",
-      'process.on("SIGTERM", () => {',
-      '  writeFileSync(process.env.TUIMINAL_TEST_STOPPED, "term")',
-      "})",
-      'process.stdin.on("data", (chunk) => appendFileSync(process.env.TUIMINAL_TEST_RECEIVED, chunk))',
-      "process.stdin.resume()",
+      "setInterval(() => undefined, 1000)",
     ].join("\n"),
   )
+  writeFileSync(proxy, "process.stdin.resume()\n")
   writeFileSync(
     codex,
     [
       "#!/bin/sh",
       'case "$*" in',
-      '  "app-server --stdio") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_APP_SERVER" ;;',
+      '  "app-server daemon start") "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_DAEMON" & ;;',
+      '  "app-server proxy") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_PROXY" ;;',
       "  *) exit 1 ;;",
       "esac",
     ].join("\n"),
   )
   chmodSync(codex, 0o700)
-  const launch = createRemoteCodexAppServerLaunch(profile(), root, {
-    leaseId: "watchdog-test",
-    intervalSeconds: 1,
-    missedIntervals: 2,
-    terminateGraceSeconds: 1,
-  })
-  const command = launch.command.at(-1)
-  if (!command) throw new Error("Missing remote app-server command")
+  const launch = createRemoteCodexAppServerLaunch(profile(), root)
+  const daemonCommand = launch.daemonStartCommand.at(-1)
+  const proxyCommand = launch.proxyCommand.at(-1)
+  if (!daemonCommand || !proxyCommand) throw new Error("Missing remote daemon/proxy command")
   const environment = [
     `HOME='${root}'`,
-    `TMPDIR='${temporary}'`,
     `PATH='${root}:/usr/bin:/bin'`,
     `TUIMINAL_TEST_RUNTIME='${process.execPath}'`,
-    `TUIMINAL_TEST_APP_SERVER='${appServer}'`,
+    `TUIMINAL_TEST_DAEMON='${daemon}'`,
+    `TUIMINAL_TEST_PROXY='${proxy}'`,
     `TUIMINAL_TEST_STARTED='${started}'`,
-    `TUIMINAL_TEST_STOPPED='${stopped}'`,
-    `TUIMINAL_TEST_RECEIVED='${received}'`,
   ].join("; ")
-  const wrapper = Bun.spawn(
-    [
-      "/bin/sh",
-      "-c",
-      `${environment}; export HOME TMPDIR PATH TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_APP_SERVER TUIMINAL_TEST_STARTED TUIMINAL_TEST_STOPPED TUIMINAL_TEST_RECEIVED; ${command}`,
-    ],
-    {
-      stdin: "pipe",
-      stdout: "ignore",
-      stderr: "pipe",
-    },
-  )
-  const neighbor = Bun.spawn(["/bin/sh", "-c", "while :; do sleep 1; done"], {
+  const exports =
+    "export HOME PATH TUIMINAL_TEST_RUNTIME TUIMINAL_TEST_DAEMON TUIMINAL_TEST_PROXY TUIMINAL_TEST_STARTED"
+  const starter = Bun.spawn(["/bin/sh", "-c", `${environment}; ${exports}; ${daemonCommand}`], {
     stdin: "ignore",
     stdout: "ignore",
-    stderr: "ignore",
+    stderr: "pipe",
   })
+  const proxyProcess = Bun.spawn(["/bin/sh", "-c", `${environment}; ${exports}; ${proxyCommand}`], {
+    stdin: "pipe",
+    stdout: "ignore",
+    stderr: "pipe",
+  })
+  let daemonPid = 0
   try {
+    expect(await starter.exited).toBe(0)
     for (let attempt = 0; attempt < 50 && !existsSync(started); attempt += 1) await Bun.sleep(20)
     expect(existsSync(started)).toBe(true)
-    wrapper.stdin.write(`${launch.heartbeatLine}\n`)
-    wrapper.stdin.write('{"id":1,"method":"thread/list"}\n')
-    for (let attempt = 0; attempt < 50 && !existsSync(received); attempt += 1) await Bun.sleep(20)
-    expect(readFileSync(received, "utf8")).toBe('{"id":1,"method":"thread/list"}\n')
-
-    await Bun.sleep(1_100)
-    wrapper.stdin.write(`${launch.heartbeatLine}\n`)
-    await Bun.sleep(1_100)
-    expect(wrapper.exitCode).toBeNull()
-    await Promise.race([
-      wrapper.exited,
-      Bun.sleep(4_000).then(() => {
-        throw new Error("Remote watchdog did not retire its app-server")
-      }),
-    ])
-    expect(existsSync(stopped)).toBe(true)
-    expect(neighbor.exitCode).toBeNull()
-    expect(readdirSync(temporary)).toEqual([])
-    const appServerPid = Number(readFileSync(started, "utf8"))
-    expect(() => process.kill(appServerPid, 0)).toThrow()
+    daemonPid = Number(readFileSync(started, "utf8"))
+    process.kill(daemonPid, 0)
+    proxyProcess.kill("SIGTERM")
+    await proxyProcess.exited
+    process.kill(daemonPid, 0)
   } finally {
-    if (wrapper.exitCode === null) wrapper.kill("SIGKILL")
-    if (neighbor.exitCode === null) neighbor.kill("SIGTERM")
-    await wrapper.exited.catch(() => undefined)
-    await neighbor.exited.catch(() => undefined)
+    if (proxyProcess.exitCode === null) proxyProcess.kill("SIGKILL")
+    if (daemonPid) {
+      try {
+        process.kill(daemonPid, "SIGTERM")
+      } catch {
+        // The test owns this simulated daemon and it may already be gone.
+      }
+    }
+    await proxyProcess.exited.catch(() => undefined)
   }
-}, 10_000)
+})
 
-test("remote Codex refresh lists and hydrates agents through SSH stdio", async () => {
-  const root = fixtureRoot()
-  const appServer = join(root, "remote-app-server.js")
-  writeFileSync(
-    appServer,
-    [
-      'let buffered = ""',
-      'process.stdin.setEncoding("utf8")',
-      'process.stdin.on("data", (chunk) => {',
-      "  buffered += chunk",
-      '  let newline = buffered.indexOf("\\n")',
-      "  while (newline >= 0) {",
-      "    const request = JSON.parse(buffered.slice(0, newline))",
-      "    buffered = buffered.slice(newline + 1)",
-      '    if (request.method === "initialize")',
-      "      process.stdout.write(JSON.stringify({ id: request.id, result: {} }) + '\\n')",
-      '    else if (request.method === "thread/list")',
-      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ id: 'remote-1', name: 'Agente remoto', preview: 'Projeto remoto', cwd: '/srv/project', gitInfo: { branch: 'feature/remote' }, recencyAt: 10, status: { type: 'notLoaded' } }] } }) + '\\n')",
-      '    else if (request.method === "thread/turns/list")',
-      "      process.stdout.write(JSON.stringify({ id: request.id, result: { data: [{ items: [{ type: 'agentMessage', phase: 'final_answer', text: 'Concluído remotamente.' }] }] } }) + '\\n')",
-      '    newline = buffered.indexOf("\\n")',
-      "  }",
-      "})",
-    ].join("\n"),
-  )
+test("remote Codex refresh lists and hydrates agents through the raw SSH proxy", async () => {
   const controller = new AbortController()
   const threads = await refreshRemoteCodexResumeThreads(profile(), controller.signal, {
-    executable: [process.execPath, appServer],
+    executable: [process.execPath, proxyFixture, "resume", JSON.stringify({ result: {} })],
   })
 
   expect(threads).toEqual([

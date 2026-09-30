@@ -107,15 +107,19 @@ describe("Free Terminal presentation", () => {
       label: "Codex",
       displayCommand: "codex --remote",
       command: ["codex"],
-      codex: { appServer: true },
+      agentLaunch: { providerId: "codex", transport: "app-server" },
     })
     expect(createCodexAgentCommand("thread-123")).toMatchObject({
       displayCommand: "codex resume thread-123 --remote",
-      codex: { appServer: true, resumeThreadId: "thread-123" },
+      agentLaunch: {
+        providerId: "codex",
+        transport: "app-server",
+        resumeThreadId: "thread-123",
+      },
     })
     expect(createCodexAgentCommand(undefined, "/workspace/chosen")).toMatchObject({
       workingDirectory: "/workspace/chosen",
-      codex: { appServer: true },
+      agentLaunch: { providerId: "codex", transport: "app-server" },
     })
   })
   test("derives agent state from public app-server events", () => {
@@ -283,15 +287,16 @@ describe("Free Terminal presentation", () => {
     const native = session("native", { agent, backend: "native" })
     const localhost = session("localhost", {
       agent,
-      agentIntegration: "codex-app-server",
+      agentIntegration: { providerId: "codex", transport: "app-server" },
       backend: "native",
     })
     const remoteCodex = session("remote-codex", {
       agent,
-      agentIntegration: "codex-app-server",
+      agentIntegration: { providerId: "codex", transport: "app-server" },
       backend: "native",
-      codex: {
-        appServer: true,
+      agentLaunch: {
+        providerId: "codex",
+        transport: "app-server",
         remote: {
           profile: {
             id: "work",

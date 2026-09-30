@@ -1,8 +1,8 @@
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { CodexResumeThread } from "../model/codex-resume-threads"
+import type { AgentResumeThread } from "../model/agent-resume-thread"
 
-function resumeThreadPresentation(state: CodexResumeThread["state"]) {
+function resumeThreadPresentation(state: AgentResumeThread["state"]) {
   switch (state) {
     case "working":
       return {
@@ -47,7 +47,7 @@ function idleDurationLabel(updatedAt: number, now: number) {
   return `${Math.floor(hours / 24)}d`
 }
 
-function ResumeThreadState({ thread, now }: { thread: CodexResumeThread; now: number }) {
+function ResumeThreadState({ thread, now }: { thread: AgentResumeThread; now: number }) {
   const presentation = resumeThreadPresentation(thread.state)
   return (
     <text wrapMode="none" style={{ flexShrink: 0 }}>
@@ -59,7 +59,7 @@ function ResumeThreadState({ thread, now }: { thread: CodexResumeThread; now: nu
   )
 }
 
-function resumeThreadStateWidth(thread: CodexResumeThread, now: number) {
+function resumeThreadStateWidth(thread: AgentResumeThread, now: number) {
   const presentation = resumeThreadPresentation(thread.state)
   const idle = thread.state === "idle" ? ` · ${idleDurationLabel(thread.updatedAt, now)}` : ""
   return 1 + displayWidth(presentation.label) + displayWidth(idle)
@@ -74,19 +74,19 @@ export function TerminalResumeThreadRow({
   backgroundColor,
   onSelect,
 }: {
-  thread: CodexResumeThread
+  thread: AgentResumeThread
   active: boolean
   alternate: boolean
   width: number
   now: number
   backgroundColor: string
-  onSelect?: (id: string) => void
+  onSelect?: (thread: AgentResumeThread) => void
 }) {
   const presentation = resumeThreadPresentation(thread.state)
   const contentWidth = Math.max(1, width - 2)
   const railColor = active ? COLORS.terminal : alternate ? COLORS.panelRaised : COLORS.border
   const remote = Boolean(thread.remoteProfileId)
-  const origin = translateUi(remote ? "Remoto" : "Local")
+  const origin = `${thread.providerId === "opencode" ? "OpenCode" : "Codex"} · ${translateUi(remote ? "Remoto" : "Local")}`
   const summary =
     thread.preview ||
     (!thread.projectName ? thread.cwd : "") ||
@@ -102,7 +102,7 @@ export function TerminalResumeThreadRow({
   const branchWidth = branch
     ? Math.min(displayWidth(branch), Math.max(1, Math.floor(metadataWidth / 2)))
     : 0
-  const projectWidth = Math.max(1, metadataWidth - branchWidth - (branch ? 2 : 0))
+  const projectWidth = Math.max(1, metadataWidth - branchWidth - (branch ? 3 : 0))
   const stateWidth = resumeThreadStateWidth(thread, now)
   const titleAndRuleWidth = Math.max(1, contentWidth - stateWidth - 2)
   const titleWidth = Math.max(
@@ -116,7 +116,7 @@ export function TerminalResumeThreadRow({
     // biome-ignore lint/a11y/noStaticElementInteractions: row selection is also available through arrows and Enter.
     <box
       id={`terminal-resume-thread-${thread.id}`}
-      onMouseDown={() => onSelect?.(thread.id)}
+      onMouseDown={() => onSelect?.(thread)}
       style={{
         height: 3,
         flexShrink: 0,
@@ -213,7 +213,7 @@ export function TerminalAgentResponsePanel({
   thread,
   now,
 }: {
-  thread: CodexResumeThread
+  thread: AgentResumeThread
   now: number
 }) {
   const presentation = resumeThreadPresentation(thread.state)

@@ -1,6 +1,6 @@
 import { createServer } from "node:net"
 
-export async function unusedCodexLoopbackPort() {
+export async function unusedLoopbackPort(label = "o servidor local") {
   const server = createServer()
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject)
@@ -9,8 +9,12 @@ export async function unusedCodexLoopbackPort() {
   const address = server.address()
   const port = address && typeof address !== "string" ? address.port : 0
   await new Promise<void>((resolve) => server.close(() => resolve()))
-  if (!port) throw new Error("Não foi possível reservar uma porta para o Codex app-server.")
+  if (!port) throw new Error(`Não foi possível reservar uma porta para ${label}.`)
   return port
+}
+
+export function unusedCodexLoopbackPort() {
+  return unusedLoopbackPort("o Codex app-server")
 }
 
 export async function waitForCodexAppServer(

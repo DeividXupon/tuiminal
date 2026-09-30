@@ -10,9 +10,10 @@ import {
   inspectClientFrame,
   inspectUpstreamFrame,
 } from "./codex-relay-observer"
+import { resolveCodexExecutable } from "./codex-executable"
+import { CodexProxyWebSocket } from "./codex-proxy-websocket"
 import { createRemoteCodexAppServerLaunch, remoteCodexTuiCommand } from "./remote-codex-connection"
-import { startRemoteCodexHeartbeat } from "./remote-codex-heartbeat"
-import { handshakeRemoteCodex } from "./remote-codex-handshake"
+import { preflightRemoteCodex } from "./remote-codex-handshake"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
@@ -37,6 +38,7 @@ type CodexTerminalOptions = TerminalOptions & {
 }
 type StdioAppServerProcess = {
   pid: number
+  exitCode: number | null
   stdin: { write(value: string | Uint8Array): number | Promise<number>; end(): void }
   stdout: ReadableStream<Uint8Array>
   stderr: ReadableStream<Uint8Array>
@@ -124,7 +126,7 @@ async function drainStream(stream: ReadableStream<Uint8Array>) {
   }
 }
 
-function forwardStdioLine(
+function forwardProxyMessage(
   value: string,
   relay: CodexRelay,
   events: CodexAppServerEvents,
@@ -142,49 +144,13 @@ function forwardStdioLine(
   if (!internalResponse) downstream.send?.(value)
 }
 
-async function forwardStdioOutput(
+/** Bridges the daemon's WebSocket through the raw SSH proxy to the local official Codex TUI. */
+async function startCodexProxyRelay(
   process: StdioAppServerProcess,
-  relay: CodexRelay,
-  events: CodexAppServerEvents,
-  relayId: number,
-  downstream: {
-    send: ((value: string) => void) | null
-    close: ((code?: number, reason?: string) => void) | null
-  },
-) {
-  const reader = process.stdout.getReader()
-  const decoder = new TextDecoder()
-  let buffered = ""
-  try {
-    while (!relay.closing) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      buffered += decoder.decode(chunk.value, { stream: true })
-      if (buffered.length > 16 * 1024 * 1024)
-        throw new Error("A resposta remota do Codex excedeu o limite permitido.")
-      const lines = buffered.split("\n")
-      buffered = lines.pop() ?? ""
-      for (const line of lines)
-        forwardStdioLine(line.replace(/\r$/, ""), relay, events, relayId, downstream)
-    }
-  } catch (error) {
-    if (!relay.closing) events.onError(error instanceof Error ? error.message : String(error))
-  } finally {
-    reader.releaseLock()
-    if (!relay.closing) {
-      events.onError("Codex app-server remoto desconectou.")
-      downstream.close?.(1011, "Remote Codex app-server disconnected")
-    }
-  }
-}
-
-/** Bridges the remote JSONL stdio transport to the local official Codex TUI. */
-function startCodexStdioRelay(
-  process: StdioAppServerProcess,
-  sendUpstream: (value: string) => void,
   events: CodexAppServerEvents,
   remoteProfileId: string,
   remoteProfileName: string,
+  signal: AbortSignal,
 ) {
   relaySequence += 1
   const relayId = relaySequence
@@ -193,7 +159,23 @@ function startCodexStdioRelay(
     close: ((code?: number, reason?: string) => void) | null
   } = { send: null, close: null }
   const relay = createCodexRelay({ id: remoteProfileId, name: remoteProfileName })
-  relay.sendUpstream = sendUpstream
+  const disconnected = (message: string) => {
+    if (relay.closing) return
+    events.onError(message)
+    downstream.close?.(1011, "Remote Codex app-server disconnected")
+  }
+  const transport = await CodexProxyWebSocket.connect(process, signal, {
+    onMessage(value) {
+      forwardProxyMessage(value, relay, events, relayId, downstream)
+    },
+    onError(error) {
+      disconnected(error.message)
+    },
+    onClose() {
+      disconnected("Codex app-server remoto desconectou.")
+    },
+  })
+  relay.sendUpstream = (value) => void transport.send(value)
   const server = Bun.serve<CodexRelay>({
     hostname: "127.0.0.1",
     port: 0,
@@ -219,12 +201,12 @@ function startCodexStdioRelay(
     },
   })
   void drainStream(process.stderr).catch(() => undefined)
-  void forwardStdioOutput(process, relay, events, relayId, downstream)
   return {
     url: `ws://127.0.0.1:${server.port}`,
     stop() {
       relay.closing = true
       relay.sendUpstream = null
+      transport.stop()
       downstream.close?.()
       server.stop(true)
       downstream.send = null
@@ -241,32 +223,35 @@ async function startRemoteCodexAppServerTerminal(
   signal.throwIfAborted()
   const { remote, resumeThreadId, cwd: _localCwd, ...terminalOptions } = options
   void _localCwd
-  await handshakeRemoteCodex(remote.profile, remote.workingDirectory, signal)
+  await preflightRemoteCodex(remote.profile, remote.workingDirectory, signal)
   signal.throwIfAborted()
   const launch = createRemoteCodexAppServerLaunch(remote.profile, remote.workingDirectory)
-  const server = Bun.spawn(launch.command, {
+  const server = Bun.spawn(launch.proxyCommand, {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   }) as unknown as StdioAppServerProcess
-  const heartbeat = startRemoteCodexHeartbeat(server.stdin, launch.heartbeatLine, () =>
-    events.onError("Não foi possível enviar dados ao Codex remoto."),
-  )
-  const relay = startCodexStdioRelay(
-    server,
-    heartbeat.write,
-    events,
-    remote.profile.id,
-    remote.profile.name,
-  )
+  let relay: Awaited<ReturnType<typeof startCodexProxyRelay>>
+  try {
+    relay = await startCodexProxyRelay(
+      server,
+      events,
+      remote.profile.id,
+      remote.profile.name,
+      signal,
+    )
+  } catch (error) {
+    if (server.exitCode === null) server.kill()
+    await server.exited
+    throw error
+  }
   let stopping: Promise<void> | null = null
   const stopServer = () => {
     if (stopping) return stopping
     stopping = (async () => {
       relay.stop()
-      heartbeat.stop()
       try {
-        server.kill()
+        if (server.exitCode === null) server.kill()
         await server.exited
       } finally {
         unregister()
@@ -278,7 +263,12 @@ async function startRemoteCodexAppServerTerminal(
   let terminal: FreeTerminalProcessHandle | null = null
   try {
     signal.throwIfAborted()
-    const command = remoteCodexTuiCommand(relay.url, remote.workingDirectory, resumeThreadId)
+    const command = remoteCodexTuiCommand(
+      relay.url,
+      remote.workingDirectory,
+      resumeThreadId,
+      resolveCodexExecutable(),
+    )
     const ownedTerminal = startFreeTerminalProcess(command, {
       ...terminalOptions,
       onExit(result) {
@@ -320,7 +310,8 @@ export async function startCodexAppServerTerminal(
   const port = await unusedCodexLoopbackPort()
   signal.throwIfAborted()
   const url = `ws://127.0.0.1:${port}`
-  const server = Bun.spawn(["codex", "app-server", "--listen", url], {
+  const codexExecutable = resolveCodexExecutable()
+  const server = Bun.spawn([codexExecutable, "app-server", "--listen", url], {
     ...(options.cwd ? { cwd: options.cwd } : {}),
     stdin: "ignore",
     stdout: "ignore",
@@ -348,8 +339,8 @@ export async function startCodexAppServerTerminal(
     relay = startCodexAppServerRelay(url, events)
     signal.throwIfAborted()
     const terminalCommand = options.resumeThreadId
-      ? ["codex", "resume", options.resumeThreadId, "--remote", relay.url]
-      : ["codex", "--remote", relay.url]
+      ? [codexExecutable, "resume", options.resumeThreadId, "--remote", relay.url]
+      : [codexExecutable, "--remote", relay.url]
     const { resumeThreadId: _resumeThreadId, ...terminalOptions } = options
     void _resumeThreadId
     const ownedTerminal = startFreeTerminalProcess(terminalCommand, {

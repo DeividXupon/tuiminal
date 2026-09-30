@@ -19,14 +19,14 @@ export type TerminalAction = {
 export const TERMINAL_ACTIONS = [
   {
     key: "a",
-    label: "[A] Novo Codex",
-    description: "Inicia o Codex local ou remoto em uma nova seção.",
+    label: "[A] Novo agente",
+    description: "Escolhe um agente e inicia uma nova seção.",
     tags: ["agent"],
   },
   {
     key: "s",
     label: "[S] Mensagens enviadas",
-    description: "Mostra o histórico público da conversa Codex.",
+    description: "Mostra o histórico público do agente integrado.",
     tags: ["feature", "agent"],
   },
   {

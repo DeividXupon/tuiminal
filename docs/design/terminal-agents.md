@@ -120,8 +120,8 @@ agents under `Local • term`, then integrated app-server sessions under
 `Local • localhost`. These names describe the current transports without claiming a
 real remote runtime. Keyboard navigation and Master Key numbering follow that visual
 order. Compact layouts omit the subgroup headings while retaining the same order.
-Integrated Codex sessions add a third line with thinking, code, command,
-user-visible text, and tool indicators; only the current public app-server activity
+Integrated Codex and OpenCode sessions add a third line with thinking, code, command,
+user-visible text, and tool indicators; only the current public provider activity
 pulses.
 Always use the broadly supported `...`, `{}`, `>_`, `txt`, and `●` markers so the
 activity line does not depend on a patched font. Distribute the five markers across
@@ -134,9 +134,9 @@ The agent list has its own bounded scroll area and uses single-line rows on very
 short layouts so running agents remain accessible. Compact rows prefer the task
 title to the agent label when one is available, retaining the status marker.
 Sections stay in their chosen folders as agents start, change state and stop;
-there is no automatic AI folder. Working markers and integrated Codex activity
+there is no automatic AI folder. Working markers and integrated-agent activity
 indicators animate in Agents using one shared 100 ms timer. The timer stops when no
-running agent is working and no integrated Codex session remains, when the Terminal
+running agent is working and no integrated session remains, when the Terminal
 tool is inactive, and on unmount. Animation updates only the
 sidebar and preserves scrolling, focus and terminal instances. Color supplements
 the marker rather than being the only signal.
@@ -155,24 +155,73 @@ informational notification that running the agent through Tuiminal enables more
 features. This does not change the borrowed process, send it input, or imply that
 Tuiminal can access its reasoning.
 
+## Integrated providers
+
+Integrated agents use a closed, typed first-party provider registry; it is not a
+plugin API or a user-configurable command manifest. A provider declares its process
+profile, availability and optional capabilities for local or remote launch, resume,
+structured activity, message history and project synchronization. UI actions consult
+those capabilities rather than assuming that every integrated agent matches Codex.
+Codex and OpenCode are available providers. Claude Code remains a visible, disabled
+coming-soon choice and cannot start a process. Screen observation remains independent
+from this registry and continues to recognize supported agents launched elsewhere.
+
 ## Integrated Codex sessions
 
-Without an active remote profile, `[A] New Codex`, and the empty workspace's matching
-action, start one owned `codex app-server` on localhost and launch the official Codex
-terminal UI with `codex --remote` in a native PTY. With an active profile, the same
-action first asks Local or Remote and collects that side's working directory before
+`[A] New agent`, and the empty workspace's matching action, open the provider selector.
+Choosing Codex and a local project starts one owned `codex app-server` on localhost and
+launches the official Codex terminal UI with `codex --remote` in a native PTY. With an
+active profile, the project flow asks Local or Remote and collects that side's working directory before
 launching. The user composes tasks and handles approvals in Codex's own interface. A
 localhost WebSocket relay passes the CLI protocol through unchanged while Tuiminal
 reads public thread, turn, and item events from the server stream. It never submits
 agent input or approvals, and never reads private reasoning. The app-server, relay,
 and PTY are stopped together when a local session closes. A remote session instead
 first probes the official shared Codex daemon on its SSH host. The bounded probe must
-validate the directory, receive a valid `initialize` response, and confirm the local
-CLI is protocol-compatible with the responding daemon before any TUI is opened. The
-probe closes only its proxy, then the session reconnects through `codex app-server
-proxy`; closing the pane stops the local PTY, relay, and SSH proxy without stopping
-that daemon or its active turns. A later remote resume reconnects to the same shared
-daemon and passes the tagged remote cwd explicitly.
+validate both CLI versions, the directory, the remote account, `app-server daemon` and
+`app-server proxy` capabilities, daemon startup and a valid `initialize` response
+before any TUI is opened. Compatibility requires matching major/minor for 0.x and
+matching major for stable releases; missing or invalid versions fail closed. The
+remote installation owns the daemon started or reused with `codex app-server daemon
+start`. The probe closes only its proxy, then the session reconnects through `codex
+app-server proxy`; closing the pane stops the local PTY, relay, and SSH proxy without
+stopping that daemon or its active turns. A later remote resume reconnects to the same
+shared daemon and passes the tagged remote cwd explicitly.
+
+A capability or version failure opens a localized modal instead of the TUI. `[Esc]`
+returns to the preserved new-launch or resume selection. `[Enter]` opens local `~/`
+and remote SSH `~/` terminals in one split with detected versions, `codex update` and
+the official POSIX installer alternative; it never types or runs a command. Revalidate
+keeps that guide open on failure and, on success, closes only its two terminals before
+retrying the exact original profile, cwd and optional thread. This guards an
+experimental, version-dependent app-server protocol.
+
+## Integrated OpenCode sessions
+
+Choosing OpenCode and a local project starts one owned `opencode serve` on loopback,
+negotiates the public server generation, then launches the official TUI in a native PTY.
+OpenCode v2 uses `opencode --server <url> <cwd>`; legacy v1 uses
+`opencode attach <url> --dir <cwd>`.
+For a remote project, the server runs on remote loopback through an owned SSH process
+with local port forwarding; the same official local TUI attaches through that tunnel.
+Neither path exposes a public listener. The PTY, observer, server, and SSH tunnel are
+owned as one session and stop together when its pane closes.
+
+Tuiminal observes only OpenCode's public HTTP and SSE surfaces. The event stream
+provides session identity, title, state, permission waits, and structured activity;
+bounded session, message, status, and per-message diff requests hydrate the current
+conversation. Input and approvals remain in the official TUI. Reasoning part text is
+not displayed, while public user prompts, attachments, model identity, final responses,
+tool activity, and file changes feed the same provider-neutral history model used by
+the Terminal UI. The observer never scrapes rendered terminal output.
+
+The Master Key resume list is loaded from the official JSON session list, with the
+public server API as a fallback and message hydration for the latest response. Entries
+retain OpenCode as their provider plus their exact local or SSH source, directory, and
+session ID. Selecting one starts the negotiated official TUI with `--session`; it never falls
+back to Codex or to the other machine. A successful completed prompt is eligible for
+automatic project sync only after public hydration confirms completion. Active,
+failed, interrupted, and permission-pending sessions do not trigger it.
 
 Master Key then `[S]` opens an in-memory history of messages sent by the user in
 the selected thread. The relay combines text inputs on the public outbound requests
@@ -210,9 +259,16 @@ on restart or close until the thread is hydrated again. Screen-observed native,
 tmux, and external agents do not offer this structured history.
 
 For integrated Codex sessions, `turn/completed` determines completion and public
-item events determine the visible activity. Silence does not complete a task.
+item events determine visible activity. For OpenCode, public session, message, tool,
+permission, question, and status events provide the corresponding state, followed by
+bounded hydration. Silence does not complete a task for either provider.
 Starting, resuming, or forking a thread hydrates its task title from the returned
-public thread name; later `thread/name/updated` events replace it.
+public thread name; later `thread/name/updated` events replace it. Resume also
+rehydrates the public message history plus active/completed/failed and
+waiting-for-approval state before live events continue. When automatic project sync is
+enabled, a successfully completed turn found during that hydration schedules one
+coalesced catch-up sync. Active, failed, interrupted or approval-pending hydration does
+not sync and does not create a new incremental-sync cursor.
 Unseen completion persists until viewed or a later turn starts. Native and tmux
 agents without an authoritative integration continue to use the bounded screen
 observation rules above.

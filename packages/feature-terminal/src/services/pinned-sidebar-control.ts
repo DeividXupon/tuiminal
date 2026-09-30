@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createConnection, createServer } from "node:net"
 import { isTerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
+import { isAgentProviderId } from "../model/agent-provider"
 import type { PinnedTerminalSelection, PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
 
 const MAX_MESSAGE_BYTES = 4096
@@ -27,6 +28,7 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
     paneId?: string
     sessionId?: string
     resumeThreadId?: string
+    providerId?: string
     folderId?: string
     focusTarget?: string
     action?: string
@@ -36,7 +38,8 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
   return Boolean(
     (target.socket?.startsWith("/") && /^%\d+$/.test(target.paneId ?? "")) ||
       validId(target.sessionId) ||
-      validId(target.resumeThreadId) ||
+      (validId(target.resumeThreadId) &&
+        (target.providerId === undefined || isAgentProviderId(target.providerId))) ||
       validId(target.folderId) ||
       (validId(target.focusTarget) &&
         /^(?:sidebar|terminal|history|live-diff):/.test(target.focusTarget ?? "")) ||

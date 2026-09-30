@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { createHash } from "node:crypto"
 import {
   codexAppServerUserMessage,
   codexAppServerUserMessageHistory,
@@ -6,45 +7,91 @@ import {
   codexResumeThreads,
   startCodexAppServerRelay,
 } from "../packages/feature-terminal/src/services/codex-app-server"
-import { startRemoteCodexHeartbeat } from "../packages/feature-terminal/src/services/remote-codex-heartbeat"
+import {
+  type CodexAppServerEvents,
+  createCodexRelay,
+  inspectClientFrame,
+  inspectUpstreamFrame,
+} from "../packages/feature-terminal/src/services/codex-relay-observer"
+import {
+  codexProxyClientFrame,
+  CodexProxyFrameDecoder,
+  CodexProxyWebSocket,
+} from "../packages/feature-terminal/src/services/codex-proxy-websocket"
+import { resumeListFrame } from "../packages/feature-terminal/src/services/codex-resume"
 
 type MockSocket = { send: (data: string) => unknown }
 
-test("remote heartbeat serializes protocol frames and stops without late writes", async () => {
-  const writes: string[] = []
-  const firstWrite = Promise.withResolvers<number>()
-  let ended = false
-  let errors = 0
-  const heartbeat = startRemoteCodexHeartbeat(
-    {
-      write(value) {
-        writes.push(String(value))
-        if (writes.length === 1) return firstWrite.promise
-        return String(value).length
-      },
-      end() {
-        ended = true
-      },
-    },
-    "heartbeat",
-    () => {
-      errors += 1
-    },
-    { intervalMs: 5 },
-  )
-  heartbeat.write('{"id":1}')
-  await Bun.sleep(15)
-  expect(writes).toEqual(["heartbeat\n"])
+test("resume lists CLI, VS Code, and integrated app-server threads", () => {
+  expect(JSON.parse(resumeListFrame("resume-list"))).toMatchObject({
+    method: "thread/list",
+    params: { sourceKinds: ["cli", "vscode", "appServer"] },
+  })
+})
 
-  firstWrite.resolve("heartbeat\n".length)
-  for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) await Bun.sleep(5)
-  expect(writes.slice(0, 2)).toEqual(["heartbeat\n", '{"id":1}\n'])
-  heartbeat.stop()
-  const stoppedAt = writes.length
-  await Bun.sleep(20)
-  expect(writes).toHaveLength(stoppedAt)
-  expect(ended).toBe(true)
-  expect(errors).toBe(0)
+test("remote proxy uses masked WebSocket frames instead of JSONL", () => {
+  const message = JSON.stringify({ id: 1, method: "initialize", padding: "x".repeat(256) })
+  const frame = codexProxyClientFrame(message, 1, new Uint8Array([1, 2, 3, 4]))
+  expect(frame[0]).toBe(0x81)
+  expect((frame[1] ?? 0) & 0x80).toBe(0x80)
+  expect(new TextDecoder().decode(frame)).not.toContain(`${message}\n`)
+
+  const decoder = new CodexProxyFrameDecoder()
+  expect(decoder.push(frame.subarray(0, 3))).toEqual([])
+  const decoded = decoder.push(frame.subarray(3))
+  expect(decoded).toHaveLength(1)
+  expect(decoded[0]?.opcode).toBe(1)
+  expect(new TextDecoder().decode(decoded[0]?.payload)).toBe(message)
+})
+
+test("remote proxy performs HTTP Upgrade before exchanging Codex messages", async () => {
+  let output!: ReadableStreamDefaultController<Uint8Array>
+  const requests: Record<string, unknown>[] = []
+  const decoder = new CodexProxyFrameDecoder()
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      output = controller
+    },
+  })
+  const process = {
+    stdout,
+    stdin: {
+      write(value: string | Uint8Array) {
+        if (typeof value === "string") {
+          const key = value.match(/^Sec-WebSocket-Key:\s*(.+)$/imu)?.[1]?.trim()
+          if (!key) throw new Error("Missing test WebSocket key")
+          const accept = createHash("sha1")
+            .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+            .digest("base64")
+          output.enqueue(
+            new TextEncoder().encode(
+              `HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+            ),
+          )
+          return value.length
+        }
+        for (const frame of decoder.push(value)) {
+          const request = JSON.parse(new TextDecoder().decode(frame.payload))
+          requests.push(request)
+          const response = new TextEncoder().encode(
+            JSON.stringify({ id: request.id, result: { userAgent: "codex_cli_rs/0.159.2" } }),
+          )
+          output.enqueue(Uint8Array.of(0x81, response.byteLength, ...response))
+        }
+        return value.byteLength
+      },
+      end() {},
+    },
+  }
+  const signal = new AbortController().signal
+  const transport = await CodexProxyWebSocket.connect(process, signal)
+  await transport.send(JSON.stringify({ id: "initialize-1", method: "initialize" }))
+  expect(JSON.parse(await transport.nextMessage(signal))).toMatchObject({
+    id: "initialize-1",
+    result: { userAgent: "codex_cli_rs/0.159.2" },
+  })
+  expect(requests).toEqual([{ id: "initialize-1", method: "initialize" }])
+  transport.stop()
 })
 
 function replyToResumeListRequest(
@@ -223,6 +270,51 @@ test("extracts the latest public agent response for the /resume picker", () => {
   ).toBe("Login fixed with tests")
 })
 
+test("rehydrates a resumed thread that is waiting for approval as blocked", () => {
+  const hydrated: Record<string, unknown>[] = []
+  const relay = createCodexRelay()
+  relay.sendUpstream = () => undefined
+  const events: CodexAppServerEvents = {
+    onActivity() {},
+    onState() {},
+    onTitle() {},
+    onUserMessage() {},
+    onUserMessageHistory() {},
+    onHydrated: (thread) => hydrated.push(thread),
+    onError() {},
+  }
+  inspectClientFrame(
+    JSON.stringify({ id: 7, method: "thread/resume", params: { threadId: "thread-blocked" } }),
+    relay,
+    events,
+    1,
+  )
+  inspectUpstreamFrame(
+    JSON.stringify({
+      id: 7,
+      result: {
+        thread: {
+          id: "thread-blocked",
+          status: { type: "active", activeFlags: ["waitingOnApproval"] },
+          turns: [{ id: "turn-active", status: "inProgress", startedAt: 10, items: [] }],
+        },
+        initialTurnsPage: null,
+      },
+    }),
+    relay,
+    events,
+    1,
+  )
+  expect(hydrated).toEqual([
+    {
+      threadId: "thread-blocked",
+      state: "blocked",
+      latestTurnStatus: "inProgress",
+      waitingOnApproval: true,
+    },
+  ])
+})
+
 test("extracts previous user messages from public thread history", () => {
   const [message] = codexAppServerUserMessageHistory({
     thread: {
@@ -318,6 +410,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
   const historicalMessageIds: string[][] = []
   const historicalMessageDetails: Array<Record<string, unknown>> = []
   const historicalReplacements: boolean[] = []
+  const hydrated: Record<string, unknown>[] = []
   const errors: string[] = []
   let upstreamClosed = false
   const appServer = Bun.serve({
@@ -345,10 +438,13 @@ test("Codex TUI frames and approvals pass through while public activity is obser
                 thread: {
                   id: "thread-1",
                   name: "Existing login task",
+                  status: { type: "notLoaded" },
                   turns: [
                     {
                       id: "turn-old",
                       startedAt: 1_700_000_000,
+                      completedAt: 1_700_000_010,
+                      status: "completed",
                       items: [
                         {
                           type: "userMessage",
@@ -491,6 +587,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       historicalMessageDetails.push(...messages)
       historicalReplacements.push(replace)
     },
+    onHydrated: (thread) => hydrated.push(thread),
     onError: (message) => errors.push(message),
   })
   const client = new WebSocket(relay.url)
@@ -592,6 +689,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
         limit: 6,
         sortKey: "recency_at",
         sortDirection: "desc",
+        sourceKinds: ["cli", "vscode", "appServer"],
       },
     })
     expect(internalResumeRequests[0]?.params).not.toHaveProperty("cwd")
@@ -671,6 +769,14 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       serviceTier: "fast",
     })
     expect(historicalReplacements.filter(Boolean)).toHaveLength(1)
+    expect(hydrated).toEqual([
+      {
+        threadId: "thread-1",
+        state: "done",
+        latestTurnStatus: "completed",
+        waitingOnApproval: false,
+      },
+    ])
     expect(activities).toContain("running")
     expect(states).toContain("blocked")
     expect(states.at(-1)).toBe("done")

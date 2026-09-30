@@ -24,7 +24,8 @@ export function RemoteProjectSyncDialog({
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
-  const width = Math.max(1, Math.min(78, dimensions.width - 2))
+  const width = Math.max(1, Math.min(68, dimensions.width - 6))
+  const height = Math.max(1, Math.min(10, dimensions.height - 4))
   useEffect(() => dialog.current?.focus(), [])
   useKeyboard((key) => {
     if (key.name === "escape") {
@@ -40,40 +41,59 @@ export function RemoteProjectSyncDialog({
       dialogRef={dialog}
       id="terminal-project-sync-confirm"
       width={width}
-      height={Math.max(1, Math.min(9, dimensions.height - 2))}
+      height={height}
       borderColor={kind === "replace" ? COLORS.warning : COLORS.terminal}
       zIndex={830}
       onBackdropPress={onClose}
     >
-      <text
-        content={`◆ ${translateUi(kind === "replace" ? "SUBSTITUIR CÓPIA LOCAL?" : "SINCRONIZAR PROJETO REMOTO?")}`}
+      <box style={{ height: 1, flexShrink: 0, backgroundColor: COLORS.panelRaised }}>
+        <text
+          content={`◆ ${translateUi(kind === "replace" ? "SUBSTITUIR CÓPIA LOCAL?" : "SINCRONIZAR PROJETO REMOTO?")}`}
+          style={{
+            height: 1,
+            flexShrink: 0,
+            fg: kind === "replace" ? COLORS.warning : COLORS.terminal,
+          }}
+        />
+      </box>
+      <box style={{ flexGrow: 1, minHeight: 3 }}>
+        <text
+          content={translateUi(
+            kind === "replace"
+              ? "A cópia local possui alterações. O remoto substituirá todo o conteúdo local."
+              : "O projeto remoto será copiado integralmente para esta pasta:",
+          )}
+          wrapMode="word"
+          style={{ height: 2, flexShrink: 0, fg: COLORS.text }}
+        />
+        <text
+          content={`› ${truncateDisplay(localPath, Math.max(1, width - 6))}`}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+        />
+      </box>
+      <box
         style={{
           height: 1,
           flexShrink: 0,
-          fg: kind === "replace" ? COLORS.warning : COLORS.terminal,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          backgroundColor: COLORS.panelRaised,
         }}
-      />
-      <text
-        content={translateUi(
-          kind === "replace"
-            ? "A cópia local possui alterações. O remoto substituirá todo o conteúdo local."
-            : "O projeto remoto será copiado integralmente para esta pasta:",
-        )}
-        wrapMode="word"
-        style={{ height: 2, flexShrink: 0, fg: COLORS.text }}
-      />
-      <text
-        content={truncateDisplay(localPath, Math.max(1, width - 4))}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
-      />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+      >
         <TerminalInlineButton
+          id="terminal-project-sync-confirm-action"
           compact
+          accent={kind === "replace" ? COLORS.warning : COLORS.terminal}
           label={kind === "replace" ? "[Enter] Substituir" : "[Enter] Sincronizar"}
           onPress={onConfirm}
         />
-        <TerminalInlineButton compact label="[Esc] Cancelar" onPress={onClose} />
+        <TerminalInlineButton
+          id="terminal-project-sync-cancel-confirm"
+          compact
+          label="[Esc] Cancelar"
+          onPress={onClose}
+        />
       </box>
     </ModalSurface>
   )

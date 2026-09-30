@@ -11,22 +11,24 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useAgentDetection } from "./hooks/use-agent-detection"
 import { useAgentNotifications } from "./hooks/use-agent-notifications"
+import { useAgentResumeThreads } from "./hooks/use-agent-resume-threads"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
-import { useCodexResumeThreads } from "./hooks/use-codex-resume-threads"
 import { useExternalTerminals } from "./hooks/use-external-terminals"
 import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
+import { useWorkspaceRemoteCodexCompatibilityFlow } from "./hooks/use-remote-codex-compatibility-flow"
 import { useRemoteProjectAutoSync } from "./hooks/use-remote-project-auto-sync"
 import { useRemoteProjectSync } from "./hooks/use-remote-project-sync"
 import { useTerminalContexts } from "./hooks/use-terminal-contexts"
 import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
+import { useTerminalWorkspaceFocusTargets } from "./hooks/use-terminal-workspace-focus-targets"
 import {
   parseTerminalFocusTargetKey,
   TERMINAL_SIDEBAR_FOCUS_TARGET,
   type TerminalFocusTargetKey,
-  terminalFocusTargetKey,
 } from "./model/focus-selection"
+import type { AgentResumeThread } from "./model/agent-resume-thread"
 import {
   clearTerminalSidebar,
   publishTerminalSidebar,
@@ -41,6 +43,7 @@ import {
 } from "./model/pinned-sidebar"
 import type { RemoteProjectSyncReview } from "./model/remote-project-sync"
 import {
+  agentSessionHasCapability,
   cleanTerminalName,
   DEFAULT_FOLDER,
   DEFAULT_FOLDER_NAME,
@@ -58,13 +61,11 @@ import {
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
 import {
-  liveDiffCoversActiveSplit,
   type MessageHistoryTarget,
-  messageHistoryForSession,
   type SplitRequest,
 } from "./rendering/terminal-workspace-presentation"
 import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
-import { resolveCodexResumeCommand } from "./services/codex-resume-command"
+import { resolveAgentResumeCommand } from "./services/agent-resume-command"
 import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import {
@@ -89,6 +90,7 @@ import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
 import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
+import { RemoteCodexCompatibilityPrompt } from "./ui/RemoteCodexCompatibilityPrompt"
 import { RemoteProjectSyncFlow, type RemoteProjectSyncFlowState } from "./ui/RemoteProjectSyncFlow"
 import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
@@ -198,7 +200,7 @@ export function FreeTerminal({
   const sidebarOwner = useRef({})
   const activateFocusTargetRef = useRef<(target: TerminalFocusTargetKey) => void>(() => undefined)
   const runActionRef = useRef<(key: string) => void>(() => undefined)
-  const resumeCodexThreadRef = useRef<(threadId: string) => void>(() => undefined)
+  const resumeAgentThreadRef = useRef<(thread: AgentResumeThread) => void>(() => undefined)
   const handledTargetRevision = useRef(0)
   const handledRemoteSetupRequest = useRef(0)
   const sidebarPinned = useSyncExternalStore(
@@ -264,45 +266,16 @@ export function FreeTerminal({
       ),
     [activeSession?.id, activeSession?.sectionId, sessions],
   )
-  const focusTargets = useMemo(() => {
-    const targets: TerminalFocusTargetKey[] = [TERMINAL_SIDEBAR_FOCUS_TARGET]
-    if (!activeSession) return targets
-    const activeSectionSessions = sessions.filter(
-      (session) => session.sectionId === activeSession.sectionId,
-    )
-    const liveDiffCoversTerminal = liveDiffCoversActiveSplit(
-      activeSectionSessions,
-      dimensions.width,
-      dimensions.height,
-      sidebarWidth,
-    )
-    for (const session of sessions) {
-      if (session.sectionId !== activeSession.sectionId) continue
-      const liveDiffTarget = liveDiffTargets.get(session.id)
-      const liveDiffVisible =
-        liveDiffTarget?.startedAt === session.startedAt &&
-        (!session.agent || liveDiffTarget.agentKey === session.agent.key)
-      const liveDiffCoversSession = liveDiffCoversTerminal && liveDiffVisible
-      if (!liveDiffCoversSession) targets.push(terminalFocusTargetKey("terminal", session.id))
-      if (session.remoteSetup) targets.push(terminalFocusTargetKey("setup", session.id))
-      if (
-        !liveDiffCoversSession &&
-        messageHistoryForSession(session, messageHistoryTargets.get(session.id), agentMessages)
-      )
-        targets.push(terminalFocusTargetKey("history", session.id))
-      if (liveDiffVisible) targets.push(terminalFocusTargetKey("live-diff", session.id))
-    }
-    return targets
-  }, [
+  const focusTargets = useTerminalWorkspaceFocusTargets({
+    sessions,
     activeSession,
-    agentMessages,
-    dimensions.height,
-    dimensions.width,
     liveDiffTargets,
     messageHistoryTargets,
-    sessions,
+    messages: agentMessages,
+    availableWidth: dimensions.width,
+    availableHeight: dimensions.height,
     sidebarWidth,
-  ])
+  })
   const virtualFocusTargets = useMemo(
     () =>
       tmuxHostSidebar
@@ -363,7 +336,10 @@ export function FreeTerminal({
       const next = new Map(current)
       for (const [sessionId, target] of current) {
         const owner = sessions.find((session) => session.id === sessionId)
-        if (owner?.startedAt === target.startedAt && owner.agentIntegration === "codex-app-server")
+        if (
+          owner?.startedAt === target.startedAt &&
+          agentSessionHasCapability(owner, "message-history")
+        )
           continue
         next.delete(sessionId)
         changed = true
@@ -376,7 +352,7 @@ export function FreeTerminal({
   const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
   const canSplit = hasSplitRoom && (canCreateSplitTerminal || splitAgents.length > 0)
   const sidebarHeight = dimensions.height - 1
-  const { recentThreads, refreshRemoteThreads } = useCodexResumeThreads(active)
+  const { recentThreads, refreshRemoteThreads } = useAgentResumeThreads(active)
   const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
     "\u0000",
   )
@@ -522,6 +498,20 @@ export function FreeTerminal({
     },
     [launchCommand],
   )
+  const remoteCodexCompatibility = useWorkspaceRemoteCodexCompatibilityFlow({
+    sessions,
+    launchCommand,
+    launchOriginal: launchSection,
+    closeSession,
+    updateSession,
+    setNotice,
+    agentLaunchOpen: Boolean(agentLaunchStep),
+    setAgentLaunchStep,
+    setSelectedFolder,
+    restoreFocus,
+    leaderRef,
+    setLeaderActive,
+  })
   useEffect(() => {
     if (!remoteSetupRequest || handledRemoteSetupRequest.current === remoteSetupRequest.id) return
     handledRemoteSetupRequest.current = remoteSetupRequest.id
@@ -535,26 +525,26 @@ export function FreeTerminal({
     else launchSection(createRemoteServerSetupCommand(remoteSetupRequest.profile))
     onRemoteSetupRequestHandled?.(remoteSetupRequest.id)
   }, [launchSection, onRemoteSetupRequestHandled, remoteSetupRequest, selectSession, sessionsRef])
-  const resumeCodexThread = async (threadId: string) => {
+  const resumeAgentThread = async (thread: AgentResumeThread) => {
     if (sessions.length >= MAX_SESSIONS) {
       setNotice("O limite de terminais foi atingido.")
       return
     }
     setLeader(false)
     const configured = getUiSettings().terminalRemoteCodexProfiles
-    const remoteId = recentThreads.find((thread) => thread.id === threadId)?.remoteProfileId
+    const remoteId = thread.remoteProfileId
     const profiles =
       remoteId && !configured.some((profile) => profile.id === remoteId)
         ? await listSshConfigProfiles().catch(() => [])
         : configured
-    const { command, error } = resolveCodexResumeCommand(threadId, recentThreads, profiles)
+    const { command, error } = resolveAgentResumeCommand(thread, profiles)
     if (error) {
       setNotice(error)
       return
     }
     if (command) launchSection(command)
   }
-  resumeCodexThreadRef.current = resumeCodexThread
+  resumeAgentThreadRef.current = resumeAgentThread
   const requestSplit = (down: boolean) => {
     if (!activeSession || !canSplit) {
       setNotice("Esta seção já possui dois terminais.")
@@ -612,7 +602,10 @@ export function FreeTerminal({
     moveSession(id, splitPlacement(request))
   }
   const projectSyncDisabled = () => {
-    if (!activeSession?.codex?.remote || activeSession.agentIntegration !== "codex-app-server")
+    if (
+      !activeSession?.agentLaunch?.remote ||
+      !agentSessionHasCapability(activeSession, "project-sync")
+    )
       return true
     const status = projectSync.statuses.get(activeSession.id)
     return (
@@ -621,7 +614,7 @@ export function FreeTerminal({
   }
   const disabled = (key: string) => {
     if (["v", "h"].includes(key)) return !canSplit
-    if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
+    if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
     if (key === "r") return projectSyncDisabled()
     if (["n", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
     if (key.startsWith("alt+")) return !onSelectTool
@@ -673,7 +666,7 @@ export function FreeTerminal({
       })
       return
     }
-    if (activeSession?.agentIntegration !== "codex-app-server") return
+    if (!activeSession || !agentSessionHasCapability(activeSession, "message-history")) return
     setMessageHistoryTargets((current) => {
       const next = new Map(current)
       next.set(activeSession.id, {
@@ -809,7 +802,7 @@ export function FreeTerminal({
     }
   }
   const chooseProjectSyncParent = async (session: TerminalSession, parent: string) => {
-    const remote = session.codex?.remote
+    const remote = session.agentLaunch?.remote
     if (!remote) return
     const localPath = remoteProjectSyncDestination(parent, remote.workingDirectory)
     if (await pathExists(localPath)) {
@@ -867,7 +860,7 @@ export function FreeTerminal({
         break
       case "a":
         {
-          setAgentLaunchStep({ kind: "projects" })
+          setAgentLaunchStep({ kind: "providers" })
         }
         break
       case "v":
@@ -950,7 +943,7 @@ export function FreeTerminal({
   const addLiveDiffProject = useCallback(
     (id: string, roots: readonly string[]) => {
       const session = sessionsRef.current.find((candidate) => candidate.id === id)
-      if (session?.codex?.remote) return
+      if (session?.agentLaunch?.remote) return
       const seeds = [session?.workingDirectory ?? "", ...roots]
       liveDiffProjectSearch.current?.abort()
       const controller = new AbortController()
@@ -1051,6 +1044,7 @@ export function FreeTerminal({
       agentLaunchStep ||
       projectSyncFlow ||
       liveDiffProjectPicker ||
+      remoteCodexCompatibility.prompt ||
       leaderRef.current ||
       boxFocusBusyRef.current
     )
@@ -1066,6 +1060,7 @@ export function FreeTerminal({
     agentLaunchStep,
     projectSyncFlow,
     projectSync.cancel,
+    remoteCodexCompatibility.prompt,
     sessions,
   ])
 
@@ -1131,7 +1126,12 @@ export function FreeTerminal({
     }
     if ("resumeThreadId" in target) {
       handledTargetRevision.current = requestedTargetRevision
-      resumeCodexThreadRef.current(target.resumeThreadId)
+      const thread = recentThreads.find(
+        (candidate) =>
+          candidate.id === target.resumeThreadId &&
+          (candidate.providerId ?? "codex") === (target.providerId ?? "codex"),
+      )
+      if (thread) resumeAgentThreadRef.current(thread)
       return
     }
     if ("folderId" in target) {
@@ -1180,6 +1180,7 @@ export function FreeTerminal({
     return () => controller.abort()
   }, [
     requestedTargetRevision,
+    recentThreads,
     sessions,
     sidebarSessions,
     selectSession,
@@ -1253,6 +1254,7 @@ export function FreeTerminal({
       agentLaunchStep ||
       projectSyncFlow ||
       liveDiffProjectPicker ||
+      remoteCodexCompatibility.prompt ||
       key.defaultPrevented
     )
       return
@@ -1323,6 +1325,7 @@ export function FreeTerminal({
             onAddLiveDiffProject={addLiveDiffProject}
             onCloseMessageHistory={closeMessageHistory}
             onReturnMessageHistoryTerminal={focusTerminal}
+            onRetryRemoteCodex={(flowId) => void remoteCodexCompatibility.retry(flowId)}
             onFocusTarget={focusBox}
           />
         </box>
@@ -1332,7 +1335,7 @@ export function FreeTerminal({
             height={dimensions.height}
             recentThreads={recentThreads}
             onAction={runAction}
-            onSelectThread={resumeCodexThread}
+            onSelectThread={resumeAgentThread}
             disabled={disabled}
           />
         )}
@@ -1356,8 +1359,12 @@ export function FreeTerminal({
         )}
         {agentLaunchStep && (
           <AgentLaunchDialog
+            step={agentLaunchStep}
+            onStep={setAgentLaunchStep}
             sessions={sessions}
+            inactive={Boolean(remoteCodexCompatibility.prompt)}
             onCancelLaunch={closeSession}
+            onCompatibility={remoteCodexCompatibility.showCompatibility}
             onLaunch={launchSection}
             onClose={() => {
               setAgentLaunchStep(null)
@@ -1365,6 +1372,7 @@ export function FreeTerminal({
             }}
           />
         )}
+        <RemoteCodexCompatibilityPrompt flow={remoteCodexCompatibility} />
         {liveDiffProjectPicker && (
           <LiveDiffProjectPicker
             projects={liveDiffProjectPicker.projects}

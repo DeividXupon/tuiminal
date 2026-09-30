@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import {
-  codexResumeThreadsSnapshot,
-  subscribeCodexResumeThreads,
-} from "../model/codex-resume-threads"
-import type { TerminalSession } from "../model/sessions"
+import type { AgentProviderId } from "../model/agent-provider"
+import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
+import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
 import {
   type AgentProjectTarget,
   readProjectDirectory,
@@ -13,30 +11,43 @@ import {
   recentProjectsForTarget,
   rememberAgentProject,
 } from "../services/agent-project-recents"
-import {
-  refreshCodexResumeThreads,
-  refreshRemoteCodexResumeThreads,
-} from "../services/codex-app-server"
-import {
-  createCodexAgentCommand,
-  createRemoteCodexAgentCommand,
-  FREE_TERMINAL_WORKING_DIRECTORY,
-} from "../services/terminal"
-import type { FreeTerminalCommand } from "../model/sessions"
+import { agentProviderAdapter } from "../services/agent-provider-adapters"
+import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
+
+const NO_RESUME_PROJECTS = [] as const
+const EMPTY_RESUME_PROJECTS = {
+  subscribe: () => () => undefined,
+  snapshot: () => NO_RESUME_PROJECTS,
+  enabled: () => false,
+  refresh: async () => undefined,
+} as const
 
 export function useAgentProjectPicker({
+  providerId,
   target,
   sessions,
   onLaunch,
   onCancelLaunch,
   onClose,
+  onLaunched,
+  onCompatibility,
 }: {
+  providerId: AgentProviderId
   target: AgentProjectTarget
   sessions: readonly TerminalSession[]
   onLaunch: (command: FreeTerminalCommand) => string | undefined
   onCancelLaunch: (id: string) => void
   onClose: () => void
+  onLaunched: () => void
+  onCompatibility: (
+    command: FreeTerminalCommand,
+    report: RemoteCodexCompatibilityReport,
+    sessionId: string,
+  ) => void
 }) {
+  const adapter = agentProviderAdapter(providerId)
+  if (!adapter) throw new Error(`Agent provider ${providerId} is not available.`)
+  const resume = adapter.resume ?? EMPTY_RESUME_PROJECTS
   const initial = target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~"
   const [destination, setDestination] = useState(initial)
   const [launching, setLaunching] = useState(false)
@@ -47,19 +58,13 @@ export function useAgentProjectPicker({
   const request = useRef<AbortController | null>(null)
   const busy = useRef(false)
   const pendingRef = useRef<string | null>(null)
-  const threads = useSyncExternalStore(
-    subscribeCodexResumeThreads,
-    codexResumeThreadsSnapshot,
-    codexResumeThreadsSnapshot,
-  )
-  const recent = recentProjectsForTarget(target, saved, threads)
+  const pendingCommand = useRef<FreeTerminalCommand | null>(null)
+  const threads = useSyncExternalStore(resume.subscribe, resume.snapshot, resume.snapshot)
+  const recent = recentProjectsForTarget(providerId, target, saved, threads)
   useEffect(() => {
     const controller = new AbortController()
-    if (process.env.TUIMINAL_TERMINAL_CODEX_RESUME !== "0") {
-      const refresh =
-        target.kind === "local"
-          ? refreshCodexResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, controller.signal)
-          : refreshRemoteCodexResumeThreads(target.profile, controller.signal)
+    if (resume.enabled(process.env)) {
+      const refresh = resume.refresh(target, controller.signal)
       void refresh.catch(() => {
         if (!controller.signal.aborted) setHistoryError(true)
       })
@@ -68,7 +73,7 @@ export function useAgentProjectPicker({
       controller.abort()
       request.current?.abort()
     }
-  }, [target])
+  }, [resume, target])
 
   useEffect(() => {
     if (!pending) return
@@ -78,18 +83,34 @@ export function useAgentProjectPicker({
     setPending(null)
     busy.current = false
     setLaunching(false)
+    if (session.remoteCodexCompatibility && pendingCommand.current) {
+      const command = pendingCommand.current
+      pendingCommand.current = null
+      onCompatibility(command, session.remoteCodexCompatibility, pending)
+      return
+    }
+    pendingCommand.current = null
     if (session.status === "running") {
       try {
-        rememberAgentProject(target, session.workingDirectory || destination)
+        rememberAgentProject(providerId, target, session.workingDirectory || destination)
       } catch {
         /* History cannot interrupt a running agent. */
       }
-      onClose()
+      onLaunched()
     } else {
       setError(session.startError || "Não foi possível iniciar a sessão.")
       onCancelLaunch(pending)
     }
-  }, [pending, sessions, target, destination, onCancelLaunch, onClose])
+  }, [
+    pending,
+    sessions,
+    providerId,
+    target,
+    destination,
+    onCancelLaunch,
+    onLaunched,
+    onCompatibility,
+  ])
 
   const launch = async (path: string) => {
     if (busy.current) return
@@ -103,16 +124,11 @@ export function useAgentProjectPicker({
       const resolved = await readProjectDirectory(target, path, initial, controller.signal, false)
       if (controller.signal.aborted) return
       setDestination(resolved.path)
-      const command =
-        target.kind === "remote"
-          ? createRemoteCodexAgentCommand({
-              profile: target.profile,
-              workingDirectory: resolved.path,
-            })
-          : createCodexAgentCommand(undefined, resolved.path)
+      const command = adapter.createCommand(target, resolved.path)
       const id = onLaunch(command)
       if (!id) throw new Error("O limite de terminais foi atingido.")
       pendingRef.current = id
+      pendingCommand.current = command
       setPending(id)
     } catch (cause) {
       if (!controller.signal.aborted)
@@ -125,6 +141,7 @@ export function useAgentProjectPicker({
     request.current?.abort()
     if (pendingRef.current) onCancelLaunch(pendingRef.current)
     pendingRef.current = null
+    pendingCommand.current = null
     onClose()
   }
   return { destination, recent, launching, error, historyError, pending, launch, cancel }

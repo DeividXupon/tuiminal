@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react"
 import type { AgentState } from "../model/agent-state"
-import type { TerminalSession } from "../model/sessions"
+import { agentSessionHasCapability, type TerminalSession } from "../model/sessions"
 
 export type RemoteProjectTurnObservation = {
   startedAt: number
   state: AgentState | null
   active: boolean
+  hydrationRevision: number
 }
 
 type RemoteProjectAutoSyncFailure = {
@@ -16,7 +17,35 @@ type RemoteProjectAutoSyncFailure = {
 }
 
 function supportsAutomaticProjectSync(session: TerminalSession) {
-  return session.agentIntegration === "codex-app-server" && Boolean(session.codex?.remote)
+  return agentSessionHasCapability(session, "project-sync") && Boolean(session.agentLaunch?.remote)
+}
+
+function observeRemoteSession(
+  session: TerminalSession,
+  previous: RemoteProjectTurnObservation | undefined,
+) {
+  const state = session.agent?.state ?? null
+  let active = previous?.startedAt === session.startedAt ? previous.active : false
+  if (state === "working" || state === "blocked") active = true
+  else if (state === "idle" || state === "unknown") active = false
+  const hydration = session.remoteAgentHydration ?? session.remoteCodexHydration
+  const completed = Boolean(
+    (state === "done" && active && previous?.state !== "done") ||
+      (hydration &&
+        hydration.revision !== previous?.hydrationRevision &&
+        hydration.state === "done" &&
+        hydration.latestTurnStatus === "completed" &&
+        !hydration.waitingOnApproval),
+  )
+  return {
+    completed,
+    observation: {
+      startedAt: session.startedAt,
+      state,
+      active: completed ? false : active,
+      hydrationRevision: hydration?.revision ?? 0,
+    },
+  }
 }
 
 export function observeCompletedRemoteProjectTurns(
@@ -28,17 +57,9 @@ export function observeCompletedRemoteProjectTurns(
   for (const session of sessions) {
     if (!supportsAutomaticProjectSync(session)) continue
     retained.add(session.id)
-    const state = session.agent?.state ?? null
-    const previous = observations.get(session.id)
-    let active = previous?.startedAt === session.startedAt ? previous.active : false
-    if (state === "working" || state === "blocked") active = true
-    else if (state === "idle" || state === "unknown") active = false
-    const justCompleted = state === "done" && active && previous?.state !== "done"
-    if (justCompleted) {
-      completed.push(session)
-      active = false
-    }
-    observations.set(session.id, { startedAt: session.startedAt, state, active })
+    const next = observeRemoteSession(session, observations.get(session.id))
+    if (next.completed) completed.push(session)
+    observations.set(session.id, next.observation)
   }
   for (const sessionId of observations.keys())
     if (!retained.has(sessionId)) observations.delete(sessionId)

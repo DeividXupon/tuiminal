@@ -6,7 +6,9 @@ import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { useEffect, useRef, useState } from "react"
 import { useAgentProjectPicker } from "../hooks/use-agent-project-picker"
+import { agentProvider, type AgentProviderId } from "../model/agent-provider"
 import type { AgentProjectTarget } from "../model/agent-project"
+import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
 import {
   type DiscoveredAgentProjects,
@@ -40,15 +42,24 @@ function projectRows(
 }
 
 export function AgentProjectPicker(props: {
+  providerId: AgentProviderId
   target: AgentProjectTarget
   sessions: readonly TerminalSession[]
   inactive: boolean
+  environmentEnabled: boolean
   onEnvironment: () => void
   onLaunch: (command: FreeTerminalCommand) => string | undefined
   onCancelLaunch: (id: string) => void
+  onCompatibility: (
+    command: FreeTerminalCommand,
+    report: RemoteCodexCompatibilityReport,
+    sessionId: string,
+  ) => void
   onClose: () => void
+  onLaunched: () => void
 }) {
   const picker = useAgentProjectPicker(props)
+  const provider = agentProvider(props.providerId)
   const dimensions = useTerminalDimensions()
   const dialog = useRef<BoxRenderable | null>(null)
   const list = useRef<ScrollBoxRenderable | null>(null)
@@ -144,7 +155,7 @@ export function AgentProjectPicker(props: {
       key.preventDefault()
       key.stopPropagation()
       setBrowsing(true)
-    } else if (key.name === "e") {
+    } else if (key.name === "e" && props.environmentEnabled) {
       key.preventDefault()
       key.stopPropagation()
       props.onEnvironment()
@@ -179,18 +190,20 @@ export function AgentProjectPicker(props: {
         >
           {!small && (
             <text
-              content={translateUi("Novo agente · Codex")}
+              content={`${translateUi("Novo agente")} · ${provider.label}`}
               style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
             />
           )}
           <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <TerminalInlineButton
-              id="terminal-dialog-project-environment"
-              compact
-              label="[E] Ambiente"
-              disabled={locked}
-              onPress={props.onEnvironment}
-            />
+            {props.environmentEnabled && (
+              <TerminalInlineButton
+                id="terminal-dialog-project-environment"
+                compact
+                label="[E] Ambiente"
+                disabled={locked}
+                onPress={props.onEnvironment}
+              />
+            )}
             <text content={origin} wrapMode="none" style={{ fg: COLORS.focus, flexGrow: 1 }} />
           </box>
           <scrollbox

@@ -4,7 +4,8 @@ Use for SSH alias discovery, readiness, remote launch/resume and transport.
 Contract: [Terminal remote setup and launch](../design/terminal.md#master-key-and-focus).
 Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts),
 [connection](../../packages/feature-terminal/src/services/remote-codex-connection.ts),
-[handshake](../../packages/feature-terminal/src/services/remote-codex-handshake.ts).
+[handshake](../../packages/feature-terminal/src/services/remote-codex-handshake.ts), and
+[OpenCode transport](../../packages/feature-terminal/src/services/remote-opencode-connection.ts).
 
 ## SSH configuration
 
@@ -36,27 +37,39 @@ Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts
   after its path changes, cache listings, and keep `[Tab]` inside the input. Git
   discovery stays bounded to the selected host. Validate directories and preserve
   startup errors for retry. Browsing never launches an agent or copies a project.
-- Start an owned `codex app-server --stdio` through `ssh -T`, then bridge its
-  JSONL stream to a loopback WebSocket for the local official TUI. Pass remote
-  cwd with `-C`; no remote TCP listener or copied socket.
-  Bound stdout, discard non-JSON, drain stderr.
-- Wrap each owned remote app-server in a private POSIX lease. Serialize protocol
-  writes, consume a local heartbeat every 20 seconds without forwarding it, and
-  count ordinary input as activity. After roughly two minutes without activity,
-  stop only that app-server and its wrapper so an abandoned SSH transport cannot
-  retain the conversation lock. The server-side SSH session may age out later.
-- Before the TUI, a separate ten-second cancellable probe verifies SSH, cwd,
-  app-server startup and initialize. Record the remote `userAgent` and local CLI
-  versions for diagnostics, but accept version skew after a valid initialize response.
-  Distinguish host/key/network/directory/app-server/protocol/timeout failures.
-  A failed probe never opens the TUI.
-- Close only the owned local TUI, relay, SSH processes and remote app-server,
-  including the probe process after initialized. Stop heartbeat timers before
-  closing stdin, and remove only the exact private lease directory.
-- Recent-thread reads query local and the active remote source independently,
-  omit cwd, and merge without erasing the other source. Tag threads with profile,
-  remote cwd and optional branch. Resume uses that exact source; a missing profile
-  never falls back to local. Public events drive activity/history.
+- Before the TUI, one cancellable preflight verifies the local Codex binary and
+  version, SSH authentication, the selected remote directory, remote Codex version
+  and `codex login status`, `app-server daemon` and `app-server proxy` capabilities, daemon startup and the
+  proxy's `initialize` response. For 0.x releases require matching major and minor;
+  for stable releases require matching major. Missing or invalid versions are
+  incompatible. Distinguish host/key/network/directory/capability/daemon/proxy/
+  protocol/timeout failures. A failed preflight never opens the TUI.
+- Start or reuse the persistent shared daemon with `codex app-server daemon start`,
+  then bridge the daemon's WebSocket bytes through a disposable `codex app-server
+  proxy` over `ssh -T` to a loopback WebSocket for the local official TUI. The proxy
+  targets the daemon's Unix control socket, so its stdio carries the HTTP Upgrade and
+  WebSocket frames, not the JSONL transport exposed by `app-server --stdio`. Pass
+  remote cwd with `-C`; expose no remote TCP listener or copied socket. Serialize and
+  bound frames, and drain stderr. Browsing and short-lived history/preflight requests
+  also close only their proxies.
+- Tuiminal owns the local TUI, loopback relay and the SSH proxy process for a remote
+  pane. Closing or probing stops only those resources; it never invokes daemon stop.
+  The persistent daemon and its active turns belong to the remote Codex installation.
+- OpenCode runs owned `opencode serve` on remote loopback, forwards it with SSH `-L`,
+  and attaches its official local TUI. Bound public HTTP/SSE reads; keep input and
+  approvals in the TUI. Stop its server, tunnel, observer and PTY together.
+- A missing capability or incompatible version opens a localized modal. `[Esc]`
+  returns to the preserved project/resume selection. `[Enter]` opens two terminals in
+  one split, local `~/` and remote SSH `~/`, showing detected versions, `codex update`
+  and the official POSIX installer alternative. The user runs commands manually;
+  nothing is typed or executed automatically. Revalidation keeps the guide open on
+  failure, or closes only those two terminals and retries the exact original launch
+  on success. The app-server protocol is experimental and version-dependent; see the
+  [official app-server documentation](https://learn.chatgpt.com/docs/app-server) and
+  [`codex update` reference](https://learn.chatgpt.com/docs/developer-commands#codex-update).
+- Query local and active-remote recents independently and merge without erasing either
+  source. Tag provider, profile and cwd; never fall back to another provider or host.
+  Rehydrate public history and state before consuming live events.
 
 ## Remote Live Diff
 
@@ -68,9 +81,9 @@ failure and stop only the helper on panel close; show the profile in the heading
 
 ## Remote project synchronization
 
-- Only active integrated remote Codex sessions offer Master Key `[R]`. Keep the
-  last state in the pane tag; sweep it while checking and fill it with measured
-  progress while syncing. Only project-facing changes settle as out-of-sync.
+- Only active integrated remote agents with sync capability offer `[R]`. Keep state
+  and measured progress in the pane tag; only project-facing changes settle as
+  out-of-sync.
 - First sync derives `<remote-basename>-sync` under a chosen local parent. Never
   adopt an unknown existing path. Persist the profile/canonical cwd, destination,
   fingerprints, validated compressed baseline and automatic preference outside
@@ -79,11 +92,14 @@ failure and stop only the helper on panel close; show the profile in the heading
   page new, changed, removed and conflicting paths and require one destructive
   confirmation for local changes. The checking, review and transfer states expose
   `[A]` with `OFF`/`ON`; toggling never confirms the current review.
-- Enabled automatic sync runs remote-to-local after successful app-server turns
+- Enabled automatic sync runs remote-to-local after successful structured agent turns
   and is standing permission to replace conflicts. It stays in the background,
   updates the tag and notifies only on failure. Failed/interrupted turns do not
   trigger it. Serialize per project, prioritize manual work, coalesce completions
-  while busy, drop pending work when disabled and retry failures only next turn.
+  while busy, drop pending work when disabled and retry failures only next turn. After
+  resume hydration, one already-completed unseen turn requests one coalesced catch-up;
+  active, failed, interrupted or approval-pending hydration never does, and no new
+  incremental-sync cursor is created.
 - Compare the complete tree, including hidden/ignored paths, dependencies, caches
   and `.git`; never poll on a timer. Repeat comparisons are metadata-first and
   reuse digests only when size, mode, mtime and ctime still match. Bound local

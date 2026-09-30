@@ -1,4 +1,9 @@
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
+import {
+  TERMINAL_SIDEBAR_FOCUS_TARGET,
+  type TerminalFocusTargetKey,
+  terminalFocusTargetKey,
+} from "../model/focus-selection"
 import { MAX_TERMINALS_PER_SECTION, type TerminalSession } from "../model/sessions"
 import { liveDiffCoversSplitPane } from "../ui/TerminalPanes"
 
@@ -38,4 +43,53 @@ export function liveDiffCoversActiveSplit(
     sidebarWidth,
     splitDown: sessions.some((session) => session.row === 1),
   })
+}
+
+export function terminalWorkspaceFocusTargets({
+  sessions,
+  activeSession,
+  liveDiffTargets,
+  messageHistoryTargets,
+  messages,
+  availableWidth,
+  availableHeight,
+  sidebarWidth,
+}: {
+  sessions: readonly TerminalSession[]
+  activeSession: TerminalSession | undefined
+  liveDiffTargets: ReadonlyMap<string, { startedAt: number; agentKey: string; sessionId: string }>
+  messageHistoryTargets: ReadonlyMap<string, MessageHistoryTarget>
+  messages: ReadonlyMap<string, readonly AgentMessageHistoryEntry[]>
+  availableWidth: number
+  availableHeight: number
+  sidebarWidth: number
+}) {
+  const targets: TerminalFocusTargetKey[] = [TERMINAL_SIDEBAR_FOCUS_TARGET]
+  if (!activeSession) return targets
+  const activeSectionSessions = sessions.filter(
+    (session) => session.sectionId === activeSession.sectionId,
+  )
+  const liveDiffCoversTerminal = liveDiffCoversActiveSplit(
+    activeSectionSessions,
+    availableWidth,
+    availableHeight,
+    sidebarWidth,
+  )
+  for (const session of activeSectionSessions) {
+    const liveDiffTarget = liveDiffTargets.get(session.id)
+    const liveDiffVisible =
+      liveDiffTarget?.startedAt === session.startedAt &&
+      (!session.agent || liveDiffTarget.agentKey === session.agent.key)
+    const liveDiffCoversSession = liveDiffCoversTerminal && liveDiffVisible
+    if (!liveDiffCoversSession) targets.push(terminalFocusTargetKey("terminal", session.id))
+    if (session.remoteSetup || session.remoteCodexUpdate)
+      targets.push(terminalFocusTargetKey("setup", session.id))
+    if (
+      !liveDiffCoversSession &&
+      messageHistoryForSession(session, messageHistoryTargets.get(session.id), messages)
+    )
+      targets.push(terminalFocusTargetKey("history", session.id))
+    if (liveDiffVisible) targets.push(terminalFocusTargetKey("live-diff", session.id))
+  }
+  return targets
 }

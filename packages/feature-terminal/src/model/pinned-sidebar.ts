@@ -1,4 +1,5 @@
-import type { CodexResumeThread } from "./codex-resume-threads"
+import type { AgentProviderId } from "./agent-provider"
+import type { AgentResumeThread } from "./agent-resume-thread"
 import type { TerminalFocusTargetKey } from "./focus-selection"
 import type { TerminalFolder, TerminalSession } from "./sessions"
 
@@ -20,7 +21,7 @@ export type PinnedTerminalTarget = {
 export type PinnedTerminalSelection =
   | PinnedTerminalTarget
   | { sessionId: string }
-  | { resumeThreadId: string }
+  | { resumeThreadId: string; providerId?: AgentProviderId }
   | { folderId: string }
   | { focusTarget: TerminalFocusTargetKey }
   | { action: string }
@@ -34,7 +35,7 @@ export type PinnedTerminalSidebarView = {
   width: number
   height: number
   masterKey: PinnedTerminalMasterKey
-  recentThreads: readonly CodexResumeThread[]
+  recentThreads: readonly AgentResumeThread[]
   masterKeyActive?: boolean
   focusSelection?:
     | {

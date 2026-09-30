@@ -6,7 +6,15 @@ import {
 } from "../packages/feature-terminal/src/services/agent-directory-search"
 import { codexResumeThreads } from "../packages/feature-terminal/src/services/codex-resume"
 import { afterEach, expect, test } from "bun:test"
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import {
@@ -14,6 +22,7 @@ import {
   resolveProjectInput,
 } from "../packages/feature-terminal/src/services/agent-project-directories"
 import {
+  agentProjectRecentsPath,
   loadRecentAgentProjects,
   mergeRecentProjects,
   recentProjectsForTarget,
@@ -126,27 +135,54 @@ test("recent projects persist outside projects, deduplicate and remain scoped to
   const environment = { XDG_DATA_HOME: root, TUIMINAL_TERMINAL_WORKSPACE_STATE: "1" }
   const local = { kind: "local" as const }
   const remote = { kind: "remote" as const, profile }
-  rememberAgentProject(local, root, environment)
-  rememberAgentProject(remote, "/srv/project", environment)
-  rememberAgentProject(local, root, environment)
-  expect(loadRecentAgentProjects(environment)).toHaveLength(2)
+  rememberAgentProject("codex", local, root, environment)
+  rememberAgentProject("codex", remote, "/srv/project", environment)
+  rememberAgentProject("codex", local, root, environment)
+  rememberAgentProject("opencode", local, join(root, "other"), environment)
+  expect(loadRecentAgentProjects(environment)).toHaveLength(3)
   expect(
-    recentProjectsForTarget(local, loadRecentAgentProjects(environment), []).map(
+    recentProjectsForTarget("codex", local, loadRecentAgentProjects(environment), []).map(
       (item) => item.path,
     ),
   ).toEqual([root])
   expect(
-    recentProjectsForTarget(remote, loadRecentAgentProjects(environment), []).map(
+    recentProjectsForTarget("codex", remote, loadRecentAgentProjects(environment), []).map(
       (item) => item.path,
     ),
   ).toEqual(["/srv/project"])
+  expect(
+    recentProjectsForTarget("opencode", local, loadRecentAgentProjects(environment), []).map(
+      (item) => item.path,
+    ),
+  ).toEqual([join(root, "other")])
+  expect(JSON.parse(readFileSync(agentProjectRecentsPath(environment), "utf8")).version).toBe(2)
   const many = Array.from({ length: 30 }, (_, i) => ({
+    providerId: "codex" as const,
     source: "local",
     path: join(root, `${i}`),
     usedAt: i,
   }))
   expect(mergeRecentProjects(many)).toHaveLength(20)
   expect(mergeRecentProjects(many)[0]?.usedAt).toBe(29)
+})
+
+test("version 1 recent projects migrate to Codex on the next write", () => {
+  const root = fixture()
+  const environment = { XDG_DATA_HOME: root, TUIMINAL_TERMINAL_WORKSPACE_STATE: "1" }
+  rememberAgentProject("codex", { kind: "local" }, root, environment)
+  const file = agentProjectRecentsPath(environment)
+  writeFileSync(
+    file,
+    `${JSON.stringify({
+      version: 1,
+      projects: [{ source: "local", path: root, usedAt: 1 }],
+    })}\n`,
+  )
+  expect(loadRecentAgentProjects(environment)).toEqual([
+    { providerId: "codex", source: "local", path: root, usedAt: 1 },
+  ])
+  rememberAgentProject("codex", { kind: "local" }, root, environment)
+  expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(2)
 })
 
 test("recent project suggestions retain exact conversation paths and merge timestamps", () => {
@@ -165,11 +201,12 @@ test("recent project suggestions retain exact conversation paths and merge times
   }
   expect(codexResumeThreads({ result: { data: [thread] } })[0]?.cwd).toBe(path)
   const projects = recentProjectsForTarget(
+    "codex",
     { kind: "local" },
-    [{ source: "local", path, usedAt: 10_000 }],
+    [{ providerId: "codex", source: "local", path, usedAt: 10_000 }],
     [thread, { ...thread, id: "remote", cwd: "/srv/remote", remoteProfileId: profile.id }],
   )
-  expect(projects).toEqual([{ source: "local", path, usedAt: 20_000 }])
+  expect(projects).toEqual([{ providerId: "codex", source: "local", path, usedAt: 20_000 }])
 })
 
 test("directory access rejects missing permissions and bounds very large listings", async () => {

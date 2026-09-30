@@ -1,4 +1,14 @@
 import type { AgentStatus } from "./agent-state"
+import {
+  agentProviderHasCapability,
+  type AgentProviderCapability,
+  type AgentProviderId,
+} from "./agent-provider"
+import type {
+  RemoteCodexCompatibilityReport,
+  RemoteCodexHydration,
+  RemoteCodexUpdateGuide,
+} from "./remote-codex"
 import type { TmuxPaneTarget, TmuxTerminalKind } from "./tmux"
 
 export type RemoteServerProfile = {
@@ -17,6 +27,25 @@ export type RemoteCodexTarget = {
   workingDirectory: string
 }
 
+export type IntegratedAgentLaunch =
+  | {
+      providerId: "codex" | "opencode"
+      transport: "app-server"
+      resumeThreadId?: string
+      remote?: RemoteCodexTarget
+    }
+  | {
+      providerId: "claude"
+      transport: "screen"
+      resumeThreadId?: never
+      remote?: never
+    }
+
+export type AgentSessionIntegration = {
+  providerId: AgentProviderId
+  transport: "app-server" | "screen"
+}
+
 export type FreeTerminalKind = TmuxTerminalKind
 export type FreeTerminalCommand = {
   kind: FreeTerminalKind
@@ -33,10 +62,12 @@ export type FreeTerminalCommand = {
   autoMirror?: boolean
   /** Read-only reference to a native terminal owned by another application. */
   external?: { terminalId: string }
-  /** Launch the official Codex TUI against an owned local or SSH-hosted app-server. */
-  codex?: { appServer: true; resumeThreadId?: string; remote?: RemoteCodexTarget }
+  /** First-party agent launch metadata; provider-specific protocols stay behind adapters. */
+  agentLaunch?: IntegratedAgentLaunch
   /** Interactive SSH shell paired with the read-only server setup guide. */
   remoteSetup?: { profile: RemoteServerProfile }
+  /** Manual local/remote terminals opened by the Codex compatibility guide. */
+  remoteCodexUpdate?: RemoteCodexUpdateGuide
 }
 export type TerminalSession = FreeTerminalCommand & {
   id: string
@@ -55,8 +86,14 @@ export type TerminalSession = FreeTerminalCommand & {
   exitCode: number | null
   startedAt: number
   agent: AgentStatus | null
-  /** App-server events are authoritative for this session's agent state. */
-  agentIntegration?: "codex-app-server" | "screen"
+  /** Provider and transport currently responsible for the session's agent state. */
+  agentIntegration?: AgentSessionIntegration
+  /** Structured update failure used by the compatibility flow. */
+  remoteCodexCompatibility?: RemoteCodexCompatibilityReport | undefined
+  /** Latest authoritative state returned while resuming a remote thread. */
+  remoteCodexHydration?: RemoteCodexHydration | undefined
+  /** Latest authoritative state returned by any integrated remote agent. */
+  remoteAgentHydration?: RemoteCodexHydration | undefined
   backend?: "native" | "tmux" | "external"
 }
 export type TerminalFolder = { id: string; name: string }
@@ -73,13 +110,35 @@ export function isRunningAgent(session: TerminalSession) {
   return session.status === "running" && session.agent !== null
 }
 
+export function integratedAgentProvider(session: TerminalSession) {
+  return session.agentIntegration?.transport === "app-server"
+    ? session.agentIntegration.providerId
+    : null
+}
+
+export function agentSessionHasCapability(
+  session: TerminalSession | null | undefined,
+  capability: AgentProviderCapability,
+) {
+  const providerId = session ? integratedAgentProvider(session) : null
+  return providerId ? agentProviderHasCapability(providerId, capability) : false
+}
+
+export function codexAgentLaunch(command: FreeTerminalCommand) {
+  return command.agentLaunch?.providerId === "codex" ? command.agentLaunch : undefined
+}
+
+export function integratedAgentLaunch(command: FreeTerminalCommand) {
+  return command.agentLaunch?.transport === "app-server" ? command.agentLaunch : undefined
+}
+
 /** Integrated agents connect to an app-server owned on this machine's localhost. */
 export function isLocalhostAgentSession(session: TerminalSession) {
-  return session.agentIntegration === "codex-app-server" && !session.codex?.remote
+  return integratedAgentProvider(session) !== null && !session.agentLaunch?.remote
 }
 
 export function isRemoteAgentSession(session: TerminalSession) {
-  return session.agentIntegration === "codex-app-server" && Boolean(session.codex?.remote)
+  return integratedAgentProvider(session) !== null && Boolean(session.agentLaunch?.remote)
 }
 
 export function orderedRunningAgents(sessions: readonly TerminalSession[]) {

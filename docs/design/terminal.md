@@ -8,9 +8,9 @@ visible PTY shows its project folder, Git branch and localized Clean/Changed sta
 outside a repository it shows the current folder and No Git. The strip has its own
 layout row and never covers permanent terminal content. A recognized agent also shows
 a left-aligned Local or Remote tag, using distinct semantic colors and the same
-traveling text shimmer as Terminal shortcut hints; only integrated remote Codex is
+traveling text shimmer as Terminal shortcut hints; only integrated remote agents are
 classified as Remote. The remaining metadata stays right-aligned. The strip follows
-local and tmux working-directory changes. Integrated remote Codex panes inspect their
+local and tmux working-directory changes. Integrated remote agent panes inspect their
 selected remote project through a bounded SSH helper; generic interactive SSH panes do
 not claim remote Git context. Hovering each context tag opens a localized one-line
 explanation over the PTY directly below the metadata and leaving it closes the tooltip.
@@ -156,14 +156,17 @@ readiness probe finds the standalone binary directly but the interactive shell h
 reloaded its startup file. Tuiminal does not create keys, install software,
 register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
 automatically. Master Key `[N]` always opens a local terminal section, independently
-of the active remote profile. Master Key `[A]` and **New Codex** always open the
-project selector, including when no remote alias is active. It starts in Local;
+of the active remote profile. Master Key `[A]` and **New agent** first open the
+first-party provider selector. Codex and OpenCode are available; Claude Code is
+visible but disabled as coming soon and cannot start processes. Choosing an available provider opens
+the project selector, including when no remote alias is active. It starts in Local;
 `[E]` opens a list of explicit SSH aliases discovered from `~/.ssh/config`.
 Choosing an alias applies to this launch without changing the active settings alias.
-Recent projects combine that origin's public Codex conversations and successful
+Recent projects combine that provider and origin's public conversations and successful
 selector launches. They are deduplicated by absolute path, ordered by last use,
-and limited to 20 per origin. Successful launches are stored atomically in
+and limited to 20 per provider and origin. Successful launches are stored atomically in
 `terminal/agent-projects.json` under Tuiminal's user data directory, outside projects.
+Legacy entries without a provider belong to Codex and migrate on the next write.
 Choosing a recent project prepares a new conversation; existing resume actions
 still resume the original thread and resolve its original SSH alias.
 
@@ -202,25 +205,56 @@ selection starts the project directly. Startup failures keep the chosen destinat
 available for retry. Cancelling retires only the pending owned session.
 `[Esc]` closes the list and restores terminal focus. Headers and actions remain
 visible while the lists scroll. Each screen keeps its hints, confirmation and
-`[Esc]` together in one footer row. Tuiminal starts an owned `codex app-server
---stdio` through `ssh -T` and bridges its JSONL stream to the local interface.
-Before opening it, a ten-second probe validates the SSH connection, selected remote
-directory, app-server startup, and its `initialize` response. Its `userAgent`
-identifies the remote version actually serving
-the request. Tuiminal records it with the local CLI version for diagnostics, but a
-valid `initialize` response remains authoritative when those versions differ. The
-probe closes its process after `initialized`, and only then does the separate JSONL
-stream reach the local official Codex TUI through a loopback-only relay. Authentication,
-host identity, reachability, missing Codex, missing directory, app-server startup,
-protocol and timeout failures remain distinct and do not open the TUI. The
-TUI receives the selected remote directory through `-C`. No remote TCP listener is
-exposed. The SSH app-server, relay, and TUI share one owned lifecycle. Public app-server
-input renews a private lease, including a heartbeat every 20 seconds while idle. If
-the remote wrapper receives no activity for roughly two minutes, it stops only its
-app-server and releases the conversation lock; the abandoned SSH transport may age
-out independently. Public app-server events provide integrated activity,
-sent-message history, and remote `/resume` entries. Those entries retain the source
-profile and remote cwd, so resuming never silently falls back to the local machine.
+`[Esc]` together in one footer row. Before opening a remote TUI, Tuiminal runs one
+cancellable preflight for the local Codex binary/version, SSH authentication, the
+selected directory, the remote Codex binary/version and account status, `app-server daemon` and
+`app-server proxy`, daemon startup and the proxy's `initialize` response. For 0.x
+versions the major and minor must match; for stable versions the major must match.
+An absent or unparsable version is incompatible. The response `userAgent` identifies
+the remote version actually serving the request and must agree with that policy.
+Authentication, host identity, reachability, missing Codex, missing directory,
+missing capability, daemon startup, proxy startup, protocol and timeout failures stay
+distinct and do not open the TUI.
+
+The remote Codex installation owns one persistent shared daemon started or reused by
+`codex app-server daemon start`. Tuiminal carries the daemon's WebSocket transport,
+including its HTTP Upgrade, through a disposable `codex app-server proxy` over
+`ssh -T` to a loopback-only relay for the local official Codex TUI. The proxy stdio is
+a raw tunnel to the Unix control socket, not app-server JSONL. Tuiminal passes the
+selected remote directory through `-C` and exposes no remote TCP listener. A pane
+owns only its local TUI, relay and SSH proxy, and closes only those resources.
+Preflight and history queries likewise close only their temporary proxies. Tuiminal
+never invokes daemon stop, so closing a pane cannot cancel a daemon turn or invalidate
+another client.
+
+OpenCode uses an independent first-party transport. A local launch starts one owned
+`opencode serve --hostname 127.0.0.1` in the selected directory and opens the official
+TUI after validating JSON health and negotiating v2 `opencode --server <url> <cwd>` or
+legacy v1 `opencode attach <url> --dir <cwd>`. A remote launch starts that server on remote
+loopback through SSH `-L`, then runs the same official TUI locally against the forwarded
+port. Its SSH process, server, observer, and PTY share the pane lifecycle, and no server
+port is exposed publicly. Public HTTP and SSE provide session identity, title, state,
+permission waits, structured activity, messages, per-message diffs, and resume hydration.
+Input and approvals stay in the official TUI; Tuiminal neither scrapes its screen nor
+displays OpenCode reasoning part text.
+
+If a capability is absent or versions are incompatible, a localized focused modal
+shows both detected versions and explains that the
+[app-server protocol is experimental and version-dependent](https://learn.chatgpt.com/docs/app-server).
+`[Esc]` returns to the project selector or resume list with the original intent intact.
+`[Enter]` opens local `~/` and remote SSH `~/` terminals in one split with the detected
+version, [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update)
+and the official POSIX installer alternative. Tuiminal does not prefill or execute any
+command. The split's inline `[Esc]` and `[Enter]` actions own their keyboard scope.
+Revalidation failure leaves both terminals and the refreshed report open; success
+closes only those two terminals and retries the exact original profile, directory and
+optional thread ID.
+
+Public app-server events provide integrated activity, sent-message history, and remote
+`/resume` entries. Those entries retain the source profile and remote cwd, so resuming
+never silently falls back to the local machine. Resume first rehydrates public history,
+active/completed/failed state and approval waits from the daemon, then continues with
+live events.
 Remote integrated agents are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
 working directory and linked worktrees through a separate owned SSH channel; it never
 falls back to a same-named local path. Selecting the category renders a read-only
@@ -243,15 +277,16 @@ in light mode. Colored, localized tags align at the opposite end of the title ro
 classify agent-only features, general features, terminal operations, sidebar operations,
 navigation, and application actions. Agent-only features may show both feature and agent
 tags. Actions are ordered by those purposes. `[C]` and `[G]` are not Master Key
-actions. `[R]` is enabled only for the selected integrated remote Codex session and
+actions. `[R]` is enabled only for the selected integrated remote agent session and
 synchronizes its project to a protected local copy.
 Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
 sheet. Actions and Agents become clickable tabs, `[←/→]` switches tabs, and only the
 active tab's content is rendered.
 Agents merges up to six local conversations with up to six conversations from the
-active remote profile. Both `thread/list` queries omit `cwd`, so the local list covers
-recent conversations across the local host and the remote list covers recent
-conversations across that SSH host. Each source refreshes independently, and one
+active remote profile. Codex uses app-server `thread/list`; OpenCode uses its official
+JSON session list with the public server API as fallback. The lists cover recent
+conversations across the corresponding local or SSH host. Each provider and source
+refreshes independently, and one
 source never erases the other. Every row presents Local or Remote as a colored tag
 with its own palette-aware background; remote rows keep their profile name beside the
 tag as user data. Each item has three lines: name and state; the prompt preview in the
@@ -264,19 +299,18 @@ Three `▌` cells form a rail beside the item: unselected rows alternate subdued
 and raised-panel colors, while the selected row uses the brighter Terminal accent.
 The modal footer provides the single `[Enter]` hint instead of repeating it in every
 item. Project and branch also participate in filtering. A
-short-lived owned local app-server loads the
-local list and bounded public
-`thread/turns/list` results when Terminal becomes active, even before a Codex pane
-exists; integrated panes keep it current afterward. An agent row shows `[Enter]`, its
+short-lived owned provider connection loads each local list and bounded public history
+when Terminal becomes active, even before an integrated pane exists; integrated panes
+keep it current afterward. An agent row shows `[Enter]`, its
 name, prompt preview and live state. Idle rows append the elapsed time since their last
 activity using the palette's primary text color, which stays bright on dark palettes
 and dark on light palettes. Focusing an agent keeps that row intact and shows up to three wrapped lines
 of its latest public `agentMessage` below the Agents list; the response follows
 `[↑/↓]` selection. Its marker, title, state and response use semantic state/focus
-colors. Selecting it opens a new
-section running the official TUI through `codex resume <thread-id> --remote <relay>`.
-The relay consumes its own `thread/list` requests and responses rather than forwarding
-them into the visible TUI. `[/]` focuses one filter for actions and agents;
+colors. Selecting it opens a new section running the matching provider's official TUI.
+Codex resumes through its relay; OpenCode attaches with the exact `--session` and source
+directory. Provider and source identity are stable, so a resume never changes tools or
+silently falls back from remote to local. `[/]` focuses one filter for actions and agents;
 horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
 selected result. `[Esc]` first unfocuses the filter,
 then closes the modal. The modal owns input until an enabled action is chosen or
@@ -362,9 +396,9 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | Key after the Master Key | Action |
 | --- | --- |
 | `[N]` | Open a new local terminal section |
-| `[A]` | Open local Codex, or choose Local / Remote when an SSH profile is active |
+| `[A]` | Choose an agent provider, then its project and execution environment |
 | `[V]` / `[H]` | Choose a new shell or an existing agent, then split right / below |
-| `[S]` | Open or focus sent-message history for an integrated Codex session |
+| `[S]` | Open or focus sent-message history for an integrated agent session |
 | `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
@@ -372,13 +406,13 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | `[L]` | Focus the visible sidebar |
 | `[E]` | Rename selected terminal |
 | `[D]` | Open Live Diff for a recognized agent, or focus it when already open |
-| `[R]` | Synchronize the selected integrated remote Codex project to its local copy |
+| `[R]` | Synchronize the selected integrated remote agent project to its local copy |
 | `[X]` | Close selected terminal |
 | `[,]` | Open settings |
 | `[Q]` | Quit Tuiminal |
 | `[Esc]` | Cancel without changing terminal focus |
 
-An integrated remote Codex pane also carries a project synchronization tag. Before
+An integrated remote agent pane also carries a project synchronization tag. Before
 the first copy it says **Not synced** and exposes the configured Master Key followed
 by `[R]`. The first synchronization asks for a local parent and derives
 `<remote-basename>-sync`; for example, remote `/tui` becomes `tui-sync` inside the
@@ -394,14 +428,17 @@ background with measured delta progress without changing the tag text.
 
 The checking, review and transfer states also expose `[A]` **Automatic sync** with
 an `OFF` or `ON` state. Its value is saved per remote-project mapping. When
-enabled, every successfully completed Codex turn starts a background remote-to-local
+enabled, every successfully completed integrated-agent turn starts a background remote-to-local
 sync without opening or focusing a modal; the pane tag carries its progress and only
 failures notify. This is standing authorization to replace local changes with the
 remote result. Enabling it during an open review does not confirm that review, while
 enabling it during the first transfer is saved as soon as the initial mapping succeeds.
 Manual work remains first in line, and completions received while a sync is busy
 collapse into one pending run. Disabling removes that pending run; a failure waits for
-another completed turn instead of retrying immediately.
+another completed turn instead of retrying immediately. If resume hydration finds one
+successful turn that completed while the pane was closed, it requests one coalesced
+catch-up sync after hydration. Active, failed, interrupted or approval-pending turns do
+not request one, and this recovery path does not create a new incremental-sync cursor.
 
 For a saved mapping, Master Key `[R]` first compares detailed remote, local and last
 successful manifests. If nothing differs, it shows a brief notification. Otherwise a
@@ -415,6 +452,13 @@ digests from the last successful snapshot are reused unless size, mode, modifica
 time or change time moved. Quiet paths still appear in the review and are synchronized
 normally; the distinction affects only the settled pane tag.
 
+Synchronization confirmation, progress and review use compact centered surfaces with
+consistent outer margins. Their header and footer bands separate status from actions;
+primary and cancel actions occupy opposite footer edges. In the review, pagination
+stays beside the page counter above the automatic-sync control instead of competing
+with the destructive confirmation row. The change list receives the flexible height,
+and all three surfaces clamp to the available terminal dimensions.
+
 Only new or content-changed regular-file bytes cross SSH. A separate installed helper
 performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal
 renderer remains responsive. The focused progress dialog owns `[Esc]` cancellation,
@@ -427,7 +471,7 @@ destination. A source change after review requires a fresh review.
 
 ## Sent-message history
 
-Master Key then `[S]` opens a compact table below the selected integrated Codex
+Master Key then `[S]` opens a compact table below the selected integrated agent
 terminal and focuses it. Columns are ordered as elapsed time, status, message,
 image, audio, skill, and model. Status combines turn duration with `✓` for
 completion, `×` for failure or interruption, and `…` while queued or running, for
@@ -457,7 +501,7 @@ highlighting, line-number gutters, and addition/removal backgrounds. It renders 
 selected turn, not the current repository-wide Live Diff. A colored line renderer
 keeps legacy or partial patches without unified hunks readable.
 
-The history combines text input carried by the public outbound app-server requests
+For Codex, the history combines text input carried by the public outbound app-server requests
 `turn/start`, `turn/steer`, and `thread/queue/add` with earlier `userMessage` items
 from public thread history responses. After a thread is resumed or forked, the
 relay requests `thread/turns/list` pages with full items until `nextCursor` is
@@ -476,7 +520,13 @@ code points; restart and close clear the cache until the selected thread is
 hydrated again. The action is disabled for screen-observed agents and ordinary
 terminals.
 
-Each integrated Codex session can keep its own sent-message history panel open.
+For OpenCode, the same view maps public message parts, tool state, attachments, model
+identity, final responses, and per-message session diffs into the shared history model.
+Hydration reads the complete public transcript and refreshes after relevant SSE events.
+OpenCode reasoning part text is deliberately omitted; no terminal output is scraped and
+no input or approval is submitted by Tuiminal.
+
+Each integrated agent session can keep its own sent-message history panel open.
 In a split, opening, focusing, or closing one session's history does not replace
 or mutate the sibling session's panel.
 
@@ -582,7 +632,7 @@ the recognized agent's process tree cwd where the OS exposes it, and Git-linked
 worktrees. A path entered through Add project is resolved locally and need not be linked
 to the launch repository. Up to four canonical roots are monitored. On macOS cwd
 inspection uses `lsof`; on Linux it uses `/proc/<pid>/cwd`; Windows falls back
-to known launch/tmux/manual paths. A remote integrated Codex session instead starts
+to known launch/tmux/manual paths. A remote integrated agent session instead starts
 from its tagged remote working directory and discovers linked worktrees on that host.
 It never inspects a local path with the same text. The file list is limited to the first 1,000
 changed paths per root and visibly warns when truncated.
@@ -595,7 +645,7 @@ write project files or read credentials. Remote reads use one persistent, batch-
 SSH helper per open panel. Its framed protocol accepts only fixed operations, treats
 encoded roots and paths as data, bounds responses, retries after transport failure,
 and is stopped when the panel closes. It carries Git metadata and patch text only;
-the project is not copied and the Codex app-server stream remains independent.
+the project is not copied and the provider protocol stream remains independent.
 Closing the companion aborts its reads.
 Agent exit stops the polling but retains the last visible snapshot; terminal
 close, restart, or agent identity replacement releases that snapshot. These are

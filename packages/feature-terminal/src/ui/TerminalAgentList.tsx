@@ -5,6 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { useEffect, useRef } from "react"
 import {
+  agentSessionHasCapability,
   isLocalhostAgentSession,
   isRemoteAgentSession,
   orderedRunningAgents,
@@ -49,7 +50,7 @@ function TerminalAgentRow({
   const shortcutWidth = shortcut ? displayWidth(shortcut) : 0
   const primary = compact && agent.taskTitle ? agent.taskTitle : agent.label
   const primaryColor = agentPrimaryColor(compact, agent.taskTitle, selected)
-  const showActivity = !compact && session.agentIntegration === "codex-app-server"
+  const showActivity = !compact && agentSessionHasCapability(session, "structured-activity")
   const rowHeight = compact ? 1 : showActivity ? 3 : 2
   const activityIndicators = showActivity
     ? codexActivityIndicators(agent.state, agent.activity, frame)
@@ -168,14 +169,14 @@ export function TerminalAgentList({
   const localhostAgents = agents.filter(isLocalhostAgentSession)
   const remoteAgents = Map.groupBy(
     agents.filter(isRemoteAgentSession),
-    (session) => session.codex?.remote?.profile.id ?? "remote",
+    (session) => session.agentLaunch?.remote?.profile.id ?? "remote",
   )
   const groups = [
     { id: "term", label: translateUi("Local • term"), sessions: terminalAgents },
     { id: "localhost", label: translateUi("Local • localhost"), sessions: localhostAgents },
     ...[...remoteAgents].map(([profileId, profileSessions]) => ({
       id: `remote-${profileId}`,
-      label: `${translateUi("Remoto")} • ${profileSessions[0]?.codex?.remote?.profile.name ?? profileId}`,
+      label: `${translateUi("Remoto")} • ${profileSessions[0]?.agentLaunch?.remote?.profile.name ?? profileId}`,
       sessions: profileSessions,
     })),
   ].filter((group) => group.sessions.length > 0)

@@ -10,7 +10,13 @@ export function RemoteProjectSyncAutomaticControl({
   onToggle: () => void
 }) {
   return (
-    <box style={{ height: 2, flexShrink: 0 }}>
+    <box
+      style={{
+        height: 3,
+        flexShrink: 0,
+        backgroundColor: COLORS.panel,
+      }}
+    >
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <TerminalInlineButton
           id="terminal-project-sync-automatic"
@@ -26,8 +32,8 @@ export function RemoteProjectSyncAutomaticControl({
             ? "O remoto substituirá alterações locais após cada resposta concluída."
             : "Sincroniza após cada resposta concluída.",
         )}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: automatic ? COLORS.warning : COLORS.muted }}
+        wrapMode="word"
+        style={{ height: 2, flexShrink: 0, fg: automatic ? COLORS.warning : COLORS.muted }}
       />
     </box>
   )

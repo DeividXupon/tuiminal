@@ -1,3 +1,4 @@
+import { homedir } from "node:os"
 import { resolve } from "node:path"
 import {
   forceKillOwnedProcessTree,
@@ -8,7 +9,7 @@ import {
 } from "@xupon/tuiminal-core/process/owned-process"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-
+import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { remoteInteractiveSshCommand } from "./remote-codex-connection"
@@ -125,7 +126,11 @@ export function createCodexAgentCommand(
     command: ["codex"],
     accent: COLORS.terminal,
     workingDirectory,
-    codex: { appServer: true, ...(resumeThreadId ? { resumeThreadId } : {}) },
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
+      ...(resumeThreadId ? { resumeThreadId } : {}),
+    },
   }
 }
 
@@ -143,7 +148,12 @@ export function createRemoteCodexAgentCommand(
     command: ["codex"],
     accent: COLORS.terminal,
     workingDirectory: remote.workingDirectory,
-    codex: { appServer: true, remote, ...(resumeThreadId ? { resumeThreadId } : {}) },
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
+      remote,
+      ...(resumeThreadId ? { resumeThreadId } : {}),
+    },
   }
 }
 
@@ -162,9 +172,36 @@ export function createRemoteServerSetupCommand(
   }
 }
 
-function processEnvironment() {
+export function createRemoteCodexUpdateCommands(
+  flowId: number,
+  profile: TerminalRemoteCodexProfile,
+  report: RemoteCodexCompatibilityReport,
+): [FreeTerminalCommand, FreeTerminalCommand] {
+  const local = createShellTerminalCommand()
+  const guide = { flowId, report, checking: false, error: "" }
+  return [
+    {
+      ...local,
+      label: "Codex · Local",
+      workingDirectory: homedir(),
+      remoteCodexUpdate: { ...guide, side: "local" },
+    },
+    {
+      kind: "custom",
+      label: `Codex · ${profile.name}`,
+      shortLabel: "SSH",
+      displayCommand: `ssh ${profile.host}`,
+      command: remoteInteractiveSshCommand(profile),
+      accent: COLORS.warning,
+      workingDirectory: homedir(),
+      remoteCodexUpdate: { ...guide, side: "remote" },
+    },
+  ]
+}
+
+function processEnvironment(overrides: Record<string, string | undefined> = {}) {
   return Object.fromEntries(
-    Object.entries(process.env).filter(
+    Object.entries({ ...process.env, ...overrides }).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   )
@@ -180,7 +217,8 @@ export function startFreeTerminalProcess(
     onExit: (result: FreeTerminalExit) => void
     /** Attached clients must detach without sending Ctrl+C to a borrowed session. */
     interruptOnStop?: boolean
-    env?: Record<string, string>
+    /** An explicit undefined removes an inherited variable from the child. */
+    env?: Record<string, string | undefined>
   },
 ): FreeTerminalProcessHandle {
   if (!bunRuntime) {
@@ -200,8 +238,7 @@ export function startFreeTerminalProcess(
   const subprocess = bunRuntime.spawn(command, {
     cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
     env: {
-      ...processEnvironment(),
-      ...options.env,
+      ...processEnvironment(options.env),
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
     },

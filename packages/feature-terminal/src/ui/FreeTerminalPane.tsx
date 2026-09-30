@@ -19,6 +19,7 @@ import {
   terminalContentWidth,
 } from "./free-terminal-pane-layout"
 import { LiveDiffPanel } from "./LiveDiffPanel"
+import { RemoteCodexUpdateCompanion } from "./RemoteCodexUpdateCompanion"
 import { RemoteServerSetupPanel } from "./RemoteServerSetupPanel"
 import {
   TerminalPaneMetadata,
@@ -38,6 +39,11 @@ declare module "@opentui/react" {
 export type { FreeTerminalPaneLayout } from "./free-terminal-pane-layout"
 
 type PaneProps = FreeTerminalPaneProps
+
+function hasTerminalCompanion(session: PaneProps["session"]) {
+  return Boolean(session.remoteSetup ?? session.remoteCodexUpdate)
+}
+
 export const FreeTerminalPane = memo(function FreeTerminalPane({
   session,
   active,
@@ -59,6 +65,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
   messageHistory,
   onCloseMessageHistory,
   onReturnMessageHistoryTerminal,
+  onRetryRemoteCodex,
   focusSelection,
 }: PaneProps) {
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null)
@@ -92,16 +99,19 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
     messageDetailOpen,
   )
   const remoteSetup = session.remoteSetup
+  const remoteCodexUpdate = session.remoteCodexUpdate
+  const companionOpen = hasTerminalCompanion(session)
   const measureFrame = measuresPane(
     liveDiff,
     messageHistory,
     remoteSetup,
+    remoteCodexUpdate,
     context,
     syncStatus,
     agentOrigin,
   )
-  const setupHeights = remoteSetupHeights(terminalAreaHeight, Boolean(remoteSetup))
-  const embeddedTerminalHeight = remoteSetup ? setupHeights.terminalHeight : embeddedHeight
+  const setupHeights = remoteSetupHeights(terminalAreaHeight, companionOpen)
+  const embeddedTerminalHeight = companionOpen ? setupHeights.terminalHeight : embeddedHeight
   const terminalFocusTarget = terminalFocusTargetKey("terminal", session.id)
   const historyFocusTarget = terminalFocusTargetKey("history", session.id)
   const liveDiffFocusTarget = terminalFocusTargetKey("live-diff", session.id)
@@ -215,7 +225,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
             />
             <PlasmaLoadingOverlay
               id={`terminal-pane-start-loader-${session.id}`}
-              active={session.status === "starting" && Boolean(session.codex)}
+              active={session.status === "starting" && Boolean(session.agentLaunch)}
               label="Iniciando agente…"
               accent={COLORS.terminal}
               background={COLORS.canvas}
@@ -288,6 +298,15 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
               )}
             </box>
           )}
+          <RemoteCodexUpdateCompanion
+            session={session}
+            height={setupHeights.setupHeight}
+            active={Boolean(toolActive && active)}
+            onActivate={onActivate}
+            onRetry={onRetryRemoteCodex}
+            focusSelection={focusSelection}
+            focusTarget={setupFocusTarget}
+          />
         </box>
         {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
           <box

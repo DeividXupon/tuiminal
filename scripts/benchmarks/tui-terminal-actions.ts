@@ -561,18 +561,28 @@ export function tuiTerminalActionBenchmarks({
       description: "Open rendered sent-message history for an integrated Codex Terminal",
       beforeEach: async () => {
         const sessions = await terminalSessions()
-        let codex = sessions.find((session) => session.agentIntegration === "codex-app-server")
+        let codex = sessions.find((session) => session.agentIntegration?.transport === "app-server")
         if (!codex) {
           await masterAction("a")
           await waitForUi(
+            () => Boolean(tui.renderer.root.findDescendantById("terminal-dialog-agent-provider")),
+            "Agent provider picker",
+          )
+          await act(async () => tui.mockInput.pressEnter())
+          await waitForUi(
+            () => Boolean(tui.renderer.root.findDescendantById("terminal-dialog-project-picker")),
+            "Codex project picker",
+          )
+          await act(async () => tui.mockInput.pressEnter())
+          await waitForUi(
             () =>
               terminalSidebarSnapshot().view?.sessions.some(
-                (session) => session.agentIntegration === "codex-app-server",
+                (session) => session.agentIntegration?.transport === "app-server",
               ) === true,
             "Integrated Codex Terminal",
           )
           codex = terminalSidebarSnapshot().view?.sessions.find(
-            (session) => session.agentIntegration === "codex-app-server",
+            (session) => session.agentIntegration?.transport === "app-server",
           )
         }
         if (!codex) throw new Error("Message history needs an integrated Codex Terminal")

@@ -2,13 +2,15 @@ import {
   publishCodexResumeThreads,
   updateCodexResumeThreadResponse,
 } from "../model/codex-resume-threads"
+import type { CodexHydratedThread } from "../model/remote-codex"
 import type { CodexObservedUserMessage } from "./codex-message-history"
 import { CodexMessageHistoryObserver } from "./codex-message-history-observer"
 import { codexResumeThreads, resumeListFrame } from "./codex-resume"
 
 type RecordValue = Record<string, unknown>
 type CodexActivity = "thinking" | "writing" | "running" | "updating" | "coding" | "tooling"
-type CodexState = "working" | "blocked" | "done" | "unknown"
+type CodexState = "working" | "blocked" | "done" | "unknown" | "idle"
+export type { CodexHydratedThread } from "../model/remote-codex"
 
 export type CodexAppServerEvents = {
   onActivity: (activity: CodexActivity) => void
@@ -16,6 +18,7 @@ export type CodexAppServerEvents = {
   onTitle: (title: string) => void
   onUserMessage: (message: CodexObservedUserMessage) => void
   onUserMessageHistory: (messages: readonly CodexObservedUserMessage[], replace: boolean) => void
+  onHydrated?: (thread: CodexHydratedThread) => void
   onError: (message: string) => void
 }
 

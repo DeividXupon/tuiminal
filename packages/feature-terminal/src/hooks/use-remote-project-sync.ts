@@ -7,7 +7,7 @@ import {
   remoteProjectSyncMappingKey,
   remoteProjectSyncReviewStatus,
 } from "../model/remote-project-sync"
-import type { TerminalSession } from "../model/sessions"
+import { agentSessionHasCapability, type TerminalSession } from "../model/sessions"
 import { RemoteProjectSyncLocalChangesError } from "../services/remote-project-sync-errors"
 import {
   loadRemoteProjectSyncMappings,
@@ -25,7 +25,9 @@ function mappedBySource(mappings: readonly RemoteProjectSyncMapping[]) {
 }
 
 function remoteSession(session: TerminalSession) {
-  return session.agentIntegration === "codex-app-server" ? session.codex?.remote : undefined
+  return agentSessionHasCapability(session, "project-sync")
+    ? session.agentLaunch?.remote
+    : undefined
 }
 
 function failureStatus(localPath: string, error: unknown): RemoteProjectSyncStatus {

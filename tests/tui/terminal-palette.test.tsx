@@ -148,7 +148,7 @@ test("integrated agent startup covers the empty terminal with the shared loader"
     displayCommand: "codex --remote",
     command: ["codex"],
     accent: COLORS.terminal,
-    codex: { appServer: true },
+    agentLaunch: { providerId: "codex", transport: "app-server" },
   }
   const tui = await testRender(
     <FreeTerminalPane

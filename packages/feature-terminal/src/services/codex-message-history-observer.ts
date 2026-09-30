@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../model/agent-message-history"
+import type { CodexHydratedThread } from "../model/remote-codex"
 import {
   type CodexObservedUserMessage,
   detailFromItems,
@@ -16,11 +17,13 @@ import {
   userInputDetails,
 } from "./codex-message-history"
 import { CodexMessagePublisher } from "./codex-message-publisher"
+import { hydratedCodexThread } from "./codex-thread-hydration"
 
 export type CodexMessageHistoryEvents = {
   onTitle: (title: string) => void
   onUserMessage: (message: CodexObservedUserMessage) => void
   onUserMessageHistory: (messages: readonly CodexObservedUserMessage[], replace: boolean) => void
+  onHydrated?: (thread: CodexHydratedThread) => void
 }
 
 type ObservedRequest = {
@@ -190,6 +193,7 @@ export class CodexMessageHistoryObserver {
       true,
       events,
     )
+    events.onHydrated?.(hydratedCodexThread(thread, initialPage?.data))
     if (request.method !== "thread/start")
       this.requestHistoryPage(thread.id, null, this.historyGeneration, send)
     return true

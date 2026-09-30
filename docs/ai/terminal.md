@@ -10,7 +10,7 @@ Code: [feature](../../packages/feature-terminal/src/).
 | History or Live Diff | [History](../design/terminal.md#sent-message-history), [Live Diff](../design/terminal.md#live-diff-companion) |
 | Native/tmux sessions | [Backends](../design/terminal.md#native-and-tmux-sessions) |
 | Agent identity, activity or titles | [Agent observation](../design/terminal-agents.md) |
-| SSH setup/remote Codex | [Remote note](terminal-remote.md) |
+| SSH setup/remote integrated agents | [Remote note](terminal-remote.md) |
 
 ## Lifecycle
 
@@ -50,9 +50,10 @@ Code: [feature](../../packages/feature-terminal/src/).
 - Read screen activity through the bounded input-free native observer, not viewport
   visibility. Create it only after recognition; batch output, skip unchanged
   revisions and release it with the exact PTY. Keep PTY hot paths lean.
-- Integrated Codex observes public app-server events; the official TUI owns input
-  and approvals. Never read private reasoning. History hydrates/paginates public
-  turns and merges stable IDs for the selected thread.
+- Integrated Codex observes public app-server events, while integrated OpenCode uses
+  its public HTTP/SSE protocol. Each official TUI owns input and approvals. Never read
+  private reasoning. History hydrates public turns and merges stable IDs for the
+  selected provider session.
 - Sidebar filtering must not change splits, folders, lifetime or focus. Running
   agents appear exclusively in Agents. Task titles are sanitized display metadata.
   Animation timers stay outside PTY rendering and stop while inactive.

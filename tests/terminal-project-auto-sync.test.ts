@@ -12,9 +12,10 @@ function remoteSession(state: AgentState, startedAt = 1): TerminalSession {
   return {
     id: "remote",
     startedAt,
-    agentIntegration: "codex-app-server",
-    codex: {
-      appServer: true,
+    agentIntegration: { providerId: "codex", transport: "app-server" },
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
       remote: {
         profile: { id: "fixture", name: "Fixture", host: "fixture" },
         workingDirectory: "/srv/project",
@@ -22,6 +23,24 @@ function remoteSession(state: AgentState, startedAt = 1): TerminalSession {
     },
     agent: { key: "codex", label: "Codex", profile: "codex", state, activity: null },
   } as TerminalSession
+}
+
+function hydratedRemoteSession(
+  state: AgentState,
+  revision: number,
+  latestTurnStatus: NonNullable<TerminalSession["remoteCodexHydration"]>["latestTurnStatus"],
+  waitingOnApproval = false,
+) {
+  return {
+    ...remoteSession(state),
+    remoteCodexHydration: {
+      revision,
+      threadId: "thread-1",
+      state,
+      latestTurnStatus,
+      waitingOnApproval,
+    },
+  }
 }
 
 test("requests automatic sync once after a successful remote turn", () => {
@@ -40,6 +59,32 @@ test("does not request automatic sync after a failed or restarted turn", () => {
   expect(observeCompletedRemoteProjectTurns([remoteSession("done")], observations)).toEqual([])
   observeCompletedRemoteProjectTurns([remoteSession("working")], observations)
   expect(observeCompletedRemoteProjectTurns([remoteSession("done", 2)], observations)).toEqual([])
+})
+
+test("coalesces one catch-up sync after a completed turn is hydrated", () => {
+  const observations = new Map<string, RemoteProjectTurnObservation>()
+  const completed = hydratedRemoteSession("done", 1, "completed")
+  expect(observeCompletedRemoteProjectTurns([completed], observations)).toHaveLength(1)
+  expect(observeCompletedRemoteProjectTurns([completed], observations)).toEqual([])
+  expect(
+    observeCompletedRemoteProjectTurns(
+      [hydratedRemoteSession("done", 2, "completed")],
+      observations,
+    ),
+  ).toHaveLength(1)
+})
+
+test("does not catch up failed, interrupted, active, or approval-pending hydration", () => {
+  const observations = new Map<string, RemoteProjectTurnObservation>()
+  const sessions = [
+    hydratedRemoteSession("unknown", 1, "failed"),
+    hydratedRemoteSession("unknown", 2, "interrupted"),
+    hydratedRemoteSession("working", 3, "inProgress"),
+    hydratedRemoteSession("working", 4, "completed"),
+    hydratedRemoteSession("blocked", 5, "completed", true),
+  ]
+  for (const session of sessions)
+    expect(observeCompletedRemoteProjectTurns([session], observations)).toEqual([])
 })
 
 test("reports automatic sync failures only for a live matching session", () => {

@@ -7,6 +7,7 @@ import { detectAgentTitle } from "../model/agent-screen"
 import { agentTaskTitle } from "../model/agent-task-title"
 import type { PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
 import {
+  agentSessionHasCapability,
   DEFAULT_FOLDER,
   DEFAULT_FOLDER_NAME,
   EXTERNAL_FOLDER,
@@ -197,7 +198,7 @@ function SidebarApp({
   const disabled = useCallback(
     (key: string) => {
       if (["v", "h"].includes(key)) return !canSplit
-      if (key === "s") return activeSession?.agentIntegration !== "codex-app-server"
+      if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
       if (["n", "a"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
       if ([",", "q"].includes(key)) return !replica
@@ -367,10 +368,13 @@ function SidebarApp({
           height={dimensions.height}
           recentThreads={recentThreads}
           onAction={(key) => void runAction(key)}
-          onSelectThread={(resumeThreadId) => {
+          onSelectThread={(thread) => {
             setLeaderActive(false)
             void (async () => {
-              const delivered = await sendPinnedSidebarTarget(endpoint, { resumeThreadId })
+              const delivered = await sendPinnedSidebarTarget(endpoint, {
+                resumeThreadId: thread.id,
+                providerId: thread.providerId ?? "codex",
+              })
               if (delivered) await selectPinnedTmuxHost(sourceSocket, hostPane)
             })()
           }}

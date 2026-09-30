@@ -1,4 +1,5 @@
 import { TERMINAL_PROJECT_MESSAGES } from "./terminal-project-catalog"
+import { TERMINAL_REMOTE_COMPATIBILITY_MESSAGES } from "./terminal-remote-compatibility-catalog"
 import { TERMINAL_REMOTE_DAEMON_MESSAGES } from "./terminal-remote-daemon-catalog"
 import { TERMINAL_REMOTE_HANDSHAKE_MESSAGES } from "./terminal-remote-handshake-catalog"
 import { TERMINAL_REMOTE_SETUP_MESSAGES } from "./terminal-remote-setup-catalog"
@@ -329,5 +330,6 @@ export const TERMINAL_REMOTE_MESSAGES = [
   ],
   ...TERMINAL_REMOTE_DAEMON_MESSAGES,
   ...TERMINAL_REMOTE_HANDSHAKE_MESSAGES,
+  ...TERMINAL_REMOTE_COMPATIBILITY_MESSAGES,
   ...TERMINAL_REMOTE_SETUP_MESSAGES,
 ] as const

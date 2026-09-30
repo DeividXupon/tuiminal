@@ -49,9 +49,9 @@ export function RemoteProjectSyncPreviewDialog({
   const dialog = useRef<BoxRenderable | null>(null)
   const list = useRef<ScrollBoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
-  const width = Math.max(24, Math.min(96, dimensions.width - 2))
-  const height = Math.max(8, Math.min(28, dimensions.height - 2))
-  const [listWidth, setListWidth] = useState(width - 4)
+  const width = Math.max(1, Math.min(88, dimensions.width - 6))
+  const height = Math.max(1, Math.min(24, dimensions.height - 4))
+  const [listWidth, setListWidth] = useState(Math.max(1, width - 4))
   const previousOffset = Math.max(0, review.offset - review.pageSize)
   const pageEnd = review.offset + review.changes.length
   const nextOffset = review.offset + review.pageSize
@@ -90,28 +90,56 @@ export function RemoteProjectSyncPreviewDialog({
       zIndex={830}
       onBackdropPress={onClose}
     >
-      <text
-        content={`◆ ${translateUi("ITENS FORA DE SINCRONIA")}`}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
-      />
-      <text
-        content={`${translateUi("Novo")}: ${review.counts.add} · ${translateUi("Alterado")}: ${review.counts.update} · ${translateUi("Removido")}: ${review.counts.delete} · ${translateUi("Conflito")}: ${review.counts.conflict}`}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
-      <text
-        content={truncateDisplay(review.localPath, Math.max(1, width - 4))}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
-      />
-      {review.hasLocalChanges && (
+      <box
+        style={{
+          height: 2,
+          flexShrink: 0,
+          backgroundColor: COLORS.panelRaised,
+        }}
+      >
         <text
-          content={translateUi(
-            "As alterações locais destacadas serão substituídas pelo projeto remoto.",
-          )}
-          wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
+          content={`◆ ${translateUi("ITENS FORA DE SINCRONIA")}`}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
         />
+        <text wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
+          <span fg={COLORS.success}>{`${translateUi("Novo")}: ${review.counts.add}`}</span>
+          <span fg={COLORS.muted}> · </span>
+          <span fg={COLORS.warning}>{`${translateUi("Alterado")}: ${review.counts.update}`}</span>
+          <span fg={COLORS.muted}> · </span>
+          <span fg={COLORS.danger}>{`${translateUi("Removido")}: ${review.counts.delete}`}</span>
+          <span fg={COLORS.muted}> · </span>
+          <span fg={COLORS.danger}>{`${translateUi("Conflito")}: ${review.counts.conflict}`}</span>
+        </text>
+      </box>
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          backgroundColor: COLORS.panel,
+        }}
+      >
+        <text
+          content={`› ${truncateDisplay(review.localPath, Math.max(1, width - 6))}`}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+        />
+      </box>
+      {review.hasLocalChanges && (
+        <box
+          style={{
+            height: 2,
+            flexShrink: 0,
+            backgroundColor: COLORS.diffModifiedBg,
+          }}
+        >
+          <text
+            content={`! ${translateUi(
+              "As alterações locais destacadas serão substituídas pelo projeto remoto.",
+            )}`}
+            wrapMode="word"
+            style={{ height: 2, flexShrink: 0, fg: COLORS.warning }}
+          />
+        </box>
       )}
       <scrollbox
         ref={list}
@@ -121,11 +149,17 @@ export function RemoteProjectSyncPreviewDialog({
         onSizeChange={function (this: BoxRenderable) {
           setListWidth((current) => (current === this.width ? current : this.width))
         }}
-        style={{ flexGrow: 1, minHeight: 1, border: ["top", "bottom"], borderColor: COLORS.border }}
+        style={{
+          flexGrow: 1,
+          minHeight: 3,
+          border: true,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.canvas,
+        }}
       >
         {review.changes.map((change, index) => {
           const label = changeLabel(change)
-          const statusWidth = 12
+          const statusWidth = 11
           return (
             <box
               key={`${change.path}\0${change.action}`}
@@ -146,37 +180,57 @@ export function RemoteProjectSyncPreviewDialog({
           )
         })}
       </scrollbox>
-      <text
-        content={`${review.offset + 1}–${Math.min(pageEnd, review.changeCount)} / ${review.changeCount}`}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <text
+          content={`${review.offset + 1}–${Math.min(pageEnd, review.changeCount)} / ${review.changeCount}`}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row", gap: 1 }}>
+          {hasPrevious && (
+            <TerminalInlineButton
+              id="terminal-project-sync-previous-page"
+              compact
+              label="[←] Anterior"
+              onPress={() => onPage(previousOffset)}
+            />
+          )}
+          {hasNext && (
+            <TerminalInlineButton
+              id="terminal-project-sync-next-page"
+              compact
+              label="[→] Próxima"
+              onPress={() => onPage(nextOffset)}
+            />
+          )}
+        </box>
+      </box>
       <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          backgroundColor: COLORS.panelRaised,
+        }}
+      >
         <TerminalInlineButton
           id="terminal-project-sync-confirm-changes"
           compact
+          accent={review.hasLocalChanges ? COLORS.warning : COLORS.terminal}
           label={
             review.hasLocalChanges ? "[Enter] Substituir e sincronizar" : "[Enter] Sincronizar"
           }
           onPress={onConfirm}
         />
-        {hasPrevious && (
-          <TerminalInlineButton
-            id="terminal-project-sync-previous-page"
-            compact
-            label="[←] Anterior"
-            onPress={() => onPage(previousOffset)}
-          />
-        )}
-        {hasNext && (
-          <TerminalInlineButton
-            id="terminal-project-sync-next-page"
-            compact
-            label="[→] Próxima"
-            onPress={() => onPage(nextOffset)}
-          />
-        )}
         <TerminalInlineButton
           id="terminal-project-sync-cancel-changes"
           compact

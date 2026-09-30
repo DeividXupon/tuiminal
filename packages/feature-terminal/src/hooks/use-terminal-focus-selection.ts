@@ -161,7 +161,12 @@ export function useTerminalFocusSelection({
             kind === "history" ? `agent-message-history-${sessionId}` : `live-diff-${sessionId}`,
           )
           ?.focus()
-      else renderer.root.findDescendantById(`remote-server-setup-${sessionId}`)?.focus()
+      else {
+        const setup = renderer.root.findDescendantById(`remote-server-setup-${sessionId}`)
+        const update = renderer.root.findDescendantById(`remote-codex-update-${sessionId}`)
+        const companion = setup ?? update
+        companion?.focus()
+      }
     })
   }, [focusTerminal, renderer, selectedTarget])
 

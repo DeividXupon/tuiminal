@@ -3,13 +3,17 @@ import type { EmbeddedTerminalRenderable } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { type RefObject, useCallback, useRef } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
+import { agentProvider } from "../model/agent-provider"
 import {
   cleanTerminalName,
+  integratedAgentLaunch,
   type FreeTerminalCommand,
   type TerminalSession,
 } from "../model/sessions"
 import { AgentMonitor } from "../services/agent-monitor"
 import { startCodexAppServerTerminal } from "../services/codex-app-server"
+import { startOpenCodeServerTerminal } from "../services/opencode-server"
+import { RemoteCodexCompatibilityError } from "../services/remote-codex-handshake"
 import {
   FREE_TERMINAL_WORKING_DIRECTORY,
   type FreeTerminalExit,
@@ -68,11 +72,15 @@ function beginAgentOutput(id: string, size: TerminalSize, context: LaunchContext
   context.outputs.current.get(id)?.dispose()
   const output = new AgentMonitor(size.columns, size.rows)
   context.outputs.current.set(id, output)
+  const command = context.commands.current.get(id)
   context.updateSession(id, {
-    ...(context.commands.current.get(id)?.codex ? {} : { agent: null }),
+    ...(command && integratedAgentLaunch(command) ? {} : { agent: null }),
     busy: false,
     status: "starting",
     startError: "",
+    remoteCodexCompatibility: undefined,
+    remoteCodexHydration: undefined,
+    remoteAgentHydration: undefined,
     pid: null,
     exitCode: null,
     startedAt: Date.now(),
@@ -168,7 +176,15 @@ function failTerminalStart(
   if (!isCurrent() || launch.signal.aborted) return
   const message = error instanceof Error ? error.message : "Não foi possível iniciar a sessão."
   terminal.write(`\u001b[38;2;255;107;107m× ${translateUi(message)}\u001b[0m\r\n`)
-  context.updateSession(id, { status: "failed", pid: null, exitCode: 1, startError: message })
+  context.updateSession(id, {
+    status: "failed",
+    pid: null,
+    exitCode: 1,
+    startError: message,
+    ...(error instanceof RemoteCodexCompatibilityError
+      ? { remoteCodexCompatibility: error.report }
+      : {}),
+  })
   context.setNotice(`${translateUi("Erro")}: ${translateUi(message)}`)
 }
 
@@ -181,6 +197,7 @@ async function launchTerminal(
   const command = context.commands.current.get(id)
   const terminal = context.terminals.current.get(id)
   if (!command || !terminal) return
+  const integration = integratedAgentLaunch(command)
   const isCurrent = () => currentLaunch(id, terminal, launch, context)
   const stopped = await stopTerminalBeforeRestart({
     handle: context.handles.current.get(id),
@@ -193,32 +210,34 @@ async function launchTerminal(
   if (clear) terminal.write("\u001bc")
   const size = terminalSize(id, context)
   const output = beginAgentOutput(id, size, context)
-  if (command.codex && clear) context.clearAgentMessages(id)
+  if (integration && clear) context.clearAgentMessages(id)
   const active: ActiveLaunch = { handle: null, ended: false }
-  let codexState: "working" | "blocked" | "done" | "unknown" | "idle" = "idle"
-  let codexActivity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling" =
+  let agentState: "working" | "blocked" | "done" | "unknown" | "idle" = "idle"
+  let agentActivity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling" =
     "thinking"
-  let codexTitle: string | undefined
-  const updateCodexAgent = () => {
+  let agentTitle: string | undefined
+  let hydrationRevision = 0
+  const provider = agentProvider(integration?.providerId ?? "codex")
+  const updateIntegratedAgent = () => {
     if (!launch.isCurrent()) return
     context.updateSession(id, {
       agent: {
-        key: `codex-app-server:${id}`,
-        label: "Codex",
-        profile: "codex",
-        state: codexState,
-        activity: codexState === "working" ? codexActivity : null,
-        ...(codexTitle ? { taskTitle: codexTitle } : {}),
+        key: `${provider.id}-app-server:${id}`,
+        label: provider.label,
+        profile: provider.profile,
+        state: agentState,
+        activity: agentState === "working" ? agentActivity : null,
+        ...(agentTitle ? { taskTitle: agentTitle } : {}),
       },
-      agentIntegration: "codex-app-server",
+      agentIntegration: { providerId: provider.id, transport: "app-server" },
     })
   }
   const options = {
-    cwd: command.codex?.remote
+    cwd: integration?.remote
       ? FREE_TERMINAL_WORKING_DIRECTORY
       : (command.workingDirectory ?? FREE_TERMINAL_WORKING_DIRECTORY),
-    ...(command.codex?.resumeThreadId ? { resumeThreadId: command.codex.resumeThreadId } : {}),
-    ...(command.codex?.remote ? { remote: command.codex.remote } : {}),
+    ...(integration?.resumeThreadId ? { resumeThreadId: integration.resumeThreadId } : {}),
+    ...(integration?.remote ? { remote: integration.remote } : {}),
     ...size,
     onData(data: Uint8Array) {
       if (!launch.isCurrent()) return
@@ -229,40 +248,80 @@ async function launchTerminal(
       finishTerminalExit(id, command, result, launch, active, output, context),
   }
   try {
-    active.handle = command.codex
-      ? await startCodexAppServerTerminal(
-          options,
-          {
-            onActivity(activity) {
-              codexActivity = activity
-              codexState = "working"
-              updateCodexAgent()
+    const events = {
+      onActivity(activity: typeof agentActivity) {
+        agentActivity = activity
+        agentState = "working"
+        updateIntegratedAgent()
+      },
+      onState(state: typeof agentState) {
+        agentState = state
+        if (state === "working") agentActivity = "thinking"
+        updateIntegratedAgent()
+      },
+      onTitle(title: string) {
+        agentTitle = cleanTerminalName(title)
+        updateIntegratedAgent()
+      },
+      onUserMessage(message: AgentMessageHistoryEntry) {
+        if (!launch.isCurrent()) return
+        context.updateAgentMessages(id, [message], false)
+      },
+      onUserMessageHistory(messages: readonly AgentMessageHistoryEntry[], replace: boolean) {
+        if (!launch.isCurrent()) return
+        context.updateAgentMessages(id, messages, replace)
+      },
+      onError(message: string) {
+        if (!launch.isCurrent()) return
+        context.setNotice(`${provider.label}: ${translateUi(message)}`)
+      },
+    }
+    active.handle = integration
+      ? integration.providerId === "codex"
+        ? await startCodexAppServerTerminal(
+            options,
+            {
+              ...events,
+              onHydrated(thread) {
+                if (!launch.isCurrent()) return
+                agentState = thread.state
+                updateIntegratedAgent()
+                if (integration.remote) {
+                  hydrationRevision += 1
+                  context.updateSession(id, {
+                    remoteCodexHydration: { ...thread, revision: hydrationRevision },
+                    remoteAgentHydration: { ...thread, revision: hydrationRevision },
+                  })
+                }
+              },
             },
-            onState(state) {
-              codexState = state
-              if (state === "working") codexActivity = "thinking"
-              updateCodexAgent()
+            launch.signal,
+          )
+        : await startOpenCodeServerTerminal(
+            options,
+            {
+              ...events,
+              onHydrated(hydration) {
+                if (!launch.isCurrent()) return
+                agentState = hydration.state
+                updateIntegratedAgent()
+                if (!integration.remote) return
+                hydrationRevision += 1
+                const latest = hydration.messages.at(-1)
+                context.updateSession(id, {
+                  remoteAgentHydration: {
+                    revision: hydrationRevision,
+                    threadId: hydration.session.id,
+                    state: hydration.state,
+                    latestTurnStatus:
+                      latest?.status === "queued" ? "inProgress" : (latest?.status ?? null),
+                    waitingOnApproval: hydration.waitingOnApproval,
+                  },
+                })
+              },
             },
-            onTitle(title) {
-              codexTitle = cleanTerminalName(title)
-              updateCodexAgent()
-            },
-            onUserMessage(message) {
-              if (!launch.isCurrent()) return
-              context.updateAgentMessages(id, [message], false)
-            },
-            onUserMessageHistory(messages, replace) {
-              if (!launch.isCurrent()) return
-              context.updateAgentMessages(id, messages, replace)
-            },
-            onError(message) {
-              if (!launch.isCurrent()) return
-              context.updateSession(id, { agentIntegration: "screen", agent: null })
-              context.setNotice(`Codex: ${translateUi(message)}`)
-            },
-          },
-          launch.signal,
-        )
+            launch.signal,
+          )
       : await startWorkspaceTerminal(command, options, launch.signal)
     await acceptStartedTerminal(id, command, active.handle, active, isCurrent, context)
   } catch (error) {

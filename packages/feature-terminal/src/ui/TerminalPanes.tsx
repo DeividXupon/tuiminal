@@ -82,6 +82,7 @@ type TerminalPanesProps = {
   onAddLiveDiffProject: NonNullable<PaneProps["onAddLiveDiffProject"]>
   onCloseMessageHistory: NonNullable<PaneProps["onCloseMessageHistory"]>
   onReturnMessageHistoryTerminal: NonNullable<PaneProps["onReturnMessageHistoryTerminal"]>
+  onRetryRemoteCodex: NonNullable<PaneProps["onRetryRemoteCodex"]>
   onFocusTarget: (target: TerminalFocusTargetKey) => void
 }
 
@@ -112,7 +113,7 @@ function paneLiveDiff(
   if (!matchesLiveDiffTarget(session, target)) return undefined
   return {
     agentKey: target.agentKey,
-    ...(session.codex?.remote ? { remote: session.codex.remote } : {}),
+    ...(session.agentLaunch?.remote ? { remote: session.agentLaunch.remote } : {}),
     manualDirectories: target.manualDirectories,
     stacked,
     coversTerminal,
@@ -193,6 +194,7 @@ function TerminalPaneItem({
       )}
       onCloseMessageHistory={panes.onCloseMessageHistory}
       onReturnMessageHistoryTerminal={panes.onReturnMessageHistoryTerminal}
+      onRetryRemoteCodex={panes.onRetryRemoteCodex}
       focusSelection={
         panes.selectedFocusTarget && visible
           ? { selectedTarget: panes.selectedFocusTarget, onFocus: panes.onFocusTarget }
@@ -234,7 +236,7 @@ export function TerminalPanes(panes: TerminalPanesProps) {
             />
             <TerminalInlineButton
               compact
-              label="Novo Codex"
+              label="Novo agente"
               accent={COLORS.terminal}
               onPress={onNewCodex}
             />

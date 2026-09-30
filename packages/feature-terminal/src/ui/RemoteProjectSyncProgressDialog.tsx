@@ -44,7 +44,8 @@ export function RemoteProjectSyncProgressDialog({
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
-  const width = Math.max(24, Math.min(78, dimensions.width - 2))
+  const width = Math.max(1, Math.min(68, dimensions.width - 6))
+  const height = Math.max(1, Math.min(12, dimensions.height - 4))
   const progress = status?.kind === "syncing" ? status.progress : null
   const cancelling = status?.kind === "cancelling"
   useEffect(() => dialog.current?.focus(), [])
@@ -63,55 +64,67 @@ export function RemoteProjectSyncProgressDialog({
       dialogRef={dialog}
       id="terminal-project-sync-progress"
       width={width}
-      height={Math.max(1, Math.min(11, dimensions.height - 2))}
+      height={height}
       borderColor={cancelling ? COLORS.warning : COLORS.terminal}
       zIndex={830}
       onBackdropPress={() => {
         if (!cancelling) onCancel()
       }}
     >
-      <text
-        content={`◆ ${translateUi("SINCRONIZAÇÃO DO PROJETO")}`}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
-      />
-      <text
-        content={phaseLabel(status)}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
-      />
-      <text
-        content={truncateDisplay(localPath, Math.max(1, width - 4))}
-        wrapMode="none"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
-      />
-      <box
-        style={{
-          position: "relative",
-          height: 1,
-          flexShrink: 0,
-          backgroundColor: COLORS.panelRaised,
-          overflow: "hidden",
-        }}
-      >
-        <box
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: Math.max(1, Math.round((progress ?? 0.08) * Math.max(1, width - 4))),
-            height: 1,
-            backgroundColor: COLORS.terminal,
-            opacity: 0.35,
-          }}
-        />
+      <box style={{ height: 1, flexShrink: 0, backgroundColor: COLORS.panelRaised }}>
         <text
-          content={progress === null ? " …" : ` ${Math.round(progress * 100)}%`}
-          wrapMode="none"
-          style={{ position: "absolute", left: 0, top: 0, height: 1, fg: COLORS.text }}
+          content={`◆ ${translateUi("SINCRONIZAÇÃO DO PROJETO")}`}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
         />
       </box>
+      <box style={{ flexGrow: 1, minHeight: 4 }}>
+        <text
+          content={phaseLabel(status)}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
+        />
+        <text
+          content={`› ${truncateDisplay(localPath, Math.max(1, width - 6))}`}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+        />
+        <box
+          style={{
+            position: "relative",
+            height: 1,
+            flexShrink: 0,
+            backgroundColor: COLORS.panelRaised,
+            overflow: "hidden",
+          }}
+        >
+          <box
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: Math.max(1, Math.round((progress ?? 0.08) * Math.max(1, width - 4))),
+              height: 1,
+              backgroundColor: COLORS.terminal,
+              opacity: 0.35,
+            }}
+          />
+          <text
+            content={progress === null ? " …" : ` ${Math.round(progress * 100)}%`}
+            wrapMode="none"
+            style={{ position: "absolute", left: 0, top: 0, height: 1, fg: COLORS.text }}
+          />
+        </box>
+      </box>
       <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          backgroundColor: COLORS.panelRaised,
+        }}
+      >
         <TerminalInlineButton
           id="terminal-project-sync-cancel-progress"
           compact

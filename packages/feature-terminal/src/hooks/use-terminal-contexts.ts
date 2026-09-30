@@ -55,12 +55,12 @@ function reconcileRemoteSources(
 ) {
   for (const [id, owned] of sources) {
     const session = visible.find((candidate) => candidate.id === id)
-    if (session?.startedAt === owned.startedAt && session.codex?.remote) continue
+    if (session?.startedAt === owned.startedAt && session.agentLaunch?.remote) continue
     owned.source.close()
     sources.delete(id)
   }
   for (const session of visible) {
-    const remote = session.codex?.remote
+    const remote = session.agentLaunch?.remote
     if (!remote || session.status !== "running" || sources.has(session.id)) continue
     sources.set(session.id, {
       startedAt: session.startedAt,
@@ -99,7 +99,7 @@ async function resolveSessionDirectory(
   handle: FreeTerminalProcessHandle | undefined,
   signal: AbortSignal,
 ) {
-  if (session.codex?.remote) return session.codex.remote.workingDirectory
+  if (session.agentLaunch?.remote) return session.agentLaunch.remote.workingDirectory
   if (session.status === "running" && handle?.readWorkingDirectory) {
     const current = await handle.readWorkingDirectory(signal).catch(() => null)
     if (current) return current
@@ -113,7 +113,7 @@ async function readSessionContext(
   sources: ReadonlyMap<string, OwnedRemoteSource>,
   signal: AbortSignal,
 ) {
-  if (session.codex?.remote) return sources.get(session.id)?.source.read(signal)
+  if (session.agentLaunch?.remote) return sources.get(session.id)?.source.read(signal)
   return readTerminalRepositoryContext(directory, signal)
 }
 

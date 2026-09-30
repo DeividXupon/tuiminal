@@ -116,7 +116,7 @@ test("sidebar separates numbered terminals from independently clickable agent st
 test("integrated Codex rows show a third activity line", async () => {
   updateUiSettings({ language: "pt-BR" })
   const codex = session("Codex", "working")
-  codex.agentIntegration = "codex-app-server"
+  codex.agentIntegration = { providerId: "codex", transport: "app-server" }
   codex.agent!.activity = "running"
   tui = await testRender(
     <TerminalSidebar
@@ -145,11 +145,12 @@ test("integrated Codex rows show a third activity line", async () => {
 test("agent list separates terminal and localhost sessions", async () => {
   updateUiSettings({ language: "pt-BR" })
   const localhost = session("Localhost", "idle")
-  localhost.agentIntegration = "codex-app-server"
+  localhost.agentIntegration = { providerId: "codex", transport: "app-server" }
   const remote = session("Remote", "working")
-  remote.agentIntegration = "codex-app-server"
-  remote.codex = {
-    appServer: true,
+  remote.agentIntegration = { providerId: "codex", transport: "app-server" }
+  remote.agentLaunch = {
+    providerId: "codex",
+    transport: "app-server",
     remote: {
       profile: {
         id: "work",

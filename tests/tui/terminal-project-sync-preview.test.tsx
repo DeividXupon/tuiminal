@@ -4,6 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import type { RemoteProjectSyncReview } from "../../packages/feature-terminal/src/model/remote-project-sync"
+import { RemoteProjectSyncDialog } from "../../packages/feature-terminal/src/ui/RemoteProjectSyncDialog"
 import { RemoteProjectSyncPreviewDialog } from "../../packages/feature-terminal/src/ui/RemoteProjectSyncPreviewDialog"
 import { RemoteProjectSyncProgressDialog } from "../../packages/feature-terminal/src/ui/RemoteProjectSyncProgressDialog"
 
@@ -46,9 +47,18 @@ test("sync progress keeps focus and cancels with Escape", async () => {
   })
   await tui.renderOnce()
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("terminal-project-sync-progress")
+  expect({
+    width: dialog.width,
+    height: dialog.height,
+    x: dialog.screenX,
+    y: dialog.screenY,
+  }).toEqual({ width: 68, height: 12, x: 11, y: 3 })
   expect(tui.captureCharFrame()).toContain("50%")
   expect(tui.captureCharFrame()).toContain("[A] Sincronização automática OFF")
   expect(tui.captureCharFrame()).toContain("[Esc] Cancelar")
+  const cancel = tui.renderer.root.findDescendantById("terminal-project-sync-cancel-progress")
+  if (!cancel) throw new Error("Sync progress cancel action did not mount")
+  expect(cancel.screenX).toBeGreaterThan(dialog.screenX + dialog.width / 2)
   act(() => tui?.mockInput.pressKey("a"))
   expect(automaticToggles).toBe(1)
   act(() => tui?.mockInput.pressEscape())
@@ -126,6 +136,12 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   })
   await tui.renderOnce()
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("terminal-project-sync-preview")
+  expect({
+    width: dialog.width,
+    height: dialog.height,
+    x: dialog.screenX,
+    y: dialog.screenY,
+  }).toEqual({ width: 88, height: 20, x: 6, y: 2 })
   const frame = tui.captureCharFrame()
   expect(frame).toContain("ITENS FORA DE SINCRONIA")
   expect(frame).toContain("src/new.ts")
@@ -142,10 +158,49 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   if (!confirm || !cancel) throw new Error("Sync preview actions did not mount")
   const automatic = tui.renderer.root.findDescendantById("terminal-project-sync-automatic")
   if (!automatic) throw new Error("Automatic sync action did not mount")
+  expect(next.screenY).toBeLessThan(automatic.screenY)
+  expect(automatic.screenY).toBeLessThan(confirm.screenY)
+  expect(cancel.screenY).toBe(confirm.screenY)
+  expect(cancel.screenX).toBeGreaterThan(confirm.screenX)
   await act(async () => tui?.mockMouse.click(automatic.screenX + 1, automatic.screenY))
   expect(automaticToggles).toBe(1)
   await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))
   expect(confirms).toBe(1)
   await act(async () => tui?.mockMouse.click(cancel.screenX + 1, cancel.screenY))
   expect(closes).toBe(1)
+})
+
+test("sync confirmation keeps primary and cancel actions separated in a compact modal", async () => {
+  let confirms = 0
+  let closes = 0
+  tui = await testRender(
+    <RemoteProjectSyncDialog
+      kind="replace"
+      localPath="/local/project-sync"
+      onConfirm={() => {
+        confirms += 1
+      }}
+      onClose={() => {
+        closes += 1
+      }}
+    />,
+    { width: 90, height: 18 },
+  )
+  await act(async () => Bun.sleep(10))
+  await tui.renderOnce()
+  const dialog = tui.renderer.root.findDescendantById("terminal-project-sync-confirm")
+  const confirm = tui.renderer.root.findDescendantById("terminal-project-sync-confirm-action")
+  const cancel = tui.renderer.root.findDescendantById("terminal-project-sync-cancel-confirm")
+  if (!dialog || !confirm || !cancel) throw new Error("Sync confirmation did not mount")
+  expect({
+    width: dialog.width,
+    height: dialog.height,
+    x: dialog.screenX,
+    y: dialog.screenY,
+  }).toEqual({ width: 68, height: 10, x: 11, y: 4 })
+  expect(confirm.screenY).toBe(cancel.screenY)
+  expect(confirm.screenX).toBeLessThan(cancel.screenX)
+  await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))
+  await act(async () => tui?.mockMouse.click(cancel.screenX + 1, cancel.screenY))
+  expect({ confirms, closes }).toEqual({ confirms: 1, closes: 1 })
 })

@@ -30,6 +30,10 @@ import {
   resetCodexResumeThreadsForTests,
 } from "../../packages/feature-terminal/src/model/codex-resume-threads"
 import {
+  publishOpenCodeResumeThreads,
+  resetOpenCodeResumeThreadsForTests,
+} from "../../packages/feature-terminal/src/model/opencode-resume-threads"
+import {
   resetPinnedTerminalSidebarForTests,
   setTmuxHostSidebar,
   terminalSidebarReplica,
@@ -41,6 +45,8 @@ import * as projectDirectories from "../../packages/feature-terminal/src/service
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
+import * as openCodeServer from "../../packages/feature-terminal/src/services/opencode-server"
+import * as remoteHandshake from "../../packages/feature-terminal/src/services/remote-codex-handshake"
 import * as remoteLiveDiff from "../../packages/feature-terminal/src/services/remote-live-diff"
 import * as remoteReadiness from "../../packages/feature-terminal/src/services/remote-server-readiness"
 import * as remoteTerminalContext from "../../packages/feature-terminal/src/services/remote-terminal-context"
@@ -57,6 +63,15 @@ import {
   terminalActionKey,
 } from "../../packages/feature-terminal/src/ui/TerminalActions"
 
+const incompatibleReport = {
+  compatible: false,
+  reason: "versionMismatch",
+  localVersion: "0.157.2",
+  remoteVersion: "0.158.0",
+  daemonAvailable: true,
+  proxyAvailable: true,
+} as const
+
 const originalSettings = getUiSettings()
 const originalOnlyTab = process.env.TUIMINAL_ONLY_TAB
 const originalInitialTab = process.env.TUIMINAL_INITIAL_TAB
@@ -72,6 +87,15 @@ let codexResumeSpy:
   | undefined
 let remoteCodexResumeSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "refreshRemoteCodexResumeThreads">>
+  | undefined
+let openCodeSpy:
+  | ReturnType<typeof spyOn<typeof openCodeServer, "startOpenCodeServerTerminal">>
+  | undefined
+let openCodeResumeSpy:
+  | ReturnType<typeof spyOn<typeof openCodeServer, "refreshOpenCodeResumeThreads">>
+  | undefined
+let remoteOpenCodeResumeSpy:
+  | ReturnType<typeof spyOn<typeof openCodeServer, "refreshRemoteOpenCodeResumeThreads">>
   | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
@@ -91,6 +115,9 @@ afterEach(() => {
   codexSpy?.mockRestore()
   codexResumeSpy?.mockRestore()
   remoteCodexResumeSpy?.mockRestore()
+  openCodeSpy?.mockRestore()
+  openCodeResumeSpy?.mockRestore()
+  remoteOpenCodeResumeSpy?.mockRestore()
   codexEvents = undefined
   inspectionSpy?.mockRestore()
   repositoryContextSpy = undefined
@@ -101,6 +128,7 @@ afterEach(() => {
   snapshot = []
   resetPinnedTerminalSidebarForTests()
   resetCodexResumeThreadsForTests()
+  resetOpenCodeResumeThreadsForTests()
   updateUiSettings(originalSettings)
   if (originalOnlyTab === undefined) delete process.env.TUIMINAL_ONLY_TAB
   else process.env.TUIMINAL_ONLY_TAB = originalOnlyTab
@@ -166,6 +194,20 @@ async function mount(
       return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
     },
   )
+  openCodeSpy = spyOn(openCodeServer, "startOpenCodeServerTerminal").mockImplementation(
+    async (options) => {
+      const directory = options.remote?.workingDirectory ?? options.cwd ?? process.cwd()
+      commands.push([
+        "opencode",
+        "--server",
+        "http://127.0.0.1:4501",
+        ...(options.resumeThreadId ? ["--session", options.resumeThreadId] : []),
+        directory,
+      ])
+      starts.push(options)
+      return { pid: 501, backend: "native", write() {}, resize() {}, async stop() {} }
+    },
+  )
   liveDiffSpies.push(
     spyOn(gitProjects, "discoverAgentGitProjects").mockResolvedValue({
       paths: [],
@@ -199,6 +241,11 @@ async function mount(
   )
   codexResumeSpy = spyOn(codexServer, "refreshCodexResumeThreads").mockResolvedValue([])
   remoteCodexResumeSpy = spyOn(codexServer, "refreshRemoteCodexResumeThreads").mockResolvedValue([])
+  openCodeResumeSpy = spyOn(openCodeServer, "refreshOpenCodeResumeThreads").mockResolvedValue([])
+  remoteOpenCodeResumeSpy = spyOn(
+    openCodeServer,
+    "refreshRemoteOpenCodeResumeThreads",
+  ).mockResolvedValue([])
   if (app) process.env.TUIMINAL_ONLY_TAB = "terminal"
   if (fullApp) {
     delete process.env.TUIMINAL_ONLY_TAB
@@ -229,6 +276,12 @@ async function leader(action: string) {
   await key("b", true)
   await key(action)
 }
+async function openAgentProjects() {
+  await leader("a")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+}
 async function selectProjectRemote() {
   await key("e")
   for (
@@ -258,7 +311,7 @@ async function waitForFolderResults() {
   expect(tui?.captureCharFrame()).not.toContain("Carregando pastas")
 }
 async function launchAgent(remote = false) {
-  await leader("a")
+  await openAgentProjects()
   if (remote) {
     await selectProjectRemote()
   }
@@ -380,6 +433,60 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
+test("agent picker enables OpenCode while keeping future providers disabled", async () => {
+  await mount()
+  await leader("a")
+  expect(tui?.captureCharFrame()).toContain("Codex")
+  expect(tui?.captureCharFrame()).toContain("Claude Code")
+  expect(tui?.captureCharFrame()).toContain("OpenCode")
+  expect(tui?.captureCharFrame().match(/Em breve/g)).toHaveLength(1)
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+
+  await arrow("down")
+  await key("enter")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  expect(commands).toHaveLength(0)
+  await click("terminal-dialog-agent-provider-opencode")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+  expect(commands).toHaveLength(0)
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeUndefined()
+})
+
+test("Master Key opens the official OpenCode TUI attached to its public server", async () => {
+  await mount()
+  await leader("a")
+  await click("terminal-dialog-agent-provider-opencode")
+  await click("terminal-dialog-project-launch")
+  expect(openCodeSpy).toHaveBeenCalledTimes(1)
+  expect(commands[0]).toEqual([
+    "opencode",
+    "--server",
+    "http://127.0.0.1:4501",
+    processes.FREE_TERMINAL_WORKING_DIRECTORY,
+  ])
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+})
+
+test("OpenCode launches remotely through the selected SSH source and enables project sync", async () => {
+  await mount()
+  await leader("a")
+  await click("terminal-dialog-agent-provider-opencode")
+  await selectProjectRemote()
+  await click("terminal-dialog-project-launch")
+
+  expect(openCodeSpy).toHaveBeenCalledTimes(1)
+  expect(starts.at(-1)).toMatchObject({
+    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
+  })
+  expect(commands.at(-1)).toEqual(["opencode", "--server", "http://127.0.0.1:4501", "/srv/project"])
+
+  await leader("r")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeDefined()
+})
+
 test("Master Key A chooses an SSH alias inside the picker and launches the exact remote directory", async () => {
   await mount()
   await launchAgent(true)
@@ -464,7 +571,7 @@ test("Master Key R offers a local destination only for the active remote Codex",
 
 test("project environment picker has a single navigation footer without reload", async () => {
   await mount()
-  await leader("a")
+  await openAgentProjects()
   await key("e")
   const frame = tui?.captureCharFrame() ?? ""
   expect(frame).toContain("[↑/↓] navegar · [Enter] selecionar · [Esc] cancelar")
@@ -479,7 +586,7 @@ test("project environment picker has a single navigation footer without reload",
 
 test("Master Key A chooses a local directory without a shell or configured SSH profile", async () => {
   await mount()
-  await leader("a")
+  await openAgentProjects()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
   expect(commands).toHaveLength(0)
   await key("p")
@@ -598,7 +705,7 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
   await key("/")
   await act(async () => tui?.mockInput.typeText("login"))
   await tui?.renderOnce()
-  expect(tui?.captureCharFrame()).toContain("AGENTES · CODEX /RESUME")
+  expect(tui?.captureCharFrame()).toContain("AGENTES · RETOMAR")
   expect(tui?.captureCharFrame()).toContain("Revisar autenticação")
   expect(tui?.captureCharFrame()).toContain("└  Corrija o fluxo de login do projeto")
   expect(tui?.captureCharFrame()).toContain("Local  project  ⎇ feature/login")
@@ -609,7 +716,7 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
   await key("escape")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
   await arrow("right")
-  expect(tui?.captureCharFrame()).toContain("› AGENTES · CODEX /RESUME")
+  expect(tui?.captureCharFrame()).toContain("› AGENTES · RETOMAR")
   expect(tui?.captureCharFrame()).toContain("O login foi corrigido")
   expect(tui?.captureCharFrame()).toContain("passaram.")
   expect(tui?.captureCharFrame()).toContain("Corrija o fluxo de login do projeto")
@@ -644,6 +751,42 @@ test("Master Key lists and resumes conversations from the local Codex /resume li
   ])
 })
 
+test("Master Key resumes an OpenCode conversation with the official attached TUI", async () => {
+  await mount(false, 140, 36)
+  await act(async () => {
+    publishOpenCodeResumeThreads([
+      {
+        id: "ses_opencode",
+        title: "Implementar integração",
+        preview: "Concluir suporte ao OpenCode",
+        lastResponse: "Integração concluída.",
+        cwd: "/workspace/opencode-project",
+        projectName: "opencode-project",
+        gitBranch: "",
+        updatedAt: Date.now(),
+        state: "idle",
+      },
+    ])
+  })
+  await tui?.renderOnce()
+  await key("b", true)
+  await arrow("right")
+
+  expect(tui?.captureCharFrame()).toContain("OpenCode · Local")
+  expect(tui?.captureCharFrame()).toContain("Implementar integração")
+  await key("enter")
+
+  expect(openCodeSpy).toHaveBeenCalledTimes(1)
+  expect(commands.at(-1)).toEqual([
+    "opencode",
+    "--server",
+    "http://127.0.0.1:4501",
+    "--session",
+    "ses_opencode",
+    "/workspace/opencode-project",
+  ])
+})
+
 test("Master Key Agents merges local and remote Codex conversations", async () => {
   const profile = {
     id: "work-server",
@@ -655,6 +798,7 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
     terminalRemoteCodexActiveProfileId: profile.id,
   })
   await mount(false, 140, 36)
+  const updatedAt = Date.now()
   await act(async () => {
     publishCodexResumeThreads([
       {
@@ -665,7 +809,7 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
         cwd: "/workspace/local",
         projectName: "local",
         gitBranch: "feature/local",
-        updatedAt: Date.now(),
+        updatedAt,
         state: "idle",
       },
     ])
@@ -679,7 +823,7 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
           cwd: "/srv/project",
           projectName: "project",
           gitBranch: "main",
-          updatedAt: Date.now() - 1,
+          updatedAt: updatedAt - 1,
           state: "idle",
           remoteProfileId: profile.id,
           remoteProfileName: profile.name,
@@ -696,8 +840,9 @@ test("Master Key Agents merges local and remote Codex conversations", async () =
   expect(tui?.captureCharFrame()).toContain("Agente remoto")
   expect(tui?.captureCharFrame()).toContain("Projeto remoto")
   expect(tui?.captureCharFrame()).toContain("Projeto local")
-  expect(tui?.captureCharFrame()).toContain("Remoto  Servidor do trabalho · project  ⎇ main")
-  expect(tui?.captureCharFrame()).toContain("Local  local  ⎇ feature/local")
+  expect(tui?.captureCharFrame()).toContain("Codex · Remoto  Servidor do trabalho")
+  expect(tui?.captureCharFrame()).toContain("Codex · Local  local  ⎇ feature/local")
+  expect(tui?.captureCharFrame()).toContain("⎇ main")
   const localOrigin = renderable("terminal-resume-origin-local-thread")
   const remoteOrigin = renderable("terminal-resume-origin-remote-thread")
   const localMarker = renderable("terminal-resume-marker-local-thread")
@@ -795,6 +940,74 @@ test("a remote Codex conversation resumes through its original SSH profile", asy
   })
 })
 
+test("the compatibility guide retries the exact remote resumed conversation", async () => {
+  await mount(false, 140, 36)
+  const profile = {
+    id: "work-server",
+    name: "Servidor do trabalho",
+    host: "work-server",
+  }
+  updateUiSettings({
+    terminalRemoteCodexProfiles: [profile],
+    terminalRemoteCodexActiveProfileId: profile.id,
+  })
+  await act(async () =>
+    publishCodexResumeThreads([
+      {
+        id: "remote-thread",
+        title: "Continuar no servidor",
+        preview: "Projeto remoto",
+        lastResponse: "Pronto.",
+        cwd: "/srv/project",
+        projectName: "project",
+        gitBranch: "main",
+        updatedAt: Date.now(),
+        state: "idle",
+        remoteProfileId: profile.id,
+      },
+    ]),
+  )
+  codexSpy?.mockRejectedValueOnce(
+    new remoteHandshake.RemoteCodexCompatibilityError(incompatibleReport),
+  )
+  const preflight = spyOn(remoteHandshake, "preflightRemoteCodex").mockResolvedValue({
+    ...incompatibleReport,
+    compatible: true,
+    reason: null,
+    remoteVersion: "0.157.9",
+    remoteUserAgent: "codex_cli_rs/0.157.9",
+  })
+  liveDiffSpies.push(preflight)
+
+  await tui?.renderOnce()
+  await key("b", true)
+  await arrow("right")
+  await key("enter")
+  await waitForRenderable("remote-codex-compatibility-modal")
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  await key("enter")
+  for (let attempt = 0; attempt < 100 && codexSpy?.mock.calls.length !== 2; attempt++) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+
+  expect(preflight).toHaveBeenCalledTimes(1)
+  expect(codexSpy).toHaveBeenCalledTimes(2)
+  expect(starts.at(-1)).toMatchObject({
+    resumeThreadId: "remote-thread",
+    remote: { profile, workingDirectory: "/srv/project" },
+  })
+  expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CODEX")
+})
+
 test("Master Key idle time uses the light palette's primary text color", async () => {
   updateUiSettings({ colorMode: "light", palette: "prime" })
   await mount(false, 140, 36)
@@ -825,7 +1038,7 @@ test("Master Key idle time uses the light palette's primary text color", async (
   )
   await arrow("left")
   const actionTitle = renderable("terminal-action-title-a")
-  expect(spanColor("Novo Codex", actionTitle.screenY)).toEqual(
+  expect(spanColor("Novo agente", actionTitle.screenY)).toEqual(
     RGBA.fromHex(paletteFor("prime", "light").text).toInts(),
   )
 })
@@ -1139,7 +1352,7 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(agentPanel?.screenX).toBeGreaterThan(actionPanel?.screenX ?? 0)
   expect(tui?.renderer.root.findDescendantById("terminal-actions-backdrop")).toBeUndefined()
   expect(terminal.height).toBe(height)
-  expect(tui?.captureCharFrame()).toContain("Inicia o Codex local ou remoto em uma nova seção.")
+  expect(tui?.captureCharFrame()).toContain("Escolhe um agente e inicia uma nova seção.")
   expect(tui?.captureCharFrame()).toContain("Abre um terminal local em uma nova seção.")
   const newCodex = renderable("terminal-action-a")
   const sentMessages = renderable("terminal-action-s")
@@ -1152,7 +1365,7 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(chooseBox.screenY).toBe(remoteSync.screenY + 2)
   for (const action of ["c", "g"])
     expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
-  expect(spanColor("Novo Codex", newCodex.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  expect(spanColor("Novo agente", newCodex.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
   const featureTag = renderable("terminal-action-tag-d-feature")
   const agentTag = renderable("terminal-action-tag-d-agent")
   expect(featureTag.screenX).toBeGreaterThan(renderable("terminal-action-title-d").screenX)
@@ -1161,7 +1374,7 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(spanColor("AGENTE", liveDiff.screenY)).toEqual(RGBA.fromHex(COLORS.database).toInts())
   await key("/")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-action-search")
-  await act(async () => tui?.mockInput.typeText("codex"))
+  await act(async () => tui?.mockInput.typeText("agente"))
   await tui?.renderOnce()
   expect(tui?.renderer.root.findDescendantById("terminal-action-a")).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("terminal-action-n")).toBeUndefined()
@@ -2796,7 +3009,7 @@ test("project picker launches a clicked remote project from the selected origin"
     ],
     "work-server",
   )
-  await leader("a")
+  await openAgentProjects()
   expect(tui?.captureCharFrame()).toContain("only-local")
   expect(tui?.captureCharFrame()).not.toContain("only-remote")
   await selectProjectRemote()
@@ -2818,12 +3031,125 @@ test("project picker retains the destination on launch error and retries once", 
   expect(focusedTerminal().id).toStartWith("free-terminal-")
 })
 
+test("remote compatibility Escape returns to the preserved project selection", async () => {
+  await mount()
+  codexSpy?.mockRejectedValueOnce(
+    new remoteHandshake.RemoteCodexCompatibilityError(incompatibleReport),
+  )
+  await launchAgent(true)
+  await waitForRenderable("remote-codex-compatibility-modal")
+  expect(tui?.captureCharFrame()).toContain("CODEX INCOMPATÍVEL")
+  expect(tui?.captureCharFrame()).toContain("0.157.2")
+  expect(tui?.captureCharFrame()).toContain("0.158.0")
+
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("remote-codex-compatibility-modal")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Remoto · work-server")
+
+  await click("terminal-dialog-project-launch")
+  expect(codexSpy).toHaveBeenCalledTimes(2)
+  expect(starts.at(-1)).toMatchObject({
+    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
+  })
+})
+
+test("compatibility guide opens local and SSH terminals, revalidates, and relaunches", async () => {
+  await mount(false, 150, 38)
+  codexSpy?.mockRejectedValueOnce(
+    new remoteHandshake.RemoteCodexCompatibilityError(incompatibleReport),
+  )
+  const updatedReport = { ...incompatibleReport, remoteVersion: "0.159.0" }
+  const preflight = spyOn(remoteHandshake, "preflightRemoteCodex")
+    .mockRejectedValueOnce(new remoteHandshake.RemoteCodexCompatibilityError(updatedReport))
+    .mockResolvedValueOnce({
+      ...incompatibleReport,
+      compatible: true,
+      reason: null,
+      remoteVersion: "0.157.9",
+      remoteUserAgent: "codex_cli_rs/0.157.9",
+    })
+  liveDiffSpies.push(preflight)
+
+  await launchAgent(true)
+  await waitForRenderable("remote-codex-compatibility-modal")
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.captureCharFrame().includes("ATUALIZAR CODEX");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  const guide = tui?.captureCharFrame() ?? ""
+  expect(guide).toContain("ATUALIZAR CODEX · Local")
+  expect(guide).toContain("ATUALIZAR CODEX · work-server")
+  expect(guide).toContain("codex update")
+  expect(guide).toContain("curl -fsSL https://chatgpt.com/codex/install.sh | sh")
+  expect(
+    commands.some((command) => command.at(0) === "ssh" && command.at(-1) === "work-server"),
+  ).toBe(true)
+  expect(inputs.every((input) => input.length === 0)).toBe(true)
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("free-terminal-")
+  await leader("m")
+  await arrow("down")
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 &&
+    (!tui?.captureCharFrame().includes("0.159.0") ||
+      !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-"));
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  expect(tui?.captureCharFrame()).toContain("0.159.0")
+  expect(tui?.captureCharFrame()).toContain("incompatíveis")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+  await key("enter")
+  for (let attempt = 0; attempt < 100 && codexSpy?.mock.calls.length !== 2; attempt++) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  expect(preflight).toHaveBeenCalledTimes(2)
+  expect(codexSpy).toHaveBeenCalledTimes(2)
+  expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CODEX")
+  expect(starts.at(-1)).toMatchObject({
+    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
+  })
+})
+
 test("folder browsing opens a focused home input and Escape restores the existing PTY", async () => {
   await mount(true)
   await leader("n")
   const original = focusedTerminal()
   const count = commands.length
-  await leader("a")
+  await openAgentProjects()
   await key("p")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-dialog-project-path")
   expect((tui?.renderer.currentFocusedRenderable as InputRenderable | undefined)?.value).toBe("~/")
@@ -2833,6 +3159,8 @@ test("folder browsing opens a focused home input and Escape restores the existin
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
   await key("escape")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  await key("escape")
   expect(focusedTerminal()).toBe(original)
   expect(inputs[0]?.join("")).toBe("")
 })
@@ -2850,7 +3178,7 @@ test("project picker cancels stale directory reads when leaving folder search", 
     },
   )
   liveDiffSpies.push(query)
-  await leader("a")
+  await openAgentProjects()
   await key("p")
   for (let attempt = 0; attempt < 100 && !querySignal; attempt++)
     await act(async () => Bun.sleep(5))
@@ -2868,7 +3196,7 @@ test("project picker cancels stale directory reads when leaving folder search", 
 
 test("project picker keeps destination and launch visible in a short terminal", async () => {
   await mount(false, 70, 12)
-  await leader("a")
+  await openAgentProjects()
   expect(tui?.captureCharFrame()).toContain("Iniciar agente")
   expect(tui?.captureCharFrame()).toContain("Local")
   const launch = tui?.renderer.root.findDescendantById("terminal-dialog-project-launch")
@@ -2880,7 +3208,7 @@ test("project picker keeps destination and launch visible in a short terminal", 
 for (const width of [70, 110])
   test(`project and folder picker actions share one visible footer row at ${width} columns`, async () => {
     await mount(false, width, 24)
-    await leader("a")
+    await openAgentProjects()
     const assertFooter = (ids: string[]) => {
       const controls = ids.map((id) => tui?.renderer.root.findDescendantById(id))
       const y = controls[0]?.screenY
@@ -2941,6 +3269,8 @@ test("cancelling an agent startup retires only the pending session and cannot la
   await tui?.renderOnce()
   expect(stopped).toHaveBeenCalledTimes(1)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  await key("escape")
   expect(focusedTerminal()).toBe(original)
 })
 
@@ -2970,7 +3300,7 @@ for (const remote of [false, true])
       },
     )
     liveDiffSpies.push(query)
-    await leader("a")
+    await openAgentProjects()
     if (remote) await selectProjectRemote()
     await key("p")
     await waitForFolderResults()
@@ -3028,7 +3358,7 @@ test("project picker adds discovered Git repositories without duplicating recent
       },
     ]),
   )
-  await leader("a")
+  await openAgentProjects()
   expect(tui?.captureCharFrame()).toContain("Projetos recentes")
   expect(tui?.captureCharFrame()).toContain("Projetos Git encontrados")
   expect(tui?.captureCharFrame()).toContain("discovered-git")
@@ -3057,7 +3387,7 @@ test("editing a folder parent aborts its old query and ignores a delayed reply",
     },
   )
   liveDiffSpies.push(query)
-  await leader("a")
+  await openAgentProjects()
   await key("p")
   for (let attempt = 0; attempt < 100 && !oldSignal; attempt++) await act(async () => Bun.sleep(5))
   const input = tui?.renderer.root.findDescendantById(
@@ -3089,7 +3419,7 @@ test("folder validation shows its loader, preserves the path on failure, and ret
     },
   )
   liveDiffSpies.push(query)
-  await leader("a")
+  await openAgentProjects()
   await key("p")
   await waitForFolderResults()
   await click("terminal-dialog-folder-choose")
@@ -3116,7 +3446,7 @@ test("autocomplete uses the native input buffer when typing and Tab arrive in on
     truncated: false,
   })
   liveDiffSpies.push(query)
-  await leader("a")
+  await openAgentProjects()
   await key("p")
   await waitForFolderResults()
   await act(async () => tui?.mockInput.pressKey("Pr\t"))

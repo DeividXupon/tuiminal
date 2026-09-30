@@ -3,7 +3,9 @@ import { useTerminalDimensions } from "@opentui/react"
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
+import { agentProvider } from "../model/agent-provider"
 import {
+  integratedAgentLaunch,
   type FreeTerminalCommand,
   type FreeTerminalKind,
   MAX_SESSIONS,
@@ -53,22 +55,31 @@ function createTerminalSession(
   const id = `${command.kind}-${Date.now()}-${sessionSequence.current}`
   const number = (kindSequences.current.get(command.kind) ?? 0) + 1
   kindSequences.current.set(command.kind, number)
+  const integration = integratedAgentLaunch(command)
+  const provider = integration ? agentProvider(integration.providerId) : null
   return {
     ...command,
     ...placement,
     id,
     title: command.tmux ? command.label : `${command.label} ${number}`,
     titleMode: "automatic",
-    agent: command.codex
+    agent: provider
       ? {
-          key: `codex-app-server:${id}`,
-          label: "Codex",
-          profile: "codex",
+          key: `${provider.id}-app-server:${id}`,
+          label: provider.label,
+          profile: provider.profile,
           state: "idle",
           activity: null,
         }
       : null,
-    ...(command.codex ? { agentIntegration: "codex-app-server" as const } : {}),
+    ...(provider
+      ? {
+          agentIntegration: {
+            providerId: provider.id,
+            transport: "app-server" as const,
+          },
+        }
+      : {}),
     busy: false,
     status: "starting",
     pid: null,

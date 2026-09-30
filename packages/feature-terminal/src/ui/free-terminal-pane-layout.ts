@@ -35,7 +35,7 @@ export type FreeTerminalPaneProps = {
   liveDiff?:
     | {
         agentKey: string
-        remote?: NonNullable<TerminalSession["codex"]>["remote"]
+        remote?: NonNullable<TerminalSession["agentLaunch"]>["remote"]
         manualDirectories: readonly string[]
         stacked: boolean
         coversTerminal: boolean
@@ -54,6 +54,7 @@ export type FreeTerminalPaneProps = {
     | undefined
   onCloseMessageHistory?: (id: string) => void
   onReturnMessageHistoryTerminal?: (id: string) => void
+  onRetryRemoteCodex?: (flowId: number) => void
   focusSelection?:
     | {
         selectedTarget: TerminalFocusTargetKey
@@ -177,11 +178,20 @@ export function measuresPane(
   liveDiff: FreeTerminalPaneProps["liveDiff"],
   messageHistory: FreeTerminalPaneProps["messageHistory"],
   remoteSetup: TerminalSession["remoteSetup"],
+  remoteCodexUpdate: TerminalSession["remoteCodexUpdate"],
   context: FreeTerminalPaneProps["context"],
   syncStatus: FreeTerminalPaneProps["syncStatus"],
   agentOrigin: TerminalAgentOrigin | undefined,
 ) {
-  return Boolean(liveDiff || messageHistory || remoteSetup || context || syncStatus || agentOrigin)
+  return Boolean(
+    liveDiff ||
+      messageHistory ||
+      remoteSetup ||
+      remoteCodexUpdate ||
+      context ||
+      syncStatus ||
+      agentOrigin,
+  )
 }
 
 export function paneContextWidth(
@@ -238,6 +248,8 @@ export function sameTerminalPane(previous: FreeTerminalPaneProps, next: FreeTerm
     previous.messageHistory?.focusRequest === next.messageHistory?.focusRequest &&
     previous.onCloseMessageHistory === next.onCloseMessageHistory &&
     previous.onReturnMessageHistoryTerminal === next.onReturnMessageHistoryTerminal &&
+    previous.session.remoteCodexUpdate === next.session.remoteCodexUpdate &&
+    previous.onRetryRemoteCodex === next.onRetryRemoteCodex &&
     previous.focusSelection?.selectedTarget === next.focusSelection?.selectedTarget &&
     previous.focusSelection?.onFocus === next.focusSelection?.onFocus
   )

@@ -1,5 +1,28 @@
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
-import { remoteCodexAppServerSshCommand } from "./remote-codex-connection"
+import {
+  compatibleCodexVersions,
+  localCodexCompatibility,
+  parseCodexVersion,
+  type RemoteCodexCompatibilityReport,
+  RemoteCodexCompatibilityError,
+  remoteCodexCompatibility,
+  remoteCodexCompatibilityReport,
+} from "./remote-codex-compatibility"
+import {
+  createRemoteCodexAppServerLaunch,
+  remoteCodexPreflightSshCommand,
+  remoteCodexProxySshCommand,
+} from "./remote-codex-connection"
+import { resolveCodexExecutable } from "./codex-executable"
+import { CodexProxyDisconnectedError, CodexProxyWebSocket } from "./codex-proxy-websocket"
+
+export {
+  compatibleCodexVersions,
+  parseCodexVersion,
+  RemoteCodexCompatibilityError,
+  type RemoteCodexCompatibilityReport,
+  type RemoteCodexIncompatibilityReason,
+} from "./remote-codex-compatibility"
 
 type RecordValue = Record<string, unknown>
 
@@ -10,6 +33,7 @@ export type RemoteCodexHandshakeErrorCode =
   | "unreachable"
   | "codexMissing"
   | "directoryMissing"
+  | "codexUnauthenticated"
   | "appServerStartFailed"
   | "initializeRejected"
   | "protocolIncompatible"
@@ -24,12 +48,13 @@ const ERROR_MESSAGES: Record<RemoteCodexHandshakeErrorCode, string> = {
   unreachable: "Não foi possível alcançar o servidor remoto.",
   codexMissing: "O Codex não está instalado no servidor remoto.",
   directoryMissing: "A pasta selecionada não existe no servidor remoto.",
-  appServerStartFailed: "O app-server do Codex não iniciou no servidor remoto.",
+  codexUnauthenticated: "A conta do Codex ainda não está conectada.",
+  appServerStartFailed: "O daemon do Codex não iniciou no servidor remoto.",
   initializeRejected: "O Codex remoto rejeitou o handshake initialize.",
   protocolIncompatible: "A resposta initialize do Codex remoto é incompatível.",
   localCodexUnavailable: "Não foi possível verificar a versão local do Codex.",
-  timeout: "O handshake remoto do Codex excedeu o tempo limite.",
-  disconnected: "O Codex remoto encerrou antes de responder ao handshake.",
+  timeout: "O preflight remoto do Codex excedeu o tempo limite.",
+  disconnected: "O proxy remoto do Codex encerrou antes de responder ao handshake.",
 }
 
 export const REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS = 10_000
@@ -41,16 +66,6 @@ export class RemoteCodexHandshakeError extends Error {
   }
 }
 
-type RemoteCodexHandshakeOptions = {
-  timeoutMs?: number
-  remoteCommand?: readonly string[]
-  localVersionCommand?: readonly string[]
-}
-
-type ParsedVersion = {
-  value: string
-}
-
 type HandshakeProcess = {
   exitCode: number | null
   stdin: { write(value: string | Uint8Array): number | Promise<number>; end(): void }
@@ -60,18 +75,28 @@ type HandshakeProcess = {
   kill(signal?: string | number): void
 }
 
-class RemoteCodexProcessEnded extends Error {}
+type PreflightOptions = {
+  timeoutMs?: number
+  localVersionCommand?: readonly string[]
+  remoteProbeCommand?: readonly string[]
+  daemonStartCommand?: readonly string[]
+  proxyCommand?: readonly string[]
+}
+
+type HandshakeOptions = {
+  timeoutMs?: number
+  remoteCommand?: readonly string[]
+  localVersionCommand?: readonly string[]
+}
+
+type CommandResult = { exitCode: number; stdout: string; stderr: string }
+
+function localVersionCommand(command?: readonly string[]) {
+  return command ?? [resolveCodexExecutable(), "--version"]
+}
 
 function object(value: unknown): RecordValue | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null
-}
-
-function parseCodexVersion(value: string): ParsedVersion | null {
-  const match = value.match(/(?:^|[^\d])(\d+)\.(\d+)\.(\d+)(?:[-+][\d.A-Za-z-]+)?/u)
-  if (!match?.[1] || !match[2] || !match[3]) return null
-  return {
-    value: `${match[1]}.${match[2]}.${match[3]}`,
-  }
 }
 
 async function readBoundedText(stream: ReadableStream<Uint8Array>, maximumBytes = 64 * 1024) {
@@ -94,74 +119,18 @@ async function readBoundedText(stream: ReadableStream<Uint8Array>, maximumBytes 
   }
 }
 
-async function waitForExit(process: HandshakeProcess, signal: AbortSignal) {
-  if (process.exitCode !== null) return process.exitCode
-  signal.throwIfAborted()
-  return new Promise<number>((resolve, reject) => {
-    const onAbort = () => {
-      cleanup()
-      reject(signal.reason)
-    }
-    const cleanup = () => signal.removeEventListener("abort", onAbort)
-    signal.addEventListener("abort", onAbort, { once: true })
-    process.exited.then(
-      (code) => {
-        cleanup()
-        resolve(code)
-      },
-      (error) => {
-        cleanup()
-        reject(error)
-      },
-    )
-  })
-}
-
-async function nextJsonlResponse(
-  stream: ReadableStream<Uint8Array>,
-  id: string,
+async function runCommand(
+  command: readonly string[],
   signal: AbortSignal,
-) {
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let buffered = ""
-  const onAbort = () => void reader.cancel(signal.reason).catch(() => undefined)
-  signal.addEventListener("abort", onAbort, { once: true })
-  try {
-    while (true) {
-      signal.throwIfAborted()
-      const newline = buffered.indexOf("\n")
-      if (newline >= 0) {
-        const line = buffered.slice(0, newline).replace(/\r$/u, "")
-        buffered = buffered.slice(newline + 1)
-        if (!line) continue
-        try {
-          const message = object(JSON.parse(line))
-          if (message?.id === id) return message
-        } catch {
-          // SSH banners and unrelated malformed lines are not protocol responses.
-        }
-        continue
-      }
-      const chunk = await reader.read()
-      signal.throwIfAborted()
-      if (chunk.done) throw new RemoteCodexProcessEnded()
-      buffered += decoder.decode(chunk.value, { stream: true })
-      if (buffered.length > 1024 * 1024) throw new RemoteCodexHandshakeError("protocolIncompatible")
-    }
-  } finally {
-    signal.removeEventListener("abort", onAbort)
-    reader.releaseLock()
-  }
-}
-
-async function localCodexVersion(command: readonly string[], signal: AbortSignal) {
+  missingExecutableIsCodex = false,
+): Promise<CommandResult> {
   signal.throwIfAborted()
   let process: ReturnType<typeof Bun.spawn>
   try {
     process = Bun.spawn([...command], { stdin: "ignore", stdout: "pipe", stderr: "pipe" })
   } catch {
-    throw new RemoteCodexHandshakeError("localCodexUnavailable")
+    if (missingExecutableIsCodex) return { exitCode: 127, stdout: "", stderr: "" }
+    throw new RemoteCodexHandshakeError("sshUnavailable")
   }
   const stop = () => process.kill()
   signal.addEventListener("abort", stop, { once: true })
@@ -172,9 +141,7 @@ async function localCodexVersion(command: readonly string[], signal: AbortSignal
       readBoundedText(process.stderr as ReadableStream<Uint8Array>),
     ])
     signal.throwIfAborted()
-    const version = parseCodexVersion(`${stdout}\n${stderr}`)
-    if (exitCode !== 0 || !version) throw new RemoteCodexHandshakeError("localCodexUnavailable")
-    return version.value
+    return { exitCode, stdout, stderr }
   } finally {
     signal.removeEventListener("abort", stop)
     if (process.exitCode === null) process.kill()
@@ -198,115 +165,210 @@ function processFailure(exitCode: number, stderr: string) {
   if (exitCode === 127) return new RemoteCodexHandshakeError("codexMissing")
   if (exitCode === 72) return new RemoteCodexHandshakeError("directoryMissing")
   if (exitCode === 73) return new RemoteCodexHandshakeError("appServerStartFailed")
+  if (exitCode === 75) return new RemoteCodexHandshakeError("codexUnauthenticated")
   return new RemoteCodexHandshakeError("disconnected")
 }
 
-async function stopHandshakeProcess(process: HandshakeProcess, stderr: Promise<string>) {
+async function nextProxyResponse(transport: CodexProxyWebSocket, id: string, signal: AbortSignal) {
+  while (true) {
+    const value = await transport.nextMessage(signal)
+    try {
+      const message = object(JSON.parse(value))
+      if (message?.id === id) return message
+    } catch {
+      throw new RemoteCodexHandshakeError("protocolIncompatible")
+    }
+  }
+}
+
+async function stopProxy(process: HandshakeProcess, stderr: Promise<string>) {
   try {
     process.stdin.end()
   } catch {
-    // The remote app-server may already have closed stdin.
+    // A disconnected proxy may already have closed stdin.
   }
   if (process.exitCode === null) process.kill()
   await Promise.allSettled([process.exited, stderr])
 }
 
-async function exchangeInitialize(
-  process: HandshakeProcess,
-  profileId: string,
-  localVersion: Promise<string>,
-  signal: AbortSignal,
-) {
+async function initializeProxy(command: readonly string[], profileId: string, signal: AbortSignal) {
+  let process: HandshakeProcess
+  try {
+    process = Bun.spawn([...command], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    }) as unknown as HandshakeProcess
+  } catch {
+    throw new RemoteCodexHandshakeError("sshUnavailable")
+  }
+  const stderr = readBoundedText(process.stderr)
   const requestId = `tuiminal-remote-handshake:${profileId}`
-  await Promise.resolve(
-    process.stdin.write(
-      `${JSON.stringify({
+  let transport: CodexProxyWebSocket | null = null
+  try {
+    transport = await CodexProxyWebSocket.connect(process, signal)
+    await transport.send(
+      JSON.stringify({
         id: requestId,
         method: "initialize",
         params: {
           clientInfo: { name: "tuiminal", title: "Tuiminal", version: "1" },
           capabilities: null,
         },
-      })}\n`,
-    ),
-  )
-  const [message, local] = await Promise.all([
-    nextJsonlResponse(process.stdout, requestId, signal),
-    localVersion,
-  ])
-  if (message.error !== undefined) throw new RemoteCodexHandshakeError("initializeRejected")
-  const userAgent = object(message.result)?.userAgent
-  if (typeof userAgent !== "string") throw new RemoteCodexHandshakeError("protocolIncompatible")
-  const remote = parseCodexVersion(userAgent)?.value
-  if (!remote) throw new RemoteCodexHandshakeError("protocolIncompatible")
-  await Promise.resolve(
-    process.stdin.write(`${JSON.stringify({ method: "initialized", params: {} })}\n`),
-  )
-  return { localVersion: local, remoteVersion: remote, remoteUserAgent: userAgent }
-}
-
-async function throwHandshakeFailure(
-  error: unknown,
-  process: HandshakeProcess,
-  stderr: Promise<string>,
-  signal: AbortSignal,
-  deadline: AbortSignal,
-  timedOut: boolean,
-): Promise<never> {
-  if (signal.aborted) signal.throwIfAborted()
-  if (timedOut) throw new RemoteCodexHandshakeError("timeout")
-  if (!(error instanceof RemoteCodexProcessEnded)) throw error
-  try {
-    const exitCode = await waitForExit(process, deadline)
-    throw processFailure(exitCode, await stderr)
-  } catch (exitError) {
+      }),
+    )
+    const message = await nextProxyResponse(transport, requestId, signal)
+    if (message.error !== undefined) throw new RemoteCodexHandshakeError("initializeRejected")
+    const userAgent = object(message.result)?.userAgent
+    const remoteVersion = typeof userAgent === "string" ? parseCodexVersion(userAgent)?.value : null
+    if (typeof userAgent !== "string" || !remoteVersion)
+      throw new RemoteCodexHandshakeError("protocolIncompatible")
+    await transport.send(JSON.stringify({ method: "initialized", params: {} }))
+    return { remoteVersion, remoteUserAgent: userAgent }
+  } catch (error) {
     if (signal.aborted) signal.throwIfAborted()
-    if (timedOut || deadline.aborted) throw new RemoteCodexHandshakeError("timeout")
-    throw exitError
+    if (error instanceof CodexProxyDisconnectedError || process.exitCode !== null) {
+      const exitCode = process.exitCode ?? (await process.exited)
+      throw processFailure(exitCode, await stderr)
+    }
+    if (error instanceof RemoteCodexHandshakeError) throw error
+    throw new RemoteCodexHandshakeError("protocolIncompatible")
+  } finally {
+    transport?.stop()
+    await stopProxy(process, stderr)
   }
 }
 
-/** Proves the remote app-server can answer the local CLI before the official TUI is opened. */
-export async function handshakeRemoteCodex(
-  profile: TerminalRemoteCodexProfile,
-  workingDirectory: string,
+async function withDeadline<T>(
   signal: AbortSignal,
-  options: RemoteCodexHandshakeOptions = {},
+  timeoutMs: number,
+  operation: (deadline: AbortSignal) => Promise<T>,
 ) {
   signal.throwIfAborted()
-  const remoteCommand = [
-    ...(options.remoteCommand ?? remoteCodexAppServerSshCommand(profile, workingDirectory)),
-  ]
   const timeout = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
-    timeout.abort(new DOMException("Remote Codex handshake timed out", "TimeoutError"))
-  }, options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS)
-  const deadline = AbortSignal.any([signal, timeout.signal])
-
-  let process: HandshakeProcess
+    timeout.abort(new DOMException("Remote Codex preflight timed out", "TimeoutError"))
+  }, timeoutMs)
   try {
-    process = Bun.spawn(remoteCommand, {
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    }) as unknown as HandshakeProcess
-  } catch {
-    clearTimeout(timer)
-    throw new RemoteCodexHandshakeError("sshUnavailable")
-  }
-  const localVersionPromise = localCodexVersion(
-    options.localVersionCommand ?? ["codex", "--version"],
-    deadline,
-  )
-  const stderr = readBoundedText(process.stderr)
-  try {
-    return await exchangeInitialize(process, profile.id, localVersionPromise, deadline)
+    return await operation(AbortSignal.any([signal, timeout.signal]))
   } catch (error) {
-    return await throwHandshakeFailure(error, process, stderr, signal, deadline, timedOut)
+    if (signal.aborted) signal.throwIfAborted()
+    if (timedOut) throw new RemoteCodexHandshakeError("timeout")
+    throw error
   } finally {
     clearTimeout(timer)
-    await stopHandshakeProcess(process, stderr)
   }
+}
+
+function checkedRemoteCompatibility(remoteResult: CommandResult) {
+  if (remoteResult.exitCode === 72) throw new RemoteCodexHandshakeError("directoryMissing")
+  if (![0, 74, 75, 127].includes(remoteResult.exitCode))
+    throw processFailure(remoteResult.exitCode, remoteResult.stderr)
+  if (remoteResult.exitCode === 127)
+    return {
+      version: null,
+      daemonAvailable: false,
+      proxyAvailable: false,
+      reason: "remoteCodexMissing" as const,
+    }
+  if (remoteResult.exitCode === 74)
+    return {
+      version: null,
+      daemonAvailable: false,
+      proxyAvailable: false,
+      reason: "remoteVersionInvalid" as const,
+    }
+  return remoteCodexCompatibility(remoteResult.stdout)
+}
+
+function checkedCompatibilityReport(localResult: CommandResult, remoteResult: CommandResult) {
+  const local = checkedLocalCompatibility(localResult)
+  const report = remoteCodexCompatibilityReport(local, checkedRemoteCompatibility(remoteResult))
+  if (!report.compatible) throw new RemoteCodexCompatibilityError(report)
+  if (remoteResult.exitCode === 75) throw new RemoteCodexHandshakeError("codexUnauthenticated")
+  return report
+}
+
+function checkedLocalCompatibility(result: CommandResult) {
+  return localCodexCompatibility(result.exitCode, result.stdout, result.stderr)
+}
+
+function checkedInitializedReport(
+  report: RemoteCodexCompatibilityReport,
+  initialized: Awaited<ReturnType<typeof initializeProxy>>,
+) {
+  if (
+    !report.localVersion ||
+    compatibleCodexVersions(report.localVersion, initialized.remoteVersion)
+  )
+    return { ...report, ...initialized }
+  throw new RemoteCodexCompatibilityError({
+    ...report,
+    compatible: false,
+    reason: "versionMismatch",
+    remoteVersion: initialized.remoteVersion,
+    remoteUserAgent: initialized.remoteUserAgent,
+  })
+}
+
+/** Validates both CLIs, starts the persistent daemon, and probes it through a disposable proxy. */
+export async function preflightRemoteCodex(
+  profile: TerminalRemoteCodexProfile,
+  workingDirectory: string,
+  signal: AbortSignal,
+  options: PreflightOptions = {},
+) {
+  return withDeadline(
+    signal,
+    options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS,
+    async (deadline) => {
+      const launch = createRemoteCodexAppServerLaunch(profile, workingDirectory)
+      const [localResult, remoteResult] = await Promise.all([
+        runCommand(localVersionCommand(options.localVersionCommand), deadline, true),
+        runCommand(
+          options.remoteProbeCommand ?? remoteCodexPreflightSshCommand(profile, workingDirectory),
+          deadline,
+        ),
+      ])
+      const report = checkedCompatibilityReport(localResult, remoteResult)
+      const daemon = await runCommand(
+        options.daemonStartCommand ?? launch.daemonStartCommand,
+        deadline,
+      )
+      if (daemon.exitCode !== 0) throw processFailure(daemon.exitCode, daemon.stderr)
+      const initialized = await initializeProxy(
+        options.proxyCommand ?? launch.proxyCommand,
+        profile.id,
+        deadline,
+      )
+      return checkedInitializedReport(report, initialized)
+    },
+  )
+}
+
+export async function handshakeRemoteCodex(
+  profile: TerminalRemoteCodexProfile,
+  workingDirectory: string,
+  signal: AbortSignal,
+  options: HandshakeOptions = {},
+) {
+  return withDeadline(
+    signal,
+    options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS,
+    async (deadline) => {
+      const [localResult, initialized] = await Promise.all([
+        runCommand(localVersionCommand(options.localVersionCommand), deadline, true),
+        initializeProxy(
+          options.remoteCommand ?? remoteCodexProxySshCommand(profile, workingDirectory),
+          profile.id,
+          deadline,
+        ),
+      ])
+      const local = checkedLocalCompatibility(localResult)
+      if (!local.version) throw new RemoteCodexHandshakeError("localCodexUnavailable")
+      return { localVersion: local.version, ...initialized }
+    },
+  )
 }

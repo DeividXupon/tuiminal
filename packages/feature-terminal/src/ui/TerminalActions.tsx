@@ -5,7 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { CodexResumeThread } from "../model/codex-resume-threads"
+import type { AgentResumeThread } from "../model/agent-resume-thread"
 import { TERMINAL_ACTION_TAG_LABELS, TERMINAL_ACTIONS } from "../model/terminal-actions"
 import { TerminalActionRow } from "./TerminalActionRow"
 import { TerminalAgentResponsePanel, TerminalResumeThreadRow } from "./TerminalResumeThreads"
@@ -119,9 +119,9 @@ export function TerminalActions({
 }: {
   width: number
   height: number
-  recentThreads?: readonly CodexResumeThread[]
+  recentThreads?: readonly AgentResumeThread[]
   onAction: (key: string) => void
-  onSelectThread?: (id: string) => void
+  onSelectThread?: (thread: AgentResumeThread) => void
   disabled: (key: string) => boolean
   compact?: boolean
 }) {
@@ -201,7 +201,7 @@ export function TerminalActions({
       return
     }
     const thread = threads[selectedAgent]
-    if (thread) onSelectThread?.(thread.id)
+    if (thread) onSelectThread?.(thread)
   }
   const close = () => onAction("escape")
 
@@ -345,7 +345,7 @@ export function TerminalActions({
             <TerminalPanelHeading
               visible={!compact}
               active={activePanel === "agents"}
-              label="AGENTES · CODEX /RESUME"
+              label="AGENTES · RETOMAR"
             />
             <scrollbox ref={agentList} id="terminal-agent-results" scrollY style={{ flexGrow: 1 }}>
               {threads.map((thread, index) => (
@@ -357,16 +357,16 @@ export function TerminalActions({
                   width={panelContentWidth}
                   now={now}
                   backgroundColor={agentPanelBackground}
-                  onSelect={(id) => {
+                  onSelect={(selectedThread) => {
                     setActivePanel("agents")
                     setSelectedAgent(index)
-                    onSelectThread?.(id)
+                    onSelectThread?.(selectedThread)
                   }}
                 />
               ))}
               {!query.trim() && recentThreads.length === 0 && (
                 <text
-                  content={translateUi("Nenhuma conversa disponível no /resume do Codex local.")}
+                  content={translateUi("Nenhuma conversa de agente disponível para retomar.")}
                   style={{ fg: COLORS.muted }}
                 />
               )}

@@ -452,7 +452,7 @@ export const TERMINAL_MESSAGES = [
   ],
   ["Nova pasta", "New folder", "Nueva carpeta", "新しいフォルダー", "新建文件夹", "새 폴더"],
   ["Novo comando", "New command", "Nuevo comando", "新規コマンド", "新建命令", "새 명령"],
-  ["Novo Codex", "New Codex", "Nuevo Codex", "新しいCodex", "新建 Codex", "새 Codex"],
+  ["Novo agente", "New agent", "Nuevo agente", "新しいエージェント", "新建智能体", "새 에이전트"],
   ["Comando", "Command", "Comando", "コマンド", "命令", "명령"],
   [
     "Renomear terminal",

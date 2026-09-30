@@ -1,14 +1,20 @@
 import { afterEach, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { TerminalRemoteCodexProfile } from "../packages/core/src/settings/theme"
+import { REMOTE_CODEX_PREFLIGHT_MARKER } from "../packages/feature-terminal/src/services/remote-codex-connection"
 import {
+  compatibleCodexVersions,
   handshakeRemoteCodex,
+  preflightRemoteCodex,
+  REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS,
+  RemoteCodexCompatibilityError,
   RemoteCodexHandshakeError,
 } from "../packages/feature-terminal/src/services/remote-codex-handshake"
 
 const roots: string[] = []
+const proxyFixture = join(import.meta.dir, "fixtures/codex-proxy-fixture.ts")
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -32,41 +38,177 @@ function localVersionCommand(version = "0.157.1") {
   return [process.execPath, "-e", `process.stdout.write("codex-cli ${version}\\n")`]
 }
 
-function handshakeServer(result: string) {
+function handshakeServer(response: Record<string, unknown>) {
   const root = fixtureRoot()
-  const script = join(root, "server.js")
   const requests = join(root, "requests.jsonl")
-  writeFileSync(
-    script,
-    [
-      'import { appendFileSync } from "node:fs"',
-      "const requests = process.argv[2]",
-      'let buffered = ""',
-      'process.stdin.setEncoding("utf8")',
-      'process.stdin.on("data", (chunk) => {',
-      "  buffered += chunk",
-      '  let newline = buffered.indexOf("\\n")',
-      "  while (newline >= 0) {",
-      "    const line = buffered.slice(0, newline)",
-      "    buffered = buffered.slice(newline + 1)",
-      "    if (line) {",
-      "      const request = JSON.parse(line)",
-      '      appendFileSync(requests, line + "\\n")',
-      '      if (request.method === "initialize")',
-      `        process.stdout.write(JSON.stringify({ id: request.id, ${result} }) + "\\n")`,
-      "    }",
-      '    newline = buffered.indexOf("\\n")',
-      "  }",
-      "})",
-    ].join("\n"),
-  )
-  return { command: [process.execPath, script, requests], requests }
+  return {
+    command: [process.execPath, proxyFixture, "handshake", JSON.stringify(response), requests],
+    requests,
+  }
 }
 
-test("remote handshake waits for initialize and reads the responding app-server version", async () => {
-  const remote = handshakeServer(
-    'result: { userAgent: "codex_cli_rs/0.157.8", codexHome: "/home/ubuntu/.codex", platformFamily: "unix", platformOs: "linux" }',
+function outputCommand(stdout: string, exitCode = 0) {
+  return [
+    process.execPath,
+    "-e",
+    `process.stdout.write(${JSON.stringify(stdout)}); process.exit(${exitCode})`,
+  ]
+}
+
+function remoteProbe(version: string, daemon = true, proxy = true) {
+  return outputCommand(
+    `${REMOTE_CODEX_PREFLIGHT_MARKER}\nVERSION\ncodex-cli ${version}\nDAEMON=${daemon ? 1 : 0}\nPROXY=${proxy ? 1 : 0}\n`,
   )
+}
+
+test("Codex compatibility follows 0.x minor and stable major boundaries", () => {
+  expect(REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS).toBe(10_000)
+  expect(compatibleCodexVersions("0.157.1", "0.157.99")).toBe(true)
+  expect(compatibleCodexVersions("0.157.1", "0.158.0")).toBe(false)
+  expect(compatibleCodexVersions("1.2.3", "1.99.0")).toBe(true)
+  expect(compatibleCodexVersions("1.2.3", "2.0.0")).toBe(false)
+  expect(compatibleCodexVersions("invalid", "1.0.0")).toBe(false)
+})
+
+test("remote preflight validates versions and capabilities before starting the daemon", async () => {
+  const remote = handshakeServer({ result: { userAgent: "codex_cli_rs/0.157.8" } })
+  const daemonMarker = join(fixtureRoot(), "daemon-started")
+  await expect(
+    preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+      localVersionCommand: localVersionCommand("0.157.1"),
+      remoteProbeCommand: remoteProbe("0.157.8"),
+      daemonStartCommand: [
+        process.execPath,
+        "-e",
+        `require("node:fs").writeFileSync(${JSON.stringify(daemonMarker)}, "yes")`,
+      ],
+      proxyCommand: remote.command,
+      timeoutMs: 1_000,
+    }),
+  ).resolves.toMatchObject({
+    compatible: true,
+    localVersion: "0.157.1",
+    remoteVersion: "0.157.8",
+    daemonAvailable: true,
+    proxyAvailable: true,
+  })
+  expect(readFileSync(daemonMarker, "utf8")).toBe("yes")
+})
+
+test.each([
+  {
+    name: "incompatible 0.x versions",
+    local: localVersionCommand("0.157.1"),
+    remote: remoteProbe("0.158.0"),
+    reason: "versionMismatch",
+  },
+  {
+    name: "invalid local version",
+    local: outputCommand("codex-cli unknown"),
+    remote: remoteProbe("0.157.0"),
+    reason: "localVersionInvalid",
+  },
+  {
+    name: "missing local Codex",
+    local: outputCommand("", 127),
+    remote: remoteProbe("0.157.0"),
+    reason: "localCodexMissing",
+  },
+  {
+    name: "missing remote Codex",
+    local: localVersionCommand(),
+    remote: outputCommand("", 127),
+    reason: "remoteCodexMissing",
+  },
+  {
+    name: "invalid remote version",
+    local: localVersionCommand(),
+    remote: outputCommand("codex-cli unknown", 74),
+    reason: "remoteVersionInvalid",
+  },
+  {
+    name: "missing daemon command",
+    local: localVersionCommand(),
+    remote: remoteProbe("0.157.9", false, true),
+    reason: "daemonUnavailable",
+  },
+  {
+    name: "missing proxy command",
+    local: localVersionCommand(),
+    remote: remoteProbe("0.157.9", true, false),
+    reason: "proxyUnavailable",
+  },
+])(
+  "remote preflight reports $name without starting the daemon",
+  async ({ local, remote, reason }) => {
+    const marker = join(fixtureRoot(), "must-not-start")
+    const promise = preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+      localVersionCommand: local,
+      remoteProbeCommand: remote,
+      daemonStartCommand: [
+        process.execPath,
+        "-e",
+        `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started")`,
+      ],
+      proxyCommand: outputCommand(""),
+      timeoutMs: 1_000,
+    })
+    await expect(promise).rejects.toBeInstanceOf(RemoteCodexCompatibilityError)
+    await expect(promise).rejects.toMatchObject({ report: { compatible: false, reason } })
+    expect(existsSync(marker)).toBe(false)
+  },
+)
+
+test("remote preflight treats an unspawnable local Codex as missing", async () => {
+  const root = fixtureRoot()
+  const marker = join(root, "must-not-start")
+  const promise = preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+    localVersionCommand: [join(root, "missing-codex")],
+    remoteProbeCommand: remoteProbe("0.157.0"),
+    daemonStartCommand: [
+      process.execPath,
+      "-e",
+      `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started")`,
+    ],
+    proxyCommand: outputCommand(""),
+    timeoutMs: 1_000,
+  })
+  await expect(promise).rejects.toMatchObject({
+    report: { compatible: false, reason: "localCodexMissing" },
+  })
+  expect(existsSync(marker)).toBe(false)
+})
+
+test("remote preflight requires the remote Codex account before daemon startup", async () => {
+  const marker = join(fixtureRoot(), "must-not-start")
+  const unauthenticated = outputCommand(
+    `${REMOTE_CODEX_PREFLIGHT_MARKER}\nVERSION\ncodex-cli 0.157.9\nDAEMON=1\nPROXY=1\nAUTH=0\n`,
+    75,
+  )
+  const promise = preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+    localVersionCommand: localVersionCommand(),
+    remoteProbeCommand: unauthenticated,
+    daemonStartCommand: [
+      process.execPath,
+      "-e",
+      `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started")`,
+    ],
+    proxyCommand: outputCommand(""),
+    timeoutMs: 1_000,
+  })
+  await expect(promise).rejects.toMatchObject({ code: "codexUnauthenticated" })
+  expect(existsSync(marker)).toBe(false)
+})
+
+test("remote handshake waits for initialize and reads the responding app-server version", async () => {
+  const remote = handshakeServer({
+    result: {
+      userAgent: "codex_cli_rs/0.157.8",
+      codexHome: "/home/ubuntu/.codex",
+      platformFamily: "unix",
+      platformOs: "linux",
+    },
+  })
 
   await expect(
     handshakeRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
@@ -79,7 +221,9 @@ test("remote handshake waits for initialize and reads the responding app-server 
     remoteVersion: "0.157.8",
     remoteUserAgent: "codex_cli_rs/0.157.8",
   })
-  expect(JSON.parse(readFileSync(remote.requests, "utf8").trim())).toMatchObject({
+  expect(
+    JSON.parse(readFileSync(remote.requests, "utf8").trim().split("\n").at(0) ?? "{}"),
+  ).toMatchObject({
     method: "initialize",
     params: {
       clientInfo: { name: "tuiminal", title: "Tuiminal", version: "1" },
@@ -88,10 +232,15 @@ test("remote handshake waits for initialize and reads the responding app-server 
   })
 })
 
-test("remote handshake accepts version skew after initialize and rejects protocol errors", async () => {
-  const skewed = handshakeServer(
-    'result: { userAgent: "codex_cli_rs/0.158.0", codexHome: "/tmp", platformFamily: "unix", platformOs: "linux" }',
-  )
+test("raw proxy handshake reports version skew and rejects protocol errors", async () => {
+  const skewed = handshakeServer({
+    result: {
+      userAgent: "codex_cli_rs/0.158.0",
+      codexHome: "/tmp",
+      platformFamily: "unix",
+      platformOs: "linux",
+    },
+  })
   await expect(
     handshakeRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
       remoteCommand: skewed.command,
@@ -103,7 +252,7 @@ test("remote handshake accepts version skew after initialize and rejects protoco
     remoteVersion: "0.158.0",
   })
 
-  const malformed = handshakeServer("result: {}")
+  const malformed = handshakeServer({ result: {} })
   await expect(
     handshakeRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
       remoteCommand: malformed.command,
@@ -112,7 +261,9 @@ test("remote handshake accepts version skew after initialize and rejects protoco
     }),
   ).rejects.toMatchObject({ code: "protocolIncompatible" })
 
-  const rejected = handshakeServer('error: { code: -32600, message: "unsupported initialize" }')
+  const rejected = handshakeServer({
+    error: { code: -32600, message: "unsupported initialize" },
+  })
   await expect(
     handshakeRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
       remoteCommand: rejected.command,
@@ -148,7 +299,7 @@ test("remote handshake maps SSH, directory, Codex and app-server startup failure
   }
 })
 
-test("remote handshake does not start the local probe when SSH cannot be spawned", async () => {
+test("remote handshake validates the local CLI independently when SSH cannot be spawned", async () => {
   const root = fixtureRoot()
   const marker = join(root, "local-version-started")
   await expect(
@@ -163,7 +314,7 @@ test("remote handshake does not start the local probe when SSH cannot be spawned
     }),
   ).rejects.toMatchObject({ code: "sshUnavailable" })
   await Bun.sleep(25)
-  expect(existsSync(marker)).toBe(false)
+  expect(existsSync(marker)).toBe(true)
 })
 
 test("remote handshake owns timeout and cancellation without opening the TUI", async () => {
