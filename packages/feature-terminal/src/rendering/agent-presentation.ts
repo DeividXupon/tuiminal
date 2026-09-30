@@ -35,6 +35,9 @@ const ACTIVITIES: Partial<Record<AgentActivity, string>> = {
   thinking: "Pensando",
   writing: "Escrevendo",
   running: "Executando",
+  updating: "Atualizando",
+  coding: "Codificando",
+  tooling: "Usando ferramenta",
 }
 const SHORT_STATES: Record<AgentState, string> = {
   working: "Trabalhando",

@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto"
+import { statSync } from "node:fs"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import type { OpenCodeObserverEvents } from "./opencode-api"
-import { openCodeLastResponse, openCodeResumeThreads, parseOpenCodeSessions } from "./opencode-api"
+import { openCodeLastResponse, openCodeResumeThreads } from "./opencode-api"
 import { unusedLoopbackPort } from "./codex-app-server-connection"
 import {
-  publishOpenCodeResumeThreads,
+  mergeOpenCodeResumeThreads,
   upsertOpenCodeResumeThread,
 } from "../model/opencode-resume-threads"
 import type { RemoteCodexTarget } from "../model/sessions"
@@ -11,14 +13,17 @@ import { resolveOpenCodeExecutable } from "./opencode-executable"
 import { listOpenCodeSessions, OpenCodeObserver, fetchOpenCodeJson } from "./opencode-observer"
 import {
   detectOpenCodeServerProtocol,
-  openCodeCliProtocol,
+  openCodeAuthorization,
+  openCodeServerEnvironment,
+  openCodeTuiConfigContent,
   openCodeTuiCommand,
+  type OpenCodeServerCredentials,
   type OpenCodeServerProtocol,
 } from "./opencode-protocol"
-import {
-  remoteOpenCodeServerCommand,
-  remoteOpenCodeSessionListCommand,
-} from "./remote-opencode-connection"
+import { createOpenCodeTuiControl } from "./opencode-tui-control"
+import { listOpenCodeResumeSessions } from "./opencode-session-list"
+import { remoteOpenCodeServerCommand } from "./remote-opencode-connection"
+import { preflightRemoteOpenCode } from "./remote-opencode-compatibility"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
@@ -30,22 +35,12 @@ type OpenCodeTerminalOptions = TerminalOptions & {
 
 type ServerProcess = ReturnType<typeof Bun.spawn>
 
-export function openCodeServerEnvironment(
-  environment: Record<string, string | undefined> = process.env,
-) {
-  return Object.fromEntries(
-    Object.entries(environment).filter(
-      (entry): entry is [string, string] =>
-        entry[0] !== "OPENCODE_SERVER_PASSWORD" && typeof entry[1] === "string",
-    ),
-  )
-}
-
 async function waitForOpenCodeServer(
   baseUrl: string,
   process: Pick<ServerProcess, "exitCode">,
   signal: AbortSignal,
   remote: boolean,
+  authorization?: string,
 ): Promise<OpenCodeServerProtocol> {
   const deadline = Date.now() + 8_000
   while (Date.now() < deadline) {
@@ -60,6 +55,8 @@ async function waitForOpenCodeServer(
     const protocol = await detectOpenCodeServerProtocol(
       baseUrl,
       AbortSignal.any([signal, AbortSignal.timeout(500)]),
+      fetch,
+      authorization,
     )
     if (protocol) return protocol
     await Bun.sleep(50)
@@ -67,21 +64,33 @@ async function waitForOpenCodeServer(
   throw new Error("O servidor do OpenCode não ficou pronto para a interface.")
 }
 
-function spawnOpenCodeServer(port: number, workingDirectory: string, remote?: RemoteCodexTarget) {
+function spawnOpenCodeServer(
+  localPort: number,
+  remotePort: number,
+  workingDirectory: string,
+  credentials: OpenCodeServerCredentials,
+  remote?: RemoteCodexTarget,
+) {
   const command = remote
-    ? remoteOpenCodeServerCommand(remote.profile, workingDirectory, port)
-    : [resolveOpenCodeExecutable(), "serve", "--hostname", "127.0.0.1", "--port", String(port)]
-  return Bun.spawn(command, {
+    ? remoteOpenCodeServerCommand(remote.profile, workingDirectory, localPort, remotePort)
+    : [resolveOpenCodeExecutable(), "serve", "--hostname", "127.0.0.1", "--port", String(localPort)]
+  const serverProcess = Bun.spawn(command, {
     ...(remote ? {} : { cwd: workingDirectory }),
     ...(!remote
       ? {
-          env: openCodeServerEnvironment(),
+          env: openCodeServerEnvironment(process.env, credentials),
         }
       : {}),
-    stdin: "ignore",
+    stdin: remote ? "pipe" : "ignore",
     stdout: "ignore",
     stderr: "ignore",
   })
+  if (remote) {
+    const input = serverProcess.stdin as { write(data: string): number; end(): void }
+    input.write(`${credentials.password}\n`)
+    input.end()
+  }
+  return serverProcess
 }
 
 async function stopServer(process: ServerProcess) {
@@ -89,40 +98,24 @@ async function stopServer(process: ServerProcess) {
   await process.exited.catch(() => undefined)
 }
 
-async function detectOpenCodeCliProtocol(executable: string, signal: AbortSignal) {
-  const timeout = AbortSignal.timeout(5_000)
-  const boundedSignal = AbortSignal.any([signal, timeout])
-  const child = Bun.spawn([executable, "--version"], {
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const stop = () => child.kill()
-  boundedSignal.addEventListener("abort", stop, { once: true })
-  try {
-    const [code, stdout, stderr] = await Promise.all([
-      child.exited,
-      readBoundedOutput(child.stdout as ReadableStream<Uint8Array>, 64 * 1024),
-      readBoundedOutput(child.stderr as ReadableStream<Uint8Array>, 64 * 1024),
-    ])
-    if (code !== 0) return null
-    return openCodeCliProtocol(`${stdout}\n${stderr}`)
-  } finally {
-    boundedSignal.removeEventListener("abort", stop)
-    if (child.exitCode === null) child.kill()
-  }
-}
-
 async function startOwnedOpenCodeServer(
   workingDirectory: string,
   remote: RemoteCodexTarget | undefined,
   signal: AbortSignal,
 ) {
-  const port = await unusedLoopbackPort("o servidor do OpenCode")
+  const localPort = await unusedLoopbackPort("o servidor do OpenCode")
+  let remotePort = localPort
+  if (remote) {
+    remotePort = await unusedLoopbackPort("o servidor remoto do OpenCode")
+    while (remotePort === localPort)
+      remotePort = await unusedLoopbackPort("o servidor remoto do OpenCode")
+  }
+  const credentials = { username: "opencode", password: randomUUID() }
+  const authorization = openCodeAuthorization(credentials)
   signal.throwIfAborted()
   let process: ServerProcess
   try {
-    process = spawnOpenCodeServer(port, workingDirectory, remote)
+    process = spawnOpenCodeServer(localPort, remotePort, workingDirectory, credentials, remote)
   } catch {
     throw new Error(
       remote
@@ -130,10 +123,16 @@ async function startOwnedOpenCodeServer(
         : "O OpenCode não está instalado nesta máquina.",
     )
   }
-  const baseUrl = `http://127.0.0.1:${port}`
+  const baseUrl = `http://127.0.0.1:${localPort}`
   try {
-    const protocol = await waitForOpenCodeServer(baseUrl, process, signal, Boolean(remote))
-    return { baseUrl, process, protocol }
+    const protocol = await waitForOpenCodeServer(
+      baseUrl,
+      process,
+      signal,
+      Boolean(remote),
+      authorization,
+    )
+    return { baseUrl, process, protocol, credentials, authorization }
   } catch (error) {
     await stopServer(process)
     throw error
@@ -148,11 +147,9 @@ export async function startOpenCodeServerTerminal(
 ): Promise<FreeTerminalProcessHandle> {
   const { resumeThreadId, remote, cwd, ...terminalOptions } = options
   const directory = remote?.workingDirectory ?? cwd ?? process.cwd()
+  if (remote) await preflightRemoteOpenCode(remote.profile, signal)
   const server = await startOwnedOpenCodeServer(directory, remote, signal)
   const executable = resolveOpenCodeExecutable()
-  const cliProtocol = remote
-    ? ((await detectOpenCodeCliProtocol(executable, signal).catch(() => null)) ?? server.protocol)
-    : server.protocol
   const observer = new OpenCodeObserver(
     server.baseUrl,
     directory,
@@ -194,7 +191,11 @@ export async function startOpenCodeServerTerminal(
       },
     },
     server.protocol,
+    server.authorization,
   )
+  const tuiControl = createOpenCodeTuiControl({
+    onTitle: (title) => observer.observeTerminalTitle(title),
+  })
   let stopping: Promise<void> | null = null
   let unregister: () => void = () => undefined
   const stopOwnedServer = () => {
@@ -214,17 +215,40 @@ export async function startOpenCodeServerTerminal(
   try {
     await observer.start(signal)
     signal.throwIfAborted()
+    const clientDirectory =
+      remote &&
+      server.protocol === "v2" &&
+      !statSync(directory, { throwIfNoEntry: false })?.isDirectory()
+        ? undefined
+        : directory
     const command = openCodeTuiCommand(
       executable,
       server.baseUrl,
-      directory,
+      clientDirectory,
       resumeThreadId,
-      cliProtocol,
+      server.protocol,
     )
     const ownedTerminal = startFreeTerminalProcess(command, {
       ...terminalOptions,
       cwd: remote ? process.cwd() : directory,
-      env: { ...terminalOptions.env, OPENCODE_SERVER_PASSWORD: undefined },
+      env: {
+        ...terminalOptions.env,
+        ...(server.protocol === "v2"
+          ? {
+              OPENCODE_CLI_CONFIG_CONTENT: openCodeTuiConfigContent(
+                terminalOptions.env?.OPENCODE_CLI_CONFIG_CONTENT ??
+                  process.env.OPENCODE_CLI_CONFIG_CONTENT,
+              ),
+            }
+          : {}),
+        OPENCODE_PASSWORD: server.credentials.password,
+        OPENCODE_SERVER_USERNAME: server.credentials.username,
+        OPENCODE_SERVER_PASSWORD: server.credentials.password,
+      },
+      onData(data) {
+        tuiControl.observeData(data)
+        terminalOptions.onData(data)
+      },
       onExit(result) {
         void stopOwnedServer()
           .catch((error: unknown) => events.onError(String(error)))
@@ -254,11 +278,19 @@ async function refreshOpenCodeThreadsFromServer(
   directory: string,
   signal: AbortSignal,
   protocol: OpenCodeServerProtocol,
+  authorization: string | undefined,
   remote?: { id: string; name: string },
   listedSessions?: Awaited<ReturnType<typeof listOpenCodeSessions>>,
 ) {
   const sessions =
-    listedSessions ?? (await listOpenCodeSessions(baseUrl, directory, signal, protocol))
+    listedSessions ??
+    (await listOpenCodeSessions(
+      baseUrl,
+      protocol === "v2" ? undefined : directory,
+      signal,
+      protocol,
+      authorization,
+    ))
   const threads = openCodeResumeThreads(sessions, remote)
   const hydrated = []
   for (let offset = 0; offset < threads.length; offset += 6) {
@@ -273,6 +305,7 @@ async function refreshOpenCodeThreadsFromServer(
               protocol === "v2" ? undefined : thread.cwd || directory,
               signal,
               { limit: 20 },
+              authorization,
             ),
           )
         } catch {
@@ -283,64 +316,8 @@ async function refreshOpenCodeThreadsFromServer(
     )
     hydrated.push(...batch)
   }
-  publishOpenCodeResumeThreads(hydrated, remote?.id)
+  mergeOpenCodeResumeThreads(hydrated, remote?.id)
   return hydrated
-}
-
-async function readBoundedOutput(stream: ReadableStream<Uint8Array>, maximumBytes: number) {
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let output = ""
-  let remaining = maximumBytes
-  try {
-    while (true) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      if (chunk.value.byteLength > remaining)
-        throw new Error("A lista de sessões do OpenCode excedeu o limite seguro.")
-      remaining -= chunk.value.byteLength
-      output += decoder.decode(chunk.value, { stream: true })
-    }
-    return output + decoder.decode()
-  } finally {
-    reader.releaseLock()
-  }
-}
-
-async function listOpenCodeResumeSessions(
-  directory: string,
-  signal: AbortSignal,
-  remote?: RemoteCodexTarget,
-) {
-  signal.throwIfAborted()
-  const timeout = AbortSignal.timeout(15_000)
-  const boundedSignal = AbortSignal.any([signal, timeout])
-  const command = remote
-    ? remoteOpenCodeSessionListCommand(remote.profile)
-    : [resolveOpenCodeExecutable(), "session", "list", "--format", "json", "--max-count", "20"]
-  const child = Bun.spawn(command, {
-    ...(remote ? {} : { cwd: directory }),
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const stop = () => child.kill()
-  boundedSignal.addEventListener("abort", stop, { once: true })
-  try {
-    const [code, stdout] = await Promise.all([
-      child.exited,
-      readBoundedOutput(child.stdout as ReadableStream<Uint8Array>, 2 * 1024 * 1024),
-      readBoundedOutput(child.stderr as ReadableStream<Uint8Array>, 64 * 1024),
-    ])
-    if (!signal.aborted && timeout.aborted)
-      throw new Error("A listagem de sessões do OpenCode excedeu o tempo limite.")
-    signal.throwIfAborted()
-    if (code !== 0) throw new Error("Não foi possível listar as sessões do OpenCode.")
-    return parseOpenCodeSessions(JSON.parse(stdout))
-  } finally {
-    boundedSignal.removeEventListener("abort", stop)
-    if (child.exitCode === null) child.kill()
-  }
 }
 
 async function withTemporaryOpenCodeServer(
@@ -360,8 +337,9 @@ async function withTemporaryOpenCodeServer(
       directory,
       signal,
       server.protocol,
+      server.authorization,
       remote ? { id: remote.profile.id, name: remote.profile.name } : undefined,
-      listedSessions,
+      server.protocol === "v2" ? undefined : listedSessions,
     )
   } finally {
     try {

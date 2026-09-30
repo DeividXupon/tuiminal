@@ -105,8 +105,9 @@ test("sidebar separates numbered terminals from independently clickable agent st
   expect(lines[section.screenY + 1]).toContain("workspace · native")
   expect(agent.screenY).toBeLessThan(section.screenY)
   expect(codexAgent.height).toBe(2)
-  expect(lines[codexAgent.screenY]).toMatch(/⠋ Codex\s+Lendo/)
+  expect(lines[codexAgent.screenY]).toMatch(/⠋ Lendo\s+Codex/)
   expect(lines[codexAgent.screenY + 1]).toContain("Task Codex")
+  expect(lines[agent.screenY]).toMatch(/! Aguardando\s+Claude/)
   await act(async () => tui?.mockMouse.click(agent.screenX + 2, agent.screenY))
   expect(selections).toEqual(["Claude"])
   // Listing an unseen result never acknowledges it; only the workspace owns that transition.
@@ -140,6 +141,70 @@ test("integrated Codex rows show a third activity line", async () => {
   const lines = tui.captureCharFrame().split("\n")
   expect(row.height).toBe(3)
   expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
+})
+
+test("integrated OpenCode rows name the current structured action", async () => {
+  updateUiSettings({ language: "pt-BR" })
+  const opencode = session("OpenCode", "working")
+  opencode.agentIntegration = { providerId: "opencode", transport: "app-server" }
+  opencode.agent!.activity = "tooling"
+  tui = await testRender(
+    <TerminalSidebar
+      sessions={[opencode]}
+      folders={[{ id: "terminal", name: "Terminal" }]}
+      selectedFolder="terminal"
+      activeSessionId="OpenCode"
+      width={32}
+      height={30}
+      masterKey="Ctrl+B"
+      onActivate={() => undefined}
+      onSelectFolder={() => undefined}
+      onActions={() => undefined}
+      onNew={() => undefined}
+    />,
+    { width: 32, height: 30 },
+  )
+  await tui.renderOnce()
+
+  const row = tui.renderer.root.findDescendantById("terminal-agent-OpenCode")!
+  const lines = tui.captureCharFrame().split("\n")
+  expect(lines[row.screenY]).toMatch(/⠋ Usando ferramenta\s+OpenCode/)
+  expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
+})
+
+test("compact OpenCode row keeps the visible session status at minimum width", async () => {
+  updateUiSettings({ language: "pt-BR" })
+  const opencode = session("OpenCode", "working")
+  opencode.agentIntegration = { providerId: "opencode", transport: "app-server" }
+  opencode.agent = {
+    key: "opencode:visible",
+    label: "OpenCode",
+    profile: "opencode",
+    state: "blocked",
+    activity: null,
+    taskTitle: "Review another long task title",
+  }
+  tui = await testRender(
+    <TerminalSidebar
+      sessions={[opencode]}
+      folders={[{ id: "terminal", name: "Terminal" }]}
+      selectedFolder="terminal"
+      activeSessionId="OpenCode"
+      width={16}
+      height={8}
+      masterKey="Ctrl+B"
+      onActivate={() => undefined}
+      onSelectFolder={() => undefined}
+      onActions={() => undefined}
+      onNew={() => undefined}
+    />,
+    { width: 16, height: 8 },
+  )
+  await tui.renderOnce()
+
+  const second = tui.renderer.root.findDescendantById("terminal-agent-OpenCode")!
+  const lines = tui.captureCharFrame().split("\n")
+  expect(lines[second.screenY]).toContain("Agua")
 })
 
 test("agent list separates terminal and localhost sessions", async () => {

@@ -5,11 +5,17 @@ export type RemoteCodexIncompatibilityReason =
   | "localVersionInvalid"
   | "remoteCodexMissing"
   | "remoteVersionInvalid"
+  | "localOpenCodeMissing"
+  | "localOpenCodeVersionInvalid"
+  | "remoteOpenCodeMissing"
+  | "remoteOpenCodeVersionInvalid"
   | "daemonUnavailable"
   | "proxyUnavailable"
   | "versionMismatch"
 
 export type RemoteCodexCompatibilityReport = {
+  /** Absent on persisted legacy Codex reports. */
+  providerId?: "codex" | "opencode"
   compatible: boolean
   reason: RemoteCodexIncompatibilityReason | null
   localVersion: string | null

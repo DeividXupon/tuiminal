@@ -49,8 +49,14 @@ export function RemoteCodexUpdatePanel({
     else if (!guide.checking) onRetry(guide.flowId)
   })
   const remote = guide.side === "remote"
+  const openCode = guide.report.providerId === "opencode"
   const detected = remote ? guide.report.remoteVersion : guide.report.localVersion
   const showInstaller = remote || process.platform !== "win32"
+  const title = openCode ? "◆ ATUALIZAR OPENCODE" : "◆ ATUALIZAR CODEX"
+  const upgradeCommand = openCode ? "opencode upgrade" : "codex update"
+  const installer = openCode
+    ? "curl -fsSL https://opencode.ai/v2/install | bash"
+    : "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this companion panel owns its keyboard scope.
     <box
@@ -64,19 +70,16 @@ export function RemoteCodexUpdatePanel({
       style={{ width: "100%", height: "100%", paddingLeft: 1, paddingRight: 1 }}
     >
       <text
-        content={`${translateUi("◆ ATUALIZAR CODEX")} · ${remote ? profileName : translateUi("Local")}`}
+        content={`${translateUi(title)} · ${remote ? profileName : translateUi("Local")}`}
         style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
       />
       <text
         content={`${translateUi("Versão detectada")}: ${detected ?? translateUi("não detectada")}`}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
-      <text content="codex update" style={{ height: 1, flexShrink: 0, fg: COLORS.text }} />
+      <text content={upgradeCommand} style={{ height: 1, flexShrink: 0, fg: COLORS.text }} />
       {showInstaller && (
-        <text
-          content="curl -fsSL https://chatgpt.com/codex/install.sh | sh"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-        />
+        <text content={installer} style={{ height: 1, flexShrink: 0, fg: COLORS.muted }} />
       )}
       <text
         content={translateUi(

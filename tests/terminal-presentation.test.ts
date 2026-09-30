@@ -100,6 +100,8 @@ describe("Free Terminal presentation", () => {
       shortLabel: "Trabalhando",
       color: COLORS.terminal,
     })
+    expect(agentPresentation("working", 1, "coding").shortLabel).toBe("Codificando")
+    expect(agentPresentation("working", 1, "tooling").shortLabel).toBe("Usando ferramenta")
   })
   test("opens the official Codex TUI against an owned app-server", () => {
     expect(createCodexAgentCommand()).toMatchObject({

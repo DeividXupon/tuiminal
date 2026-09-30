@@ -14,6 +14,10 @@ const COMPATIBILITY_MESSAGES: Record<RemoteCodexIncompatibilityReason, string> =
   localVersionInvalid: "A versão local do Codex não pôde ser identificada.",
   remoteCodexMissing: "O Codex não está instalado no servidor remoto.",
   remoteVersionInvalid: "A versão remota do Codex não pôde ser identificada.",
+  localOpenCodeMissing: "O OpenCode não está instalado nesta máquina.",
+  localOpenCodeVersionInvalid: "A versão local do OpenCode não pôde ser identificada.",
+  remoteOpenCodeMissing: "O OpenCode não está instalado no servidor remoto.",
+  remoteOpenCodeVersionInvalid: "A versão remota do OpenCode não pôde ser identificada.",
   daemonUnavailable: "O Codex remoto não oferece app-server daemon.",
   proxyUnavailable: "O Codex remoto não oferece app-server proxy.",
   versionMismatch: "As versões local e remota do Codex são incompatíveis.",
@@ -21,7 +25,11 @@ const COMPATIBILITY_MESSAGES: Record<RemoteCodexIncompatibilityReason, string> =
 
 export class RemoteCodexCompatibilityError extends Error {
   constructor(readonly report: RemoteCodexCompatibilityReport) {
-    super(COMPATIBILITY_MESSAGES[report.reason ?? "versionMismatch"])
+    super(
+      report.providerId === "opencode" && (report.reason ?? "versionMismatch") === "versionMismatch"
+        ? "As versões local e remota do OpenCode são incompatíveis."
+        : COMPATIBILITY_MESSAGES[report.reason ?? "versionMismatch"],
+    )
     this.name = "RemoteCodexCompatibilityError"
   }
 }

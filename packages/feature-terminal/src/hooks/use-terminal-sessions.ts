@@ -140,9 +140,10 @@ export function useTerminalSessions(active: boolean) {
   )
   const clearAgentMessages = useCallback((id: string) => {
     setAgentMessages((current) => {
-      if (!current.has(id)) return current
+      const prefix = `${id}::`
+      if (![...current.keys()].some((key) => key === id || key.startsWith(prefix))) return current
       const next = new Map(current)
-      next.delete(id)
+      for (const key of next.keys()) if (key === id || key.startsWith(prefix)) next.delete(key)
       return next
     })
   }, [])
@@ -373,6 +374,7 @@ export function useTerminalSessions(active: boolean) {
     activateSession,
     focusTerminal,
     updateSession,
+    updateAgentMessages,
     moveSession,
     launchCommand,
     closeSession,

@@ -20,9 +20,12 @@ export type OpenCodeSessionSummary = {
 export type OpenCodeHydration = {
   session: OpenCodeSessionSummary
   state: AgentState
+  activity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling" | null
   messages: AgentMessageHistoryEntry[]
   waitingOnApproval: boolean
 }
+
+export type OpenCodeActivity = NonNullable<OpenCodeHydration["activity"]>
 
 export type OpenCodeObserverEvents = {
   onActivity: (
@@ -32,12 +35,18 @@ export type OpenCodeObserverEvents = {
   onTitle: (title: string) => void
   onUserMessageHistory: (messages: readonly AgentMessageHistoryEntry[], replace: boolean) => void
   onHydrated?: (hydration: OpenCodeHydration) => void
+  /** Complete, isolated snapshot for one root session owned by this TUI. */
+  onSessionUpdated?: (session: OpenCodeHydration) => void
+  onSessionRemoved?: (sessionId: string) => void
+  onActiveSessionChanged?: (sessionId: string) => void
   onError: (message: string) => void
 }
 
 function object(value: unknown): RecordValue | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null
 }
+
+export { object as openCodeObject }
 
 function values(value: unknown) {
   return Array.isArray(value) ? value : []
@@ -296,76 +305,15 @@ export function openCodeMessageHistory(
 export function openCodeLastResponse(value: unknown) {
   const messages = values(responseData(value))
     .map(messageWithParts)
-    .filter((message) => message?.info.role === "assistant")
+    .filter(
+      (message): message is MessageWithParts =>
+        message !== null && message.info.role === "assistant",
+    )
     .sort(
       (left, right) =>
-        (timeValue(left!.info.time, "completed") || timeValue(left!.info.time, "created")) -
-        (timeValue(right!.info.time, "completed") || timeValue(right!.info.time, "created")),
+        (timeValue(left.info.time, "completed") || timeValue(left.info.time, "created")) -
+        (timeValue(right.info.time, "completed") || timeValue(right.info.time, "created")),
     )
-  return messages.length ? messageText(messages.at(-1)!) : ""
-}
-
-export function unwrapOpenCodeEvent(value: unknown) {
-  const event = object(value)
-  const payload = object(event?.payload)
-  return payload ?? event
-}
-
-export function openCodeEventSessionId(value: unknown) {
-  const event = unwrapOpenCodeEvent(value)
-  const properties = object(event?.properties) ?? object(event?.data)
-  const info = object(properties?.info)
-  const part = object(properties?.part)
-  return (
-    text(properties?.sessionID) ||
-    text(info?.sessionID) ||
-    text(info?.id) ||
-    text(part?.sessionID) ||
-    null
-  )
-}
-
-export function openCodeEventActivity(value: unknown) {
-  const event = unwrapOpenCodeEvent(value)
-  const properties = object(event?.properties) ?? object(event?.data)
-  const part = object(properties?.part)
-  if (event?.type === "message.part.delta" || event?.type === "message.part.updated") {
-    if (part?.type === "text") return "writing" as const
-    if (part?.type === "reasoning") return "thinking" as const
-    if (part?.type === "patch") return "coding" as const
-    if (part?.type === "tool") return "tooling" as const
-  }
-  if (event?.type === "file.edited" || event?.type === "session.diff") return "coding" as const
-  return null
-}
-
-export function openCodeEventState(value: unknown) {
-  const event = unwrapOpenCodeEvent(value)
-  const properties = object(event?.properties) ?? object(event?.data)
-  if (event?.type === "session.idle") return "idle" as const
-  if (event?.type === "session.completed") return "done" as const
-  if (event?.type === "session.error") return "unknown" as const
-  if (event?.type === "permission.asked" || event?.type === "question.asked")
-    return "blocked" as const
-  if (event?.type === "session.status") {
-    const status = object(properties?.status)
-    if (status?.type === "idle") return "idle" as const
-    if (status?.type === "busy" || status?.type === "retry") return "working" as const
-  }
-  return openCodeEventActivity(value) ? ("working" as const) : null
-}
-
-export function openCodeEventTitle(value: unknown) {
-  const event = unwrapOpenCodeEvent(value)
-  if (event?.type !== "session.updated" && event?.type !== "session.renamed") return null
-  const properties = object(event.properties) ?? object(event.data)
-  const info = object(properties?.info)
-  return text(properties?.title) || text(info?.title) || null
-}
-
-export function openCodeEventSession(value: unknown) {
-  const event = unwrapOpenCodeEvent(value)
-  if (event?.type !== "session.created" && event?.type !== "session.updated") return null
-  const properties = object(event.properties) ?? object(event.data)
-  return parseOpenCodeSession(properties?.info)
+  const latest = messages.at(-1)
+  return latest ? messageText(latest) : ""
 }

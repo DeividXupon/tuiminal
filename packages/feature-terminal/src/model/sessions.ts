@@ -1,9 +1,9 @@
-import type { AgentStatus } from "./agent-state"
 import {
-  agentProviderHasCapability,
   type AgentProviderCapability,
   type AgentProviderId,
+  agentProviderHasCapability,
 } from "./agent-provider"
+import type { AgentStatus } from "./agent-state"
 import type {
   RemoteCodexCompatibilityReport,
   RemoteCodexHydration,
@@ -66,7 +66,7 @@ export type FreeTerminalCommand = {
   agentLaunch?: IntegratedAgentLaunch
   /** Interactive SSH shell paired with the read-only server setup guide. */
   remoteSetup?: { profile: RemoteServerProfile }
-  /** Manual local/remote terminals opened by the Codex compatibility guide. */
+  /** Manual local/remote terminals opened by an integrated-agent compatibility guide. */
   remoteCodexUpdate?: RemoteCodexUpdateGuide
 }
 export type TerminalSession = FreeTerminalCommand & {

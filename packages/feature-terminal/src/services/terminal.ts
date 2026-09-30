@@ -10,6 +10,7 @@ import {
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
+import type { AgentProviderId } from "../model/agent-provider"
 import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { remoteInteractiveSshCommand } from "./remote-codex-connection"
@@ -172,23 +173,25 @@ export function createRemoteServerSetupCommand(
   }
 }
 
-export function createRemoteCodexUpdateCommands(
+export function createRemoteAgentUpdateCommands(
   flowId: number,
   profile: TerminalRemoteCodexProfile,
   report: RemoteCodexCompatibilityReport,
+  providerId: Extract<AgentProviderId, "codex" | "opencode">,
 ): [FreeTerminalCommand, FreeTerminalCommand] {
   const local = createShellTerminalCommand()
-  const guide = { flowId, report, checking: false, error: "" }
+  const provider = providerId === "opencode" ? "OpenCode" : "Codex"
+  const guide = { flowId, report: { ...report, providerId }, checking: false, error: "" }
   return [
     {
       ...local,
-      label: "Codex · Local",
+      label: `${provider} · Local`,
       workingDirectory: homedir(),
       remoteCodexUpdate: { ...guide, side: "local" },
     },
     {
       kind: "custom",
-      label: `Codex · ${profile.name}`,
+      label: `${provider} · ${profile.name}`,
       shortLabel: "SSH",
       displayCommand: `ssh ${profile.host}`,
       command: remoteInteractiveSshCommand(profile),

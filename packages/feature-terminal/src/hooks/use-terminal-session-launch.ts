@@ -6,13 +6,14 @@ import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { agentProvider } from "../model/agent-provider"
 import {
   cleanTerminalName,
-  integratedAgentLaunch,
   type FreeTerminalCommand,
+  integratedAgentLaunch,
   type TerminalSession,
 } from "../model/sessions"
 import { AgentMonitor } from "../services/agent-monitor"
 import { startCodexAppServerTerminal } from "../services/codex-app-server"
 import { startOpenCodeServerTerminal } from "../services/opencode-server"
+import { OpenCodeSessionProjection } from "../services/opencode-session-projection"
 import { RemoteCodexCompatibilityError } from "../services/remote-codex-handshake"
 import {
   FREE_TERMINAL_WORKING_DIRECTORY,
@@ -218,6 +219,7 @@ async function launchTerminal(
   let agentTitle: string | undefined
   let hydrationRevision = 0
   const provider = agentProvider(integration?.providerId ?? "codex")
+  const openCodeSessions = new OpenCodeSessionProjection(id, provider, integration?.resumeThreadId)
   const updateIntegratedAgent = () => {
     if (!launch.isCurrent()) return
     context.updateSession(id, {
@@ -246,6 +248,22 @@ async function launchTerminal(
     },
     onExit: (result: FreeTerminalExit) =>
       finishTerminalExit(id, command, result, launch, active, output, context),
+  }
+  const publishOpenCodeSessions = () => {
+    if (!launch.isCurrent()) return
+    const { active, messages } = openCodeSessions.snapshot()
+    if (active) context.updateAgentMessages(id, messages, true)
+    else context.clearAgentMessages(id)
+    context.updateSession(id, {
+      agent: active?.agent ?? {
+        key: `${provider.id}-app-server:${id}`,
+        label: provider.label,
+        profile: provider.profile,
+        state: "idle",
+        activity: null,
+      },
+      agentIntegration: { providerId: provider.id, transport: "app-server" },
+    })
   }
   try {
     const events = {
@@ -301,11 +319,26 @@ async function launchTerminal(
             options,
             {
               ...events,
-              onHydrated(hydration) {
+              onSessionUpdated(hydration) {
                 if (!launch.isCurrent()) return
-                agentState = hydration.state
-                updateIntegratedAgent()
-                if (!integration.remote) return
+                openCodeSessions.upsert(hydration)
+                publishOpenCodeSessions()
+              },
+              onSessionRemoved(sessionId) {
+                if (!launch.isCurrent()) return
+                openCodeSessions.remove(sessionId)
+                publishOpenCodeSessions()
+              },
+              onActiveSessionChanged(sessionId) {
+                if (!launch.isCurrent()) return
+                openCodeSessions.activate(sessionId)
+                if (openCodeSessions.has(sessionId)) publishOpenCodeSessions()
+              },
+              onHydrated(hydration) {
+                if (!launch.isCurrent() || !integration.remote) return
+                const projected = openCodeSessions.snapshot()
+                if (projected.sessions.length > 0 && projected.active?.id !== hydration.session.id)
+                  return
                 hydrationRevision += 1
                 const latest = hydration.messages.at(-1)
                 context.updateSession(id, {

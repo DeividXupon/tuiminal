@@ -55,18 +55,18 @@ Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts
 - Tuiminal owns the local TUI, loopback relay and the SSH proxy process for a remote
   pane. Closing or probing stops only those resources; it never invokes daemon stop.
   The persistent daemon and its active turns belong to the remote Codex installation.
-- OpenCode runs owned `opencode serve` on remote loopback, forwards it with SSH `-L`,
-  and attaches its official local TUI. Bound public HTTP/SSE reads; keep input and
-  approvals in the TUI. Stop its server, tunnel, observer and PTY together.
+- OpenCode runs owned `opencode serve` on remote loopback behind SSH `-L`, with distinct
+  endpoints for self-host aliases. Pass its password over SSH stdin, authenticate the
+  observer/TUI, require matching local/remote v2 versions, and stop all owned resources
+  together. Do not pass a remote-only cwd as the v2 local TUI's positional directory;
+  let the remote server cwd remain authoritative.
 - A missing capability or incompatible version opens a localized modal. `[Esc]`
   returns to the preserved project/resume selection. `[Enter]` opens two terminals in
-  one split, local `~/` and remote SSH `~/`, showing detected versions, `codex update`
-  and the official POSIX installer alternative. The user runs commands manually;
-  nothing is typed or executed automatically. Revalidation keeps the guide open on
-  failure, or closes only those two terminals and retries the exact original launch
-  on success. The app-server protocol is experimental and version-dependent; see the
-  [official app-server documentation](https://learn.chatgpt.com/docs/app-server) and
-  [`codex update` reference](https://learn.chatgpt.com/docs/developer-commands#codex-update).
+  one split, local `~/` and remote SSH `~/`, with versions and the provider's manual
+  update/install commands. Revalidation keeps the guide on failure; success closes
+  only its terminals and retries the exact launch. See the
+  [Codex app-server](https://learn.chatgpt.com/docs/app-server) and
+  [OpenCode CLI](https://opencode.ai/v2/docs/cli/commands/) references.
 - Query local and active-remote recents independently and merge without erasing either
   source. Tag provider, profile and cwd; never fall back to another provider or host.
   Rehydrate public history and state before consuming live events.

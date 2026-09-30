@@ -204,16 +204,37 @@ OpenCode v2 uses `opencode --server <url> <cwd>`; legacy v1 uses
 `opencode attach <url> --dir <cwd>`.
 For a remote project, the server runs on remote loopback through an owned SSH process
 with local port forwarding; the same official local TUI attaches through that tunnel.
+The v2 client omits a remote-only positional directory so it cannot attempt a local
+`chdir`; the remote server working directory remains authoritative.
 Neither path exposes a public listener. The PTY, observer, server, and SSH tunnel are
-owned as one session and stop together when its pane closes.
+owned as one session and stop together when its pane closes. Each launch uses an
+in-memory random server password shared only with the observer and official TUI. Remote
+launches deliver it over SSH stdin and reserve distinct local and remote ports so an SSH
+alias that resolves to the Tuiminal host cannot collide with its own forward. Remote v2
+launches also require the local TUI and remote server to report the same OpenCode version;
+an incompatible pair opens the shared compatibility modal before the TUI can request a
+route from the wrong API contract. Its guide opens local and SSH terminals with
+`opencode upgrade` and the official installer, revalidates both binaries, then retries
+the exact original project or resumed session only after their versions match.
 
-Tuiminal observes only OpenCode's public HTTP and SSE surfaces. The event stream
+Tuiminal observes OpenCode's public HTTP and SSE surfaces. The event stream
 provides session identity, title, state, permission waits, and structured activity;
-bounded session, message, status, and per-message diff requests hydrate the current
-conversation. Input and approvals remain in the official TUI. Reasoning part text is
+bounded session, message, status, and per-message diff requests hydrate each observed
+root conversation. Input and approvals remain in the official TUI. Reasoning part text is
 not displayed, while public user prompts, attachments, model identity, final responses,
 tool activity, and file changes feed the same provider-neutral history model used by
 the Terminal UI. The observer never scrapes rendered terminal output.
+
+One OpenCode PTY receives one Agents row. OpenCode v2 is launched with a process-local
+CLI override that hides its session tab rail and keeps terminal-title signaling enabled;
+this does not change the user's global OpenCode settings. If the TUI opens another root
+session internally, the same row follows
+the title, state, activity, notification, and message history of the currently visible
+session. Root-session observation and hydration remain isolated by session ID, bounded
+to 24 sessions and four concurrent hydrations, while child/subagent sessions never
+become sidebar rows. A unique exact OSC title match follows visible session changes
+without reading the rendered screen. Deletion or terminal shutdown removes the matching
+in-memory observation.
 
 The Master Key resume list is loaded from the official JSON session list, with the
 public server API as a fallback and message hydration for the latest response. Entries

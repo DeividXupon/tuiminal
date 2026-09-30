@@ -287,7 +287,7 @@ export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
       description: "Order agent and visible section targets for 10,000 Master Key updates",
       operationsPerSample: 10_000,
       run: () => {
-        let targets: readonly TerminalSession[] = []
+        let targets: ReturnType<typeof visibleTerminalShortcutTargets> = []
         for (let index = 0; index < 10_000; index += 1) {
           targets = visibleTerminalShortcutTargets(
             sessions,

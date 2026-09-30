@@ -8,6 +8,14 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "◆ 호환되지 않는 CODEX",
   ],
   [
+    "◆ OPENCODE INCOMPATÍVEL",
+    "◆ INCOMPATIBLE OPENCODE",
+    "◆ OPENCODE INCOMPATIBLE",
+    "◆ OPENCODE 非互換",
+    "◆ OPENCODE 不兼容",
+    "◆ 호환되지 않는 OPENCODE",
+  ],
+  [
     "O Codex não está instalado nesta máquina.",
     "Codex is not installed on this machine.",
     "Codex no está instalado en esta máquina.",
@@ -30,6 +38,22 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "リモート Codex のバージョンを特定できませんでした。",
     "无法识别远程 Codex 版本。",
     "원격 Codex 버전을 확인할 수 없습니다.",
+  ],
+  [
+    "A versão local do OpenCode não pôde ser identificada.",
+    "The local OpenCode version could not be identified.",
+    "No se pudo identificar la versión local de OpenCode.",
+    "ローカル OpenCode のバージョンを特定できませんでした。",
+    "无法识别本地 OpenCode 版本。",
+    "로컬 OpenCode 버전을 확인할 수 없습니다.",
+  ],
+  [
+    "A versão remota do OpenCode não pôde ser identificada.",
+    "The remote OpenCode version could not be identified.",
+    "No se pudo identificar la versión remota de OpenCode.",
+    "リモート OpenCode のバージョンを特定できませんでした。",
+    "无法识别远程 OpenCode 版本。",
+    "원격 OpenCode 버전을 확인할 수 없습니다.",
   ],
   [
     "O Codex remoto não oferece app-server daemon.",
@@ -56,6 +80,14 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "로컬 및 원격 Codex 버전이 호환되지 않습니다.",
   ],
   [
+    "As versões local e remota do OpenCode são incompatíveis.",
+    "The local and remote OpenCode versions are incompatible.",
+    "Las versiones local y remota de OpenCode son incompatibles.",
+    "ローカルとリモートの OpenCode バージョンに互換性がありません。",
+    "本地和远程 OpenCode 版本不兼容。",
+    "로컬 및 원격 OpenCode 버전이 호환되지 않습니다.",
+  ],
+  [
     "O daemon do Codex não iniciou no servidor remoto.",
     "The Codex daemon did not start on the remote server.",
     "El daemon de Codex no se inició en el servidor remoto.",
@@ -70,6 +102,14 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "リモート Codex の事前検証がタイムアウトしました。",
     "远程 Codex 预检超时。",
     "원격 Codex 사전 검증 시간이 초과되었습니다.",
+  ],
+  [
+    "O preflight remoto do OpenCode excedeu o tempo limite.",
+    "The remote OpenCode preflight timed out.",
+    "El preflight remoto de OpenCode superó el tiempo límite.",
+    "リモート OpenCode の事前検証がタイムアウトしました。",
+    "远程 OpenCode 预检超时。",
+    "원격 OpenCode 사전 검증 시간이 초과되었습니다.",
   ],
   [
     "O proxy remoto do Codex encerrou antes de responder ao handshake.",
@@ -87,6 +127,14 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "app-server プロトコルは実験的で、バージョンに依存します。",
     "app-server 协议是实验性的，并且依赖版本。",
     "app-server 프로토콜은 실험적이며 버전에 따라 달라집니다.",
+  ],
+  [
+    "A API do OpenCode depende da versão usada nas duas máquinas.",
+    "The OpenCode API depends on the version used on both machines.",
+    "La API de OpenCode depende de la versión usada en ambas máquinas.",
+    "OpenCode API は両方のマシンで使用するバージョンに依存します。",
+    "OpenCode API 取决于两台计算机上使用的版本。",
+    "OpenCode API는 두 컴퓨터에서 사용하는 버전에 따라 달라집니다.",
   ],
   [
     "[Esc] Cancelar",
@@ -111,6 +159,14 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
     "◆ CODEX を更新",
     "◆ 更新 CODEX",
     "◆ CODEX 업데이트",
+  ],
+  [
+    "◆ ATUALIZAR OPENCODE",
+    "◆ UPDATE OPENCODE",
+    "◆ ACTUALIZAR OPENCODE",
+    "◆ OPENCODE を更新",
+    "◆ 更新 OPENCODE",
+    "◆ OPENCODE 업데이트",
   ],
   [
     "Versão detectada",

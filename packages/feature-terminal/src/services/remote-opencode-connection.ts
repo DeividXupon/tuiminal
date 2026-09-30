@@ -27,8 +27,16 @@ export function remoteOpenCodeServerCommand(
 ) {
   const command = [
     ...remoteOpenCodePrelude(workingDirectory),
-    "unset OPENCODE_SERVER_PASSWORD",
-    `exec "$opencode_command" serve --hostname 127.0.0.1 --port ${remotePort}`,
+    "IFS= read -r OPENCODE_PASSWORD || exit 74",
+    "OPENCODE_SERVER_PASSWORD=$OPENCODE_PASSWORD",
+    "export OPENCODE_PASSWORD",
+    "export OPENCODE_SERVER_PASSWORD",
+    "unset OPENCODE_SERVER_USERNAME",
+    `"$opencode_command" serve --hostname 127.0.0.1 --port ${remotePort} & opencode_pid=$!`,
+    "ssh_parent_pid=$PPID",
+    '(while kill -0 "$ssh_parent_pid" 2>/dev/null; do sleep 1; done; kill "$opencode_pid" 2>/dev/null) & ssh_watchdog_pid=$!',
+    'trap \'kill "$opencode_pid" "$ssh_watchdog_pid" 2>/dev/null; wait "$opencode_pid" 2>/dev/null; wait "$ssh_watchdog_pid" 2>/dev/null\' EXIT HUP INT TERM',
+    'wait "$opencode_pid"',
   ].join("; ")
   return [
     "ssh",
@@ -60,6 +68,22 @@ export function remoteOpenCodeSessionListCommand(
     ...remoteOpenCodePrelude("/"),
     `exec "$opencode_command" session list --format json --max-count ${Math.max(1, Math.floor(maximum))}`,
   ].join("; ")
+  return [
+    "ssh",
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "ConnectionAttempts=1",
+    profile.host,
+    command,
+  ]
+}
+
+export function remoteOpenCodeVersionCommand(profile: TerminalRemoteCodexProfile) {
+  const command = [...remoteOpenCodePrelude("/"), 'exec "$opencode_command" --version'].join("; ")
   return [
     "ssh",
     "-T",

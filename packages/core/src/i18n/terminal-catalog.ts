@@ -1,10 +1,12 @@
 import { TERMINAL_ACTION_MESSAGES } from "./terminal-action-catalog"
+import { TERMINAL_AGENT_MESSAGES } from "./terminal-agent-catalog"
 import { TERMINAL_LIVE_DIFF_MESSAGES } from "./terminal-live-diff-catalog"
 import { TERMINAL_MASTER_KEY_DESCRIPTION_MESSAGES } from "./terminal-master-key-catalog"
 import { TERMINAL_PROJECT_SYNC_MESSAGES } from "./terminal-project-sync-catalog"
 import { TERMINAL_TMUX_MESSAGES } from "./terminal-tmux-catalog"
 
 export const TERMINAL_MESSAGES = [
+  ...TERMINAL_AGENT_MESSAGES,
   ...TERMINAL_TMUX_MESSAGES,
   ...TERMINAL_LIVE_DIFF_MESSAGES,
   ...TERMINAL_PROJECT_SYNC_MESSAGES,

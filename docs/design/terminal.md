@@ -229,23 +229,31 @@ another client.
 
 OpenCode uses an independent first-party transport. A local launch starts one owned
 `opencode serve --hostname 127.0.0.1` in the selected directory and opens the official
-TUI after validating JSON health and negotiating v2 `opencode --server <url> <cwd>` or
-legacy v1 `opencode attach <url> --dir <cwd>`. A remote launch starts that server on remote
-loopback through SSH `-L`, then runs the same official TUI locally against the forwarded
-port. Its SSH process, server, observer, and PTY share the pane lifecycle, and no server
-port is exposed publicly. Public HTTP and SSE provide session identity, title, state,
+TUI after validating authenticated JSON server information and negotiating v2
+`opencode --server <url> <cwd>` or legacy v1
+`opencode attach <url> --dir <cwd>`. A remote launch starts that server on remote loopback
+through SSH `-L`, then runs the same official TUI locally against the forwarded port. If
+the remote directory does not exist locally, the v2 client omits its positional directory
+instead of attempting a local `chdir`; the server's selected working directory remains
+authoritative.
+Each launch keeps one random password in memory, sends a remote password only through
+SSH stdin, and uses distinct tunnel endpoints so self-referential SSH aliases remain
+valid. A remote v2 launch requires the local TUI and remote server to report the same
+OpenCode version before the TUI opens. Its SSH process, server, observer, and PTY share
+the pane lifecycle, and no server port is exposed publicly. Public HTTP and SSE provide
+session identity, title, state,
 permission waits, structured activity, messages, per-message diffs, and resume hydration.
 Input and approvals stay in the official TUI; Tuiminal neither scrapes its screen nor
 displays OpenCode reasoning part text.
 
-If a capability is absent or versions are incompatible, a localized focused modal
-shows both detected versions and explains that the
-[app-server protocol is experimental and version-dependent](https://learn.chatgpt.com/docs/app-server).
+If a capability is absent or Codex/OpenCode versions are incompatible, a localized
+focused modal shows both detected versions and the provider-specific constraint.
 `[Esc]` returns to the project selector or resume list with the original intent intact.
 `[Enter]` opens local `~/` and remote SSH `~/` terminals in one split with the detected
-version, [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update)
-and the official POSIX installer alternative. Tuiminal does not prefill or execute any
-command. The split's inline `[Esc]` and `[Enter]` actions own their keyboard scope.
+version, the applicable [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update)
+or [`opencode upgrade`](https://opencode.ai/v2/docs/cli/commands/) command, and the
+official POSIX installer alternative. Tuiminal does not prefill or execute any command.
+The split's inline `[Esc]` and `[Enter]` actions own their keyboard scope.
 Revalidation failure leaves both terminals and the refreshed report open; success
 closes only those two terminals and retries the exact original profile, directory and
 optional thread ID.

@@ -23,6 +23,45 @@ function agentPrimaryColor(
   return selected ? COLORS.text : COLORS.muted
 }
 
+function agentRowLayout(
+  session: TerminalSession,
+  agent: NonNullable<TerminalSession["agent"]>,
+  status: ReturnType<typeof agentPresentation>,
+  frame: number,
+  compact: boolean,
+  selected: boolean,
+  width: number,
+  shortcutWidth: number,
+) {
+  const primary = compact ? (agent.taskTitle ?? agent.label) : status.shortLabel
+  const trailing = compact ? status.shortLabel : agent.label
+  const trailingWidth = Math.min(
+    displayWidth(trailing),
+    compact
+      ? Math.max(5, width - 14)
+      : Math.max(3, width - displayWidth(primary) - 6 - shortcutWidth),
+  )
+  const showActivity = !compact && agentSessionHasCapability(session, "structured-activity")
+  return {
+    primary,
+    trailing,
+    trailingWidth,
+    primaryColor: compact ? agentPrimaryColor(compact, agent.taskTitle, selected) : status.color,
+    trailingColor: compact ? status.color : selected ? COLORS.text : COLORS.muted,
+    showActivity,
+    rowHeight: compact ? 1 : showActivity ? 3 : 2,
+    activityIndicators: showActivity
+      ? codexActivityIndicators(agent.state, agent.activity, frame)
+      : [],
+    trailingId: compact ? "status" : "provider",
+  }
+}
+
+function activityIndicatorColor(active: boolean, bright: boolean) {
+  if (!active) return COLORS.border
+  return bright ? COLORS.terminal : COLORS.muted
+}
+
 function TerminalAgentRow({
   compact,
   frame,
@@ -46,26 +85,28 @@ function TerminalAgentRow({
   if (!agent) return null
   const status = agentPresentation(agent.state, frame, agent.activity)
   const cursorRail = cursor ? "▌" : " "
-  const statusWidth = Math.min(displayWidth(status.shortLabel), Math.max(5, width - 14))
   const shortcutWidth = shortcut ? displayWidth(shortcut) : 0
-  const primary = compact && agent.taskTitle ? agent.taskTitle : agent.label
-  const primaryColor = agentPrimaryColor(compact, agent.taskTitle, selected)
-  const showActivity = !compact && agentSessionHasCapability(session, "structured-activity")
-  const rowHeight = compact ? 1 : showActivity ? 3 : 2
-  const activityIndicators = showActivity
-    ? codexActivityIndicators(agent.state, agent.activity, frame)
-    : []
+  const layout = agentRowLayout(
+    session,
+    agent,
+    status,
+    frame,
+    compact,
+    selected,
+    width,
+    shortcutWidth,
+  )
   return (
     <Button
       id={`terminal-agent-${session.id}`}
-      height={rowHeight}
+      height={layout.rowHeight}
       width="100%"
       onPress={() => onActivate(session.id)}
     >
       <box
         style={{
           width: "100%",
-          height: rowHeight,
+          height: layout.rowHeight,
           flexDirection: "row",
           backgroundColor: selected || cursor ? COLORS.panelRaised : "transparent",
           paddingRight: 1,
@@ -73,7 +114,9 @@ function TerminalAgentRow({
       >
         <text
           content={
-            compact ? cursorRail : Array.from({ length: rowHeight }, () => cursorRail).join("\n")
+            compact
+              ? cursorRail
+              : Array.from({ length: layout.rowHeight }, () => cursorRail).join("\n")
           }
           style={{ fg: COLORS.terminal, width: 1, flexShrink: 0 }}
         />
@@ -85,20 +128,25 @@ function TerminalAgentRow({
             style={{ fg: BRAND_COLOR, width: shortcutWidth, flexShrink: 0 }}
           />
         )}
-        <box style={{ height: rowHeight, flexGrow: 1, minWidth: 0 }}>
+        <box style={{ height: layout.rowHeight, flexGrow: 1, minWidth: 0 }}>
           <box style={{ height: 1, flexDirection: "row", width: "100%" }}>
             <text content={`${status.marker} `} style={{ fg: status.color, flexShrink: 0 }} />
             <text
               id={`terminal-agent-primary-${session.id}`}
               content={truncateDisplay(
-                primary,
-                Math.max(2, width - statusWidth - 6 - shortcutWidth),
+                layout.primary,
+                Math.max(2, width - layout.trailingWidth - 6 - shortcutWidth),
               )}
-              style={{ fg: primaryColor, flexGrow: 1 }}
+              style={{ fg: layout.primaryColor, flexGrow: 1 }}
             />
             <text
-              content={truncateDisplay(status.shortLabel, statusWidth)}
-              style={{ fg: status.color, width: statusWidth, flexShrink: 0 }}
+              id={`terminal-agent-${layout.trailingId}-${session.id}`}
+              content={truncateDisplay(layout.trailing, layout.trailingWidth)}
+              style={{
+                fg: layout.trailingColor,
+                width: layout.trailingWidth,
+                flexShrink: 0,
+              }}
             />
           </box>
           {!compact && (
@@ -108,7 +156,7 @@ function TerminalAgentRow({
               style={{ fg: agent.taskTitle ? COLORS.focus : COLORS.muted }}
             />
           )}
-          {showActivity && (
+          {layout.showActivity && (
             <box
               id={`terminal-agent-activity-${session.id}`}
               style={{
@@ -119,16 +167,12 @@ function TerminalAgentRow({
                 paddingLeft: 2,
               }}
             >
-              {activityIndicators.map((indicator) => (
+              {layout.activityIndicators.map((indicator) => (
                 <text
                   key={indicator.key}
                   content={indicator.marker}
                   style={{
-                    fg: indicator.active
-                      ? indicator.bright
-                        ? COLORS.terminal
-                        : COLORS.muted
-                      : COLORS.border,
+                    fg: activityIndicatorColor(indicator.active, indicator.bright),
                     flexShrink: 0,
                   }}
                 />

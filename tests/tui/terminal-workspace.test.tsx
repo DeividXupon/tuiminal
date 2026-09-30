@@ -45,9 +45,11 @@ import * as projectDirectories from "../../packages/feature-terminal/src/service
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
+import type { OpenCodeObserverEvents } from "../../packages/feature-terminal/src/services/opencode-api"
 import * as openCodeServer from "../../packages/feature-terminal/src/services/opencode-server"
 import * as remoteHandshake from "../../packages/feature-terminal/src/services/remote-codex-handshake"
 import * as remoteLiveDiff from "../../packages/feature-terminal/src/services/remote-live-diff"
+import * as remoteOpenCodeCompatibility from "../../packages/feature-terminal/src/services/remote-opencode-compatibility"
 import * as remoteReadiness from "../../packages/feature-terminal/src/services/remote-server-readiness"
 import * as remoteTerminalContext from "../../packages/feature-terminal/src/services/remote-terminal-context"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
@@ -68,6 +70,16 @@ const incompatibleReport = {
   reason: "versionMismatch",
   localVersion: "0.157.2",
   remoteVersion: "0.158.0",
+  daemonAvailable: true,
+  proxyAvailable: true,
+} as const
+
+const incompatibleOpenCodeReport = {
+  providerId: "opencode",
+  compatible: false,
+  reason: "versionMismatch",
+  localVersion: "2.0.19",
+  remoteVersion: "2.0.20",
   daemonAvailable: true,
   proxyAvailable: true,
 } as const
@@ -98,6 +110,7 @@ let remoteOpenCodeResumeSpy:
   | ReturnType<typeof spyOn<typeof openCodeServer, "refreshRemoteOpenCodeResumeThreads">>
   | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
+let openCodeEvents: OpenCodeObserverEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 let repositoryContextSpy:
   | ReturnType<typeof spyOn<typeof repositoryContext, "readTerminalRepositoryContext">>
@@ -119,6 +132,7 @@ afterEach(() => {
   openCodeResumeSpy?.mockRestore()
   remoteOpenCodeResumeSpy?.mockRestore()
   codexEvents = undefined
+  openCodeEvents = undefined
   inspectionSpy?.mockRestore()
   repositoryContextSpy = undefined
   for (const spy of liveDiffSpies.splice(0)) spy.mockRestore()
@@ -195,17 +209,24 @@ async function mount(
     },
   )
   openCodeSpy = spyOn(openCodeServer, "startOpenCodeServerTerminal").mockImplementation(
-    async (options) => {
+    async (options, events) => {
+      openCodeEvents = events
       const directory = options.remote?.workingDirectory ?? options.cwd ?? process.cwd()
       commands.push([
         "opencode",
         "--server",
         "http://127.0.0.1:4501",
         ...(options.resumeThreadId ? ["--session", options.resumeThreadId] : []),
-        directory,
+        ...(options.remote ? [] : [directory]),
       ])
       starts.push(options)
-      return { pid: 501, backend: "native", write() {}, resize() {}, async stop() {} }
+      return {
+        pid: 501,
+        backend: "native",
+        write() {},
+        resize() {},
+        async stop() {},
+      }
     },
   )
   liveDiffSpies.push(
@@ -470,6 +491,84 @@ test("Master Key opens the official OpenCode TUI attached to its public server",
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
+test("OpenCode keeps one sidebar row synchronized with the visible root session", async () => {
+  await mount(false, 140, 36)
+  await leader("a")
+  await click("terminal-dialog-agent-provider-opencode")
+  await click("terminal-dialog-project-launch")
+  const terminalId = focusedTerminal().id.replace("free-terminal-", "")
+  const observed = (id: string, title: string, state: "working" | "blocked", message: string) => ({
+    session: {
+      id,
+      title,
+      directory: processes.FREE_TERMINAL_WORKING_DIRECTORY,
+      updatedAt: Date.now(),
+    },
+    state,
+    activity: state === "working" ? ("coding" as const) : null,
+    messages: [
+      {
+        id: `message-${id}`,
+        turnId: `turn-${id}`,
+        text: message,
+        sentAt: Date.now(),
+        durationMs: null,
+        status: "completed" as const,
+        hasImage: false,
+        hasAudio: false,
+        hasSkill: false,
+        model: null,
+        effort: null,
+        serviceTier: null,
+        ...EMPTY_AGENT_MESSAGE_TURN_DETAIL,
+      },
+    ],
+    waitingOnApproval: state === "blocked",
+  })
+
+  await act(async () => {
+    openCodeEvents?.onSessionUpdated?.(
+      observed("ses_first", "First OpenCode task", "working", "Message from first session"),
+    )
+    openCodeEvents?.onSessionUpdated?.(
+      observed("ses_second", "Second OpenCode task", "blocked", "Message from second session"),
+    )
+    openCodeEvents?.onActiveSessionChanged?.("ses_first")
+  })
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById(`terminal-agent-${terminalId}`)).toBeDefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-agent-${terminalId}::ses_first`),
+  ).toBeUndefined()
+  expect(
+    tui?.renderer.root.findDescendantById(`terminal-agent-${terminalId}::ses_second`),
+  ).toBeUndefined()
+  expect(tui?.captureCharFrame()).toContain("First OpenCode task")
+  expect(tui?.captureCharFrame()).not.toContain("Second OpenCode task")
+  expect(tui?.captureCharFrame()).toContain("Codificando")
+  expect(tui?.captureCharFrame()).not.toContain("Aguardando")
+
+  await act(async () => openCodeEvents?.onActiveSessionChanged?.("ses_second"))
+  await tui?.renderOnce()
+  expect(tui?.renderer.root.findDescendantById(`terminal-agent-${terminalId}`)).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Second OpenCode task")
+  expect(tui?.captureCharFrame()).not.toContain("First OpenCode task")
+  expect(tui?.captureCharFrame()).toContain("Aguardando")
+  await act(async () => {
+    openCodeEvents?.onSessionUpdated?.(
+      observed("ses_first", "Hidden OpenCode task", "working", "Hidden message"),
+    )
+  })
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("Second OpenCode task")
+  expect(tui?.captureCharFrame()).not.toContain("Hidden OpenCode task")
+  expect(tui?.captureCharFrame()).toContain("Aguardando")
+  await leader("s")
+  expect(tui?.captureCharFrame()).toContain("Message from second session")
+  expect(tui?.captureCharFrame()).not.toContain("Message from first session")
+})
+
 test("OpenCode launches remotely through the selected SSH source and enables project sync", async () => {
   await mount()
   await leader("a")
@@ -481,7 +580,7 @@ test("OpenCode launches remotely through the selected SSH source and enables pro
   expect(starts.at(-1)).toMatchObject({
     remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
   })
-  expect(commands.at(-1)).toEqual(["opencode", "--server", "http://127.0.0.1:4501", "/srv/project"])
+  expect(commands.at(-1)).toEqual(["opencode", "--server", "http://127.0.0.1:4501"])
 
   await leader("r")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeDefined()
@@ -3139,6 +3238,68 @@ test("compatibility guide opens local and SSH terminals, revalidates, and relaun
   expect(preflight).toHaveBeenCalledTimes(2)
   expect(codexSpy).toHaveBeenCalledTimes(2)
   expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CODEX")
+  expect(starts.at(-1)).toMatchObject({
+    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
+  })
+})
+
+test("OpenCode incompatibility opens its update split, revalidates, and relaunches", async () => {
+  await mount(false, 150, 38)
+  openCodeSpy?.mockRejectedValueOnce(
+    new remoteHandshake.RemoteCodexCompatibilityError(incompatibleOpenCodeReport),
+  )
+  const preflight = spyOn(remoteOpenCodeCompatibility, "preflightRemoteOpenCode").mockResolvedValue(
+    {
+      ...incompatibleOpenCodeReport,
+      compatible: true,
+      reason: null,
+      localVersion: "2.0.20",
+    },
+  )
+  liveDiffSpies.push(preflight)
+
+  await leader("a")
+  await click("terminal-dialog-agent-provider-opencode")
+  await selectProjectRemote()
+  await click("terminal-dialog-project-launch")
+  await waitForRenderable("remote-codex-compatibility-modal")
+  expect(tui?.captureCharFrame()).toContain("OPENCODE INCOMPATÍVEL")
+  expect(tui?.captureCharFrame()).toContain("2.0.19")
+  expect(tui?.captureCharFrame()).toContain("2.0.20")
+
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.captureCharFrame().includes("ATUALIZAR OPENCODE");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  const guide = tui?.captureCharFrame() ?? ""
+  expect(guide).toContain("ATUALIZAR OPENCODE · Local")
+  expect(guide).toContain("ATUALIZAR OPENCODE · work-server")
+  expect(guide).toContain("opencode upgrade")
+  expect(guide).toContain("curl -fsSL https://opencode.ai/v2/install | bash")
+  expect(inputs.every((input) => input.length === 0)).toBe(true)
+
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  await key("enter")
+  for (let attempt = 0; attempt < 100 && openCodeSpy?.mock.calls.length !== 2; attempt++) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+
+  expect(preflight).toHaveBeenCalledTimes(1)
+  expect(openCodeSpy).toHaveBeenCalledTimes(2)
+  expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR OPENCODE")
   expect(starts.at(-1)).toMatchObject({
     remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
   })

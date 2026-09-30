@@ -1,164 +1,34 @@
-import type {
-  AgentMessageFileChange,
-  AgentMessageHistoryEntry,
-} from "../model/agent-message-history"
+import type { AgentMessageFileChange } from "../model/agent-message-history"
+import { agentTaskTitle } from "../model/agent-task-title"
 import {
+  type OpenCodeActivity,
   type OpenCodeHydration,
   type OpenCodeObserverEvents,
-  openCodeEventActivity,
+  parseOpenCodeSession,
+} from "./opencode-api"
+import {
+  openCodeEventDeletedSessionId,
+  openCodeEventDirectory,
   openCodeEventSession,
   openCodeEventSessionId,
-  openCodeEventState,
+  openCodeEventSessionParentId,
   openCodeEventTitle,
-  openCodeMessageHistory,
-  parseOpenCodeFileDiffs,
-  parseOpenCodeSession,
-  parseOpenCodeSessions,
   unwrapOpenCodeEvent,
-} from "./opencode-api"
-import { readOpenCodeJsonResponse, type OpenCodeServerProtocol } from "./opencode-protocol"
+} from "./opencode-events"
+import {
+  fetchOpenCodeJson,
+  hydratedOpenCodeState,
+  listOpenCodeSessions,
+  openCodeApiUrl,
+  openCodeMessageDiffs,
+  openCodeMessageHistory,
+  openCodeSessionMessages,
+  openCodeStatusState,
+} from "./opencode-hydration"
+import { applyOpenCodeLiveEvent } from "./opencode-live-event"
+import type { OpenCodeServerProtocol } from "./opencode-protocol"
 
-type RecordValue = Record<string, unknown>
-
-function object(value: unknown): RecordValue | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null
-}
-
-function apiUrl(baseUrl: string, pathname: string, directory: string | undefined, query = {}) {
-  const url = new URL(pathname, baseUrl)
-  if (directory) url.searchParams.set("directory", directory)
-  for (const [key, value] of Object.entries(query))
-    if (value !== undefined && value !== null) url.searchParams.set(key, String(value))
-  return url
-}
-
-export async function fetchOpenCodeJson(
-  baseUrl: string,
-  pathname: string,
-  directory: string | undefined,
-  signal: AbortSignal,
-  query: Record<string, string | number | undefined> = {},
-) {
-  const timeout = AbortSignal.timeout(15_000)
-  const boundedSignal = AbortSignal.any([signal, timeout])
-  try {
-    const response = await fetch(apiUrl(baseUrl, pathname, directory, query), {
-      signal: boundedSignal,
-    })
-    return await readOpenCodeJsonResponse(response)
-  } catch (error) {
-    if (!signal.aborted && timeout.aborted)
-      throw new Error("A consulta à API do OpenCode excedeu o tempo limite.")
-    throw error
-  }
-}
-
-export async function listOpenCodeSessions(
-  baseUrl: string,
-  directory: string,
-  signal: AbortSignal,
-  protocol: OpenCodeServerProtocol = "v1",
-) {
-  const pathname = protocol === "v2" ? "/api/session" : "/session"
-  return parseOpenCodeSessions(
-    await fetchOpenCodeJson(baseUrl, pathname, directory, signal, {
-      roots: "true",
-      limit: 100,
-      ...(protocol === "v2" ? { order: "desc" } : {}),
-    }),
-  )
-}
-
-async function sessionMessages(
-  baseUrl: string,
-  directory: string,
-  sessionId: string,
-  signal: AbortSignal,
-  protocol: OpenCodeServerProtocol,
-) {
-  const messages: unknown[] = []
-  let cursor: string | undefined
-  for (let page = 0; page < 20; page++) {
-    const response = await fetch(
-      apiUrl(
-        baseUrl,
-        `${protocol === "v2" ? "/api" : ""}/session/${encodeURIComponent(sessionId)}/message`,
-        protocol === "v2" ? undefined : directory,
-        {
-          ...(cursor ? { cursor } : {}),
-          ...(protocol === "v2" ? { order: "asc" } : {}),
-        },
-      ),
-      { signal },
-    )
-    const value = await readOpenCodeJsonResponse(response)
-    const record = object(value)
-    const data = Array.isArray(record?.data) ? record.data : Array.isArray(value) ? value : []
-    messages.push(...data)
-    const next = response.headers.get("x-next-cursor") ?? object(record?.cursor)?.next
-    if (typeof next !== "string" || !next) break
-    cursor = next
-  }
-  return messages
-}
-
-async function messageDiffs(
-  baseUrl: string,
-  directory: string,
-  sessionId: string,
-  messages: readonly unknown[],
-  signal: AbortSignal,
-  protocol: OpenCodeServerProtocol,
-  previous: ReadonlyMap<string, readonly AgentMessageFileChange[]> = new Map(),
-) {
-  const users = messages.flatMap((value): string[] => {
-    const record = object(value)
-    const info = object(record?.info) ?? record
-    return info?.role === "user" && typeof info.id === "string" ? [info.id] : []
-  })
-  const diffs = new Map(previous)
-  if (protocol === "v2") {
-    for (const value of messages) {
-      const record = object(value)
-      const info = object(record?.info) ?? record
-      if (info?.role !== "user" || typeof info.id !== "string") continue
-      const summary = object(info.summary)
-      if (!Array.isArray(summary?.diffs)) continue
-      diffs.set(info.id, parseOpenCodeFileDiffs(summary.diffs, info.id))
-    }
-    return diffs
-  }
-  const pending = users.filter((messageId) => !diffs.has(messageId))
-  for (let offset = 0; offset < pending.length; offset += 8) {
-    await Promise.all(
-      pending.slice(offset, offset + 8).map(async (messageId) => {
-        signal.throwIfAborted()
-        try {
-          const value = await fetchOpenCodeJson(
-            baseUrl,
-            `/session/${encodeURIComponent(sessionId)}/diff`,
-            directory,
-            signal,
-            { messageID: messageId },
-          )
-          diffs.set(messageId, parseOpenCodeFileDiffs(value, messageId))
-        } catch {
-          // Diff support varies by OpenCode version; transcript hydration remains useful.
-        }
-      }),
-    )
-  }
-  return diffs
-}
-
-function statusState(value: unknown, sessionId: string) {
-  const response = object(value)
-  const statuses = object(response?.data) ?? response
-  const status = object(statuses?.[sessionId])
-  if (status?.type === "busy" || status?.type === "retry" || status?.type === "running")
-    return "working" as const
-  return "idle" as const
-}
+export { fetchOpenCodeJson, listOpenCodeSessions } from "./opencode-hydration"
 
 function eventNeedsHydration(type: unknown) {
   return (
@@ -166,33 +36,28 @@ function eventNeedsHydration(type: unknown) {
     (type.startsWith("message.") ||
       type.startsWith("session.") ||
       type.startsWith("permission.") ||
-      type.startsWith("question."))
+      type.startsWith("question.") ||
+      type.startsWith("form."))
   )
 }
 
-function hydratedState(
-  current: OpenCodeHydration["state"],
-  observed: "working" | "idle",
-  waitingOnApproval: boolean,
-  latestStatus: AgentMessageHistoryEntry["status"] | undefined,
-) {
-  if (waitingOnApproval) return "blocked" as const
-  if (observed === "working") return current
-  if (latestStatus === "completed") return "done" as const
-  if (latestStatus === "failed" || latestStatus === "interrupted") return "unknown" as const
-  return "idle" as const
+type ObservedOpenCodeSession = OpenCodeHydration & {
+  diffs: Map<string, readonly AgentMessageFileChange[]>
+  toolActivities: Map<string, OpenCodeActivity>
+  /** Prevents a lagging /active snapshot from reopening a settled execution. */
+  settled: boolean
 }
 
 export class OpenCodeObserver {
   private readonly controller = new AbortController()
-  private readonly baseline = new Set<string>()
-  private sessionId: string | null
-  private state: OpenCodeHydration["state"] = "idle"
-  private waitingOnApproval = false
-  private hydrationTimer: ReturnType<typeof setTimeout> | null = null
-  private hydration: Promise<void> | null = null
-  private hydrationRequested = false
-  private readonly diffs = new Map<string, readonly AgentMessageFileChange[]>()
+  private readonly baseline = new Map<string, OpenCodeHydration["session"]>()
+  private readonly sessions = new Map<string, ObservedOpenCodeSession>()
+  private activeSessionId: string | null
+  private readonly hydrationTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly pendingHydrations = new Set<string>()
+  private readonly hydrating = new Set<string>()
+  private readonly maximumSessions = 24
+  private readonly maximumHydrations = 4
 
   constructor(
     private readonly baseUrl: string,
@@ -200,8 +65,9 @@ export class OpenCodeObserver {
     resumeSessionId: string | undefined,
     private readonly events: OpenCodeObserverEvents,
     private readonly protocol: OpenCodeServerProtocol = "v1",
+    private readonly authorization?: string,
   ) {
-    this.sessionId = resumeSessionId ?? null
+    this.activeSessionId = resumeSessionId ?? null
   }
 
   async start(signal: AbortSignal) {
@@ -211,22 +77,30 @@ export class OpenCodeObserver {
       this.directory,
       this.controller.signal,
       this.protocol,
+      this.authorization,
     )
-    for (const session of sessions) this.baseline.add(session.id)
-    if (this.sessionId) this.scheduleHydration(0)
+    for (const session of sessions) this.baseline.set(session.id, session)
+    if (this.activeSessionId) {
+      const session = this.baseline.get(this.activeSessionId)
+      if (session) this.track(session, true)
+    }
     const response = await fetch(
-      apiUrl(this.baseUrl, this.protocol === "v2" ? "/api/event" : "/event", this.directory),
+      openCodeApiUrl(
+        this.baseUrl,
+        this.protocol === "v2" ? "/api/event" : "/event",
+        this.directory,
+      ),
       {
-        headers: { accept: "text/event-stream" },
+        headers: {
+          accept: "text/event-stream",
+          ...(this.authorization ? { authorization: this.authorization } : {}),
+        },
         signal: this.controller.signal,
       },
     )
     if (!response.ok || !response.body)
       throw new Error("Não foi possível observar os eventos públicos do OpenCode.")
-    void this.consume(response.body).catch((error: unknown) => {
-      if (!this.controller.signal.aborted)
-        this.events.onError(error instanceof Error ? error.message : String(error))
-    })
+    void this.consume(response.body).catch((error: unknown) => this.reportError(error))
   }
 
   private async consume(stream: ReadableStream<Uint8Array>) {
@@ -250,10 +124,8 @@ export class OpenCodeObserver {
             .join("\n")
           if (data) {
             try {
-              this.observe(JSON.parse(data))
-            } catch {
-              // Ignore malformed or forward-incompatible events.
-            }
+              this.observeEvent(JSON.parse(data))
+            } catch {}
           }
           boundary = buffer.indexOf("\n\n")
         }
@@ -264,116 +136,228 @@ export class OpenCodeObserver {
     }
   }
 
-  private observe(value: unknown) {
+  /** Consumes one decoded public event. Public for protocol-level regression tests. */
+  observeEvent(value: unknown) {
+    const eventDirectory = openCodeEventDirectory(value)
+    if (eventDirectory && eventDirectory !== this.directory) return
     const event = unwrapOpenCodeEvent(value)
-    const candidate = openCodeEventSession(value)
-    if (
-      !this.sessionId &&
-      candidate &&
-      candidate.directory === this.directory &&
-      (!this.baseline.has(candidate.id) || event?.type === "session.created")
-    )
-      this.sessionId = candidate.id
-    const eventSessionId = openCodeEventSessionId(value)
-    if (!this.sessionId || (eventSessionId && eventSessionId !== this.sessionId)) return
-    const title = openCodeEventTitle(value)
-    if (title) this.events.onTitle(title)
-    const state = openCodeEventState(value)
-    if (state) {
-      this.state = state
-      this.waitingOnApproval = state === "blocked"
-      this.events.onState(state)
+    const removed = openCodeEventDeletedSessionId(value)
+    if (removed) {
+      this.remove(removed)
+      return
     }
-    if (
-      event?.type === "permission.replied" ||
-      event?.type === "permission.updated" ||
-      event?.type === "question.replied"
+    const matched = this.matchEventSession(value, event?.type)
+    if (!matched) return
+    const { sessionId, observed } = matched
+    const title = openCodeEventTitle(value)
+    if (title) observed.session = { ...observed.session, title }
+    applyOpenCodeLiveEvent(observed, value, event?.type)
+    this.publish(observed)
+    if (eventNeedsHydration(event?.type)) this.scheduleHydration(sessionId)
+  }
+
+  private matchEventSession(value: unknown, type: unknown) {
+    const candidate = openCodeEventSession(value)
+    const isChild = Boolean(openCodeEventSessionParentId(value))
+    if (candidate && !isChild) {
+      this.baseline.set(candidate.id, candidate)
+      if (type === "session.created") this.track(candidate, true)
+      else if (this.sessions.has(candidate.id)) this.track(candidate, false)
+    }
+    const sessionId = openCodeEventSessionId(value) ?? candidate?.id ?? null
+    if (!sessionId) return null
+    if (!this.sessions.has(sessionId)) {
+      const known = this.baseline.get(sessionId)
+      if (!known || isChild) return null
+      this.track(known, false)
+    }
+    const observed = this.sessions.get(sessionId)
+    return observed ? { sessionId, observed } : null
+  }
+
+  private track(session: OpenCodeHydration["session"], activate: boolean) {
+    if (session.directory && session.directory !== this.directory) return
+    let observed = this.sessions.get(session.id)
+    if (!observed) {
+      if (this.sessions.size >= this.maximumSessions) return
+      observed = {
+        session,
+        state: "idle",
+        activity: null,
+        messages: [],
+        waitingOnApproval: false,
+        diffs: new Map(),
+        toolActivities: new Map(),
+        settled: false,
+      }
+      this.sessions.set(session.id, observed)
+    } else observed.session = session
+    if (activate || !this.activeSessionId) this.setActiveSession(session.id)
+    this.publish(observed)
+    this.scheduleHydration(session.id, 0)
+  }
+
+  private remove(sessionId: string) {
+    const timer = this.hydrationTimers.get(sessionId)
+    if (timer) clearTimeout(timer)
+    this.hydrationTimers.delete(sessionId)
+    this.pendingHydrations.delete(sessionId)
+    if (!this.sessions.delete(sessionId)) return
+    if (this.protocol === "v2") this.events.onSessionRemoved?.(sessionId)
+    if (this.activeSessionId !== sessionId) return
+    const replacement = [...this.sessions.values()].sort(
+      (left, right) => right.session.updatedAt - left.session.updatedAt,
+    )[0]
+    this.activeSessionId = null
+    if (replacement) this.setActiveSession(replacement.session.id)
+  }
+
+  private publish(observed: ObservedOpenCodeSession, hydrated = false, publishHistory = hydrated) {
+    const snapshot: OpenCodeHydration = {
+      session: observed.session,
+      state: observed.state,
+      activity: observed.activity,
+      messages: observed.messages,
+      waitingOnApproval: observed.waitingOnApproval,
+    }
+    if (this.protocol === "v2") this.events.onSessionUpdated?.(snapshot)
+    if (observed.session.id === this.activeSessionId) {
+      this.events.onTitle(observed.session.title)
+      this.events.onState(observed.state)
+      if (observed.state === "working" && observed.activity)
+        this.events.onActivity(observed.activity)
+      if (publishHistory) this.events.onUserMessageHistory(observed.messages, true)
+    }
+    if (hydrated) this.events.onHydrated?.(snapshot)
+  }
+
+  setActiveSession(sessionId: string) {
+    const known = this.sessions.get(sessionId) ?? this.baseline.get(sessionId)
+    if (!known) return false
+    if (!("messages" in known)) this.track(known, false)
+    const observed = this.sessions.get(sessionId)
+    if (!observed) return false
+    this.activeSessionId = sessionId
+    if (this.protocol === "v2") this.events.onActiveSessionChanged?.(sessionId)
+    this.publish(observed, false, true)
+    return true
+  }
+
+  observeTerminalTitle(title: string) {
+    const taskTitle = agentTaskTitle(
+      { key: "opencode-title", label: "OpenCode", profile: "opencode" },
+      title,
     )
-      this.waitingOnApproval = false
-    const activity = openCodeEventActivity(value)
-    if (activity) this.events.onActivity(activity)
-    if (eventNeedsHydration(event?.type)) this.scheduleHydration()
+    const normalized = (taskTitle ?? title).trim().toLocaleLowerCase()
+    if (!normalized) return
+    const matches = [...this.baseline.values()].filter((session) => {
+      const sessionTitle = session.title.trim()
+      const visibleTitle = sessionTitle.length > 40 ? `${sessionTitle.slice(0, 37)}…` : sessionTitle
+      return visibleTitle.toLocaleLowerCase() === normalized
+    })
+    const match = matches[0]
+    if (matches.length === 1 && match) this.setActiveSession(match.id)
   }
 
-  private scheduleHydration(delay = 40) {
-    this.hydrationRequested = true
-    if (this.hydrationTimer) clearTimeout(this.hydrationTimer)
-    this.hydrationTimer = setTimeout(() => {
-      this.hydrationTimer = null
-      void this.hydrate()
-    }, delay)
+  private scheduleHydration(sessionId: string, delay = 40) {
+    const current = this.hydrationTimers.get(sessionId)
+    if (current) clearTimeout(current)
+    this.hydrationTimers.set(
+      sessionId,
+      setTimeout(() => {
+        this.hydrationTimers.delete(sessionId)
+        this.pendingHydrations.add(sessionId)
+        this.pumpHydrations()
+      }, delay),
+    )
   }
 
-  private async hydrate() {
-    if (!this.sessionId || this.controller.signal.aborted) return
-    if (this.hydration) return this.hydration
-    this.hydrationRequested = false
-    this.hydration = (async () => {
-      const sessionId = this.sessionId!
+  private pumpHydrations() {
+    if (this.controller.signal.aborted) return
+    while (this.hydrating.size < this.maximumHydrations) {
+      const sessionId = [...this.pendingHydrations].find((id) => !this.hydrating.has(id))
+      if (!sessionId) break
+      this.pendingHydrations.delete(sessionId)
+      this.hydrating.add(sessionId)
+      void this.hydrate(sessionId).finally(() => {
+        this.hydrating.delete(sessionId)
+        this.pumpHydrations()
+      })
+    }
+  }
+
+  private async hydrate(sessionId: string) {
+    const observed = this.sessions.get(sessionId)
+    if (!observed || this.controller.signal.aborted) return
+    try {
       const [sessionValue, statusValue, messages] = await Promise.all([
         fetchOpenCodeJson(
           this.baseUrl,
           `${this.protocol === "v2" ? "/api" : ""}/session/${encodeURIComponent(sessionId)}`,
           this.protocol === "v2" ? undefined : this.directory,
           this.controller.signal,
-        ),
+          {},
+          this.authorization,
+        ).catch(() => null),
         fetchOpenCodeJson(
           this.baseUrl,
           this.protocol === "v2" ? "/api/session/active" : "/session/status",
           this.protocol === "v2" ? undefined : this.directory,
           this.controller.signal,
+          {},
+          this.authorization,
         ).catch(() => null),
-        sessionMessages(
+        openCodeSessionMessages(
           this.baseUrl,
           this.directory,
           sessionId,
           this.controller.signal,
           this.protocol,
-        ),
+          this.authorization,
+        ).catch(() => null),
       ])
-      const session = parseOpenCodeSession(sessionValue)
-      if (!session) return
-      const observedState = statusState(statusValue, sessionId)
-      if (!this.waitingOnApproval && this.state !== "unknown" && this.state !== "done")
-        this.state = observedState
-      const diffs = await messageDiffs(
-        this.baseUrl,
-        this.directory,
-        sessionId,
-        messages,
-        this.controller.signal,
-        this.protocol,
-        this.diffs,
-      )
-      this.diffs.clear()
-      for (const [messageId, changes] of diffs) this.diffs.set(messageId, changes)
-      const history = openCodeMessageHistory(messages, this.state, diffs)
-      const latest = history.at(-1)
-      this.state = hydratedState(this.state, observedState, this.waitingOnApproval, latest?.status)
-      this.events.onTitle(session.title)
-      this.events.onState(this.state)
-      this.events.onUserMessageHistory(history, true)
-      this.events.onHydrated?.({
-        session,
-        state: this.state,
-        messages: history,
-        waitingOnApproval: this.waitingOnApproval,
-      })
-    })()
-      .catch((error: unknown) => {
-        if (!this.controller.signal.aborted)
-          this.events.onError(error instanceof Error ? error.message : String(error))
-      })
-      .finally(() => {
-        this.hydration = null
-        if (this.hydrationRequested && !this.controller.signal.aborted) this.scheduleHydration(0)
-      })
-    return this.hydration
+      const session = parseOpenCodeSession(sessionValue) ?? observed.session
+      if (!this.sessions.has(sessionId)) return
+      const observedState = openCodeStatusState(statusValue, sessionId)
+      observed.session = session
+      if (messages) {
+        const diffs = await openCodeMessageDiffs(
+          this.baseUrl,
+          this.directory,
+          sessionId,
+          messages,
+          this.controller.signal,
+          this.protocol,
+          observed.diffs,
+          this.authorization,
+        )
+        observed.diffs.clear()
+        for (const [messageId, changes] of diffs) observed.diffs.set(messageId, changes)
+        observed.messages = openCodeMessageHistory(messages, observed.state, diffs)
+      }
+      if (observedState && !(observed.settled && observedState === "working"))
+        observed.state = hydratedOpenCodeState(
+          observed.state,
+          observedState,
+          observed.waitingOnApproval,
+          observed.messages.at(-1)?.status,
+        )
+      if (observed.state !== "working") observed.activity = null
+      this.publish(observed, true)
+    } catch (error) {
+      this.reportError(error)
+    }
+  }
+
+  private reportError(error: unknown) {
+    if (this.controller.signal.aborted) return
+    this.events.onError(error instanceof Error ? error.message : String(error))
   }
 
   stop() {
-    if (this.hydrationTimer) clearTimeout(this.hydrationTimer)
-    this.hydrationTimer = null
+    for (const timer of this.hydrationTimers.values()) clearTimeout(timer)
+    this.hydrationTimers.clear()
+    this.pendingHydrations.clear()
     this.controller.abort()
   }
 }

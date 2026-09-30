@@ -12,6 +12,10 @@ const REASON_MESSAGES = {
   localVersionInvalid: "A versão local do Codex não pôde ser identificada.",
   remoteCodexMissing: "O Codex não está instalado no servidor remoto.",
   remoteVersionInvalid: "A versão remota do Codex não pôde ser identificada.",
+  localOpenCodeMissing: "O OpenCode não está instalado nesta máquina.",
+  localOpenCodeVersionInvalid: "A versão local do OpenCode não pôde ser identificada.",
+  remoteOpenCodeMissing: "O OpenCode não está instalado no servidor remoto.",
+  remoteOpenCodeVersionInvalid: "A versão remota do OpenCode não pôde ser identificada.",
   daemonUnavailable: "O Codex remoto não oferece app-server daemon.",
   proxyUnavailable: "O Codex remoto não oferece app-server proxy.",
   versionMismatch: "As versões local e remota do Codex são incompatíveis.",
@@ -39,6 +43,11 @@ export function RemoteCodexCompatibilityModal({
     else onOpenGuide()
   })
   const version = (value: string | null) => value ?? translateUi("não detectada")
+  const openCode = report.providerId === "opencode"
+  const reason =
+    openCode && (report.reason ?? "versionMismatch") === "versionMismatch"
+      ? "As versões local e remota do OpenCode são incompatíveis."
+      : REASON_MESSAGES[report.reason ?? "versionMismatch"]
   return (
     <ModalSurface
       dialogRef={dialog}
@@ -50,11 +59,11 @@ export function RemoteCodexCompatibilityModal({
       onBackdropPress={onCancel}
       positionRelative
     >
-      <text content={translateUi("◆ CODEX INCOMPATÍVEL")} style={{ fg: COLORS.warning }} />
       <text
-        content={translateUi(REASON_MESSAGES[report.reason ?? "versionMismatch"])}
-        style={{ fg: COLORS.text }}
+        content={translateUi(openCode ? "◆ OPENCODE INCOMPATÍVEL" : "◆ CODEX INCOMPATÍVEL")}
+        style={{ fg: COLORS.warning }}
       />
+      <text content={translateUi(reason)} style={{ fg: COLORS.text }} />
       <text
         content={`${translateUi("Local")} · ${version(report.localVersion)}`}
         style={{ fg: COLORS.muted }}
@@ -64,7 +73,11 @@ export function RemoteCodexCompatibilityModal({
         style={{ fg: COLORS.muted }}
       />
       <text
-        content={translateUi("O protocolo do app-server é experimental e depende da versão.")}
+        content={translateUi(
+          openCode
+            ? "A API do OpenCode depende da versão usada nas duas máquinas."
+            : "O protocolo do app-server é experimental e depende da versão.",
+        )}
         style={{ fg: COLORS.muted }}
       />
       <box style={{ flexGrow: 1 }} />

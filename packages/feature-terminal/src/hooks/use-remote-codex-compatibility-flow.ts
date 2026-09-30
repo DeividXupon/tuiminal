@@ -11,7 +11,8 @@ import {
   preflightRemoteCodex,
   RemoteCodexCompatibilityError,
 } from "../services/remote-codex-handshake"
-import { createRemoteCodexUpdateCommands } from "../services/terminal"
+import { preflightRemoteOpenCode } from "../services/remote-opencode-compatibility"
+import { createRemoteAgentUpdateCommands } from "../services/terminal"
 
 export type RemoteCodexCompatibilityPrompt = {
   command: FreeTerminalCommand
@@ -106,7 +107,13 @@ export function useRemoteCodexCompatibilityFlow({
     sequence.current += 1
     const id = sequence.current
     const sectionId = `remote-codex-update-${Date.now()}-${id}`
-    const [local, ssh] = createRemoteCodexUpdateCommands(id, remote.profile, prompt.report)
+    const providerId = prompt.command.agentLaunch?.providerId ?? prompt.report.providerId ?? "codex"
+    const [local, ssh] = createRemoteAgentUpdateCommands(
+      id,
+      remote.profile,
+      prompt.report,
+      providerId,
+    )
     const localId = launchCommand(local, {
       sectionId,
       folderId: DEFAULT_FOLDER,
@@ -153,7 +160,9 @@ export function useRemoteCodexCompatibilityFlow({
       validation.current = controller
       updateGuides(flow, flow.report, true)
       try {
-        await preflightRemoteCodex(remote.profile, remote.workingDirectory, controller.signal)
+        if (flow.command.agentLaunch?.providerId === "opencode")
+          await preflightRemoteOpenCode(remote.profile, controller.signal)
+        else await preflightRemoteCodex(remote.profile, remote.workingDirectory, controller.signal)
         controller.signal.throwIfAborted()
         for (const sessionId of flow.sessionIds) closeSession(sessionId)
         setUpdateFlow(null)
