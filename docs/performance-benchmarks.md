@@ -17,6 +17,8 @@ BENCHMARK_OUTPUT=tab-latency.json bun run benchmark:tui
 BENCHMARK_SAMPLES=30 BENCHMARK_WARMUP=5 bun run benchmark:tui
 bun run benchmark:terminal:sync
 TUIMINAL_SYNC_BENCHMARK_FILES=10000 bun run benchmark:terminal:sync
+bun run benchmark:terminal:ui
+BENCHMARK_OUTPUT=terminal-remote-ui.json bun run benchmark:terminal:ui
 bun run benchmark:runner:execution
 BENCHMARK_OUTPUT=runner-execution.json bun run benchmark:runner:execution
 bun run benchmark:runner:flow
@@ -39,10 +41,10 @@ BENCHMARK_OUTPUT=database-ui.json bun run benchmark:database:ui
 
 `benchmark:all` runs the service, startup, native tab/action, Runner execution
 and flow, HTTP response, Git Diffs, Git PR/Issue and Inbox remote UI, the
-large-data PR workload, complete HTTP, and complete Database suites
+large-data PR workload, complete HTTP and Database suites, and Terminal remote dialogs
 sequentially. It writes one report to `dist/benchmarks/all.json` by default,
 with all raw samples, suite membership, and the source commit. Use `--suite`
-with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui`
+with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui`
 to select a subset. `--samples` and `--warmup` apply to service and mounted
 UI suites; startup keeps its own `--startup-samples` and `--startup-warmup`
 defaults of five and one. `--external-database` opts the service suite into
@@ -50,7 +52,8 @@ the Docker-backed native-driver matrix. A failed suite stops the run without
 publishing a combined report.
 
 `benchmark` creates a temporary config directory, SQLite database, Git repository,
-fake `gh` executable, Runner project, HTTP collection, and loopback HTTP server. It removes these resources
+fake `gh` executable, Runner project, HTTP collection, loopback HTTP server, SSH configuration,
+and local remote-protocol fixture processes. It removes these resources
 after the run. It does not open the user's project, credentials, GitHub account, or
 database servers. The only persistent file is the optional `--output` path.
 The Terminal suite runs in its own Bun process and returns its measured samples to
@@ -74,11 +77,12 @@ the samples. The server returns deterministic rows, uses no real database or
 credentials, and is stopped with its owning client.
 
 `benchmark:tui` uses the native OpenTUI test renderer and measures input to a
-rendered frame. Ten cases cover `[Alt+1–5]` and mouse tab switches. Twenty-two more
+rendered frame. Ten cases cover `[Alt+1–5]` and mouse tab switches. Twenty-five more
 measure the Terminal Master Key, session creation, mouse and keyboard folder
 folding, pinning and unpinning the sidebar, activation from another tool, session
 navigation, splitting, rename, custom commands, close, spatial focus selection,
-sent-message history, Live Diff, Codex resume and live resize,
+provider and project selection, folder browsing, sent-message history, Live Diff,
+Codex resume and live resize,
 Database catalog search focus, Git commit graph, Runner multi view and project picker,
 and HTTP help overlay. It uses a disposable project,
 local Git repository and SQLite database with isolated configuration. Defaults are
@@ -96,6 +100,13 @@ a small-delta comparison and the delta sync, including file-transfer and SSH-con
 counts. A disposable fake `ssh` executes the real remote protocol locally. The fixture
 includes `.git` and ignored cache content; `TUIMINAL_SYNC_BENCHMARK_FILES` sets its file
 count. SSH network latency is intentionally outside this filesystem and protocol benchmark.
+
+`benchmark:terminal:ui` mounts the production remote-provider compatibility and
+project-synchronization dialogs in the native renderer. Four cases measure opening
+the compatibility warning, a 200-row synchronization review, transfer progress, and
+the destructive replacement confirmation. The suite uses static local fixtures and
+does not start SSH, contact a provider, or copy a project. Sample, warmup, and optional
+`BENCHMARK_OUTPUT` settings match `benchmark:tui`.
 
 `benchmark:runner:execution` mounts the production Runner execution hook in the
 native test renderer. Three cases measure the failure-to-restart path with one
@@ -213,15 +224,15 @@ can change results. The command does not enforce a universal latency budget.
 
 ## Current coverage
 
-The default service suite has 178 portable cases across the five tools, plus one
+The default service suite has 207 portable cases across the five tools, plus one
 live Runner port-discovery case on POSIX hosts with `lsof` and one isolated live
 Terminal mirror case when `tmux` is available. The native TUI suite
-has 32 cases; the mounted Git Diffs suite has ten cases; the complete HTTP and
+has 35 cases; the Terminal remote-dialog suite has four; the mounted Git Diffs suite has ten cases; the complete HTTP and
 Database UI suites have seven each; the mounted Git PR/Issue remote UI suite has
 eight and the Inbox UI suite has three; the mounted HTTP response suite has three; the Runner execution
 suite has four; the complete Runner flow UI suite adds three cases; and cold
-startup adds five tool-specific measurements. The twelve maintained offline suites
-cover 264 portable cases, plus the live Runner port case on POSIX hosts with
+startup adds five tool-specific measurements. The thirteen maintained offline suites
+cover 300 portable cases, plus the live Runner port case on POSIX hosts with
 `lsof` and the live Terminal mirror case on hosts with `tmux`. The opt-in native database
 matrix adds 30 more when Docker is available. Remote Git responses come from
 a disposable `gh` fixture process, so those cases include
@@ -233,7 +244,7 @@ process launch and JSON parsing without network latency.
 | Git | Local status/history, diff, branch comparison, stage/unstage, partial-stage patch load/apply, single-line stage and reverse removal, bidirectional line exchange, mounted partial-stage opening and line transfer in both directions, mounted folder stage/unstage and exact-target discard confirmation/completion, tracked and untracked discard, file tree and patch parsing, PR/Issue query suggestions, fake `gh` PR/Issue and Inbox pagination, two-page PR/Issue refresh, mounted PR/Issue and Inbox list loading and refresh, PR/Issue details and detail pagination, PR workflow runs, simulated CI watch transition and real fake-`gh` check polling through notification, all 22 direct PR/Issue mutation kinds including guarded checkout, comment and close coordination through authentication/write/reconciliation, uncertain network-write classification, PR list merge and description rendering, Issue sort, Inbox merge |
 | Runner | Project discovery/context, dependency planning/transitions, simulated and process-backed three-stage flows, owned process-plan restart, mounted four-command flow execution and restart from visible controls through rendered success, mounted stop through real child retirement, mounted automatic policy restart and optional history-log persistence, YAML parse, bounded log buffering/filtering/rendering/export, completed-history roundtrips with metadata only and 1,200 opted-in logs, listening-port parsing and live discovery when `lsof` is available, healthy/unhealthy/cancelled local probes, disposable process and PTY launch/exit and stop |
 | HTTP | `.http` parse and project scan, request preparation/auth/variables, loopback GET/POST/multipart/file/redirect, finite and continuous chunked capture, continuous-stream truncation and midstream cancellation with transport retirement, complete 128 KiB GET download with protected publication, name collision, redirect, midstream cancellation, 404 and unsafe POST rejection, mounted response-hook completion, duplicate suppression, cancellation and owner-close abort, input-driven keyboard/mouse Send, response search, Pretty JSON collapse and visible complete download, approved cross-origin redirect with credential stripping, timeout and cancellation, bounded response capture, single-request collection run, a three-request dependency/extraction/assertion chain with redacted report, ten-row dataset execution with four workers both alone and combined with dependency chains, response inspection/diff, cookie jar, history body budget and persisted roundtrip, Postman and OpenAPI import preview/apply |
-| Free Terminal | Native/custom/Codex command construction, PTY output/title processing, native PTY launch and retirement/restart, serialized launch replacement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based and screen-based agent detection, task titles and state transitions, external-terminal grouping, Codex app-server event classification, resume threads and sent-message history parsing/merge/publication, section navigation grouping, spatial focus, Master Key shortcut ordering and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch/merge/preview preparation |
+| Free Terminal | Native/custom and provider-specific local/remote command construction, provider resume resolution and roster merging, project recents/autocomplete/Git discovery, PTY output/title processing, native PTY launch and retirement/restart, serialized launch replacement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based and screen-based agent detection, task titles and state transitions, integrated-agent origin grouping, Claude hook/background projection, OpenCode event/history/session projection, SSH alias discovery, remote directory parsing, provider version compatibility, Codex WebSocket framing/handshake/preflight, remote readiness, remote Live Diff/context channels, repository/sync context tags, companion layouts and focus maps, project-sync manifest comparison/snapshot persistence, external-terminal grouping, Codex app-server event classification, resume threads and sent-message history parsing/merge/publication, section navigation grouping, spatial focus, Master Key shortcut ordering and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch/merge/preview preparation, mounted provider/project/folder selection, compatibility warning, synchronization review/progress/confirmation, and the existing complete-tree sync workload |
 
 The older `scripts/benchmark-free-terminal.ts` remains available for its larger,
 specialized terminal workload.
@@ -241,7 +252,7 @@ specialized terminal workload.
 ## Coverage still to add
 
 The service suite measures model and service response time; the TUI suite measures
-warm keyboard and mouse tab switches plus twenty-two individual tool actions. The dedicated
+warm keyboard and mouse tab switches plus twenty-five individual tool actions. The dedicated
 Database UI suite adds catalog, grid, and SQL timings. The suites do not yet measure
 most TUI actions, other mouse interactions,
 installation, or physical terminal display
@@ -261,8 +272,8 @@ and asserts that the count stays bounded at 16 across repeated samples.
   interactions. The complete-download and cancellation controls now have UI
   timings; owner-close timing remains in the response-hook suite.
 - Free Terminal: the portable service suite has representative coverage for every
-  current model/service feature family, the native renderer suite covers the maintained
-  local dialogs, companion panels and live resize, and an isolated server exercises
+  current model/service feature family, the native renderer suites cover the maintained
+  local and remote dialogs, companion panels and live resize, and an isolated server exercises
   live tmux capture when `tmux` is installed. Host-terminal display latency and
   discovery of terminals owned outside the benchmark remain environment-dependent.
 

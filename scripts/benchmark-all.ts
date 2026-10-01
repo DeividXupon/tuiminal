@@ -17,6 +17,7 @@ const suiteIds = [
   "git-pr",
   "http-ui",
   "database-ui",
+  "terminal-remote-ui",
 ] as const
 type SuiteId = (typeof suiteIds)[number]
 const testFiles: Partial<Record<SuiteId, string>> = {
@@ -29,11 +30,12 @@ const testFiles: Partial<Record<SuiteId, string>> = {
   "git-inbox-ui": "benchmark-git-inbox-ui.test.tsx",
   "http-ui": "benchmark-http-ui.test.tsx",
   "database-ui": "benchmark-database-ui.test.tsx",
+  "terminal-remote-ui": "benchmark-terminal-remote-ui.test.tsx",
 }
 const projectRoot = resolve(import.meta.dir, "..")
 
 function usage() {
-  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
+  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
 }
 
 function requiredValue(args: string[], index: number, option: string) {

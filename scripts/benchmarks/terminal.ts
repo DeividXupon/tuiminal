@@ -1,7 +1,10 @@
 import { dirname, join } from "node:path"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
+import { terminalAgentBenchmarks } from "./terminal-agents"
 import { terminalFeatureBenchmarks } from "./terminal-features"
+import { terminalRemoteBenchmarks } from "./terminal-remote"
 import { terminalRuntimeBenchmarks } from "./terminal-runtime"
+import { terminalWorkspaceBenchmarks } from "./terminal-workspace"
 
 export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]> {
   const { AgentMonitor } = await import(
@@ -509,7 +512,10 @@ export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]>
       },
     }),
   ]
+  cases.push(...(await terminalAgentBenchmarks(root)))
   cases.push(...(await terminalFeatureBenchmarks()))
+  cases.push(...(await terminalRemoteBenchmarks(root)))
   cases.push(...(await terminalRuntimeBenchmarks(root)))
+  cases.push(...(await terminalWorkspaceBenchmarks(root)))
   return cases
 }

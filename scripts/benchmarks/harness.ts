@@ -4,6 +4,7 @@ export type BenchmarkCase<T = unknown> = {
   description: string
   operationsPerSample?: number
   beforeEach?: () => void | Promise<void>
+  afterEach?: () => void | Promise<void>
   run: () => T | Promise<T>
   verify: (result: T) => void
 }
@@ -43,17 +44,25 @@ export async function measureBenchmark<T>(
   const count = benchmark.operationsPerSample ?? 1
   if (!Number.isSafeInteger(count) || count < 1) throw new Error("Invalid operation count")
   for (let index = 0; index < warmup; index += 1) {
-    await benchmark.beforeEach?.()
-    benchmark.verify(await benchmark.run())
+    try {
+      await benchmark.beforeEach?.()
+      benchmark.verify(await benchmark.run())
+    } finally {
+      await benchmark.afterEach?.()
+    }
   }
   const samplesMs: number[] = []
   for (let index = 0; index < samples; index += 1) {
-    await benchmark.beforeEach?.()
-    const started = performance.now()
-    const result = await benchmark.run()
-    const elapsed = performance.now() - started
-    benchmark.verify(result)
-    samplesMs.push(elapsed / count)
+    try {
+      await benchmark.beforeEach?.()
+      const started = performance.now()
+      const result = await benchmark.run()
+      const elapsed = performance.now() - started
+      benchmark.verify(result)
+      samplesMs.push(elapsed / count)
+    } finally {
+      await benchmark.afterEach?.()
+    }
   }
   const ordered = [...samplesMs].sort((left, right) => left - right)
   return {

@@ -768,6 +768,7 @@ Comandos principais:
 | `bun run benchmark:startup` | Medir a inicialização da CLI até o primeiro quadro pronto de cada ferramenta |
 | `bun run benchmark:tui` | Medir o tempo até renderizar trocas de aba e ações das ferramentas no renderer nativo de teste |
 | `bun run benchmark:terminal:sync` | Medir a primeira sincronização completa, a verificação sem mudanças, a comparação e um delta pequeno |
+| `bun run benchmark:terminal:ui` | Medir os diálogos de compatibilidade remota e sincronização de projeto no renderer nativo |
 | `bun run benchmark:runner:execution` | Medir a política de reinício e a persistência opcional de logs no Runner montado |
 | `bun run benchmark:runner:flow` | Medir execução, reinício e parada de um fluxo real pela interface nativa do Runner |
 | `bun run benchmark:http:response` | Medir a conclusão e o cancelamento de downloads na resposta HTTP montada |

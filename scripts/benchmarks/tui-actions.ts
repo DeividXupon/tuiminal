@@ -4,6 +4,7 @@ import { terminalSidebarSnapshot } from "../../packages/feature-terminal/src/mod
 import type { CodexAppServerEvents } from "../../packages/feature-terminal/src/services/codex-app-server"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 import { tuiTerminalActionBenchmarks } from "./tui-terminal-actions"
+import { tuiTerminalDialogActionBenchmarks } from "./tui-terminal-dialog-actions"
 
 type TuiActionContext = {
   tui: TestRendererSetup
@@ -216,6 +217,18 @@ export function tuiActionBenchmarks({
         if (!tui.renderer.root.findDescendantById("http-overlay")) {
           throw new Error("HTTP help overlay is missing")
         }
+      },
+    }),
+  )
+  cases.push(
+    ...tuiTerminalDialogActionBenchmarks({
+      tui,
+      clickTab,
+      waitForUi,
+      closeRunnerProjectPickerIfOpen: async () => {
+        if (!projectPickerOpen) return
+        await switchTo("3", "Runner")
+        await closeRunnerProjectPicker()
       },
     }),
   )

@@ -742,6 +742,7 @@ Main commands:
 | `bun run benchmark:startup` | Measure cold CLI launch to the first ready frame for each tool |
 | `bun run benchmark:tui` | Measure rendered tab-switch and tool-action latency in the native test renderer |
 | `bun run benchmark:terminal:sync` | Measure first full project sync, unchanged verification, comparison, and a small delta sync |
+| `bun run benchmark:terminal:ui` | Measure remote compatibility and project-sync dialogs in the native renderer |
 | `bun run benchmark:runner:execution` | Measure mounted Runner restart policy and optional log persistence |
 | `bun run benchmark:runner:flow` | Measure real Runner flow execution, restart, and stop through the native interface |
 | `bun run benchmark:http:response` | Measure mounted HTTP response download completion and cancellation |
