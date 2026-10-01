@@ -130,6 +130,10 @@ updates and final answers as well as plan updates. When the agent is stopped, al
 activity markers remain inactive and the first-line state represents it. A row
 activates the existing pane without acknowledging other results. Compact status
 labels keep the list readable; the done marker continues to mean unseen completion.
+Provider names use the active palette in Agents, the provider picker and resume rows:
+Codex is gray, Claude is orange, and OpenCode pairs a gray `Open` with a high-contrast
+`Code`. Neutral badge backgrounds support Codex and OpenCode, while Claude uses a warm
+badge background. The semantic palette colors adapt this treatment for dark and light themes.
 The agent list has its own bounded scroll area and uses single-line rows on very
 short layouts so running agents remain accessible. Compact rows prefer the task
 title to the agent label when one is available, retaining the status marker.

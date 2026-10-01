@@ -4,6 +4,7 @@ import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { useEffect, useRef } from "react"
+import { isAgentProviderId } from "../model/agent-provider"
 import {
   agentSessionHasCapability,
   isLocalhostAgentSession,
@@ -12,6 +13,7 @@ import {
   type TerminalSession,
 } from "../model/sessions"
 import { agentPresentation, codexActivityIndicators } from "../rendering/agent-presentation"
+import { AgentProviderWordmark } from "./AgentProviderWordmark"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
 function agentPrimaryColor(
@@ -141,13 +143,22 @@ function TerminalAgentRow({
             />
             <text
               id={`terminal-agent-${layout.trailingId}-${session.id}`}
-              content={truncateDisplay(layout.trailing, layout.trailingWidth)}
               style={{
                 fg: layout.trailingColor,
                 width: layout.trailingWidth,
                 flexShrink: 0,
               }}
-            />
+            >
+              {compact ? (
+                truncateDisplay(layout.trailing, layout.trailingWidth)
+              ) : (
+                <AgentProviderWordmark
+                  providerId={isAgentProviderId(agent.profile) ? agent.profile : null}
+                  label={truncateDisplay(layout.trailing, layout.trailingWidth)}
+                  fallbackColor={layout.trailingColor}
+                />
+              )}
+            </text>
           </box>
           {!compact && (
             <text

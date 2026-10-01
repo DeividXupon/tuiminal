@@ -1,6 +1,8 @@
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { agentProvider } from "../model/agent-provider"
 import type { AgentResumeThread } from "../model/agent-resume-thread"
+import { AgentProviderWordmark } from "./AgentProviderWordmark"
 
 function resumeThreadPresentation(state: AgentResumeThread["state"]) {
   switch (state) {
@@ -86,7 +88,10 @@ export function TerminalResumeThreadRow({
   const contentWidth = Math.max(1, width - 2)
   const railColor = active ? COLORS.terminal : alternate ? COLORS.panelRaised : COLORS.border
   const remote = Boolean(thread.remoteProfileId)
-  const origin = `${thread.providerId === "opencode" ? "OpenCode" : "Codex"} · ${translateUi(remote ? "Remoto" : "Local")}`
+  const providerId = thread.providerId ?? "codex"
+  const providerLabel = agentProvider(providerId).label
+  const locationLabel = translateUi(remote ? "Remoto" : "Local")
+  const origin = `${providerLabel} · ${locationLabel}`
   const summary =
     thread.preview ||
     (!thread.projectName ? thread.cwd : "") ||
@@ -181,14 +186,17 @@ export function TerminalResumeThreadRow({
         <box style={{ height: 1, minWidth: 1, flexDirection: "row" }}>
           <text
             id={`terminal-resume-origin-${thread.id}`}
-            content={` ${origin} `}
             wrapMode="none"
             style={{
               flexShrink: 0,
               fg: remote ? COLORS.database : COLORS.success,
               bg: remote ? COLORS.databaseSelectionBg : COLORS.diffAddedBg,
             }}
-          />
+          >
+            <span fg={remote ? COLORS.database : COLORS.success}> </span>
+            <AgentProviderWordmark providerId={providerId} label={providerLabel} />
+            <span fg={remote ? COLORS.database : COLORS.success}>{` · ${locationLabel} `}</span>
+          </text>
           <text
             id={`terminal-resume-project-${thread.id}`}
             content={` ${truncateDisplay(project, projectWidth)}`}

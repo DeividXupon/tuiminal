@@ -399,6 +399,7 @@ test("Master Key action parsing accepts Alt tool keys and ignores unrelated modi
 })
 
 test("tmux helper Master Key uses compact Actions and Agents tabs", async () => {
+  updateUiSettings({ colorMode: "light", palette: "prime" })
   tui = await testRender(
     <TerminalActions
       compact
@@ -415,6 +416,7 @@ test("tmux helper Master Key uses compact Actions and Agents tabs", async () => 
           gitBranch: "main",
           updatedAt: Date.now(),
           state: "idle",
+          providerId: "opencode",
         },
       ]}
       onAction={() => undefined}
@@ -440,6 +442,11 @@ test("tmux helper Master Key uses compact Actions and Agents tabs", async () => 
   expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeUndefined()
   expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeDefined()
   expect(tui.renderer.root.findDescendantById("terminal-resume-thread-compact-agent")).toBeDefined()
+  const origin = renderable("terminal-resume-origin-compact-agent")
+  expect(spanColor("Open", origin.screenY)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanColor("Code", origin.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  expect(spanBackground("Open", origin.screenY)).toEqual(RGBA.fromHex(COLORS.panelAlt).toInts())
+  expect(spanBackground("Code", origin.screenY)).toEqual(RGBA.fromHex(COLORS.panelAlt).toInts())
 
   await click("terminal-action-tab-actions")
   expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeDefined()
@@ -455,6 +462,7 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
 })
 
 test("agent picker enables OpenCode while keeping future providers disabled", async () => {
+  updateUiSettings({ colorMode: "dark", palette: "prime" })
   await mount()
   await leader("a")
   expect(tui?.captureCharFrame()).toContain("Codex")
@@ -462,6 +470,23 @@ test("agent picker enables OpenCode while keeping future providers disabled", as
   expect(tui?.captureCharFrame()).toContain("OpenCode")
   expect(tui?.captureCharFrame().match(/Em breve/g)).toHaveLength(1)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
+  const codexRow = renderable("terminal-dialog-agent-provider-codex")
+  const claudeRow = renderable("terminal-dialog-agent-provider-claude")
+  const openCodeRow = renderable("terminal-dialog-agent-provider-opencode")
+  expect(spanColor("Codex", codexRow.screenY)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanBackground("Codex", codexRow.screenY)).toEqual(RGBA.fromHex(COLORS.panelAlt).toInts())
+  expect(spanColor("Claude Code", claudeRow.screenY)).toEqual(RGBA.fromHex(COLORS.http).toInts())
+  expect(spanBackground("Claude Code", claudeRow.screenY)).toEqual(
+    RGBA.fromHex(COLORS.databaseEditedBg).toInts(),
+  )
+  expect(spanColor("Open", openCodeRow.screenY)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanColor("Code", openCodeRow.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  expect(spanBackground("Open", openCodeRow.screenY)).toEqual(
+    RGBA.fromHex(COLORS.panelAlt).toInts(),
+  )
+  expect(spanBackground("Code", openCodeRow.screenY)).toEqual(
+    RGBA.fromHex(COLORS.panelAlt).toInts(),
+  )
 
   await arrow("down")
   await key("enter")
@@ -873,6 +898,12 @@ test("Master Key resumes an OpenCode conversation with the official attached TUI
 
   expect(tui?.captureCharFrame()).toContain("OpenCode · Local")
   expect(tui?.captureCharFrame()).toContain("Implementar integração")
+  const origin = renderable("terminal-resume-origin-ses_opencode")
+  expect(spanColor("Open", origin.screenY)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanColor("Code", origin.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
+  expect(spanBackground("Open", origin.screenY)).toEqual(RGBA.fromHex(COLORS.panelAlt).toInts())
+  expect(spanBackground("Code", origin.screenY)).toEqual(RGBA.fromHex(COLORS.panelAlt).toInts())
+  expect(spanColor("Local", origin.screenY)).toEqual(RGBA.fromHex(COLORS.success).toInts())
   await key("enter")
 
   expect(openCodeSpy).toHaveBeenCalledTimes(1)

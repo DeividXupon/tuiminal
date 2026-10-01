@@ -50,6 +50,16 @@ function session(id: string, state: AgentState): TerminalSession {
   }
 }
 
+function brandedSession(
+  id: string,
+  label: string,
+  profile: NonNullable<TerminalSession["agent"]>["profile"],
+) {
+  const result = session(id, "idle")
+  if (!result.agent) throw new Error("Expected agent fixture")
+  return { ...result, agent: { ...result.agent, label, profile } }
+}
+
 test("sidebar separates numbered terminals from independently clickable agent status rows", async () => {
   updateUiSettings({ language: "pt-BR" })
   const selections: string[] = []
@@ -171,6 +181,61 @@ test("integrated OpenCode rows name the current structured action", async () => 
   expect(lines[row.screenY]).toMatch(/⠋ Usando ferramenta\s+OpenCode/)
   expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
 })
+
+for (const colorMode of ["dark", "light"] as const) {
+  test(`agent provider names preserve branded contrast in the ${colorMode} theme`, async () => {
+    updateUiSettings({ colorMode, palette: "prime", language: "pt-BR" })
+    const codex = brandedSession("codex-brand", "Codex", "codex")
+    const claude = brandedSession("claude-brand", "Claude Code", "claude")
+    const opencode = brandedSession("opencode-brand", "OpenCode", "opencode")
+    tui = await testRender(
+      <TerminalSidebar
+        sessions={[codex, claude, opencode]}
+        folders={[{ id: "terminal", name: "Terminal" }]}
+        selectedFolder="terminal"
+        activeSessionId={opencode.id}
+        width={32}
+        height={30}
+        masterKey="Ctrl+B"
+        onActivate={() => undefined}
+        onSelectFolder={() => undefined}
+        onActions={() => undefined}
+        onNew={() => undefined}
+      />,
+      { width: 32, height: 30 },
+    )
+    await tui.renderOnce()
+
+    const providerSpan = (id: string, text: string) => {
+      const row = tui?.renderer.root.findDescendantById(`terminal-agent-${id}`)
+      return tui?.captureSpans().lines[row?.screenY ?? -1]?.spans.find((span) => span.text === text)
+    }
+    expect(providerSpan(codex.id, "Codex")?.fg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.muted).toInts(),
+    )
+    expect(providerSpan(codex.id, "Codex")?.bg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.panelAlt).toInts(),
+    )
+    expect(providerSpan(claude.id, "Claude Code")?.fg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.http).toInts(),
+    )
+    expect(providerSpan(claude.id, "Claude Code")?.bg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.databaseEditedBg).toInts(),
+    )
+    expect(providerSpan(opencode.id, "Open")?.fg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.muted).toInts(),
+    )
+    expect(providerSpan(opencode.id, "Open")?.bg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.panelAlt).toInts(),
+    )
+    expect(providerSpan(opencode.id, "Code")?.fg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.text).toInts(),
+    )
+    expect(providerSpan(opencode.id, "Code")?.bg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.panelAlt).toInts(),
+    )
+  })
+}
 
 test("compact OpenCode row keeps the visible session status at minimum width", async () => {
   updateUiSettings({ language: "pt-BR" })

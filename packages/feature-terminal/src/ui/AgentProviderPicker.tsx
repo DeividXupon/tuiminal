@@ -5,6 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef, useState } from "react"
 import { AGENT_PROVIDERS, type AgentProviderId } from "../model/agent-provider"
+import { AgentProviderWordmark } from "./AgentProviderWordmark"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
 export function AgentProviderPicker({
@@ -70,12 +71,14 @@ export function AgentProviderPicker({
                 backgroundColor: selected === index ? COLORS.panelRaised : COLORS.panel,
               }}
             >
-              <text
-                content={`${selected === index ? "›" : " "} ${provider.label}`}
-                style={{
-                  fg: disabled ? COLORS.muted : selected === index ? COLORS.focus : COLORS.text,
-                }}
-              />
+              <text>
+                <span
+                  fg={disabled ? COLORS.muted : selected === index ? COLORS.focus : COLORS.text}
+                >
+                  {`${selected === index ? "›" : " "} `}
+                </span>
+                <AgentProviderWordmark providerId={provider.id} label={provider.label} />
+              </text>
               <text
                 content={`  ${disabled ? translateUi("Em breve") : translateUi("Disponível")}`}
                 style={{ fg: disabled ? COLORS.muted : COLORS.success }}
