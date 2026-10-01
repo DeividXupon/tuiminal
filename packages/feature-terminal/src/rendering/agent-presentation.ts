@@ -14,6 +14,8 @@ const CODEX_ACTIVITY_MARKERS = {
 type CodexActivityMarker = keyof typeof CODEX_ACTIVITY_MARKERS
 
 const CODEX_ACTIVITY_MARKER: Partial<Record<AgentActivity, CodexActivityMarker>> = {
+  reading: "tool",
+  searching: "tool",
   thinking: "thinking",
   coding: "code",
   writing: "text",

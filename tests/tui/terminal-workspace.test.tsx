@@ -42,6 +42,8 @@ import {
 import * as gitProjects from "../../packages/feature-terminal/src/services/agent-git-projects"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import * as projectDirectories from "../../packages/feature-terminal/src/services/agent-project-directories"
+import * as claudeCompatibility from "../../packages/feature-terminal/src/services/claude-compatibility"
+import * as claudeTerminal from "../../packages/feature-terminal/src/services/claude-terminal"
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
@@ -84,6 +86,31 @@ const incompatibleOpenCodeReport = {
   proxyAvailable: true,
 } as const
 
+const missingClaudeReport = {
+  providerId: "claude",
+  compatible: false,
+  reason: "localClaudeMissing",
+  localVersion: null,
+  remoteVersion: null,
+  daemonAvailable: true,
+  proxyAvailable: true,
+} as const
+
+const missingCodexReport = {
+  ...incompatibleReport,
+  providerId: "codex",
+  reason: "localCodexMissing",
+  localVersion: null,
+  remoteVersion: null,
+} as const
+
+const missingOpenCodeReport = {
+  ...incompatibleOpenCodeReport,
+  reason: "localOpenCodeMissing",
+  localVersion: null,
+  remoteVersion: null,
+} as const
+
 const originalSettings = getUiSettings()
 const originalOnlyTab = process.env.TUIMINAL_ONLY_TAB
 const originalInitialTab = process.env.TUIMINAL_INITIAL_TAB
@@ -93,6 +120,9 @@ let tui: TestRendererSetup | undefined
 let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
 let codexSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "startCodexAppServerTerminal">>
+  | undefined
+let claudeSpy:
+  | ReturnType<typeof spyOn<typeof claudeTerminal, "startClaudeHooksTerminal">>
   | undefined
 let codexResumeSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "refreshCodexResumeThreads">>
@@ -126,6 +156,7 @@ afterEach(() => {
   tui = undefined
   spawnSpy?.mockRestore()
   codexSpy?.mockRestore()
+  claudeSpy?.mockRestore()
   codexResumeSpy?.mockRestore()
   remoteCodexResumeSpy?.mockRestore()
   openCodeSpy?.mockRestore()
@@ -206,6 +237,16 @@ async function mount(
       )
       starts.push(options)
       return { pid: 500, backend: "native", write() {}, resize() {}, async stop() {} }
+    },
+  )
+  claudeSpy = spyOn(claudeTerminal, "startClaudeHooksTerminal").mockImplementation(
+    async (options) => {
+      commands.push([
+        "claude",
+        ...(options.resumeThreadId ? ["--resume", options.resumeThreadId] : []),
+      ])
+      starts.push(options)
+      return { pid: 502, backend: "native", write() {}, resize() {}, async stop() {} }
     },
   )
   openCodeSpy = spyOn(openCodeServer, "startOpenCodeServerTerminal").mockImplementation(
@@ -461,14 +502,14 @@ test("Master Key opens the official Codex TUI connected to app-server", async ()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
 
-test("agent picker enables OpenCode while keeping future providers disabled", async () => {
+test("agent picker enables Codex, Claude Code and OpenCode with branded contrast", async () => {
   updateUiSettings({ colorMode: "dark", palette: "prime" })
   await mount()
   await leader("a")
   expect(tui?.captureCharFrame()).toContain("Codex")
   expect(tui?.captureCharFrame()).toContain("Claude Code")
   expect(tui?.captureCharFrame()).toContain("OpenCode")
-  expect(tui?.captureCharFrame().match(/Em breve/g)).toHaveLength(1)
+  expect(tui?.captureCharFrame()).not.toContain("Em breve")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
   const codexRow = renderable("terminal-dialog-agent-provider-codex")
   const claudeRow = renderable("terminal-dialog-agent-provider-claude")
@@ -490,8 +531,10 @@ test("agent picker enables OpenCode while keeping future providers disabled", as
 
   await arrow("down")
   await key("enter")
-  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
   expect(commands).toHaveLength(0)
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
   await click("terminal-dialog-agent-provider-opencode")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
   expect(commands).toHaveLength(0)
@@ -3334,6 +3377,100 @@ test("OpenCode incompatibility opens its update split, revalidates, and relaunch
   expect(starts.at(-1)).toMatchObject({
     remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
   })
+})
+
+test("a missing local Claude CLI opens one update terminal and retries the launch", async () => {
+  await mount(false, 150, 38)
+  claudeSpy?.mockRejectedValueOnce(
+    new remoteHandshake.RemoteCodexCompatibilityError(missingClaudeReport),
+  )
+  const preflight = spyOn(claudeCompatibility, "preflightClaude").mockResolvedValue({
+    ...missingClaudeReport,
+    compatible: true,
+    reason: null,
+    localVersion: "2.1.80",
+  })
+  liveDiffSpies.push(preflight)
+
+  await leader("a")
+  await click("terminal-dialog-agent-provider-claude")
+  await click("terminal-dialog-project-launch")
+  await waitForRenderable("remote-codex-compatibility-modal")
+  expect(tui?.captureCharFrame()).toContain("CLAUDE CODE INCOMPATÍVEL")
+  expect(tui?.captureCharFrame()).toContain("O Claude Code não está instalado")
+
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.captureCharFrame().includes("ATUALIZAR CLAUDE CODE");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  const guide = tui?.captureCharFrame() ?? ""
+  expect(guide).toContain("ATUALIZAR CLAUDE CODE · Local")
+  expect(guide).toContain("claude update")
+  expect(guide).toContain("curl -fsSL https://claude.ai/install.sh | bash")
+  expect(commands.some((command) => command[0] === "ssh")).toBe(false)
+  expect(inputs.every((input) => input.length === 0)).toBe(true)
+
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  await key("enter")
+  for (let attempt = 0; attempt < 100 && claudeSpy?.mock.calls.length !== 2; attempt++) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+
+  expect(preflight).toHaveBeenCalledTimes(1)
+  expect(claudeSpy).toHaveBeenCalledTimes(2)
+  expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CLAUDE CODE")
+  expect(starts.at(-1)).toMatchObject({ cwd: processes.FREE_TERMINAL_WORKING_DIRECTORY })
+})
+
+test.each([
+  {
+    providerId: "codex" as const,
+    report: missingCodexReport,
+    modalTitle: "CODEX INCOMPATÍVEL",
+    guideTitle: "ATUALIZAR CODEX · Local",
+  },
+  {
+    providerId: "opencode" as const,
+    report: missingOpenCodeReport,
+    modalTitle: "OPENCODE INCOMPATÍVEL",
+    guideTitle: "ATUALIZAR OPENCODE · Local",
+  },
+])("a missing local $providerId CLI opens its update guide", async (scenario) => {
+  await mount(false, 150, 38)
+  const error = new remoteHandshake.RemoteCodexCompatibilityError(scenario.report)
+  if (scenario.providerId === "codex") codexSpy?.mockRejectedValueOnce(error)
+  else openCodeSpy?.mockRejectedValueOnce(error)
+
+  await leader("a")
+  await click(`terminal-dialog-agent-provider-${scenario.providerId}`)
+  await click("terminal-dialog-project-launch")
+  await waitForRenderable("remote-codex-compatibility-modal")
+  expect(tui?.captureCharFrame()).toContain(scenario.modalTitle)
+
+  await key("enter")
+  for (
+    let attempt = 0;
+    attempt < 100 && !tui?.captureCharFrame().includes(scenario.guideTitle);
+    attempt++
+  ) {
+    await act(async () => Bun.sleep(2))
+    await tui?.renderOnce()
+  }
+  expect(tui?.captureCharFrame()).toContain(scenario.guideTitle)
+  expect(commands.some((command) => command[0] === "ssh")).toBe(false)
 })
 
 test("folder browsing opens a focused home input and Escape restores the existing PTY", async () => {

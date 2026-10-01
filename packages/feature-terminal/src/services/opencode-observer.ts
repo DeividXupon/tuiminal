@@ -243,6 +243,10 @@ export class OpenCodeObserver {
     return true
   }
 
+  activeSession() {
+    return this.activeSessionId
+  }
+
   observeTerminalTitle(title: string) {
     const taskTitle = agentTaskTitle(
       { key: "opencode-title", label: "OpenCode", profile: "opencode" },

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { TerminalRemoteCodexProfile } from "../packages/core/src/settings/theme"
+import { preflightLocalCodex } from "../packages/feature-terminal/src/services/local-codex-compatibility"
 import { REMOTE_CODEX_PREFLIGHT_MARKER } from "../packages/feature-terminal/src/services/remote-codex-connection"
 import {
   compatibleCodexVersions,
@@ -61,38 +62,85 @@ function remoteProbe(version: string, daemon = true, proxy = true) {
   )
 }
 
-test("Codex compatibility follows 0.x minor and stable major boundaries", () => {
-  expect(REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS).toBe(10_000)
-  expect(compatibleCodexVersions("0.157.1", "0.157.99")).toBe(true)
+test("Codex compatibility requires the exact experimental protocol version", () => {
+  expect(REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS).toBe(80_000)
+  expect(compatibleCodexVersions("0.157.1", "0.157.1")).toBe(true)
+  expect(compatibleCodexVersions("0.157.1", "0.157.99")).toBe(false)
   expect(compatibleCodexVersions("0.157.1", "0.158.0")).toBe(false)
-  expect(compatibleCodexVersions("1.2.3", "1.99.0")).toBe(true)
+  expect(compatibleCodexVersions("1.2.3", "1.99.0")).toBe(false)
   expect(compatibleCodexVersions("1.2.3", "2.0.0")).toBe(false)
+  expect(compatibleCodexVersions("1.2.3-alpha.1", "1.2.3")).toBe(false)
+  expect(compatibleCodexVersions("1.2.3.4", "1.2.3")).toBe(false)
   expect(compatibleCodexVersions("invalid", "1.0.0")).toBe(false)
 })
 
-test("remote preflight validates versions and capabilities before starting the daemon", async () => {
-  const remote = handshakeServer({ result: { userAgent: "codex_cli_rs/0.157.8" } })
-  const daemonMarker = join(fixtureRoot(), "daemon-started")
+test("local Codex preflight reports a missing CLI for the update guide", async () => {
   await expect(
-    preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
-      localVersionCommand: localVersionCommand("0.157.1"),
-      remoteProbeCommand: remoteProbe("0.157.8"),
-      daemonStartCommand: [
-        process.execPath,
-        "-e",
-        `require("node:fs").writeFileSync(${JSON.stringify(daemonMarker)}, "yes")`,
-      ],
-      proxyCommand: remote.command,
+    preflightLocalCodex(new AbortController().signal, {
+      localVersionCommand: outputCommand("", 127),
       timeoutMs: 1_000,
     }),
-  ).resolves.toMatchObject({
-    compatible: true,
-    localVersion: "0.157.1",
-    remoteVersion: "0.157.8",
-    daemonAvailable: true,
-    proxyAvailable: true,
+  ).rejects.toMatchObject({
+    report: {
+      providerId: "codex",
+      compatible: false,
+      reason: "localCodexMissing",
+      localVersion: null,
+      remoteVersion: null,
+    },
   })
-  expect(readFileSync(daemonMarker, "utf8")).toBe("yes")
+})
+
+test("remote preflight accepts newly started and existing compatible daemons", async () => {
+  for (const status of ["started", "alreadyRunning"] as const) {
+    const remote = handshakeServer({ result: { userAgent: "codex_cli_rs/0.157.1" } })
+    const daemonMarker = join(fixtureRoot(), `daemon-${status}`)
+    await expect(
+      preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+        localVersionCommand: localVersionCommand("0.157.1"),
+        remoteProbeCommand: remoteProbe("0.157.1"),
+        daemonStartCommand: [
+          process.execPath,
+          "-e",
+          `require("node:fs").writeFileSync(${JSON.stringify(daemonMarker)}, "yes"); process.stdout.write(JSON.stringify({ status: ${JSON.stringify(status)}, appServerVersion: "0.157.1" }))`,
+        ],
+        proxyCommand: remote.command,
+        timeoutMs: 1_000,
+      }),
+    ).resolves.toMatchObject({
+      compatible: true,
+      localVersion: "0.157.1",
+      remoteVersion: "0.157.1",
+      daemonAvailable: true,
+      proxyAvailable: true,
+    })
+    expect(readFileSync(daemonMarker, "utf8")).toBe("yes")
+  }
+})
+
+test("remote preflight rejects an invalid or version-skewed daemon response", async () => {
+  const common = {
+    localVersionCommand: localVersionCommand("0.157.1"),
+    remoteProbeCommand: remoteProbe("0.157.1"),
+    proxyCommand: outputCommand("must not connect"),
+    timeoutMs: 1_000,
+  }
+  await expect(
+    preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+      ...common,
+      daemonStartCommand: outputCommand("not-json"),
+    }),
+  ).rejects.toMatchObject({ code: "appServerStartFailed" })
+  await expect(
+    preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+      ...common,
+      daemonStartCommand: outputCommand(
+        JSON.stringify({ status: "running", appServerVersion: "0.157.2" }),
+      ),
+    }),
+  ).rejects.toMatchObject({
+    report: { compatible: false, reason: "versionMismatch", remoteVersion: "0.157.2" },
+  })
 })
 
 test.each([
@@ -186,7 +234,7 @@ test("remote preflight requires the remote Codex account before daemon startup",
     75,
   )
   const promise = preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
-    localVersionCommand: localVersionCommand(),
+    localVersionCommand: localVersionCommand("0.157.9"),
     remoteProbeCommand: unauthenticated,
     daemonStartCommand: [
       process.execPath,
@@ -313,7 +361,7 @@ test("remote handshake validates the local CLI independently when SSH cannot be 
       timeoutMs: 1_000,
     }),
   ).rejects.toMatchObject({ code: "sshUnavailable" })
-  await Bun.sleep(25)
+  for (let attempt = 0; attempt < 50 && !existsSync(marker); attempt++) await Bun.sleep(10)
   expect(existsSync(marker)).toBe(true)
 })
 

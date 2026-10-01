@@ -2,6 +2,7 @@ import {
   type TerminalRemoteCodexProfile,
   terminalRemoteProfileValidationError,
 } from "@xupon/tuiminal-core/settings/theme"
+import { automatedSshPrefix, remotePosixShellCommand } from "./remote-ssh-command"
 
 const SSH_TEST_MARKER = "TUIMINAL_SSH_OK"
 export const REMOTE_CODEX_PREFLIGHT_MARKER = "TUIMINAL_CODEX_PREFLIGHT_V1"
@@ -27,29 +28,15 @@ type RemoteCodexConnectionTestOptions = {
   timeoutMs?: number
 }
 
-function remoteSshPrefix(profile: TerminalRemoteCodexProfile, tty: boolean) {
-  return [
-    "ssh",
-    tty ? "-tt" : "-T",
-    "-o",
-    "ServerAliveInterval=30",
-    "-o",
-    "ServerAliveCountMax=3",
-    profile.host,
-  ]
-}
-
 export function remoteNonInteractiveSshCommand(
   profile: TerminalRemoteCodexProfile,
   command: string,
 ) {
-  const ssh = remoteSshPrefix(profile, false)
-  ssh.splice(2, 0, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1")
-  return [...ssh, command]
+  return [...automatedSshPrefix(profile), remotePosixShellCommand(command)]
 }
 
 export function remoteInteractiveSshCommand(profile: TerminalRemoteCodexProfile) {
-  return remoteSshPrefix(profile, true)
+  return automatedSshPrefix(profile, { tty: true })
 }
 
 function shellQuote(value: string) {
@@ -97,7 +84,8 @@ export function remoteCodexDaemonStartSshCommand(
 ) {
   const command = [
     ...remoteCodexPrelude(workingDirectory),
-    '"$codex_command" app-server daemon start </dev/null >/dev/null 2>&1 || exit 73',
+    '"$codex_command" app-server daemon start </dev/null >/dev/null || exit 73',
+    'exec "$codex_command" app-server daemon version </dev/null || exit 73',
   ].join("; ")
   return remoteNonInteractiveSshCommand(profile, command)
 }
@@ -156,18 +144,8 @@ export function remoteCodexSshTestCommand(
   const executable = Array.isArray(options.executable)
     ? [...options.executable]
     : [options.executable ?? "ssh"]
-  return [
-    ...executable,
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    `ConnectTimeout=${timeoutSeconds}`,
-    "-o",
-    "ConnectionAttempts=1",
-    profile.host,
-    `printf ${SSH_TEST_MARKER}`,
-  ]
+  const ssh = automatedSshPrefix(profile, { connectTimeoutSeconds: timeoutSeconds })
+  return [...executable, ...ssh.slice(1), remotePosixShellCommand(`printf ${SSH_TEST_MARKER}`)]
 }
 
 function failedConnectionResult(stderr: string): RemoteCodexConnectionTestResult {

@@ -1,7 +1,8 @@
 import {
-  terminalRemoteProfileValidationError,
   type TerminalRemoteCodexProfile,
+  terminalRemoteProfileValidationError,
 } from "@xupon/tuiminal-core/settings/theme"
+import { automatedSshPrefix, remotePosixShellCommand } from "./remote-ssh-command"
 
 const RESULT_PREFIX = "TUIMINAL_REMOTE_READY"
 
@@ -82,17 +83,11 @@ export function remoteServerBarrierCheckCommand(
   options: RemoteServerReadinessOptions = {},
 ) {
   const timeoutSeconds = Math.max(1, Math.ceil((options.timeoutMs ?? 10_000) / 1_000))
+  const ssh = automatedSshPrefix(profile, { connectTimeoutSeconds: timeoutSeconds })
   return [
     ...executableArguments(options),
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    `ConnectTimeout=${timeoutSeconds}`,
-    "-o",
-    "ConnectionAttempts=1",
-    profile.host,
-    BARRIER_COMMANDS[barrier],
+    ...ssh.slice(1),
+    remotePosixShellCommand(BARRIER_COMMANDS[barrier]),
   ]
 }
 

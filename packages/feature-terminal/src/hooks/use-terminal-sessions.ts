@@ -5,9 +5,9 @@ import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
 import { agentProvider } from "../model/agent-provider"
 import {
-  integratedAgentLaunch,
   type FreeTerminalCommand,
   type FreeTerminalKind,
+  integratedAgentLaunch,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   normalizeSectionLayout,
@@ -65,7 +65,7 @@ function createTerminalSession(
     titleMode: "automatic",
     agent: provider
       ? {
-          key: `${provider.id}-app-server:${id}`,
+          key: `${provider.id}-${integration?.transport}:${id}`,
           label: provider.label,
           profile: provider.profile,
           state: "idle",
@@ -76,7 +76,7 @@ function createTerminalSession(
       ? {
           agentIntegration: {
             providerId: provider.id,
-            transport: "app-server" as const,
+            transport: integration?.transport ?? "screen",
           },
         }
       : {}),

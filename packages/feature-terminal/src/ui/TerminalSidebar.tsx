@@ -174,7 +174,8 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   const animatingAgents = sessions.some(
     (session) =>
       session.status === "running" &&
-      (session.agent?.state === "working" || session.agentIntegration?.transport === "app-server"),
+      (session.agent?.state === "working" ||
+        (session.agentIntegration && session.agentIntegration.transport !== "screen")),
   )
   useEffect(() => {
     if (!active || !animatingAgents || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return

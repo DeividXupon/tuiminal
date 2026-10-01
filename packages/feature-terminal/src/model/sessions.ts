@@ -36,14 +36,14 @@ export type IntegratedAgentLaunch =
     }
   | {
       providerId: "claude"
-      transport: "screen"
-      resumeThreadId?: never
-      remote?: never
+      transport: "hooks"
+      resumeThreadId?: string
+      remote?: RemoteCodexTarget
     }
 
 export type AgentSessionIntegration = {
   providerId: AgentProviderId
-  transport: "app-server" | "screen"
+  transport: "app-server" | "hooks" | "screen"
 }
 
 export type FreeTerminalKind = TmuxTerminalKind
@@ -111,7 +111,7 @@ export function isRunningAgent(session: TerminalSession) {
 }
 
 export function integratedAgentProvider(session: TerminalSession) {
-  return session.agentIntegration?.transport === "app-server"
+  return session.agentIntegration && session.agentIntegration.transport !== "screen"
     ? session.agentIntegration.providerId
     : null
 }
@@ -129,10 +129,10 @@ export function codexAgentLaunch(command: FreeTerminalCommand) {
 }
 
 export function integratedAgentLaunch(command: FreeTerminalCommand) {
-  return command.agentLaunch?.transport === "app-server" ? command.agentLaunch : undefined
+  return command.agentLaunch
 }
 
-/** Integrated agents connect to an app-server owned on this machine's localhost. */
+/** Integrated agents use a structured transport owned on this machine's localhost. */
 export function isLocalhostAgentSession(session: TerminalSession) {
   return integratedAgentProvider(session) !== null && !session.agentLaunch?.remote
 }

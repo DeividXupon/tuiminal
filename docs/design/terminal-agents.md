@@ -116,11 +116,11 @@ only the ordinary terminal appears in Sessions, without changing the actual spli
 A dedicated Agents list shows every running agent in two lines: its marker, name
 and right-aligned localized status; its published task title or, when unavailable,
 its terminal name. The list groups screen-observed native, tmux and external-terminal
-agents under `Local • term`, then integrated app-server sessions under
+agents under `Local • term`, then integrated structured sessions under
 `Local • localhost`. These names describe the current transports without claiming a
 real remote runtime. Keyboard navigation and Master Key numbering follow that visual
 order. Compact layouts omit the subgroup headings while retaining the same order.
-Integrated Codex and OpenCode sessions add a third line with thinking, code, command,
+Integrated Codex, Claude Code and OpenCode sessions add a third line with thinking, code, command,
 user-visible text, and tool indicators; only the current public provider activity
 pulses.
 Always use the broadly supported `...`, `{}`, `>_`, `txt`, and `●` markers so the
@@ -166,9 +166,18 @@ plugin API or a user-configurable command manifest. A provider declares its proc
 profile, availability and optional capabilities for local or remote launch, resume,
 structured activity, message history and project synchronization. UI actions consult
 those capabilities rather than assuming that every integrated agent matches Codex.
-Codex and OpenCode are available providers. Claude Code remains a visible, disabled
-coming-soon choice and cannot start a process. Screen observation remains independent
-from this registry and continues to recognize supported agents launched elsewhere.
+Codex, Claude Code and OpenCode are available providers. Screen observation remains
+independent from this registry and continues to recognize supported agents launched
+elsewhere.
+
+Before a local integrated launch, Tuiminal performs a bounded CLI version check. A
+missing, unreadable or unsupported Codex, Claude Code or OpenCode installation opens
+the shared compatibility modal instead of leaving only a failed terminal. `[Enter]`
+opens one local `~/` shell with the detected version plus manual update and official
+installer commands; Tuiminal never fills or runs them. Revalidation keeps the guide
+open on failure and, on success, closes only that shell and retries the exact original
+project and optional session. Remote compatibility failures use the same flow with
+local and SSH shells in one split when both sides participate in the integration.
 
 ## Integrated Codex sessions
 
@@ -184,15 +193,17 @@ and PTY are stopped together when a local session closes. A remote session inste
 first probes the official shared Codex daemon on its SSH host. The bounded probe must
 validate both CLI versions, the directory, the remote account, `app-server daemon` and
 `app-server proxy` capabilities, daemon startup and a valid `initialize` response
-before any TUI is opened. Compatibility requires matching major/minor for 0.x and
-matching major for stable releases; missing or invalid versions fail closed. The
+before any TUI is opened. Compatibility requires the exact local CLI, remote CLI,
+daemon app-server and initialized app-server version; missing or invalid versions fail
+closed. The probe parses the daemon lifecycle JSON and gives version/capability,
+daemon startup and proxy initialization separate bounded deadlines. The
 remote installation owns the daemon started or reused with `codex app-server daemon
 start`. The probe closes only its proxy, then the session reconnects through `codex
 app-server proxy`; closing the pane stops the local PTY, relay, and SSH proxy without
 stopping that daemon or its active turns. A later remote resume reconnects to the same
 shared daemon and passes the tagged remote cwd explicitly.
 
-A capability or version failure opens a localized modal instead of the TUI. `[Esc]`
+A remote capability or version failure opens a localized modal instead of the TUI. `[Esc]`
 returns to the preserved new-launch or resume selection. `[Enter]` opens local `~/`
 and remote SSH `~/` terminals in one split with detected versions, `codex update` and
 the official POSIX installer alternative; it never types or runs a command. Revalidate
@@ -200,21 +211,80 @@ keeps that guide open on failure and, on success, closes only its two terminals 
 retrying the exact original profile, cwd and optional thread. This guards an
 experimental, version-dependent app-server protocol.
 
+## Integrated Claude Code sessions
+
+Choosing Claude Code and a project launches the official interactive `claude` TUI in
+that directory. Claude Code 2.1.63 or newer receives a process-local `--settings` JSON
+object containing HTTP hooks for session start/end, user prompts, tool lifecycle,
+permission requests, notifications and successful stops. Claude Code 2.1.152 or newer
+also receives `MessageDisplay`. Claude holds each displayed text chunk until that hook
+answers, which adds the SSH round trip to remote text, so its timeout is one second.
+Tuiminal never reads or
+writes `~/.claude`, submits input, answers a permission request or returns a hook
+decision. Existing user and managed settings remain authoritative; a policy may reject
+the added loopback hook URL rather than being bypassed. The official TUI remains usable
+when policy filters the hook; local launches fall back to bounded screen observation
+until a valid hook event proves that structured observation is active.
+
+For local and remote foreground launches, the owned hook receiver binds to a random
+localhost port and uses an unguessable path.
+It bounds request bodies, publishes a neutral response immediately, sanitizes display
+text and projects events into the provider-neutral agent state and message-history
+models. `UserPromptSubmit` starts an in-memory turn with thinking activity.
+`PreToolUse` and `MessageDisplay` set the code, command, tool or text activity, which
+holds until the next such signal or turn boundary because hooks expose no
+model-generation event; display after `Stop` never reopens a turn.
+`PermissionRequest` marks it blocked and `Stop` publishes the final assistant message
+and authoritative successful completion. The task title is the session title Claude
+publishes through OSC 0/2 (its `/rename` name or generated title, see
+[Task titles](#task-titles)); the session's first prompt stands in only until one is
+published. Prompts Claude submits itself, wrapped in one element such as
+`<task-notification>`, still start a turn but never become the resume preview or the
+fallback title. No private reasoning or transcript file is read. Detailed history is memory-only. A mode-0600 Tuiminal data file stores only a
+UUID session ID, origin, directory, 60-character title, state and timestamps for
+sessions Tuiminal started; prompt previews and final responses are not persisted. Resume
+uses the exact `claude --resume <id>` only for UUID session IDs, cwd and original local origin or SSH profile, alias and
+host. Other conversations remain available through Claude's own `/resume`.
+
+For SSH projects, Claude Code 2.1.285 or newer creates an empty official background
+session with a preselected UUID, then attaches its TUI, or attaches the selected existing
+UUID. The official supervisor owns the worker. Its process-local settings contain no
+HTTP hooks, so a persistent worker never retains a URL owned by a disposable Tuiminal
+attachment. Tuiminal polls the supported `claude agents --json --all` command for
+`working`, `blocked`, `done`, `failed` and `stopped`; attachments for the same profile
+and cwd share one non-overlapping five-second poller. It never reads the files under
+`~/.claude/jobs`. Application shutdown removes only the attachment and observer, so an
+in-progress turn continues.
+Explicit pane close additionally resolves the public short ID and runs `claude stop`.
+Persistent background sessions expose only that public state and the bounded resume row;
+detailed hook history is unavailable for them. Process-local settings disable
+automatic background worktree isolation for this launch so Live Diff and synchronization
+continue to target the selected checkout. A successful remote completion publishes the
+generic hydration marker used by automatic project sync; blocked, failed, stopped or
+incomplete turns do not trigger it. Versions from 2.1.63 through 2.1.284 fall back to the
+previous attached foreground TUI and pane-owned lifecycle; they do not invoke unsupported
+background-agent commands.
+
 ## Integrated OpenCode sessions
 
 Choosing OpenCode and a local project starts one owned `opencode serve` on loopback,
 negotiates the public server generation, then launches the official TUI in a native PTY.
 OpenCode v2 uses `opencode --server <url> <cwd>`; legacy v1 uses
 `opencode attach <url> --dir <cwd>`.
-For a remote project, the server runs on remote loopback through an owned SSH process
-with local port forwarding; the same official local TUI attaches through that tunnel.
+For a remote project, a version- and directory-scoped server runs on remote loopback;
+the same official local TUI attaches through a disposable SSH local forward.
 The v2 client omits a remote-only positional directory so it cannot attempt a local
 `chdir`; the remote server working directory remains authoritative.
-Neither path exposes a public listener. The PTY, observer, server, and SSH tunnel are
-owned as one session and stop together when its pane closes. Each launch uses an
-in-memory random server password shared only with the observer and official TUI. Remote
-launches deliver it over SSH stdin and reserve distinct local and remote ports so an SSH
-alias that resolves to the Tuiminal host cannot collide with its own forward. Remote v2
+Neither path exposes a public listener. Local PTY, observer and server stop together.
+For remote launches, PID, process start identity, remotely selected port and random
+password are stored in a mode-0700/0600 Tuiminal state directory on the remote host.
+Startup is serialized by a stale-lock-recovering directory and delivers a proposed
+password plus the excluded local port over SSH stdin; reconnect validates the process
+identity and reads the existing registration over SSH. An unhealthy registration is
+invalidated and retried once. Application shutdown
+stops only the TUI, observer and tunnel, leaving the server and active turn running;
+explicit pane close interrupts only the selected root turn, then disconnects. Distinct
+local and remote ports let an alias that resolves to the Tuiminal host avoid its own forward. Remote v2
 launches also require the local TUI and remote server to report the same OpenCode version;
 an incompatible pair opens the shared compatibility modal before the TUI can request a
 route from the wrong API contract. Its guide opens local and SSH terminals with
@@ -284,9 +354,10 @@ on restart or close until the thread is hydrated again. Screen-observed native,
 tmux, and external agents do not offer this structured history.
 
 For integrated Codex sessions, `turn/completed` determines completion and public
-item events determine visible activity. For OpenCode, public session, message, tool,
-permission, question, and status events provide the corresponding state, followed by
-bounded hydration. Silence does not complete a task for either provider.
+item events determine visible activity. Claude uses its public `Stop` hook and never
+treats silence or a permission event as completion. For OpenCode, public session,
+message, tool, permission, question, and status events provide the corresponding state,
+followed by bounded hydration. Silence does not complete a task for any provider.
 Starting, resuming, or forking a thread hydrates its task title from the returned
 public thread name; later `thread/name/updated` events replace it. Resume also
 rehydrates the public message history plus active/completed/failed and

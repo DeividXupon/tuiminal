@@ -16,23 +16,54 @@ test("first-party agent providers have unique identities and only available adap
     ]),
   ).toEqual([
     ["codex", "available", true],
-    ["claude", "coming-soon", false],
+    ["claude", "available", true],
     ["opencode", "available", true],
   ])
 })
 
-test("provider capabilities expose structured Codex and OpenCode integrations", () => {
+test("provider capabilities expose all structured first-party integrations", () => {
   expect(agentProviderHasCapability("codex", "message-history")).toBe(true)
   expect(agentProviderHasCapability("codex", "remote-launch")).toBe(true)
   expect(agentProviderHasCapability("claude", "local-launch")).toBe(true)
-  expect(agentProviderHasCapability("claude", "message-history")).toBe(false)
+  expect(agentProviderHasCapability("claude", "message-history")).toBe(true)
+  expect(agentProviderHasCapability("claude", "remote-launch")).toBe(true)
+  expect(agentProviderHasCapability("claude", "project-sync")).toBe(true)
   expect(agentProviderHasCapability("opencode", "project-sync")).toBe(true)
   expect(agentProviderHasCapability("opencode", "message-history")).toBe(true)
   expect(agentProviderHasCapability("opencode", "remote-launch")).toBe(true)
 })
 
+test("the Claude adapter creates hook-observed local and remote launch metadata", () => {
+  const adapter = agentProviderAdapter("claude")
+  if (!adapter) throw new Error("Claude adapter unavailable")
+  expect(adapter.createCommand({ kind: "local" }, "/workspace", "claude-local")).toMatchObject({
+    workingDirectory: "/workspace",
+    agentLaunch: {
+      providerId: "claude",
+      transport: "hooks",
+      resumeThreadId: "claude-local",
+    },
+  })
+  expect(
+    adapter.createCommand(
+      { kind: "remote", profile: { id: "work", name: "Work", host: "work" } },
+      "/srv/project",
+      "claude-remote",
+    ),
+  ).toMatchObject({
+    workingDirectory: "/srv/project",
+    agentLaunch: {
+      providerId: "claude",
+      transport: "hooks",
+      resumeThreadId: "claude-remote",
+      remote: { profile: { id: "work" }, workingDirectory: "/srv/project" },
+    },
+  })
+})
+
 test("the OpenCode adapter creates resumable local and remote launch metadata", () => {
-  const adapter = agentProviderAdapter("opencode")!
+  const adapter = agentProviderAdapter("opencode")
+  if (!adapter) throw new Error("OpenCode adapter unavailable")
   expect(adapter.createCommand({ kind: "local" }, "/workspace", "ses_local")).toMatchObject({
     workingDirectory: "/workspace",
     agentLaunch: {
@@ -59,7 +90,8 @@ test("the OpenCode adapter creates resumable local and remote launch metadata", 
 })
 
 test("the Codex adapter creates local and remote provider launch metadata", () => {
-  const adapter = agentProviderAdapter("codex")!
+  const adapter = agentProviderAdapter("codex")
+  if (!adapter) throw new Error("Codex adapter unavailable")
   expect(adapter.createCommand({ kind: "local" }, "/workspace")).toMatchObject({
     workingDirectory: "/workspace",
     agentLaunch: { providerId: "codex", transport: "app-server" },

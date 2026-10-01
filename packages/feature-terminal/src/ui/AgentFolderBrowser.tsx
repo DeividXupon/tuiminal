@@ -13,7 +13,7 @@ import {
   directorySuggestions,
 } from "../services/agent-directory-search"
 import { readProjectDirectory } from "../services/agent-project-directories"
-import { projectName } from "../services/agent-project-recents"
+import { projectName } from "../model/project-name"
 import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
 export function AgentFolderBrowser({

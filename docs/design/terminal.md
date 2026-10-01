@@ -157,8 +157,7 @@ reloaded its startup file. Tuiminal does not create keys, install software,
 register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
 automatically. Master Key `[N]` always opens a local terminal section, independently
 of the active remote profile. Master Key `[A]` and **New agent** first open the
-first-party provider selector. Codex and OpenCode are available; Claude Code is
-visible but disabled as coming soon and cannot start processes. Choosing an available provider opens
+first-party provider selector. Codex, Claude Code and OpenCode are available. Choosing a provider opens
 the project selector, including when no remote alias is active. It starts in Local;
 `[E]` opens a list of explicit SSH aliases discovered from `~/.ssh/config`.
 Choosing an alias applies to this launch without changing the active settings alias.
@@ -205,16 +204,33 @@ selection starts the project directly. Startup failures keep the chosen destinat
 available for retry. Cancelling retires only the pending owned session.
 `[Esc]` closes the list and restores terminal focus. Headers and actions remain
 visible while the lists scroll. Each screen keeps its hints, confirmation and
-`[Esc]` together in one footer row. Before opening a remote TUI, Tuiminal runs one
-cancellable preflight for the local Codex binary/version, SSH authentication, the
+`[Esc]` together in one footer row. Automated SSH commands neutralize alias-owned
+remote commands, stdin/session modes, local commands, connection masters and inherited
+forwards, and execute fixed scripts through `/bin/sh`. Tunnel startup rejects aliases
+that already define dynamic, local or remote forwards. Before opening a remote TUI,
+Tuiminal runs one cancellable staged preflight for the local Codex binary/version, SSH authentication, the
 selected directory, the remote Codex binary/version and account status, `app-server daemon` and
-`app-server proxy`, daemon startup and the proxy's `initialize` response. For 0.x
-versions the major and minor must match; for stable versions the major must match.
-An absent or unparsable version is incompatible. The response `userAgent` identifies
-the remote version actually serving the request and must agree with that policy.
+`app-server proxy`, daemon startup and the proxy's `initialize` response. The exact
+local CLI, remote CLI, daemon app-server and initialized app-server versions must match.
+An absent or unparsable version is incompatible. The daemon lifecycle JSON and response
+`userAgent` identify the versions actually serving the request and must agree.
 Authentication, host identity, reachability, missing Codex, missing directory,
 missing capability, daemon startup, proxy startup, protocol and timeout failures stay
 distinct and do not open the TUI.
+
+Claude Code launch performs its own bounded local or remote version check and requires
+2.1.63 or newer. Local sessions run the official TUI with a loopback-only hook receiver
+supplied through process-local `--settings`. Remote sessions on 2.1.285 or newer create
+an empty official background session with a Tuiminal-generated UUID and immediately
+attach to it, or attach to the selected existing UUID. Persistent workers receive no
+HTTP hook URL; a shared five-second `claude agents --json --all` poller rehydrates public
+state without depending on a disposable attachment. The process-local settings keep background
+edits in the selected checkout instead of moving them to an automatic worktree. No global
+Claude settings, transcript or credential is read or changed. Application shutdown closes
+the PTY attachment and shared observer but leaves the supervisor-owned turn running; explicit pane
+close additionally resolves its short ID through the public command and runs `claude stop`.
+Remote versions from 2.1.63 through 2.1.284 retain the previous foreground lifecycle:
+their SSH TUI, hook receiver and reverse tunnel remain pane-owned and stop together.
 
 The remote Codex installation owns one persistent shared daemon started or reused by
 `codex app-server daemon start`. Tuiminal carries the daemon's WebSocket transport,
@@ -231,16 +247,22 @@ OpenCode uses an independent first-party transport. A local launch starts one ow
 `opencode serve --hostname 127.0.0.1` in the selected directory and opens the official
 TUI after validating authenticated JSON server information and negotiating v2
 `opencode --server <url> <cwd>` or legacy v1
-`opencode attach <url> --dir <cwd>`. A remote launch starts that server on remote loopback
-through SSH `-L`, then runs the same official TUI locally against the forwarded port. If
+`opencode attach <url> --dir <cwd>`. A remote launch starts or reuses a version- and
+directory-scoped server on remote loopback, then runs the same official TUI locally through
+a disposable SSH `-L`. Its random password, PID, process start identity and remotely
+selected port live only in a mode-0700/0600 Tuiminal state directory on the remote host;
+stale registrations are invalidated and retried once. If
 the remote directory does not exist locally, the v2 client omits its positional directory
 instead of attempting a local `chdir`; the server's selected working directory remains
 authoritative.
-Each launch keeps one random password in memory, sends a remote password only through
-SSH stdin, and uses distinct tunnel endpoints so self-referential SSH aliases remain
-valid. A remote v2 launch requires the local TUI and remote server to report the same
-OpenCode version before the TUI opens. Its SSH process, server, observer, and PTY share
-the pane lifecycle, and no server port is exposed publicly. Public HTTP and SSE provide
+Each local launch keeps one random password in memory; remote startup sends a proposed
+password only through SSH stdin and reconnect reads the registered password only through
+the encrypted SSH command. Distinct tunnel endpoints keep self-referential aliases valid.
+A remote v2 launch requires exact local/remote OpenCode versions before the TUI opens.
+Application shutdown closes the local TUI, observer and tunnel but leaves the registered
+server and active turn running. Explicit pane close calls the public interrupt endpoint for
+the selected root session, then disconnects without disrupting other server sessions. No
+server port is exposed publicly. Public HTTP and SSE provide
 session identity, title, state,
 permission waits, structured activity, messages, per-message diffs, and resume hydration.
 Input and approvals stay in the official TUI; Tuiminal neither scrapes its screen nor

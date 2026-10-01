@@ -12,6 +12,7 @@ export type CodexResumeThread = {
   state: CodexResumeThreadState
   remoteProfileId?: string
   remoteProfileName?: string
+  remoteProfileHost?: string
 }
 
 let threads: readonly CodexResumeThread[] = []

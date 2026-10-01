@@ -1,10 +1,18 @@
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import {
+  type BoundedCommandResult,
+  MISSING_COMMAND_RESULT,
+  readBoundedText,
+  runBoundedCommand,
+} from "./bounded-command"
+import { resolveCodexExecutable } from "./codex-executable"
+import { CodexProxyDisconnectedError, CodexProxyWebSocket } from "./codex-proxy-websocket"
+import {
   compatibleCodexVersions,
   localCodexCompatibility,
   parseCodexVersion,
-  type RemoteCodexCompatibilityReport,
   RemoteCodexCompatibilityError,
+  type RemoteCodexCompatibilityReport,
   remoteCodexCompatibility,
   remoteCodexCompatibilityReport,
 } from "./remote-codex-compatibility"
@@ -13,8 +21,6 @@ import {
   remoteCodexPreflightSshCommand,
   remoteCodexProxySshCommand,
 } from "./remote-codex-connection"
-import { resolveCodexExecutable } from "./codex-executable"
-import { CodexProxyDisconnectedError, CodexProxyWebSocket } from "./codex-proxy-websocket"
 
 export {
   compatibleCodexVersions,
@@ -57,7 +63,11 @@ const ERROR_MESSAGES: Record<RemoteCodexHandshakeErrorCode, string> = {
   disconnected: "O proxy remoto do Codex encerrou antes de responder ao handshake.",
 }
 
-export const REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS = 10_000
+const REMOTE_CODEX_PROBE_TIMEOUT_MS = 20_000
+const REMOTE_CODEX_DAEMON_TIMEOUT_MS = 45_000
+const REMOTE_CODEX_PROXY_TIMEOUT_MS = 15_000
+export const REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS =
+  REMOTE_CODEX_PROBE_TIMEOUT_MS + REMOTE_CODEX_DAEMON_TIMEOUT_MS + REMOTE_CODEX_PROXY_TIMEOUT_MS
 
 export class RemoteCodexHandshakeError extends Error {
   constructor(readonly code: RemoteCodexHandshakeErrorCode) {
@@ -89,7 +99,7 @@ type HandshakeOptions = {
   localVersionCommand?: readonly string[]
 }
 
-type CommandResult = { exitCode: number; stdout: string; stderr: string }
+type CommandResult = BoundedCommandResult
 
 function localVersionCommand(command?: readonly string[]) {
   return command ?? [resolveCodexExecutable(), "--version"]
@@ -99,53 +109,15 @@ function object(value: unknown): RecordValue | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null
 }
 
-async function readBoundedText(stream: ReadableStream<Uint8Array>, maximumBytes = 64 * 1024) {
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let remaining = maximumBytes
-  let output = ""
-  try {
-    while (true) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      if (remaining <= 0) continue
-      const value = chunk.value.subarray(0, remaining)
-      remaining -= value.byteLength
-      output += decoder.decode(value, { stream: true })
-    }
-    return output + decoder.decode()
-  } finally {
-    reader.releaseLock()
-  }
-}
-
-async function runCommand(
+function runCommand(
   command: readonly string[],
   signal: AbortSignal,
   missingExecutableIsCodex = false,
 ): Promise<CommandResult> {
-  signal.throwIfAborted()
-  let process: ReturnType<typeof Bun.spawn>
-  try {
-    process = Bun.spawn([...command], { stdin: "ignore", stdout: "pipe", stderr: "pipe" })
-  } catch {
-    if (missingExecutableIsCodex) return { exitCode: 127, stdout: "", stderr: "" }
+  return runBoundedCommand(command, signal, () => {
+    if (missingExecutableIsCodex) return MISSING_COMMAND_RESULT
     throw new RemoteCodexHandshakeError("sshUnavailable")
-  }
-  const stop = () => process.kill()
-  signal.addEventListener("abort", stop, { once: true })
-  try {
-    const [exitCode, stdout, stderr] = await Promise.all([
-      process.exited,
-      readBoundedText(process.stdout as ReadableStream<Uint8Array>),
-      readBoundedText(process.stderr as ReadableStream<Uint8Array>),
-    ])
-    signal.throwIfAborted()
-    return { exitCode, stdout, stderr }
-  } finally {
-    signal.removeEventListener("abort", stop)
-    if (process.exitCode === null) process.kill()
-  }
+  })
 }
 
 function processFailure(exitCode: number, stderr: string) {
@@ -291,6 +263,34 @@ function checkedCompatibilityReport(localResult: CommandResult, remoteResult: Co
   return report
 }
 
+function checkedDaemonStart(result: CommandResult, report: RemoteCodexCompatibilityReport) {
+  if (result.exitCode !== 0) throw processFailure(result.exitCode, result.stderr)
+  let output: RecordValue | null = null
+  try {
+    output = object(JSON.parse(result.stdout.trim()))
+  } catch {
+    // The lifecycle command promises one JSON object on successful stdout.
+  }
+  if (
+    !output ||
+    !["alreadyRunning", "running", "started"].includes(String(output.status)) ||
+    typeof output.appServerVersion !== "string" ||
+    !parseCodexVersion(output.appServerVersion)
+  )
+    throw new RemoteCodexHandshakeError("appServerStartFailed")
+  if (
+    !report.localVersion ||
+    !compatibleCodexVersions(report.localVersion, output.appServerVersion)
+  )
+    throw new RemoteCodexCompatibilityError({
+      ...report,
+      compatible: false,
+      reason: "versionMismatch",
+      remoteVersion: output.appServerVersion,
+    })
+  return output
+}
+
 function checkedLocalCompatibility(result: CommandResult) {
   return localCodexCompatibility(result.exitCode, result.stdout, result.stderr)
 }
@@ -320,9 +320,10 @@ export async function preflightRemoteCodex(
   signal: AbortSignal,
   options: PreflightOptions = {},
 ) {
-  return withDeadline(
+  const stageTimeout = (fallback: number) => options.timeoutMs ?? fallback
+  const report = await withDeadline(
     signal,
-    options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS,
+    stageTimeout(REMOTE_CODEX_PROBE_TIMEOUT_MS),
     async (deadline) => {
       const launch = createRemoteCodexAppServerLaunch(profile, workingDirectory)
       const [localResult, remoteResult] = await Promise.all([
@@ -332,20 +333,23 @@ export async function preflightRemoteCodex(
           deadline,
         ),
       ])
-      const report = checkedCompatibilityReport(localResult, remoteResult)
-      const daemon = await runCommand(
-        options.daemonStartCommand ?? launch.daemonStartCommand,
-        deadline,
-      )
-      if (daemon.exitCode !== 0) throw processFailure(daemon.exitCode, daemon.stderr)
-      const initialized = await initializeProxy(
-        options.proxyCommand ?? launch.proxyCommand,
-        profile.id,
-        deadline,
-      )
-      return checkedInitializedReport(report, initialized)
+      return { launch, report: checkedCompatibilityReport(localResult, remoteResult) }
     },
   )
+  await withDeadline(signal, stageTimeout(REMOTE_CODEX_DAEMON_TIMEOUT_MS), async (deadline) => {
+    const daemon = await runCommand(
+      options.daemonStartCommand ?? report.launch.daemonStartCommand,
+      deadline,
+    )
+    checkedDaemonStart(daemon, report.report)
+  })
+  const initialized = await withDeadline(
+    signal,
+    stageTimeout(REMOTE_CODEX_PROXY_TIMEOUT_MS),
+    (deadline) =>
+      initializeProxy(options.proxyCommand ?? report.launch.proxyCommand, profile.id, deadline),
+  )
+  return checkedInitializedReport(report.report, initialized)
 }
 
 export async function handshakeRemoteCodex(
@@ -356,7 +360,7 @@ export async function handshakeRemoteCodex(
 ) {
   return withDeadline(
     signal,
-    options.timeoutMs ?? REMOTE_CODEX_HANDSHAKE_TIMEOUT_MS,
+    options.timeoutMs ?? REMOTE_CODEX_PROXY_TIMEOUT_MS,
     async (deadline) => {
       const [localResult, initialized] = await Promise.all([
         runCommand(localVersionCommand(options.localVersionCommand), deadline, true),

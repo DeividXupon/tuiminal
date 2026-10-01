@@ -1,5 +1,15 @@
 import "./setup"
 import { describe, expect, test } from "bun:test"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { join } from "node:path"
 import { agentProvider } from "../packages/feature-terminal/src/model/agent-provider"
 import {
   mergeOpenCodeResumeThreads,
@@ -37,11 +47,18 @@ import {
   openCodeVersion,
   readOpenCodeJsonResponse,
 } from "../packages/feature-terminal/src/services/opencode-protocol"
+import { interruptOpenCodeSession } from "../packages/feature-terminal/src/services/opencode-server-connection"
 import { OpenCodeSessionProjection } from "../packages/feature-terminal/src/services/opencode-session-projection"
 import { createOpenCodeTuiControl } from "../packages/feature-terminal/src/services/opencode-tui-control"
-import { preflightRemoteOpenCode } from "../packages/feature-terminal/src/services/remote-opencode-compatibility"
+import {
+  preflightLocalOpenCode,
+  preflightRemoteOpenCode,
+} from "../packages/feature-terminal/src/services/remote-opencode-compatibility"
 import {
   remoteOpenCodeServerCommand,
+  remoteOpenCodeServerKey,
+  remoteOpenCodeStopServerCommand,
+  remoteOpenCodeTunnelCommand,
   remoteOpenCodeVersionCommand,
 } from "../packages/feature-terminal/src/services/remote-opencode-connection"
 
@@ -729,6 +746,44 @@ test("OpenCode version detection reads authenticated v2 server information", asy
   expect(openCodeVersion("unknown")).toBeNull()
 })
 
+test("explicit OpenCode stop interrupts only the selected session", async () => {
+  const requests: Array<{ url: URL; method: string; authorization: string | null }> = []
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    requests.push({
+      url: new URL(String(input)),
+      method: init?.method ?? "GET",
+      authorization: new Headers(init?.headers).get("authorization"),
+    })
+    return new Response("true")
+  }) as typeof fetch
+
+  await interruptOpenCodeSession(
+    "http://127.0.0.1:4096",
+    "/workspace/project",
+    "ses_current",
+    "v2",
+    "Basic token",
+    fetcher,
+  )
+  await interruptOpenCodeSession(
+    "http://127.0.0.1:4096",
+    "/workspace/project",
+    "ses_legacy",
+    "v1",
+    undefined,
+    fetcher,
+  )
+
+  expect(requests.map((request) => request.url.pathname)).toEqual([
+    "/api/session/ses_current/interrupt",
+    "/session/ses_legacy/abort",
+  ])
+  expect(requests.map((request) => request.method)).toEqual(["POST", "POST"])
+  expect(requests[0]?.authorization).toBe("Basic token")
+  expect(requests[0]?.url.search).toBe("")
+  expect(requests[1]?.url.searchParams.get("directory")).toBe("/workspace/project")
+})
+
 test("OpenCode protocol detection preserves the legacy JSON health contract", async () => {
   const fetcher = (async (input: string | URL | Request) => {
     const url = new URL(String(input))
@@ -841,23 +896,176 @@ test("remote OpenCode v2 requires the same detected client and server version", 
   ).toBe(false)
 })
 
-test("remote OpenCode server remains loopback-only behind an owned SSH tunnel", () => {
+test("remote OpenCode server persists separately from its loopback-only SSH tunnel", () => {
+  const key = remoteOpenCodeServerKey("/srv/project with spaces")
   const command = remoteOpenCodeServerCommand(
     { id: "work", name: "Work", host: "work-alias" },
     "/srv/project with spaces",
+    key,
+  )
+  expect(command).toContain("work-alias")
+  expect(command).toContain("RemoteCommand=none")
+  expect(command).toContain("ClearAllForwardings=yes")
+  expect(command.at(-1)).toContain("exec /bin/sh -c")
+  expect(command.at(-1)).toContain("/srv/project with spaces")
+  expect(command.at(-1)).toContain("IFS= read -r OPENCODE_PASSWORD")
+  expect(command.at(-1)).toContain("IFS= read -r excluded_port")
+  expect(command.at(-1)).toContain("OPENCODE_SERVER_PASSWORD=$OPENCODE_PASSWORD")
+  expect(command.at(-1)).toContain('nohup "$opencode_command" serve --hostname 127.0.0.1')
+  expect(command.at(-1)).toContain("/dev/urandom")
+  expect(command.at(-1)).toContain('ps -p "$opencode_pid" -o lstart=')
+  expect(command.at(-1)).toContain("TUIMINAL_OPENCODE")
+  expect(command.at(-1)).not.toContain("ssh_parent_pid")
+
+  const tunnel = remoteOpenCodeTunnelCommand(
+    { id: "work", name: "Work", host: "work-alias" },
     45123,
     45124,
   )
-  expect(command).toContain("ExitOnForwardFailure=yes")
-  expect(command).toContain("127.0.0.1:45123:127.0.0.1:45124")
-  expect(command).toContain("work-alias")
-  expect(command.at(-1)).toContain("cd '/srv/project with spaces'")
-  expect(command.at(-1)).toContain("IFS= read -r OPENCODE_PASSWORD")
-  expect(command.at(-1)).toContain("OPENCODE_SERVER_PASSWORD=$OPENCODE_PASSWORD")
-  expect(command.at(-1)).toContain("serve --hostname 127.0.0.1 --port 45124")
-  expect(command.at(-1)).toContain('while kill -0 "$ssh_parent_pid"')
-  expect(command.at(-1)).toContain('kill "$opencode_pid"')
+  expect(tunnel).toContain("ExitOnForwardFailure=yes")
+  expect(tunnel).toContain("ClearAllForwardings=no")
+  expect(tunnel).toContain("SessionType=none")
+  expect(tunnel).not.toContain("SessionType=default")
+  expect(tunnel).toContain("none")
+  expect(tunnel).toContain("127.0.0.1:45123:127.0.0.1:45124")
+  expect(tunnel).toContain("work-alias")
+
+  const stop = remoteOpenCodeStopServerCommand(
+    { id: "work", name: "Work", host: "work-alias" },
+    "/srv/project with spaces",
+    key,
+  )
+  expect(stop.at(-1)).toContain('kill "$opencode_pid"')
+  expect(stop.at(-1)).toContain("opencode*serve")
 })
+
+test.skipIf(process.platform === "win32")(
+  "remote OpenCode's detached server survives startup and its registry stop retires it",
+  async () => {
+    const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-daemon-")
+    const home = join(root, "home")
+    const state = join(root, "state")
+    const project = join(root, "project")
+    const bin = join(root, "bin")
+    const executable = join(bin, "opencode")
+    const profile = { id: "work", name: "Work", host: "work-alias" }
+    mkdirSync(home, { recursive: true })
+    mkdirSync(state, { recursive: true })
+    mkdirSync(project, { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(executable, "#!/bin/sh\ntrap 'exit 0' TERM INT\nwhile :; do sleep 1; done\n", {
+      mode: 0o700,
+    })
+    chmodSync(executable, 0o700)
+    const key = remoteOpenCodeServerKey(project, "2.0.20")
+    const environment = {
+      ...process.env,
+      HOME: home,
+      XDG_STATE_HOME: state,
+      PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+    }
+    let pid = 0
+    const ownedPids = new Set<number>()
+    try {
+      const script = remoteOpenCodeServerCommand(profile, project, key).at(-1)
+      if (!script) throw new Error("Missing remote OpenCode startup script")
+      const start = Bun.spawn(["sh", "-c", script], {
+        env: environment,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const input = start.stdin as { write(data: string): number; end(): void }
+      input.write("11111111-1111-4111-8111-111111111111\n45124\n")
+      input.end()
+      const output = await new Response(start.stdout).text()
+      expect(await start.exited).toBe(0)
+      const port = Number(/TUIMINAL_OPENCODE (\d+)/u.exec(output)?.[1])
+      expect(port).toBeGreaterThanOrEqual(20_000)
+      expect(port).toBeLessThan(60_000)
+      expect(port).not.toBe(45_124)
+      pid = Number(readFileSync(join(state, "tuiminal", "opencode", key, "pid"), "utf8").trim())
+      ownedPids.add(pid)
+      expect(() => process.kill(pid, 0)).not.toThrow()
+
+      const reconnect = Bun.spawn(["sh", "-c", script], {
+        env: environment,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const reconnectInput = reconnect.stdin as { write(data: string): number; end(): void }
+      reconnectInput.write("22222222-2222-4222-8222-222222222222\n45125\n")
+      reconnectInput.end()
+      const reconnectOutput = await new Response(reconnect.stdout).text()
+      expect(await reconnect.exited).toBe(0)
+      expect(reconnectOutput).toContain(
+        `TUIMINAL_OPENCODE ${port} 11111111-1111-4111-8111-111111111111 ${pid} reused`,
+      )
+
+      writeFileSync(join(state, "tuiminal", "opencode", key, "password"), "corrupt\n")
+      const repair = Bun.spawn(["sh", "-c", script], {
+        env: environment,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const repairInput = repair.stdin as { write(data: string): number; end(): void }
+      repairInput.write("33333333-3333-4333-8333-333333333333\n45126\n")
+      repairInput.end()
+      const repairOutput = await new Response(repair.stdout).text()
+      expect(await repair.exited).toBe(0)
+      expect(repairOutput).toContain("33333333-3333-4333-8333-333333333333")
+      expect(repairOutput).toContain("created")
+      const stalePid = pid
+      const repairedPid = Number(
+        readFileSync(join(state, "tuiminal", "opencode", key, "pid"), "utf8").trim(),
+      )
+      expect(repairedPid).not.toBe(pid)
+      ownedPids.add(repairedPid)
+      pid = repairedPid
+      let staleRetired = false
+      for (let attempt = 0; attempt < 30; attempt++) {
+        try {
+          process.kill(stalePid, 0)
+          await Bun.sleep(50)
+        } catch {
+          staleRetired = true
+          break
+        }
+      }
+      expect(staleRetired).toBe(true)
+
+      const stopScript = remoteOpenCodeStopServerCommand(profile, project, key).at(-1)
+      if (!stopScript) throw new Error("Missing remote OpenCode stop script")
+      const stop = Bun.spawn(["sh", "-c", stopScript], {
+        env: environment,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "pipe",
+      })
+      expect(await stop.exited).toBe(0)
+      for (let attempt = 0; attempt < 30; attempt++) {
+        try {
+          process.kill(pid, 0)
+          await Bun.sleep(50)
+        } catch {
+          pid = 0
+          break
+        }
+      }
+      expect(pid).toBe(0)
+    } finally {
+      for (const ownedPid of ownedPids)
+        try {
+          process.kill(ownedPid, "SIGKILL")
+        } catch {
+          // The owned fake server already exited.
+        }
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+)
 
 test("remote OpenCode compatibility preflight requires the exact v2 version", async () => {
   const profile = { id: "work", name: "Work", host: "work-alias" }
@@ -891,19 +1099,51 @@ test("remote OpenCode compatibility preflight requires the exact v2 version", as
   })
 })
 
+test("local OpenCode preflight reports a missing CLI for the update guide", async () => {
+  await expect(
+    preflightLocalOpenCode(new AbortController().signal, {
+      localVersionCommand: versionCommand("", 127),
+      timeoutMs: 1_000,
+    }),
+  ).rejects.toMatchObject({
+    report: {
+      providerId: "opencode",
+      compatible: false,
+      reason: "localOpenCodeMissing",
+      localVersion: null,
+      remoteVersion: null,
+    },
+  })
+})
+
 test("remote OpenCode version preflight uses the configured SSH alias", () => {
   const command = remoteOpenCodeVersionCommand({ id: "work", name: "Work", host: "work-alias" })
   expect(command).toContain("work-alias")
   expect(command.at(-1)).toContain('exec "$opencode_command" --version')
 })
 
-test("remote OpenCode treats the selected directory as shell data", () => {
+test("remote OpenCode treats the selected directory as shell data", async () => {
+  const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-quote-")
+  const marker = join(root, "not-run")
+  const bin = join(root, "bin")
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(join(bin, "opencode"), "#!/bin/sh\nexit 0\n", { mode: 0o700 })
+  const directory = `/missing/project'; touch '${marker}'; echo '`
   const command = remoteOpenCodeServerCommand(
     { id: "work", name: "Work", host: "work-alias" },
-    "/srv/project'; touch /tmp/not-run; echo '",
-    45123,
+    directory,
+    remoteOpenCodeServerKey(directory),
   )
-  expect(command.at(-1)).toContain(
-    `cd '/srv/project'"'"'; touch /tmp/not-run; echo '"'"'' || exit 72`,
-  )
+  try {
+    const child = Bun.spawn(["sh", "-c", command.at(-1) ?? "exit 1"], {
+      env: { ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` },
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    expect(await child.exited).toBe(72)
+    expect(existsSync(marker)).toBe(false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

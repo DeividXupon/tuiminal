@@ -7,6 +7,7 @@ import type {
 import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../model/agent-message-history"
 import type { AgentState } from "../model/agent-state"
 import type { OpenCodeResumeThread } from "../model/opencode-resume-threads"
+import { projectName } from "../model/project-name"
 
 type RecordValue = Record<string, unknown>
 
@@ -68,15 +69,6 @@ function timeValue(value: unknown, key: string) {
 function responseData(value: unknown) {
   const record = object(value)
   return record && Array.isArray(record.data) ? record.data : value
-}
-
-function projectName(path: string) {
-  return (
-    path
-      .replace(/[\\/]+$/u, "")
-      .split(/[\\/]/u)
-      .at(-1) || path
-  )
 }
 
 export function parseOpenCodeSession(value: unknown): OpenCodeSessionSummary | null {

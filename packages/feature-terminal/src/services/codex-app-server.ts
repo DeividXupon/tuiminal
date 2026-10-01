@@ -12,6 +12,7 @@ import {
 } from "./codex-relay-observer"
 import { resolveCodexExecutable } from "./codex-executable"
 import { CodexProxyWebSocket } from "./codex-proxy-websocket"
+import { preflightLocalCodex } from "./local-codex-compatibility"
 import { createRemoteCodexAppServerLaunch, remoteCodexTuiCommand } from "./remote-codex-connection"
 import { preflightRemoteCodex } from "./remote-codex-handshake"
 import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
@@ -307,6 +308,7 @@ export async function startCodexAppServerTerminal(
       events,
       signal,
     )
+  await preflightLocalCodex(signal)
   const port = await unusedCodexLoopbackPort()
   signal.throwIfAborted()
   const url = `ws://127.0.0.1:${port}`

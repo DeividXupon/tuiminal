@@ -15,14 +15,6 @@ export type RecentAgentProject = {
 export function projectSource(target: AgentProjectTarget) {
   return target.kind === "local" ? "local" : `ssh:${target.profile.id}`
 }
-export function projectName(path: string) {
-  return (
-    path
-      .replace(/[\\/]+$/u, "")
-      .split(/[\\/]/u)
-      .at(-1) || path
-  )
-}
 export function mergeRecentProjects(projects: readonly RecentAgentProject[]) {
   const unique = new Map<string, RecentAgentProject>()
   const counts = new Map<string, number>()

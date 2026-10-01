@@ -4,6 +4,7 @@ import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { type RefObject, useCallback, useRef } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { agentProvider } from "../model/agent-provider"
+import type { AgentActivity, AgentState } from "../model/agent-state"
 import {
   cleanTerminalName,
   type FreeTerminalCommand,
@@ -11,8 +12,7 @@ import {
   type TerminalSession,
 } from "../model/sessions"
 import { AgentMonitor } from "../services/agent-monitor"
-import { startCodexAppServerTerminal } from "../services/codex-app-server"
-import { startOpenCodeServerTerminal } from "../services/opencode-server"
+import { startIntegratedAgentTerminal } from "../services/integrated-agent-terminal"
 import { OpenCodeSessionProjection } from "../services/opencode-session-projection"
 import { RemoteCodexCompatibilityError } from "../services/remote-codex-handshake"
 import {
@@ -213,27 +213,31 @@ async function launchTerminal(
   const output = beginAgentOutput(id, size, context)
   if (integration && clear) context.clearAgentMessages(id)
   const active: ActiveLaunch = { handle: null, ended: false }
-  let agentState: "working" | "blocked" | "done" | "unknown" | "idle" = "idle"
-  let agentActivity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling" =
-    "thinking"
+  let agentState: AgentState = "idle"
+  let agentActivity: AgentActivity = "thinking"
   let agentTitle: string | undefined
   let hydrationRevision = 0
+  let agentTransport =
+    integration?.providerId === "claude" && !integration.remote
+      ? ("screen" as const)
+      : (integration?.transport ?? "screen")
   const provider = agentProvider(integration?.providerId ?? "codex")
   const openCodeSessions = new OpenCodeSessionProjection(id, provider, integration?.resumeThreadId)
   const updateIntegratedAgent = () => {
     if (!launch.isCurrent()) return
     context.updateSession(id, {
       agent: {
-        key: `${provider.id}-app-server:${id}`,
+        key: `${provider.id}-${agentTransport}:${id}`,
         label: provider.label,
         profile: provider.profile,
         state: agentState,
         activity: agentState === "working" ? agentActivity : null,
         ...(agentTitle ? { taskTitle: agentTitle } : {}),
       },
-      agentIntegration: { providerId: provider.id, transport: "app-server" },
+      agentIntegration: { providerId: provider.id, transport: agentTransport },
     })
   }
+  if (integration?.providerId === "claude" && !integration.remote) updateIntegratedAgent()
   const options = {
     cwd: integration?.remote
       ? FREE_TERMINAL_WORKING_DIRECTORY
@@ -256,23 +260,23 @@ async function launchTerminal(
     else context.clearAgentMessages(id)
     context.updateSession(id, {
       agent: active?.agent ?? {
-        key: `${provider.id}-app-server:${id}`,
+        key: `${provider.id}-${agentTransport}:${id}`,
         label: provider.label,
         profile: provider.profile,
         state: "idle",
         activity: null,
       },
-      agentIntegration: { providerId: provider.id, transport: "app-server" },
+      agentIntegration: { providerId: provider.id, transport: agentTransport },
     })
   }
   try {
     const events = {
-      onActivity(activity: typeof agentActivity) {
+      onActivity(activity: AgentActivity) {
         agentActivity = activity
         agentState = "working"
         updateIntegratedAgent()
       },
-      onState(state: typeof agentState) {
+      onState(state: AgentState) {
         agentState = state
         if (state === "working") agentActivity = "thinking"
         updateIntegratedAgent()
@@ -295,10 +299,11 @@ async function launchTerminal(
       },
     }
     active.handle = integration
-      ? integration.providerId === "codex"
-        ? await startCodexAppServerTerminal(
-            options,
-            {
+      ? await startIntegratedAgentTerminal(
+          integration,
+          options,
+          {
+            codex: {
               ...events,
               onHydrated(thread) {
                 if (!launch.isCurrent()) return
@@ -313,11 +318,22 @@ async function launchTerminal(
                 }
               },
             },
-            launch.signal,
-          )
-        : await startOpenCodeServerTerminal(
-            options,
-            {
+            claude: {
+              ...events,
+              onObserved() {
+                if (agentTransport === "hooks") return
+                agentTransport = "hooks"
+                updateIntegratedAgent()
+              },
+              onHydrated(thread) {
+                if (!launch.isCurrent() || !integration.remote) return
+                hydrationRevision += 1
+                context.updateSession(id, {
+                  remoteAgentHydration: { ...thread, revision: hydrationRevision },
+                })
+              },
+            },
+            openCode: {
               ...events,
               onSessionUpdated(hydration) {
                 if (!launch.isCurrent()) return
@@ -353,8 +369,9 @@ async function launchTerminal(
                 })
               },
             },
-            launch.signal,
-          )
+          },
+          launch.signal,
+        )
       : await startWorkspaceTerminal(command, options, launch.signal)
     await acceptStartedTerminal(id, command, active.handle, active, isCurrent, context)
   } catch (error) {

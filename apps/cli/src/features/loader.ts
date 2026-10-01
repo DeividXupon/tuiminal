@@ -1,7 +1,12 @@
 import { fileURLToPath } from "node:url"
 import { featureEnvironment, FEATURE_VERSION } from "./environment"
 import { MINIMAL_BUILD, sourceFeaturesEnabled } from "./mode"
-import { FeatureInstallError, type FeatureId } from "./model"
+import {
+  FeatureInstallError,
+  parseFeatureArtifact,
+  type FeatureArtifact,
+  type FeatureId,
+} from "./model"
 import { loadedFeature, registerFeature, type FeatureModules } from "./registry"
 
 export async function importVerifiedFeature(bytes: Uint8Array): Promise<Record<string, unknown>> {
@@ -35,13 +40,26 @@ function terminalSidebarCommand(args: string[]) {
       ]
 }
 
+// Helpers run the payload snapshot the host loaded, even after a dev catalog rebuild.
+const loadedArtifacts = new Map<FeatureId, FeatureArtifact>()
+
+function pinnedArtifactArguments(id: FeatureId) {
+  const artifact = loadedArtifacts.get(id)
+  return artifact ? [JSON.stringify(artifact)] : []
+}
+
 function terminalProjectSyncWorkerCommand() {
   return MINIMAL_BUILD
-    ? [process.execPath, "--internal-terminal-project-sync-worker"]
+    ? [
+        process.execPath,
+        "--internal-terminal-project-sync-worker",
+        ...pinnedArtifactArguments("terminal"),
+      ]
     : [
         process.execPath,
         fileURLToPath(new URL("../../bin/tuiminal.ts", import.meta.url)),
         "--internal-terminal-project-sync-worker",
+        ...pinnedArtifactArguments("terminal"),
       ]
 }
 
@@ -55,9 +73,23 @@ async function prepareHost() {
   )
 }
 
-async function loadEntry(id: FeatureId, name: string, withHost = true) {
+function entryArtifact(
+  catalogArtifact: FeatureArtifact | undefined,
+  pinned: FeatureArtifact | undefined,
+) {
+  if (!pinned || pinned.sha256 === catalogArtifact?.sha256) return catalogArtifact
+  // Release catalogs are embedded, so only a local dev rebuild can diverge from the host.
+  if (MINIMAL_BUILD)
+    throw new FeatureInstallError("catalog", "Pinned feature is not in the catalog")
+  return pinned
+}
+
+async function loadEntry(id: FeatureId, name: string, withHost = true, pinned?: FeatureArtifact) {
   const environment = await featureEnvironment()
-  const artifact = environment.catalog.artifacts.find((entry) => entry.id === id)
+  const artifact = entryArtifact(
+    environment.catalog.artifacts.find((entry) => entry.id === id),
+    pinned,
+  )
   if (!artifact) throw new FeatureInstallError("catalog", "Official feature is not in the catalog")
   let files: Map<string, Buffer>
   try {
@@ -73,7 +105,9 @@ async function loadEntry(id: FeatureId, name: string, withHost = true) {
   }
   const bytes = files.get(name)
   if (!bytes) throw new FeatureInstallError("integrity", "Official feature entry is missing")
-  return importVerifiedFeature(bytes)
+  const module = await importVerifiedFeature(bytes)
+  if (name === "index.mjs") loadedArtifacts.set(id, artifact)
+  return module
 }
 const pending = new Map<FeatureId, Promise<void>>()
 export async function loadFeature(id: FeatureId) {
@@ -119,10 +153,22 @@ export async function runInstalledTerminalSidebar(args: string[]) {
   return (module.runTerminalSidebarCli as (args: string[]) => Promise<number>)(args)
 }
 
-export async function runInstalledTerminalProjectSyncWorker() {
+function parsePinnedArtifact(id: FeatureId, value: string | undefined) {
+  if (value === undefined) return undefined
+  const artifact = parseFeatureArtifact(JSON.parse(value), FEATURE_VERSION)
+  if (artifact.id !== id) throw new FeatureInstallError("catalog", "Invalid pinned feature")
+  return artifact
+}
+
+export async function runInstalledTerminalProjectSyncWorker(args: string[] = []) {
   if (typeof process.send !== "function")
     throw new Error("Terminal project sync worker requires an IPC channel")
   if (sourceFeaturesEnabled())
     return (await import("./source-loader")).sourceTerminalProjectSyncWorker()
-  await loadEntry("terminal", "project-sync-worker.mjs")
+  await loadEntry(
+    "terminal",
+    "project-sync-worker.mjs",
+    true,
+    parsePinnedArtifact("terminal", args[0]),
+  )
 }

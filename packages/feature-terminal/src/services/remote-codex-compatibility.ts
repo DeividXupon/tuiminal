@@ -1,6 +1,7 @@
-import type {
-  RemoteCodexCompatibilityReport,
-  RemoteCodexIncompatibilityReason,
+import {
+  type RemoteCodexCompatibilityReport,
+  type RemoteCodexIncompatibilityReason,
+  remoteCodexCompatibilityMessage,
 } from "../model/remote-codex"
 import { REMOTE_CODEX_PREFLIGHT_MARKER } from "./remote-codex-connection"
 
@@ -9,36 +10,20 @@ export type {
   RemoteCodexIncompatibilityReason,
 } from "../model/remote-codex"
 
-const COMPATIBILITY_MESSAGES: Record<RemoteCodexIncompatibilityReason, string> = {
-  localCodexMissing: "O Codex não está instalado nesta máquina.",
-  localVersionInvalid: "A versão local do Codex não pôde ser identificada.",
-  remoteCodexMissing: "O Codex não está instalado no servidor remoto.",
-  remoteVersionInvalid: "A versão remota do Codex não pôde ser identificada.",
-  localOpenCodeMissing: "O OpenCode não está instalado nesta máquina.",
-  localOpenCodeVersionInvalid: "A versão local do OpenCode não pôde ser identificada.",
-  remoteOpenCodeMissing: "O OpenCode não está instalado no servidor remoto.",
-  remoteOpenCodeVersionInvalid: "A versão remota do OpenCode não pôde ser identificada.",
-  daemonUnavailable: "O Codex remoto não oferece app-server daemon.",
-  proxyUnavailable: "O Codex remoto não oferece app-server proxy.",
-  versionMismatch: "As versões local e remota do Codex são incompatíveis.",
-}
-
 export class RemoteCodexCompatibilityError extends Error {
   constructor(readonly report: RemoteCodexCompatibilityReport) {
-    super(
-      report.providerId === "opencode" && (report.reason ?? "versionMismatch") === "versionMismatch"
-        ? "As versões local e remota do OpenCode são incompatíveis."
-        : COMPATIBILITY_MESSAGES[report.reason ?? "versionMismatch"],
-    )
+    super(remoteCodexCompatibilityMessage(report))
     this.name = "RemoteCodexCompatibilityError"
   }
 }
 
 export function parseCodexVersion(value: string) {
-  const match = value.match(/(?:^|[^\d])(\d+)\.(\d+)\.(\d+)(?:[-+][\d.A-Za-z-]+)?/u)
+  const match = value.match(
+    /(?:^|[^\d])(\d+)\.(\d+)\.(\d+)((?:-[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?)(?![+\-.\dA-Za-z])/u,
+  )
   if (!match?.[1] || !match[2] || !match[3]) return null
   return {
-    value: `${match[1]}.${match[2]}.${match[3]}`,
+    value: `${match[1]}.${match[2]}.${match[3]}${match[4] ?? ""}`,
     major: Number(match[1]),
     minor: Number(match[2]),
     patch: Number(match[3]),
@@ -48,8 +33,7 @@ export function parseCodexVersion(value: string) {
 export function compatibleCodexVersions(localValue: string, remoteValue: string) {
   const local = parseCodexVersion(localValue)
   const remote = parseCodexVersion(remoteValue)
-  if (!local || !remote || local.major !== remote.major) return false
-  return local.major === 0 ? local.minor === remote.minor : true
+  return Boolean(local && remote && local.value === remote.value)
 }
 
 export function localCodexCompatibility(exitCode: number, stdout: string, stderr: string) {

@@ -49,14 +49,27 @@ export function RemoteCodexUpdatePanel({
     else if (!guide.checking) onRetry(guide.flowId)
   })
   const remote = guide.side === "remote"
-  const openCode = guide.report.providerId === "opencode"
+  const providerId = guide.report.providerId ?? "codex"
   const detected = remote ? guide.report.remoteVersion : guide.report.localVersion
   const showInstaller = remote || process.platform !== "win32"
-  const title = openCode ? "◆ ATUALIZAR OPENCODE" : "◆ ATUALIZAR CODEX"
-  const upgradeCommand = openCode ? "opencode upgrade" : "codex update"
-  const installer = openCode
-    ? "curl -fsSL https://opencode.ai/v2/install | bash"
-    : "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+  const title =
+    providerId === "opencode"
+      ? "◆ ATUALIZAR OPENCODE"
+      : providerId === "claude"
+        ? "◆ ATUALIZAR CLAUDE CODE"
+        : "◆ ATUALIZAR CODEX"
+  const upgradeCommand =
+    providerId === "opencode"
+      ? "opencode upgrade"
+      : providerId === "claude"
+        ? "claude update"
+        : "codex update"
+  const installer =
+    providerId === "opencode"
+      ? "curl -fsSL https://opencode.ai/v2/install | bash"
+      : providerId === "claude"
+        ? "curl -fsSL https://claude.ai/install.sh | bash"
+        : "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this companion panel owns its keyboard scope.
     <box

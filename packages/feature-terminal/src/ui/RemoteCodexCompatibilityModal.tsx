@@ -5,21 +5,10 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef } from "react"
-import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
-
-const REASON_MESSAGES = {
-  localCodexMissing: "O Codex não está instalado nesta máquina.",
-  localVersionInvalid: "A versão local do Codex não pôde ser identificada.",
-  remoteCodexMissing: "O Codex não está instalado no servidor remoto.",
-  remoteVersionInvalid: "A versão remota do Codex não pôde ser identificada.",
-  localOpenCodeMissing: "O OpenCode não está instalado nesta máquina.",
-  localOpenCodeVersionInvalid: "A versão local do OpenCode não pôde ser identificada.",
-  remoteOpenCodeMissing: "O OpenCode não está instalado no servidor remoto.",
-  remoteOpenCodeVersionInvalid: "A versão remota do OpenCode não pôde ser identificada.",
-  daemonUnavailable: "O Codex remoto não oferece app-server daemon.",
-  proxyUnavailable: "O Codex remoto não oferece app-server proxy.",
-  versionMismatch: "As versões local e remota do Codex são incompatíveis.",
-} as const
+import {
+  type RemoteCodexCompatibilityReport,
+  remoteCodexCompatibilityMessage,
+} from "../model/remote-codex"
 
 export function RemoteCodexCompatibilityModal({
   report,
@@ -28,7 +17,7 @@ export function RemoteCodexCompatibilityModal({
   onOpenGuide,
 }: {
   report: RemoteCodexCompatibilityReport
-  profileName: string
+  profileName?: string
   onCancel: () => void
   onOpenGuide: () => void
 }) {
@@ -44,10 +33,20 @@ export function RemoteCodexCompatibilityModal({
   })
   const version = (value: string | null) => value ?? translateUi("não detectada")
   const openCode = report.providerId === "opencode"
-  const reason =
-    openCode && (report.reason ?? "versionMismatch") === "versionMismatch"
-      ? "As versões local e remota do OpenCode são incompatíveis."
-      : REASON_MESSAGES[report.reason ?? "versionMismatch"]
+  const claude = report.providerId === "claude"
+  const reason = remoteCodexCompatibilityMessage(report)
+  const title = claude
+    ? "◆ CLAUDE CODE INCOMPATÍVEL"
+    : openCode
+      ? "◆ OPENCODE INCOMPATÍVEL"
+      : "◆ CODEX INCOMPATÍVEL"
+  const detail = claude
+    ? "A integração requer Claude Code 2.1.63 ou superior."
+    : openCode && profileName
+      ? "A API do OpenCode depende da versão usada nas duas máquinas."
+      : openCode
+        ? "A integração requer uma versão válida do OpenCode."
+        : "O protocolo do app-server é experimental e depende da versão."
   return (
     <ModalSurface
       dialogRef={dialog}
@@ -59,27 +58,19 @@ export function RemoteCodexCompatibilityModal({
       onBackdropPress={onCancel}
       positionRelative
     >
-      <text
-        content={translateUi(openCode ? "◆ OPENCODE INCOMPATÍVEL" : "◆ CODEX INCOMPATÍVEL")}
-        style={{ fg: COLORS.warning }}
-      />
+      <text content={translateUi(title)} style={{ fg: COLORS.warning }} />
       <text content={translateUi(reason)} style={{ fg: COLORS.text }} />
       <text
         content={`${translateUi("Local")} · ${version(report.localVersion)}`}
         style={{ fg: COLORS.muted }}
       />
-      <text
-        content={`${translateUi("Remoto")} · ${profileName} · ${version(report.remoteVersion)}`}
-        style={{ fg: COLORS.muted }}
-      />
-      <text
-        content={translateUi(
-          openCode
-            ? "A API do OpenCode depende da versão usada nas duas máquinas."
-            : "O protocolo do app-server é experimental e depende da versão.",
-        )}
-        style={{ fg: COLORS.muted }}
-      />
+      {profileName && (
+        <text
+          content={`${translateUi("Remoto")} · ${profileName} · ${version(report.remoteVersion)}`}
+          style={{ fg: COLORS.muted }}
+        />
+      )}
+      <text content={translateUi(detail)} style={{ fg: COLORS.muted }} />
       <box style={{ flexGrow: 1 }} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton

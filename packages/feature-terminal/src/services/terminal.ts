@@ -175,21 +175,24 @@ export function createRemoteServerSetupCommand(
 
 export function createRemoteAgentUpdateCommands(
   flowId: number,
-  profile: TerminalRemoteCodexProfile,
+  profile: TerminalRemoteCodexProfile | undefined,
   report: RemoteCodexCompatibilityReport,
-  providerId: Extract<AgentProviderId, "codex" | "opencode">,
-): [FreeTerminalCommand, FreeTerminalCommand] {
+  providerId: AgentProviderId,
+): FreeTerminalCommand[] {
   const local = createShellTerminalCommand()
-  const provider = providerId === "opencode" ? "OpenCode" : "Codex"
+  const provider =
+    providerId === "opencode" ? "OpenCode" : providerId === "claude" ? "Claude Code" : "Codex"
   const guide = { flowId, report: { ...report, providerId }, checking: false, error: "" }
-  return [
+  const commands: FreeTerminalCommand[] = [
     {
       ...local,
       label: `${provider} · Local`,
       workingDirectory: homedir(),
       remoteCodexUpdate: { ...guide, side: "local" },
     },
-    {
+  ]
+  if (profile)
+    commands.push({
       kind: "custom",
       label: `${provider} · ${profile.name}`,
       shortLabel: "SSH",
@@ -198,8 +201,8 @@ export function createRemoteAgentUpdateCommands(
       accent: COLORS.warning,
       workingDirectory: homedir(),
       remoteCodexUpdate: { ...guide, side: "remote" },
-    },
-  ]
+    })
+  return commands
 }
 
 function processEnvironment(overrides: Record<string, string | undefined> = {}) {

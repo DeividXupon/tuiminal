@@ -41,7 +41,7 @@ export function RemoteCodexUpdateCompanion({
       <RemoteCodexUpdatePanel
         sessionId={session.id}
         guide={guide}
-        profileName={session.label.replace(/^(?:Codex|OpenCode) · /u, "")}
+        profileName={session.label.replace(/^(?:Codex|Claude Code|OpenCode) · /u, "")}
         active={active}
         terminalStatus={session.status}
         onActivateSession={() => onActivate(session.id)}

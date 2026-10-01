@@ -50,10 +50,11 @@ Code: [feature](../../packages/feature-terminal/src/).
 - Read screen activity through the bounded input-free native observer, not viewport
   visibility. Create it only after recognition; batch output, skip unchanged
   revisions and release it with the exact PTY. Keep PTY hot paths lean.
-- Integrated Codex observes public app-server events, while integrated OpenCode uses
-  its public HTTP/SSE protocol. Each official TUI owns input and approvals. Never read
-  private reasoning. History hydrates public turns and merges stable IDs for the
-  selected provider session.
+- Integrated Codex observes public app-server events, Claude Code uses per-launch
+  loopback HTTP hooks, and OpenCode uses its public HTTP/SSE protocol. Each official TUI
+  owns input and approvals. Claude hooks return no decisions and never modify global
+  settings. Never read private reasoning. History merges stable IDs for the selected
+  provider session; Claude's detailed history is memory-only.
 - Sidebar filtering must not change splits, folders, lifetime or focus. Running
   agents appear exclusively in Agents. Task titles are sanitized display metadata.
   Animation timers stay outside PTY rendering and stop while inactive.

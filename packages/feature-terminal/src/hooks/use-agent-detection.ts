@@ -96,7 +96,7 @@ function runningCandidates(state: DetectionState): RunningCandidate[] {
       (session) =>
         session.status === "running" &&
         session.pid &&
-        session.agentIntegration?.transport !== "app-server",
+        (!session.agentIntegration || session.agentIntegration.transport === "screen"),
     )
     .map((session) => ({
       session,

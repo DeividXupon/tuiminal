@@ -5,11 +5,11 @@ type CompatibilityFlow = ReturnType<typeof useRemoteCodexCompatibilityFlow>
 
 export function RemoteCodexCompatibilityPrompt({ flow }: { flow: CompatibilityFlow }) {
   const remote = flow.prompt?.command.agentLaunch?.remote
-  if (!flow.prompt || !remote) return null
+  if (!flow.prompt) return null
   return (
     <RemoteCodexCompatibilityModal
       report={flow.prompt.report}
-      profileName={remote.profile.name}
+      {...(remote ? { profileName: remote.profile.name } : {})}
       onCancel={flow.cancelPrompt}
       onOpenGuide={flow.openGuide}
     />

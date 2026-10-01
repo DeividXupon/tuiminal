@@ -37,8 +37,15 @@ export const AGENT_PROVIDERS = [
     id: "claude",
     label: "Claude Code",
     profile: "claude",
-    availability: "coming-soon",
-    capabilities: ["local-launch"],
+    availability: "available",
+    capabilities: [
+      "local-launch",
+      "remote-launch",
+      "resume",
+      "structured-activity",
+      "message-history",
+      "project-sync",
+    ],
   },
   {
     id: "opencode",

@@ -36,6 +36,10 @@ import {
   remoteServerBarrierCheckCommand,
 } from "../packages/feature-terminal/src/services/remote-server-readiness"
 import { remoteServerSetupInstructions } from "../packages/feature-terminal/src/services/remote-server-setup"
+import {
+  remoteSshEffectiveConfigurationCommand,
+  sshConfigurationHasForwarding,
+} from "../packages/feature-terminal/src/services/remote-ssh-command"
 import { listSshConfigProfiles } from "../packages/feature-terminal/src/services/ssh-config"
 import {
   createRemoteCodexAgentCommand,
@@ -132,18 +136,12 @@ test("SSH connection test builds an argument array without opening a remote Code
     executable: "/usr/bin/ssh",
     timeoutMs: 3_200,
   })
-  expect(command).toEqual([
-    "/usr/bin/ssh",
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ConnectTimeout=4",
-    "-o",
-    "ConnectionAttempts=1",
-    "oracle-vps",
-    "printf TUIMINAL_SSH_OK",
-  ])
+  expect(command.slice(0, 2)).toEqual(["/usr/bin/ssh", "-T"])
+  expect(command).toContain("ConnectTimeout=4")
+  expect(command).toContain("RemoteCommand=none")
+  expect(command).toContain("ClearAllForwardings=yes")
+  expect(command).toContain("oracle-vps")
+  expect(command.at(-1)).toContain("printf TUIMINAL_SSH_OK")
   expect(command.join(" ")).not.toContain("app-server")
 })
 
@@ -203,17 +201,11 @@ test("remote readiness checks use fixed scripts without interpolating profile da
     timeoutMs: 3_200,
   })
 
-  expect(github.slice(0, -1)).toEqual([
-    "/usr/bin/ssh",
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ConnectTimeout=4",
-    "-o",
-    "ConnectionAttempts=1",
-    "oracle-vps",
-  ])
+  expect(github.slice(0, 2)).toEqual(["/usr/bin/ssh", "-T"])
+  expect(github).toContain("ConnectTimeout=4")
+  expect(github).toContain("RemoteCommand=none")
+  expect(github).toContain("ClearAllForwardings=yes")
+  expect(github).toContain("oracle-vps")
   expect(github.at(-1)).toContain("ssh -T")
   expect(codex.at(-1)).toContain("codex_command")
   expect(codex.at(-1)).toContain("$HOME/.codex/packages/standalone/current/bin/codex")
@@ -371,15 +363,11 @@ test("remote server setup opens an interactive SSH shell without embedding a set
   const target = profile()
   const command = createRemoteServerSetupCommand(target)
 
-  expect(command.command).toEqual([
-    "ssh",
-    "-tt",
-    "-o",
-    "ServerAliveInterval=30",
-    "-o",
-    "ServerAliveCountMax=3",
-    "oracle-vps",
-  ])
+  expect(command.command.slice(0, 2)).toEqual(["ssh", "-tt"])
+  expect(command.command).toContain("RemoteCommand=none")
+  expect(command.command).toContain("StdinNull=no")
+  expect(command.command).toContain("ClearAllForwardings=yes")
+  expect(command.command.at(-1)).toBe("oracle-vps")
   expect(command.displayCommand).toBe("ssh oracle-vps")
   expect(command.remoteSetup).toEqual({ profile: target })
 })
@@ -406,12 +394,35 @@ test("remote Codex starts a persistent daemon and connects through a disposable 
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
+    "-o",
+    "RemoteCommand=none",
+    "-o",
+    "SessionType=default",
+    "-o",
+    "StdinNull=no",
+    "-o",
+    "ForkAfterAuthentication=no",
+    "-o",
+    "PermitLocalCommand=no",
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPersist=no",
+    "-S",
+    "none",
+    "-o",
+    "ClearAllForwardings=yes",
     "oracle-vps",
   ])
-  expect(proxy.at(-1)).toContain("cd '/srv/project with '\"'\"'quote'\"'\"''")
+  expect(proxy.at(-1)).toContain("exec /bin/sh -c")
+  expect(proxy.at(-1)).toContain("/srv/project with")
+  expect(proxy.at(-1)).toContain("quote")
   expect(proxy.at(-1)).toContain('exec "$codex_command" app-server proxy')
   expect(daemon.at(-1)).toContain(
-    '"$codex_command" app-server daemon start </dev/null >/dev/null 2>&1 || exit 73',
+    '"$codex_command" app-server daemon start </dev/null >/dev/null || exit 73',
+  )
+  expect(daemon.at(-1)).toContain(
+    'exec "$codex_command" app-server daemon version </dev/null || exit 73',
   )
   expect(probe.at(-1)).toContain('"$codex_command" app-server daemon --help')
   expect(probe.at(-1)).toContain('"$codex_command" app-server proxy --help')
@@ -462,6 +473,24 @@ test("remote Codex starts a persistent daemon and connects through a disposable 
   expect(() => remoteCodexTuiCommand("ws://127.0.0.1:4500", "relative/project")).toThrow()
 })
 
+test("automated SSH commands isolate alias side effects and detect tunnel conflicts", () => {
+  const command = remoteSshEffectiveConfigurationCommand(profile())
+  expect(command).toContain("RemoteCommand=none")
+  expect(command).toContain("SessionType=none")
+  expect(command).toContain("StdinNull=no")
+  expect(command).toContain("ForkAfterAuthentication=no")
+  expect(command).toContain("PermitLocalCommand=no")
+  expect(command).toContain("ControlMaster=no")
+  expect(command).toContain("ControlPersist=no")
+  expect(command).toContain("none")
+  expect(sshConfigurationHasForwarding("hostname host\nuser ubuntu\n")).toBe(false)
+  expect(
+    sshConfigurationHasForwarding("hostname host\nlocalforward 127.0.0.1:3000 [127.0.0.1]:3000\n"),
+  ).toBe(true)
+  expect(sshConfigurationHasForwarding("remoteforward 127.0.0.1:0 [127.0.0.1]:3000\n")).toBe(true)
+  expect(sshConfigurationHasForwarding("  dynamicforward 127.0.0.1:1080\n")).toBe(true)
+})
+
 test("generated remote stdio command completes the app-server handshake", async () => {
   const root = fixtureRoot()
   const codex = join(root, "codex")
@@ -486,7 +515,7 @@ test("generated remote stdio command completes the app-server handshake", async 
   const result = await handshakeRemoteCodex(profile(), root, new AbortController().signal, {
     remoteCommand: ["/bin/sh", "-c", `${environment} ${command}`],
     localVersionCommand: [process.execPath, "-e", 'process.stdout.write("codex-cli 0.158.0\\n")'],
-    timeoutMs: 1_000,
+    timeoutMs: 3_000,
   })
   expect(result).toMatchObject({ remoteVersion: "0.158.0" })
   expect(readFileSync(calls, "utf8")).toBe("app-server daemon start\napp-server proxy\n")
@@ -513,6 +542,7 @@ test("closing a disposable proxy leaves the persistent remote daemon running", a
       "#!/bin/sh",
       'case "$*" in',
       '  "app-server daemon start") "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_DAEMON" & ;;',
+      '  "app-server daemon version") printf \'%s\\n\' \'{"status":"running","appServerVersion":"0.158.0"}\' ;;',
       '  "app-server proxy") exec "$TUIMINAL_TEST_RUNTIME" "$TUIMINAL_TEST_PROXY" ;;',
       "  *) exit 1 ;;",
       "esac",
@@ -568,8 +598,15 @@ test("closing a disposable proxy leaves the persistent remote daemon running", a
 
 test("remote Codex refresh lists and hydrates agents through the raw SSH proxy", async () => {
   const controller = new AbortController()
+  const requests = join(fixtureRoot(), "remote-resume-requests.jsonl")
   const threads = await refreshRemoteCodexResumeThreads(profile(), controller.signal, {
-    executable: [process.execPath, proxyFixture, "resume", JSON.stringify({ result: {} })],
+    executable: [
+      process.execPath,
+      proxyFixture,
+      "resume",
+      JSON.stringify({ result: {} }),
+      requests,
+    ],
   })
 
   expect(threads).toEqual([

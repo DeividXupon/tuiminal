@@ -3,6 +3,7 @@ import type {
   RemoteCodexCompatibilityReport,
   RemoteCodexIncompatibilityReason,
 } from "../model/remote-codex"
+import { type BoundedCommandResult, runBoundedCommand } from "./bounded-command"
 import { resolveOpenCodeExecutable } from "./opencode-executable"
 import {
   compatibleRemoteOpenCode,
@@ -13,60 +14,14 @@ import {
 import { RemoteCodexCompatibilityError } from "./remote-codex-compatibility"
 import { remoteOpenCodeVersionCommand } from "./remote-opencode-connection"
 
-type CommandResult = { exitCode: number; stdout: string; stderr: string }
-
 type PreflightOptions = {
   timeoutMs?: number
   localVersionCommand?: readonly string[]
   remoteVersionCommand?: readonly string[]
 }
 
-async function readBoundedText(stream: ReadableStream<Uint8Array>, maximumBytes = 64 * 1024) {
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let output = ""
-  let remaining = maximumBytes
-  try {
-    while (true) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      if (remaining <= 0) continue
-      const value = chunk.value.subarray(0, remaining)
-      remaining -= value.byteLength
-      output += decoder.decode(value, { stream: true })
-    }
-    return output + decoder.decode()
-  } finally {
-    reader.releaseLock()
-  }
-}
-
-async function runVersionCommand(command: readonly string[], signal: AbortSignal) {
-  signal.throwIfAborted()
-  let child: ReturnType<typeof Bun.spawn>
-  try {
-    child = Bun.spawn([...command], { stdin: "ignore", stdout: "pipe", stderr: "pipe" })
-  } catch {
-    return { exitCode: 127, stdout: "", stderr: "" }
-  }
-  const stop = () => child.kill()
-  signal.addEventListener("abort", stop, { once: true })
-  try {
-    const [exitCode, stdout, stderr] = await Promise.all([
-      child.exited,
-      readBoundedText(child.stdout as ReadableStream<Uint8Array>),
-      readBoundedText(child.stderr as ReadableStream<Uint8Array>),
-    ])
-    signal.throwIfAborted()
-    return { exitCode, stdout, stderr }
-  } finally {
-    signal.removeEventListener("abort", stop)
-    if (child.exitCode === null) child.kill()
-  }
-}
-
 function identity(
-  result: CommandResult,
+  result: BoundedCommandResult,
   missing: RemoteCodexIncompatibilityReason,
   invalid: RemoteCodexIncompatibilityReason,
 ) {
@@ -83,7 +38,10 @@ function identity(
   }
 }
 
-function compatibilityReport(localResult: CommandResult, remoteResult: CommandResult) {
+function compatibilityReport(
+  localResult: BoundedCommandResult,
+  remoteResult: BoundedCommandResult,
+) {
   const local = identity(localResult, "localOpenCodeMissing", "localOpenCodeVersionInvalid")
   const remote = identity(remoteResult, "remoteOpenCodeMissing", "remoteOpenCodeVersionInvalid")
   const reason =
@@ -101,6 +59,41 @@ function compatibilityReport(localResult: CommandResult, remoteResult: CommandRe
   } satisfies RemoteCodexCompatibilityReport
 }
 
+function localCompatibilityReport(localResult: BoundedCommandResult) {
+  const local = identity(localResult, "localOpenCodeMissing", "localOpenCodeVersionInvalid")
+  return {
+    providerId: "opencode",
+    compatible: local.reason === null,
+    reason: local.reason,
+    localVersion: local.version,
+    remoteVersion: null,
+    daemonAvailable: true,
+    proxyAvailable: true,
+  } satisfies RemoteCodexCompatibilityReport
+}
+
+/** Validates the local OpenCode CLI before starting its owned server. */
+export async function preflightLocalOpenCode(
+  signal: AbortSignal,
+  options: Pick<PreflightOptions, "localVersionCommand" | "timeoutMs"> = {},
+) {
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? 10_000)
+  try {
+    const report = localCompatibilityReport(
+      await runBoundedCommand(
+        options.localVersionCommand ?? [resolveOpenCodeExecutable(), "--version"],
+        AbortSignal.any([signal, timeout]),
+      ),
+    )
+    if (!report.compatible) throw new RemoteCodexCompatibilityError(report)
+    return report
+  } catch (error) {
+    if (signal.aborted) signal.throwIfAborted()
+    if (timeout.aborted) throw new Error("A verificação do OpenCode excedeu o tempo limite.")
+    throw error
+  }
+}
+
 /** Validates the local OpenCode TUI and remote OpenCode server binary before retrying a launch. */
 export async function preflightRemoteOpenCode(
   profile: TerminalRemoteCodexProfile,
@@ -111,11 +104,11 @@ export async function preflightRemoteOpenCode(
   const boundedSignal = AbortSignal.any([signal, timeout])
   try {
     const [localResult, remoteResult] = await Promise.all([
-      runVersionCommand(
+      runBoundedCommand(
         options.localVersionCommand ?? [resolveOpenCodeExecutable(), "--version"],
         boundedSignal,
       ),
-      runVersionCommand(
+      runBoundedCommand(
         options.remoteVersionCommand ?? remoteOpenCodeVersionCommand(profile),
         boundedSignal,
       ),

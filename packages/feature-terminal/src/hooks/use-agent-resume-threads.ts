@@ -2,6 +2,10 @@ import { getUiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import type { AgentResumeThread } from "../model/agent-resume-thread"
 import {
+  claudeResumeThreadsSnapshot,
+  subscribeClaudeResumeThreads,
+} from "../model/claude-resume-threads"
+import {
   codexResumeThreadsSnapshot,
   subscribeCodexResumeThreads,
 } from "../model/codex-resume-threads"
@@ -9,6 +13,8 @@ import {
   openCodeResumeThreadsSnapshot,
   subscribeOpenCodeResumeThreads,
 } from "../model/opencode-resume-threads"
+import { refreshRemoteClaudeResumeThreads } from "../services/claude-background"
+import { refreshClaudeResumeThreads } from "../services/claude-resume-store"
 import {
   refreshCodexResumeThreads,
   refreshRemoteCodexResumeThreads,
@@ -35,15 +41,21 @@ export function useAgentResumeThreads(active: boolean) {
     openCodeResumeThreadsSnapshot,
     openCodeResumeThreadsSnapshot,
   )
+  const claude = useSyncExternalStore(
+    subscribeClaudeResumeThreads,
+    claudeResumeThreadsSnapshot,
+    claudeResumeThreadsSnapshot,
+  )
   const recentThreads = useMemo(
     () =>
       [
         ...codex.map((thread) => ({ ...thread, providerId: "codex" as const })),
+        ...claude.map((thread) => ({ ...thread, providerId: "claude" as const })),
         ...openCode.map((thread) => ({ ...thread, providerId: "opencode" as const })),
       ].sort(
         (left, right) => right.updatedAt - left.updatedAt || left.id.localeCompare(right.id),
       ) satisfies AgentResumeThread[],
-    [codex, openCode],
+    [claude, codex, openCode],
   )
   const refreshRemoteThreads = useCallback(() => {
     const settings = getUiSettings()
@@ -61,6 +73,8 @@ export function useAgentResumeThreads(active: boolean) {
       void refreshRemoteCodexResumeThreads(profile, controller.signal).catch(() => undefined)
     if (process.env.TUIMINAL_TERMINAL_OPENCODE_RESUME !== "0")
       void refreshRemoteOpenCodeResumeThreads(profile, controller.signal).catch(() => undefined)
+    if (process.env.TUIMINAL_TERMINAL_CLAUDE_RESUME !== "0")
+      void refreshRemoteClaudeResumeThreads(profile, controller.signal).catch(() => undefined)
   }, [])
   useEffect(() => {
     if (!active) return
@@ -73,6 +87,7 @@ export function useAgentResumeThreads(active: boolean) {
       void refreshOpenCodeResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, controller.signal).catch(
         () => undefined,
       )
+    if (process.env.TUIMINAL_TERMINAL_CLAUDE_RESUME !== "0") refreshClaudeResumeThreads()
     refreshRemoteThreads()
     return () => {
       controller.abort()

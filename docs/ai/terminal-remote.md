@@ -2,10 +2,7 @@
 
 Use for SSH alias discovery, readiness, remote launch/resume and transport.
 Contract: [Terminal remote setup and launch](../design/terminal.md#master-key-and-focus).
-Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts),
-[connection](../../packages/feature-terminal/src/services/remote-codex-connection.ts),
-[handshake](../../packages/feature-terminal/src/services/remote-codex-handshake.ts), and
-[OpenCode transport](../../packages/feature-terminal/src/services/remote-opencode-connection.ts).
+Code: [Terminal services](../../packages/feature-terminal/src/services/).
 
 ## SSH configuration
 
@@ -20,6 +17,11 @@ Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts
 - Test with one bounded, abortable `ssh` child, argv, batch mode, normal
   known_hosts verification and a constant marker. No `-i`, `-p`, synthesized
   user@host, shell interpolation, logged SSH output or app-server startup.
+- Automated SSH children override alias-owned remote commands, session/stdin
+  modes, local commands, connection masters and inherited forwards, then run
+  fixed scripts with `/bin/sh`. Tunnel launches first inspect `ssh -G` and fail
+  with an actionable error when the alias defines a dynamic, local or remote
+  forward; use a dedicated forwarding-free alias in that case.
 
 ## Readiness and launch
 
@@ -30,41 +32,32 @@ Code: [SSH discovery](../../packages/feature-terminal/src/services/ssh-config.ts
   rechecks only the failing barrier. Never type commands, install software, create
   keys or authenticate for the user. Readiness does not launch an agent.
 - Master Key `[N]` always creates a local shell. `[A]` always opens the project
-  selector; it can choose any discovered SSH alias without changing settings.
-  Scope recents and reads by origin. Use fixed, bounded, cancellable read-only
-  SSH directory queries; quote paths as data. Ignore stale results after origin
-  changes. `[P]` opens the focused `~/` autocomplete screen; query a parent only
-  after its path changes, cache listings, and keep `[Tab]` inside the input. Git
-  discovery stays bounded to the selected host. Validate directories and preserve
-  startup errors for retry. Browsing never launches an agent or copies a project.
-- Before the TUI, one cancellable preflight verifies the local Codex binary and
-  version, SSH authentication, the selected remote directory, remote Codex version
-  and `codex login status`, `app-server daemon` and `app-server proxy` capabilities, daemon startup and the
-  proxy's `initialize` response. For 0.x releases require matching major and minor;
-  for stable releases require matching major. Missing or invalid versions are
-  incompatible. Distinguish host/key/network/directory/capability/daemon/proxy/
-  protocol/timeout failures. A failed preflight never opens the TUI.
+  selector without changing settings. Scope recents, Git discovery and fixed,
+  bounded directory reads by origin; quote paths and ignore stale replies. `[P]`
+  opens cached `~/` autocomplete. Browsing never launches or copies a project.
+- Codex preflight verifies both CLIs, SSH/account/directory, daemon/proxy
+  capabilities, lifecycle JSON and `initialize`. The experimental transport
+  requires exact local CLI, remote CLI, daemon and initialized server versions.
+  Use separate bounded probe/daemon/proxy deadlines and preserve specific failure
+  reasons. A failed preflight never opens the TUI.
 - Start or reuse the persistent shared daemon with `codex app-server daemon start`,
-  then bridge the daemon's WebSocket bytes through a disposable `codex app-server
-  proxy` over `ssh -T` to a loopback WebSocket for the local official TUI. The proxy
-  targets the daemon's Unix control socket, so its stdio carries the HTTP Upgrade and
-  WebSocket frames, not the JSONL transport exposed by `app-server --stdio`. Pass
-  remote cwd with `-C`; expose no remote TCP listener or copied socket. Serialize and
-  bound frames, and drain stderr. Browsing and short-lived history/preflight requests
-  also close only their proxies.
+  then carry its Unix-socket WebSocket through a disposable `app-server proxy`
+  over `ssh -T` to the local TUI. This is HTTP Upgrade/WebSocket, not stdio JSONL.
+  Pass remote cwd with `-C`, expose no remote listener, and bound frames/output.
 - Tuiminal owns the local TUI, loopback relay and the SSH proxy process for a remote
   pane. Closing or probing stops only those resources; it never invokes daemon stop.
   The persistent daemon and its active turns belong to the remote Codex installation.
-- OpenCode runs owned `opencode serve` on remote loopback behind SSH `-L`, with distinct
-  endpoints for self-host aliases. Pass its password over SSH stdin, authenticate the
-  observer/TUI, require matching local/remote v2 versions, and stop all owned resources
-  together. Do not pass a remote-only cwd as the v2 local TUI's positional directory;
-  let the remote server cwd remain authoritative.
-- A missing capability or incompatible version opens a localized modal. `[Esc]`
-  returns to the preserved project/resume selection. `[Enter]` opens two terminals in
-  one split, local `~/` and remote SSH `~/`, with versions and the provider's manual
-  update/install commands. Revalidation keeps the guide on failure; success closes
-  only its terminals and retries the exact launch. See the
+- Remote OpenCode reuses a version/cwd-scoped loopback server whose PID, process
+  identity, remote-selected port and password use private state and a recoverable
+  lock. Retry one stale/unhealthy registration. App exit detaches clients; pane
+  close interrupts its turn. Require exact v2 versions and no local remote-cwd argv.
+- Remote Claude Code 2.1.285+ creates or attaches an official background UUID. App exit
+  detaches its TUI/observer; pane close runs `claude stop`. Workers use hook-free
+  settings and shared five-second `claude agents --json --all` polling. Older
+  versions use pane-owned foreground hooks/`ssh -R`. Never read `~/.claude`.
+- A missing provider CLI, capability or incompatible version opens a localized modal.
+  `[Esc]` preserves intent; `[Enter]` opens manual local/SSH update terminals.
+  Revalidation retains failures or closes only those terminals and retries. See the
   [Codex app-server](https://learn.chatgpt.com/docs/app-server) and
   [OpenCode CLI](https://opencode.ai/v2/docs/cli/commands/) references.
 - Query local and active-remote recents independently and merge without erasing either

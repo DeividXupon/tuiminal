@@ -195,6 +195,13 @@ describe("Free Terminal presentation", () => {
       active: true,
       bright: true,
     })
+    for (const activity of ["reading", "searching"] as const)
+      expect(codexActivityIndicators("working", activity, 0)).toContainEqual({
+        key: "tool",
+        marker: "●",
+        active: true,
+        bright: true,
+      })
     expect(codexActivityIndicators("working", "writing", 0)).toContainEqual({
       key: "text",
       marker: "txt",

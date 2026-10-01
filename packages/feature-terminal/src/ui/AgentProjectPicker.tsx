@@ -14,7 +14,7 @@ import {
   type DiscoveredAgentProjects,
   discoverAgentGitProjects,
 } from "../services/agent-git-projects"
-import { projectName } from "../services/agent-project-recents"
+import { projectName } from "../model/project-name"
 import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
 import { AgentFolderBrowser } from "./AgentFolderBrowser"
 import { TerminalInlineButton } from "./TerminalShortcut"

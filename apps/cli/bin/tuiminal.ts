@@ -17,7 +17,9 @@ if (args[0] === "--internal-sqlite-worker") {
   await (await import("../src/features/loader")).runInstalledSqliteWorker()
   // The worker stays alive through its IPC message listener.
 } else if (args[0] === "--internal-terminal-project-sync-worker") {
-  await (await import("../src/features/loader")).runInstalledTerminalProjectSyncWorker()
+  await (await import("../src/features/loader")).runInstalledTerminalProjectSyncWorker(
+    args.slice(1),
+  )
   // The worker stays alive through its IPC message listener.
 } else if (args[0] === "--internal-terminal-sidebar") {
   const { initializeUiSettings } = await import("@xupon/tuiminal-core/settings/theme")

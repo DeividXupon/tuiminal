@@ -55,6 +55,42 @@ function validHash(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
 }
 
+export function parseFeatureArtifact(value: unknown, version: string): FeatureArtifact {
+  const artifact = value as FeatureArtifact | null
+  if (
+    !artifact ||
+    !isFeatureId(artifact.id) ||
+    artifact.version !== version ||
+    artifact.filename !== `tuiminal-${version}-${artifact.id}.json.gz` ||
+    !validHash(artifact.sha256) ||
+    !Number.isSafeInteger(artifact.size) ||
+    artifact.size <= 0 ||
+    artifact.size > MAX_FEATURE_DOWNLOAD ||
+    !Array.isArray(artifact.files)
+  )
+    throw new FeatureInstallError("catalog", "Invalid official feature artifact")
+  const expected = featureFileNames(artifact.id)
+  const names = new Set<string>()
+  let expanded = 0
+  for (const file of artifact.files) {
+    if (
+      !file ||
+      !expected.includes(file.name) ||
+      names.has(file.name) ||
+      !Number.isSafeInteger(file.size) ||
+      file.size <= 0 ||
+      !validHash(file.sha256)
+    )
+      throw new FeatureInstallError("catalog", "Invalid official feature file")
+    names.add(file.name)
+    expanded += file.size
+  }
+  if (names.size !== expected.length || expanded > MAX_FEATURE_EXPANDED / 2) {
+    throw new FeatureInstallError("catalog", "Incomplete official feature artifact")
+  }
+  return artifact
+}
+
 export function parseFeatureCatalog(value: unknown, version: string): FeatureCatalog {
   const catalog = value as Partial<FeatureCatalog> | null
   if (
@@ -67,39 +103,10 @@ export function parseFeatureCatalog(value: unknown, version: string): FeatureCat
   )
     throw new FeatureInstallError("catalog", "Invalid official feature catalog")
   const ids = new Set<FeatureId>()
-  for (const artifact of catalog.artifacts) {
-    if (
-      !artifact ||
-      !isFeatureId(artifact.id) ||
-      ids.has(artifact.id) ||
-      artifact.version !== version ||
-      artifact.filename !== `tuiminal-${version}-${artifact.id}.json.gz` ||
-      !validHash(artifact.sha256) ||
-      !Number.isSafeInteger(artifact.size) ||
-      artifact.size <= 0 ||
-      artifact.size > MAX_FEATURE_DOWNLOAD ||
-      !Array.isArray(artifact.files)
-    )
+  for (const value of catalog.artifacts) {
+    const artifact = parseFeatureArtifact(value, version)
+    if (ids.has(artifact.id))
       throw new FeatureInstallError("catalog", "Invalid official feature artifact")
-    const expected = featureFileNames(artifact.id)
-    const names = new Set<string>()
-    let expanded = 0
-    for (const file of artifact.files) {
-      if (
-        !file ||
-        !expected.includes(file.name) ||
-        names.has(file.name) ||
-        !Number.isSafeInteger(file.size) ||
-        file.size <= 0 ||
-        !validHash(file.sha256)
-      )
-        throw new FeatureInstallError("catalog", "Invalid official feature file")
-      names.add(file.name)
-      expanded += file.size
-    }
-    if (names.size !== expected.length || expanded > MAX_FEATURE_EXPANDED / 2) {
-      throw new FeatureInstallError("catalog", "Incomplete official feature artifact")
-    }
     ids.add(artifact.id)
   }
   return catalog as FeatureCatalog
