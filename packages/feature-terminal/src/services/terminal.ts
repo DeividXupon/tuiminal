@@ -9,8 +9,8 @@ import {
 } from "@xupon/tuiminal-core/process/owned-process"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import type { AgentProviderId } from "../model/agent-provider"
+import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { remoteInteractiveSshCommand } from "./remote-codex-connection"
@@ -39,6 +39,10 @@ export type FreeTerminalProcessHandle = {
   stop: () => Promise<void>
   /** Explicitly close the backing persistent session; stop only detaches clients. */
   close?: () => Promise<void>
+  /** Retire a launch that never became current without closing reused persistent state. */
+  cancelLaunch?: () => Promise<void>
+  /** Keep `close` reachable after a disposable attachment exits. */
+  retainCloseAfterExit?: boolean
 }
 
 type BunTerminalLike = {

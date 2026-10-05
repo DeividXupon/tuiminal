@@ -47,7 +47,11 @@ import {
   openCodeVersion,
   readOpenCodeJsonResponse,
 } from "../packages/feature-terminal/src/services/opencode-protocol"
-import { interruptOpenCodeSession } from "../packages/feature-terminal/src/services/opencode-server-connection"
+import {
+  interruptOpenCodeSession,
+  localOpenCodeServerSupervisorCommand,
+  retireCreatedOpenCodeServer,
+} from "../packages/feature-terminal/src/services/opencode-server-connection"
 import { OpenCodeSessionProjection } from "../packages/feature-terminal/src/services/opencode-session-projection"
 import { createOpenCodeTuiControl } from "../packages/feature-terminal/src/services/opencode-tui-control"
 import {
@@ -783,6 +787,67 @@ test("explicit OpenCode stop interrupts only the selected session", async () => 
   expect(requests[0]?.url.search).toBe("")
   expect(requests[1]?.url.searchParams.get("directory")).toBe("/workspace/project")
 })
+
+test("temporary OpenCode connections retire only servers they created", async () => {
+  const calls: string[] = []
+  const connection = (created: boolean) => ({
+    created,
+    stop: async () => {
+      calls.push("stop")
+    },
+    close: async () => {
+      calls.push("close")
+    },
+  })
+
+  await retireCreatedOpenCodeServer(connection(true))
+  await retireCreatedOpenCodeServer(connection(false))
+
+  expect(calls).toEqual(["close", "stop"])
+})
+
+test.skipIf(process.platform === "win32")(
+  "local OpenCode supervisor retires its server when the owner pipe closes",
+  async () => {
+    const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-supervisor-")
+    const executable = join(root, "opencode")
+    const pidFile = join(root, "pid")
+    writeFileSync(
+      executable,
+      `#!/bin/sh\nprintf '%s\\n' "$$" > "$PID_FILE"\ntrap 'exit 0' TERM INT\nwhile :; do sleep 1; done\n`,
+      { mode: 0o700 },
+    )
+    let serverPid = 0
+    const supervisor = Bun.spawn(
+      ["/bin/sh", "-c", localOpenCodeServerSupervisorCommand(executable, 45_123)],
+      {
+        env: { ...process.env, PID_FILE: pidFile },
+        stdin: "pipe",
+        stdout: "ignore",
+        stderr: "pipe",
+      },
+    )
+    try {
+      for (let attempt = 0; attempt < 100 && !existsSync(pidFile); attempt++) await Bun.sleep(20)
+      expect(existsSync(pidFile)).toBe(true)
+      serverPid = Number(readFileSync(pidFile, "utf8").trim())
+      expect(serverPid).toBeGreaterThan(0)
+      ;(supervisor.stdin as { end(): void }).end()
+      expect(await supervisor.exited).toBe(0)
+      expect(() => process.kill(serverPid, 0)).toThrow()
+      serverPid = 0
+    } finally {
+      if (supervisor.exitCode === null) supervisor.kill()
+      if (serverPid)
+        try {
+          process.kill(serverPid, "SIGKILL")
+        } catch {
+          // The owned fake server already exited.
+        }
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+)
 
 test("OpenCode protocol detection preserves the legacy JSON health contract", async () => {
   const fetcher = (async (input: string | URL | Request) => {

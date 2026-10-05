@@ -4,6 +4,7 @@ import type { RemoteCodexTarget } from "../model/sessions"
 import {
   type ClaudeBackgroundLaunch,
   ensureRemoteClaudeBackgroundSession,
+  retireCreatedRemoteClaudeBackgroundSession,
   startRemoteClaudeBackgroundObserver,
   stopRemoteClaudeBackgroundSession,
 } from "./claude-background"
@@ -79,25 +80,65 @@ function observeRemoteClaudeBackground(
     : null
 }
 
-function remoteClaudeClose(
+export function remoteClaudeClose(
   remote: RemoteCodexTarget | undefined,
   session: ClaudeBackgroundLaunch | null,
   owned: FreeTerminalProcessHandle,
   cleanup: () => Promise<void>,
-) {
+  stopSession: (
+    target: RemoteCodexTarget,
+    sessionId: string,
+    knownShortId?: string,
+  ) => Promise<void> = stopRemoteClaudeBackgroundSession,
+): Pick<FreeTerminalProcessHandle, "cancelLaunch" | "close" | "retainCloseAfterExit"> {
   if (!remote || !session) return {}
-  return {
-    async close() {
+  let detaching: Promise<void> | null = null
+  let closing: Promise<void> | null = null
+  const detach = () => {
+    if (detaching) return detaching
+    detaching = (async () => {
       try {
-        try {
-          await owned.stop()
-        } finally {
-          await cleanup()
-        }
+        await owned.stop()
       } finally {
-        await stopRemoteClaudeBackgroundSession(remote, session.sessionId, session.shortId)
+        await cleanup()
       }
-    },
+    })()
+    return detaching
+  }
+  const close = () => {
+    if (closing) return closing
+    closing = detach()
+      .finally(() => stopSession(remote, session.sessionId, session.shortId))
+      .catch((error: unknown) => {
+        closing = null
+        throw error
+      })
+    return closing
+  }
+  return {
+    retainCloseAfterExit: true,
+    cancelLaunch: session.created ? close : detach,
+    close,
+  }
+}
+
+export async function retireFailedClaudeTerminalLaunch(
+  terminal: FreeTerminalProcessHandle | null,
+  cleanup: () => Promise<void>,
+  remote: RemoteCodexTarget | undefined,
+  backgroundSession: ClaudeBackgroundLaunch | null,
+  stopSession: (
+    target: RemoteCodexTarget,
+    sessionId: string,
+    knownShortId?: string,
+  ) => Promise<void> = stopRemoteClaudeBackgroundSession,
+) {
+  await terminal?.stop().catch(() => undefined)
+  try {
+    await cleanup()
+  } finally {
+    if (remote && backgroundSession)
+      await retireCreatedRemoteClaudeBackgroundSession(remote, backgroundSession, stopSession)
   }
 }
 
@@ -224,6 +265,7 @@ export async function startClaudeHooksTerminal(
   let receiver: ReturnType<typeof startClaudeHookServer> | null = null
   let tunnel: Tunnel | null = null
   let backgroundObserver: ReturnType<typeof startRemoteClaudeBackgroundObserver> | null = null
+  let backgroundSession: ClaudeBackgroundLaunch | null = null
   let terminal: FreeTerminalProcessHandle | null = null
   let cleanupPromise: Promise<void> | null = null
   const cleanup = () => {
@@ -245,7 +287,7 @@ export async function startClaudeHooksTerminal(
   const unregister = registerTerminalResource({ stop: cleanup })
   try {
     const backgroundSettings = claudeBackgroundSettings()
-    const backgroundSession = await prepareRemoteClaudeBackground(
+    backgroundSession = await prepareRemoteClaudeBackground(
       remote,
       backgroundCapable,
       requestedSessionId,
@@ -253,6 +295,7 @@ export async function startClaudeHooksTerminal(
       Boolean(options.resumeThreadId),
       signal,
     )
+    signal.throwIfAborted()
     const persistentRemote = Boolean(backgroundSession)
     let settings = backgroundSettings
     if (!persistentRemote) {
@@ -267,6 +310,7 @@ export async function startClaudeHooksTerminal(
       settings = claudeHookSettings(hookUrl, { messageDisplay })
     }
     backgroundObserver = observeRemoteClaudeBackground(remote, backgroundSession, events, signal)
+    signal.throwIfAborted()
     const command = claudeTerminalCommand(
       executable,
       remote,
@@ -308,8 +352,7 @@ export async function startClaudeHooksTerminal(
       ...remoteClaudeClose(remote, backgroundSession, owned, cleanup),
     }
   } catch (error) {
-    await terminal?.stop().catch(() => undefined)
-    await cleanup()
+    await retireFailedClaudeTerminalLaunch(terminal, cleanup, remote, backgroundSession)
     throw error
   }
 }

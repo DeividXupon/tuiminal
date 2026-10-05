@@ -31,6 +31,12 @@ export type StartedOpenCodeServer = {
   close: () => Promise<void>
 }
 
+export function retireCreatedOpenCodeServer(
+  server: Pick<StartedOpenCodeServer, "created" | "stop" | "close">,
+) {
+  return server.created ? server.close() : server.stop()
+}
+
 async function waitForOpenCodeServer(
   baseUrl: string,
   process: Pick<ServerProcess, "exitCode">,
@@ -60,17 +66,46 @@ async function waitForOpenCodeServer(
   throw new Error("O servidor do OpenCode não ficou pronto para a interface.")
 }
 
+function shellQuote(value: string) {
+  return `'${value.replaceAll("'", `'"'"'`)}'`
+}
+
+export function localOpenCodeServerSupervisorCommand(executable: string, localPort: number) {
+  const server = `${shellQuote(executable)} serve --hostname 127.0.0.1 --port ${localPort}`
+  return [
+    "server_pid=",
+    "watcher_pid=",
+    'cleanup() { trap - EXIT HUP INT TERM; if [ -n "$watcher_pid" ]; then kill "$watcher_pid" 2>/dev/null || true; wait "$watcher_pid" 2>/dev/null || true; fi; if [ -n "$server_pid" ]; then kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; fi; }',
+    "trap cleanup EXIT HUP INT TERM",
+    "exec 3<&0",
+    `${server} </dev/null &`,
+    "server_pid=$!",
+    '(IFS= read -r _ <&3 || true; kill "$server_pid" 2>/dev/null || true) &',
+    "watcher_pid=$!",
+    "exec 3<&-",
+    'server_status=0; wait "$server_pid" || server_status=$?',
+    "server_pid=",
+    'kill "$watcher_pid" 2>/dev/null || true',
+    'wait "$watcher_pid" 2>/dev/null || true',
+    "watcher_pid=",
+    'exit "$server_status"',
+  ].join("\n")
+}
+
 function spawnLocalOpenCodeServer(
   localPort: number,
   workingDirectory: string,
   credentials: OpenCodeServerCredentials,
 ) {
+  const executable = resolveOpenCodeExecutable()
   return Bun.spawn(
-    [resolveOpenCodeExecutable(), "serve", "--hostname", "127.0.0.1", "--port", String(localPort)],
+    process.platform === "win32"
+      ? [executable, "serve", "--hostname", "127.0.0.1", "--port", String(localPort)]
+      : ["/bin/sh", "-c", localOpenCodeServerSupervisorCommand(executable, localPort)],
     {
       cwd: workingDirectory,
       env: openCodeServerEnvironment(process.env, credentials),
-      stdin: "ignore",
+      stdin: process.platform === "win32" ? "ignore" : "pipe",
       stdout: "ignore",
       stderr: "ignore",
     },

@@ -107,7 +107,11 @@ function finishTerminalExit(
   context: LaunchContext,
 ) {
   active.ended = true
-  if (context.handles.current.get(id) === active.handle) context.handles.current.delete(id)
+  if (
+    context.handles.current.get(id) === active.handle &&
+    !(active.handle?.retainCloseAfterExit && active.handle.close)
+  )
+    context.handles.current.delete(id)
   if (!launch.isCurrent()) return
   output.dispose()
   context.outputs.current.delete(id)
@@ -137,10 +141,13 @@ async function acceptStartedTerminal(
   context: LaunchContext,
 ) {
   if (!isCurrent()) {
-    await (handle.close?.() ?? handle.stop())
+    await (handle.cancelLaunch?.() ?? handle.close?.() ?? handle.stop())
     return
   }
-  if (active.ended) return
+  if (active.ended) {
+    if (handle.retainCloseAfterExit && handle.close) context.handles.current.set(id, handle)
+    return
+  }
   context.handles.current.set(id, handle)
   const latestSize = context.sizes.current.get(id)
   if (latestSize) handle.resize(latestSize.columns, latestSize.rows)

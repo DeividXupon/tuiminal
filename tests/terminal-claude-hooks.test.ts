@@ -27,6 +27,10 @@ import {
   rememberClaudeResumeThread,
 } from "../packages/feature-terminal/src/services/claude-resume-store"
 import {
+  remoteClaudeClose,
+  retireFailedClaudeTerminalLaunch,
+} from "../packages/feature-terminal/src/services/claude-terminal"
+import {
   claudeArguments,
   claudeVersionAtLeast,
   parseClaudeVersion,
@@ -490,11 +494,188 @@ test("Claude background dispatch resolves the official short id through fake rem
     },
   )
 
-  expect(launch).toEqual({ sessionId: SESSION_1, shortId: "7c5dcf5d" })
+  expect(launch).toEqual({ sessionId: SESSION_1, shortId: "7c5dcf5d", created: true })
   expect(commands).toHaveLength(1)
   expect(commands[0]?.at(-1)).toContain("--session-id")
   expect(commands[0]?.at(-1)).toContain(SESSION_1)
   expect(commands[0]?.at(-1)).toContain("--bg")
+})
+
+test("Claude background dispatch reports whether it reused an official session", async () => {
+  const remote = {
+    profile: { id: "work", name: "Work", host: "work-alias" },
+    workingDirectory: "/srv/project",
+  }
+  let started = false
+  const launch = await ensureRemoteClaudeBackgroundSession(
+    remote,
+    SESSION_1,
+    "{}",
+    true,
+    new AbortController().signal,
+    {
+      async readSessions() {
+        return [
+          {
+            id: "7c5dcf5d",
+            sessionId: SESSION_1,
+            cwd: "/srv/project",
+            name: "Fix auth",
+            startedAt: 1_700_000_000_000,
+            state: "working",
+            status: "busy",
+            waitingFor: "",
+          },
+        ]
+      },
+      async runCommand() {
+        started = true
+        return { exitCode: 0, stdout: "", stderr: "" }
+      },
+    },
+  )
+
+  expect(launch).toEqual({ sessionId: SESSION_1, shortId: "7c5dcf5d", created: false })
+  expect(started).toBe(false)
+})
+
+test("Claude background dispatch retires a session created during cancellation", async () => {
+  const remote = {
+    profile: { id: "work", name: "Work", host: "work-alias" },
+    workingDirectory: "/srv/project",
+  }
+  const controller = new AbortController()
+  const stopped: Array<{ sessionId: string; shortId: string | undefined }> = []
+  let reads = 0
+  const launch = ensureRemoteClaudeBackgroundSession(
+    remote,
+    SESSION_2,
+    "{}",
+    false,
+    controller.signal,
+    {
+      async readSessions(_profile, signal) {
+        reads += 1
+        if (reads === 1) return []
+        expect(signal.aborted).toBe(false)
+        return [
+          {
+            id: "created-after-cancel",
+            sessionId: SESSION_2,
+            cwd: "/srv/project",
+            name: "Created during cancellation",
+            startedAt: 1_700_000_000_001,
+            state: "working",
+            status: "busy",
+            waitingFor: "",
+          },
+        ]
+      },
+      async runCommand(_command, signal) {
+        controller.abort()
+        signal.throwIfAborted()
+        return { exitCode: 0, stdout: "", stderr: "" }
+      },
+      async stopSession(_remote, sessionId, shortId) {
+        stopped.push({ sessionId, shortId })
+      },
+    },
+  )
+
+  await expect(launch).rejects.toMatchObject({ name: "AbortError" })
+  expect(reads).toBe(2)
+  expect(stopped).toEqual([{ sessionId: SESSION_2, shortId: "created-after-cancel" }])
+})
+
+test("failed Claude attachments retire only the background session they created", async () => {
+  const remote = {
+    profile: { id: "work", name: "Work", host: "work-alias" },
+    workingDirectory: "/srv/project",
+  }
+  const calls: string[] = []
+  const terminal = {
+    pid: 1,
+    write() {},
+    resize() {},
+    async stop() {
+      calls.push("terminal")
+    },
+  }
+  const cleanup = async () => {
+    calls.push("cleanup")
+  }
+  const stopSession = async (_remote: typeof remote, _sessionId: string, shortId?: string) => {
+    if (shortId) calls.push(shortId)
+  }
+
+  await retireFailedClaudeTerminalLaunch(
+    terminal,
+    cleanup,
+    remote,
+    { sessionId: SESSION_1, shortId: "created", created: true },
+    stopSession,
+  )
+  await retireFailedClaudeTerminalLaunch(
+    terminal,
+    cleanup,
+    remote,
+    { sessionId: SESSION_2, shortId: "reused", created: false },
+    stopSession,
+  )
+
+  expect(calls).toEqual(["terminal", "cleanup", "created", "terminal", "cleanup"])
+})
+
+test("remote Claude keeps one idempotent close lease after its attachment exits", async () => {
+  const remote = {
+    profile: { id: "work", name: "Work", host: "work-alias" },
+    workingDirectory: "/srv/project",
+  }
+  const calls: string[] = []
+  const lease = remoteClaudeClose(
+    remote,
+    { sessionId: SESSION_1, shortId: "attached", created: false },
+    {
+      pid: 1,
+      write() {},
+      resize() {},
+      async stop() {
+        calls.push("attachment")
+      },
+    },
+    async () => {
+      calls.push("observer")
+    },
+    async (_remote, _sessionId, shortId) => {
+      if (shortId) calls.push(shortId)
+    },
+  )
+
+  expect(lease.retainCloseAfterExit).toBe(true)
+  expect(lease.cancelLaunch).toBeDefined()
+  expect(lease.close).toBeDefined()
+  await lease.cancelLaunch?.()
+  expect(calls).toEqual(["attachment", "observer"])
+  await Promise.all([lease.close?.(), lease.close?.()])
+  expect(calls).toEqual(["attachment", "observer", "attached"])
+
+  const createdStops: string[] = []
+  const createdLease = remoteClaudeClose(
+    remote,
+    { sessionId: SESSION_2, shortId: "created", created: true },
+    {
+      pid: 2,
+      write() {},
+      resize() {},
+      async stop() {},
+    },
+    async () => undefined,
+    async (_remote, _sessionId, shortId) => {
+      if (shortId) createdStops.push(shortId)
+    },
+  )
+  await createdLease.cancelLaunch?.()
+  expect(createdStops).toEqual(["created"])
 })
 
 test("Claude background dispatch reports when the remote CLI rejects agent view", async () => {
