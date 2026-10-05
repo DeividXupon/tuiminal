@@ -1,5 +1,5 @@
 import type { AgentProviderId } from "./agent-provider"
-import type { AgentResumeThread } from "./agent-resume-thread"
+import type { AgentResumePaginationState, AgentResumeThread } from "./agent-resume-thread"
 import type { TerminalFocusTargetKey } from "./focus-selection"
 import type { TerminalFolder, TerminalSession } from "./sessions"
 
@@ -21,7 +21,8 @@ export type PinnedTerminalTarget = {
 export type PinnedTerminalSelection =
   | PinnedTerminalTarget
   | { sessionId: string }
-  | { resumeThreadId: string; providerId?: AgentProviderId }
+  | { resumeThreadId: string; providerId?: AgentProviderId; remoteProfileId?: string }
+  | { loadMoreResumeProvider: AgentProviderId }
   | { folderId: string }
   | { focusTarget: TerminalFocusTargetKey }
   | { action: string }
@@ -36,6 +37,8 @@ export type PinnedTerminalSidebarView = {
   height: number
   masterKey: PinnedTerminalMasterKey
   recentThreads: readonly AgentResumeThread[]
+  activeRemoteProfileId?: string | undefined
+  resumePagination?: AgentResumePaginationState | undefined
   masterKeyActive?: boolean
   focusSelection?:
     | {
@@ -49,6 +52,7 @@ export type PinnedTerminalSidebarView = {
   onActions: () => void
   onNew: () => void
   onCommand: () => void
+  onLoadMoreResume?: ((providerId: AgentProviderId) => void) | undefined
 }
 
 export type PinnedTerminalSidebarReplica = Pick<
@@ -60,6 +64,8 @@ export type PinnedTerminalSidebarReplica = Pick<
   | "activeSessionId"
   | "masterKey"
   | "recentThreads"
+  | "activeRemoteProfileId"
+  | "resumePagination"
 > & {
   theme: Record<string, string>
   language: string
@@ -167,6 +173,8 @@ export function terminalSidebarReplica(
     activeSessionId: view.activeSessionId,
     masterKey: view.masterKey,
     recentThreads: view.recentThreads,
+    activeRemoteProfileId: view.activeRemoteProfileId,
+    resumePagination: view.resumePagination,
     focusSelectionTarget: view.focusSelection?.selectedTarget ?? null,
     theme,
     language,

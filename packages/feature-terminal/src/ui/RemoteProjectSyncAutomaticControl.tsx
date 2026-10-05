@@ -11,10 +11,10 @@ export function RemoteProjectSyncAutomaticControl({
 }) {
   return (
     <box
+      id="terminal-project-sync-automatic-control"
       style={{
         height: 3,
         flexShrink: 0,
-        backgroundColor: COLORS.panel,
       }}
     >
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
@@ -33,7 +33,7 @@ export function RemoteProjectSyncAutomaticControl({
             : "Sincroniza após cada resposta concluída.",
         )}
         wrapMode="word"
-        style={{ height: 2, flexShrink: 0, fg: automatic ? COLORS.warning : COLORS.muted }}
+        style={{ height: 2, flexShrink: 0, fg: COLORS.muted }}
       />
     </box>
   )

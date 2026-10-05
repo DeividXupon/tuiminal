@@ -1,7 +1,13 @@
 import { statSync } from "node:fs"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import {
+  AGENT_RESUME_PAGE_SIZE,
+  AGENT_RESUME_SOURCE_LIMIT,
+  type AgentResumePage,
+} from "../model/agent-resume-thread"
+import {
   mergeOpenCodeResumeThreads,
+  openCodeResumeThreadsSnapshot,
   upsertOpenCodeResumeThread,
 } from "../model/opencode-resume-threads"
 import type { RemoteCodexTarget } from "../model/sessions"
@@ -16,6 +22,7 @@ import {
 } from "./opencode-protocol"
 import {
   interruptOpenCodeSession,
+  retireCreatedOpenCodeServer,
   startOpenCodeServerConnection,
 } from "./opencode-server-connection"
 import { listOpenCodeResumeSessions } from "./opencode-session-list"
@@ -207,6 +214,8 @@ async function refreshOpenCodeThreadsFromServer(
   authorization: string | undefined,
   remote?: { id: string; name: string },
   listedSessions?: Awaited<ReturnType<typeof listOpenCodeSessions>>,
+  maximum = AGENT_RESUME_PAGE_SIZE,
+  hydrateIds?: ReadonlySet<string>,
 ) {
   const sessions =
     listedSessions ??
@@ -217,11 +226,22 @@ async function refreshOpenCodeThreadsFromServer(
       protocol,
       authorization,
     ))
-  const threads = openCodeResumeThreads(sessions, remote)
+  const threads = openCodeResumeThreads(sessions, remote, maximum)
+  const previous = new Map(
+    openCodeResumeThreadsSnapshot()
+      .filter((thread) => thread.remoteProfileId === remote?.id)
+      .map((thread) => [thread.id, thread]),
+  )
+  const summaries = threads.map((thread) => ({
+    ...thread,
+    lastResponse: previous.get(thread.id)?.lastResponse ?? thread.lastResponse,
+  }))
+  mergeOpenCodeResumeThreads(summaries, remote?.id)
   const hydrated = []
-  for (let offset = 0; offset < threads.length; offset += 6) {
+  const pending = hydrateIds ? summaries.filter((thread) => hydrateIds.has(thread.id)) : summaries
+  for (let offset = 0; offset < pending.length; offset += 6) {
     const batch = await Promise.all(
-      threads.slice(offset, offset + 6).map(async (thread) => {
+      pending.slice(offset, offset + 6).map(async (thread) => {
         let lastResponse = ""
         try {
           lastResponse = openCodeLastResponse(
@@ -241,40 +261,92 @@ async function refreshOpenCodeThreadsFromServer(
       }),
     )
     hydrated.push(...batch)
+    mergeOpenCodeResumeThreads(batch, remote?.id)
   }
-  mergeOpenCodeResumeThreads(hydrated, remote?.id)
-  return hydrated
+  const hydratedById = new Map(hydrated.map((thread) => [thread.id, thread]))
+  return summaries.map((thread) => hydratedById.get(thread.id) ?? thread)
 }
 
 async function withTemporaryOpenCodeServer(
   directory: string,
   signal: AbortSignal,
   remote?: RemoteCodexTarget,
-) {
-  const listedSessions = await listOpenCodeResumeSessions(directory, signal, remote).catch(
+): Promise<AgentResumePage> {
+  const maximum = AGENT_RESUME_PAGE_SIZE
+  return withTemporaryOpenCodeServerPage(directory, signal, remote, maximum)
+}
+
+async function withTemporaryOpenCodeServerPage(
+  directory: string,
+  signal: AbortSignal,
+  remote: RemoteCodexTarget | undefined,
+  requestedMaximum: number,
+): Promise<AgentResumePage> {
+  const maximum = Math.max(1, Math.min(AGENT_RESUME_SOURCE_LIMIT, Math.floor(requestedMaximum)))
+  const previousIds = new Set(
+    openCodeResumeThreadsSnapshot()
+      .filter((thread) => thread.remoteProfileId === remote?.profile.id)
+      .map((thread) => thread.id),
+  )
+  const listPromise = listOpenCodeResumeSessions(directory, signal, remote, maximum + 1).catch(
     () => undefined,
   )
-  const compatibility = remote
-    ? await preflightRemoteOpenCode(remote.profile, signal)
-    : await preflightLocalOpenCode(signal)
+  const preflightController = new AbortController()
+  const preflightSignal = AbortSignal.any([signal, preflightController.signal])
+  const compatibilityPromise = remote
+    ? preflightRemoteOpenCode(remote.profile, preflightSignal)
+    : preflightLocalOpenCode(preflightSignal)
+  void compatibilityPromise.catch(() => undefined)
+  const listedSessions = await listPromise
+  const boundedSessions = listedSessions?.slice(0, maximum)
+  const remoteSource = remote ? { id: remote.profile.id, name: remote.profile.name } : undefined
+  const listedThreads = boundedSessions
+    ? openCodeResumeThreads(boundedSessions, remoteSource, maximum).map((thread) => {
+        const previous = openCodeResumeThreadsSnapshot().find(
+          (candidate) =>
+            candidate.id === thread.id && candidate.remoteProfileId === thread.remoteProfileId,
+        )
+        return { ...thread, lastResponse: previous?.lastResponse ?? "" }
+      })
+    : []
+  if (boundedSessions) mergeOpenCodeResumeThreads(listedThreads, remote?.profile.id)
+  const hydrateIds = new Set(
+    listedThreads.filter((thread) => !previousIds.has(thread.id)).map((thread) => thread.id),
+  )
+  if (boundedSessions && hydrateIds.size === 0) {
+    preflightController.abort()
+    return {
+      threads: listedThreads,
+      nextCursor: null,
+      hasMore: (listedSessions?.length ?? 0) > maximum,
+    }
+  }
+  const compatibility = await compatibilityPromise
   const server = await startOpenCodeServerConnection(
     directory,
     remote,
     signal,
     compatibility.remoteVersion ?? "",
   )
-  const stop = () => server.stop()
+  const stop = () => retireCreatedOpenCodeServer(server)
   const unregister = registerTerminalResource({ stop })
   try {
-    return await refreshOpenCodeThreadsFromServer(
+    const threads = await refreshOpenCodeThreadsFromServer(
       server.baseUrl,
       directory,
       signal,
       server.protocol,
       server.authorization,
       remote ? { id: remote.profile.id, name: remote.profile.name } : undefined,
-      server.protocol === "v2" ? undefined : listedSessions,
+      boundedSessions,
+      maximum,
+      boundedSessions ? hydrateIds : undefined,
     )
+    return {
+      threads,
+      nextCursor: null,
+      hasMore: listedSessions ? listedSessions.length > maximum : threads.length >= maximum,
+    }
   } finally {
     try {
       await stop()
@@ -284,14 +356,30 @@ async function withTemporaryOpenCodeServer(
   }
 }
 
-export function refreshOpenCodeResumeThreads(directory: string, signal: AbortSignal) {
-  return withTemporaryOpenCodeServer(directory, signal)
+export function loadOpenCodeResumeThreadsPage(
+  directory: string,
+  signal: AbortSignal,
+  maximum = AGENT_RESUME_PAGE_SIZE,
+) {
+  return withTemporaryOpenCodeServerPage(directory, signal, undefined, maximum)
 }
 
-export function refreshRemoteOpenCodeResumeThreads(
+export async function refreshOpenCodeResumeThreads(directory: string, signal: AbortSignal) {
+  return (await withTemporaryOpenCodeServer(directory, signal)).threads
+}
+
+export function loadRemoteOpenCodeResumeThreadsPage(
+  profile: TerminalRemoteCodexProfile,
+  signal: AbortSignal,
+  maximum = AGENT_RESUME_PAGE_SIZE,
+) {
+  const remote = { profile, workingDirectory: "/" }
+  return withTemporaryOpenCodeServerPage("/", signal, remote, maximum)
+}
+
+export async function refreshRemoteOpenCodeResumeThreads(
   profile: TerminalRemoteCodexProfile,
   signal: AbortSignal,
 ) {
-  const remote = { profile, workingDirectory: "/" }
-  return withTemporaryOpenCodeServer("/", signal, remote)
+  return (await loadRemoteOpenCodeResumeThreadsPage(profile, signal)).threads
 }

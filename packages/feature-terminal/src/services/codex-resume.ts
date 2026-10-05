@@ -1,8 +1,20 @@
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
-import { type CodexResumeThread, publishCodexResumeThreads } from "../model/codex-resume-threads"
+import type { AgentResumePage } from "../model/agent-resume-thread"
+import {
+  type CodexResumeThread,
+  mergeCodexResumeThreads,
+  publishCodexResumeThreads,
+} from "../model/codex-resume-threads"
 import { unusedCodexLoopbackPort, waitForCodexAppServer } from "./codex-app-server-connection"
 import { resolveCodexExecutable } from "./codex-executable"
-import { CodexProxyWebSocket, type CodexProxyProcess } from "./codex-proxy-websocket"
+import { type CodexProxyProcess, CodexProxyWebSocket } from "./codex-proxy-websocket"
+import {
+  codexResumeLastResponse,
+  codexResumeNextCursor,
+  codexResumeThreads,
+  resumeListFrame,
+  resumeTurnsFrame,
+} from "./codex-resume-protocol"
 import { remoteCodexAppServerSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
 
@@ -12,130 +24,11 @@ function object(value: unknown): RecordValue | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null
 }
 
-function cleanThreadText(value: unknown, limit: number) {
-  if (typeof value !== "string") return ""
-  return [
-    ...value
-      .replace(/[\p{Cc}\u202a-\u202e\u2066-\u2069]+/gu, " ")
-      .replace(/\s+/g, " ")
-      .trim(),
-  ]
-    .slice(0, limit)
-    .join("")
-}
-
-function threadProjectName(cwd: string) {
-  const path = cwd.replace(/[\\/]+$/g, "")
-  if (!path) return cwd
-  return path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1)
-}
-
-function threadState(value: unknown): CodexResumeThread["state"] {
-  const status = object(value)
-  if (status?.type === "systemError") return "failed"
-  if (status?.type !== "active") return "idle"
-  return Array.isArray(status.activeFlags) && status.activeFlags.includes("waitingOnApproval")
-    ? "blocked"
-    : "working"
-}
-
-function responseFromItems(value: unknown) {
-  if (!Array.isArray(value)) return ""
-  const messages = value
-    .map(object)
-    .filter(
-      (item): item is RecordValue =>
-        item !== null && item.type === "agentMessage" && typeof item.text === "string",
-    )
-  const final = messages.filter((item) => item.phase === "final_answer").at(-1)
-  return cleanThreadText((final ?? messages.at(-1))?.text, 1_000)
-}
-
-/** Extracts the latest public Codex response from newest-first full turns. */
-export function codexResumeLastResponse(message: unknown) {
-  const data = object(object(message)?.result)?.data
-  if (!Array.isArray(data)) return ""
-  for (const value of data) {
-    const response = responseFromItems(object(value)?.items)
-    if (response) return response
-  }
-  return ""
-}
-
-/** Parses the same public thread summaries used by the Codex `/resume` picker. */
-export function codexResumeThreads(
-  message: unknown,
-  remoteProfileId?: string,
-  remoteProfileName?: string,
-): CodexResumeThread[] {
-  const result = object(object(message)?.result)
-  if (!Array.isArray(result?.data)) return []
-  return result.data
-    .flatMap((value): CodexResumeThread[] => {
-      const thread = object(value)
-      if (typeof thread?.id !== "string") return []
-      const preview = cleanThreadText(thread.preview, 240)
-      const name = cleanThreadText(thread.name, 120)
-      const cwd =
-        typeof thread.cwd === "string" &&
-        thread.cwd.length <= 4_096 &&
-        !/[\p{Cc}\p{Cf}]/u.test(thread.cwd)
-          ? thread.cwd
-          : ""
-      const gitBranch = cleanThreadText(object(thread.gitInfo)?.branch, 160)
-      const updatedAt =
-        typeof thread.recencyAt === "number"
-          ? thread.recencyAt
-          : typeof thread.updatedAt === "number"
-            ? thread.updatedAt
-            : 0
-      return [
-        {
-          id: thread.id,
-          title: name || preview || "Codex",
-          preview,
-          lastResponse: "",
-          cwd,
-          projectName: threadProjectName(cwd),
-          gitBranch,
-          updatedAt,
-          state: threadState(thread.status),
-          ...(remoteProfileId ? { remoteProfileId } : {}),
-          ...(remoteProfileName ? { remoteProfileName } : {}),
-        },
-      ]
-    })
-    .sort((left, right) => right.updatedAt - left.updatedAt || left.id.localeCompare(right.id))
-    .slice(0, 6)
-}
-
-export function resumeListFrame(id: string) {
-  return JSON.stringify({
-    id,
-    method: "thread/list",
-    params: {
-      cursor: null,
-      limit: 6,
-      sortKey: "recency_at",
-      sortDirection: "desc",
-      sourceKinds: ["cli", "vscode", "appServer"],
-    },
-  })
-}
-
-export function resumeTurnsFrame(id: string, threadId: string) {
-  return JSON.stringify({
-    id,
-    method: "thread/turns/list",
-    params: {
-      threadId,
-      cursor: null,
-      limit: 10,
-      sortDirection: "desc",
-      itemsView: "full",
-    },
-  })
-}
+export {
+  codexResumeLastResponse,
+  codexResumeThreads,
+  resumeListFrame,
+} from "./codex-resume-protocol"
 
 function waitForOpen(socket: WebSocket, signal: AbortSignal) {
   signal.throwIfAborted()
@@ -195,8 +88,27 @@ function waitForResponse(socket: WebSocket, id: string, signal: AbortSignal) {
   })
 }
 
+type CodexResumePageOptions = {
+  cursor?: string | null
+  append?: boolean
+  limit?: number
+}
+
+function publishCodexPage(
+  threads: readonly CodexResumeThread[],
+  remoteProfileId: string | undefined,
+  append: boolean,
+) {
+  if (append) mergeCodexResumeThreads(threads, remoteProfileId)
+  else publishCodexResumeThreads(threads, remoteProfileId)
+}
+
 /** Loads the local `/resume` picker without requiring an already-open Codex terminal. */
-export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal) {
+export async function loadCodexResumeThreadsPage(
+  cwd: string,
+  signal: AbortSignal,
+  options: CodexResumePageOptions = {},
+): Promise<AgentResumePage<CodexResumeThread>> {
   const port = await unusedCodexLoopbackPort()
   signal.throwIfAborted()
   const url = `ws://127.0.0.1:${port}`
@@ -243,9 +155,11 @@ export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal
     await waitForResponse(connectedSocket, initializeId, deadline)
     connectedSocket.send(JSON.stringify({ method: "initialized", params: {} }))
     const listId = "tuiminal-resume-list"
-    connectedSocket.send(resumeListFrame(listId))
-    const threads = codexResumeThreads(await waitForResponse(connectedSocket, listId, deadline))
-    publishCodexResumeThreads(threads)
+    connectedSocket.send(resumeListFrame(listId, options))
+    const listResponse = await waitForResponse(connectedSocket, listId, deadline)
+    const threads = codexResumeThreads(listResponse)
+    const nextCursor = codexResumeNextCursor(listResponse)
+    publishCodexPage(threads, undefined, Boolean(options.append))
     const lastResponses = await Promise.all(
       threads.map(async (thread, index) => {
         const id = `tuiminal-resume-turns-${index}`
@@ -259,11 +173,15 @@ export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal
       ...thread,
       lastResponse: lastResponses[index] ?? "",
     }))
-    publishCodexResumeThreads(hydrated)
-    return hydrated
+    publishCodexPage(hydrated, undefined, Boolean(options.append))
+    return { threads: hydrated, nextCursor, hasMore: nextCursor !== null }
   } finally {
     await stop()
   }
+}
+
+export async function refreshCodexResumeThreads(cwd: string, signal: AbortSignal) {
+  return (await loadCodexResumeThreadsPage(cwd, signal)).threads
 }
 
 async function nextProxyMessage(transport: CodexProxyWebSocket, signal: AbortSignal) {
@@ -285,12 +203,43 @@ async function nextProxyResponse(transport: CodexProxyWebSocket, id: string, sig
   }
 }
 
+async function hydrateRemoteCodexResumeThreads(
+  transport: CodexProxyWebSocket,
+  threads: readonly CodexResumeThread[],
+  profileId: string,
+  signal: AbortSignal,
+) {
+  const pending = new Map<string, number>()
+  const responses = new Map<number, string>()
+  for (const [index, thread] of threads.entries()) {
+    const id = `tuiminal-remote-resume-turns:${profileId}:${index}`
+    pending.set(id, index)
+    await transport.send(resumeTurnsFrame(id, thread.id))
+  }
+  while (pending.size > 0) {
+    const message = await nextProxyMessage(transport, signal)
+    if (typeof message.id !== "string") continue
+    const index = pending.get(message.id)
+    if (index === undefined) continue
+    pending.delete(message.id)
+    responses.set(index, codexResumeLastResponse(message))
+  }
+  return threads.map((thread, index) => ({
+    ...thread,
+    lastResponse: responses.get(index) ?? "",
+  }))
+}
+
+type RemoteCodexResumePageOptions = CodexResumePageOptions & {
+  executable?: readonly string[]
+}
+
 /** Loads the active SSH host's recent threads without opening a visible Codex pane. */
-export async function refreshRemoteCodexResumeThreads(
+export async function loadRemoteCodexResumeThreadsPage(
   profile: TerminalRemoteCodexProfile,
   signal: AbortSignal,
-  options: { executable?: readonly string[] } = {},
-) {
+  options: RemoteCodexResumePageOptions = {},
+): Promise<AgentResumePage<CodexResumeThread>> {
   signal.throwIfAborted()
   const sshCommand = remoteCodexAppServerSshCommand(profile, "/")
   const command = options.executable ? [...options.executable, ...sshCommand.slice(1)] : sshCommand
@@ -346,26 +295,26 @@ export async function refreshRemoteCodexResumeThreads(
     await nextProxyResponse(transport, initializeId, deadline)
     await transport.send(JSON.stringify({ method: "initialized", params: {} }))
     const listId = `tuiminal-remote-resume-list:${profile.id}`
-    await transport.send(resumeListFrame(listId))
-    const threads = codexResumeThreads(
-      await nextProxyResponse(transport, listId, deadline),
-      profile.id,
-      profile.name,
-    )
-    publishCodexResumeThreads(threads, profile.id)
-    const hydrated: CodexResumeThread[] = []
-    for (const [index, thread] of threads.entries()) {
-      const id = `tuiminal-remote-resume-turns:${profile.id}:${index}`
-      await transport.send(resumeTurnsFrame(id, thread.id))
-      const response = await nextProxyResponse(transport, id, deadline)
-      hydrated.push({ ...thread, lastResponse: codexResumeLastResponse(response) })
-    }
+    await transport.send(resumeListFrame(listId, options))
+    const listResponse = await nextProxyResponse(transport, listId, deadline)
+    const threads = codexResumeThreads(listResponse, profile.id, profile.name)
+    const nextCursor = codexResumeNextCursor(listResponse)
+    publishCodexPage(threads, profile.id, Boolean(options.append))
+    const hydrated = await hydrateRemoteCodexResumeThreads(transport, threads, profile.id, deadline)
     deadline.throwIfAborted()
-    publishCodexResumeThreads(hydrated, profile.id)
-    return hydrated
+    publishCodexPage(hydrated, profile.id, Boolean(options.append))
+    return { threads: hydrated, nextCursor, hasMore: nextCursor !== null }
   } finally {
     signal.removeEventListener("abort", abort)
     deadline?.removeEventListener("abort", abortDeadline)
     await stop()
   }
+}
+
+export async function refreshRemoteCodexResumeThreads(
+  profile: TerminalRemoteCodexProfile,
+  signal: AbortSignal,
+  options: Pick<RemoteCodexResumePageOptions, "executable"> = {},
+) {
+  return (await loadRemoteCodexResumeThreadsPage(profile, signal, options)).threads
 }

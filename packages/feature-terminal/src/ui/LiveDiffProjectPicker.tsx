@@ -14,12 +14,15 @@ export function LiveDiffProjectPicker({
   error,
   onSelect,
   onClose,
+  inactive = false,
 }: {
   projects: readonly LiveDiffProject[]
   loading: boolean
   error: string
   onSelect: (path: string) => void
   onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dimensions = useTerminalDimensions()
   const dialog = useRef<BoxRenderable | null>(null)
@@ -36,8 +39,8 @@ export function LiveDiffProjectPicker({
       : [...projects]
   }, [projects, query])
   useEffect(() => {
-    input.current?.focus()
-  }, [])
+    if (!inactive) input.current?.focus()
+  }, [inactive])
   useEffect(() => {
     setSelected((current) => Math.min(current, Math.max(0, filtered.length - 1)))
   }, [filtered.length])
@@ -49,6 +52,7 @@ export function LiveDiffProjectPicker({
     if (project) onSelect(project.path)
   }
   useKeyboard((key) => {
+    if (inactive) return
     if (key.name === "escape") {
       key.preventDefault()
       key.stopPropagation()

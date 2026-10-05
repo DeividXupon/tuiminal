@@ -23,12 +23,13 @@ import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
 import { useTerminalSessions } from "./hooks/use-terminal-sessions"
 import { useTerminalWorkspaceFocusTargets } from "./hooks/use-terminal-workspace-focus-targets"
+import type { AgentProviderId } from "./model/agent-provider"
+import type { AgentResumeThread } from "./model/agent-resume-thread"
 import {
   parseTerminalFocusTargetKey,
   TERMINAL_SIDEBAR_FOCUS_TARGET,
   type TerminalFocusTargetKey,
 } from "./model/focus-selection"
-import type { AgentResumeThread } from "./model/agent-resume-thread"
 import {
   clearTerminalSidebar,
   publishTerminalSidebar,
@@ -60,9 +61,9 @@ import {
   visibleTerminalShortcutTargets,
 } from "./model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
-import {
-  type MessageHistoryTarget,
-  type SplitRequest,
+import type {
+  MessageHistoryTarget,
+  SplitRequest,
 } from "./rendering/terminal-workspace-presentation"
 import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
 import { resolveAgentResumeCommand } from "./services/agent-resume-command"
@@ -88,6 +89,8 @@ import {
 } from "./services/terminal-workspace-state"
 import { discoverTmuxWorkspace } from "./services/tmux-agents"
 import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
+import { TerminalTutorialDemo } from "./tutorial/TerminalTutorialDemo"
+import { isTerminalTutorialTarget } from "./tutorial/TerminalTutorialVisualState"
 import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { RemoteCodexCompatibilityPrompt } from "./ui/RemoteCodexCompatibilityPrompt"
@@ -104,6 +107,13 @@ const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
   { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
   { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
 ]
+
+function terminalLeaderNavigationKey(key: KeyEvent, agentTabsActive: boolean) {
+  if (["up", "down", "left", "right", "tab", "enter", "return"].includes(key.name)) return true
+  if (key.ctrl || key.meta || key.option || key.shift || key.super) return false
+  const name = key.name.toLowerCase()
+  return ["h", "j", "k", "l"].includes(name) || (agentTabsActive && ["z", "v"].includes(name))
+}
 
 type LiveDiffTarget = {
   sessionId: string
@@ -122,6 +132,7 @@ export function FreeTerminal({
   onMasterKeyActiveChange,
   remoteSetupRequest,
   onRemoteSetupRequestHandled,
+  tutorial = null,
 }: {
   active: boolean
   externalSidebarHost?: boolean
@@ -131,6 +142,8 @@ export function FreeTerminal({
   onMasterKeyActiveChange?: (active: boolean) => void
   remoteSetupRequest?: RemoteServerSetupRequest | null
   onRemoteSetupRequestHandled?: (id: number) => void
+  /** While set, the simulated tour paints over the live workspace, which stays mounted. */
+  tutorial?: { targetId: string | null } | null
 }) {
   const { notify } = useNotifications()
   const renderer = useRenderer()
@@ -352,7 +365,13 @@ export function FreeTerminal({
   const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
   const canSplit = hasSplitRoom && (canCreateSplitTerminal || splitAgents.length > 0)
   const sidebarHeight = dimensions.height - 1
-  const { recentThreads, refreshRemoteThreads } = useAgentResumeThreads(active)
+  const {
+    recentThreads,
+    activeRemoteProfileId,
+    pagination: resumePagination,
+    loadMoreThreads,
+    refreshRemoteThreads,
+  } = useAgentResumeThreads(active)
   const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
     "\u0000",
   )
@@ -613,7 +632,7 @@ export function FreeTerminal({
     )
   }
   const disabled = (key: string) => {
-    if (["v", "h"].includes(key)) return !canSplit
+    if (["c", "shift+h"].includes(key)) return !canSplit
     if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
     if (key === "r") return projectSyncDisabled()
     if (["n", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
@@ -853,7 +872,7 @@ export function FreeTerminal({
     const invokedFromLeader = leaderRef.current
     setLeader(false)
     if (runFocusAction(key, invokedFromLeader)) return
-    if (!["e", "l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
+    if (!["e", "shift+l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
     switch (key) {
       case "n":
         launchSection()
@@ -863,10 +882,10 @@ export function FreeTerminal({
           setAgentLaunchStep({ kind: "providers" })
         }
         break
-      case "v":
+      case "c":
         requestSplit(false)
         break
-      case "h":
+      case "shift+h":
         requestSplit(true)
         break
       case "s":
@@ -888,7 +907,7 @@ export function FreeTerminal({
       case "b":
         toggleTerminalSidebarPinned()
         break
-      case "l":
+      case "shift+l":
         requestTerminalSidebarFocus()
         void focusPinnedTmuxSidebar()
         break
@@ -1025,7 +1044,9 @@ export function FreeTerminal({
   useEffect(() => {
     if (!active) {
       if (projectSyncFlow) {
-        const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
+        const owner = sessionsRef.current.find(
+          (session) => session.id === projectSyncFlow.sessionId,
+        )
         if (owner) projectSync.cancel(owner)
       }
       leaderRef.current = false
@@ -1061,7 +1082,7 @@ export function FreeTerminal({
     projectSyncFlow,
     projectSync.cancel,
     remoteCodexCompatibility.prompt,
-    sessions,
+    sessionsRef,
   ])
 
   const sidebarView = useMemo(
@@ -1075,6 +1096,8 @@ export function FreeTerminal({
       height: sidebarHeight,
       masterKey,
       recentThreads,
+      activeRemoteProfileId,
+      resumePagination,
       masterKeyActive: leaderActive,
       focusSelection: selectedBoxFocusTarget
         ? { selectedTarget: selectedBoxFocusTarget, onFocus: focusBox }
@@ -1085,13 +1108,16 @@ export function FreeTerminal({
       onActions: toggleSidebarActions,
       onNew: openSidebarTerminal,
       onCommand: openSidebarCommand,
+      onLoadMoreResume: (providerId: AgentProviderId) => void loadMoreThreads(providerId),
     }),
     [
       activeSessionId,
+      activeRemoteProfileId,
       collapsedFolderIds,
       leaderActive,
       masterKey,
       recentThreads,
+      resumePagination,
       openSidebarTerminal,
       openSidebarCommand,
       focusBox,
@@ -1104,6 +1130,7 @@ export function FreeTerminal({
       sidebarWidth,
       toggleFolder,
       toggleSidebarActions,
+      loadMoreThreads,
     ],
   )
   useEffect(() => {
@@ -1124,12 +1151,18 @@ export function FreeTerminal({
       runActionRef.current(target.action)
       return
     }
+    if ("loadMoreResumeProvider" in target) {
+      handledTargetRevision.current = requestedTargetRevision
+      void loadMoreThreads(target.loadMoreResumeProvider)
+      return
+    }
     if ("resumeThreadId" in target) {
       handledTargetRevision.current = requestedTargetRevision
       const thread = recentThreads.find(
         (candidate) =>
           candidate.id === target.resumeThreadId &&
-          (candidate.providerId ?? "codex") === (target.providerId ?? "codex"),
+          (candidate.providerId ?? "codex") === (target.providerId ?? "codex") &&
+          candidate.remoteProfileId === target.remoteProfileId,
       )
       if (thread) resumeAgentThreadRef.current(thread)
       return
@@ -1185,6 +1218,7 @@ export function FreeTerminal({
     sidebarSessions,
     selectSession,
     launchCommand,
+    loadMoreThreads,
     folderForTmuxPane,
     focusBox,
     notify,
@@ -1219,8 +1253,10 @@ export function FreeTerminal({
       return true
     }
     if (
-      ["up", "down", "left", "right", "enter", "return"].includes(key.name) ||
-      ["j", "k"].includes(key.name.toLowerCase())
+      terminalLeaderNavigationKey(
+        key,
+        Boolean(renderer.root.findDescendantById("terminal-agent-panel-active")),
+      )
     )
       return true
     key.preventDefault()
@@ -1334,6 +1370,9 @@ export function FreeTerminal({
             width={dimensions.width}
             height={dimensions.height}
             recentThreads={recentThreads}
+            activeRemoteProfileId={activeRemoteProfileId}
+            resumePagination={resumePagination}
+            onLoadMoreThreads={(providerId) => void loadMoreThreads(providerId)}
             onAction={runAction}
             onSelectThread={resumeAgentThread}
             disabled={disabled}
@@ -1393,6 +1432,9 @@ export function FreeTerminal({
           onPage={pageProjectSyncReview}
           onClose={closeProjectSyncFlow}
         />
+        {tutorial && isTerminalTutorialTarget(tutorial.targetId) && (
+          <TerminalTutorialDemo activeTargetId={tutorial.targetId} />
+        )}
       </box>
     </TerminalShortcutAnimation>
   )

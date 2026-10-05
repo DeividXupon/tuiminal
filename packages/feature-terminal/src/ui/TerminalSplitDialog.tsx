@@ -17,6 +17,7 @@ export function TerminalSplitDialog({
   onCreateTerminal,
   onSelectAgent,
   onClose,
+  inactive = false,
 }: {
   down: boolean
   agents: readonly TerminalSession[]
@@ -24,6 +25,8 @@ export function TerminalSplitDialog({
   onCreateTerminal: () => void
   onSelectAgent: (id: string) => void
   onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dimensions = useTerminalDimensions()
   const dialog = useRef<BoxRenderable | null>(null)
@@ -42,8 +45,8 @@ export function TerminalSplitDialog({
   }
 
   useEffect(() => {
-    dialog.current?.focus()
-  }, [])
+    if (!inactive) dialog.current?.focus()
+  }, [inactive])
   useEffect(() => {
     setSelected((current) => Math.min(current, Math.max(0, options.length - 1)))
   }, [options.length])
@@ -51,6 +54,7 @@ export function TerminalSplitDialog({
     list.current?.scrollChildIntoView(`terminal-split-option-${selected}`)
   }, [selected])
   useKeyboard((key) => {
+    if (inactive) return
     key.preventDefault()
     key.stopPropagation()
     if (key.name === "escape") {

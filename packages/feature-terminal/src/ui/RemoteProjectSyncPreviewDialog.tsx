@@ -22,9 +22,7 @@ function changeLabel(change: RemoteProjectSyncChange) {
 
 function changeColor(change: RemoteProjectSyncChange) {
   if (change.localChanged) return COLORS.danger
-  if (change.action === "add") return COLORS.success
-  if (change.action === "delete") return COLORS.danger
-  return COLORS.warning
+  return COLORS.muted
 }
 
 function displayPath(path: string, width: number) {
@@ -38,6 +36,7 @@ export function RemoteProjectSyncPreviewDialog({
   onPage,
   onConfirm,
   onClose,
+  inactive = false,
 }: {
   review: RemoteProjectSyncReview
   automatic: boolean
@@ -45,6 +44,8 @@ export function RemoteProjectSyncPreviewDialog({
   onPage: (offset: number) => void
   onConfirm: () => void
   onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const list = useRef<ScrollBoxRenderable | null>(null)
@@ -57,8 +58,10 @@ export function RemoteProjectSyncPreviewDialog({
   const nextOffset = review.offset + review.pageSize
   const hasPrevious = review.offset > 0
   const hasNext = pageEnd < review.changeCount
-  useEffect(() => dialog.current?.focus(), [])
-  useKeyboard((key) => {
+  useEffect(() => {
+    if (!inactive) dialog.current?.focus()
+  }, [inactive])
+  const handleKey = (key: Parameters<Parameters<typeof useKeyboard>[0]>[0]) => {
     const name = key.name.toLowerCase()
     if (name === "a") {
       consume(key)
@@ -79,6 +82,9 @@ export function RemoteProjectSyncPreviewDialog({
       consume(key)
       onPage(nextOffset)
     }
+  }
+  useKeyboard((key) => {
+    if (!inactive) handleKey(key)
   })
   return (
     <ModalSurface
@@ -86,56 +92,46 @@ export function RemoteProjectSyncPreviewDialog({
       id="terminal-project-sync-preview"
       width={width}
       height={height}
-      borderColor={review.hasLocalChanges ? COLORS.warning : COLORS.terminal}
+      borderColor={review.hasLocalChanges ? COLORS.warning : COLORS.border}
       zIndex={830}
       onBackdropPress={onClose}
     >
       <box
+        id="terminal-project-sync-preview-header"
         style={{
           height: 2,
           flexShrink: 0,
-          backgroundColor: COLORS.panelRaised,
         }}
       >
         <text
-          content={`◆ ${translateUi("ITENS FORA DE SINCRONIA")}`}
-          style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
+          content={translateUi("ITENS FORA DE SINCRONIA")}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
         />
-        <text wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
-          <span fg={COLORS.success}>{`${translateUi("Novo")}: ${review.counts.add}`}</span>
-          <span fg={COLORS.muted}> · </span>
-          <span fg={COLORS.warning}>{`${translateUi("Alterado")}: ${review.counts.update}`}</span>
-          <span fg={COLORS.muted}> · </span>
-          <span fg={COLORS.danger}>{`${translateUi("Removido")}: ${review.counts.delete}`}</span>
-          <span fg={COLORS.muted}> · </span>
-          <span fg={COLORS.danger}>{`${translateUi("Conflito")}: ${review.counts.conflict}`}</span>
-        </text>
-      </box>
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          backgroundColor: COLORS.panel,
-        }}
-      >
         <text
-          content={`› ${truncateDisplay(review.localPath, Math.max(1, width - 6))}`}
+          content={`${translateUi("Novo")}: ${review.counts.add} · ${translateUi("Alterado")}: ${review.counts.update} · ${translateUi("Removido")}: ${review.counts.delete} · ${translateUi("Conflito")}: ${review.counts.conflict}`}
           wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+      </box>
+      <box id="terminal-project-sync-preview-path" style={{ height: 1, flexShrink: 0 }}>
+        <text
+          content={truncateDisplay(review.localPath, Math.max(1, width - 4))}
+          wrapMode="none"
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
         />
       </box>
       {review.hasLocalChanges && (
         <box
+          id="terminal-project-sync-preview-warning"
           style={{
             height: 2,
             flexShrink: 0,
-            backgroundColor: COLORS.diffModifiedBg,
           }}
         >
           <text
-            content={`! ${translateUi(
+            content={translateUi(
               "As alterações locais destacadas serão substituídas pelo projeto remoto.",
-            )}`}
+            )}
             wrapMode="word"
             style={{ height: 2, flexShrink: 0, fg: COLORS.warning }}
           />
@@ -152,9 +148,8 @@ export function RemoteProjectSyncPreviewDialog({
         style={{
           flexGrow: 1,
           minHeight: 3,
-          border: true,
+          border: ["top", "bottom"],
           borderColor: COLORS.border,
-          backgroundColor: COLORS.canvas,
         }}
       >
         {review.changes.map((change, index) => {
@@ -214,12 +209,12 @@ export function RemoteProjectSyncPreviewDialog({
       </box>
       <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
       <box
+        id="terminal-project-sync-preview-actions"
         style={{
           height: 1,
           flexShrink: 0,
           flexDirection: "row",
           justifyContent: "space-between",
-          backgroundColor: COLORS.panelRaised,
         }}
       >
         <TerminalInlineButton

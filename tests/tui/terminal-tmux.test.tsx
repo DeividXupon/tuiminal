@@ -3,11 +3,11 @@ import { afterEach, expect, mock, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
-import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
+import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
+import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
+import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
 
 const originalSettings = getUiSettings()
 const originalAuto = process.env.TUIMINAL_TERMINAL_AUTO_MIRROR
@@ -127,7 +127,7 @@ test("mirror dimensions follow the real viewport after the sidebar, splits and w
   const viewport = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(pane.width).toBe(120 - sidebar.width)
   expect(mirrorResize.mock.calls.at(-1)).toEqual([pane.width, pane.height])
-  await leader("v")
+  await leader("c")
   await act(async () => tui?.mockInput.pressKey("n"))
   await tui?.renderOnce()
   expect(pane.width).toBeLessThan(viewport.width)

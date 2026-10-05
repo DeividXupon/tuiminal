@@ -42,17 +42,19 @@ export function RemoteProjectSyncDialog({
       id="terminal-project-sync-confirm"
       width={width}
       height={height}
-      borderColor={kind === "replace" ? COLORS.warning : COLORS.terminal}
+      borderColor={kind === "replace" ? COLORS.warning : COLORS.border}
       zIndex={830}
       onBackdropPress={onClose}
     >
-      <box style={{ height: 1, flexShrink: 0, backgroundColor: COLORS.panelRaised }}>
+      <box id="terminal-project-sync-confirm-header" style={{ height: 1, flexShrink: 0 }}>
         <text
-          content={`◆ ${translateUi(kind === "replace" ? "SUBSTITUIR CÓPIA LOCAL?" : "SINCRONIZAR PROJETO REMOTO?")}`}
+          content={translateUi(
+            kind === "replace" ? "SUBSTITUIR CÓPIA LOCAL?" : "SINCRONIZAR PROJETO REMOTO?",
+          )}
           style={{
             height: 1,
             flexShrink: 0,
-            fg: kind === "replace" ? COLORS.warning : COLORS.terminal,
+            fg: kind === "replace" ? COLORS.warning : COLORS.text,
           }}
         />
       </box>
@@ -67,18 +69,18 @@ export function RemoteProjectSyncDialog({
           style={{ height: 2, flexShrink: 0, fg: COLORS.text }}
         />
         <text
-          content={`› ${truncateDisplay(localPath, Math.max(1, width - 6))}`}
+          content={truncateDisplay(localPath, Math.max(1, width - 4))}
           wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
         />
       </box>
       <box
+        id="terminal-project-sync-confirm-actions"
         style={{
           height: 1,
           flexShrink: 0,
           flexDirection: "row",
           justifyContent: "space-between",
-          backgroundColor: COLORS.panelRaised,
         }}
       >
         <TerminalInlineButton

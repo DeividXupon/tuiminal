@@ -1,12 +1,23 @@
 import { chmod, unlink } from "node:fs/promises"
+import { createConnection, createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createConnection, createServer } from "node:net"
 import { isTerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
 import { isAgentProviderId } from "../model/agent-provider"
+import { AGENT_RESUME_SOURCE_LIMIT } from "../model/agent-resume-thread"
 import type { PinnedTerminalSelection, PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
 
 const MAX_MESSAGE_BYTES = 4096
+const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
+
+function validId(id: unknown): id is string {
+  return (
+    typeof id === "string" &&
+    id.length > 0 &&
+    id.length <= 200 &&
+    !/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(id)
+  )
+}
 
 function validResumeThread(value: unknown) {
   if (!value || typeof value !== "object") return false
@@ -21,6 +32,27 @@ function validResumeThread(value: unknown) {
   )
 }
 
+function validResumePagination(value: unknown) {
+  if (!value || typeof value !== "object") return false
+  const pagination = value as Record<string, unknown>
+  const limits = pagination.limits as Record<string, unknown> | undefined
+  const hasMore = pagination.hasMore as Record<string, unknown> | undefined
+  return Boolean(
+    limits &&
+      hasMore &&
+      ["codex", "claude", "opencode"].every(
+        (providerId) =>
+          Number.isInteger(limits[providerId]) &&
+          Number(limits[providerId]) >= 0 &&
+          Number(limits[providerId]) <= AGENT_RESUME_SOURCE_LIMIT &&
+          typeof hasMore[providerId] === "boolean",
+      ) &&
+      typeof pagination.loadingInitial === "boolean" &&
+      Array.isArray(pagination.loadingMore) &&
+      pagination.loadingMore.every(isAgentProviderId),
+  )
+}
+
 function validTarget(value: unknown): value is PinnedTerminalSelection {
   if (!value || typeof value !== "object") return false
   const target = value as Partial<PinnedTerminalSelection> & {
@@ -29,17 +61,19 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
     sessionId?: string
     resumeThreadId?: string
     providerId?: string
+    remoteProfileId?: string
+    loadMoreResumeProvider?: string
     folderId?: string
     focusTarget?: string
     action?: string
   }
-  const validId = (id: string | undefined) =>
-    Boolean(id && id.length <= 200 && !/[\p{Cc}\u202a-\u202e\u2066-\u2069]/u.test(id))
   return Boolean(
     (target.socket?.startsWith("/") && /^%\d+$/.test(target.paneId ?? "")) ||
       validId(target.sessionId) ||
       (validId(target.resumeThreadId) &&
-        (target.providerId === undefined || isAgentProviderId(target.providerId))) ||
+        (target.providerId === undefined || isAgentProviderId(target.providerId)) &&
+        (target.remoteProfileId === undefined || validId(target.remoteProfileId))) ||
+      isAgentProviderId(target.loadMoreResumeProvider) ||
       validId(target.folderId) ||
       (validId(target.focusTarget) &&
         /^(?:sidebar|terminal|history|live-diff):/.test(target.focusTarget ?? "")) ||
@@ -141,7 +175,7 @@ function requestControl(endpoint: string, request: object) {
     socket.once("connect", () => socket.write(`${JSON.stringify(request)}\n`))
     socket.on("data", (data) => {
       source += data
-      if (Buffer.byteLength(source) > 1024 * 1024) return finish(null)
+      if (Buffer.byteLength(source) > MAX_SNAPSHOT_BYTES) return finish(null)
       const newline = source.indexOf("\n")
       if (newline < 0) return
       try {
@@ -177,6 +211,9 @@ export async function requestPinnedSidebarSnapshot(endpoint: string) {
     !Array.isArray(snapshot.collapsedFolderIds) ||
     !Array.isArray(snapshot.recentThreads) ||
     !snapshot.recentThreads.every(validResumeThread) ||
+    (snapshot.resumePagination !== undefined &&
+      !validResumePagination(snapshot.resumePagination)) ||
+    (snapshot.activeRemoteProfileId !== undefined && !validId(snapshot.activeRemoteProfileId)) ||
     !snapshot.collapsedFolderIds.every((id) => typeof id === "string") ||
     typeof snapshot.selectedFolder !== "string" ||
     (snapshot.activeSessionId !== null && typeof snapshot.activeSessionId !== "string") ||

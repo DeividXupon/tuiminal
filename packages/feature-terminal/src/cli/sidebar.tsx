@@ -197,7 +197,7 @@ function SidebarApp({
   )
   const disabled = useCallback(
     (key: string) => {
-      if (["v", "h"].includes(key)) return !canSplit
+      if (["c", "shift+h"].includes(key)) return !canSplit
       if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
       if (["n", "a"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
@@ -280,7 +280,7 @@ function SidebarApp({
   }, [focusSidebar, sourceSocket])
   const runAction = useCallback(
     async (key: string) => {
-      if (key === "escape" || key === "l") {
+      if (key === "escape" || key === "shift+l") {
         focusSidebar()
         return
       }
@@ -301,7 +301,7 @@ function SidebarApp({
         setFocusRequest((current) => current + 1)
         return
       }
-      if (mode === "app" || ["v", "h", "e", "s", ",", "q"].includes(key))
+      if (mode === "app" || ["c", "shift+h", "e", "s", ",", "q"].includes(key))
         await selectPinnedTmuxHost(sourceSocket, hostPane)
       else setFocusRequest((current) => current + 1)
     },
@@ -367,6 +367,11 @@ function SidebarApp({
           width={dimensions.width}
           height={dimensions.height}
           recentThreads={recentThreads}
+          activeRemoteProfileId={replica?.activeRemoteProfileId}
+          resumePagination={replica?.resumePagination}
+          onLoadMoreThreads={(providerId) => {
+            void sendPinnedSidebarTarget(endpoint, { loadMoreResumeProvider: providerId })
+          }}
           onAction={(key) => void runAction(key)}
           onSelectThread={(thread) => {
             setLeaderActive(false)
@@ -374,6 +379,7 @@ function SidebarApp({
               const delivered = await sendPinnedSidebarTarget(endpoint, {
                 resumeThreadId: thread.id,
                 providerId: thread.providerId ?? "codex",
+                ...(thread.remoteProfileId ? { remoteProfileId: thread.remoteProfileId } : {}),
               })
               if (delivered) await selectPinnedTmuxHost(sourceSocket, hostPane)
             })()

@@ -1,3 +1,4 @@
+import { AGENT_RESUME_SOURCE_LIMIT, compareAgentResumeThreads } from "./agent-resume-order"
 import type { CodexResumeThread } from "./codex-resume-threads"
 
 export type ClaudeResumeThread = CodexResumeThread
@@ -13,7 +14,7 @@ let threads: readonly ClaudeResumeThread[] = []
 const listeners = new Set<() => void>()
 
 function newestFirst(left: ClaudeResumeThread, right: ClaudeResumeThread) {
-  return right.updatedAt - left.updatedAt || left.id.localeCompare(right.id)
+  return compareAgentResumeThreads(left, right)
 }
 
 export function claudeResumeThreadKey(
@@ -33,15 +34,21 @@ export function subscribeClaudeResumeThreads(listener: () => void) {
 
 export function publishClaudeResumeThreads(next: readonly ClaudeResumeThread[]) {
   const seen = new Set<string>()
-  const normalized = next
+  const byOrigin = new Map<string, ClaudeResumeThread[]>()
+  for (const thread of next
     .filter((thread) => {
       const key = claudeResumeThreadKey(thread)
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-    .sort(newestFirst)
-    .slice(0, 100)
+    .sort(newestFirst)) {
+    const origin = thread.remoteProfileId ? `remote:${thread.remoteProfileId}` : "local"
+    const entries = byOrigin.get(origin) ?? []
+    if (entries.length < AGENT_RESUME_SOURCE_LIMIT) entries.push(thread)
+    byOrigin.set(origin, entries)
+  }
+  const normalized = [...byOrigin.values()].flat().sort(newestFirst)
   if (JSON.stringify(normalized) === JSON.stringify(threads)) return
   threads = normalized
   for (const listener of listeners) listener()

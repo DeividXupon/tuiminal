@@ -1,5 +1,6 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
+import type { BoxRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
@@ -14,6 +15,12 @@ afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
 })
+
+function expectTransparentBackground(id: string) {
+  const renderable = tui?.renderer.root.findDescendantById(id) as BoxRenderable | null | undefined
+  if (!renderable) throw new Error(`${id} did not mount`)
+  expect(renderable.backgroundColor.toInts()).toEqual([0, 0, 0, 0])
+}
 
 test("sync progress keeps focus and cancels with Escape", async () => {
   let cancels = 0
@@ -56,6 +63,9 @@ test("sync progress keeps focus and cancels with Escape", async () => {
   expect(tui.captureCharFrame()).toContain("50%")
   expect(tui.captureCharFrame()).toContain("[A] Sincronização automática OFF")
   expect(tui.captureCharFrame()).toContain("[Esc] Cancelar")
+  expectTransparentBackground("terminal-project-sync-progress-header")
+  expectTransparentBackground("terminal-project-sync-automatic-control")
+  expectTransparentBackground("terminal-project-sync-progress-actions")
   const cancel = tui.renderer.root.findDescendantById("terminal-project-sync-cancel-progress")
   if (!cancel) throw new Error("Sync progress cancel action did not mount")
   expect(cancel.screenX).toBeGreaterThan(dialog.screenX + dialog.width / 2)
@@ -149,6 +159,11 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   expect(frame).toContain("[A] Sincronização automática ON")
   expect(frame).toContain("O remoto substituirá alterações locais")
   expect(frame).toContain("[Enter] Substituir e sincronizar")
+  expectTransparentBackground("terminal-project-sync-preview-header")
+  expectTransparentBackground("terminal-project-sync-preview-path")
+  expectTransparentBackground("terminal-project-sync-preview-warning")
+  expectTransparentBackground("terminal-project-sync-automatic-control")
+  expectTransparentBackground("terminal-project-sync-preview-actions")
   const next = tui.renderer.root.findDescendantById("terminal-project-sync-next-page")
   if (!next) throw new Error("Sync preview next-page action did not mount")
   await act(async () => tui?.mockMouse.click(next.screenX + 1, next.screenY))
@@ -198,6 +213,8 @@ test("sync confirmation keeps primary and cancel actions separated in a compact 
     x: dialog.screenX,
     y: dialog.screenY,
   }).toEqual({ width: 68, height: 10, x: 11, y: 4 })
+  expectTransparentBackground("terminal-project-sync-confirm-header")
+  expectTransparentBackground("terminal-project-sync-confirm-actions")
   expect(confirm.screenY).toBe(cancel.screenY)
   expect(confirm.screenX).toBeLessThan(cancel.screenX)
   await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))

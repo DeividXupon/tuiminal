@@ -18,6 +18,7 @@ import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import { descendantProcesses } from "../model/agent-detection"
 import { type LiveDiffFile, mergeLiveDiffFiles } from "../model/live-diff"
 import type { RemoteCodexTarget } from "../model/sessions"
+import { decoratedLineColors } from "../rendering/live-diff-line-colors"
 import { liveDiffUnwrappedHeight, liveDiffWrappedHeight } from "../rendering/live-diff-table"
 import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { readTerminalProcesses } from "../services/agent-processes"
@@ -51,41 +52,6 @@ function liveDiffPreviewGeometry(
     left: stacked ? 0 : -30,
     width: stableContentWidth + 30,
   }
-}
-
-type LiveDiffColors = Pick<
-  typeof COLORS,
-  "canvas" | "diffAddedBg" | "diffGutterBg" | "diffRecentBg" | "diffRemovedBg" | "panel"
->
-
-function decoratedLineColors(
-  patch: string,
-  highlightedLines: ReadonlySet<number>,
-  separatorLines: ReadonlySet<number>,
-  colors: LiveDiffColors,
-) {
-  const result = new Map<number, { gutter: string; content: string }>()
-  let inHunk = false
-  let codeLine = 0
-  for (const text of patch.split("\n")) {
-    if (text.startsWith("@@ ")) {
-      inHunk = true
-      continue
-    }
-    if (!inHunk) continue
-    const marker = text[0]
-    if (marker === "+")
-      result.set(codeLine++, { gutter: colors.diffAddedBg, content: colors.diffAddedBg })
-    else if (marker === "-")
-      result.set(codeLine++, { gutter: colors.diffRemovedBg, content: colors.diffRemovedBg })
-    else if (marker === " ")
-      result.set(codeLine++, { gutter: colors.diffGutterBg, content: colors.panel })
-  }
-  for (const line of separatorLines)
-    result.set(line, { gutter: colors.canvas, content: colors.canvas })
-  for (const line of highlightedLines)
-    result.set(line, { gutter: colors.diffRecentBg, content: colors.diffRecentBg })
-  return result
 }
 
 async function updateSnapshot(

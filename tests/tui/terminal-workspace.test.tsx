@@ -319,13 +319,13 @@ async function mount(
   })
   await tui.renderOnce()
 }
-async function key(name: string, ctrl = false) {
+async function key(name: string, ctrl = false, shift = false) {
   await act(async () => {
     if (name === "enter") tui?.mockInput.pressEnter()
     else if (name === "escape") tui?.mockInput.pressEscape()
     else if (name === "backspace") tui?.mockInput.pressBackspace()
     else if (name === "tab") tui?.mockInput.pressTab()
-    else tui?.mockInput.pressKey(name, { ctrl })
+    else tui?.mockInput.pressKey(name, { ctrl, shift })
     if (name === "escape") await Bun.sleep(70)
   })
   await tui?.renderOnce()
@@ -334,9 +334,9 @@ async function arrow(direction: "up" | "down" | "left" | "right") {
   await act(async () => tui?.mockInput.pressArrow(direction))
   await tui?.renderOnce()
 }
-async function leader(action: string) {
+async function leader(action: string, shift = false) {
   await key("b", true)
-  await key(action)
+  await key(action, false, shift)
 }
 async function openAgentProjects() {
   await leader("a")
@@ -379,8 +379,8 @@ async function launchAgent(remote = false) {
   }
   await click("terminal-dialog-project-launch")
 }
-async function split(action: "v" | "h") {
-  await leader(action)
+async function split(action: "c" | "h") {
+  await leader(action, action === "h")
   expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
   await key("n")
 }
@@ -436,6 +436,9 @@ test("Master Key action parsing accepts Alt tool keys and ignores unrelated modi
   expect(terminalActionKey({ name: "1", meta: true, ctrl: true })).toBeNull()
   expect(terminalActionKey({ name: "6", meta: true })).toBeNull()
   expect(terminalActionKey({ name: "q", ctrl: true })).toBeNull()
+  expect(terminalActionKey({ name: "h", shift: true })).toBe("shift+h")
+  expect(terminalActionKey({ name: "l", shift: true })).toBe("shift+l")
+  expect(terminalActionKey({ name: "q", shift: true })).toBeNull()
   expect(terminalActionKey({ name: "," })).toBe(",")
 })
 
@@ -492,6 +495,31 @@ test("tmux helper Master Key uses compact Actions and Agents tabs", async () => 
   await click("terminal-action-tab-actions")
   expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeDefined()
   expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeUndefined()
+
+  await key("l")
+  expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeDefined()
+  await key("h")
+  expect(tui.renderer.root.findDescendantById("terminal-action-panel")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("terminal-agent-panel")).toBeUndefined()
+})
+
+test("Master Key keeps Z/V for providers and uses C for a side split", async () => {
+  await mount()
+  await leader("n")
+  await key("b", true)
+  await arrow("right")
+  expect(tui?.renderer.root.findDescendantById("terminal-agent-panel-active")).toBeDefined()
+
+  await key("v")
+
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeUndefined()
+
+  await key("c")
+
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
 })
 
 test("Master Key opens the official Codex TUI connected to app-server", async () => {
@@ -652,6 +680,45 @@ test("OpenCode launches remotely through the selected SSH source and enables pro
 
   await leader("r")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeDefined()
+})
+
+test("closing a disconnected remote Claude pane still closes its background session", async () => {
+  await mount()
+  const stopSession = mock(async () => undefined)
+  let exit: Parameters<typeof claudeTerminal.startClaudeHooksTerminal>[0]["onExit"] | undefined
+  claudeSpy?.mockImplementation(async (options) => {
+    starts.push(options)
+    exit = options.onExit
+    const owned = {
+      pid: 502,
+      backend: "native" as const,
+      write() {},
+      resize() {},
+      async stop() {},
+    }
+    return {
+      ...owned,
+      ...claudeTerminal.remoteClaudeClose(
+        options.remote,
+        { sessionId: "remote-session", shortId: "remote-short-id", created: false },
+        owned,
+        async () => undefined,
+        stopSession,
+      ),
+    }
+  })
+
+  await leader("a")
+  await click("terminal-dialog-agent-provider-claude")
+  await selectProjectRemote()
+  await click("terminal-dialog-project-launch")
+  expect(exit).toBeDefined()
+
+  await act(async () => exit?.({ code: 255, signal: null, stopped: false }))
+  await tui?.renderOnce()
+  await leader("x")
+
+  expect(stopSession).toHaveBeenCalledTimes(1)
 })
 
 test("Master Key A chooses an SSH alias inside the picker and launches the exact remote directory", async () => {
@@ -1345,6 +1412,9 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   expect(app.captureCharFrame()).toContain("Mensagem anterior do agente aberto")
   expect(app.captureCharFrame()).toContain("Mensagem de outra página")
   expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
+  await act(async () => codexEvents?.onActivity("thinking"))
+  await app.renderOnce()
+  expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
   expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   expect(spanColor("[J/K]", panel.screenY + panel.height - 1)).toEqual(
     RGBA.fromHex(BRAND_COLOR).toInts(),
@@ -1757,7 +1827,7 @@ test("pinned sidebar keeps the custom command dialog accessible", async () => {
 test("Master Key can move keyboard focus from a terminal into the sidebar", async () => {
   await mount()
   await leader("n")
-  await leader("l")
+  await leader("l", true)
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
 })
 
@@ -1766,7 +1836,7 @@ test("Master Key M selects visible boxes with arrows or HJKL before moving focus
   await leader("n")
   const first = focusedTerminal()
   const firstId = first.id.replace("free-terminal-", "")
-  await split("v")
+  await split("c")
   const second = focusedTerminal()
   const secondId = second.id.replace("free-terminal-", "")
   const sidebar = renderable("terminal-sidebar")
@@ -1888,7 +1958,7 @@ test("returning from the pinned sidebar redraws and keeps the terminal visible",
   const invalidate = spyOn(terminal, "invalidate")
 
   await leader("b")
-  await leader("l")
+  await leader("l", true)
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
   await key("enter")
 
@@ -1919,7 +1989,7 @@ test("split confirmation can create a second pane and a third split is refused",
   await mount()
   await leader("n")
   const first = focusedTerminal()
-  await leader("v")
+  await leader("c")
   expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
   expect(tui?.captureCharFrame()).toContain("O que deseja colocar no novo painel?")
   expect(starts).toHaveLength(1)
@@ -1938,7 +2008,7 @@ test("split confirmation can create a second pane and a third split is refused",
   expect(second.screenX).toBe(first.screenX + first.width + 1)
   expect(first.width + second.width + 1).toBe(panes.width)
   expect(tui?.captureCharFrame()).toContain("│")
-  await leader("h")
+  await leader("h", true)
   expect(starts).toHaveLength(2)
   await key("escape")
   const splitWidth = second.width
@@ -1958,7 +2028,7 @@ test("split confirmation moves an existing agent without restarting it", async (
   const shell = focusedTerminal()
   expect(starts).toHaveLength(2)
 
-  await leader("v")
+  await leader("c")
   expect(tui?.renderer.root.findDescendantById("terminal-split-dialog")).toBeDefined()
   expect(tui?.captureCharFrame()).toContain("AGENTES EXISTENTES")
   expect(tui?.captureCharFrame()).toContain("Codex")
@@ -1995,7 +2065,7 @@ test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (me
   expect(focusedTerminal()).toBe(first)
   await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
   expect(focusedTerminal()).toBe(second)
-  await split("v")
+  await split("c")
   const third = focusedTerminal()
   expect(second.width + third.width + 1).toBe(panes.width)
   expect(third.screenX).toBe(second.screenX + second.width + 1)
@@ -2112,7 +2182,7 @@ test("changing Master Key in contextual settings takes effect and keeps shell in
 test("an agent launched under a shell keeps its pair in Tuiminais without restarting", async () => {
   await mount()
   await leader("n")
-  await split("v")
+  await split("c")
   const terminal = focusedTerminal()
   const sessionId = terminal.id.replace("free-terminal-", "")
   const agentId = `terminal-agent-${sessionId}`
@@ -2194,7 +2264,7 @@ test("removed Master Key actions are absent while new terminals stay in Tuiminai
   expect(starts).toHaveLength(1)
 })
 
-test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (direction) => {
+test.each(["h", "c"] as const)("Live Diff shares its %s split pane", async (direction) => {
   const root = "/fixture/split-live-diff"
   liveDiffSpies.push(
     spyOn(liveDiff, "liveDiffRepositoryRoot").mockResolvedValue(root),
@@ -2244,6 +2314,9 @@ test.each(["h", "v"] as const)("Live Diff shares its %s split pane", async (dire
   expect(focusedTerminal()).toBe(siblingTerminal)
   await click(`live-diff-${sessionId}`)
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
+  await act(async () => codexEvents?.onActivity("thinking"))
+  await tui?.renderOnce()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
 
   await key("escape")
   expect(tui?.renderer.root.findDescendantById(`live-diff-${sessionId}`)).toBeDefined()
@@ -2271,7 +2344,7 @@ test("Live Diff covers its split pane only when the terminal is very small", asy
   await launchAgent()
   const agentTerminal = focusedTerminal()
   const sessionId = agentTerminal.id.replace("free-terminal-", "")
-  await split("v")
+  await split("c")
   const siblingTerminal = focusedTerminal()
   const siblingId = siblingTerminal.id.replace("free-terminal-", "")
   await click(`terminal-agent-${sessionId}`)
@@ -2303,7 +2376,7 @@ test("split agents keep independent Live Diff panels", async () => {
   const firstId = focusedTerminal().id.replace("free-terminal-", "")
   await launchAgent()
   const secondId = focusedTerminal().id.replace("free-terminal-", "")
-  await leader("v")
+  await leader("c")
   await click("terminal-split-option-1")
 
   await leader("d")
@@ -2329,7 +2402,7 @@ test("split Codex agents keep independent sent-message histories", async () => {
   const firstId = focusedTerminal().id.replace("free-terminal-", "")
   await launchAgent()
   const secondId = focusedTerminal().id.replace("free-terminal-", "")
-  await leader("v")
+  await leader("c")
   await click("terminal-split-option-1")
 
   await leader("s")

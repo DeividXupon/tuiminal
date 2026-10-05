@@ -8,16 +8,16 @@ import {
   startCodexAppServerRelay,
 } from "../packages/feature-terminal/src/services/codex-app-server"
 import {
+  CodexProxyFrameDecoder,
+  CodexProxyWebSocket,
+  codexProxyClientFrame,
+} from "../packages/feature-terminal/src/services/codex-proxy-websocket"
+import {
   type CodexAppServerEvents,
   createCodexRelay,
   inspectClientFrame,
   inspectUpstreamFrame,
 } from "../packages/feature-terminal/src/services/codex-relay-observer"
-import {
-  codexProxyClientFrame,
-  CodexProxyFrameDecoder,
-  CodexProxyWebSocket,
-} from "../packages/feature-terminal/src/services/codex-proxy-websocket"
 import { resumeListFrame } from "../packages/feature-terminal/src/services/codex-resume"
 
 type MockSocket = { send: (data: string) => unknown }
@@ -230,7 +230,7 @@ test("parses the local Codex /resume thread summaries", () => {
       cwd: "/workspace/app",
       projectName: "app",
       gitBranch: "feature/auth",
-      updatedAt: 22,
+      updatedAt: 22_000,
       state: "blocked",
     },
     {
@@ -241,7 +241,7 @@ test("parses the local Codex /resume thread summaries", () => {
       cwd: "/workspace/older",
       projectName: "older",
       gitBranch: "release/older",
-      updatedAt: 11,
+      updatedAt: 11_000,
       state: "idle",
     },
   ])
@@ -686,7 +686,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       method: "thread/list",
       params: {
         cursor: null,
-        limit: 6,
+        limit: 12,
         sortKey: "recency_at",
         sortDirection: "desc",
         sourceKinds: ["cli", "vscode", "appServer"],

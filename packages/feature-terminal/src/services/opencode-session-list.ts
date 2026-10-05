@@ -27,13 +27,22 @@ export async function listOpenCodeResumeSessions(
   directory: string,
   signal: AbortSignal,
   remote?: RemoteCodexTarget,
+  maximum = 20,
 ) {
   signal.throwIfAborted()
   const timeout = AbortSignal.timeout(15_000)
   const boundedSignal = AbortSignal.any([signal, timeout])
   const command = remote
-    ? remoteOpenCodeSessionListCommand(remote.profile)
-    : [resolveOpenCodeExecutable(), "session", "list", "--format", "json", "--max-count", "20"]
+    ? remoteOpenCodeSessionListCommand(remote.profile, maximum)
+    : [
+        resolveOpenCodeExecutable(),
+        "session",
+        "list",
+        "--format",
+        "json",
+        "--max-count",
+        String(Math.max(1, Math.floor(maximum))),
+      ]
   const child = Bun.spawn(command, {
     ...(remote ? {} : { cwd: directory }),
     stdin: "ignore",

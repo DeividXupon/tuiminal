@@ -18,6 +18,13 @@ type SidebarKeyboardOptions = {
   onExit: () => void
 }
 
+function isLeaderNavigationKey(key: KeyEvent, agentTabsActive: boolean) {
+  if (["up", "down", "left", "right", "tab", "enter", "return"].includes(key.name)) return true
+  if (key.ctrl || key.meta || key.option || key.shift || key.super) return false
+  const name = key.name.toLowerCase()
+  return ["h", "j", "k", "l"].includes(name) || (agentTabsActive && ["z", "v"].includes(name))
+}
+
 function consumeKey(key: KeyEvent) {
   key.preventDefault()
   key.stopPropagation()
@@ -76,8 +83,10 @@ export function useSidebarKeyboard(options: SidebarKeyboardOptions) {
         return
       }
       if (
-        ["up", "down", "left", "right", "enter", "return"].includes(key.name) ||
-        ["j", "k"].includes(key.name.toLowerCase())
+        isLeaderNavigationKey(
+          key,
+          Boolean(renderer.root.findDescendantById("terminal-agent-panel-active")),
+        )
       )
         return
       handleLeaderKey(key, options)

@@ -1,7 +1,7 @@
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { agentProvider } from "../model/agent-provider"
-import type { AgentResumeThread } from "../model/agent-resume-thread"
+import { type AgentResumeThread, agentResumeTimestamp } from "../model/agent-resume-thread"
 import { AgentProviderWordmark } from "./AgentProviderWordmark"
 
 function resumeThreadPresentation(state: AgentResumeThread["state"]) {
@@ -39,7 +39,7 @@ function resumeThreadPresentation(state: AgentResumeThread["state"]) {
 
 function idleDurationLabel(updatedAt: number, now: number) {
   if (updatedAt <= 0) return "—"
-  const timestamp = updatedAt < 10_000_000_000 ? updatedAt * 1_000 : updatedAt
+  const timestamp = agentResumeTimestamp(updatedAt)
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1_000))
   if (seconds < 60) return `${seconds}s`
   const minutes = Math.floor(seconds / 60)

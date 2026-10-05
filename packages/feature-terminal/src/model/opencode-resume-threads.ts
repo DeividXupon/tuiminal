@@ -1,3 +1,4 @@
+import { AGENT_RESUME_SOURCE_LIMIT, compareAgentResumeThreads } from "./agent-resume-order"
 import type { CodexResumeThread } from "./codex-resume-threads"
 
 export type OpenCodeResumeThread = CodexResumeThread
@@ -7,7 +8,7 @@ const sources = new Map<string, readonly OpenCodeResumeThread[]>()
 const listeners = new Set<() => void>()
 
 function newestFirst(left: OpenCodeResumeThread, right: OpenCodeResumeThread) {
-  return right.updatedAt - left.updatedAt || left.id.localeCompare(right.id)
+  return compareAgentResumeThreads(left, right)
 }
 
 export function openCodeResumeThreadsSnapshot() {
@@ -24,7 +25,7 @@ export function publishOpenCodeResumeThreads(
   remoteProfileId?: string,
 ) {
   const source = remoteProfileId ? `remote:${remoteProfileId}` : "local"
-  sources.set(source, next)
+  sources.set(source, [...next].sort(newestFirst).slice(0, AGENT_RESUME_SOURCE_LIMIT))
   const merged = [...sources.values()].flat().sort(newestFirst)
   if (JSON.stringify(merged) === JSON.stringify(threads)) return
   threads = merged
@@ -41,7 +42,7 @@ export function mergeOpenCodeResumeThreads(
   publishOpenCodeResumeThreads(
     [...next, ...(sources.get(source) ?? []).filter((thread) => !incoming.has(thread.id))]
       .sort(newestFirst)
-      .slice(0, 20),
+      .slice(0, AGENT_RESUME_SOURCE_LIMIT),
     remoteProfileId,
   )
 }

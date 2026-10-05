@@ -438,6 +438,7 @@ export function AppContent() {
               !closed.has(ONLY_TAB) &&
               ONLY_TAB === "terminal" && (
                 <FreeTerminal
+                  tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
                   active={!interactionBlocked}
                   externalSidebarHost
                   remoteSetupRequest={remoteSetup.request}
@@ -554,6 +555,7 @@ export function AppContent() {
                 style={{ flexGrow: 1 }}
               >
                 <FreeTerminal
+                  tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
                   active={activeTab === "terminal" && !interactionBlocked}
                   externalSidebarHost
                   remoteSetupRequest={remoteSetup.request}

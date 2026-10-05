@@ -14,12 +14,15 @@ export function AgentProjectEnvironmentDialog({
   error,
   onSelect,
   onClose,
+  inactive = false,
 }: {
   profiles: readonly TerminalRemoteCodexProfile[]
   loading: boolean
   error: string
   onSelect: (target: AgentProjectTarget) => void
   onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dimensions = useTerminalDimensions()
   const dialog = useRef<BoxRenderable | null>(null)
@@ -34,13 +37,13 @@ export function AgentProjectEnvironmentDialog({
     if (target) onSelect(target)
   }
   useEffect(() => {
-    dialog.current?.focus()
-  }, [])
+    if (!inactive) dialog.current?.focus()
+  }, [inactive])
   useEffect(() => {
     list.current?.scrollChildIntoView(`terminal-dialog-project-environment-${selected}`)
   }, [selected])
   useKeyboard((key) => {
-    if (!["escape", "up", "down", "enter", "return"].includes(key.name)) return
+    if (inactive || !["escape", "up", "down", "enter", "return"].includes(key.name)) return
     key.preventDefault()
     key.stopPropagation()
     if (key.name === "escape") onClose()

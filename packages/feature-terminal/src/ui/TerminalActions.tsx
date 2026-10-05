@@ -1,14 +1,23 @@
-import type { BoxRenderable, InputRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
+import type { BoxRenderable, InputRenderable, KeyEvent } from "@opentui/core"
 import { useKeyboard } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { AgentResumeThread } from "../model/agent-resume-thread"
+import type { AgentProviderId } from "../model/agent-provider"
+import {
+  type AgentResumePaginationState,
+  type AgentResumeTab,
+  type AgentResumeThread,
+  agentResumeThreadKey,
+  agentResumeThreadsForTab,
+  DEFAULT_AGENT_RESUME_PAGINATION,
+} from "../model/agent-resume-thread"
 import { TERMINAL_ACTION_TAG_LABELS, TERMINAL_ACTIONS } from "../model/terminal-actions"
-import { TerminalActionRow } from "./TerminalActionRow"
-import { TerminalAgentResponsePanel, TerminalResumeThreadRow } from "./TerminalResumeThreads"
+import { TerminalActionListPanel } from "./TerminalActionListPanel"
+import { TerminalResumePanel } from "./TerminalResumePanel"
+import { adjacentAgentResumeTab } from "./TerminalResumeTabs"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
 export { TERMINAL_ACTIONS } from "../model/terminal-actions"
@@ -28,7 +37,11 @@ export function terminalActionKey(key: {
     const number = [key.name, key.sequence, key.raw].find((value) => /^[1-5]$/.test(value ?? ""))
     return number ? `alt+${number}` : null
   }
-  if (key.ctrl || key.shift || key.super) return null
+  if (key.ctrl || key.super) return null
+  if (key.shift) {
+    const name = key.name.toLowerCase()
+    return ["h", "l"].includes(name) ? `shift+${name}` : null
+  }
   return [key.name, key.sequence, key.raw].includes(",") ? "," : key.name
 }
 
@@ -48,9 +61,10 @@ function terminalActionDirection(key: KeyEvent, searchFocused: boolean) {
 }
 
 function terminalActionPanel(key: KeyEvent, searchFocused: boolean) {
-  if (searchFocused) return null
-  if (key.name === "left") return "actions" as const
-  if (key.name === "right") return "agents" as const
+  if (searchFocused || key.ctrl || key.meta || key.option || key.shift || key.super) return null
+  const name = key.name.toLowerCase()
+  if (name === "left" || name === "h") return "actions" as const
+  if (name === "right" || name === "l") return "agents" as const
   return null
 }
 
@@ -58,7 +72,42 @@ function isSlashKey(key: KeyEvent) {
   return key.name === "/" || key.sequence === "/" || key.raw === "/"
 }
 
-type TerminalActionPanel = "actions" | "agents"
+function handleDialogKey(
+  key: KeyEvent,
+  searchFocused: boolean,
+  input: InputRenderable | null,
+  dialog: BoxRenderable | null,
+  close: () => void,
+) {
+  if (key.name === "escape") {
+    consumeKey(key)
+    if (searchFocused) {
+      input?.blur()
+      dialog?.focus()
+    } else close()
+    return true
+  }
+  if (!searchFocused && isSlashKey(key)) {
+    consumeKey(key)
+    input?.focus()
+    return true
+  }
+  return false
+}
+
+function resumeTabDirection(key: KeyEvent, searchFocused: boolean, panel: TerminalActionPanel) {
+  if (searchFocused || panel !== "agents") return 0
+  if (key.name.toLowerCase() === "z") return -1 as const
+  if (key.name.toLowerCase() === "v") return 1 as const
+  return 0
+}
+
+function nextPanel(current: TerminalActionPanel, requested: TerminalActionPanel) {
+  if (current !== requested) return requested
+  return requested === "actions" ? "agents" : "actions"
+}
+
+export type TerminalActionPanel = "actions" | "agents"
 
 function TerminalActionTabs({
   visible,
@@ -90,49 +139,41 @@ function TerminalActionTabs({
   )
 }
 
-function TerminalPanelHeading({
-  visible,
-  active,
-  label,
-}: {
-  visible: boolean
-  active: boolean
-  label: string
-}) {
-  if (!visible) return null
-  return (
-    <text
-      content={`${active ? "›" : " "} ${translateUi(label)}`}
-      style={{ height: 1, flexShrink: 0, fg: active ? COLORS.focus : COLORS.muted }}
-    />
-  )
-}
-
 export function TerminalActions({
   width,
   height,
   recentThreads = [],
+  activeRemoteProfileId,
+  resumePagination = DEFAULT_AGENT_RESUME_PAGINATION,
+  onLoadMoreThreads,
   onAction,
   onSelectThread,
   disabled,
   compact = false,
+  inactive = false,
+  initialPanel = "actions",
 }: {
   width: number
   height: number
   recentThreads?: readonly AgentResumeThread[]
+  activeRemoteProfileId?: string | undefined
+  resumePagination?: AgentResumePaginationState | undefined
+  onLoadMoreThreads?: (providerId: AgentProviderId) => void
   onAction: (key: string) => void
   onSelectThread?: (thread: AgentResumeThread) => void
   disabled: (key: string) => boolean
   compact?: boolean
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
+  initialPanel?: TerminalActionPanel
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const input = useRef<InputRenderable | null>(null)
-  const actionList = useRef<ScrollBoxRenderable | null>(null)
-  const agentList = useRef<ScrollBoxRenderable | null>(null)
   const [query, setQuery] = useState("")
-  const [activePanel, setActivePanel] = useState<TerminalActionPanel>("actions")
+  const [activePanel, setActivePanel] = useState<TerminalActionPanel>(initialPanel)
+  const [activeResumeTab, setActiveResumeTab] = useState<AgentResumeTab>("global")
   const [selectedAction, setSelectedAction] = useState(0)
-  const [selectedAgent, setSelectedAgent] = useState(0)
+  const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const actions = useMemo(
     () =>
@@ -150,7 +191,12 @@ export function TerminalActions({
   )
   const threads = useMemo(
     () =>
-      recentThreads.filter(
+      agentResumeThreadsForTab(
+        recentThreads,
+        activeResumeTab,
+        activeRemoteProfileId,
+        resumePagination.limits,
+      ).filter(
         (thread) =>
           !query.trim() ||
           matchesQuery(
@@ -158,9 +204,14 @@ export function TerminalActions({
             query,
           ),
       ),
-    [query, recentThreads],
+    [activeRemoteProfileId, activeResumeTab, query, recentThreads, resumePagination.limits],
   )
-  const selectedThread = activePanel === "agents" ? threads[selectedAgent] : undefined
+  const selectedAgent = Math.max(
+    0,
+    selectedAgentKey
+      ? threads.findIndex((thread) => agentResumeThreadKey(thread) === selectedAgentKey)
+      : 0,
+  )
   const dialogWidth = compact ? width : Math.max(1, Math.min(120, width - 2))
   const dialogHeight = Math.max(1, Math.min(compact ? 24 : 30, height - 2))
   const panelContentWidth = Math.max(
@@ -171,8 +222,8 @@ export function TerminalActions({
   const agentPanelBackground = activePanel === "agents" ? COLORS.panelAlt : COLORS.panel
 
   useEffect(() => {
-    dialog.current?.focus()
-  }, [])
+    if (!inactive) dialog.current?.focus()
+  }, [inactive])
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(timer)
@@ -181,19 +232,11 @@ export function TerminalActions({
     setSelectedAction((current) => Math.min(current, Math.max(0, actions.length - 1)))
   }, [actions.length])
   useEffect(() => {
-    setSelectedAgent((current) => Math.min(current, Math.max(0, threads.length - 1)))
-  }, [threads.length])
-  useEffect(() => {
-    const key = actions[selectedAction]?.key
-    if (activePanel === "actions" && key)
-      actionList.current?.scrollChildIntoView(`terminal-action-${key}`)
-  }, [actions, activePanel, selectedAction])
-  useEffect(() => {
-    const id = threads[selectedAgent]?.id
-    if (activePanel === "agents" && id)
-      agentList.current?.scrollChildIntoView(`terminal-resume-thread-${id}`)
-  }, [activePanel, selectedAgent, threads])
-
+    const selected = selectedAgentKey
+      ? threads.some((thread) => agentResumeThreadKey(thread) === selectedAgentKey)
+      : false
+    if (!selected) setSelectedAgentKey(threads[0] ? agentResumeThreadKey(threads[0]) : null)
+  }, [selectedAgentKey, threads])
   const choose = () => {
     if (activePanel === "actions") {
       const action = actions[selectedAction]
@@ -204,20 +247,33 @@ export function TerminalActions({
     if (thread) onSelectThread?.(thread)
   }
   const close = () => onAction("escape")
+  const moveListSelection = (direction: number) => {
+    const itemCount = activePanel === "actions" ? actions.length : threads.length
+    if (!itemCount) return false
+    if (activePanel === "actions")
+      setSelectedAction((current) => (current + direction + itemCount) % itemCount)
+    else if (
+      direction > 0 &&
+      selectedAgent === itemCount - 1 &&
+      activeResumeTab !== "global" &&
+      resumePagination.hasMore[activeResumeTab]
+    )
+      onLoadMoreThreads?.(activeResumeTab)
+    else {
+      const next = (selectedAgent + direction + itemCount) % itemCount
+      const thread = threads[next]
+      if (thread) setSelectedAgentKey(agentResumeThreadKey(thread))
+    }
+    return true
+  }
 
   useKeyboard((key) => {
+    if (inactive) return
     const searchFocused = input.current?.focused ?? false
-    if (key.name === "escape") {
+    if (handleDialogKey(key, searchFocused, input.current, dialog.current, close)) return
+    if (!searchFocused && key.name === "tab") {
       consumeKey(key)
-      if (searchFocused) {
-        input.current?.blur()
-        dialog.current?.focus()
-      } else close()
-      return
-    }
-    if (!searchFocused && isSlashKey(key)) {
-      consumeKey(key)
-      input.current?.focus()
+      setActivePanel((current) => nextPanel(current, current))
       return
     }
     const panel = terminalActionPanel(key, searchFocused)
@@ -226,13 +282,16 @@ export function TerminalActions({
       setActivePanel(panel)
       return
     }
-    const direction = terminalActionDirection(key, searchFocused)
-    const itemCount = activePanel === "actions" ? actions.length : threads.length
-    if (direction && itemCount) {
+    const tabDirection = resumeTabDirection(key, searchFocused, activePanel)
+    if (tabDirection) {
       consumeKey(key)
-      if (activePanel === "actions")
-        setSelectedAction((current) => (current + direction + itemCount) % itemCount)
-      else setSelectedAgent((current) => (current + direction + itemCount) % itemCount)
+      setActiveResumeTab((current) => adjacentAgentResumeTab(current, tabDirection))
+      setSelectedAgentKey(null)
+      return
+    }
+    const direction = terminalActionDirection(key, searchFocused)
+    if (direction && moveListSelection(direction)) {
+      consumeKey(key)
       return
     }
     if (key.name === "enter" || key.name === "return") {
@@ -283,103 +342,52 @@ export function TerminalActions({
         style={{ flexGrow: 1, minHeight: 1, flexDirection: "row", gap: 1 }}
       >
         {(!compact || activePanel === "actions") && (
-          <box
-            id="terminal-action-panel"
-            style={{
-              flexGrow: 1,
-              flexBasis: 0,
-              minWidth: 1,
-              backgroundColor: actionPanelBackground,
-              paddingLeft: 1,
-              paddingRight: 1,
+          <TerminalActionListPanel
+            compact={compact}
+            active={activePanel === "actions"}
+            backgroundColor={actionPanelBackground}
+            actions={actions}
+            selectedIndex={selectedAction}
+            descriptionWidth={panelContentWidth}
+            query={query}
+            disabled={disabled}
+            onSelect={(index, action) => {
+              setActivePanel("actions")
+              setSelectedAction(index)
+              if (!disabled(action.key)) onAction(action.key)
             }}
-          >
-            <TerminalPanelHeading
-              visible={!compact}
-              active={activePanel === "actions"}
-              label="AÇÕES"
-            />
-            <scrollbox
-              ref={actionList}
-              id="terminal-action-results"
-              scrollY
-              style={{ flexGrow: 1 }}
-            >
-              {actions.map((action, index) => {
-                const active = activePanel === "actions" && selectedAction === index
-                const actionDisabled = disabled(action.key)
-                return (
-                  <TerminalActionRow
-                    key={action.key}
-                    action={action}
-                    active={active}
-                    disabled={actionDisabled}
-                    backgroundColor={actionPanelBackground}
-                    descriptionWidth={panelContentWidth}
-                    onSelect={() => {
-                      setActivePanel("actions")
-                      setSelectedAction(index)
-                      if (!actionDisabled) onAction(action.key)
-                    }}
-                  />
-                )
-              })}
-              {query.trim() && actions.length === 0 && (
-                <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
-              )}
-            </scrollbox>
-          </box>
+          />
         )}
         {(!compact || activePanel === "agents") && (
-          <box
-            id="terminal-agent-panel"
-            style={{
-              flexGrow: 1,
-              flexBasis: 0,
-              minWidth: 1,
-              backgroundColor: agentPanelBackground,
-              paddingLeft: 1,
-              paddingRight: 1,
+          <TerminalResumePanel
+            compact={compact}
+            active={activePanel === "agents"}
+            backgroundColor={agentPanelBackground}
+            threads={threads}
+            query={query}
+            selectedIndex={selectedAgent}
+            width={panelContentWidth}
+            now={now}
+            activeTab={activeResumeTab}
+            pagination={resumePagination}
+            onSelectTab={(tab) => {
+              setActivePanel("agents")
+              setActiveResumeTab(tab)
+              setSelectedAgentKey(null)
             }}
-          >
-            <TerminalPanelHeading
-              visible={!compact}
-              active={activePanel === "agents"}
-              label="AGENTES · RETOMAR"
-            />
-            <scrollbox ref={agentList} id="terminal-agent-results" scrollY style={{ flexGrow: 1 }}>
-              {threads.map((thread, index) => (
-                <TerminalResumeThreadRow
-                  key={thread.id}
-                  thread={thread}
-                  active={activePanel === "agents" && selectedAgent === index}
-                  alternate={index % 2 === 1}
-                  width={panelContentWidth}
-                  now={now}
-                  backgroundColor={agentPanelBackground}
-                  onSelect={(selectedThread) => {
-                    setActivePanel("agents")
-                    setSelectedAgent(index)
-                    onSelectThread?.(selectedThread)
-                  }}
-                />
-              ))}
-              {!query.trim() && recentThreads.length === 0 && (
-                <text
-                  content={translateUi("Nenhuma conversa de agente disponível para retomar.")}
-                  style={{ fg: COLORS.muted }}
-                />
-              )}
-              {query.trim() && threads.length === 0 && (
-                <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
-              )}
-            </scrollbox>
-            {selectedThread && <TerminalAgentResponsePanel thread={selectedThread} now={now} />}
-          </box>
+            onSelectThread={(thread) => {
+              setActivePanel("agents")
+              setSelectedAgentKey(agentResumeThreadKey(thread))
+              onSelectThread?.(thread)
+            }}
+            onReachEnd={() => {
+              if (activeResumeTab !== "global") onLoadMoreThreads?.(activeResumeTab)
+            }}
+          />
         )}
       </box>
       <TerminalShortcutText
-        content={`[←/→] ${compact ? "aba" : "painel"} · [↑/↓] navegar · [Enter] abrir · [Esc] fechar`}
+        content="[←/→ H/L] painel · [Z←] [→V] agente · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </ModalSurface>

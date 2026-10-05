@@ -1,0 +1,159 @@
+import { describe, expect, test } from "bun:test"
+import type { AgentProviderId } from "../packages/feature-terminal/src/model/agent-provider"
+import {
+  type AgentResumeThread,
+  agentResumeThreadsForTab,
+  compareAgentResumeThreads,
+  DEFAULT_AGENT_RESUME_PAGINATION,
+} from "../packages/feature-terminal/src/model/agent-resume-thread"
+import {
+  claudeResumeThreadsSnapshot,
+  publishClaudeResumeThreads,
+  resetClaudeResumeThreadsForTests,
+} from "../packages/feature-terminal/src/model/claude-resume-threads"
+import {
+  codexResumeThreadsSnapshot,
+  publishCodexResumeThreads,
+  resetCodexResumeThreadsForTests,
+} from "../packages/feature-terminal/src/model/codex-resume-threads"
+import {
+  openCodeResumeThreadsSnapshot,
+  publishOpenCodeResumeThreads,
+  resetOpenCodeResumeThreadsForTests,
+} from "../packages/feature-terminal/src/model/opencode-resume-threads"
+
+function thread(
+  providerId: AgentProviderId,
+  id: string,
+  updatedAt: number,
+  remoteProfileId?: string,
+): AgentResumeThread {
+  return {
+    id,
+    title: id,
+    preview: id,
+    lastResponse: "",
+    cwd: `/workspace/${id}`,
+    projectName: id,
+    gitBranch: "",
+    updatedAt,
+    state: "idle",
+    providerId,
+    ...(remoteProfileId ? { remoteProfileId } : {}),
+  }
+}
+
+describe("Master Key recent agents", () => {
+  test("sorts mixed provider timestamp units by the actual last interaction", () => {
+    const threads = [
+      thread("opencode", "millisecond-older", 1_700_000_000_500),
+      thread("codex", "second-newer", 1_700_000_001),
+      thread("claude", "unknown", 0),
+    ]
+
+    expect(threads.sort(compareAgentResumeThreads).map(({ id }) => id)).toEqual([
+      "second-newer",
+      "millisecond-older",
+      "unknown",
+    ])
+  })
+
+  test("balances Global by provider and origin, then applies one chronological order", () => {
+    const providers: readonly AgentProviderId[] = ["codex", "claude", "opencode"]
+    const threads = providers.flatMap((providerId, providerIndex) =>
+      Array.from({ length: 14 }, (_, index) => [
+        thread(providerId, `${providerId}-local-${index}`, 10_000 - providerIndex * 100 - index),
+        thread(
+          providerId,
+          `${providerId}-remote-${index}`,
+          9_000 - providerIndex * 100 - index,
+          "active",
+        ),
+        thread(
+          providerId,
+          `${providerId}-inactive-${index}`,
+          20_000 - providerIndex * 100 - index,
+          "inactive",
+        ),
+      ]).flat(),
+    )
+
+    const global = agentResumeThreadsForTab(
+      threads,
+      "global",
+      "active",
+      DEFAULT_AGENT_RESUME_PAGINATION.limits,
+    )
+    expect(global).toHaveLength(42)
+    expect(global.some(({ remoteProfileId }) => remoteProfileId === "inactive")).toBe(false)
+    for (const providerId of providers) {
+      const provider = global.filter((candidate) => candidate.providerId === providerId)
+      expect(provider.filter(({ remoteProfileId }) => !remoteProfileId)).toHaveLength(7)
+      expect(provider.filter(({ remoteProfileId }) => remoteProfileId === "active")).toHaveLength(7)
+    }
+    expect(global.map(({ updatedAt }) => updatedAt)).toEqual(
+      global.map(({ updatedAt }) => updatedAt).sort((left, right) => right - left),
+    )
+
+    const codex = agentResumeThreadsForTab(
+      threads,
+      "codex",
+      "active",
+      DEFAULT_AGENT_RESUME_PAGINATION.limits,
+    )
+    expect(codex.filter(({ remoteProfileId }) => !remoteProfileId)).toHaveLength(12)
+    expect(codex.filter(({ remoteProfileId }) => remoteProfileId === "active")).toHaveLength(12)
+  })
+
+  test("keeps same-id local and remote Codex response caches isolated", () => {
+    resetCodexResumeThreadsForTests()
+    try {
+      const local = thread("codex", "shared", 100)
+      publishCodexResumeThreads([{ ...local, lastResponse: "local response" }])
+      publishCodexResumeThreads(
+        [{ ...local, lastResponse: "", remoteProfileId: "active" }],
+        "active",
+      )
+
+      expect(
+        codexResumeThreadsSnapshot().find(
+          (candidate) => candidate.id === "shared" && candidate.remoteProfileId === "active",
+        )?.lastResponse,
+      ).toBe("")
+    } finally {
+      resetCodexResumeThreadsForTests()
+    }
+  })
+
+  test("caps every provider and local/remote origin independently", () => {
+    const roster = (providerId: AgentProviderId, remoteProfileId?: string) =>
+      Array.from({ length: 121 }, (_, index) =>
+        thread(providerId, `${remoteProfileId ?? "local"}-${index}`, index + 1, remoteProfileId),
+      )
+    resetCodexResumeThreadsForTests()
+    resetOpenCodeResumeThreadsForTests()
+    resetClaudeResumeThreadsForTests()
+    try {
+      publishCodexResumeThreads(roster("codex"))
+      publishCodexResumeThreads(roster("codex", "active"), "active")
+      publishOpenCodeResumeThreads(roster("opencode"))
+      publishOpenCodeResumeThreads(roster("opencode", "active"), "active")
+      publishClaudeResumeThreads([...roster("claude"), ...roster("claude", "active")])
+
+      for (const snapshot of [
+        codexResumeThreadsSnapshot(),
+        openCodeResumeThreadsSnapshot(),
+        claudeResumeThreadsSnapshot(),
+      ]) {
+        expect(snapshot.filter(({ remoteProfileId }) => !remoteProfileId)).toHaveLength(120)
+        expect(snapshot.filter(({ remoteProfileId }) => remoteProfileId === "active")).toHaveLength(
+          120,
+        )
+      }
+    } finally {
+      resetCodexResumeThreadsForTests()
+      resetOpenCodeResumeThreadsForTests()
+      resetClaudeResumeThreadsForTests()
+    }
+  })
+})

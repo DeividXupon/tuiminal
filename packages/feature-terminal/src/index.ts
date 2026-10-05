@@ -2,6 +2,7 @@ export { FreeTerminal } from "./TerminalWorkspace"
 export type { RemoteServerSetupRequest } from "./model/sessions"
 export { PinnedTerminalSidebar } from "./ui/PinnedTerminalSidebar"
 export { terminalKeyboardScope } from "./keyboard"
+export { TERMINAL_TUTORIAL_STEPS } from "./tutorial/steps"
 export { createRemoteServerSetupCommand, stopAllFreeTerminalProcesses } from "./services/terminal"
 export {
   listSshConfigProfiles,

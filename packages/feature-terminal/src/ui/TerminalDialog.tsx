@@ -16,24 +16,27 @@ export function TerminalDialog({
   initialValue,
   onSave,
   onClose,
+  inactive = false,
 }: {
   kind: TerminalDialogKind
   initialValue: string
   onSave: (value: string) => void
   onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dimensions = useTerminalDimensions()
   const dialogRef = useRef<BoxRenderable | null>(null)
   const ref = useRef<InputRenderable | null>(null)
   const [value, setValue] = useState(initialValue)
   useEffect(() => {
-    ref.current?.focus()
-  }, [])
+    if (!inactive) ref.current?.focus()
+  }, [inactive])
   const submit = () => {
     if (value.trim()) onSave(value.trim())
   }
   useKeyboard((key) => {
-    if (key.name === "escape") {
+    if (!inactive && key.name === "escape") {
       key.preventDefault()
       key.stopPropagation()
       onClose()

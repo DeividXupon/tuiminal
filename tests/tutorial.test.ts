@@ -24,13 +24,28 @@ const GIT_TUTORIAL_SOURCE = (
     ),
   )
 ).join("\n")
+const TERMINAL_TUTORIAL_SOURCES = await Promise.all(
+  [
+    "TerminalTutorialAgentFixtures.ts",
+    "TerminalTutorialDemo.tsx",
+    "TerminalTutorialDialogs.tsx",
+    "TerminalTutorialFixtures.ts",
+    "TerminalTutorialPanes.tsx",
+    "TerminalTutorialSidebar.tsx",
+    "TerminalTutorialVisualState.ts",
+  ].map((filename) =>
+    Bun.file(
+      new URL(`../packages/feature-terminal/src/tutorial/${filename}`, import.meta.url),
+    ).text(),
+  ),
+)
 const HTTP_TUTORIAL_SOURCE = await Bun.file(
   new URL("../packages/feature-http/src/tutorial/HttpTutorialDemo.tsx", import.meta.url),
 ).text()
 
 describe("contextual tutorial", () => {
   test("keeps non-database tours focused on the active tool", () => {
-    for (const screen of ["runner", "terminal"]) {
+    for (const screen of ["runner"]) {
       const steps = getTutorialSteps(screen)
       expect(steps.map((step) => step.targetId)).toEqual(["tutorial-current-tool"])
       expect(steps.some((step) => step.targetId === "tutorial-app-header")).toBe(false)
@@ -47,6 +62,44 @@ describe("contextual tutorial", () => {
       for (const value of [step.group, step.title, step.description, step.hint]) {
         if (value) expect(translateUi(value, "en")).not.toBe(value)
       }
+    }
+  })
+
+  test("tours Free Terminal from the basics to remote agents with simulated views", async () => {
+    const { terminalTutorialVisualState } = await import(
+      "../packages/feature-terminal/src/tutorial/TerminalTutorialVisualState"
+    )
+    const steps = getTutorialSteps("terminal")
+    const targets = steps.map((step) => step.targetId)
+    expect(new Set(targets).size).toBe(targets.length)
+    expect(targets[0]).toBe("tutorial-terminal-workspace")
+    expect(targets.at(-1)).toBe("tutorial-terminal-finale")
+    expect([...new Set(steps.map((step) => step.group))]).toEqual([
+      "1 · O BÁSICO",
+      "2 · A MASTER KEY",
+      "3 · DIVIDINDO A TELA",
+      "4 · AGENTES",
+      "5 · DE OLHO NO AGENTE",
+      "6 · AVANÇADO",
+    ])
+    for (const step of steps) {
+      for (const value of [step.group, step.title, step.description, step.hint]) {
+        if (value) expect(translateUi(value, "en")).not.toBe(value)
+      }
+      // Targets outside the opening view must stay listed while their state is closed.
+      if (terminalTutorialVisualState(step.targetId) !== "workspace")
+        expect(step.stateful).toBe(true)
+    }
+    for (const source of TERMINAL_TUTORIAL_SOURCES) {
+      const imports = [...source.matchAll(/from "([^"]+)"/g)].map((match) => match[1])
+      expect(
+        imports.filter((path) => path?.includes("/services/") || path?.includes("/hooks/")),
+      ).toEqual(
+        source.includes("remoteServerSetupInstructions") ? ["../services/remote-server-setup"] : [],
+      )
+      expect(source).not.toContain("Bun.spawn")
+      expect(source).not.toContain("node:fs")
+      expect(source).not.toContain("node:child_process")
     }
   })
 
@@ -163,3 +216,4 @@ describe("contextual tutorial", () => {
 const { loadSourceFeature } = await import("../apps/cli/src/features/source-loader")
 await loadSourceFeature("git")
 await loadSourceFeature("http")
+await loadSourceFeature("terminal")

@@ -91,6 +91,7 @@ export function AgentMessageHistoryPanel({
   onReturnTerminal,
   onActivateSession,
   onDetailModeChange,
+  initialDetailView = null,
 }: {
   sessionId: string
   messages: readonly AgentMessageHistoryEntry[]
@@ -100,6 +101,8 @@ export function AgentMessageHistoryPanel({
   onReturnTerminal: (id: string) => void
   onActivateSession: () => void
   onDetailModeChange: (open: boolean) => void
+  /** Opens a detail section on mount, as in simulated tutorials. */
+  initialDetailView?: AgentMessageDetailView | null
 }) {
   const renderer = useRenderer()
   const panel = useRef<BoxRenderable | null>(null)
@@ -111,7 +114,7 @@ export function AgentMessageHistoryPanel({
   const [now, setNow] = useState(Date.now())
   const [width, setWidth] = useState(120)
   const [height, setHeight] = useState(30)
-  const [detailView, setDetailView] = useState<AgentMessageDetailView | null>(null)
+  const [detailView, setDetailView] = useState<AgentMessageDetailView | null>(initialDetailView)
   const panelFocused = useRenderableFocus(panel)
   const shortcutColor = terminalShortcutColor(active, panelFocused)
   const selectedEntry = rows.find((entry) => entry.id === selectedId) ?? rows[0] ?? null

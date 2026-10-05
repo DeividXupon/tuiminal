@@ -10,6 +10,7 @@ import { codexResumeThreads, resumeListFrame } from "./codex-resume"
 type RecordValue = Record<string, unknown>
 type CodexActivity = "thinking" | "writing" | "running" | "updating" | "coding" | "tooling"
 type CodexState = "working" | "blocked" | "done" | "unknown" | "idle"
+
 export type { CodexHydratedThread } from "../model/remote-codex"
 
 export type CodexAppServerEvents = {
@@ -140,7 +141,7 @@ export function inspectUpstreamFrame(
         item?.type === "agentMessage" &&
         typeof item.text === "string"
       )
-        updateCodexResumeThreadResponse(params.threadId, item.text)
+        updateCodexResumeThreadResponse(params.threadId, item.text, relay.remoteProfileId)
     }
     if (typeof message.method === "string") publishObserverEvent(message, events)
     const historyResponse =

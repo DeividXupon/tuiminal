@@ -364,6 +364,7 @@ export function getTutorialSteps(screen: string): TutorialStep[] {
   if (screen === "database") return DATABASE_TUTORIAL_STEPS
   if (screen === "git") return [...(loadedFeature("git")?.GIT_TUTORIAL_STEPS ?? [])]
   if (screen === "http") return [...(loadedFeature("http")?.HTTP_TUTORIAL_STEPS ?? [])]
+  if (screen === "terminal") return [...(loadedFeature("terminal")?.TERMINAL_TUTORIAL_STEPS ?? [])]
   return GENERIC_TUTORIAL_STEPS
 }
 

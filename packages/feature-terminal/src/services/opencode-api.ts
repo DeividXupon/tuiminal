@@ -5,6 +5,7 @@ import type {
   AgentMessageTurnStatus,
 } from "../model/agent-message-history"
 import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../model/agent-message-history"
+import { AGENT_RESUME_SOURCE_LIMIT } from "../model/agent-resume-thread"
 import type { AgentState } from "../model/agent-state"
 import type { OpenCodeResumeThread } from "../model/opencode-resume-threads"
 import { projectName } from "../model/project-name"
@@ -107,9 +108,10 @@ export function parseOpenCodeSessions(value: unknown) {
 export function openCodeResumeThreads(
   value: unknown,
   remote?: { id: string; name: string },
+  maximum = AGENT_RESUME_SOURCE_LIMIT,
 ): OpenCodeResumeThread[] {
   return parseOpenCodeSessions(value)
-    .slice(0, 20)
+    .slice(0, Math.max(1, Math.min(AGENT_RESUME_SOURCE_LIMIT, Math.floor(maximum))))
     .map((session) => ({
       id: session.id,
       title: session.title,

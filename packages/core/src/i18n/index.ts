@@ -1,6 +1,7 @@
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { CONFIGURATION_MESSAGES } from "./configuration-catalog"
+import { DATABASE_CONNECTION_MESSAGES } from "./database-connections-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
 import { GIT_BROWSER_MESSAGES } from "./git-browser-catalog"
@@ -48,6 +49,7 @@ import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner
 import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
 import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
 import { TERMINAL_MESSAGES } from "./terminal-catalog"
+import { TERMINAL_TUTORIAL_MESSAGES } from "./terminal-tutorial-catalog"
 
 export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko"
 
@@ -115,6 +117,7 @@ const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...CONFIGURATION_MESSAGES,
   ...TERMINAL_MESSAGES,
+  ...DATABASE_CONNECTION_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
   ...RUNNER_HELP_MESSAGES,
@@ -5004,6 +5007,7 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_REQUEST_MESSAGES,
   ...HTTP_TRANSPORT_MESSAGES,
   ...HTTP_TUTORIAL_MESSAGES,
+  ...TERMINAL_TUTORIAL_MESSAGES,
   ...HTTP_PREVIEW_MESSAGES,
   ...HTTP_RESPONSE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,

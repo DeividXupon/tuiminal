@@ -35,12 +35,15 @@ export function RemoteProjectSyncProgressDialog({
   automatic,
   onToggleAutomatic,
   onCancel,
+  inactive = false,
 }: {
   localPath: string
   status?: RemoteProjectSyncStatus | undefined
   automatic: boolean
   onToggleAutomatic: () => void
   onCancel: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
@@ -48,8 +51,11 @@ export function RemoteProjectSyncProgressDialog({
   const height = Math.max(1, Math.min(12, dimensions.height - 4))
   const progress = status?.kind === "syncing" ? status.progress : null
   const cancelling = status?.kind === "cancelling"
-  useEffect(() => dialog.current?.focus(), [])
+  useEffect(() => {
+    if (!inactive) dialog.current?.focus()
+  }, [inactive])
   useKeyboard((key) => {
+    if (inactive) return
     const name = key.name.toLowerCase()
     if (name === "a") {
       consume(key)
@@ -65,16 +71,16 @@ export function RemoteProjectSyncProgressDialog({
       id="terminal-project-sync-progress"
       width={width}
       height={height}
-      borderColor={cancelling ? COLORS.warning : COLORS.terminal}
+      borderColor={cancelling ? COLORS.warning : COLORS.border}
       zIndex={830}
       onBackdropPress={() => {
         if (!cancelling) onCancel()
       }}
     >
-      <box style={{ height: 1, flexShrink: 0, backgroundColor: COLORS.panelRaised }}>
+      <box id="terminal-project-sync-progress-header" style={{ height: 1, flexShrink: 0 }}>
         <text
-          content={`◆ ${translateUi("SINCRONIZAÇÃO DO PROJETO")}`}
-          style={{ height: 1, flexShrink: 0, fg: COLORS.terminal }}
+          content={translateUi("SINCRONIZAÇÃO DO PROJETO")}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
         />
       </box>
       <box style={{ flexGrow: 1, minHeight: 4 }}>
@@ -84,9 +90,9 @@ export function RemoteProjectSyncProgressDialog({
           style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
         />
         <text
-          content={`› ${truncateDisplay(localPath, Math.max(1, width - 6))}`}
+          content={truncateDisplay(localPath, Math.max(1, width - 4))}
           wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
         />
         <box
           style={{
@@ -117,12 +123,12 @@ export function RemoteProjectSyncProgressDialog({
       </box>
       <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
       <box
+        id="terminal-project-sync-progress-actions"
         style={{
           height: 1,
           flexShrink: 0,
           flexDirection: "row",
           justifyContent: "flex-end",
-          backgroundColor: COLORS.panelRaised,
         }}
       >
         <TerminalInlineButton
