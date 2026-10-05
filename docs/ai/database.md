@@ -10,6 +10,23 @@ Code: [feature](../../packages/feature-database/src/).
 - Start unconfigured. Native MySQL/MariaDB, PostgreSQL and SQLite are supported;
   optional MCP is explicitly opt-in/read-only. Environment URLs are discovered
   session profiles, not editable saved connections.
+- The connection manager discovers external CLI profiles on open and `[R]` refresh:
+  MySQL `~/.my.cnf` (`[client]` merged with overriding `[mysql]` values),
+  `mysql_config_editor print --all`, PostgreSQL `~/.pg_service.conf`, and matching
+  `~/.pgpass` entries. Honor `PGSERVICEFILE`/`PGPASSFILE` and Windows AppData
+  defaults. Run subprocesses by argv without a shell, bound output/time, and stop
+  only the owned process on abort.
+- External profiles remain session-only and are not copied into `databases.json`.
+  They expose the source and preserve configured TLS mode. Complete missing
+  database/password fields once per session; do not attempt to extract masked
+  `mysql_config_editor` passwords. External profiles allow writes, but normal
+  write review and confirmation still apply.
+- Read secrets from external Unix files only when the file is regular, owned by
+  the effective user and has no group/other permissions; Windows relies on ACLs.
+  Bound files to 256 KiB and discovered profiles to 100. An unsafe file may
+  contribute non-secret metadata, with a visible warning, but never its password.
+  Saved PostgreSQL profiles may select `pgpass` instead of storing a password;
+  resolve the first matching entry at connection time without persisting it.
 - Store connection metadata/favorites in restricted `databases.json`; passwords
   belong in the OS credential store. Decode URL passwords once and clear stale
   session passwords on rediscovery. Temporary test clients close on every path;
@@ -70,5 +87,9 @@ Code: [feature](../../packages/feature-database/src/).
   horizontal navigation performs local movement before crossing pane boundaries.
 
 Tests: `tests/database-*.test.ts`, `tests/sql-*.test.ts` and Database TUI suites.
+Parser/discovery tests must pass explicit temporary homes and injected
+`mysql_config_editor` output; ordinary tests must never inspect the developer's
+real home or credential files. Global test setup disables automatic discovery with
+`TUIMINAL_DATABASE_EXTERNAL_DISCOVERY=0`.
 Prioritize read-policy, result provenance, history privacy and transaction tests;
 use the opt-in [native driver matrix](validation.md#checks) for driver changes.

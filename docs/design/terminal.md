@@ -226,9 +226,11 @@ attach to it, or attach to the selected existing UUID. Persistent workers receiv
 HTTP hook URL; a shared five-second `claude agents --json --all` poller rehydrates public
 state without depending on a disposable attachment. The process-local settings keep background
 edits in the selected checkout instead of moving them to an automatic worktree. No global
-Claude settings, transcript or credential is read or changed. Application shutdown closes
-the PTY attachment and shared observer but leaves the supervisor-owned turn running; explicit pane
-close additionally resolves its short ID through the public command and runs `claude stop`.
+Claude settings, transcript or credential is read or changed. Failed or cancelled attachment
+setup stops only the background session that launch created, never a reused session.
+Application shutdown closes the PTY attachment and shared observer but leaves the
+supervisor-owned turn running; explicit pane close additionally resolves its short ID through
+the public command and runs `claude stop`, even if the attachment has already exited.
 Remote versions from 2.1.63 through 2.1.284 retain the previous foreground lifecycle:
 their SSH TUI, hook receiver and reverse tunnel remain pane-owned and stop together.
 
@@ -247,11 +249,13 @@ OpenCode uses an independent first-party transport. A local launch starts one ow
 `opencode serve --hostname 127.0.0.1` in the selected directory and opens the official
 TUI after validating authenticated JSON server information and negotiating v2
 `opencode --server <url> <cwd>` or legacy v1
-`opencode attach <url> --dir <cwd>`. A remote launch starts or reuses a version- and
+`opencode attach <url> --dir <cwd>`. On POSIX, an owner pipe retires the local server
+if Tuiminal exits before normal cleanup. A remote launch starts or reuses a version- and
 directory-scoped server on remote loopback, then runs the same official TUI locally through
 a disposable SSH `-L`. Its random password, PID, process start identity and remotely
 selected port live only in a mode-0700/0600 Tuiminal state directory on the remote host;
-stale registrations are invalidated and retried once. If
+stale registrations are invalidated and retried once. A server created solely for a
+temporary resume query is retired afterward; a reused server is only detached. If
 the remote directory does not exist locally, the v2 client omits its positional directory
 instead of attempting a local `chdir`; the server's selected working directory remains
 authoritative.
@@ -300,20 +304,27 @@ field or private-key path is editable or displayed.
 The Master Key opens a centered, mouse-accessible modal up to 120 columns wide without
 dimming or changing the embedded terminal geometry. It contains solid, borderless
 side-by-side Actions and Agents boxes inside the modal's single outer border;
-`[←/→]` changes the active box, while `[↑/↓]` or `[J/K]` moves inside it. Every action
+`[←/→]` or `[H/L]` changes the active box, while `[↑/↓]` or `[J/K]` moves inside it.
+Every action
 is a vertical two-line row: bracketed shortcut and name first, then a short description.
 The name uses the palette's primary text color so it stays light in dark mode and dark
 in light mode. Colored, localized tags align at the opposite end of the title row and
 classify agent-only features, general features, terminal operations, sidebar operations,
 navigation, and application actions. Agent-only features may show both feature and agent
-tags. Actions are ordered by those purposes. `[C]` and `[G]` are not Master Key
-actions. `[R]` is enabled only for the selected integrated remote agent session and
+tags. Actions are ordered by those purposes. `[G]` is not a Master Key action.
+`[R]` is enabled only for the selected integrated remote agent session and
 synchronizes its project to a protected local copy.
 Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
-sheet. Actions and Agents become clickable tabs, `[←/→]` switches tabs, and only the
-active tab's content is rendered.
-Agents merges up to six local conversations with up to six conversations from the
-active remote profile. Codex uses app-server `thread/list`; OpenCode uses its official
+sheet. Actions and Agents become clickable tabs, `[←/→]` or `[H/L]` switches tabs, and
+only the active tab's content is rendered.
+Agents contains Global, Codex, Claude, and OpenCode tabs. `[Z←] [→V]` moves between them
+whenever Agents owns navigation; side and lower splits use `[C]` and `[Shift+H]`.
+Global takes up to seven local and seven
+active-remote conversations per provider, then sorts the combined projection by normalized
+last-interaction time. Provider tabs initially expose up to 12 conversations from each
+origin. Reaching the list bottom requests 12 more from every origin that still has data,
+with a safety cap of 120 conversations per provider and origin. Existing cached rows remain
+interactive while an initial or incremental loader is visible. Codex uses app-server `thread/list`; OpenCode uses its official
 JSON session list with the public server API as fallback. The lists cover recent
 conversations across the corresponding local or SSH host. Each provider and source
 refreshes independently, and one
@@ -376,7 +387,7 @@ while the user switches among installed tools; Terminal removes its internal cop
 so there is still exactly one sidebar. Selecting a terminal or agent from the
 pinned sidebar opens Terminal and focuses the existing pane. Unpinning returns the
 sidebar to the Terminal workspace without restarting a PTY or changing its folder.
-`[L]` from the action menu focuses the visible sidebar. Its `[↑/↓]` and `[J/K]`
+`[Shift+L]` from the action menu focuses the visible sidebar. Its `[↑/↓]` and `[J/K]`
 cursor crosses the Terminals/Agents boundary as one ordered list, and `[Enter]`
 activates the highlighted existing pane. While the pinned sidebar owns focus, the
 tool behind it does not process keyboard input.
@@ -427,13 +438,13 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | --- | --- |
 | `[N]` | Open a new local terminal section |
 | `[A]` | Choose an agent provider, then its project and execution environment |
-| `[V]` / `[H]` | Choose a new shell or an existing agent, then split right / below |
+| `[C]` / `[Shift+H]` | Choose a new shell or an existing agent, then split right / below |
 | `[S]` | Open or focus sent-message history for an integrated agent session |
 | `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
 | `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
 | `[B]` | Pin / unpin the sidebar |
-| `[L]` | Focus the visible sidebar |
+| `[Shift+L]` | Focus the visible sidebar |
 | `[E]` | Rename selected terminal |
 | `[D]` | Open Live Diff for a recognized agent, or focus it when already open |
 | `[R]` | Synchronize the selected integrated remote agent project to its local copy |
@@ -855,6 +866,19 @@ The Terminal workspace uses the shared plasma loading surface only for blocking 
 integrated agent startup, selected-directory validation, SSH alias loading, and initial
 Live Diff project discovery. Background Git discovery and directory autocomplete stay
 interactive and use inline status instead of covering their results.
+
+## Guided tutorial
+
+Settings → Tutorial opened from Terminal runs a contextual tour of
+[`TERMINAL_TUTORIAL_STEPS`](../../packages/feature-terminal/src/tutorial/steps.ts), ordered from
+the basics (PTY, metadata strip, sessions, folders, commands) through the Master Key, splits,
+agents, history and Live Diff to pinned/tmux/remote features, project sync and server setup.
+Each step selects a simulated visual state that opens the dialog or companion it explains.
+The simulated workspace paints over the live one instead of replacing it: real PTYs stay
+mounted with their geometry, the tool is inactive and receives no input. Dialogs reused by the
+tour accept `inactive`, which disables focus and keyboard ownership. Fixtures are fictional
+paths, aliases and agents; the tour never spawns processes, reads Git, discovers projects or
+opens SSH. Tour copy is translated in the six UI languages.
 
 ## Resource ownership
 

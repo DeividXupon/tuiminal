@@ -6,6 +6,10 @@ Run the offline latency suite with Bun 1.4.2 from `.bun-version`:
 bun run benchmark
 bun run benchmark:all
 bun run benchmark:terminal
+bun run benchmark:terminal:stress
+BENCHMARK_SAMPLES=10 BENCHMARK_WARMUP=2 BENCHMARK_OUTPUT=terminal-stress.json bun run benchmark:terminal:stress
+TUIMINAL_TERMINAL_STRESS_SCALE=0.1 bun run benchmark:terminal:stress
+bun run benchmark:all --suite terminal-stress --samples 7 --warmup 1
 bun run benchmark:all --samples 30 --warmup 5 --startup-samples 5 --output all-result.json
 bun run benchmark --suite database,git --samples 30 --warmup 5
 bun run benchmark --json --output benchmark-result.json
@@ -44,12 +48,14 @@ and flow, HTTP response, Git Diffs, Git PR/Issue and Inbox remote UI, the
 large-data PR workload, complete HTTP and Database suites, and Terminal remote dialogs
 sequentially. It writes one report to `dist/benchmarks/all.json` by default,
 with all raw samples, suite membership, and the source commit. Use `--suite`
-with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui`
+with a comma-separated list of `service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui,terminal-stress`
 to select a subset. `--samples` and `--warmup` apply to service and mounted
-UI suites; startup keeps its own `--startup-samples` and `--startup-warmup`
+UI suites and to the selected stress suite; startup keeps its own
+`--startup-samples` and `--startup-warmup`
 defaults of five and one. `--external-database` opts the service suite into
 the Docker-backed native-driver matrix. A failed suite stops the run without
-publishing a combined report.
+publishing a combined report. `terminal-stress` is selectable but excluded from
+the default aggregate because it intentionally runs sustained bursts.
 
 `benchmark` creates a temporary config directory, SQLite database, Git repository,
 fake `gh` executable, Runner project, HTTP collection, loopback HTTP server, SSH configuration,
@@ -59,6 +65,15 @@ database servers. The only persistent file is the optional `--output` path.
 The Terminal suite runs in its own Bun process and returns its measured samples to
 the main report. Its process has a bounded deadline, so a stalled native PTY launch
 fails the run instead of leaving the whole suite waiting indefinitely.
+
+`benchmark:terminal:stress` is the sustained-load companion to the default Terminal
+suite. Six cases report per-operation latency for 20,000 plain or ANSI PTY chunks,
+5,000 chunks followed by screen composition, 10,000 mixed chunks with periodic
+screen observation, 100 output/resize/compose cycles, and 100,000 unchanged sidebar
+publications. Full garbage collection runs before, not during, each workload. Defaults
+are seven samples after one warmup; `BENCHMARK_SAMPLES`, `BENCHMARK_WARMUP`, and
+`BENCHMARK_OUTPUT` have their usual meanings. `TUIMINAL_TERMINAL_STRESS_SCALE` scales
+all workload sizes for quick diagnostics without changing production code or fixtures.
 
 `benchmark:database:drivers` is opt-in and requires a running Docker daemon. It
 adds 30 native-driver cases to the SQLite suite: connection tests, catalog, grid,
@@ -231,12 +246,13 @@ has 35 cases; the Terminal remote-dialog suite has four; the mounted Git Diffs s
 Database UI suites have seven each; the mounted Git PR/Issue remote UI suite has
 eight and the Inbox UI suite has three; the mounted HTTP response suite has three; the Runner execution
 suite has four; the complete Runner flow UI suite adds three cases; and cold
-startup adds five tool-specific measurements. The thirteen maintained offline suites
+startup adds five tool-specific measurements. The default aggregate's thirteen suites
 cover 300 portable cases, plus the live Runner port case on POSIX hosts with
 `lsof` and the live Terminal mirror case on hosts with `tmux`. The opt-in native database
 matrix adds 30 more when Docker is available. Remote Git responses come from
 a disposable `gh` fixture process, so those cases include
-process launch and JSON parsing without network latency.
+process launch and JSON parsing without network latency. The opt-in Terminal stress
+suite adds six sustained-load workloads without changing the default portable count.
 
 | Tool | Measured paths |
 | --- | --- |
@@ -244,10 +260,10 @@ process launch and JSON parsing without network latency.
 | Git | Local status/history, diff, branch comparison, stage/unstage, partial-stage patch load/apply, single-line stage and reverse removal, bidirectional line exchange, mounted partial-stage opening and line transfer in both directions, mounted folder stage/unstage and exact-target discard confirmation/completion, tracked and untracked discard, file tree and patch parsing, PR/Issue query suggestions, fake `gh` PR/Issue and Inbox pagination, two-page PR/Issue refresh, mounted PR/Issue and Inbox list loading and refresh, PR/Issue details and detail pagination, PR workflow runs, simulated CI watch transition and real fake-`gh` check polling through notification, all 22 direct PR/Issue mutation kinds including guarded checkout, comment and close coordination through authentication/write/reconciliation, uncertain network-write classification, PR list merge and description rendering, Issue sort, Inbox merge |
 | Runner | Project discovery/context, dependency planning/transitions, simulated and process-backed three-stage flows, owned process-plan restart, mounted four-command flow execution and restart from visible controls through rendered success, mounted stop through real child retirement, mounted automatic policy restart and optional history-log persistence, YAML parse, bounded log buffering/filtering/rendering/export, completed-history roundtrips with metadata only and 1,200 opted-in logs, listening-port parsing and live discovery when `lsof` is available, healthy/unhealthy/cancelled local probes, disposable process and PTY launch/exit and stop |
 | HTTP | `.http` parse and project scan, request preparation/auth/variables, loopback GET/POST/multipart/file/redirect, finite and continuous chunked capture, continuous-stream truncation and midstream cancellation with transport retirement, complete 128 KiB GET download with protected publication, name collision, redirect, midstream cancellation, 404 and unsafe POST rejection, mounted response-hook completion, duplicate suppression, cancellation and owner-close abort, input-driven keyboard/mouse Send, response search, Pretty JSON collapse and visible complete download, approved cross-origin redirect with credential stripping, timeout and cancellation, bounded response capture, single-request collection run, a three-request dependency/extraction/assertion chain with redacted report, ten-row dataset execution with four workers both alone and combined with dependency chains, response inspection/diff, cookie jar, history body budget and persisted roundtrip, Postman and OpenAPI import preview/apply |
-| Free Terminal | Native/custom and provider-specific local/remote command construction, provider resume resolution and roster merging, project recents/autocomplete/Git discovery, PTY output/title processing, native PTY launch and retirement/restart, serialized launch replacement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based and screen-based agent detection, task titles and state transitions, integrated-agent origin grouping, Claude hook/background projection, OpenCode event/history/session projection, SSH alias discovery, remote directory parsing, provider version compatibility, Codex WebSocket framing/handshake/preflight, remote readiness, remote Live Diff/context channels, repository/sync context tags, companion layouts and focus maps, project-sync manifest comparison/snapshot persistence, external-terminal grouping, Codex app-server event classification, resume threads and sent-message history parsing/merge/publication, section navigation grouping, spatial focus, Master Key shortcut ordering and split cleanup, persisted folder assignments, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch/merge/preview preparation, mounted provider/project/folder selection, compatibility warning, synchronization review/progress/confirmation, and the existing complete-tree sync workload |
+| Free Terminal | Native/custom and provider-specific local/remote command construction, provider resume resolution and roster merging, project recents/autocomplete/Git discovery, PTY output/title processing, sustained plain/ANSI output, periodic shadow-screen observation and resize under load, native PTY launch and retirement/restart, serialized launch replacement, tmux record and layout parsing/fitting, mirror resize/sidebar-change decisions and scheduled refresh, process-based and screen-based agent detection, task titles and state transitions, integrated-agent origin grouping, Claude hook/background projection, OpenCode event/history/session projection, SSH alias discovery, remote directory parsing, provider version compatibility, Codex WebSocket framing/handshake/preflight, remote readiness, remote Live Diff/context channels, repository/sync context tags, companion layouts and focus maps, project-sync manifest comparison/snapshot persistence, external-terminal grouping, Codex app-server event classification, resume threads and sent-message history parsing/merge/publication, section navigation grouping, spatial focus, Master Key shortcut ordering and split cleanup, persisted folder assignments, unchanged pinned-sidebar publication suppression, pinned sidebar state relay and navigation routing, Live Diff status/scan/patch/merge/preview preparation, mounted provider/project/folder selection, compatibility warning, synchronization review/progress/confirmation, and the existing complete-tree sync workload |
 
-The older `scripts/benchmark-free-terminal.ts` remains available for its larger,
-specialized terminal workload.
+The stress suite remains opt-in because its large repeated bursts answer throughput
+and observation-cost questions rather than ordinary interaction latency.
 
 ## Coverage still to add
 

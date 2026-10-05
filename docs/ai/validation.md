@@ -13,6 +13,7 @@ are authoritative; install with `bun install --frozen-lockfile`.
 | Whole source / requested commit | `bun run check` (includes full unit/TUI suite and static gates) |
 | Internal package exports/runtime | `bun run test:packages` |
 | Database drivers | `bun run test:database:drivers` (opt-in isolated Docker matrix) |
+| Remote MySQL | `bun run test:database:remote` (conditional local `.env.test.local`) |
 | Release artifacts | [Release process](../release-process.md) and native candidate matrix |
 
 Run focused checks during implementation, broadening for affected boundaries.
@@ -27,8 +28,12 @@ The offline unit script uses `--max-concurrency=1` for shell/PTY lifecycles.
   launch fixture. Register temporary roots immediately, clean those exact paths
   in finally/afterEach after owned I/O/process retirement, including assertion failure.
 - Use local ephemeral servers/disposable databases, never real settings, credentials
-  or foreign processes. For manual TUI regressions use isolated XDG config and the
-  demo SQLite database. Terminal also needs its [discovery overrides](terminal.md#validation).
+  or foreign processes. The sole exception is the local-only remote MySQL suite:
+  all `TUIMINAL_TEST_MYSQL_*` values opt into a dedicated non-production database,
+  synthetic prefixed objects and explicit writes; any missing value skips it. Keep
+  its credentials in ignored `.env.test.local`, never CI or tracked files. For manual
+  TUI regressions use isolated XDG config and the demo SQLite database. Terminal also
+  needs its [discovery overrides](terminal.md#validation).
 - Changed focus/modal/mouse/PTY/key propagation needs the real interaction sequence
   as well as automated coverage where automatable. Await loaded data and native
   geometry instead of sleeps. Do not weaken assertions or mock away the behavior.
@@ -40,6 +45,18 @@ The offline unit script uses `--max-concurrency=1` for shell/PTY lifecycles.
   existing debt cannot grow. Baseline edits need a written reason and review.
 - Settings writes flush files before atomic rename everywhere; directory fsync is
   POSIX-only. Preserve backups/conflict detection and native Windows storage tests.
+
+### Remote MySQL
+
+- Copy [`.env.test.example`](../../.env.test.example) to ignored `.env.test.local`.
+  Every value enables the suite; any missing or empty value skips it. Complete but
+  invalid configuration fails before opening a connection.
+- Target MySQL 8.4 through a publicly trusted TLS hostname and source-IP firewall.
+  Use a dedicated non-root account with `REQUIRE SSL` and only `SELECT`, `INSERT`,
+  `UPDATE`, `DELETE`, `CREATE`, `DROP`, `INDEX`, `REFERENCES`, `CREATE VIEW` and
+  `SHOW VIEW` on the named test database.
+- The suite creates and removes only synthetic `tuiminal_it_<pid>_<uuid>_*` objects.
+  It never creates or drops databases and does not remove artifacts left by a killed run.
 
 ## Packaging and release
 

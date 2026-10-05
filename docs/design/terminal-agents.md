@@ -250,12 +250,15 @@ For SSH projects, Claude Code 2.1.285 or newer creates an empty official backgro
 session with a preselected UUID, then attaches its TUI, or attaches the selected existing
 UUID. The official supervisor owns the worker. Its process-local settings contain no
 HTTP hooks, so a persistent worker never retains a URL owned by a disposable Tuiminal
-attachment. Tuiminal polls the supported `claude agents --json --all` command for
+attachment. If attachment setup is cancelled or fails, Tuiminal stops only a background
+session created by that launch and preserves a reused one. Tuiminal polls the supported
+`claude agents --json --all` command for
 `working`, `blocked`, `done`, `failed` and `stopped`; attachments for the same profile
 and cwd share one non-overlapping five-second poller. It never reads the files under
 `~/.claude/jobs`. Application shutdown removes only the attachment and observer, so an
 in-progress turn continues.
-Explicit pane close additionally resolves the public short ID and runs `claude stop`.
+Explicit pane close additionally resolves the public short ID and runs `claude stop`;
+that close lease remains available if the disposable attachment has already exited.
 Persistent background sessions expose only that public state and the bounded resume row;
 detailed hook history is unavailable for them. Process-local settings disable
 automatic background worktree isolation for this launch so Live Diff and synchronization
@@ -269,6 +272,8 @@ background-agent commands.
 
 Choosing OpenCode and a local project starts one owned `opencode serve` on loopback,
 negotiates the public server generation, then launches the official TUI in a native PTY.
+On POSIX, an owner-pipe supervisor retires that server if Tuiminal exits abruptly;
+normal shutdown still awaits the same owned process.
 OpenCode v2 uses `opencode --server <url> <cwd>`; legacy v1 uses
 `opencode attach <url> --dir <cwd>`.
 For a remote project, a version- and directory-scoped server runs on remote loopback;
@@ -281,7 +286,9 @@ password are stored in a mode-0700/0600 Tuiminal state directory on the remote h
 Startup is serialized by a stale-lock-recovering directory and delivers a proposed
 password plus the excluded local port over SSH stdin; reconnect validates the process
 identity and reads the existing registration over SSH. An unhealthy registration is
-invalidated and retried once. Application shutdown
+invalidated and retried once. A server created solely for a temporary resume-list
+query is retired when that query finishes, while a reused server is only detached.
+Application shutdown
 stops only the TUI, observer and tunnel, leaving the server and active turn running;
 explicit pane close interrupts only the selected root turn, then disconnects. Distinct
 local and remote ports let an alias that resolves to the Tuiminal host avoid its own forward. Remote v2
@@ -311,7 +318,10 @@ without reading the rendered screen. Deletion or terminal shutdown removes the m
 in-memory observation.
 
 The Master Key resume list is loaded from the official JSON session list, with the
-public server API as a fallback and message hydration for the latest response. Entries
+public server API as a fallback and message hydration for the latest response. CLI summary
+listing and compatibility preflight start concurrently. Summaries are published as soon as
+the JSON list arrives, while only newly discovered sessions are hydrated in bounded parallel
+batches; a cached roster does not wait for a temporary server. Entries
 retain OpenCode as their provider plus their exact local or SSH source, directory, and
 session ID. Selecting one starts the negotiated official TUI with `--session`; it never falls
 back to Codex or to the other machine. A successful completed prompt is eligible for

@@ -49,12 +49,16 @@ Code: [Terminal services](../../packages/feature-terminal/src/services/).
   The persistent daemon and its active turns belong to the remote Codex installation.
 - Remote OpenCode reuses a version/cwd-scoped loopback server whose PID, process
   identity, remote-selected port and password use private state and a recoverable
-  lock. Retry one stale/unhealthy registration. App exit detaches clients; pane
-  close interrupts its turn. Require exact v2 versions and no local remote-cwd argv.
+  lock. Retry one stale/unhealthy registration. A server created only for a temporary
+  resume query is retired afterward; never stop a reused server from that path. App
+  exit detaches clients; pane close interrupts its turn. Require exact v2 versions
+  and no local remote-cwd argv.
 - Remote Claude Code 2.1.285+ creates or attaches an official background UUID. App exit
-  detaches its TUI/observer; pane close runs `claude stop`. Workers use hook-free
-  settings and shared five-second `claude agents --json --all` polling. Older
-  versions use pane-owned foreground hooks/`ssh -R`. Never read `~/.claude`.
+  detaches its TUI/observer; pane close runs `claude stop`, even after the attachment
+  exits. A failed/cancelled attachment retires only the background session it created,
+  never one it reused. Workers use hook-free settings and shared five-second
+  `claude agents --json --all` polling. Older versions use pane-owned foreground
+  hooks/`ssh -R`. Never read `~/.claude`.
 - A missing provider CLI, capability or incompatible version opens a localized modal.
   `[Esc]` preserves intent; `[Enter]` opens manual local/SSH update terminals.
   Revalidation retains failures or closes only those terminals and retries. See the

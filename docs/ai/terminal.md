@@ -23,6 +23,8 @@ Code: [feature](../../packages/feature-terminal/src/).
 - Process exit and EOF differ: drain final output with a bounded fallback before
   completing retirement. Stop is asynchronous/idempotent and retains ownership
   through grace, exact-group/tree escalation and observed exit.
+- On POSIX, a local integrated OpenCode server is supervised through an owner pipe;
+  owner death must retire the server even when normal application cleanup cannot run.
 - Terminal stays compact with no outer chrome; preserve two panes per section,
   the 12-session limit and session-local Live Diff/history state.
 - tmux auto mode requires POSIX tmux 3.2+; native Windows uses ConPTY. Never install
