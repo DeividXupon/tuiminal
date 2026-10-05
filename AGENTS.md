@@ -13,7 +13,9 @@ first-party; there is no public plugin API. The CLI must work from any project.
 - Commit, push, publication, visibility changes and killing user processes require
   an explicit user request. Stop only resources owned by the current work.
 - Tests, demos and payloads must not modify the opened project or use real
-  credentials, databases or unrelated processes.
+  credentials, databases or unrelated processes. The remote MySQL suite is the
+  sole opt-in exception: use a dedicated non-production database, synthetic data,
+  complete `TUIMINAL_TEST_MYSQL_*` configuration and owned prefixed objects only.
 
 ## Boundaries
 
