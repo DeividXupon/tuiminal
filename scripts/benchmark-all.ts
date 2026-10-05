@@ -18,8 +18,10 @@ const suiteIds = [
   "http-ui",
   "database-ui",
   "terminal-remote-ui",
+  "terminal-stress",
 ] as const
 type SuiteId = (typeof suiteIds)[number]
+const defaultSuiteIds = suiteIds.filter((id) => id !== "terminal-stress")
 const testFiles: Partial<Record<SuiteId, string>> = {
   tui: "benchmark-tui.test.ts",
   "runner-execution": "benchmark-runner-execution.test.tsx",
@@ -35,7 +37,7 @@ const testFiles: Partial<Record<SuiteId, string>> = {
 const projectRoot = resolve(import.meta.dir, "..")
 
 function usage() {
-  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
+  return "Usage: bun run benchmark:all [--suite service,startup,tui,runner-execution,runner-flow,http-response,git-ui,git-remote-ui,git-inbox-ui,git-pr,http-ui,database-ui,terminal-remote-ui,terminal-stress] [--samples N] [--warmup N] [--startup-samples N] [--startup-warmup N] [--external-database] [--output path]"
 }
 
 function requiredValue(args: string[], index: number, option: string) {
@@ -62,7 +64,7 @@ function count(value: string, minimum: number, option: string) {
 
 function options(args: string[]) {
   const config = {
-    suites: [...suiteIds] as SuiteId[],
+    suites: [...defaultSuiteIds] as SuiteId[],
     samples: 20,
     warmup: 3,
     startupSamples: 5,
@@ -154,6 +156,7 @@ function command(id: SuiteId, file: string, config: ReturnType<typeof options>) 
     ]
   }
   if (id === "git-pr") return [join(import.meta.dir, "benchmark-git-pr.ts")]
+  if (id === "terminal-stress") return [join(import.meta.dir, "benchmark-free-terminal.ts")]
   const testFile = testFiles[id]
   if (!testFile) throw new Error(`Missing benchmark test for ${id}`)
   return ["test", "--preload", "./tests/tui/setup.ts", join(import.meta.dir, testFile)]

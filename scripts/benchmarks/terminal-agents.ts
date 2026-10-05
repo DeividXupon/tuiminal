@@ -282,7 +282,7 @@ export async function terminalAgentBenchmarks(root: string): Promise<BenchmarkCa
             last_assistant_message: `Completed feature ${index}`,
           })
         }
-        return { latest, state }
+        return { latest, state: state as AgentState }
       },
       verify: ({ latest, state }) => {
         if (latest?.status !== "completed" || latest.activities.length !== 2 || state !== "done")

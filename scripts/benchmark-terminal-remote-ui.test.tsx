@@ -3,7 +3,7 @@ import { test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
-import { act, type ReactElement, useState } from "react"
+import { act, type ReactNode, useState } from "react"
 import type { RemoteProjectSyncReview } from "../packages/feature-terminal/src/model/remote-project-sync"
 import { RemoteCodexCompatibilityModal } from "../packages/feature-terminal/src/ui/RemoteCodexCompatibilityModal"
 import { RemoteProjectSyncDialog } from "../packages/feature-terminal/src/ui/RemoteProjectSyncDialog"
@@ -47,13 +47,13 @@ const review: RemoteProjectSyncReview = {
 let tui: TestRendererSetup | undefined
 let reveal: (() => void) | undefined
 
-function HiddenModal({ content }: { content: ReactElement }) {
+function HiddenModal({ content }: { content: ReactNode }) {
   const [visible, setVisible] = useState(false)
   reveal = () => setVisible(true)
   return visible ? content : <text content="READY" />
 }
 
-async function prepareModal(content: ReactElement, width: number, height: number) {
+async function prepareModal(content: ReactNode, width: number, height: number) {
   if (tui) throw new Error("A previous Terminal remote modal benchmark is still mounted")
   tui = await act(async () => testRender(<HiddenModal content={content} />, { width, height }))
   await tui.renderOnce()
