@@ -164,3 +164,76 @@ test("connection form preserves input focus and outside-click dismissal", async 
   await act(async () => tui?.mockMouse.click(0, 0))
   expect(closes).toBe(1)
 })
+
+test("external candidates open a session-only completion form", async () => {
+  tui = await testRender(
+    <DatabaseConnectionModal
+      open
+      connections={[]}
+      externalCandidates={[
+        {
+          id: "external-login",
+          name: "MySQL login · remote",
+          driver: "mysql",
+          source: "external",
+          externalSource: "mysql-login-path",
+          host: "mysql.example.test",
+          port: 3306,
+          username: "app",
+          ssl: true,
+          tlsMode: "prefer",
+          writeEnabled: true,
+          missing: ["database", "password"],
+        },
+      ]}
+      selectedConnectionId={null}
+      startInForm={false}
+      onClose={() => undefined}
+      onSelect={() => undefined}
+      onCreated={() => undefined}
+      onDeleted={() => undefined}
+    />,
+    { width: 100, height: 30 },
+  )
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("MySQL login · remote")
+  await act(async () => tui?.mockInput.pressKey("RETURN"))
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("COMPLETAR CONEXÃO EXTERNA")
+  expect(tui.renderer.root.findDescendantById("db-connection-password")).toBeDefined()
+})
+
+test("saved PostgreSQL profiles can select pgpass without a password input", async () => {
+  tui = await testRender(
+    <DatabaseConnectionModal
+      open
+      connections={[
+        {
+          id: "saved-pgpass",
+          name: "PostgreSQL pgpass",
+          driver: "postgres",
+          source: "saved",
+          host: "postgres.example.test",
+          port: 5432,
+          database: "app",
+          username: "app",
+          ssl: true,
+          credentialSource: "pgpass",
+          writeEnabled: false,
+        },
+      ]}
+      selectedConnectionId="saved-pgpass"
+      startInForm={false}
+      onClose={() => undefined}
+      onSelect={() => undefined}
+      onCreated={() => undefined}
+      onDeleted={() => undefined}
+    />,
+    { width: 100, height: 30 },
+  )
+  await tui.renderOnce()
+  await act(async () => tui?.mockInput.pressKey("E"))
+  await tui.renderOnce()
+  expect(tui.captureCharFrame()).toContain("~/.pgpass")
+  expect(tui.renderer.root.findDescendantById("db-connection-password")).toBeUndefined()
+})

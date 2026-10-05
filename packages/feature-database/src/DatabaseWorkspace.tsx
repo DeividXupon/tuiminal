@@ -23,6 +23,7 @@ import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useDatabaseConnections } from "./hooks/use-database-connections"
 import { useDatabaseWorkspaceNotifications } from "./hooks/use-database-notifications"
 import { useDatabaseSelectionSweep } from "./hooks/use-database-selection-sweep"
 import { useDatabaseTableWindow } from "./hooks/use-database-table-window"
@@ -87,7 +88,6 @@ import {
   databaseConnectionCanWrite,
   databaseDriverLabel,
   getDefaultDatabaseConnectionId,
-  listDatabaseConnections,
   listDatabaseTables,
   loadDatabaseTableStructure,
   loadTableIndexes,
@@ -137,7 +137,14 @@ export function DatabaseViewer({
   const deleteSequenceArmedRef = useRef(false)
   const loadedCatalogKeyRef = useRef<string | null>(null)
   const loadedPageKeyRef = useRef<string | null>(null)
-  const [connections, setConnections] = useState(listDatabaseConnections)
+  const {
+    connections,
+    externalCandidates,
+    externalWarnings,
+    discoveringExternal,
+    reloadConnections,
+    refreshExternalConnections,
+  } = useDatabaseConnections()
   const [activeConnectionId, setActiveConnectionId] = useState(getDefaultDatabaseConnectionId)
   const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [connectionModalStartsInForm, setConnectionModalStartsInForm] = useState(false)
@@ -1273,10 +1280,21 @@ export function DatabaseViewer({
   }, [clearCurrentBatchRows, selectedTable, sensitiveVisibility, view])
 
   useEffect(() => {
-    if (!active || connections.length > 0) return
+    if (!active || discoveringExternal || connections.length > 0) return
     setConnectionModalStartsInForm(true)
     setConnectionModalOpen(true)
-  }, [active, connections.length])
+  }, [active, connections.length, discoveringExternal])
+
+  useEffect(() => {
+    if (connections.some((profile) => profile.id === activeConnectionId)) return
+    const defaultConnectionId = getDefaultDatabaseConnectionId()
+    const nextConnectionId =
+      connections.find((profile) => profile.id === defaultConnectionId)?.id ??
+      connections[0]?.id ??
+      null
+    setActiveConnectionId(nextConnectionId)
+    resetTable()
+  }, [activeConnectionId, connections, resetTable])
 
   useEffect(() => {
     if (!activeConnectionId) {
@@ -2865,13 +2883,16 @@ export function DatabaseViewer({
         <DatabaseConnectionModal
           open
           connections={connections}
+          externalCandidates={externalCandidates}
+          externalWarnings={externalWarnings}
+          discoveringExternal={discoveringExternal}
           selectedConnectionId={activeConnectionId}
           startInForm={connectionModalStartsInForm}
           onClose={() => setConnectionModalOpen(false)}
           onSelect={switchConnection}
+          onRefreshExternal={refreshExternalConnections}
           onCreated={(profile, notice) => {
-            const nextConnections = listDatabaseConnections()
-            setConnections(nextConnections)
+            reloadConnections()
             setActiveConnectionId(profile.id)
             setCatalogRefreshKey((current) => current + 1)
             setDefaultDatabaseConnection(profile.id)
@@ -2880,8 +2901,8 @@ export function DatabaseViewer({
             resetTable()
           }}
           onDeleted={(connectionId) => {
-            const nextConnections = listDatabaseConnections()
-            setConnections(nextConnections)
+            const nextConnections = connections.filter((profile) => profile.id !== connectionId)
+            reloadConnections()
             setStagedChanges((current) =>
               current.filter((change) => change.connectionId !== connectionId),
             )

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { randomUUID } from "node:crypto"
-import { mkdtempSync, rmSync } from "node:fs"
+import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type {
@@ -8,6 +8,10 @@ import type {
   DatabaseTable,
 } from "../packages/feature-database/src/model/types"
 import { nativeReadOnlyQuery } from "../packages/feature-database/src/services/read-only-query"
+import {
+  discoverExternalDatabaseConnections,
+  installExternalDatabaseConnections,
+} from "../packages/feature-database/src/services/external-database-connections"
 
 const enabled = process.env.TUIMINAL_DATABASE_INTEGRATION === "1"
 const suite = describe.skipIf(!enabled)
@@ -26,6 +30,7 @@ type DriverFixture = {
 let api: DatabaseApi
 let configRoot = ""
 let fixtures: DriverFixture[] = []
+let externalFixtures: DriverFixture[] = []
 
 async function docker(...args: string[]) {
   const subprocess = Bun.spawn(["docker", ...args], {
@@ -199,6 +204,39 @@ suite("database driver integration", () => {
       })
     }
     for (const fixture of fixtures) await seedDatabase(fixture)
+
+    writeFileSync(
+      join(configRoot, ".my.cnf"),
+      `[client]\nhost=127.0.0.1\nport=${mysqlPort}\ndatabase=tuiminal_test\nuser=root\npassword=\nssl-mode=DISABLED\n`,
+    )
+    writeFileSync(
+      join(configRoot, ".pg_service.conf"),
+      `[tuiminal]\nhost=127.0.0.1\nport=${postgresPort}\ndbname=tuiminal_test\nuser=postgres\nsslmode=disable\n`,
+    )
+    writeFileSync(
+      join(configRoot, ".pgpass"),
+      `127.0.0.1:${postgresPort}:tuiminal_test:postgres:\n`,
+    )
+    for (const filename of [".my.cnf", ".pg_service.conf", ".pgpass"]) {
+      chmodSync(join(configRoot, filename), 0o600)
+    }
+    const discovered = await discoverExternalDatabaseConnections({
+      home: configRoot,
+      platform: "linux",
+      environment: {},
+      effectiveUserId: statSync(configRoot).uid,
+      runMysqlConfigEditor: async () => null,
+    })
+    installExternalDatabaseConnections(discovered)
+    externalFixtures = discovered.profiles.map((profile) => ({
+      connectionId: profile.id,
+      driver: profile.driver as "mysql" | "postgres",
+      usersTable: {
+        schema: profile.driver === "mysql" ? "tuiminal_test" : "public",
+        name: "users",
+        type: "table",
+      },
+    }))
   }, 120_000)
 
   afterAll(async () => {
@@ -227,6 +265,20 @@ suite("database driver integration", () => {
       })
       expect(page.rows).toHaveLength(1)
       expect(page.rows[0]).toMatchObject({ name: "Alice", email: "alice@example.test" })
+    }
+  })
+
+  test("uses discovered MySQL option-file and PostgreSQL service/pgpass profiles", async () => {
+    expect(externalFixtures.map((fixture) => fixture.driver).sort()).toEqual(["mysql", "postgres"])
+    for (const fixture of externalFixtures) {
+      const catalog = await api.listDatabaseTables(fixture.connectionId)
+      expect(catalog.tables).toContainEqual(fixture.usersTable)
+      const result = await api.executeDatabaseQuery(
+        fixture.connectionId,
+        "SELECT COUNT(*) AS total FROM users",
+        true,
+      )
+      expect(Number(result.rows[0]?.total)).toBe(3)
     }
   })
 

@@ -1,5 +1,18 @@
 export type DatabaseDriver = "mysql" | "postgres" | "sqlite" | "mcp-mysql"
-export type DatabaseConnectionSource = "saved" | "environment" | "mcp"
+export type DatabaseConnectionSource = "saved" | "environment" | "mcp" | "external"
+export type DatabaseCredentialSource = "tuiminal" | "pgpass"
+export type DatabaseExternalSource =
+  | "mysql-option-file"
+  | "mysql-login-path"
+  | "postgres-service"
+  | "postgres-passfile"
+export type DatabaseTlsMode =
+  | "disable"
+  | "allow"
+  | "prefer"
+  | "require"
+  | "verify-ca"
+  | "verify-full"
 
 export type DatabaseConnectionProfile = {
   id: string
@@ -10,10 +23,24 @@ export type DatabaseConnectionProfile = {
   port?: number
   database?: string
   username?: string
+  socket?: string
   filename?: string
   command?: string
   ssl: boolean
+  tlsMode?: DatabaseTlsMode
+  credentialSource?: DatabaseCredentialSource
+  externalSource?: DatabaseExternalSource
   writeEnabled: boolean
+}
+
+export type ExternalDatabaseConnectionCandidate = Omit<
+  DatabaseConnectionProfile,
+  "source" | "credentialSource"
+> & {
+  driver: "mysql" | "postgres"
+  source: "external"
+  externalSource: DatabaseExternalSource
+  missing: Array<"host" | "database" | "username" | "password">
 }
 
 // Forms explicitly clear driver-specific fields when switching connection type.
@@ -21,9 +48,12 @@ export type DatabaseConnectionDraft = Pick<
   DatabaseConnectionProfile,
   "name" | "driver" | "ssl" | "writeEnabled"
 > & {
-  [K in "host" | "port" | "database" | "username" | "filename" | "command"]?:
+  [K in "host" | "port" | "database" | "username" | "socket" | "filename" | "command"]?:
     | DatabaseConnectionProfile[K]
     | undefined
+} & {
+  credentialSource?: DatabaseCredentialSource
+  tlsMode?: DatabaseTlsMode | undefined
 }
 
 export type DatabaseTable = {
