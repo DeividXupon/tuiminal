@@ -1,7 +1,24 @@
 import type { RemoteCodexTarget } from "../model/sessions"
 import { parseOpenCodeSessions } from "./opencode-api"
 import { resolveOpenCodeExecutable } from "./opencode-executable"
-import { remoteOpenCodeSessionListCommand } from "./remote-opencode-connection"
+import {
+  REMOTE_OPENCODE_SESSION_LIST_MARKER,
+  remoteOpenCodeSessionListCommand,
+} from "./remote-opencode-connection"
+
+export function parseOpenCodeSessionListOutput(output: string) {
+  const markerIndex = output.indexOf(REMOTE_OPENCODE_SESSION_LIST_MARKER)
+  const payload = (
+    markerIndex >= 0
+      ? output
+          .slice(markerIndex + REMOTE_OPENCODE_SESSION_LIST_MARKER.length)
+          .replace(/^\r?\n/u, "")
+      : output
+  )
+    .replace(/^\uFEFF/u, "")
+    .trim()
+  return parseOpenCodeSessions(JSON.parse(payload))
+}
 
 async function readBoundedOutput(stream: ReadableStream<Uint8Array>, maximumBytes: number) {
   const reader = stream.getReader()
@@ -61,7 +78,7 @@ export async function listOpenCodeResumeSessions(
       throw new Error("A listagem de sessões do OpenCode excedeu o tempo limite.")
     signal.throwIfAborted()
     if (code !== 0) throw new Error("Não foi possível listar as sessões do OpenCode.")
-    return parseOpenCodeSessions(JSON.parse(stdout))
+    return parseOpenCodeSessionListOutput(stdout)
   } finally {
     boundedSignal.removeEventListener("abort", stop)
     if (child.exitCode === null) child.kill()

@@ -329,8 +329,11 @@ become sidebar rows. A unique exact OSC title match follows visible session chan
 without reading the rendered screen. Deletion or terminal shutdown removes the matching
 in-memory observation.
 
-The Master Key resume list is loaded from the official JSON session list, with the
-public server API as a fallback and message hydration for the latest response. CLI summary
+The Master Key resume list is loaded from official CLI JSON output, with the
+public server API as a fallback and message hydration for the latest response. Remote
+v2 recents use `opencode api GET /api/session` with a bounded root-session query and
+no project or directory filter: `opencode session list` is scoped to the current
+project, so running it from `/` cannot discover conversations in other projects. CLI summary
 listing and compatibility preflight start concurrently. Summaries are published as soon as
 the JSON list arrives, while only newly discovered sessions are hydrated in bounded parallel
 batches; a cached roster does not wait for a temporary server. Entries

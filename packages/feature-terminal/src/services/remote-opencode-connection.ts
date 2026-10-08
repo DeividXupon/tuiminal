@@ -2,6 +2,8 @@ import { createHash } from "node:crypto"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { automatedSshPrefix, remotePosixShellCommand } from "./remote-ssh-command"
 
+export const REMOTE_OPENCODE_SESSION_LIST_MARKER = "TUIMINAL_OPENCODE_SESSIONS_V1"
+
 function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
@@ -126,9 +128,14 @@ export function remoteOpenCodeSessionListCommand(
   profile: TerminalRemoteCodexProfile,
   maximum = 20,
 ) {
+  // v2's `session list` filters by the cwd's project, which is `/` for remote recents.
+  const pathname = `/api/session?parentID=null&limit=${Math.max(1, Math.floor(maximum))}&order=desc`
   const command = [
     ...remoteOpenCodePrelude("/"),
-    `exec "$opencode_command" session list --format json --max-count ${Math.max(1, Math.floor(maximum))}`,
+    "NO_COLOR=1",
+    "export NO_COLOR",
+    `printf '${REMOTE_OPENCODE_SESSION_LIST_MARKER}\\n'`,
+    `exec "$opencode_command" api GET ${shellQuote(pathname)}`,
   ].join("; ")
   return [...automatedSshPrefix(profile), remotePosixShellCommand(command)]
 }

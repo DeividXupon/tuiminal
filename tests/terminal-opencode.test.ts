@@ -47,11 +47,13 @@ import {
   openCodeVersion,
   readOpenCodeJsonResponse,
 } from "../packages/feature-terminal/src/services/opencode-protocol"
+import { openCodeResumePageWithFallback } from "../packages/feature-terminal/src/services/opencode-resume-page"
 import {
   interruptOpenCodeSession,
   localOpenCodeServerSupervisorCommand,
   retireCreatedOpenCodeServer,
 } from "../packages/feature-terminal/src/services/opencode-server-connection"
+import { parseOpenCodeSessionListOutput } from "../packages/feature-terminal/src/services/opencode-session-list"
 import { OpenCodeSessionProjection } from "../packages/feature-terminal/src/services/opencode-session-projection"
 import { createOpenCodeTuiControl } from "../packages/feature-terminal/src/services/opencode-tui-control"
 import {
@@ -59,8 +61,10 @@ import {
   preflightRemoteOpenCode,
 } from "../packages/feature-terminal/src/services/remote-opencode-compatibility"
 import {
+  REMOTE_OPENCODE_SESSION_LIST_MARKER,
   remoteOpenCodeServerCommand,
   remoteOpenCodeServerKey,
+  remoteOpenCodeSessionListCommand,
   remoteOpenCodeStopServerCommand,
   remoteOpenCodeTunnelCommand,
   remoteOpenCodeVersionCommand,
@@ -1002,6 +1006,61 @@ test("remote OpenCode server persists separately from its loopback-only SSH tunn
   )
   expect(stop.at(-1)).toContain('kill "$opencode_pid"')
   expect(stop.at(-1)).toContain("opencode*serve")
+})
+
+test("remote OpenCode session listing ignores SSH banners before its JSON payload", () => {
+  const command = remoteOpenCodeSessionListCommand(
+    { id: "work", name: "Work", host: "work-alias" },
+    13,
+  )
+  expect(command).toContain("work-alias")
+  expect(command.at(-1)).toContain(REMOTE_OPENCODE_SESSION_LIST_MARKER)
+  expect(command.at(-1)).toContain("NO_COLOR=1")
+  expect(
+    parseOpenCodeSessionListOutput(
+      `Authorized access only\r\n${REMOTE_OPENCODE_SESSION_LIST_MARKER}\r\n${JSON.stringify([session])}\n`,
+    ),
+  ).toEqual([
+    {
+      id: "ses_one",
+      title: "Implement OpenCode",
+      directory: "/workspace/project",
+      updatedAt: 1_700_000_010_000,
+    },
+  ])
+})
+
+test("remote OpenCode keeps listed sessions when optional hydration fails", async () => {
+  const listedThread = openCodeResumeThreads([session], { id: "work", name: "Work" })[0]
+  if (!listedThread) throw new Error("Missing OpenCode session fixture")
+  const listedPage = {
+    threads: [{ ...listedThread, providerId: "opencode" as const }],
+    nextCursor: null,
+    hasMore: false,
+  }
+  await expect(
+    openCodeResumePageWithFallback(new AbortController().signal, listedPage, async () =>
+      Promise.reject(new Error("optional hydration failed")),
+    ),
+  ).resolves.toBe(listedPage)
+})
+
+test("OpenCode resume fallback never hides cancellation", async () => {
+  const listedThread = openCodeResumeThreads([session], { id: "work", name: "Work" })[0]
+  if (!listedThread) throw new Error("Missing OpenCode session fixture")
+  const controller = new AbortController()
+  controller.abort()
+  await expect(
+    openCodeResumePageWithFallback(
+      controller.signal,
+      {
+        threads: [{ ...listedThread, providerId: "opencode" as const }],
+        nextCursor: null,
+        hasMore: false,
+      },
+      async () => Promise.reject(new Error("cancelled hydration")),
+    ),
+  ).rejects.toThrow()
 })
 
 test.skipIf(process.platform === "win32")(

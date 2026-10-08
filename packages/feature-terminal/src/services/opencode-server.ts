@@ -20,6 +20,7 @@ import {
   openCodeTuiCommand,
   openCodeTuiConfigContent,
 } from "./opencode-protocol"
+import { openCodeResumePageWithFallback } from "./opencode-resume-page"
 import {
   interruptOpenCodeSession,
   retireCreatedOpenCodeServer,
@@ -267,15 +268,6 @@ async function refreshOpenCodeThreadsFromServer(
   return summaries.map((thread) => hydratedById.get(thread.id) ?? thread)
 }
 
-async function withTemporaryOpenCodeServer(
-  directory: string,
-  signal: AbortSignal,
-  remote?: RemoteCodexTarget,
-): Promise<AgentResumePage> {
-  const maximum = AGENT_RESUME_PAGE_SIZE
-  return withTemporaryOpenCodeServerPage(directory, signal, remote, maximum)
-}
-
 async function withTemporaryOpenCodeServerPage(
   directory: string,
   signal: AbortSignal,
@@ -313,40 +305,55 @@ async function withTemporaryOpenCodeServerPage(
   const hydrateIds = new Set(
     listedThreads.filter((thread) => !previousIds.has(thread.id)).map((thread) => thread.id),
   )
-  if (boundedSessions && hydrateIds.size === 0) {
+  const listedPage = boundedSessions
+    ? {
+        threads: listedThreads,
+        nextCursor: null,
+        hasMore: (listedSessions?.length ?? 0) > maximum,
+      }
+    : undefined
+  if (listedPage && hydrateIds.size === 0) {
     preflightController.abort()
-    return {
-      threads: listedThreads,
-      nextCursor: null,
-      hasMore: (listedSessions?.length ?? 0) > maximum,
-    }
+    return listedPage
   }
-  const compatibility = await compatibilityPromise
-  const server = await startOpenCodeServerConnection(
-    directory,
-    remote,
-    signal,
-    compatibility.remoteVersion ?? "",
-  )
+  let compatibility: Awaited<typeof compatibilityPromise>
+  try {
+    compatibility = await compatibilityPromise
+  } catch (error) {
+    return openCodeResumePageWithFallback(signal, listedPage, () => Promise.reject(error))
+  }
+  let server: Awaited<ReturnType<typeof startOpenCodeServerConnection>>
+  try {
+    server = await startOpenCodeServerConnection(
+      directory,
+      remote,
+      signal,
+      compatibility.remoteVersion ?? "",
+    )
+  } catch (error) {
+    return openCodeResumePageWithFallback(signal, listedPage, () => Promise.reject(error))
+  }
   const stop = () => retireCreatedOpenCodeServer(server)
   const unregister = registerTerminalResource({ stop })
   try {
-    const threads = await refreshOpenCodeThreadsFromServer(
-      server.baseUrl,
-      directory,
-      signal,
-      server.protocol,
-      server.authorization,
-      remote ? { id: remote.profile.id, name: remote.profile.name } : undefined,
-      boundedSessions,
-      maximum,
-      boundedSessions ? hydrateIds : undefined,
-    )
-    return {
-      threads,
-      nextCursor: null,
-      hasMore: listedSessions ? listedSessions.length > maximum : threads.length >= maximum,
-    }
+    return await openCodeResumePageWithFallback(signal, listedPage, async () => {
+      const threads = await refreshOpenCodeThreadsFromServer(
+        server.baseUrl,
+        directory,
+        signal,
+        server.protocol,
+        server.authorization,
+        remote ? { id: remote.profile.id, name: remote.profile.name } : undefined,
+        boundedSessions,
+        maximum,
+        boundedSessions ? hydrateIds : undefined,
+      )
+      return {
+        threads,
+        nextCursor: null,
+        hasMore: listedSessions ? listedSessions.length > maximum : threads.length >= maximum,
+      }
+    })
   } finally {
     try {
       await stop()
@@ -365,7 +372,7 @@ export function loadOpenCodeResumeThreadsPage(
 }
 
 export async function refreshOpenCodeResumeThreads(directory: string, signal: AbortSignal) {
-  return (await withTemporaryOpenCodeServer(directory, signal)).threads
+  return (await loadOpenCodeResumeThreadsPage(directory, signal)).threads
 }
 
 export function loadRemoteOpenCodeResumeThreadsPage(
