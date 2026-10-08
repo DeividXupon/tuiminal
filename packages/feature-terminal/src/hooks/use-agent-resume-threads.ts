@@ -20,8 +20,8 @@ import {
   openCodeResumeThreadsSnapshot,
   subscribeOpenCodeResumeThreads,
 } from "../model/opencode-resume-threads"
-import { refreshRemoteClaudeResumeThreads } from "../services/claude-background"
-import { refreshClaudeResumeThreads } from "../services/claude-resume-store"
+import { loadRemoteClaudeResumeThreadsPage } from "../services/claude-background"
+import { loadClaudeResumeThreadsPage } from "../services/claude-resume-store"
 import {
   loadCodexResumeThreadsPage,
   loadRemoteCodexResumeThreadsPage,
@@ -102,6 +102,29 @@ function openCodeLoadMoreTasks(
     tasks.push(
       loadRemoteOpenCodeResumeThreadsPage(profile, signal, target).then((page) =>
         update("opencode:remote", { hasMore: page.hasMore }),
+      ),
+    )
+  return tasks
+}
+
+function claudeLoadMoreTasks(
+  pages: SourcePages,
+  profile: TerminalRemoteCodexProfile | undefined,
+  signal: AbortSignal,
+  target: number,
+  update: UpdateSource,
+) {
+  const tasks: Promise<void>[] = []
+  if (pages["claude:local"].hasMore)
+    tasks.push(
+      Promise.resolve(loadClaudeResumeThreadsPage(target)).then((page) =>
+        update("claude:local", { hasMore: page.hasMore }),
+      ),
+    )
+  if (profile && pages["claude:remote"].hasMore)
+    tasks.push(
+      loadRemoteClaudeResumeThreadsPage(profile, signal, target).then((page) =>
+        update("claude:remote", { hasMore: page.hasMore }),
       ),
     )
   return tasks
@@ -209,8 +232,8 @@ export function useAgentResumeThreads(active: boolean) {
     else updateSource("opencode:remote", { hasMore: false })
     if (enabled("claude"))
       void trackInitial("claude", async () => {
-        const threads = await refreshRemoteClaudeResumeThreads(profile, controller.signal)
-        updateRemote("claude:remote", { hasMore: threads.length > AGENT_RESUME_PAGE_SIZE })
+        const page = await loadRemoteClaudeResumeThreadsPage(profile, controller.signal)
+        updateRemote("claude:remote", { hasMore: page.hasMore })
       }).catch(() => updateRemote("claude:remote", { hasMore: false }))
     else updateSource("claude:remote", { hasMore: false })
   }, [activeRemoteProfile, remoteSignature, trackInitial, updateSource])
@@ -243,11 +266,8 @@ export function useAgentResumeThreads(active: boolean) {
       }).catch(() => updateLocal("opencode:local", { hasMore: false }))
     else updateLocal("opencode:local", { hasMore: false })
     if (enabled("claude")) {
-      const threads = refreshClaudeResumeThreads()
-      updateLocal("claude:local", {
-        hasMore:
-          threads.filter((thread) => !thread.remoteProfileId).length > AGENT_RESUME_PAGE_SIZE,
-      })
+      const page = loadClaudeResumeThreadsPage()
+      updateLocal("claude:local", { hasMore: page.hasMore })
     } else updateLocal("claude:local", { hasMore: false })
     return () => {
       controller.abort()
@@ -286,24 +306,12 @@ export function useAgentResumeThreads(active: boolean) {
     const result = { codex: false, claude: false, opencode: false }
     for (const providerId of PROVIDERS) {
       if (!enabled(providerId) || limits[providerId] >= AGENT_RESUME_SOURCE_LIMIT) continue
-      if (providerId === "claude") {
-        const local = recentThreads.filter(
-          (thread) => thread.providerId === "claude" && !thread.remoteProfileId,
-        ).length
-        const remote = activeRemoteProfileId
-          ? recentThreads.filter(
-              (thread) =>
-                thread.providerId === "claude" && thread.remoteProfileId === activeRemoteProfileId,
-            ).length
-          : 0
-        result.claude = local > limits.claude || remote > limits.claude
-      } else
-        result[providerId] =
-          sources.current[`${providerId}:local`].hasMore ||
-          Boolean(activeRemoteProfileId && sources.current[`${providerId}:remote`].hasMore)
+      result[providerId] =
+        sources.current[`${providerId}:local`].hasMore ||
+        Boolean(activeRemoteProfileId && sources.current[`${providerId}:remote`].hasMore)
     }
     return result
-  }, [activeRemoteProfileId, limits, recentThreads, sourceRevision])
+  }, [activeRemoteProfileId, limits, sourceRevision])
 
   const loadMoreThreads = useCallback(
     async (providerId: AgentProviderId) => {
@@ -338,9 +346,15 @@ export function useAgentResumeThreads(active: boolean) {
                   target,
                   updateSource,
                 )
-              : []
-        await Promise.allSettled(tasks)
-        if (!controller.signal.aborted)
+              : claudeLoadMoreTasks(
+                  sources.current,
+                  activeRemoteProfile,
+                  controller.signal,
+                  target,
+                  updateSource,
+                )
+        const results = await Promise.allSettled(tasks)
+        if (!controller.signal.aborted && results.some(({ status }) => status === "fulfilled"))
           setLimits((current) => ({ ...current, [providerId]: target }))
       } finally {
         if (loadMoreControllers.current.get(providerId) === controller)
@@ -356,9 +370,19 @@ export function useAgentResumeThreads(active: boolean) {
   )
 
   const loadingInitial = initialLoadingSources.size > 0
+  const loadingInitialProviders = useMemo(
+    () => [...new Set([...initialLoadingSources].map(({ providerId }) => providerId))],
+    [initialLoadingSources],
+  )
   const pagination = useMemo<AgentResumePaginationState>(
-    () => ({ limits, hasMore, loadingInitial, loadingMore: [...loadingMore] }),
-    [hasMore, limits, loadingInitial, loadingMore],
+    () => ({
+      limits,
+      hasMore,
+      loadingInitial,
+      loadingInitialProviders,
+      loadingMore: [...loadingMore],
+    }),
+    [hasMore, limits, loadingInitial, loadingInitialProviders, loadingMore],
   )
   return {
     recentThreads,

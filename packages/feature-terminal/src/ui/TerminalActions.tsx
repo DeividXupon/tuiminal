@@ -5,6 +5,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useAgentResumeSearch } from "../hooks/use-agent-resume-search"
 import type { AgentProviderId } from "../model/agent-provider"
 import {
   type AgentResumePaginationState,
@@ -175,6 +176,14 @@ export function TerminalActions({
   const [selectedAction, setSelectedAction] = useState(0)
   const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const searchPagination = useAgentResumeSearch(
+    query,
+    activeResumeTab,
+    activeRemoteProfileId,
+    resumePagination,
+    onLoadMoreThreads,
+    inactive,
+  )
   const actions = useMemo(
     () =>
       TERMINAL_ACTIONS.filter(
@@ -196,13 +205,7 @@ export function TerminalActions({
         activeResumeTab,
         activeRemoteProfileId,
         resumePagination.limits,
-      ).filter(
-        (thread) =>
-          !query.trim() ||
-          matchesQuery(
-            `${thread.title} ${thread.preview} ${thread.cwd} ${thread.projectName} ${thread.gitBranch} ${thread.remoteProfileName ?? ""}`,
-            query,
-          ),
+        query,
       ),
     [activeRemoteProfileId, activeResumeTab, query, recentThreads, resumePagination.limits],
   )
@@ -252,15 +255,13 @@ export function TerminalActions({
     if (!itemCount) return false
     if (activePanel === "actions")
       setSelectedAction((current) => (current + direction + itemCount) % itemCount)
-    else if (
-      direction > 0 &&
-      selectedAgent === itemCount - 1 &&
-      activeResumeTab !== "global" &&
-      resumePagination.hasMore[activeResumeTab]
-    )
-      onLoadMoreThreads?.(activeResumeTab)
     else {
-      const next = (selectedAgent + direction + itemCount) % itemCount
+      if (direction > 0 && selectedAgent === itemCount - 1) {
+        if (activeResumeTab !== "global" && resumePagination.hasMore[activeResumeTab])
+          onLoadMoreThreads?.(activeResumeTab)
+        return true
+      }
+      const next = Math.max(0, Math.min(itemCount - 1, selectedAgent + direction))
       const thread = threads[next]
       if (thread) setSelectedAgentKey(agentResumeThreadKey(thread))
     }
@@ -369,7 +370,7 @@ export function TerminalActions({
             width={panelContentWidth}
             now={now}
             activeTab={activeResumeTab}
-            pagination={resumePagination}
+            pagination={searchPagination}
             onSelectTab={(tab) => {
               setActivePanel("agents")
               setActiveResumeTab(tab)
@@ -387,7 +388,7 @@ export function TerminalActions({
         )}
       </box>
       <TerminalShortcutText
-        content="[←/→ H/L] painel · [Z←] [→V] agente · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
+        content="[←/→ H/L] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
     </ModalSurface>

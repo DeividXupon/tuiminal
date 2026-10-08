@@ -1,5 +1,5 @@
 import type { AgentProviderId } from "./agent-provider"
-import { compareAgentResumeThreads } from "./agent-resume-order"
+import { AGENT_RESUME_SOURCE_LIMIT, compareAgentResumeThreads } from "./agent-resume-order"
 import type { CodexResumeThread } from "./codex-resume-threads"
 
 export {
@@ -24,6 +24,7 @@ export type AgentResumePaginationState = {
   limits: Record<AgentProviderId, number>
   hasMore: Record<AgentProviderId, boolean>
   loadingInitial: boolean
+  loadingInitialProviders: readonly AgentProviderId[]
   loadingMore: readonly AgentProviderId[]
 }
 
@@ -35,6 +36,7 @@ export const DEFAULT_AGENT_RESUME_PAGINATION: AgentResumePaginationState = {
   },
   hasMore: { codex: false, claude: false, opencode: false },
   loadingInitial: false,
+  loadingInitialProviders: [],
   loadingMore: [],
 }
 
@@ -54,17 +56,23 @@ function originThreads(
     .sort(compareAgentResumeThreads)
 }
 
-/** Projects the loaded roster into the balanced Global or provider-specific Master Key tab. */
+/** Search covers the bounded roster; only the unfiltered view limits recent rows. */
 export function agentResumeThreadsForTab(
   threads: readonly AgentResumeThread[],
   tab: AgentResumeTab,
   activeRemoteProfileId: string | undefined,
   limits: AgentResumePaginationState["limits"] = DEFAULT_AGENT_RESUME_PAGINATION.limits,
+  query = "",
 ) {
+  const search = query.trim().toLocaleLowerCase()
   const providers: readonly AgentProviderId[] =
     tab === "global" ? ["codex", "claude", "opencode"] : [tab]
   const projected = providers.flatMap((providerId) => {
-    const limit = tab === "global" ? AGENT_RESUME_GLOBAL_ORIGIN_LIMIT : limits[providerId]
+    const limit = search
+      ? AGENT_RESUME_SOURCE_LIMIT
+      : tab === "global"
+        ? AGENT_RESUME_GLOBAL_ORIGIN_LIMIT
+        : limits[providerId]
     return [
       ...originThreads(threads, providerId, undefined).slice(0, limit),
       ...(activeRemoteProfileId
@@ -72,5 +80,13 @@ export function agentResumeThreadsForTab(
         : []),
     ]
   })
-  return projected.sort(compareAgentResumeThreads)
+  return projected
+    .filter(
+      (thread) =>
+        !search ||
+        `${thread.title} ${thread.preview} ${thread.cwd} ${thread.projectName} ${thread.gitBranch} ${thread.remoteProfileName ?? ""}`
+          .toLocaleLowerCase()
+          .includes(search),
+    )
+    .sort(compareAgentResumeThreads)
 }

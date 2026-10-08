@@ -48,6 +48,8 @@ function validResumePagination(value: unknown) {
           typeof hasMore[providerId] === "boolean",
       ) &&
       typeof pagination.loadingInitial === "boolean" &&
+      Array.isArray(pagination.loadingInitialProviders) &&
+      pagination.loadingInitialProviders.every(isAgentProviderId) &&
       Array.isArray(pagination.loadingMore) &&
       pagination.loadingMore.every(isAgentProviderId),
   )

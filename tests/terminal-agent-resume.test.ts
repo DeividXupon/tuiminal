@@ -125,6 +125,36 @@ describe("Master Key recent agents", () => {
     }
   })
 
+  test.each(["global", "codex", "claude", "opencode"] as const)(
+    "%s searches past recent-row limits while preserving provider and origin scope",
+    (tab) => {
+      const providers: readonly AgentProviderId[] = ["codex", "claude", "opencode"]
+      const roster = providers.flatMap((providerId) =>
+        [undefined, "active", "inactive"].flatMap((origin) =>
+          Array.from({ length: 30 }, (_, index) => ({
+            ...thread(providerId, `${providerId}-${origin}-${index}`, 100 - index, origin),
+            gitBranch: index >= 13 ? "fix/old-issue" : "main",
+          })),
+        ),
+      )
+      const results = agentResumeThreadsForTab(
+        roster,
+        tab,
+        "active",
+        DEFAULT_AGENT_RESUME_PAGINATION.limits,
+        "  OLD-ISSUE  ",
+      )
+      expect(results).toHaveLength((tab === "global" ? 3 : 1) * 2 * 17)
+      expect(results.every(({ gitBranch }) => gitBranch === "fix/old-issue")).toBe(true)
+      expect(results.some(({ remoteProfileId }) => remoteProfileId === "inactive")).toBe(false)
+      if (tab !== "global") expect(results.every(({ providerId }) => providerId === tab)).toBe(true)
+      expect(results).toEqual([...results].sort(compareAgentResumeThreads))
+      expect(agentResumeThreadsForTab(roster, tab, "active")).toHaveLength(
+        tab === "global" ? 42 : 24,
+      )
+    },
+  )
+
   test("caps every provider and local/remote origin independently", () => {
     const roster = (providerId: AgentProviderId, remoteProfileId?: string) =>
       Array.from({ length: 121 }, (_, index) =>

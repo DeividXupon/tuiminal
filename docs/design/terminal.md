@@ -317,18 +317,25 @@ synchronizes its project to a protected local copy.
 Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
 sheet. Actions and Agents become clickable tabs, `[←/→]` or `[H/L]` switches tabs, and
 only the active tab's content is rendered.
-Agents contains Global, Codex, Claude, and OpenCode tabs. `[Z←] [→V]` moves between them
-whenever Agents owns navigation; side and lower splits use `[C]` and `[Shift+H]`.
+Agents contains Global, Codex, Claude, and OpenCode tabs. The tab strip is flanked by
+`[Z←]` and `[→V]`; either the displayed controls or those keys move between providers
+whenever Agents owns navigation. The active tab carries the animated loader while its
+provider sources are still loading. Agent-list navigation stops at the first and last
+visible rows instead of wrapping; moving down from a provider's last loaded row requests
+its next page when available. Side and lower splits use `[C]` and `[Shift+H]`.
 Global takes up to seven local and seven
 active-remote conversations per provider, then sorts the combined projection by normalized
 last-interaction time. Provider tabs initially expose up to 12 conversations from each
 origin. Reaching the list bottom requests 12 more from every origin that still has data,
 with a safety cap of 120 conversations per provider and origin. Existing cached rows remain
-interactive while an initial or incremental loader is visible. Codex uses app-server `thread/list`; OpenCode uses its official
-JSON session list with the public server API as fallback. The lists cover recent
-conversations across the corresponding local or SSH host. Each provider and source
-refreshes independently, and one
-source never erases the other. Every row presents Local or Remote as a colored tag
+interactive while an initial or incremental loader is visible. Codex uses app-server
+`thread/list`; OpenCode uses its official JSON session list with the public server API
+as fallback. The lists cover recent conversations across the corresponding local or
+SSH host. Each provider and source refreshes independently. A valid OpenCode CLI list
+remains available if its optional response hydration fails, and SSH login banners cannot
+invalidate its marked JSON payload. The remote Claude roster has a 12-second bound and
+keeps cached rows on failure. One source never erases the other. Every row presents
+Local or Remote as a colored tag
 with its own palette-aware background; remote rows keep their profile name beside the
 tag as user data. Each item has three lines: name and state; the prompt preview in the
 palette's primary black-or-white text color, introduced by a border-colored `└` aligned
@@ -351,8 +358,15 @@ of its latest public `agentMessage` below the Agents list; the response follows
 colors. Selecting it opens a new section running the matching provider's official TUI.
 Codex resumes through its relay; OpenCode attaches with the exact `--session` and source
 directory. Provider and source identity are stable, so a resume never changes tools or
-silently falls back from remote to local. `[/]` focuses one filter for actions and agents;
-horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
+silently falls back from remote to local. `[/]` focuses one filter for actions and agents.
+A nonempty query searches beyond the initial recent rows and automatically requests
+remaining pages for the selected provider, or all providers in Global, after a 150 ms
+typing pause. Search keeps the active local/remote scope and the 120-conversation cap
+per provider and origin, but does not apply Global's seven-row or the provider tab's
+visible-page limit to matches. Cached matches stay usable as more pages arrive; loaders
+remain visible until pending pages finish. Clearing the query or closing the modal stops
+requesting further pages. A page that makes no progress is not retried automatically for
+the same query. Horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
 selected result. `[Esc]` first unfocuses the filter,
 then closes the modal. The modal owns input until an enabled action is chosen or
 cancelled. There is no timeout. Unknown or disabled actions leave it open.

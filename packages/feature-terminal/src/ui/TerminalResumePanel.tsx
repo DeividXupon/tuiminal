@@ -42,7 +42,15 @@ export function TerminalResumePanel({
 }) {
   const list = useRef<ScrollBoxRenderable | null>(null)
   const selectedThread = active ? threads[selectedIndex] : undefined
-  const loadingMore = activeTab !== "global" && pagination.loadingMore.includes(activeTab)
+  const loadingInitial =
+    activeTab === "global"
+      ? pagination.loadingInitialProviders.length > 0
+      : pagination.loadingInitialProviders.includes(activeTab)
+  const loadingMore =
+    activeTab === "global"
+      ? pagination.loadingMore.length > 0
+      : pagination.loadingMore.includes(activeTab)
+  const loading = loadingInitial || loadingMore
 
   useEffect(() => {
     const id = threads[selectedIndex]?.id
@@ -78,7 +86,7 @@ export function TerminalResumePanel({
       )}
       <TerminalResumeTabs
         activeTab={activeTab}
-        loading={pagination.loadingInitial}
+        loadingProviders={[...pagination.loadingInitialProviders, ...pagination.loadingMore]}
         onSelect={onSelectTab}
       />
       <scrollbox
@@ -100,13 +108,13 @@ export function TerminalResumePanel({
             onSelect={onSelectThread}
           />
         ))}
-        {!query.trim() && threads.length === 0 && !pagination.loadingInitial && (
+        {!query.trim() && threads.length === 0 && !loading && (
           <text
             content={translateUi("Nenhuma conversa de agente disponível para retomar.")}
             style={{ fg: COLORS.muted }}
           />
         )}
-        {query.trim() && threads.length === 0 && (
+        {query.trim() && threads.length === 0 && !loading && (
           <text content={translateUi("Nenhum resultado.")} style={{ fg: COLORS.muted }} />
         )}
         {loadingMore && (

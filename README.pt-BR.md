@@ -633,7 +633,11 @@ discretas marcam cada item, alternam entre duas cores e usam o destaque mais viv
 Terminal na seleção. Pressione uma
 tecla de ação ou clique no controle; selecione uma conversa para retomá-la na interface
 oficial do respectivo provedor em uma nova seção. Pressione `[/]` para focar o filtro de ações e
-conversas. `[←/→]` ou `[H/L]` alterna entre Ações e Agentes; dentro de Agentes,
+conversas. Ao digitar, a busca inclui conversas além das recentes exibidas inicialmente e
+carrega automaticamente mais páginas do provedor selecionado, ou de todos na aba Global,
+até 120 conversas por provedor e origem. Os resultados aparecem conforme as páginas chegam;
+limpar o filtro restaura a lista de recentes e interrompe a solicitação de novas páginas.
+`[←/→]` ou `[H/L]` alterna entre Ações e Agentes; dentro de Agentes,
 `[Z←] [→V]` troca a aba de provedor. `[C]` fica reservado para **Dividir lado**. `[Esc]`
 primeiro sai do filtro e depois fecha o modal, devolvendo o foco
 ao terminal. Os atalhos globais da barra superior ficam em cinza até a Master Key ser

@@ -364,28 +364,31 @@ test.skipIf(process.platform === "win32")(
       activeSessionId: null,
       masterKey: "Ctrl+B" as const,
       recentThreads: [],
+      resumePagination: {
+        limits: { codex: 12, claude: 12, opencode: 12 },
+        hasMore: { codex: false, claude: false, opencode: false },
+        loadingInitial: true,
+        loadingInitialProviders: ["opencode" as const],
+        loadingMore: [],
+      },
       focusSelectionTarget: "sidebar:main" as const,
       theme: { canvas: "#000000" },
       language: "pt-BR",
     }
+    let currentReplica: unknown = replica
     const control = await openPinnedSidebarControl(
       (target) => selected.push(target),
-      () => replica,
+      () => currentReplica as typeof replica,
     )
-    expect(control).not.toBeNull()
+    if (!control) throw new Error("Pinned sidebar control was not created")
+    const endpoint = control.endpoint
     try {
-      expect(await requestPinnedSidebarSnapshot(control!.endpoint)).toEqual(replica)
-      expect(await sendPinnedSidebarTarget(control!.endpoint, { sessionId: "shell-123-1" })).toBe(
-        true,
-      )
-      expect(await sendPinnedSidebarTarget(control!.endpoint, { folderId: "terminal" })).toBe(true)
-      expect(await sendPinnedSidebarTarget(control!.endpoint, { action: "n" })).toBe(true)
-      expect(
-        await sendPinnedSidebarTarget(control!.endpoint, { focusTarget: "sidebar:main" }),
-      ).toBe(true)
-      expect(
-        await sendPinnedSidebarTarget(control!.endpoint, { resumeThreadId: "thread-123" }),
-      ).toBe(true)
+      expect(await requestPinnedSidebarSnapshot(endpoint)).toEqual(replica)
+      expect(await sendPinnedSidebarTarget(endpoint, { sessionId: "shell-123-1" })).toBe(true)
+      expect(await sendPinnedSidebarTarget(endpoint, { folderId: "terminal" })).toBe(true)
+      expect(await sendPinnedSidebarTarget(endpoint, { action: "n" })).toBe(true)
+      expect(await sendPinnedSidebarTarget(endpoint, { focusTarget: "sidebar:main" })).toBe(true)
+      expect(await sendPinnedSidebarTarget(endpoint, { resumeThreadId: "thread-123" })).toBe(true)
       expect(selected).toEqual([
         { sessionId: "shell-123-1" },
         { folderId: "terminal" },
@@ -393,8 +396,16 @@ test.skipIf(process.platform === "win32")(
         { focusTarget: "sidebar:main" },
         { resumeThreadId: "thread-123" },
       ])
+      currentReplica = {
+        ...replica,
+        resumePagination: {
+          ...replica.resumePagination,
+          loadingInitialProviders: ["unknown"],
+        },
+      }
+      expect(await requestPinnedSidebarSnapshot(endpoint)).toBeNull()
     } finally {
-      await control?.close()
+      await control.close()
     }
   },
 )

@@ -613,6 +613,10 @@ below the state marker introduces the summary. Three subdued `▌` cells mark ea
 alternate between two colors, and switch to the brighter Terminal accent on selection.
 Press an action key or click its control; select a conversation to resume it in that
 provider's official TUI in a new section. Press `[/]` to focus the action/conversation filter.
+Typing searches beyond the initially displayed recent conversations and automatically loads
+more pages for the selected provider, or all providers in Global, up to 120 conversations
+per provider and origin. Results appear as pages arrive; clearing the filter restores the
+recent view and stops requesting further pages.
 `[←/→]` or `[H/L]` switches Actions and Agents; inside Agents, `[Z←] [→V]` switches
 provider tabs. `[C]` remains available for **Split right**.
 `[Esc]` first leaves the filter, then closes the modal and restores terminal focus.
