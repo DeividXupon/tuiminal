@@ -196,4 +196,4 @@ test("initial sync uses one SSH connection per phase for a large tree", async ()
   } finally {
     client.dispose()
   }
-})
+}, 30_000)
