@@ -92,6 +92,9 @@ test("fingerprints complete local and remote trees, including hidden content", a
     command: localRemoteProjectManifestCommand(source),
   })
   expect(inspected.canonicalPath).toBe(realpathSync(source))
+  expect(inspected.entries.find((entry) => entry.path === "tracked.txt")?.mode).toBe(
+    statSync(join(source, "tracked.txt")).mode & 0o7777,
+  )
   writeFileSync(join(source, "tracked.txt"), "changed content\n")
   expect(await readLocalProjectFingerprint(source, signal)).not.toBe(localBefore)
   expect(
@@ -102,6 +105,37 @@ test("fingerprints complete local and remote trees, including hidden content", a
     ).fingerprint,
   ).not.toBe(inspected.fingerprint)
 })
+
+test.each([
+  ["644", 0o644],
+  ["755", 0o755],
+  ["100600", 0o600],
+  ["100644", 0o644],
+  ["100755", 0o755],
+  ["40755", 0o755],
+  ["41777", 0o1777],
+] as const)(
+  "remote manifests preserve octal permission bits from mode %s",
+  async (mode, expected) => {
+    const output = [
+      "TUIMINAL_ROOT",
+      "/fixture/project",
+      "TUIMINAL_ENTRY",
+      "entry",
+      mode.startsWith("4") ? "d" : "f",
+      `${mode}|0|1700000000|1700000000`,
+      "",
+      "",
+      "",
+    ].join("\0")
+    const manifest = await readRemoteProjectFingerprint(
+      remote("/fixture/project"),
+      new AbortController().signal,
+      { command: [process.execPath, "-e", `process.stdout.write(${JSON.stringify(output)})`] },
+    )
+    expect(manifest.entries[0]?.mode).toBe(expected)
+  },
+)
 
 test("always synchronizes the complete tree at a Git repository root", async () => {
   const root = temporaryRoot()

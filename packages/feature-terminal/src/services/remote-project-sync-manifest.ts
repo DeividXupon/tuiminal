@@ -40,7 +40,7 @@ find . -mindepth 1 -exec sh -c '
     elif [ -d "$item" ]; then type=d
     elif [ -f "$item" ]; then type=f
     fi
-    metadata=$(stat -c "%f|%s|%Y|%Z" -- "$item" 2>/dev/null || stat -f "%p|%z|%m|%c" -- "$item" 2>/dev/null) || exit 74
+    metadata=$(stat -c "%a|%s|%Y|%Z" -- "$item" 2>/dev/null || stat -f "%p|%z|%m|%c" -- "$item" 2>/dev/null) || exit 74
     printf "TUIMINAL_ENTRY\000%s\000%s\000%s\000%s\000%s\000" "$path" "$type" "$metadata" "$target" "$link_kind"
   done
 ' sh {} +
@@ -147,8 +147,7 @@ function entryType(type: string): RemoteProjectSyncEntryType {
 }
 
 function parseRemoteMode(value: string) {
-  const radix = value.length <= 4 && /^[0-7]+$/u.test(value) ? 8 : 16
-  const parsed = Number.parseInt(value, radix)
+  const parsed = Number.parseInt(value, 8)
   return Number.isFinite(parsed) ? parsed & 0o7777 : 0
 }
 
