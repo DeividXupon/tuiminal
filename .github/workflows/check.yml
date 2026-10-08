@@ -26,6 +26,8 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun audit --json
+      - name: Annotate failed test names, including timeouts
+        run: echo "::add-matcher::.github/bun-test-problem-matcher.json"
       - run: bun run check
       - run: bun run test:packages
       - run: git diff --check
@@ -43,6 +45,8 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun audit --json
+      - name: Annotate failed test names, including timeouts
+        run: echo "::add-matcher::.github/bun-test-problem-matcher.json"
       - run: bun run typecheck
       - run: bun run format:check
       - run: bun run lint
