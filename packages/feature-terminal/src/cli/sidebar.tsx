@@ -1,10 +1,13 @@
+import {
+  type DiscoveredRows,
+  readSidebarContent,
+  applyReplicaAppearance,
+  sessionForPane,
+} from "./sidebar-content"
 import { createCliRenderer } from "@opentui/core"
 import { createRoot, useFocus, useTerminalDimensions } from "@opentui/react"
-import { isLanguage, setLanguage } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { detectAgentTitle } from "../model/agent-screen"
-import { agentTaskTitle } from "../model/agent-task-title"
 import type { PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
 import {
   agentSessionHasCapability,
@@ -16,15 +19,11 @@ import {
   MAX_TERMINALS_PER_SECTION,
   numberedTerminalSections,
   orderedRunningAgents,
-  type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
 } from "../model/sessions"
 import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "../model/tmux"
-import {
-  requestPinnedSidebarSnapshot,
-  sendPinnedSidebarTarget,
-} from "../services/pinned-sidebar-control"
+import { sendPinnedSidebarTarget } from "../services/pinned-sidebar-control"
 import { waitForPinnedTmuxSidebarFocus } from "../services/pinned-sidebar-focus"
 import {
   activatePinnedTmuxHostAction,
@@ -32,85 +31,11 @@ import {
   selectPinnedTmuxHost,
 } from "../services/pinned-sidebar-navigation"
 import { waitForPinnedSidebarTerminalReady } from "../services/pinned-sidebar-terminal"
-import { discoverTmuxWorkspace } from "../services/tmux-agents"
 import { TERMINAL_ACTIONS, TerminalActions } from "../ui/TerminalActions"
 import { TerminalSidebar } from "../ui/TerminalSidebar"
 import { useSidebarKeyboard } from "./sidebar-keyboard"
 
 type SidebarMode = "app" | "tmux"
-type DiscoveredRows = Awaited<ReturnType<typeof discoverTmuxWorkspace>>["panes"]
-
-async function readSidebarContent(
-  endpoint: string,
-  sourceSocket: string,
-  hostPane: string,
-  signal: AbortSignal,
-) {
-  const replica = await requestPinnedSidebarSnapshot(endpoint)
-  if (replica) return { replica, rows: null }
-  const workspace = await discoverTmuxWorkspace(signal)
-  return {
-    replica: null,
-    rows: workspace.panes.filter(
-      ({ pane }) => pane.socket !== sourceSocket || pane.paneId !== hostPane,
-    ),
-  }
-}
-
-function applyReplicaAppearance(replica: PinnedTerminalSidebarReplica) {
-  for (const [name, value] of Object.entries(replica.theme)) {
-    if (Object.hasOwn(COLORS, name) && typeof value === "string")
-      Object.assign(COLORS, { [name]: value })
-  }
-  if (isLanguage(replica.language)) setLanguage(replica.language)
-}
-
-function sidebarSessionId(pane: TmuxPaneInfo) {
-  let socketHash = 0
-  for (const character of pane.socket)
-    socketHash = (socketHash * 31 + character.charCodeAt(0)) >>> 0
-  return `sidebar-${socketHash.toString(36)}-${pane.paneId.slice(1)}`
-}
-
-function sessionForPane(
-  pane: TmuxPaneInfo,
-  agent: Awaited<ReturnType<typeof discoverTmuxWorkspace>>["panes"][number]["agent"],
-): TerminalSession {
-  const id = sidebarSessionId(pane)
-  const signal = agent ? detectAgentTitle(agent.profile, pane.paneTitle ?? "") : null
-  return {
-    id,
-    sectionId: id,
-    folderId: pane.ownedByTuiminal ? DEFAULT_FOLDER : TUIMINAL_TMUX_FOLDER,
-    row: 0,
-    column: 0,
-    kind: "custom",
-    label: pane.command || "tmux",
-    shortLabel: "tmux",
-    displayCommand: pane.command || "tmux",
-    command: [],
-    accent: COLORS.terminal,
-    workingDirectory: pane.cwd,
-    tmux: pane,
-    title: agent?.label ?? pane.command ?? "tmux",
-    titleMode: "automatic",
-    status: "running",
-    busy: !/^(?:ba|da|fi|k|z)?sh$|^(?:cmd|powershell|pwsh)(?:\.exe)?$/i.test(pane.command),
-    pid: pane.panePid,
-    exitCode: null,
-    startedAt: 0,
-    agent: agent
-      ? {
-          ...agent,
-          state: signal?.state ?? "unknown",
-          activity: signal?.activity ?? null,
-          taskTitle: agentTaskTitle(agent, pane.paneTitle ?? "") ?? null,
-        }
-      : null,
-    backend: "tmux",
-  }
-}
-
 function SidebarApp({
   sourceSocket,
   hostPane,
@@ -278,6 +203,13 @@ function SidebarApp({
     void listen()
     return () => controller.abort()
   }, [focusSidebar, sourceSocket])
+  const activateNumberedSection = useCallback(
+    async (key: string) => {
+      const target = numberedSections[Number(key.at(-1)) - 1]?.panes[0]
+      if (target) await activate(target.id)
+    },
+    [numberedSections, activate],
+  )
   const runAction = useCallback(
     async (key: string) => {
       if (key === "escape" || key === "shift+l") {
@@ -287,8 +219,7 @@ function SidebarApp({
       if (disabled(key) || !TERMINAL_ACTIONS.some((action) => action.key === key)) return
       setLeaderActive(false)
       if (key.startsWith("alt+")) {
-        const target = numberedSections[Number(key.at(-1)) - 1]?.panes[0]
-        if (target) await activate(target.id)
+        await activateNumberedSection(key)
         return
       }
       if (key === "m") {
@@ -306,14 +237,13 @@ function SidebarApp({
       else setFocusRequest((current) => current + 1)
     },
     [
-      activate,
+      activateNumberedSection,
       disabled,
       endpoint,
       focusSidebar,
       hostPane,
       masterKey,
       mode,
-      numberedSections,
       sourceSocket,
     ],
   )

@@ -1,13 +1,13 @@
-import type { BoxRenderable, KeyEvent } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useTerminalFolders } from "./hooks/use-terminal-folders"
+import { useTerminalWorkspaceKeyboard } from "./hooks/use-terminal-workspace-keyboard"
+import { useTerminalSidebarBridge } from "./hooks/use-terminal-sidebar-bridge"
+import { useTerminalProjectSyncFlow } from "./hooks/use-terminal-project-sync-flow"
+import { useTerminalCompanions } from "./hooks/use-terminal-companions"
+import type { BoxRenderable } from "@opentui/core"
+import { useTerminalDimensions } from "@opentui/react"
 import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
-import {
-  COLORS,
-  getUiSettings,
-  matchesTerminalMasterKey,
-  terminalMasterKeyBytes,
-} from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useAgentDetection } from "./hooks/use-agent-detection"
 import { useAgentNotifications } from "./hooks/use-agent-notifications"
@@ -31,97 +31,49 @@ import {
   type TerminalFocusTargetKey,
 } from "./model/focus-selection"
 import {
-  clearTerminalSidebar,
-  publishTerminalSidebar,
   requestTerminalSidebarFocus,
   subscribeTerminalSidebar,
   terminalSidebarFocusRevision,
   terminalSidebarPinnedSnapshot,
   terminalSidebarRequestRevision,
-  terminalSidebarSnapshot,
   terminalSidebarTmuxHostSnapshot,
   toggleTerminalSidebarPinned,
 } from "./model/pinned-sidebar"
-import type { RemoteProjectSyncReview } from "./model/remote-project-sync"
 import {
   agentSessionHasCapability,
   cleanTerminalName,
   DEFAULT_FOLDER,
-  DEFAULT_FOLDER_NAME,
   EXTERNAL_FOLDER,
-  EXTERNAL_FOLDER_NAME,
   type TermAgentsCommand,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   orderedRunningAgents,
   type RemoteServerSetupRequest,
-  type TerminalFolder,
-  type TerminalSession,
   terminalSections,
   visibleTerminalShortcutTargets,
 } from "./model/sessions"
-import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "./model/tmux"
-import type {
-  MessageHistoryTarget,
-  SplitRequest,
-} from "./rendering/terminal-workspace-presentation"
+import type { SplitRequest } from "./rendering/terminal-workspace-presentation"
 import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
 import { resolveAgentResumeCommand } from "./services/agent-resume-command"
-import { discoverLiveDiffProjects, type LiveDiffProject } from "./services/live-diff-projects"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
-import {
-  pathExists,
-  RemoteProjectSyncCollisionError,
-  remoteProjectSyncDestination,
-} from "./services/remote-project-sync"
 import { listSshConfigProfiles } from "./services/ssh-config"
 import {
   createTermAgentsCommand,
   createRemoteServerSetupCommand,
   createShellTerminalCommand,
-  TERM_AGENTS_WORKING_DIRECTORY,
 } from "./services/terminal"
-import {
-  loadTerminalWorkspaceState,
-  saveTerminalWorkspaceState,
-  type TerminalWorkspaceState,
-  terminalWorkspaceAssignmentKey,
-} from "./services/terminal-workspace-state"
-import { discoverTmuxWorkspace } from "./services/tmux-agents"
-import { createTmuxMirrorCommand } from "./services/tmux-mirror-command"
 import { TerminalTutorialDemo } from "./tutorial/TerminalTutorialDemo"
 import { isTerminalTutorialTarget } from "./tutorial/TerminalTutorialVisualState"
 import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { RemoteCodexCompatibilityPrompt } from "./ui/RemoteCodexCompatibilityPrompt"
-import { RemoteProjectSyncFlow, type RemoteProjectSyncFlowState } from "./ui/RemoteProjectSyncFlow"
-import { TERMINAL_ACTIONS, TerminalActions, terminalActionKey } from "./ui/TerminalActions"
+import { RemoteProjectSyncFlow } from "./ui/RemoteProjectSyncFlow"
+import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
 import { TerminalPanes } from "./ui/TerminalPanes"
 import { TerminalShortcutAnimation } from "./ui/TerminalShortcut"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
 import { TerminalSplitDialog } from "./ui/TerminalSplitDialog"
-
-const RESERVED_TERMINAL_FOLDERS: TerminalFolder[] = [
-  { id: DEFAULT_FOLDER, name: DEFAULT_FOLDER_NAME },
-  { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
-  { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
-]
-
-function terminalLeaderNavigationKey(key: KeyEvent, agentTabsActive: boolean) {
-  if (["up", "down", "left", "right", "tab", "enter", "return"].includes(key.name)) return true
-  if (key.ctrl || key.meta || key.option || key.shift || key.super) return false
-  const name = key.name.toLowerCase()
-  return ["h", "j", "k", "l"].includes(name) || (agentTabsActive && ["z", "v"].includes(name))
-}
-
-type LiveDiffTarget = {
-  sessionId: string
-  agentKey: string
-  startedAt: number
-  manualDirectories: readonly string[]
-  focusRequest: number
-}
 
 export function TermAgents({
   active,
@@ -146,7 +98,6 @@ export function TermAgents({
   tutorial?: { targetId: string | null } | null
 }) {
   const { notify } = useNotifications()
-  const renderer = useRenderer()
   const terminalPaletteSequence = useTerminalPalette()
   const dimensions = useTerminalDimensions()
   const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
@@ -173,21 +124,35 @@ export function TermAgents({
     terminalResize,
     setNotice,
   } = terminal
+  const {
+    liveDiffTargets,
+    setLiveDiffTargets,
+    messageHistoryTargets,
+    setMessageHistoryTargets,
+    liveDiffProjectPicker,
+    setLiveDiffProjectPicker,
+    liveDiffProjectSearch,
+    toggleLiveDiff,
+    toggleMessageHistory,
+    closeLiveDiff,
+    closeMessageHistory,
+    addLiveDiffProject,
+    closeLiveDiffProjectPicker,
+    selectLiveDiffProject,
+  } = useTerminalCompanions(terminal)
   const externalSessions = useExternalTerminals()
   const sidebarSessions = useMemo(
     () => [...sessions, ...externalSessions],
     [externalSessions, sessions],
   )
-  const [initialWorkspaceState] = useState(() =>
-    loadTerminalWorkspaceState(TERM_AGENTS_WORKING_DIRECTORY),
-  )
-  const workspaceStateRef = useRef<TerminalWorkspaceState>(initialWorkspaceState)
-  const lastWorkspaceStateSignature = useRef(JSON.stringify(initialWorkspaceState))
-  const folders = RESERVED_TERMINAL_FOLDERS
-  const [collapsedFolderIds, setCollapsedFolderIds] = useState(
-    initialWorkspaceState.collapsedFolderIds,
-  )
-  const [selectedFolder, setSelectedFolder] = useState(DEFAULT_FOLDER)
+  const {
+    folders,
+    collapsedFolderIds,
+    selectedFolder,
+    setSelectedFolder,
+    toggleFolder,
+    folderForTmuxPane,
+  } = useTerminalFolders(sessions)
   const [leaderActive, setLeaderActive] = useState(false)
   const leaderRef = useRef(false)
   const [dialog, setDialog] = useState<TerminalDialogKind | null>(null)
@@ -195,26 +160,10 @@ export function TermAgents({
   const [splitRequest, setSplitRequest] = useState<SplitRequest | null>(null)
   const splitRequestRef = useRef<SplitRequest | null>(null)
   const [agentLaunchStep, setAgentLaunchStep] = useState<AgentLaunchStep | null>(null)
-  const [projectSyncFlow, setProjectSyncFlow] = useState<RemoteProjectSyncFlowState | null>(null)
-  const [liveDiffTargets, setLiveDiffTargets] = useState<ReadonlyMap<string, LiveDiffTarget>>(
-    () => new Map(),
-  )
-  const [messageHistoryTargets, setMessageHistoryTargets] = useState<
-    ReadonlyMap<string, MessageHistoryTarget>
-  >(() => new Map())
-  const [liveDiffProjectPicker, setLiveDiffProjectPicker] = useState<{
-    sessionId: string
-    projects: readonly LiveDiffProject[]
-    loading: boolean
-    error: string
-  } | null>(null)
-  const liveDiffProjectSearch = useRef<AbortController | null>(null)
   const sequence = useRef(0)
-  const sidebarOwner = useRef({})
   const activateFocusTargetRef = useRef<(target: TerminalFocusTargetKey) => void>(() => undefined)
   const runActionRef = useRef<(key: string) => void>(() => undefined)
   const resumeAgentThreadRef = useRef<(thread: AgentResumeThread) => void>(() => undefined)
-  const handledTargetRevision = useRef(0)
   const handledRemoteSetupRequest = useRef(0)
   const sidebarPinned = useSyncExternalStore(
     subscribeTerminalSidebar,
@@ -240,7 +189,7 @@ export function TermAgents({
   const sections = useMemo(() => terminalSections(sessions), [sessions])
   const masterKeyTargets = useMemo(
     () => visibleTerminalShortcutTargets(sidebarSessions, folders, collapsedFolderIds),
-    [collapsedFolderIds, sidebarSessions],
+    [collapsedFolderIds, folders, sidebarSessions],
   )
   const activeSession = sessions.find((session) => session.id === activeSessionId)
   const visibleSessions = useMemo(
@@ -325,41 +274,6 @@ export function TermAgents({
       if (leaderActive) onMasterKeyActiveChange?.(false)
     }
   }, [leaderActive, onMasterKeyActiveChange])
-  useEffect(() => {
-    setLiveDiffTargets((current) => {
-      let changed = false
-      const next = new Map(current)
-      for (const [sessionId, target] of current) {
-        const owner = sessions.find((session) => session.id === sessionId)
-        if (
-          owner &&
-          owner.startedAt === target.startedAt &&
-          (!owner.agent || owner.agent.key === target.agentKey)
-        )
-          continue
-        next.delete(sessionId)
-        changed = true
-      }
-      return changed ? next : current
-    })
-  }, [sessions])
-  useEffect(() => {
-    setMessageHistoryTargets((current) => {
-      let changed = false
-      const next = new Map(current)
-      for (const [sessionId, target] of current) {
-        const owner = sessions.find((session) => session.id === sessionId)
-        if (
-          owner?.startedAt === target.startedAt &&
-          agentSessionHasCapability(owner, "message-history")
-        )
-          continue
-        next.delete(sessionId)
-        changed = true
-      }
-      return changed ? next : current
-    })
-  }, [sessions])
   const section = sections.find((section) => section.id === activeSession?.sectionId)
   const hasSplitRoom = Boolean(section && section.panes.length < MAX_TERMINALS_PER_SECTION)
   const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
@@ -403,49 +317,16 @@ export function TermAgents({
   )
   useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
   useAgentNotifications(sessions, seenAgents)
-  const folderForTmuxPane = useCallback((pane: TmuxPaneInfo) => {
-    const defaultFolder = pane.ownedByTuiminal ? DEFAULT_FOLDER : TUIMINAL_TMUX_FOLDER
-    const savedFolder = workspaceStateRef.current.assignments[terminalWorkspaceAssignmentKey(pane)]
-    return savedFolder && RESERVED_TERMINAL_FOLDERS.some((folder) => folder.id === savedFolder)
-      ? savedFolder
-      : defaultFolder
-  }, [])
   useAutomaticTmuxMirrors(sessionsRef, dismissedTmuxPanes, launchCommand, folderForTmuxPane)
   usePinnedTmuxSidebars(sidebarPinned, sidebarWidth, masterKey)
 
-  useEffect(() => {
-    const assignments = Object.fromEntries(
-      Object.entries(workspaceStateRef.current.assignments).filter(([, folderId]) =>
-        folders.some((folder) => folder.id === folderId),
-      ),
-    )
-    for (const session of sessions) {
-      if (session.tmux) assignments[terminalWorkspaceAssignmentKey(session.tmux)] = session.folderId
-    }
-    const next: TerminalWorkspaceState = {
-      folders: [],
-      assignments,
-      collapsedFolderIds,
-    }
-    const signature = JSON.stringify(next)
-    if (signature === lastWorkspaceStateSignature.current) return
-    try {
-      workspaceStateRef.current = saveTerminalWorkspaceState(TERM_AGENTS_WORKING_DIRECTORY, next)
-      lastWorkspaceStateSignature.current = signature
-    } catch {
-      // Persistence failure must not interrupt live terminal sessions.
-    }
-  }, [collapsedFolderIds, sessions])
-
-  const toggleFolder = useCallback((id: string) => {
-    setCollapsedFolderIds((current) =>
-      current.includes(id) ? current.filter((folderId) => folderId !== id) : [...current, id],
-    )
-  }, [])
-  const selectFolderInSidebar = useCallback((id: string) => {
-    setSelectedFolder(id)
-    workspaceRef.current?.focus()
-  }, [])
+  const selectFolderInSidebar = useCallback(
+    (id: string) => {
+      setSelectedFolder(id)
+      workspaceRef.current?.focus()
+    },
+    [setSelectedFolder],
+  )
 
   const selectSession = useCallback(
     (id: string) => {
@@ -467,12 +348,22 @@ export function TermAgents({
       }
       activateSession(id)
     },
-    [activateSession, externalSessions, notify, sessionsRef, setNotice],
+    [activateSession, externalSessions, notify, sessionsRef, setNotice, setSelectedFolder],
   )
   const restoreFocus = useCallback(() => {
     if (activeSessionRef.current) focusTerminal(activeSessionRef.current)
     else queueMicrotask(() => workspaceRef.current?.focus())
   }, [activeSessionRef, focusTerminal])
+  const {
+    projectSyncFlow,
+    setProjectSyncFlow,
+    closeProjectSyncFlow,
+    runProjectSync,
+    requestProjectSync,
+    pageProjectSyncReview,
+    toggleAutomaticProjectSync,
+    chooseProjectSyncParent,
+  } = useTerminalProjectSyncFlow({ sessions, activeSessionRef, projectSync, restoreFocus })
   const toggleSidebarActions = useCallback(() => {
     if (leaderRef.current) {
       leaderRef.current = false
@@ -515,7 +406,7 @@ export function TermAgents({
       setSelectedFolder(DEFAULT_FOLDER)
       return id
     },
-    [launchCommand],
+    [launchCommand, setSelectedFolder],
   )
   const remoteCodexCompatibility = useWorkspaceRemoteCodexCompatibilityFlow({
     sessions,
@@ -646,197 +537,6 @@ export function TermAgents({
       )
     return ["x", "e", "m"].includes(key) && !activeSession
   }
-  const toggleLiveDiff = () => {
-    if (!activeSessionId) return
-    if (liveDiffTargets.has(activeSessionId)) {
-      setLiveDiffTargets((current) => {
-        const target = current.get(activeSessionId)
-        if (!target) return current
-        const next = new Map(current)
-        next.set(activeSessionId, { ...target, focusRequest: target.focusRequest + 1 })
-        return next
-      })
-      return
-    }
-    const session = activeSession
-    const agent = session?.agent
-    if (!session || !agent) return
-    setLiveDiffTargets((current) => {
-      const next = new Map(current)
-      next.set(session.id, {
-        sessionId: session.id,
-        agentKey: agent.key,
-        startedAt: session.startedAt,
-        manualDirectories: [],
-        focusRequest: 1,
-      })
-      return next
-    })
-  }
-  const toggleMessageHistory = () => {
-    if (!activeSessionId) return
-    if (messageHistoryTargets.has(activeSessionId)) {
-      setMessageHistoryTargets((current) => {
-        const target = current.get(activeSessionId)
-        if (!target) return current
-        const next = new Map(current)
-        next.set(activeSessionId, { ...target, focusRequest: target.focusRequest + 1 })
-        return next
-      })
-      return
-    }
-    if (!activeSession || !agentSessionHasCapability(activeSession, "message-history")) return
-    setMessageHistoryTargets((current) => {
-      const next = new Map(current)
-      next.set(activeSession.id, {
-        sessionId: activeSession.id,
-        startedAt: activeSession.startedAt,
-        focusRequest: 1,
-      })
-      return next
-    })
-  }
-  const closeProjectSyncFlow = () => {
-    if (projectSyncFlow?.kind === "progress") {
-      const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
-      if (owner) projectSync.cancel(owner)
-      return
-    }
-    if (projectSyncFlow?.kind === "preview") {
-      const owner = sessions.find((session) => session.id === projectSyncFlow.sessionId)
-      if (owner) projectSync.cancel(owner)
-    }
-    setProjectSyncFlow(null)
-    restoreFocus()
-  }
-  const runProjectSync = (
-    session: TerminalSession,
-    localPath?: string,
-    review?: RemoteProjectSyncReview,
-  ) => {
-    const destination = review?.localPath ?? localPath ?? projectSync.mappingFor(session)?.localPath
-    if (destination)
-      setProjectSyncFlow({ kind: "progress", sessionId: session.id, localPath: destination })
-    void projectSync
-      .synchronize(session, localPath, {
-        ...(review ? { review } : {}),
-      })
-      .then((mapping) => {
-        if (!mapping) return
-        setProjectSyncFlow(null)
-        queueMicrotask(restoreFocus)
-        notify({
-          source: `terminal-project-sync:${session.id}`,
-          kind: "success",
-          title: translateUi("Projeto sincronizado"),
-          message: mapping.localPath,
-        })
-      })
-      .catch((error) => {
-        if (error instanceof RemoteProjectSyncCollisionError)
-          setProjectSyncFlow({ kind: "browse", sessionId: session.id })
-        else {
-          setProjectSyncFlow(null)
-          queueMicrotask(restoreFocus)
-        }
-        if (!(error instanceof Error && error.message === "Operação cancelada."))
-          notify({
-            source: `terminal-project-sync:${session.id}`,
-            kind: "error",
-            title: translateUi("Falha na sincronização"),
-            message:
-              error instanceof Error
-                ? translateUi(error.message)
-                : translateUi("Não foi possível sincronizar."),
-          })
-      })
-  }
-  const requestProjectSync = (session: TerminalSession) => {
-    const mapping = projectSync.mappingFor(session)
-    if (!mapping) {
-      setProjectSyncFlow({ kind: "browse", sessionId: session.id })
-      return
-    }
-    setProjectSyncFlow({ kind: "progress", sessionId: session.id, localPath: mapping.localPath })
-    void projectSync
-      .inspect(session)
-      .then((review) => {
-        if (!review) return
-        if (activeSessionRef.current !== session.id) {
-          projectSync.cancel(session)
-          setProjectSyncFlow(null)
-          return
-        }
-        if (!review.changeCount) {
-          setProjectSyncFlow(null)
-          queueMicrotask(restoreFocus)
-          notify({
-            source: `terminal-project-sync:${session.id}`,
-            kind: "info",
-            title: translateUi("Projeto já sincronizado"),
-            message: translateUi("Nenhum arquivo pendente."),
-          })
-          return
-        }
-        setProjectSyncFlow({ kind: "preview", sessionId: session.id, review })
-      })
-      .catch((error) => {
-        setProjectSyncFlow(null)
-        queueMicrotask(restoreFocus)
-        if (!(error instanceof Error && error.message === "Operação cancelada."))
-          notify({
-            source: `terminal-project-sync:${session.id}`,
-            kind: "error",
-            title: translateUi("Falha na sincronização"),
-            message:
-              error instanceof Error
-                ? translateUi(error.message)
-                : translateUi("Não foi possível verificar o projeto."),
-          })
-      })
-  }
-  const pageProjectSyncReview = (session: TerminalSession, offset: number) => {
-    void projectSync.page(session, offset).then((page) => {
-      if (!page) return
-      setProjectSyncFlow((current) =>
-        current?.kind === "preview" && current.sessionId === session.id
-          ? { kind: "preview", sessionId: session.id, review: { ...current.review, ...page } }
-          : current,
-      )
-    })
-  }
-  const toggleAutomaticProjectSync = (session: TerminalSession) => {
-    try {
-      projectSync.toggleAutomatic(session)
-    } catch (error) {
-      notify({
-        source: `terminal-project-sync:${session.id}`,
-        kind: "error",
-        title: translateUi("Falha na sincronização automática"),
-        message:
-          error instanceof Error
-            ? translateUi(error.message)
-            : translateUi("Não foi possível salvar a preferência de sincronização automática."),
-      })
-    }
-  }
-  const chooseProjectSyncParent = async (session: TerminalSession, parent: string) => {
-    const remote = session.agentLaunch?.remote
-    if (!remote) return
-    const localPath = remoteProjectSyncDestination(parent, remote.workingDirectory)
-    if (await pathExists(localPath)) {
-      notify({
-        source: `terminal-project-sync:${session.id}`,
-        kind: "warning",
-        title: translateUi("Pasta de sincronização ocupada"),
-        message: translateUi(
-          "Escolha outra pasta; o Tuiminal não substitui uma pasta desconhecida.",
-        ),
-      })
-      return
-    }
-    setProjectSyncFlow({ kind: "destination", sessionId: session.id, localPath })
-  }
   activateFocusTargetRef.current = (target) => {
     const { kind, sessionId } = parseTerminalFocusTargetKey(target)
     if (kind === "sidebar") {
@@ -935,98 +635,6 @@ export function TermAgents({
     setDialog("command")
   }, [])
   const openCodexTerminal = useCallback(() => runActionRef.current("a"), [])
-  const closeLiveDiff = useCallback(
-    (id: string) => {
-      setLiveDiffTargets((current) => {
-        if (!current.has(id)) return current
-        const next = new Map(current)
-        next.delete(id)
-        return next
-      })
-      focusTerminal(id)
-    },
-    [focusTerminal],
-  )
-  const closeMessageHistory = useCallback(
-    (id: string) => {
-      setMessageHistoryTargets((current) => {
-        if (!current.has(id)) return current
-        const next = new Map(current)
-        next.delete(id)
-        return next
-      })
-      focusTerminal(id)
-    },
-    [focusTerminal],
-  )
-  const addLiveDiffProject = useCallback(
-    (id: string, roots: readonly string[]) => {
-      const session = sessionsRef.current.find((candidate) => candidate.id === id)
-      if (session?.agentLaunch?.remote) return
-      const seeds = [session?.workingDirectory ?? "", ...roots]
-      liveDiffProjectSearch.current?.abort()
-      const controller = new AbortController()
-      liveDiffProjectSearch.current = controller
-      setLiveDiffProjectPicker({
-        sessionId: id,
-        projects: [],
-        loading: true,
-        error: "",
-      })
-      void discoverLiveDiffProjects(seeds, controller.signal)
-        .then((projects) => {
-          if (controller.signal.aborted) return
-          const existing = new Set(roots)
-          setLiveDiffProjectPicker((current) =>
-            current?.sessionId === id
-              ? {
-                  ...current,
-                  projects: projects.filter((project) => !existing.has(project.path)),
-                  loading: false,
-                }
-              : current,
-          )
-        })
-        .catch(() => {
-          if (controller.signal.aborted) return
-          setLiveDiffProjectPicker((current) =>
-            current?.sessionId === id
-              ? {
-                  ...current,
-                  loading: false,
-                  error: translateUi("Não foi possível procurar projetos Git."),
-                }
-              : current,
-          )
-        })
-    },
-    [sessionsRef],
-  )
-  const closeLiveDiffProjectPicker = useCallback(() => {
-    liveDiffProjectSearch.current?.abort()
-    liveDiffProjectSearch.current = null
-    const id = liveDiffProjectPicker?.sessionId
-    setLiveDiffProjectPicker(null)
-    if (id) queueMicrotask(() => focusTerminal(id))
-  }, [focusTerminal, liveDiffProjectPicker?.sessionId])
-  const selectLiveDiffProject = useCallback(
-    (path: string) => {
-      const id = liveDiffProjectPicker?.sessionId
-      if (!id) return
-      setLiveDiffTargets((current) => {
-        const target = current.get(id)
-        if (!target || target.manualDirectories.includes(path)) return current
-        const next = new Map(current)
-        next.set(id, {
-          ...target,
-          manualDirectories: [...target.manualDirectories, path],
-        })
-        return next
-      })
-      closeLiveDiffProjectPicker()
-    },
-    [closeLiveDiffProjectPicker, liveDiffProjectPicker?.sessionId],
-  )
   const saveDialog = (value: string) => {
     if (dialog === "command") {
       launchSection(createTermAgentsCommand(value))
@@ -1083,6 +691,9 @@ export function TermAgents({
     projectSync.cancel,
     remoteCodexCompatibility.prompt,
     sessionsRef,
+    setLiveDiffProjectPicker,
+    setProjectSyncFlow,
+    liveDiffProjectSearch,
   ])
 
   const sidebarView = useMemo(
@@ -1113,6 +724,7 @@ export function TermAgents({
     [
       activeSessionId,
       activeRemoteProfileId,
+      folders,
       collapsedFolderIds,
       leaderActive,
       masterKey,
@@ -1133,169 +745,44 @@ export function TermAgents({
       loadMoreThreads,
     ],
   )
-  useEffect(() => {
-    publishTerminalSidebar(sidebarOwner.current, sidebarView)
-  }, [sidebarView])
-  useEffect(() => () => clearTerminalSidebar(sidebarOwner.current), [])
-
-  useEffect(() => {
-    const target = terminalSidebarSnapshot().requestedTarget
-    if (!target || handledTargetRevision.current === requestedTargetRevision) return
-    if ("focusTarget" in target) {
-      handledTargetRevision.current = requestedTargetRevision
-      focusBox(target.focusTarget)
-      return
-    }
-    if ("action" in target) {
-      handledTargetRevision.current = requestedTargetRevision
-      runActionRef.current(target.action)
-      return
-    }
-    if ("loadMoreResumeProvider" in target) {
-      handledTargetRevision.current = requestedTargetRevision
-      void loadMoreThreads(target.loadMoreResumeProvider)
-      return
-    }
-    if ("resumeThreadId" in target) {
-      handledTargetRevision.current = requestedTargetRevision
-      const thread = recentThreads.find(
-        (candidate) =>
-          candidate.id === target.resumeThreadId &&
-          (candidate.providerId ?? "codex") === (target.providerId ?? "codex") &&
-          candidate.remoteProfileId === target.remoteProfileId,
-      )
-      if (thread) resumeAgentThreadRef.current(thread)
-      return
-    }
-    if ("folderId" in target) {
-      if (folders.some((candidate) => candidate.id === target.folderId)) {
-        handledTargetRevision.current = requestedTargetRevision
-        setSelectedFolder(target.folderId)
-        toggleFolder(target.folderId)
-      }
-      return
-    }
-    if ("sessionId" in target) {
-      if (sidebarSessions.some((candidate) => candidate.id === target.sessionId)) {
-        handledTargetRevision.current = requestedTargetRevision
-        selectSession(target.sessionId)
-      }
-      return
-    }
-    const session = sessions.find(
-      (candidate) =>
-        candidate.tmux?.socket === target.socket && candidate.tmux.paneId === target.paneId,
-    )
-    if (session) {
-      handledTargetRevision.current = requestedTargetRevision
-      selectSession(session.id)
-      return
-    }
-    const controller = new AbortController()
-    const open = async () => {
-      const result = await discoverTmuxWorkspace(controller.signal)
-      const found = result.panes.find(
-        ({ pane }) => pane.socket === target.socket && pane.paneId === target.paneId,
-      )
-      if (!found || controller.signal.aborted) return
-      handledTargetRevision.current = requestedTargetRevision
-      const notice = tmuxAgentNotice(found.agent)
-      if (notice) notify(notice)
-      sequence.current += 1
-      launchCommand(createTmuxMirrorCommand(found.pane, found.agent?.label, false), {
-        sectionId: `pinned-tmux-${sequence.current}`,
-        folderId: folderForTmuxPane(found.pane),
-        row: 0,
-        column: 0,
-      })
-    }
-    void open().catch(() => undefined)
-    return () => controller.abort()
-  }, [
+  useTerminalSidebarBridge({
+    sidebarView,
     requestedTargetRevision,
+    focusBox,
+    runActionRef,
+    loadMoreThreads,
     recentThreads,
-    sessions,
+    resumeAgentThreadRef,
+    folders,
+    setSelectedFolder,
+    toggleFolder,
     sidebarSessions,
     selectSession,
+    sessions,
+    sequence,
     launchCommand,
-    loadMoreThreads,
     folderForTmuxPane,
-    focusBox,
-    notify,
-    toggleFolder,
-  ])
-
-  const handleMasterKey = (key: KeyEvent) => {
-    const configuredKey = getUiSettings().terminalMasterKey
-    if (!matchesTerminalMasterKey(key, configuredKey)) return false
-    key.preventDefault()
-    key.stopPropagation()
-    if (leaderRef.current) {
-      processHandles.current
-        .get(activeSessionRef.current ?? "")
-        ?.write(terminalMasterKeyBytes(configuredKey))
-      setLeader(false)
-      restoreFocus()
-    } else {
-      rememberBoxFocusOrigin()
-      setLeader(true)
-    }
-    return true
-  }
-
-  const handleLeaderKey = (key: KeyEvent) => {
-    if (!leaderRef.current) return false
-    if (renderer.currentFocusedRenderable?.id === "terminal-action-search") return true
-    if (key.name === "/" || key.sequence === "/" || key.raw === "/") {
-      key.preventDefault()
-      key.stopPropagation()
-      renderer.root.findDescendantById("terminal-action-search")?.focus()
-      return true
-    }
-    if (
-      terminalLeaderNavigationKey(
-        key,
-        Boolean(renderer.root.findDescendantById("terminal-agent-panel-active")),
-      )
-    )
-      return true
-    key.preventDefault()
-    key.stopPropagation()
-    const action = terminalActionKey(key)
-    if (action?.startsWith("alt+")) {
-      runAction(action)
-      return true
-    }
-    if (
-      /^[1-9]$/.test(key.name) &&
-      !key.ctrl &&
-      !key.meta &&
-      !key.option &&
-      !key.shift &&
-      !key.super
-    ) {
-      const target = masterKeyTargets[Number(key.name) - 1]
-      if (target) selectSession(target.id)
-      return true
-    }
-    if (action) runAction(action)
-    return true
-  }
-
-  useKeyboard((key) => {
-    if (
-      !active ||
-      dialogRef.current ||
-      splitRequestRef.current ||
-      agentLaunchStep ||
-      projectSyncFlow ||
-      liveDiffProjectPicker ||
-      remoteCodexCompatibility.prompt ||
-      key.defaultPrevented
-    )
-      return
-    if (handleMasterKey(key)) return
-    handleLeaderKey(key)
+  })
+  useTerminalWorkspaceKeyboard({
+    leaderRef,
+    processHandles,
+    activeSessionRef,
+    setLeader,
+    restoreFocus,
+    rememberBoxFocusOrigin,
+    runAction,
+    masterKeyTargets,
+    selectSession,
+    isBlocked: () =>
+      Boolean(
+        !active ||
+          dialogRef.current ||
+          splitRequestRef.current ||
+          agentLaunchStep ||
+          projectSyncFlow ||
+          liveDiffProjectPicker ||
+          remoteCodexCompatibility.prompt,
+      ),
   })
 
   return (

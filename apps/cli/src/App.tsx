@@ -342,12 +342,18 @@ export function AppContent() {
     </>
   )
   if (ONLY_TAB) {
+    const compact = ONLY_TAB === "terminal" || LAYOUT.compact
+    const headerHeight = compact ? 1 : 2
+    const shortcutColor =
+      ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
+    const isolatedToolAvailable =
+      features.state.installed.includes(ONLY_TAB) && !closed.has(ONLY_TAB)
     return (
       <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
         <box
           id="tutorial-app-header"
           style={{
-            height: ONLY_TAB === "terminal" || LAYOUT.compact ? 1 : 2,
+            height: headerHeight,
             flexShrink: 0,
             flexDirection: "row",
             alignItems: "center",
@@ -365,23 +371,19 @@ export function AppContent() {
           />
           <box style={{ flexDirection: "row", alignItems: "center" }}>
             <InlineButton
-              compact={ONLY_TAB === "terminal" || LAYOUT.compact}
+              compact={compact}
               id="tutorial-settings-button"
               label={compactNavigation ? "[,]" : "[,] Config"}
               accent={COLORS.focus}
-              shortcutColor={
-                ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
-              }
+              shortcutColor={shortcutColor}
               onPress={openSettings}
             />
             <InlineButton
-              compact={ONLY_TAB === "terminal" || LAYOUT.compact}
+              compact={compact}
               id="app-exit-button"
               label={compactNavigation ? "[Q]" : "[Q] Sair"}
               accent={COLORS.focus}
-              shortcutColor={
-                ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
-              }
+              shortcutColor={shortcutColor}
               onPress={() => void exit.quit()}
             />
           </box>
@@ -390,67 +392,56 @@ export function AppContent() {
         <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
           <PinnedTerminalSidebar
             active={!interactionBlocked}
-            height={Math.max(
-              1,
-              terminal.height - (ONLY_TAB === "terminal" || LAYOUT.compact ? 1 : 2),
-            )}
+            height={Math.max(1, terminal.height - headerHeight)}
             onOpenTerminal={() => {
               if (ONLY_TAB === "terminal") return
               void selectTab("terminal")
             }}
           />
           <box id="tutorial-current-tool" style={{ flexGrow: 1, minWidth: 1 }}>
-            {features.state.installed.includes(ONLY_TAB) &&
-              !closed.has(ONLY_TAB) &&
-              ONLY_TAB === "database" && (
-                <DatabaseViewer
-                  active={backgroundToolActive}
-                  tutorialMode={tutorialOpen}
-                  queryRerunRequest={databaseQueryRerunRequest}
-                  onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
-                />
-              )}
-            {features.state.installed.includes(ONLY_TAB) &&
-              !closed.has(ONLY_TAB) &&
-              ONLY_TAB === "git" && (
-                <GitViewer
-                  active={backgroundToolActive}
-                  tutorialMode={tutorialOpen}
-                  tutorialTargetId={tutorialTargetId}
-                  configurationRevision={gitConfiguration.revision}
-                  localConfigurationRevision={gitConfiguration.localRevision}
-                  onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
-                />
-              )}
-            {features.state.installed.includes(ONLY_TAB) &&
-              !closed.has(ONLY_TAB) &&
-              ONLY_TAB === "runner" && <Runner active={backgroundToolActive} />}
-            {features.state.installed.includes(ONLY_TAB) &&
-              !closed.has(ONLY_TAB) &&
-              ONLY_TAB === "http" && (
-                <HttpClient
-                  active={backgroundToolActive}
-                  tutorialMode={tutorialOpen}
-                  onUnsavedChangesChange={exit.track}
-                />
-              )}
-            {features.state.installed.includes(ONLY_TAB) &&
-              !closed.has(ONLY_TAB) &&
-              ONLY_TAB === "terminal" && (
-                <TermAgents
-                  tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
-                  active={!interactionBlocked}
-                  externalSidebarHost
-                  remoteSetupRequest={remoteSetup.request}
-                  onRemoteSetupRequestHandled={remoteSetup.handled}
-                  onMasterKeyActiveChange={setTerminalMasterKeyActive}
-                  onOpenSettings={openSettings}
-                  onQuit={() => {
-                    features.controller.cancel()
-                    void exit.quit()
-                  }}
-                />
-              )}
+            {isolatedToolAvailable && ONLY_TAB === "database" && (
+              <DatabaseViewer
+                active={backgroundToolActive}
+                tutorialMode={tutorialOpen}
+                queryRerunRequest={databaseQueryRerunRequest}
+                onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
+              />
+            )}
+            {isolatedToolAvailable && ONLY_TAB === "git" && (
+              <GitViewer
+                active={backgroundToolActive}
+                tutorialMode={tutorialOpen}
+                tutorialTargetId={tutorialTargetId}
+                configurationRevision={gitConfiguration.revision}
+                localConfigurationRevision={gitConfiguration.localRevision}
+                onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
+              />
+            )}
+            {isolatedToolAvailable && ONLY_TAB === "runner" && (
+              <Runner active={backgroundToolActive} />
+            )}
+            {isolatedToolAvailable && ONLY_TAB === "http" && (
+              <HttpClient
+                active={backgroundToolActive}
+                tutorialMode={tutorialOpen}
+                onUnsavedChangesChange={exit.track}
+              />
+            )}
+            {isolatedToolAvailable && ONLY_TAB === "terminal" && (
+              <TermAgents
+                tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
+                active={!interactionBlocked}
+                externalSidebarHost
+                remoteSetupRequest={remoteSetup.request}
+                onRemoteSetupRequestHandled={remoteSetup.handled}
+                onMasterKeyActiveChange={setTerminalMasterKeyActive}
+                onOpenSettings={openSettings}
+                onQuit={() => {
+                  features.controller.cancel()
+                  void exit.quit()
+                }}
+              />
+            )}
           </box>
         </box>
         {overlays}
