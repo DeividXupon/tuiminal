@@ -1,8 +1,8 @@
-import type { FreeTerminalProcessHandle } from "./terminal"
+import type { TermAgentsProcessHandle } from "./terminal"
 
 /** A launch failed while its owned process/session still needs retirement. */
 export class TerminalRetirementError extends Error {
-  readonly handle: FreeTerminalProcessHandle
+  readonly handle: TermAgentsProcessHandle
 
   constructor(cause: unknown, stop: () => Promise<void>) {
     super("Não foi possível encerrar a sessão tmux.", { cause })
@@ -16,7 +16,7 @@ export async function stopTerminalBeforeRestart({
   onError,
   close = false,
 }: {
-  handle: FreeTerminalProcessHandle | undefined
+  handle: TermAgentsProcessHandle | undefined
   write: (data: string) => void
   onError: (message: string) => void
   close?: boolean

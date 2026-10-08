@@ -235,7 +235,7 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
   ],
   [
     "São necessários dois terminais livres para o guia de atualização.",
-    "Two free terminal slots are required for the update guide.",
+    "Two available terminal slots are required for the update guide.",
     "Se necesitan dos terminales libres para la guía de actualización.",
     "更新ガイドには、空きターミナルが 2 つ必要です。",
     "更新指南需要两个空闲终端。",
@@ -243,7 +243,7 @@ export const TERMINAL_REMOTE_COMPATIBILITY_MESSAGES = [
   ],
   [
     "É necessário um terminal livre para o guia de atualização.",
-    "One free terminal slot is required for the update guide.",
+    "One available terminal slot is required for the update guide.",
     "Se necesita un terminal libre para la guía de actualización.",
     "更新ガイドには、空きターミナルが 1 つ必要です。",
     "更新指南需要一个空闲终端。",

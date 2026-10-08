@@ -59,7 +59,7 @@ seven npm tarballs and five feature payloads, including hashes, shared launcher
 bytes, versions, and licenses. No alpha version was published by those checks.
 The installer and five tool demos were regenerated and reviewed for this change.
 
-Subsequent package UI qualification found a native-shell assumption in Free Terminal:
+Subsequent package UI qualification found a native-shell assumption in Term Agents:
 without `SHELL`, Windows also selected `/bin/zsh`. The correction uses the Windows
 command interpreter with AutoRun disabled, retains configured POSIX shells with a
 portable `/bin/sh` fallback, and adds native process coverage. Requalify the final

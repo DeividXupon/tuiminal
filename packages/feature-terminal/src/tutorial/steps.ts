@@ -2,7 +2,7 @@ export const TERMINAL_TUTORIAL_STEPS = [
   {
     targetId: "tutorial-terminal-workspace",
     group: "1 · O BÁSICO",
-    title: "Bem-vindo ao Free Terminal",
+    title: "Bem-vindo ao Term Agents",
     description:
       "Isto aqui é um terminal de verdade: shell, lazygit, servidor de dev, o que der na telha. O Tuiminal só organiza a bagunça. Tudo neste tour é de mentirinha, então explore sem medo.",
     hint: "[Enter] avança · [←] volta · [Esc] sai do tour",

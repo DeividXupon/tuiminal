@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto"
 import type { TmuxPaneTarget, TmuxSessionTarget, TmuxTerminalKind } from "../model/tmux"
 import {
-  type FreeTerminalExit,
-  type FreeTerminalProcessHandle,
-  startFreeTerminalProcess,
+  type TermAgentsExit,
+  type TermAgentsProcessHandle,
+  startTermAgentsProcess,
 } from "./terminal"
 import { TerminalRetirementError } from "./terminal-lifecycle"
 import { registerTerminalResource } from "./terminal-resources"
@@ -12,7 +12,7 @@ import { startTmuxPaneMirror } from "./tmux-mirror"
 import { readTmuxPaneWorkingDirectory } from "./tmux-pane-context"
 import { createOwnedTmuxWindow } from "./tmux-owned-session"
 
-type Options = Parameters<typeof startFreeTerminalProcess>[1]
+type Options = Parameters<typeof startTermAgentsProcess>[1]
 
 type PaneInfo = { pid: number | null; dead: boolean; code: number | null; panes: number }
 
@@ -101,7 +101,7 @@ export async function startTmuxTerminal(
   options: Options,
   borrowed?: TmuxPaneTarget,
   terminalKind: TmuxTerminalKind = "custom",
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   if (borrowed && (!borrowed.ownedByTuiminal || !borrowed.windowId)) {
     const mirror = await startTmuxPaneMirror(borrowed, options)
     return {
@@ -121,14 +121,14 @@ export async function startTmuxTerminal(
     ? { target: borrowed, destroy: () => destroyOwnedTmuxTarget(borrowed) }
     : await createOwnedTmuxWindow(command, options, terminalKind)
   const target = owned.target
-  let client: FreeTerminalProcessHandle | undefined
+  let client: TermAgentsProcessHandle | undefined
   let clientSession: Awaited<ReturnType<typeof createLinkedClientSession>> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let finishing = false
   let finishPromise: Promise<void> | undefined
   let release = () => {}
   const inspection = new AbortController()
-  const finish = (result: FreeTerminalExit) => {
+  const finish = (result: TermAgentsExit) => {
     if (finishPromise) return finishPromise
     finishing = true
     clearTimeout(timer)
@@ -181,7 +181,7 @@ export async function startTmuxTerminal(
     // Let tmux receive wheel events and enter its own copy mode instead.
     await runTmux(["-S", target.socket, "set-option", "-gq", "mouse", "on"])
     clientSession = await createLinkedClientSession(target)
-    client = startFreeTerminalProcess(
+    client = startTermAgentsProcess(
       ["tmux", "-S", target.socket, "-f", "/dev/null", "attach-session", "-t", clientSession.name],
       {
         ...options,
@@ -192,7 +192,7 @@ export async function startTmuxTerminal(
         },
       },
     )
-    const handle: FreeTerminalProcessHandle = {
+    const handle: TermAgentsProcessHandle = {
       pid: client.pid,
       backend: "tmux",
       tmux: target,

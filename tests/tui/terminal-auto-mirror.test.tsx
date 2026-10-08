@@ -3,7 +3,7 @@ import { afterEach, expect, mock, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
@@ -22,7 +22,7 @@ function Fixture() {
   return (
     <box style={{ flexGrow: 1 }}>
       <box visible={active} style={{ flexGrow: 1 }}>
-        <FreeTerminal active={active} />
+        <TermAgents active={active} />
       </box>
       <box visible={!active} style={{ flexGrow: 1 }}>
         <text content="GIT_FIXTURE" />
@@ -163,9 +163,9 @@ test("existing agents appear automatically with current content and no manual pi
   expect(tui?.captureCharFrame()).toContain("EXISTING_AGENT_%1")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-tmux")).toBeUndefined()
   await waitFor(
-    () => tui?.renderer.currentFocusedRenderable?.id.startsWith("free-terminal-") ?? false,
+    () => tui?.renderer.currentFocusedRenderable?.id.startsWith("term-agents-") ?? false,
   )
-  const sessionId = tui!.renderer.currentFocusedRenderable!.id.replace("free-terminal-", "")
+  const sessionId = tui!.renderer.currentFocusedRenderable!.id.replace("term-agents-", "")
   await waitFor(() => Boolean(tui?.renderer.root.findDescendantById(`terminal-agent-${sessionId}`)))
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-ai")).toBeUndefined()
   expect(
@@ -195,7 +195,7 @@ test("new agents preserve local terminal focus and remain hidden behind Git", as
   const { start, setAgents } = await mount()
   await leader("n")
   await waitFor(
-    () => tui?.renderer.currentFocusedRenderable?.id.startsWith("free-terminal-") ?? false,
+    () => tui?.renderer.currentFocusedRenderable?.id.startsWith("term-agents-") ?? false,
   )
   const focused = tui?.renderer.currentFocusedRenderable
   setAgents([agent(1)])

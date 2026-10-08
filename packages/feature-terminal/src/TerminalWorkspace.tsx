@@ -50,7 +50,7 @@ import {
   DEFAULT_FOLDER_NAME,
   EXTERNAL_FOLDER,
   EXTERNAL_FOLDER_NAME,
-  type FreeTerminalCommand,
+  type TermAgentsCommand,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   orderedRunningAgents,
@@ -76,10 +76,10 @@ import {
 } from "./services/remote-project-sync"
 import { listSshConfigProfiles } from "./services/ssh-config"
 import {
-  createFreeTerminalCommand,
+  createTermAgentsCommand,
   createRemoteServerSetupCommand,
   createShellTerminalCommand,
-  FREE_TERMINAL_WORKING_DIRECTORY,
+  TERM_AGENTS_WORKING_DIRECTORY,
 } from "./services/terminal"
 import {
   loadTerminalWorkspaceState,
@@ -123,7 +123,7 @@ type LiveDiffTarget = {
   focusRequest: number
 }
 
-export function FreeTerminal({
+export function TermAgents({
   active,
   externalSidebarHost = false,
   onOpenSettings,
@@ -179,7 +179,7 @@ export function FreeTerminal({
     [externalSessions, sessions],
   )
   const [initialWorkspaceState] = useState(() =>
-    loadTerminalWorkspaceState(FREE_TERMINAL_WORKING_DIRECTORY),
+    loadTerminalWorkspaceState(TERM_AGENTS_WORKING_DIRECTORY),
   )
   const workspaceStateRef = useRef<TerminalWorkspaceState>(initialWorkspaceState)
   const lastWorkspaceStateSignature = useRef(JSON.stringify(initialWorkspaceState))
@@ -430,7 +430,7 @@ export function FreeTerminal({
     const signature = JSON.stringify(next)
     if (signature === lastWorkspaceStateSignature.current) return
     try {
-      workspaceStateRef.current = saveTerminalWorkspaceState(FREE_TERMINAL_WORKING_DIRECTORY, next)
+      workspaceStateRef.current = saveTerminalWorkspaceState(TERM_AGENTS_WORKING_DIRECTORY, next)
       lastWorkspaceStateSignature.current = signature
     } catch {
       // Persistence failure must not interrupt live terminal sessions.
@@ -504,7 +504,7 @@ export function FreeTerminal({
     if (restore) restoreFocus()
   }
   const launchSection = useCallback(
-    (command: FreeTerminalCommand = createShellTerminalCommand()) => {
+    (command: TermAgentsCommand = createShellTerminalCommand()) => {
       sequence.current += 1
       const id = launchCommand(command, {
         sectionId: `section-${sequence.current}`,
@@ -1029,7 +1029,7 @@ export function FreeTerminal({
   )
   const saveDialog = (value: string) => {
     if (dialog === "command") {
-      launchSection(createFreeTerminalCommand(value))
+      launchSection(createTermAgentsCommand(value))
       closeDialog()
       return
     }

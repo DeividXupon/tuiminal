@@ -5,10 +5,10 @@ import type { TerminalFocusTargetKey } from "../model/focus-selection"
 import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
 import type { TerminalSession } from "../model/sessions"
 import type { TerminalRepositoryContext } from "../model/terminal-context"
-import { FreeTerminalPane, type FreeTerminalPaneLayout } from "./FreeTerminalPane"
+import { TermAgentsPane, type TermAgentsPaneLayout } from "./TermAgentsPane"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
-const FULL_PANE: FreeTerminalPaneLayout = {
+const FULL_PANE: TermAgentsPaneLayout = {
   top: 0,
   left: 0,
   width: "100%",
@@ -41,7 +41,7 @@ export function liveDiffCoversSplitPane({
   )
 }
 
-type PaneProps = ComponentProps<typeof FreeTerminalPane>
+type PaneProps = ComponentProps<typeof TermAgentsPane>
 
 type LiveDiffPaneTarget = {
   sessionId: string
@@ -91,7 +91,7 @@ function paneLayout(
   visible: boolean,
   splitSection: boolean,
   down: boolean,
-): FreeTerminalPaneLayout {
+): TermAgentsPaneLayout {
   if (!splitSection || !visible) return FULL_PANE
   return {
     top: down && session.row === 1 ? "50%" : 0,
@@ -162,7 +162,7 @@ function TerminalPaneItem({
   const stacked =
     !liveDiffCoversTerminal && (splitSection || panes.availableWidth - panes.sidebarWidth < 90)
   return (
-    <FreeTerminalPane
+    <TermAgentsPane
       session={session}
       active={session.id === panes.activeSessionId}
       toolActive={panes.toolActive}

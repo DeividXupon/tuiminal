@@ -12,7 +12,7 @@ import { act, type ReactNode, useLayoutEffect } from "react"
 import { COLORS } from "../../packages/core/src/settings/theme"
 import { useTerminalPalette } from "../../packages/feature-terminal/src/hooks/use-terminal-palette"
 import type { TerminalSession } from "../../packages/feature-terminal/src/model/sessions"
-import { FreeTerminalPane } from "../../packages/feature-terminal/src/ui/FreeTerminalPane"
+import { TermAgentsPane } from "../../packages/feature-terminal/src/ui/TermAgentsPane"
 
 test("embedded terminal loads and updates host colors without changing RGB output", async () => {
   const initialColors = {
@@ -60,7 +60,7 @@ test("embedded terminal loads and updates host colors without changing RGB outpu
   function PalettePane() {
     const paletteSequence = useTerminalPalette()
     return (
-      <FreeTerminalPane
+      <TermAgentsPane
         session={session}
         active
         visible
@@ -151,7 +151,7 @@ test("integrated agent startup covers the empty terminal with the shared loader"
     agentLaunch: { providerId: "codex", transport: "app-server" },
   }
   const tui = await testRender(
-    <FreeTerminalPane
+    <TermAgentsPane
       session={session}
       active
       visible

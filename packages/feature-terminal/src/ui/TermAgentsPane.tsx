@@ -6,7 +6,7 @@ import { memo, useEffect, useRef, useState } from "react"
 import { terminalFocusTargetKey } from "../model/focus-selection"
 import { AgentMessageHistoryPanel } from "./AgentMessageHistoryPanel"
 import {
-  type FreeTerminalPaneProps,
+  type TermAgentsPaneProps,
   liveDiffContainerStyle,
   liveDiffHeights,
   measuresPane,
@@ -17,7 +17,7 @@ import {
   remoteSetupHeights,
   sameTerminalPane,
   terminalContentWidth,
-} from "./free-terminal-pane-layout"
+} from "./term-agents-pane-layout"
 import { LiveDiffPanel } from "./LiveDiffPanel"
 import { RemoteCodexUpdateCompanion } from "./RemoteCodexUpdateCompanion"
 import { RemoteServerSetupPanel } from "./RemoteServerSetupPanel"
@@ -36,15 +36,15 @@ declare module "@opentui/react" {
   }
 }
 
-export type { FreeTerminalPaneLayout } from "./free-terminal-pane-layout"
+export type { TermAgentsPaneLayout } from "./term-agents-pane-layout"
 
-type PaneProps = FreeTerminalPaneProps
+type PaneProps = TermAgentsPaneProps
 
 function hasTerminalCompanion(session: PaneProps["session"]) {
   return Boolean(session.remoteSetup ?? session.remoteCodexUpdate)
 }
 
-export const FreeTerminalPane = memo(function FreeTerminalPane({
+export const TermAgentsPane = memo(function TermAgentsPane({
   session,
   active,
   toolActive,
@@ -215,7 +215,7 @@ export const FreeTerminalPane = memo(function FreeTerminalPane({
           >
             <embedded-terminal
               ref={terminalRef}
-              id={`free-terminal-${session.id}`}
+              id={`term-agents-${session.id}`}
               maxScrollback={5_000}
               selectable
               onData={(data) => onInput(session.id, data)}

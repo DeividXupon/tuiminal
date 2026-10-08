@@ -5,8 +5,8 @@ import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
 import { agentProvider } from "../model/agent-provider"
 import {
-  type FreeTerminalCommand,
-  type FreeTerminalKind,
+  type TermAgentsCommand,
+  type TermAgentsKind,
   integratedAgentLaunch,
   MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
@@ -16,12 +16,12 @@ import {
 } from "../model/sessions"
 import { tmuxPaneKey } from "../model/tmux"
 import type { AgentMonitor } from "../services/agent-monitor"
-import type { FreeTerminalProcessHandle } from "../services/terminal"
+import type { TermAgentsProcessHandle } from "../services/terminal"
 import { TerminalLaunches } from "../services/terminal-launches"
 import { destroyOwnedTmuxTarget } from "../services/tmux-terminal"
 import { useTerminalSessionLaunch } from "./use-terminal-session-launch"
 
-function mirroredSession(command: FreeTerminalCommand, sessions: readonly TerminalSession[]) {
+function mirroredSession(command: TermAgentsCommand, sessions: readonly TerminalSession[]) {
   if (!command.tmux) return undefined
   return sessions.find(
     (session) =>
@@ -31,7 +31,7 @@ function mirroredSession(command: FreeTerminalCommand, sessions: readonly Termin
 }
 
 function reopenMirroredSession(
-  command: FreeTerminalCommand,
+  command: TermAgentsCommand,
   session: TerminalSession | undefined,
   dismissed: RefObject<Set<string>>,
   activate: (id: string) => void,
@@ -46,10 +46,10 @@ function reopenMirroredSession(
 }
 
 function createTerminalSession(
-  command: FreeTerminalCommand,
+  command: TermAgentsCommand,
   placement: TerminalPlacement,
   sessionSequence: RefObject<number>,
-  kindSequences: RefObject<Map<FreeTerminalKind, number>>,
+  kindSequences: RefObject<Map<TermAgentsKind, number>>,
 ): TerminalSession {
   sessionSequence.current += 1
   const id = `${command.kind}-${Date.now()}-${sessionSequence.current}`
@@ -93,12 +93,12 @@ export function useTerminalSessions(active: boolean) {
   const dimensionsRef = useRef(dimensions)
   dimensionsRef.current = dimensions
   const terminalRefs = useRef(new Map<string, EmbeddedTerminalRenderable>())
-  const processHandles = useRef(new Map<string, FreeTerminalProcessHandle>())
-  const sessionCommands = useRef(new Map<string, FreeTerminalCommand>())
+  const processHandles = useRef(new Map<string, TermAgentsProcessHandle>())
+  const sessionCommands = useRef(new Map<string, TermAgentsCommand>())
   const terminalSizes = useRef(new Map<string, { columns: number; rows: number }>())
   const launches = useRef(new TerminalLaunches())
   const agentOutputs = useRef(new Map<string, AgentMonitor>())
-  const kindSequences = useRef(new Map<FreeTerminalKind, number>())
+  const kindSequences = useRef(new Map<TermAgentsKind, number>())
   const sessionSequence = useRef(0)
   const activeRef = useRef(active)
   const activeSessionRef = useRef<string | null>(null)
@@ -246,7 +246,7 @@ export function useTerminalSessions(active: boolean) {
   }, [])
 
   const launchCommand = useCallback(
-    (command: FreeTerminalCommand, placement: TerminalPlacement) => {
+    (command: TermAgentsCommand, placement: TerminalPlacement) => {
       const currentSessions = sessionsRef.current
       const existing = mirroredSession(command, currentSessions)
       if (

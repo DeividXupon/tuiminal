@@ -11,22 +11,22 @@ import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/t
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { AgentProviderId } from "../model/agent-provider"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
-import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
+import type { TermAgentsCommand, RemoteCodexTarget } from "../model/sessions"
 import type { TmuxPaneTarget } from "../model/tmux"
 import { remoteInteractiveSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
 import { readProcessWorkingDirectory } from "./terminal-working-directory"
 
-export type { FreeTerminalCommand, FreeTerminalKind } from "../model/sessions"
-export { stopAllFreeTerminalProcesses } from "./terminal-resources"
+export type { TermAgentsCommand, TermAgentsKind } from "../model/sessions"
+export { stopAllTermAgentsProcesses } from "./terminal-resources"
 
-export type FreeTerminalExit = {
+export type TermAgentsExit = {
   code: number | null
   signal: string | null
   stopped: boolean
 }
 
-export type FreeTerminalProcessHandle = {
+export type TermAgentsProcessHandle = {
   pid: number
   backend?: "native" | "tmux"
   tmux?: TmuxPaneTarget
@@ -79,11 +79,9 @@ type BunRuntimeLike = {
 
 const bunRuntime = (globalThis as typeof globalThis & { Bun?: BunRuntimeLike }).Bun
 
-export const FREE_TERMINAL_WORKING_DIRECTORY = resolve(
-  process.env.TUIMINAL_WORKDIR ?? process.cwd(),
-)
+export const TERM_AGENTS_WORKING_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
 
-export function createShellTerminalCommand(): FreeTerminalCommand {
+export function createShellTerminalCommand(): TermAgentsCommand {
   const shell =
     process.platform === "win32"
       ? process.env.COMSPEC?.trim() || "cmd.exe"
@@ -96,11 +94,11 @@ export function createShellTerminalCommand(): FreeTerminalCommand {
     displayCommand: [shell, ...args].join(" "),
     command: [shell, ...args],
     accent: COLORS.terminal,
-    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
   }
 }
 
-export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
+export function createTermAgentsCommand(value: string): TermAgentsCommand {
   const command = value.trim()
   const shell = createShellTerminalCommand().command[0]!
   const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command]
@@ -114,15 +112,15 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     displayCommand: command,
     command: [shell, ...args],
     accent: COLORS.warning,
-    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
   }
 }
 
 /** Opens or resumes the official Codex TUI backed by a Tuiminal-owned local app-server. */
 export function createCodexAgentCommand(
   resumeThreadId?: string,
-  workingDirectory = FREE_TERMINAL_WORKING_DIRECTORY,
-): FreeTerminalCommand {
+  workingDirectory = TERM_AGENTS_WORKING_DIRECTORY,
+): TermAgentsCommand {
   return {
     kind: "custom",
     label: "Codex",
@@ -142,7 +140,7 @@ export function createCodexAgentCommand(
 export function createRemoteCodexAgentCommand(
   remote: RemoteCodexTarget,
   resumeThreadId?: string,
-): FreeTerminalCommand {
+): TermAgentsCommand {
   return {
     kind: "custom",
     label: `Codex · ${remote.profile.name}`,
@@ -164,7 +162,7 @@ export function createRemoteCodexAgentCommand(
 
 export function createRemoteServerSetupCommand(
   profile: TerminalRemoteCodexProfile,
-): FreeTerminalCommand {
+): TermAgentsCommand {
   return {
     kind: "custom",
     label: profile.name,
@@ -172,7 +170,7 @@ export function createRemoteServerSetupCommand(
     displayCommand: `ssh ${profile.host}`,
     command: remoteInteractiveSshCommand(profile),
     accent: COLORS.terminal,
-    workingDirectory: FREE_TERMINAL_WORKING_DIRECTORY,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
     remoteSetup: { profile },
   }
 }
@@ -182,12 +180,12 @@ export function createRemoteAgentUpdateCommands(
   profile: TerminalRemoteCodexProfile | undefined,
   report: RemoteCodexCompatibilityReport,
   providerId: AgentProviderId,
-): FreeTerminalCommand[] {
+): TermAgentsCommand[] {
   const local = createShellTerminalCommand()
   const provider =
     providerId === "opencode" ? "OpenCode" : providerId === "claude" ? "Claude Code" : "Codex"
   const guide = { flowId, report: { ...report, providerId }, checking: false, error: "" }
-  const commands: FreeTerminalCommand[] = [
+  const commands: TermAgentsCommand[] = [
     {
       ...local,
       label: `${provider} · Local`,
@@ -217,22 +215,22 @@ function processEnvironment(overrides: Record<string, string | undefined> = {}) 
   )
 }
 
-export function startFreeTerminalProcess(
+export function startTermAgentsProcess(
   command: string[],
   options: {
     cwd?: string
     columns?: number
     rows?: number
     onData: (data: Uint8Array) => void
-    onExit: (result: FreeTerminalExit) => void
+    onExit: (result: TermAgentsExit) => void
     /** Attached clients must detach without sending Ctrl+C to a borrowed session. */
     interruptOnStop?: boolean
     /** An explicit undefined removes an inherited variable from the child. */
     env?: Record<string, string | undefined>
   },
-): FreeTerminalProcessHandle {
+): TermAgentsProcessHandle {
   if (!bunRuntime) {
-    throw new Error("O Free Terminal precisa ser executado com o Bun.")
+    throw new Error("O Term Agents precisa ser executado com o Bun.")
   }
 
   let stopped = false
@@ -246,7 +244,7 @@ export function startFreeTerminalProcess(
   const terminalEnded = Promise.withResolvers<void>()
   const retired = Promise.withResolvers<void>()
   const subprocess = bunRuntime.spawn(command, {
-    cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
+    cwd: options.cwd ?? TERM_AGENTS_WORKING_DIRECTORY,
     env: {
       ...processEnvironment(options.env),
       TERM: "xterm-256color",
@@ -281,7 +279,7 @@ export function startFreeTerminalProcess(
     }
   }
 
-  const handle: FreeTerminalProcessHandle = {
+  const handle: TermAgentsProcessHandle = {
     pid: subprocess.pid,
     readWorkingDirectory: (signal) => readProcessWorkingDirectory(subprocess.pid, signal),
     write(data) {

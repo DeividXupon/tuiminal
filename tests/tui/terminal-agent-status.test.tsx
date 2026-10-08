@@ -4,7 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import type { EmbeddedTerminalRenderable } from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import { NotificationProvider } from "../../packages/core/src/notifications/index"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
@@ -16,16 +16,16 @@ import { terminalSidebarSnapshot } from "../../packages/feature-terminal/src/mod
 const originalSettings = getUiSettings()
 const encoder = new TextEncoder()
 let tui: TestRendererSetup | undefined
-let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
+let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startTermAgentsProcess">> | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
-const starts: Parameters<typeof processes.startFreeTerminalProcess>[1][] = []
+const starts: Parameters<typeof processes.startTermAgentsProcess>[1][] = []
 let snapshot: ProcessIdentity[] = []
 let setToolActive: ((value: boolean) => void) | undefined
 
 function Fixture() {
   const [active, setActive] = useState(true)
   setToolActive = setActive
-  return <FreeTerminal active={active} />
+  return <TermAgents active={active} />
 }
 
 afterEach(() => {
@@ -44,18 +44,16 @@ async function mount(readAgentPid?: () => Promise<number | null>, notifications 
   inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockImplementation(
     async () => snapshot,
   )
-  spawnSpy = spyOn(processes, "startFreeTerminalProcess").mockImplementation(
-    (_command, options) => {
-      starts.push(options)
-      return {
-        pid: 100 + starts.length,
-        ...(readAgentPid ? { readAgentPid } : {}),
-        write: () => undefined,
-        resize: () => undefined,
-        stop: async () => undefined,
-      }
-    },
-  )
+  spawnSpy = spyOn(processes, "startTermAgentsProcess").mockImplementation((_command, options) => {
+    starts.push(options)
+    return {
+      pid: 100 + starts.length,
+      ...(readAgentPid ? { readAgentPid } : {}),
+      write: () => undefined,
+      resize: () => undefined,
+      stop: async () => undefined,
+    }
+  })
   tui = await testRender(
     notifications ? (
       <NotificationProvider>
@@ -92,7 +90,7 @@ async function output(text: string, index = 0) {
 }
 function isAgentState(terminalId: string, label: string) {
   const row = tui?.renderer.root.findDescendantById(
-    `terminal-agent-${terminalId.replace("free-terminal-", "")}`,
+    `terminal-agent-${terminalId.replace("term-agents-", "")}`,
   )
   return Boolean(row && tui?.captureCharFrame().split("\n")[row.screenY]?.includes(label))
 }
@@ -102,7 +100,7 @@ test.each(["native", "tmux"])("%s Codex names hide MainThread", async (backend) 
   await mount(backend === "tmux" ? async () => 456 : undefined)
   await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   snapshot = [
     {
       pid: 466,
@@ -140,7 +138,7 @@ test("task titles update existing agent rows, retain manual names and retire wit
   await mount()
   await leader("n")
   const terminal = tui!.renderer.currentFocusedRenderable!
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const rowId = `terminal-agent-${sessionId}`
   const titleRow = () => {
     const row = tui?.renderer.root.findDescendantById(rowId)
@@ -208,7 +206,7 @@ test("states continue offscreen, preserve the pane and acknowledge a finished tu
   await output("• Finished the task\n› \n? for shortcuts")
   await waitFor(() => isAgentState(first.id, "✓"))
   const agentRow = tui?.renderer.root.findDescendantById(
-    `terminal-agent-${first.id.replace("free-terminal-", "")}`,
+    `terminal-agent-${first.id.replace("term-agents-", "")}`,
   )
   expect(agentRow).toBeDefined()
   await act(async () => tui?.mockMouse.click(agentRow!.screenX + 1, agentRow!.screenY))
@@ -238,7 +236,7 @@ test("background attention notifies once and clicking opens the exact agent pane
   const card = tui!.renderer.root.findDescendantById("app-notification-1")!
   await act(async () => tui?.mockMouse.click(card.screenX + 3, card.screenY + 1))
   expect(terminalSidebarSnapshot().requestedTarget).toEqual({
-    sessionId: first.id.replace("free-terminal-", ""),
+    sessionId: first.id.replace("term-agents-", ""),
   })
   await waitFor(() => tui!.renderer.currentFocusedRenderable === first)
   await output("⠋ Searching (3s · esc to cancel)")
@@ -285,7 +283,7 @@ test("OSC status survives a tool switch and stale process snapshots cannot resto
   await mount()
   await leader("n")
   const terminalId = tui!.renderer.currentFocusedRenderable!.id
-  const agentId = `terminal-agent-${terminalId.replace("free-terminal-", "")}`
+  const agentId = `terminal-agent-${terminalId.replace("term-agents-", "")}`
   snapshot = [{ pid: 111, parentPid: 101, executable: "codex", command: "codex" }]
   await output("\x1b]2;⠋ project\x07")
   await waitFor(() => isAgentState(terminalId, "Trabalhando"))

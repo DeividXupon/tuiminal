@@ -4,7 +4,7 @@ import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../../packages/feature-terminal
 import { publishCodexResumeThreads } from "../../packages/feature-terminal/src/model/codex-resume-threads"
 import { terminalSidebarSnapshot } from "../../packages/feature-terminal/src/model/pinned-sidebar"
 import type { CodexAppServerEvents } from "../../packages/feature-terminal/src/services/codex-app-server"
-import { stopAllFreeTerminalProcesses } from "../../packages/feature-terminal/src/services/terminal-resources"
+import { stopAllTermAgentsProcesses } from "../../packages/feature-terminal/src/services/terminal-resources"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 
 type TerminalActionContext = {
@@ -347,7 +347,7 @@ export function tuiTerminalActionBenchmarks({
               ).length === 1,
             "Terminal split close",
           )
-          await stopAllFreeTerminalProcesses()
+          await stopAllTermAgentsProcesses()
         }
         await click(`terminal-sidebar-pane-${splitFirstId}`)
       },
@@ -368,8 +368,8 @@ export function tuiTerminalActionBenchmarks({
             (session) => session.sectionId === splitSectionId,
           )
           if (panes?.length !== 2) return false
-          const left = tui.renderer.root.findDescendantById(`free-terminal-${splitFirstId}`)
-          const right = tui.renderer.root.findDescendantById(`free-terminal-${panes[1]?.id}`)
+          const left = tui.renderer.root.findDescendantById(`term-agents-${splitFirstId}`)
+          const right = tui.renderer.root.findDescendantById(`term-agents-${panes[1]?.id}`)
           return Boolean(left && right && right.screenX === left.screenX + left.width + 1)
         }, "Terminal split panes")
       },
@@ -467,7 +467,7 @@ export function tuiTerminalActionBenchmarks({
           if (created?.displayCommand !== "bun --version" || created?.status !== "running")
             return false
           customSessionId = created.id
-          return Boolean(tui.renderer.root.findDescendantById(`free-terminal-${created.id}`))
+          return Boolean(tui.renderer.root.findDescendantById(`term-agents-${created.id}`))
         }, "Custom Terminal section")
       },
       verify: () => {
@@ -529,7 +529,7 @@ export function tuiTerminalActionBenchmarks({
           (session) => session.id === terminalSidebarSnapshot().view?.activeSessionId,
         )
         if (!active) throw new Error("Focus selection needs an active Terminal")
-        await click(`free-terminal-${active.id}`)
+        await click(`term-agents-${active.id}`)
       },
       run: async () => {
         await masterAction("m")
@@ -779,7 +779,7 @@ export function tuiTerminalActionBenchmarks({
         if (!active) throw new Error("Terminal resize needs an active session")
         resizeSessionId = active.id
         resizeSessionCount = sessions.length
-        resizePane = tui.renderer.root.findDescendantById(`free-terminal-${resizeSessionId}`)
+        resizePane = tui.renderer.root.findDescendantById(`term-agents-${resizeSessionId}`)
         if (!resizePane) throw new Error("Terminal resize pane is missing")
       },
       run: async () => {
@@ -792,7 +792,7 @@ export function tuiTerminalActionBenchmarks({
         return waitForUi(
           () =>
             tui.renderer.root.findDescendantById("terminal-workspace")?.width === 160 &&
-            tui.renderer.root.findDescendantById(`free-terminal-${resizeSessionId}`) === resizePane,
+            tui.renderer.root.findDescendantById(`term-agents-${resizeSessionId}`) === resizePane,
           "Restored Terminal workspace",
         )
       },

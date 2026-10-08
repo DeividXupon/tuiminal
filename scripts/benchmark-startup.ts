@@ -11,7 +11,7 @@ const tools = [
   { id: "git", expected: ["No Git repository found", "Nenhum repositório Git encontrado"] },
   { id: "runner", expected: ["No project was found in this folder"] },
   { id: "http", expected: ["READY TO SEND"] },
-  { id: "terminal", expected: ["FREE TERMINALS IN 2", "New terminal"] },
+  { id: "terminal", expected: ["TERM AGENTS IN 2", "New terminal"] },
 ] as const
 
 function usage() {

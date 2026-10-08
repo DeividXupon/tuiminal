@@ -1,7 +1,7 @@
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { TerminalFocusTargetKey } from "../model/focus-selection"
 import type { TerminalSession } from "../model/sessions"
-import type { FreeTerminalPaneProps } from "./free-terminal-pane-layout"
+import type { TermAgentsPaneProps } from "./term-agents-pane-layout"
 import { RemoteCodexUpdatePanel } from "./RemoteCodexUpdatePanel"
 import { TerminalFocusSelection } from "./TerminalFocusSelection"
 
@@ -17,9 +17,9 @@ export function RemoteCodexUpdateCompanion({
   session: TerminalSession
   height: number | "40%"
   active: boolean
-  onActivate: FreeTerminalPaneProps["onActivate"]
-  onRetry: FreeTerminalPaneProps["onRetryRemoteCodex"]
-  focusSelection: FreeTerminalPaneProps["focusSelection"]
+  onActivate: TermAgentsPaneProps["onActivate"]
+  onRetry: TermAgentsPaneProps["onRetryRemoteCodex"]
+  focusSelection: TermAgentsPaneProps["focusSelection"]
   focusTarget: TerminalFocusTargetKey
 }) {
   const guide = session.remoteCodexUpdate

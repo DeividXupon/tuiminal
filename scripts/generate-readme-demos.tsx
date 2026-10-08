@@ -130,9 +130,9 @@ const { DatabaseTutorialDemo } = await import(
 const { GitViewer } = await import("../packages/feature-git/src")
 const { Runner } = await import("../packages/feature-runner/src")
 const { HttpTutorialDemo } = await import("../packages/feature-http/src/tutorial/HttpTutorialDemo")
-const { FreeTerminal } = await import("../packages/feature-terminal/src")
+const { TermAgents } = await import("../packages/feature-terminal/src")
 const { stopAllRunnerProcesses } = await import("../packages/feature-runner/src/services/process")
-const { stopAllFreeTerminalProcesses } = await import(
+const { stopAllTermAgentsProcesses } = await import(
   "../packages/feature-terminal/src/services/terminal"
 )
 
@@ -581,7 +581,7 @@ async function nativeTerminalFrames() {
     reviewerPath,
     `process.stdout.write(${JSON.stringify("\x1b[2J\x1b[HClaude Code · simulated session\r\n\r\n────────────\r\nDo you want to proceed?\r\n❯ 1. Yes\r\n2. No\r\nEnter to confirm · Esc to cancel")}); setInterval(() => {}, 1000)\n`,
   )
-  const tui = await testRender(createElement(FreeTerminal, { active: true }), {
+  const tui = await testRender(createElement(TermAgents, { active: true }), {
     width: TERMINAL_COLUMNS,
     height: TERMINAL_ROWS,
   })
@@ -638,10 +638,7 @@ async function nativeTerminalFrames() {
     await pressKey(tui, "enter")
     await settle(tui, () => tui.captureCharFrame().includes("API shell ready"))
     frames.push(snapshot(tui, "Pastas organizam as seções abertas"))
-    const contextSessionId = tui.renderer.currentFocusedRenderable?.id?.replace(
-      "free-terminal-",
-      "",
-    )
+    const contextSessionId = tui.renderer.currentFocusedRenderable?.id?.replace("term-agents-", "")
     await settle(
       tui,
       () =>
@@ -690,7 +687,7 @@ async function nativeTerminalFrames() {
     await prefix("e")
     await typeInto(tui, "terminal-command-input", "API review", true)
     await pressKey(tui, "enter")
-    const agentSessionId = tui.renderer.currentFocusedRenderable?.id?.replace("free-terminal-", "")
+    const agentSessionId = tui.renderer.currentFocusedRenderable?.id?.replace("term-agents-", "")
     await settle(
       tui,
       () => Boolean(tui.renderer.root.findDescendantById(`terminal-agent-${agentSessionId}`)),
@@ -760,7 +757,7 @@ async function nativeTerminalFrames() {
   } finally {
     process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     destroy(tui)
-    await stopAllFreeTerminalProcesses()
+    await stopAllTermAgentsProcesses()
   }
 }
 
@@ -770,7 +767,7 @@ async function terminalFrames() {
   const restore = prepareTerminalMirrorDemo(CAPTURE_ROOT)
   let tui: TestRendererSetup | undefined
   try {
-    tui = await testRender(createElement(FreeTerminal, { active: true }), {
+    tui = await testRender(createElement(TermAgents, { active: true }), {
       width: TERMINAL_COLUMNS,
       height: TERMINAL_ROWS,
     })
@@ -787,7 +784,7 @@ async function terminalFrames() {
     return frames
   } finally {
     if (tui) destroy(tui)
-    await stopAllFreeTerminalProcesses()
+    await stopAllTermAgentsProcesses()
     restore()
   }
 }
@@ -931,7 +928,7 @@ try {
     ["git", "Git", gitFrames],
     ["runner", "Runner", runnerFrames],
     ["http", "HTTP", httpFrames],
-    ["terminal", "Free Terminal", terminalFrames],
+    ["terminal", "Term Agents", terminalFrames],
   ] as const
   const only = process.argv.find((argument) => argument.startsWith("--only="))?.slice(7)
   if (only && !demos.some(([id]) => id === only)) throw new Error(`Unknown demo: ${only}`)
@@ -940,6 +937,6 @@ try {
   }
 } finally {
   await stopAllRunnerProcesses()
-  await stopAllFreeTerminalProcesses()
+  await stopAllTermAgentsProcesses()
   rmSync(CAPTURE_ROOT, { recursive: true, force: true })
 }

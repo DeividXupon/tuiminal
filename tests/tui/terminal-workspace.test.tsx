@@ -61,7 +61,7 @@ import {
   saveTerminalWorkspaceState,
   terminalWorkspaceStatePath,
 } from "../../packages/feature-terminal/src/services/terminal-workspace-state"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import {
   TerminalActions,
   terminalActionKey,
@@ -117,7 +117,7 @@ const originalInitialTab = process.env.TUIMINAL_INITIAL_TAB
 const originalWorkspaceState = process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE
 const originalStaticLoaders = process.env.TUIMINAL_TEST_STATIC_LOADERS
 let tui: TestRendererSetup | undefined
-let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startFreeTerminalProcess">> | undefined
+let spawnSpy: ReturnType<typeof spyOn<typeof processes, "startTermAgentsProcess">> | undefined
 let codexSpy:
   | ReturnType<typeof spyOn<typeof codexServer, "startCodexAppServerTerminal">>
   | undefined
@@ -147,7 +147,7 @@ let repositoryContextSpy:
   | undefined
 const liveDiffSpies: Array<{ mockRestore: () => void }> = []
 const inputs: string[][] = []
-const starts: Parameters<typeof processes.startFreeTerminalProcess>[1][] = []
+const starts: Parameters<typeof processes.startTermAgentsProcess>[1][] = []
 const commands: string[][] = []
 let snapshot: ProcessIdentity[] = []
 
@@ -183,7 +183,7 @@ afterEach(() => {
   else process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = originalWorkspaceState
   if (originalStaticLoaders === undefined) delete process.env.TUIMINAL_TEST_STATIC_LOADERS
   else process.env.TUIMINAL_TEST_STATIC_LOADERS = originalStaticLoaders
-  rmSync(terminalWorkspaceStatePath(processes.FREE_TERMINAL_WORKING_DIRECTORY), {
+  rmSync(terminalWorkspaceStatePath(processes.TERM_AGENTS_WORKING_DIRECTORY), {
     force: true,
   })
 })
@@ -203,7 +203,7 @@ async function mount(
   inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockImplementation(
     async () => snapshot,
   )
-  spawnSpy = spyOn(processes, "startFreeTerminalProcess").mockImplementation((command, options) => {
+  spawnSpy = spyOn(processes, "startTermAgentsProcess").mockImplementation((command, options) => {
     commands.push(command)
     starts.push(options)
     const input: string[] = []
@@ -313,7 +313,7 @@ async function mount(
     delete process.env.TUIMINAL_ONLY_TAB
     process.env.TUIMINAL_INITIAL_TAB = "terminal"
   }
-  tui = await testRender(app || fullApp ? <App /> : <FreeTerminal active {...actions} />, {
+  tui = await testRender(app || fullApp ? <App /> : <TermAgents active {...actions} />, {
     width,
     height,
   })
@@ -582,7 +582,7 @@ test("Master Key opens the official OpenCode TUI attached to its public server",
     "opencode",
     "--server",
     "http://127.0.0.1:4501",
-    processes.FREE_TERMINAL_WORKING_DIRECTORY,
+    processes.TERM_AGENTS_WORKING_DIRECTORY,
   ])
   expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
 })
@@ -592,12 +592,12 @@ test("OpenCode keeps one sidebar row synchronized with the visible root session"
   await leader("a")
   await click("terminal-dialog-agent-provider-opencode")
   await click("terminal-dialog-project-launch")
-  const terminalId = focusedTerminal().id.replace("free-terminal-", "")
+  const terminalId = focusedTerminal().id.replace("term-agents-", "")
   const observed = (id: string, title: string, state: "working" | "blocked", message: string) => ({
     session: {
       id,
       title,
-      directory: processes.FREE_TERMINAL_WORKING_DIRECTORY,
+      directory: processes.TERM_AGENTS_WORKING_DIRECTORY,
       updatedAt: Date.now(),
     },
     state,
@@ -746,7 +746,7 @@ test.each([
   await mount(false, 120, 30)
   await launchAgent(expected.remote)
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const origin = await waitForRenderable(`terminal-context-origin-${sessionId}`)
   const frame = renderable(`terminal-pane-frame-${sessionId}`)
 
@@ -765,7 +765,7 @@ test("agent origin text uses the shared Terminal shimmer", async () => {
   await mount(false, 120, 30)
   await launchAgent()
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const origin = await waitForRenderable(`terminal-context-origin-${sessionId}`)
   const background = RGBA.fromHex(COLORS.diffAddedBg).toInts().join(",")
   const frames = new Set<string>()
@@ -864,7 +864,7 @@ test("remote Codex opens Live Diff through its remote source without the local p
 
   await launchAgent(true)
 
-  const sessionId = focusedTerminal().id.replace("free-terminal-", "")
+  const sessionId = focusedTerminal().id.replace("term-agents-", "")
   await leader("d")
   await act(async () => Bun.sleep(20))
   await tui?.renderOnce()
@@ -1287,7 +1287,7 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   await mount(false, 140, 36)
   await launchAgent()
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   await act(async () => {
     codexEvents?.onUserMessageHistory(
       [
@@ -1499,7 +1499,7 @@ test("Master Key S opens a navigable sent-message history below the agent termin
     .split("\n")
     .findIndex((line) => line.includes("MENSAGEM [M]"))
   expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
-  await click(`free-terminal-${sessionId}`)
+  await click(`term-agents-${sessionId}`)
   expect(focusedTerminal()).toBe(terminal)
   expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
   expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
@@ -1635,7 +1635,7 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(inputs[0]?.join("")).toBe("\u0002")
 })
 
-test("Free Terminal header and sidebar shortcuts highlight only with the Master Key", async () => {
+test("Term Agents header and sidebar shortcuts highlight only with the Master Key", async () => {
   await mount(false, 160, 30, {}, true)
   const muted = RGBA.fromHex(COLORS.muted).toInts()
   const brand = RGBA.fromHex(BRAND_COLOR).toInts()
@@ -1645,7 +1645,7 @@ test("Free Terminal header and sidebar shortcuts highlight only with the Master 
     expect(spanColor(shortcut, 0)).toEqual(muted)
 
   await leader("n")
-  const sessionId = focusedTerminal().id.replace("free-terminal-", "")
+  const sessionId = focusedTerminal().id.replace("term-agents-", "")
   const sidebarBefore = renderable("terminal-sidebar")
   const sectionBefore = renderable("terminal-sidebar-section-section-1")
   const statusBefore = renderable(`terminal-sidebar-status-${sessionId}`)
@@ -1696,8 +1696,8 @@ test("Master Key selects visible terminals with their single-digit sidebar keys"
   expect(second).not.toBe(first)
 
   await key("b", true)
-  const firstSessionId = first.id.replace("free-terminal-", "")
-  const secondSessionId = second.id.replace("free-terminal-", "")
+  const firstSessionId = first.id.replace("term-agents-", "")
+  const secondSessionId = second.id.replace("term-agents-", "")
   expect(
     tui?.renderer.root.findDescendantById(`terminal-sidebar-shortcut-${firstSessionId}`),
   ).toBeDefined()
@@ -1835,10 +1835,10 @@ test("Master Key M selects visible boxes with arrows or HJKL before moving focus
   await mount()
   await leader("n")
   const first = focusedTerminal()
-  const firstId = first.id.replace("free-terminal-", "")
+  const firstId = first.id.replace("term-agents-", "")
   await split("c")
   const second = focusedTerminal()
-  const secondId = second.id.replace("free-terminal-", "")
+  const secondId = second.id.replace("term-agents-", "")
   const sidebar = renderable("terminal-sidebar")
   const sidebarSection = renderable("terminal-sidebar-section-section-1")
   const sidebarGeometry = {
@@ -1998,7 +1998,7 @@ test("split confirmation can create a second pane and a third split is refused",
   expect(starts).toHaveLength(2)
   expect(first.screenY).toBe(second.screenY)
   const frame = tui?.renderer.root.findDescendantById(
-    `terminal-pane-frame-${first.id.replace("free-terminal-", "")}`,
+    `terminal-pane-frame-${first.id.replace("term-agents-", "")}`,
   )
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(first.height).toBe(frame!.height)
@@ -2014,7 +2014,7 @@ test("split confirmation can create a second pane and a third split is refused",
   const splitWidth = second.width
   await leader("x")
   expect(first.width).toBeGreaterThan(splitWidth)
-  for (const old of ["❯ FREE TERMINAL", "CMD", "Seção 2×2", "Split lado", "vivas ·"]) {
+  for (const old of ["❯ TERM AGENTS", "CMD", "Seção 2×2", "Split lado", "vivas ·"]) {
     expect(tui?.captureCharFrame()).not.toContain(old)
   }
   expect(starts).toHaveLength(2)
@@ -2036,7 +2036,7 @@ test("split confirmation moves an existing agent without restarting it", async (
 
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   expect(focusedTerminal()).toBe(agent)
-  const agentMetadata = renderable(`terminal-context-${agent.id.replace("free-terminal-", "")}`)
+  const agentMetadata = renderable(`terminal-context-${agent.id.replace("term-agents-", "")}`)
   expect(shell.screenY).toBe(agentMetadata.screenY)
   expect(agent.screenY).toBe(agentMetadata.screenY + 1)
   expect(shell.width + agent.width + 1).toBe(panes.width)
@@ -2061,9 +2061,9 @@ test.each(["keyboard", "mouse"])("new terminals stay separate via %s", async (me
   expect(second.height).toBe(panes.height)
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-2")).toBeDefined()
-  await click(`terminal-sidebar-pane-${first.id.replace("free-terminal-", "")}`)
+  await click(`terminal-sidebar-pane-${first.id.replace("term-agents-", "")}`)
   expect(focusedTerminal()).toBe(first)
-  await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
+  await click(`terminal-sidebar-pane-${second.id.replace("term-agents-", "")}`)
   expect(focusedTerminal()).toBe(second)
   await split("c")
   const third = focusedTerminal()
@@ -2095,7 +2095,7 @@ test("paired sidebar rows support mouse selection", async () => {
   const folder = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
   const section = tui!.renderer.root.findDescendantById("terminal-sidebar-section-section-1")!
   expect(section.parent).toBe(folder.parent)
-  const firstId = first.id.replace("free-terminal-", "")
+  const firstId = first.id.replace("term-agents-", "")
   await click(`terminal-sidebar-pane-${firstId}`)
   expect(focusedTerminal()).toBe(first)
   expect(starts).toHaveLength(2)
@@ -2103,7 +2103,7 @@ test("paired sidebar rows support mouse selection", async () => {
 
 test("legacy custom folders cannot return to the Terminal workspace", async () => {
   process.env.TUIMINAL_TERMINAL_WORKSPACE_STATE = "1"
-  saveTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY, {
+  saveTerminalWorkspaceState(processes.TERM_AGENTS_WORKING_DIRECTORY, {
     folders: [{ id: "folder-7", name: "Services" }],
     assignments: {},
     collapsedFolderIds: [],
@@ -2115,7 +2115,7 @@ test("legacy custom folders cannot return to the Terminal workspace", async () =
   await leader("n")
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-folder-7")).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-new-folder")).toBeUndefined()
-  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY).folders).toEqual([])
+  expect(loadTerminalWorkspaceState(processes.TERM_AGENTS_WORKING_DIRECTORY).folders).toEqual([])
 })
 
 test("session folders collapse, persist per project, and omit empty folders", async () => {
@@ -2135,14 +2135,14 @@ test("session folders collapse, persist per project, and omit empty folders", as
   ).toBeUndefined()
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
   expect(tui?.captureCharFrame().split("\n")[folder.screenY]).toContain("▸ Tuiminais")
-  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY)).toMatchObject({
+  expect(loadTerminalWorkspaceState(processes.TERM_AGENTS_WORKING_DIRECTORY)).toMatchObject({
     collapsedFolderIds: ["terminal"],
   })
 
   await key("enter")
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar-section-section-1")).toBeDefined()
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-sidebar")
-  expect(loadTerminalWorkspaceState(processes.FREE_TERMINAL_WORKING_DIRECTORY)).toMatchObject({
+  expect(loadTerminalWorkspaceState(processes.TERM_AGENTS_WORKING_DIRECTORY)).toMatchObject({
     collapsedFolderIds: [],
   })
 
@@ -2184,7 +2184,7 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
   await leader("n")
   await split("c")
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const agentId = `terminal-agent-${sessionId}`
   const paneId = `terminal-sidebar-pane-${sessionId}`
   const separatorId = `terminal-sidebar-separator-section-1-${sessionId}`
@@ -2279,10 +2279,10 @@ test.each(["h", "c"] as const)("Live Diff shares its %s split pane", async (dire
   await mount()
   await launchAgent()
   const agentTerminal = focusedTerminal()
-  const sessionId = agentTerminal.id.replace("free-terminal-", "")
+  const sessionId = agentTerminal.id.replace("term-agents-", "")
   await split(direction)
   const siblingTerminal = focusedTerminal()
-  const siblingId = siblingTerminal.id.replace("free-terminal-", "")
+  const siblingId = siblingTerminal.id.replace("term-agents-", "")
   await click(`terminal-agent-${sessionId}`)
   const panes = renderable("terminal-panes")
   const agentFrame = renderable(`terminal-pane-frame-${sessionId}`)
@@ -2310,7 +2310,7 @@ test.each(["h", "c"] as const)("Live Diff shares its %s split pane", async (dire
   expect(siblingTerminal.width).toBeGreaterThan(0)
   expect(siblingTerminal.height).toBeGreaterThan(0)
   expect(starts).toHaveLength(2)
-  await click(`free-terminal-${siblingId}`)
+  await click(`term-agents-${siblingId}`)
   expect(focusedTerminal()).toBe(siblingTerminal)
   await click(`live-diff-${sessionId}`)
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe(`live-diff-${sessionId}`)
@@ -2343,10 +2343,10 @@ test("Live Diff covers its split pane only when the terminal is very small", asy
   await mount(false, 76, 18)
   await launchAgent()
   const agentTerminal = focusedTerminal()
-  const sessionId = agentTerminal.id.replace("free-terminal-", "")
+  const sessionId = agentTerminal.id.replace("term-agents-", "")
   await split("c")
   const siblingTerminal = focusedTerminal()
-  const siblingId = siblingTerminal.id.replace("free-terminal-", "")
+  const siblingId = siblingTerminal.id.replace("term-agents-", "")
   await click(`terminal-agent-${sessionId}`)
   const agentPane = renderable(`terminal-pane-frame-${sessionId}`).parent!
   const siblingPane = renderable(`terminal-pane-frame-${siblingId}`).parent!
@@ -2373,9 +2373,9 @@ test("split agents keep independent Live Diff panels", async () => {
   )
   await mount()
   await launchAgent()
-  const firstId = focusedTerminal().id.replace("free-terminal-", "")
+  const firstId = focusedTerminal().id.replace("term-agents-", "")
   await launchAgent()
-  const secondId = focusedTerminal().id.replace("free-terminal-", "")
+  const secondId = focusedTerminal().id.replace("term-agents-", "")
   await leader("c")
   await click("terminal-split-option-1")
 
@@ -2399,9 +2399,9 @@ test("split agents keep independent Live Diff panels", async () => {
 test("split Codex agents keep independent sent-message histories", async () => {
   await mount()
   await launchAgent()
-  const firstId = focusedTerminal().id.replace("free-terminal-", "")
+  const firstId = focusedTerminal().id.replace("term-agents-", "")
   await launchAgent()
-  const secondId = focusedTerminal().id.replace("free-terminal-", "")
+  const secondId = focusedTerminal().id.replace("term-agents-", "")
   await leader("c")
   await click("terminal-split-option-1")
 
@@ -2474,7 +2474,7 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   await mount()
   await leader("n")
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   snapshot = [
     { pid: 101, parentPid: 1, executable: "sh", command: "sh" },
     { pid: 103, parentPid: 101, executable: "codex", command: "codex" },
@@ -2831,7 +2831,7 @@ test("stacked Live Diff uses the full pane width and widens only the code area",
   await mount(false, 80, 30)
   await leader("n")
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   snapshot = [
     { pid: 101, parentPid: 1, executable: "sh", command: "sh" },
     { pid: 103, parentPid: 101, executable: "codex", command: "codex" },
@@ -3080,7 +3080,7 @@ test("Remote server configuration opens SSH above a guided barrier flow", async 
     "remote-setup",
   ])
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const setup = renderable(`remote-server-setup-${sessionId}`)
   expect(setup.screenY).toBeGreaterThan(terminal.screenY)
   expect(tui?.captureCharFrame()).toContain("PREPARAR SERVIDOR")
@@ -3111,9 +3111,9 @@ test("sidebar navigation switches among live sections without relaunching their 
   const first = focusedTerminal()
   await leader("n")
   const second = focusedTerminal()
-  await click(`terminal-sidebar-pane-${first.id.replace("free-terminal-", "")}`)
+  await click(`terminal-sidebar-pane-${first.id.replace("term-agents-", "")}`)
   expect(focusedTerminal()).toBe(first)
-  await click(`terminal-sidebar-pane-${second.id.replace("free-terminal-", "")}`)
+  await click(`terminal-sidebar-pane-${second.id.replace("term-agents-", "")}`)
   expect(focusedTerminal()).toBe(second)
   expect(starts).toHaveLength(2)
   expect(inputs).toEqual([[], []])
@@ -3156,7 +3156,7 @@ test("terminal context tags reserve a row above the PTY and keep state when widt
   }))
   await leader("n")
   const terminal = focusedTerminal()
-  const sessionId = terminal.id.replace("free-terminal-", "")
+  const sessionId = terminal.id.replace("term-agents-", "")
   const panes = tui!.renderer.root.findDescendantById("terminal-panes")!
   for (
     let attempt = 0;
@@ -3274,7 +3274,7 @@ test("project picker retains the destination on launch error and retries once", 
   await click("terminal-dialog-project-launch")
   expect(codexSpy).toHaveBeenCalledTimes(2)
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeUndefined()
-  expect(focusedTerminal().id).toStartWith("free-terminal-")
+  expect(focusedTerminal().id).toStartWith("term-agents-")
 })
 
 test("remote compatibility Escape returns to the preserved project selection", async () => {
@@ -3348,7 +3348,7 @@ test("compatibility guide opens local and SSH terminals, revalidates, and relaun
   expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
 
   await key("escape")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("free-terminal-")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("term-agents-")
   await leader("m")
   await arrow("down")
   await key("enter")
@@ -3505,7 +3505,7 @@ test("a missing local Claude CLI opens one update terminal and retries the launc
   expect(preflight).toHaveBeenCalledTimes(1)
   expect(claudeSpy).toHaveBeenCalledTimes(2)
   expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CLAUDE CODE")
-  expect(starts.at(-1)).toMatchObject({ cwd: processes.FREE_TERMINAL_WORKING_DIRECTORY })
+  expect(starts.at(-1)).toMatchObject({ cwd: processes.TERM_AGENTS_WORKING_DIRECTORY })
 })
 
 test.each([
@@ -3651,7 +3651,7 @@ test("cancelling an agent startup retires only the pending session and cannot la
   await mount()
   await leader("n")
   const original = focusedTerminal()
-  let finish: ((handle: processes.FreeTerminalProcessHandle) => void) | undefined
+  let finish: ((handle: processes.TermAgentsProcessHandle) => void) | undefined
   const stopped = mock(async () => undefined)
   codexSpy?.mockImplementationOnce(
     async () =>

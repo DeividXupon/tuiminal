@@ -115,7 +115,7 @@ export const TERMINAL_ACTIONS = [
   },
   {
     key: "alt+5",
-    label: "[Alt+5] Free Terminal",
+    label: "[Alt+5] Term Agents",
     description: "Volta para o workspace de terminais.",
     tags: ["navigation"],
   },

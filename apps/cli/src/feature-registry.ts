@@ -25,7 +25,7 @@ export function shutdownTools(mountedTools: Iterable<ToolId>) {
     database: () => loadedFeature("database")?.closeDatabaseConnection(),
     git: () => loadedFeature("git")?.disposeGitResources(),
     runner: () => loadedFeature("runner")?.stopAllRunnerProcesses(),
-    terminal: () => loadedFeature("terminal")?.stopAllFreeTerminalProcesses(),
+    terminal: () => loadedFeature("terminal")?.stopAllTermAgentsProcesses(),
   }
   return shutdownResources(
     [...mountedTools].flatMap((tool) => (disposers[tool] ? [disposers[tool]!] : [])),

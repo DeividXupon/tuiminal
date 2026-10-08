@@ -14,7 +14,7 @@ import { terminalProcessPresentation } from "../model/process-title"
 import type { TerminalSession } from "../model/sessions"
 import type { AgentMonitor } from "../services/agent-monitor"
 import { readTerminalProcesses } from "../services/agent-processes"
-import type { FreeTerminalProcessHandle } from "../services/terminal"
+import type { TermAgentsProcessHandle } from "../services/terminal"
 
 type TrackedAgent = {
   identity: AgentIdentity
@@ -31,14 +31,14 @@ type RunningCandidate = {
   session: TerminalSession
   output: AgentMonitor | undefined
   titleRevision: number | undefined
-  handle: FreeTerminalProcessHandle | undefined
+  handle: TermAgentsProcessHandle | undefined
 }
 
 type DetectionState = {
   sessions: RefObject<TerminalSession[]>
   outputs: RefObject<Map<string, AgentMonitor>>
   seen: RefObject<ReadonlySet<string>>
-  handles: RefObject<Map<string, FreeTerminalProcessHandle>>
+  handles: RefObject<Map<string, TermAgentsProcessHandle>>
   update: (id: string, patch: Partial<TerminalSession>) => void
   tracked: Map<string, TrackedAgent>
   unclaimedTitles: WeakMap<AgentMonitor, number>
@@ -212,7 +212,7 @@ export function useAgentDetection(
   outputs: RefObject<Map<string, AgentMonitor>>,
   seen: RefObject<ReadonlySet<string>>,
   update: (id: string, patch: Partial<TerminalSession>) => void,
-  handles: RefObject<Map<string, FreeTerminalProcessHandle>>,
+  handles: RefObject<Map<string, TermAgentsProcessHandle>>,
 ) {
   useEffect(() => {
     const controller = new AbortController()

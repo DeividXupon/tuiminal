@@ -74,7 +74,7 @@ test.each([
   ["git", "GitViewer"],
   ["runner", "Runner"],
   ["http", "HttpClient"],
-  ["terminal", "FreeTerminal"],
+  ["terminal", "TermAgents"],
 ] as const)("built %s payload imports using the real host modules", async (id, component) => {
   const module = await loadPayload(id)
   expect(typeof module[component]).toBe("function")

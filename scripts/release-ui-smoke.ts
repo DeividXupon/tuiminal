@@ -121,7 +121,7 @@ export async function verifyPackagedUi(
     ["database", "Save and connect"],
     ["git", "No Git repository found"],
     ["http", "READY TO SEND"],
-    ["terminal", "FREE TERMINALS IN 2"],
+    ["terminal", "TERM AGENTS IN 2"],
   ] as const)
     await verifyToolUi([node, launcher, tool, project], project, env, tool, expected)
 }

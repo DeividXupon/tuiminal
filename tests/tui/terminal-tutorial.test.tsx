@@ -7,7 +7,7 @@ import { act, useState } from "react"
 import { getTutorialSteps, TutorialOverlay } from "../../apps/cli/src/tutorial/TutorialOverlay"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import * as processes from "../../packages/feature-terminal/src/services/terminal"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import { TerminalTutorialDemo } from "../../packages/feature-terminal/src/tutorial/TerminalTutorialDemo"
 
 let tui: TestRendererSetup | undefined
@@ -108,7 +108,7 @@ test("the tour paints over live terminals without input, relaunch or resize", as
   const resizes: Array<[number, number]> = []
   let starts = 0
   let stops = 0
-  const spawn = spyOn(processes, "startFreeTerminalProcess").mockImplementation(() => {
+  const spawn = spyOn(processes, "startTermAgentsProcess").mockImplementation(() => {
     starts += 1
     return {
       pid: 900,
@@ -126,7 +126,7 @@ test("the tour paints over live terminals without input, relaunch or resize", as
     setTutorial = setOpen
     return (
       <>
-        <FreeTerminal
+        <TermAgents
           active={!tutorial}
           tutorial={tutorial ? { targetId: "tutorial-terminal-live-diff" } : null}
         />

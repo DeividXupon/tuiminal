@@ -4,8 +4,8 @@ import * as commands from "../packages/feature-terminal/src/services/tmux-comman
 import { startTmuxTerminal } from "../packages/feature-terminal/src/services/tmux-terminal"
 
 let commandSpy: ReturnType<typeof spyOn<typeof commands, "runTmux">> | undefined
-let nativeSpy: ReturnType<typeof spyOn<typeof terminal, "startFreeTerminalProcess">> | undefined
-const handles: terminal.FreeTerminalProcessHandle[] = []
+let nativeSpy: ReturnType<typeof spyOn<typeof terminal, "startTermAgentsProcess">> | undefined
+const handles: terminal.TermAgentsProcessHandle[] = []
 afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.stop().catch(() => undefined)
   commandSpy?.mockRestore()
@@ -17,7 +17,7 @@ function fixture() {
   let pane = "456\t0\t\t1\n"
   let sharedSession = false
   let windowSequence = 8
-  let nativeOptions: Parameters<typeof terminal.startFreeTerminalProcess>[1] | undefined
+  let nativeOptions: Parameters<typeof terminal.startTermAgentsProcess>[1] | undefined
   const input: Array<string | Uint8Array> = []
   const stop = mock(() => {})
   commandSpy = spyOn(commands, "runTmux").mockImplementation(async (args) => {
@@ -37,7 +37,7 @@ function fixture() {
     if (args.includes("capture-pane")) return "final command output\n"
     return ""
   })
-  nativeSpy = spyOn(terminal, "startFreeTerminalProcess").mockImplementation((_args, options) => {
+  nativeSpy = spyOn(terminal, "startTermAgentsProcess").mockImplementation((_args, options) => {
     nativeOptions = options
     return {
       pid: 789,
@@ -145,7 +145,7 @@ test("a restored Tuiminal window receives an independent linked client", async (
 test("owned command exit uses the pane exit code instead of the client exit code", async () => {
   const { setPane } = fixture()
   setPane("456\t1\t7\t1\n")
-  const exited = Promise.withResolvers<terminal.FreeTerminalExit>()
+  const exited = Promise.withResolvers<terminal.TermAgentsExit>()
   const received: string[] = []
   const handle = await startTmuxTerminal(["/bin/sh", "-c", "exit 7"], {
     onData: (data) => received.push(new TextDecoder().decode(data)),

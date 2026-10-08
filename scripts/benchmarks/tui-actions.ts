@@ -284,7 +284,7 @@ export function tuiActionBenchmarks({
           () =>
             tui.captureCharFrame().includes("◆ Terminal [Alt+5]") &&
             terminalSidebarSnapshot().view?.activeSessionId === pinnedTargetId &&
-            Boolean(tui.renderer.root.findDescendantById(`free-terminal-${pinnedTargetId}`)),
+            Boolean(tui.renderer.root.findDescendantById(`term-agents-${pinnedTargetId}`)),
           "Existing Terminal pane from pinned sidebar",
         )
       },

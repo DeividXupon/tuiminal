@@ -30,8 +30,8 @@ export function HttpClient(props: ComponentProps<FeatureModules["http"]["HttpCli
   const Component = loadedFeature("http")?.HttpClient
   return Component ? createElement(Component, props) : null
 }
-export function FreeTerminal(props: ComponentProps<FeatureModules["terminal"]["FreeTerminal"]>) {
-  const Component = loadedFeature("terminal")?.FreeTerminal
+export function TermAgents(props: ComponentProps<FeatureModules["terminal"]["TermAgents"]>) {
+  const Component = loadedFeature("terminal")?.TermAgents
   return Component ? createElement(Component, props) : null
 }
 export function PinnedTerminalSidebar(

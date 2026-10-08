@@ -7,7 +7,7 @@ import { agentProvider } from "../model/agent-provider"
 import type { AgentActivity, AgentState } from "../model/agent-state"
 import {
   cleanTerminalName,
-  type FreeTerminalCommand,
+  type TermAgentsCommand,
   integratedAgentLaunch,
   type TerminalSession,
 } from "../model/sessions"
@@ -16,9 +16,9 @@ import { startIntegratedAgentTerminal } from "../services/integrated-agent-termi
 import { OpenCodeSessionProjection } from "../services/opencode-session-projection"
 import { RemoteCodexCompatibilityError } from "../services/remote-codex-handshake"
 import {
-  FREE_TERMINAL_WORKING_DIRECTORY,
-  type FreeTerminalExit,
-  type FreeTerminalProcessHandle,
+  TERM_AGENTS_WORKING_DIRECTORY,
+  type TermAgentsExit,
+  type TermAgentsProcessHandle,
 } from "../services/terminal"
 import { startWorkspaceTerminal } from "../services/terminal-backend"
 import type { TerminalLaunch, TerminalLaunches } from "../services/terminal-launches"
@@ -31,8 +31,8 @@ type Notify = Parameters<typeof notifyTerminalExit>[0]
 type LaunchContext = {
   dimensions: RefObject<{ width: number; height: number }>
   terminals: RefObject<Map<string, EmbeddedTerminalRenderable>>
-  handles: RefObject<Map<string, FreeTerminalProcessHandle>>
-  commands: RefObject<Map<string, FreeTerminalCommand>>
+  handles: RefObject<Map<string, TermAgentsProcessHandle>>
+  commands: RefObject<Map<string, TermAgentsCommand>>
   sizes: RefObject<Map<string, TerminalSize>>
   launches: RefObject<TerminalLaunches>
   outputs: RefObject<Map<string, AgentMonitor>>
@@ -50,7 +50,7 @@ type LaunchContext = {
   notify: Notify
 }
 
-type ActiveLaunch = { handle: FreeTerminalProcessHandle | null; ended: boolean }
+type ActiveLaunch = { handle: TermAgentsProcessHandle | null; ended: boolean }
 
 function currentLaunch(
   id: string,
@@ -89,7 +89,7 @@ function beginAgentOutput(id: string, size: TerminalSize, context: LaunchContext
   return output
 }
 
-function exitMessage(command: FreeTerminalCommand, result: FreeTerminalExit) {
+function exitMessage(command: TermAgentsCommand, result: TermAgentsExit) {
   const failed = result.code !== 0 && !result.stopped
   const color = failed ? "38;2;255;107;107" : "38;2;130;144;163"
   const status = translateUi(command.tmux ? "Espelho desconectado" : "sessão encerrada")
@@ -99,8 +99,8 @@ function exitMessage(command: FreeTerminalCommand, result: FreeTerminalExit) {
 
 function finishTerminalExit(
   id: string,
-  command: FreeTerminalCommand,
-  result: FreeTerminalExit,
+  command: TermAgentsCommand,
+  result: TermAgentsExit,
   launch: TerminalLaunch,
   active: ActiveLaunch,
   output: AgentMonitor,
@@ -134,8 +134,8 @@ function finishTerminalExit(
 
 async function acceptStartedTerminal(
   id: string,
-  command: FreeTerminalCommand,
-  handle: FreeTerminalProcessHandle,
+  command: TermAgentsCommand,
+  handle: TermAgentsProcessHandle,
   active: ActiveLaunch,
   isCurrent: () => boolean,
   context: LaunchContext,
@@ -163,7 +163,7 @@ async function acceptStartedTerminal(
     context.setNotice(
       command.tmux
         ? "Espelho conectado."
-        : `${command.label} iniciado em ${basename(FREE_TERMINAL_WORKING_DIRECTORY)}.`,
+        : `${command.label} iniciado em ${basename(TERM_AGENTS_WORKING_DIRECTORY)}.`,
     )
   }
   if (!command.autoMirror && context.activeSession.current === id) context.focusTerminal(id)
@@ -247,8 +247,8 @@ async function launchTerminal(
   if (integration?.providerId === "claude" && !integration.remote) updateIntegratedAgent()
   const options = {
     cwd: integration?.remote
-      ? FREE_TERMINAL_WORKING_DIRECTORY
-      : (command.workingDirectory ?? FREE_TERMINAL_WORKING_DIRECTORY),
+      ? TERM_AGENTS_WORKING_DIRECTORY
+      : (command.workingDirectory ?? TERM_AGENTS_WORKING_DIRECTORY),
     ...(integration?.resumeThreadId ? { resumeThreadId: integration.resumeThreadId } : {}),
     ...(integration?.remote ? { remote: integration.remote } : {}),
     ...size,
@@ -257,7 +257,7 @@ async function launchTerminal(
       output.write(data)
       context.terminals.current.get(id)?.write(data)
     },
-    onExit: (result: FreeTerminalExit) =>
+    onExit: (result: TermAgentsExit) =>
       finishTerminalExit(id, command, result, launch, active, output, context),
   }
   const publishOpenCodeSessions = () => {

@@ -30,7 +30,7 @@ import {
   loadOpenCodeResumeThreadsPage,
   loadRemoteOpenCodeResumeThreadsPage,
 } from "../services/opencode-server"
-import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
+import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 
 const PROVIDERS: readonly AgentProviderId[] = ["codex", "claude", "opencode"]
 type Origin = "local" | "remote"
@@ -68,7 +68,7 @@ function codexLoadMoreTasks(
   const local = pages["codex:local"]
   if (local.hasMore)
     tasks.push(
-      loadCodexResumeThreadsPage(FREE_TERMINAL_WORKING_DIRECTORY, signal, {
+      loadCodexResumeThreadsPage(TERM_AGENTS_WORKING_DIRECTORY, signal, {
         append: true,
         cursor: local.cursor,
       }).then((page) => update("codex:local", { cursor: page.nextCursor, hasMore: page.hasMore })),
@@ -94,7 +94,7 @@ function openCodeLoadMoreTasks(
   const tasks: Promise<void>[] = []
   if (pages["opencode:local"].hasMore)
     tasks.push(
-      loadOpenCodeResumeThreadsPage(FREE_TERMINAL_WORKING_DIRECTORY, signal, target).then((page) =>
+      loadOpenCodeResumeThreadsPage(TERM_AGENTS_WORKING_DIRECTORY, signal, target).then((page) =>
         update("opencode:local", { hasMore: page.hasMore }),
       ),
     )
@@ -227,7 +227,7 @@ export function useAgentResumeThreads(active: boolean) {
     if (enabled("codex"))
       void trackInitial("codex", async () => {
         const page = await loadCodexResumeThreadsPage(
-          FREE_TERMINAL_WORKING_DIRECTORY,
+          TERM_AGENTS_WORKING_DIRECTORY,
           controller.signal,
         )
         updateLocal("codex:local", { cursor: page.nextCursor, hasMore: page.hasMore })
@@ -236,7 +236,7 @@ export function useAgentResumeThreads(active: boolean) {
     if (enabled("opencode"))
       void trackInitial("opencode", async () => {
         const page = await loadOpenCodeResumeThreadsPage(
-          FREE_TERMINAL_WORKING_DIRECTORY,
+          TERM_AGENTS_WORKING_DIRECTORY,
           controller.signal,
         )
         updateLocal("opencode:local", { hasMore: page.hasMore })

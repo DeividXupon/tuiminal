@@ -1,15 +1,15 @@
-import type { FreeTerminalCommand } from "../model/sessions"
+import type { TermAgentsCommand } from "../model/sessions"
 import { hasTmux } from "./tmux-command"
 import { startTmuxTerminal } from "./tmux-terminal"
 import { trackTerminalLaunch } from "./terminal-resources"
-import { startFreeTerminalProcess, type FreeTerminalProcessHandle } from "./terminal"
+import { startTermAgentsProcess, type TermAgentsProcessHandle } from "./terminal"
 import { TerminalRetirementError } from "./terminal-lifecycle"
 
 export function startWorkspaceTerminal(
-  command: FreeTerminalCommand,
-  options: Parameters<typeof startFreeTerminalProcess>[1],
+  command: TermAgentsCommand,
+  options: Parameters<typeof startTermAgentsProcess>[1],
   signal: AbortSignal,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   const terminalKind = command.kind
   return trackTerminalLaunch(
     (async () => {
@@ -22,7 +22,7 @@ export function startWorkspaceTerminal(
         )
       const handle = useTmux
         ? await startTmuxTerminal(command.command, options, command.tmux, terminalKind)
-        : startFreeTerminalProcess(command.command, options)
+        : startTermAgentsProcess(command.command, options)
       if (signal.aborted) {
         try {
           await (handle.close?.() ?? handle.stop())

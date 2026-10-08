@@ -3,18 +3,16 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import * as terminalService from "../../packages/feature-terminal/src/services/terminal"
 
 let tui: TestRendererSetup | undefined
-type TerminalOptions = Parameters<typeof terminalService.startFreeTerminalProcess>[1]
+type TerminalOptions = Parameters<typeof terminalService.startTermAgentsProcess>[1]
 const starts: TerminalOptions[] = []
 const inputs: string[][] = []
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
-let spawnSpy:
-  | ReturnType<typeof spyOn<typeof terminalService, "startFreeTerminalProcess">>
-  | undefined
+let spawnSpy: ReturnType<typeof spyOn<typeof terminalService, "startTermAgentsProcess">> | undefined
 
 afterEach(() => {
   act(() => tui?.renderer.destroy())
@@ -27,7 +25,7 @@ afterEach(() => {
 
 async function startFixture(shell = false) {
   inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockResolvedValue([])
-  spawnSpy = spyOn(terminalService, "startFreeTerminalProcess").mockImplementation(
+  spawnSpy = spyOn(terminalService, "startTermAgentsProcess").mockImplementation(
     (_command, options) => {
       starts.push(options)
       const received: string[] = []
@@ -42,7 +40,7 @@ async function startFixture(shell = false) {
       }
     },
   )
-  tui = await testRender(<FreeTerminal active />, { width: 100, height: 28 })
+  tui = await testRender(<TermAgents active />, { width: 100, height: 28 })
   await tui.renderOnce()
   if (shell) await leader("n")
   else {

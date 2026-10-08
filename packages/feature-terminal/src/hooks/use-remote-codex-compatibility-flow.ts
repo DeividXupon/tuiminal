@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import {
   DEFAULT_FOLDER,
-  type FreeTerminalCommand,
+  type TermAgentsCommand,
   MAX_SESSIONS,
   type TerminalPlacement,
   type TerminalSession,
@@ -20,7 +20,7 @@ import {
 import { createRemoteAgentUpdateCommands } from "../services/terminal"
 
 export type RemoteCodexCompatibilityPrompt = {
-  command: FreeTerminalCommand
+  command: TermAgentsCommand
   report: RemoteCodexCompatibilityReport
 }
 
@@ -29,7 +29,7 @@ type UpdateFlow = RemoteCodexCompatibilityPrompt & {
   sessionIds: readonly string[]
 }
 
-function originalAgentCommand(session: TerminalSession): FreeTerminalCommand {
+function originalAgentCommand(session: TerminalSession): TermAgentsCommand {
   return {
     kind: session.kind,
     label: session.label,
@@ -42,7 +42,7 @@ function originalAgentCommand(session: TerminalSession): FreeTerminalCommand {
   }
 }
 
-async function preflightAgentCommand(command: FreeTerminalCommand, signal: AbortSignal) {
+async function preflightAgentCommand(command: TermAgentsCommand, signal: AbortSignal) {
   const integration = command.agentLaunch
   if (!integration) return
   const remote = integration.remote
@@ -75,13 +75,13 @@ export function useRemoteCodexCompatibilityFlow({
   onCancelled,
 }: {
   sessions: readonly TerminalSession[]
-  launchCommand: (command: FreeTerminalCommand, placement: TerminalPlacement) => string | undefined
-  launchOriginal: (command: FreeTerminalCommand) => string | undefined
+  launchCommand: (command: TermAgentsCommand, placement: TerminalPlacement) => string | undefined
+  launchOriginal: (command: TermAgentsCommand) => string | undefined
   closeSession: (id: string) => void
   updateSession: (id: string, update: Partial<TerminalSession>) => void
   setNotice: (message: string) => void
   onGuideOpened: () => void
-  onCancelled: (command: FreeTerminalCommand | undefined) => void
+  onCancelled: (command: TermAgentsCommand | undefined) => void
 }) {
   const [prompt, setPrompt] = useState<RemoteCodexCompatibilityPrompt | null>(null)
   const [updateFlow, setUpdateFlow] = useState<UpdateFlow | null>(null)
@@ -90,7 +90,7 @@ export function useRemoteCodexCompatibilityFlow({
   const validation = useRef<AbortController | null>(null)
 
   const showCompatibility = useCallback(
-    (command: FreeTerminalCommand, report: RemoteCodexCompatibilityReport, sessionId: string) => {
+    (command: TermAgentsCommand, report: RemoteCodexCompatibilityReport, sessionId: string) => {
       if (handledSessions.current.has(sessionId)) return
       handledSessions.current.add(sessionId)
       closeSession(sessionId)

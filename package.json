@@ -17,7 +17,7 @@
     "benchmark:all": "bun scripts/benchmark-all.ts",
     "benchmark:terminal": "bun scripts/benchmark.ts --suite terminal",
     "benchmark:terminal:sync": "bun scripts/benchmark-project-sync.ts",
-    "benchmark:terminal:stress": "bun scripts/benchmark-free-terminal.ts",
+    "benchmark:terminal:stress": "bun scripts/benchmark-term-agents.ts",
     "benchmark:terminal:ui": "bun test --preload ./tests/tui/setup.ts scripts/benchmark-terminal-remote-ui.test.tsx",
     "benchmark:database:drivers": "bun scripts/benchmark.ts --suite database --external-database",
     "benchmark:startup": "bun scripts/benchmark-startup.ts",

@@ -17,7 +17,7 @@ export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]>
   const { parseLiveDiffStatus } = await import(
     "../../packages/feature-terminal/src/model/live-diff"
   )
-  const { startFreeTerminalProcess } = await import(
+  const { startTermAgentsProcess } = await import(
     "../../packages/feature-terminal/src/services/terminal"
   )
   const { parseTmuxPanes } = await import("../../packages/feature-terminal/src/model/tmux")
@@ -209,7 +209,7 @@ export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]>
         const exited = Promise.withResolvers<number | null>()
         let output = ""
         const decoder = new TextDecoder()
-        const handle = startFreeTerminalProcess(
+        const handle = startTermAgentsProcess(
           [process.execPath, "-e", "console.log('BENCHMARK_READY')"],
           {
             cwd: root,

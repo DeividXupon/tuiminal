@@ -1,5 +1,5 @@
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { cleanTerminalName, type FreeTerminalCommand } from "../model/sessions"
+import { cleanTerminalName, type TermAgentsCommand } from "../model/sessions"
 import { tmuxPaneLabel, type TmuxPaneInfo } from "../model/tmux"
 
 function restoredCommandKind(target: TmuxPaneInfo) {
@@ -15,7 +15,7 @@ export function createTmuxMirrorCommand(
   target: TmuxPaneInfo,
   agentLabel?: string,
   autoMirror = agentLabel !== undefined,
-): FreeTerminalCommand {
+): TermAgentsCommand {
   const label = cleanTerminalName(`${agentLabel ?? "tmux"} · ${tmuxPaneLabel(target)}`)
   return {
     kind: restoredCommandKind(target),

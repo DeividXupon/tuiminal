@@ -27,9 +27,9 @@ import {
 } from "./remote-claude-connection"
 import { assertRemoteSshTunnelConfiguration } from "./remote-ssh-command"
 import {
-  type FreeTerminalExit,
-  type FreeTerminalProcessHandle,
-  startFreeTerminalProcess,
+  type TermAgentsExit,
+  type TermAgentsProcessHandle,
+  startTermAgentsProcess,
 } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
@@ -40,7 +40,7 @@ type ClaudeTerminalOptions = {
   resumeThreadId?: string
   remote?: RemoteCodexTarget
   onData: (data: Uint8Array) => void
-  onExit: (result: FreeTerminalExit) => void
+  onExit: (result: TermAgentsExit) => void
 }
 
 type Tunnel = { port: number; stop: () => Promise<void> }
@@ -83,14 +83,14 @@ function observeRemoteClaudeBackground(
 export function remoteClaudeClose(
   remote: RemoteCodexTarget | undefined,
   session: ClaudeBackgroundLaunch | null,
-  owned: FreeTerminalProcessHandle,
+  owned: TermAgentsProcessHandle,
   cleanup: () => Promise<void>,
   stopSession: (
     target: RemoteCodexTarget,
     sessionId: string,
     knownShortId?: string,
   ) => Promise<void> = stopRemoteClaudeBackgroundSession,
-): Pick<FreeTerminalProcessHandle, "cancelLaunch" | "close" | "retainCloseAfterExit"> {
+): Pick<TermAgentsProcessHandle, "cancelLaunch" | "close" | "retainCloseAfterExit"> {
   if (!remote || !session) return {}
   let detaching: Promise<void> | null = null
   let closing: Promise<void> | null = null
@@ -123,7 +123,7 @@ export function remoteClaudeClose(
 }
 
 export async function retireFailedClaudeTerminalLaunch(
-  terminal: FreeTerminalProcessHandle | null,
+  terminal: TermAgentsProcessHandle | null,
   cleanup: () => Promise<void>,
   remote: RemoteCodexTarget | undefined,
   backgroundSession: ClaudeBackgroundLaunch | null,
@@ -234,7 +234,7 @@ export async function startClaudeHooksTerminal(
   options: ClaudeTerminalOptions,
   events: ClaudeHookEvents,
   signal: AbortSignal,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   const remote = options.remote
   const directory = remote?.workingDirectory ?? options.cwd ?? process.cwd()
   const executable = resolveClaudeExecutable()
@@ -266,7 +266,7 @@ export async function startClaudeHooksTerminal(
   let tunnel: Tunnel | null = null
   let backgroundObserver: ReturnType<typeof startRemoteClaudeBackgroundObserver> | null = null
   let backgroundSession: ClaudeBackgroundLaunch | null = null
-  let terminal: FreeTerminalProcessHandle | null = null
+  let terminal: TermAgentsProcessHandle | null = null
   let cleanupPromise: Promise<void> | null = null
   const cleanup = () => {
     if (cleanupPromise) return cleanupPromise
@@ -320,7 +320,7 @@ export async function startClaudeHooksTerminal(
       options.resumeThreadId,
       persistentRemote,
     )
-    const owned = startFreeTerminalProcess(command, {
+    const owned = startTermAgentsProcess(command, {
       cwd: remote ? process.cwd() : directory,
       ...(options.columns === undefined ? {} : { columns: options.columns }),
       ...(options.rows === undefined ? {} : { rows: options.rows }),

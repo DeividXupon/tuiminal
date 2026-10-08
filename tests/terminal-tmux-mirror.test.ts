@@ -12,9 +12,9 @@ import {
 } from "../packages/feature-terminal/src/rendering/tmux-screen"
 
 const target = { socket: "/tmp/fixture.sock", sessionId: "$0", name: "0", paneId: "%6" }
-const handles: terminal.FreeTerminalProcessHandle[] = []
+const handles: terminal.TermAgentsProcessHandle[] = []
 let command: ReturnType<typeof spyOn<typeof commands, "runTmux">> | undefined
-let native: ReturnType<typeof spyOn<typeof terminal, "startFreeTerminalProcess">> | undefined
+let native: ReturnType<typeof spyOn<typeof terminal, "startTermAgentsProcess">> | undefined
 let fit: ReturnType<typeof spyOn<typeof sizing, "fitTmuxMirror">> | undefined
 beforeEach(() => {
   // Screen/input lifecycle is isolated here; source geometry and restoration
@@ -73,7 +73,7 @@ test("mirror forwards existing titles and title-only updates without repainting 
 test("mirror paints existing agent content, follows the exact pane and never attaches a blank session", async () => {
   let source = snapshot("EXISTING_AGENT_CONVERSATION")
   command = spyOn(commands, "runTmux").mockImplementation(async () => source)
-  native = spyOn(terminal, "startFreeTerminalProcess")
+  native = spyOn(terminal, "startTermAgentsProcess")
   const frames: string[] = []
   const changed = Promise.withResolvers<void>()
   const exit = mock(() => {})
@@ -117,7 +117,7 @@ test("mirror paints existing agent content, follows the exact pane and never att
 
 test("missing pane fails without creating any replacement shell", async () => {
   command = spyOn(commands, "runTmux").mockRejectedValue(new Error("can't find pane: %6"))
-  native = spyOn(terminal, "startFreeTerminalProcess")
+  native = spyOn(terminal, "startTermAgentsProcess")
   await expect(
     startTmuxTerminal([], { onData: () => {}, onExit: () => {} }, target),
   ).rejects.toThrow("can't find pane")

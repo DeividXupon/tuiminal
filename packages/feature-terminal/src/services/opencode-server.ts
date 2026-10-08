@@ -28,10 +28,10 @@ import {
 import { listOpenCodeResumeSessions } from "./opencode-session-list"
 import { createOpenCodeTuiControl } from "./opencode-tui-control"
 import { preflightLocalOpenCode, preflightRemoteOpenCode } from "./remote-opencode-compatibility"
-import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
+import { type TermAgentsProcessHandle, startTermAgentsProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
-type TerminalOptions = Parameters<typeof startFreeTerminalProcess>[1]
+type TerminalOptions = Parameters<typeof startTermAgentsProcess>[1]
 type OpenCodeTerminalOptions = TerminalOptions & {
   resumeThreadId?: string
   remote?: RemoteCodexTarget
@@ -42,7 +42,7 @@ export async function startOpenCodeServerTerminal(
   options: OpenCodeTerminalOptions,
   events: OpenCodeObserverEvents,
   signal: AbortSignal,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   const { resumeThreadId, remote, cwd, ...terminalOptions } = options
   const directory = remote?.workingDirectory ?? cwd ?? process.cwd()
   const compatibility = remote
@@ -116,7 +116,7 @@ export async function startOpenCodeServerTerminal(
     return stopping
   }
   unregister = registerTerminalResource({ stop: disconnectServer })
-  let terminal: FreeTerminalProcessHandle | null = null
+  let terminal: TermAgentsProcessHandle | null = null
   try {
     await observer.start(signal)
     signal.throwIfAborted()
@@ -133,7 +133,7 @@ export async function startOpenCodeServerTerminal(
       resumeThreadId,
       server.protocol,
     )
-    const ownedTerminal = startFreeTerminalProcess(command, {
+    const ownedTerminal = startTermAgentsProcess(command, {
       ...terminalOptions,
       cwd: remote ? process.cwd() : directory,
       env: {

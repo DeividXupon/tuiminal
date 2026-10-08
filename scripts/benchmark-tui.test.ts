@@ -10,7 +10,7 @@ import { App } from "../apps/cli/src/App"
 import { updateUiSettings } from "../packages/core/src/settings/theme"
 import * as codexServer from "../packages/feature-terminal/src/services/codex-app-server"
 import * as terminalProcesses from "../packages/feature-terminal/src/services/terminal"
-import { stopAllFreeTerminalProcesses } from "../packages/feature-terminal/src/services/terminal-resources"
+import { stopAllTermAgentsProcesses } from "../packages/feature-terminal/src/services/terminal-resources"
 import { type BenchmarkCase, defineBenchmark, measureBenchmark } from "./benchmarks/harness"
 import { tuiActionBenchmarks } from "./benchmarks/tui-actions"
 
@@ -77,7 +77,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
   updateUiSettings({ language: "en" })
   let terminalPid = 900_000
   let codexEvents: codexServer.CodexAppServerEvents | undefined
-  const terminalStart = spyOn(terminalProcesses, "startFreeTerminalProcess").mockImplementation(
+  const terminalStart = spyOn(terminalProcesses, "startTermAgentsProcess").mockImplementation(
     () => ({
       pid: ++terminalPid,
       write: () => undefined,
@@ -268,7 +268,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
       tui.renderer.destroy()
       ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     })
-    await stopAllFreeTerminalProcesses()
+    await stopAllTermAgentsProcesses()
     terminalStart.mockRestore()
     codexStart.mockRestore()
     codexRefresh.mockRestore()

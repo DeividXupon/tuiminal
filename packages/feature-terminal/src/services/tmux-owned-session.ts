@@ -9,11 +9,11 @@ import {
   type TmuxTerminalKind,
 } from "../model/tmux"
 import { runTmux } from "./tmux-command"
-import type { startFreeTerminalProcess } from "./terminal"
+import type { startTermAgentsProcess } from "./terminal"
 import { TerminalRetirementError } from "./terminal-lifecycle"
 
 export const TUIMINAL_TMUX_SERVER_ARGS = ["-L", TUIMINAL_TMUX_SERVER, "-f", "/dev/null"]
-type Options = Parameters<typeof startFreeTerminalProcess>[1]
+type Options = Parameters<typeof startTermAgentsProcess>[1]
 
 const missingSession = (error: unknown) =>
   /no server running|no such file or directory|can't find session/i.test(String(error))

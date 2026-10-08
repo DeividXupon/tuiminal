@@ -7,7 +7,7 @@ import type { TerminalSession } from "../model/sessions"
 import type { TerminalRepositoryContext } from "../model/terminal-context"
 import { type TerminalAgentOrigin, terminalAgentOrigin } from "./TerminalContextTags"
 
-export type FreeTerminalPaneLayout = {
+export type TermAgentsPaneLayout = {
   top: 0 | "50%"
   left: 0 | "50%"
   width: "50%" | "100%"
@@ -16,7 +16,7 @@ export type FreeTerminalPaneLayout = {
   borderLeft: boolean
 }
 
-export type FreeTerminalPaneProps = {
+export type TermAgentsPaneProps = {
   session: TerminalSession
   active: boolean
   toolActive?: boolean
@@ -26,7 +26,7 @@ export type FreeTerminalPaneProps = {
   context?: TerminalRepositoryContext | undefined
   syncStatus?: RemoteProjectSyncStatus | undefined
   masterKey?: string
-  layout: FreeTerminalPaneLayout
+  layout: TermAgentsPaneLayout
   onActivate: (id: string) => void
   onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
   onGone: (id: string, terminal: EmbeddedTerminalRenderable) => void
@@ -84,7 +84,7 @@ function liveDiffWidths(frameWidth: number, borderLeft: boolean, stacked: boolea
 export function paneLiveDiffWidths(
   frameWidth: number,
   borderLeft: boolean,
-  liveDiff: FreeTerminalPaneProps["liveDiff"],
+  liveDiff: TermAgentsPaneProps["liveDiff"],
 ) {
   if (liveDiff?.coversTerminal) {
     const innerWidth = Math.max(1, frameWidth - (borderLeft ? 1 : 0))
@@ -94,7 +94,7 @@ export function paneLiveDiffWidths(
 }
 
 export function terminalContentWidth(
-  liveDiff: FreeTerminalPaneProps["liveDiff"],
+  liveDiff: TermAgentsPaneProps["liveDiff"],
   frameWidth: number,
   terminalWidth: number,
 ) {
@@ -175,12 +175,12 @@ export function remoteSetupHeights(frameHeight: number, open: boolean) {
 }
 
 export function measuresPane(
-  liveDiff: FreeTerminalPaneProps["liveDiff"],
-  messageHistory: FreeTerminalPaneProps["messageHistory"],
+  liveDiff: TermAgentsPaneProps["liveDiff"],
+  messageHistory: TermAgentsPaneProps["messageHistory"],
   remoteSetup: TerminalSession["remoteSetup"],
   remoteCodexUpdate: TerminalSession["remoteCodexUpdate"],
-  context: FreeTerminalPaneProps["context"],
-  syncStatus: FreeTerminalPaneProps["syncStatus"],
+  context: TermAgentsPaneProps["context"],
+  syncStatus: TermAgentsPaneProps["syncStatus"],
   agentOrigin: TerminalAgentOrigin | undefined,
 ) {
   return Boolean(
@@ -195,7 +195,7 @@ export function measuresPane(
 }
 
 export function paneContextWidth(
-  liveDiff: FreeTerminalPaneProps["liveDiff"],
+  liveDiff: TermAgentsPaneProps["liveDiff"],
   frameWidth: number,
   terminalWidth: number,
   borderLeft: boolean,
@@ -209,7 +209,7 @@ export function paneContextActive(toolActive: boolean | undefined, visible: bool
   return Boolean(toolActive && visible)
 }
 
-export function sameTerminalPane(previous: FreeTerminalPaneProps, next: FreeTerminalPaneProps) {
+export function sameTerminalPane(previous: TermAgentsPaneProps, next: TermAgentsPaneProps) {
   // Names and live agent activity belong to the sidebar; lifecycle status drives the startup loader.
   return (
     previous.session.id === next.session.id &&

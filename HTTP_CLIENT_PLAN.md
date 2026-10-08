@@ -1208,7 +1208,7 @@ The plan is implemented, beyond a new-looking screen, when:
 4. Response inspection, search, copy/save, truncation, and errors are accurate.
 5. Cancellation, redirects, cookies, files, and persistence pass the security tests above.
 6. Imports never silently overwrite and always produce a report.
-7. New features do not break Database, Git, Runner, or Free Terminal.
+7. New features do not break Database, Git, Runner, or Term Agents.
 8. README, AGENTS, shortcuts, translations, tutorial, and tests are updated per phase.
 9. `bun run check` and `git diff --check` pass.
 10. Manual auditing confirms `60×16`–`160×40`, compact/framed, mouse, drag, resize,

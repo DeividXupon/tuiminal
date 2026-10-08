@@ -15,7 +15,7 @@ Databases, GitHub, processes, APIs, and real terminals in one fast, responsive i
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#installation)
 
-[Install](#installation) · [Database](#database) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribute](#development)
+[Install](#installation) · [Database](#database) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Term Agents](#term-agents) · [Contribute](#development)
 
 </div>
 
@@ -46,7 +46,7 @@ tuiminal
 You **do not need to install Bun** to use the published package. npm downloads the binary for macOS, Linux glibc, or Windows on x64 and ARM64. The small package launcher requires Node.js 22 or later.
 
 A fresh installation opens **Install official features**. Choose Database, Git, Runner,
-HTTP, or Free Terminal with `[↑/↓]` / `[J/K]` or the mouse, then press `[Enter]` to
+HTTP, or Term Agents with `[↑/↓]` / `[J/K]` or the mouse, then press `[Enter]` to
 install and again to open. Use `[Space]` and `[I]` to install several tools. Reopen
 this screen through `[,]` → **Official features → Manage features** or
 `tuiminal features`. Only installed tools appear in the tabs; Runner is the default
@@ -62,7 +62,7 @@ For scripted setup: `tuiminal features install git runner` or `tuiminal features
 Each tool includes a detailed description. Hover over a row or navigate with
 `[↑/↓/J/K]` to see an animated icon for the tool. Database fills a storage cylinder;
 Runner plays, progresses and completes; HTTP sends a request and receives a response
-between a client and server. Git shows a branch, and Free Terminal shows a window
+between a client and server. Git shows a branch, and Term Agents shows a window
 with a blinking cursor. Icons adapt to smaller terminals.
 During a download, the tool's row fills from left to right with its actual progress.
 
@@ -107,7 +107,7 @@ The aliases `database`/`db`, `run`, and `term`/`tty` are also accepted. In isola
 | Open Git | `[Alt+2]` |
 | Open Runner | `[Alt+3]` |
 | Open HTTP | `[Alt+4]` |
-| Open Free Terminal | `[Alt+5]` |
+| Open Term Agents | `[Alt+5]` |
 | Open settings | `[,]` |
 | Quit | `[Q]`, `[Esc]`, or `[Ctrl+C]` |
 
@@ -130,7 +130,7 @@ Masked password fields copy only their mask.
 | `[Alt+2]` Git | Review local diffs, PRs, Issues, and GitHub notifications. |
 | `[Alt+3]` Runner | Discover commands, run services, and follow multiple logs. |
 | `[Alt+4]` HTTP | Build, save, send, and automate API requests. |
-| `[Alt+5]` Free Terminal | Run shells and any CLI in compact sections of up to two terminals. |
+| `[Alt+5]` Term Agents | Run shells and any CLI in compact sections of up to two terminals. |
 
 <a id="banco"></a>
 <a id="database"></a>
@@ -251,7 +251,7 @@ view between Diffs and Compare.
 - `[C]` switches to **Compare**, comparing two known refs through `base...compared` without checkout or uncommitted changes.
 - `[Ctrl+P]` chooses another local repository/branch without changing PR, Issues, or Inbox scope. In the terminal it belongs to autocomplete; it cannot open settings over a modal or partial staging.
 - The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub.
-- The Free Terminal tutorial walks from the basics to advanced use with a simulated online-store project: PTY panes, the metadata strip, sessions and folders, custom commands, the Master Key menu and `[1]`–`[9]`, rename, box selection, splits, the Agents list, the provider/project/folder/environment pickers, resume threads, sent-message history and turn details, every Live Diff area and its project picker, the pinned sidebar, tmux mirrors, remote agents, project sync review/progress/automatic sync and the server setup guide. Each step opens the view it explains. The tour paints over the live workspace, so real terminals keep running at their size and receive no input; it never spawns processes, reads Git, discovers projects or connects over SSH.
+- The Term Agents tutorial walks from the basics to advanced use with a simulated online-store project: PTY panes, the metadata strip, sessions and folders, custom commands, the Master Key menu and `[1]`–`[9]`, rename, box selection, splits, the Agents list, the provider/project/folder/environment pickers, resume threads, sent-message history and turn details, every Live Diff area and its project picker, the pinned sidebar, tmux mirrors, remote agents, project sync review/progress/automatic sync and the server setup guide. Each step opens the view it explains. The tour paints over the live workspace, so real terminals keep running at their size and receive no input; it never spawns processes, reads Git, discovers projects or connects over SSH.
 
 The three remote dashboards remove blank spacer rows in framed mode. Wide PR and
 Issues screens place sections and actions on one row; narrower screens stack them.
@@ -518,12 +518,12 @@ In Params → Path, use `:id` segments or explicit `{id}` tokens, such as `/user
 
 Sensitive Path values receive the same protection, including encoded URLs and disabled rows. To save them in `.http`, use private-variable references; literal secrets are rejected without changing the file.
 
-<a id="free-terminal"></a>
+<a id="term-agents"></a>
 
-## Free Terminal
+## Term Agents
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Tuiminal Free Terminal tab demo" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Tuiminal Term Agents tab demo" width="100%">
 </p>
 
 A general-purpose multiplexer. New terminals use real PTYs and can run shells, REPLs, interactive database clients, Codex, Claude, or any CLI available in `PATH`.
@@ -630,7 +630,7 @@ Repeating the Master Key sends its literal control byte to the process.
 | `[/]` | Focus the action and `/resume` conversation filter |
 | `[←/→]` or `[H/L]`, then `[Z←] [→V]` | Switch Actions/Agents, then the recent-agent provider tab |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
-| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
+| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Term Agents |
 | `[B]` | Pin / unpin the sidebar |
 | `[Shift+L]` | Focus the sidebar |
 | `[E]` | Rename terminal |
@@ -804,7 +804,7 @@ The [alpha readiness checklist](./ALPHA_READINESS_PLAN.md) records local hardeni
 and outstanding alpha acceptance. It is not release approval or a newly published
 npm version.
 
-Database, Git, Runner, HTTP, and Free Terminal are official internal Tuiminal
+Database, Git, Runner, HTTP, and Term Agents are official internal Tuiminal
 features. A public SDK, marketplace, and community plugin loader are not planned.
 The minimal installation downloads compatible official components on demand,
 managed by Tuiminal without modifying the user's opened project.

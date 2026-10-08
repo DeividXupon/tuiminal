@@ -8,7 +8,7 @@ import {
   refreshCodexResumeThreads,
   refreshRemoteCodexResumeThreads,
 } from "../services/codex-app-server"
-import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
+import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 
 export function useCodexResumeThreads(active: boolean) {
   const remoteRefresh = useRef<{
@@ -39,7 +39,7 @@ export function useCodexResumeThreads(active: boolean) {
   useEffect(() => {
     if (!active || process.env.TUIMINAL_TERMINAL_CODEX_RESUME === "0") return
     const controller = new AbortController()
-    void refreshCodexResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, controller.signal).catch(
+    void refreshCodexResumeThreads(TERM_AGENTS_WORKING_DIRECTORY, controller.signal).catch(
       () => undefined,
     )
     refreshRemoteThreads()

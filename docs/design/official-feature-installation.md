@@ -7,7 +7,7 @@ are maintained in this repository and use exactly the CLI version.
 ## User flow
 
 An empty installation opens **Install official features** after the startup animation.
-Select Database, Git, Runner, HTTP, or Free Terminal with `[↑/↓]`, `[J/K]`, or the
+Select Database, Git, Runner, HTTP, or Term Agents with `[↑/↓]`, `[J/K]`, or the
 mouse. `[Enter]` installs the selected tool, then opens it after installation.
 `[Space]` selects several tools and `[I]` installs that selection sequentially.
 `[C]` cancels the active download; already completed installations are retained.
@@ -37,7 +37,7 @@ keyboard selection updates a single recognizable animated icon: a storage cylind
 for Database fills from the bottom, holds its data, then empties for the next cycle.
 Runner shows a play icon while a progress line advances, then a completion check.
 HTTP sends a rightward request from a client to a server, then a leftward response
-and a client acknowledgement. Git retains its branch and Free Terminal its window
+and a client acknowledgement. Git retains its branch and Term Agents its window
 with a blinking cursor. Motions express each tool’s purpose rather than generic
 highlights traveling around an outline. Compact icons preserve these same phases.
 These illustrations use deterministic geometry without commands or sample records,

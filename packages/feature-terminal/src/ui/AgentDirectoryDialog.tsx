@@ -13,8 +13,8 @@ import { useEffect, useRef, useState } from "react"
 import { remoteInteractiveSshCommand } from "../services/remote-codex-connection"
 import {
   createShellTerminalCommand,
-  type FreeTerminalProcessHandle,
-  startFreeTerminalProcess,
+  type TermAgentsProcessHandle,
+  startTermAgentsProcess,
 } from "../services/terminal"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
@@ -44,7 +44,7 @@ export function AgentDirectoryDialog({
   const dialog = useRef<BoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
   const terminal = useRef<EmbeddedTerminalRenderable | null>(null)
-  const processHandle = useRef<FreeTerminalProcessHandle | null>(null)
+  const processHandle = useRef<TermAgentsProcessHandle | null>(null)
   const closing = useRef(false)
   const output = useRef("")
   const decoder = useRef(new TextDecoder())
@@ -66,7 +66,7 @@ export function AgentDirectoryDialog({
     const command = profile
       ? remoteInteractiveSshCommand(profile)
       : createShellTerminalCommand().command
-    const handle = startFreeTerminalProcess(command, {
+    const handle = startTermAgentsProcess(command, {
       onData(data) {
         terminal.current?.write(data)
         output.current = `${output.current}${decoder.current.decode(data, { stream: true })}`

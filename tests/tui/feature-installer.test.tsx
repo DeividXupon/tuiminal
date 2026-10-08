@@ -197,7 +197,7 @@ test("small terminal scrolls to keyboard selection and installs with the mouse",
   const { controller, store, catalog } = await mount(58, 17, "compact")
   await key("j")
   await key("ARROW_DOWN")
-  await settle((frame) => frame.includes("Free Terminal"))
+  await settle((frame) => frame.includes("Term Agents"))
   await click("feature-install-terminal")
   await settle((frame) => frame.includes("[Enter] Open"))
   expect(controller.snapshot().installed).toEqual(["terminal"])

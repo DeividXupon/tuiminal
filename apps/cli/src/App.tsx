@@ -23,7 +23,7 @@ import {
   DatabaseQueryHistoryModal,
   DatabaseViewer,
   databaseQueryHistoryCanRerun,
-  FreeTerminal,
+  TermAgents,
   GitViewer,
   HttpClient,
   listDatabaseQueryHistory,
@@ -437,7 +437,7 @@ export function AppContent() {
             {features.state.installed.includes(ONLY_TAB) &&
               !closed.has(ONLY_TAB) &&
               ONLY_TAB === "terminal" && (
-                <FreeTerminal
+                <TermAgents
                   tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
                   active={!interactionBlocked}
                   externalSidebarHost
@@ -554,7 +554,7 @@ export function AppContent() {
                 {...(activeTab === "terminal" ? { id: "tutorial-current-tool" } : {})}
                 style={{ flexGrow: 1 }}
               >
-                <FreeTerminal
+                <TermAgents
                   tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
                   active={activeTab === "terminal" && !interactionBlocked}
                   externalSidebarHost

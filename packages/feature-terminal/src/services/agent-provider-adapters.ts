@@ -11,7 +11,7 @@ import {
   openCodeResumeThreadsSnapshot,
   subscribeOpenCodeResumeThreads,
 } from "../model/opencode-resume-threads"
-import type { FreeTerminalCommand } from "../model/sessions"
+import type { TermAgentsCommand } from "../model/sessions"
 import type { AgentProjectTarget } from "./agent-project-directories"
 import { refreshRemoteClaudeResumeThreads } from "./claude-background"
 import { createClaudeAgentCommand, createRemoteClaudeAgentCommand } from "./claude-command"
@@ -22,7 +22,7 @@ import { refreshOpenCodeResumeThreads, refreshRemoteOpenCodeResumeThreads } from
 import {
   createCodexAgentCommand,
   createRemoteCodexAgentCommand,
-  FREE_TERMINAL_WORKING_DIRECTORY,
+  TERM_AGENTS_WORKING_DIRECTORY,
 } from "./terminal"
 
 export type AgentResumeProject = {
@@ -44,7 +44,7 @@ export type AgentProviderAdapter = {
     target: AgentProjectTarget,
     workingDirectory?: string,
     resumeThreadId?: string,
-  ) => FreeTerminalCommand
+  ) => TermAgentsCommand
 }
 
 const codexAdapter: AgentProviderAdapter = {
@@ -55,13 +55,13 @@ const codexAdapter: AgentProviderAdapter = {
     enabled: (environment) => environment.TUIMINAL_TERMINAL_CODEX_RESUME !== "0",
     refresh(target, signal) {
       return target.kind === "local"
-        ? refreshCodexResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, signal)
+        ? refreshCodexResumeThreads(TERM_AGENTS_WORKING_DIRECTORY, signal)
         : refreshRemoteCodexResumeThreads(target.profile, signal)
     },
   },
   createCommand(target, workingDirectory, resumeThreadId) {
     const directory =
-      workingDirectory ?? (target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~")
+      workingDirectory ?? (target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~")
     return target.kind === "remote"
       ? createRemoteCodexAgentCommand(
           { profile: target.profile, workingDirectory: directory },
@@ -79,13 +79,13 @@ const openCodeAdapter: AgentProviderAdapter = {
     enabled: (environment) => environment.TUIMINAL_TERMINAL_OPENCODE_RESUME !== "0",
     refresh(target, signal) {
       return target.kind === "local"
-        ? refreshOpenCodeResumeThreads(FREE_TERMINAL_WORKING_DIRECTORY, signal)
+        ? refreshOpenCodeResumeThreads(TERM_AGENTS_WORKING_DIRECTORY, signal)
         : refreshRemoteOpenCodeResumeThreads(target.profile, signal)
     },
   },
   createCommand(target, workingDirectory, resumeThreadId) {
     const directory =
-      workingDirectory ?? (target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~")
+      workingDirectory ?? (target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~")
     return target.kind === "remote"
       ? createRemoteOpenCodeAgentCommand(
           { profile: target.profile, workingDirectory: directory },
@@ -113,7 +113,7 @@ const claudeAdapter: AgentProviderAdapter = {
   },
   createCommand(target, workingDirectory, resumeThreadId) {
     const directory =
-      workingDirectory ?? (target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~")
+      workingDirectory ?? (target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~")
     return target.kind === "remote"
       ? createRemoteClaudeAgentCommand(
           { profile: target.profile, workingDirectory: directory },

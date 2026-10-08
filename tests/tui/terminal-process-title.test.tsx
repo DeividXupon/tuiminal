@@ -4,7 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
@@ -53,7 +53,7 @@ async function mount(mirrorRoot?: number) {
     resize: () => {},
     stop: async () => {},
   }))
-  tui = await testRender(<FreeTerminal active />, { width: 120, height: 30 })
+  tui = await testRender(<TermAgents active />, { width: 120, height: 30 })
   await tui.renderOnce()
 }
 
@@ -75,7 +75,7 @@ async function waitFor(predicate: () => boolean) {
 
 function rowTitle(terminalId: string) {
   const row = tui?.renderer.root.findDescendantById(
-    terminalId.replace("free-terminal-", "terminal-sidebar-pane-"),
+    terminalId.replace("term-agents-", "terminal-sidebar-pane-"),
   )
   return row ? (tui?.captureCharFrame().split("\n")[row.screenY] ?? "") : ""
 }

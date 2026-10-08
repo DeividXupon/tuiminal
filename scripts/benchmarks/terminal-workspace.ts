@@ -27,7 +27,7 @@ export async function terminalWorkspaceBenchmarks(root: string): Promise<Benchma
     paneLiveDiffWidths,
     remoteSetupHeights,
     terminalContentWidth,
-  } = await import("../../packages/feature-terminal/src/ui/free-terminal-pane-layout")
+  } = await import("../../packages/feature-terminal/src/ui/term-agents-pane-layout")
   type RemoteProjectSyncEntry =
     import("../../packages/feature-terminal/src/model/remote-project-sync").RemoteProjectSyncEntry
   type RemoteProjectSyncMapping =

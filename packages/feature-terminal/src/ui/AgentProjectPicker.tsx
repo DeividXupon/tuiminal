@@ -9,13 +9,13 @@ import { useAgentProjectPicker } from "../hooks/use-agent-project-picker"
 import { agentProvider, type AgentProviderId } from "../model/agent-provider"
 import type { AgentProjectTarget } from "../model/agent-project"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
-import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
+import type { TermAgentsCommand, TerminalSession } from "../model/sessions"
 import {
   type DiscoveredAgentProjects,
   discoverAgentGitProjects,
 } from "../services/agent-git-projects"
 import { projectName } from "../model/project-name"
-import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
+import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 import { AgentFolderBrowser } from "./AgentFolderBrowser"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
@@ -48,10 +48,10 @@ export function AgentProjectPicker(props: {
   inactive: boolean
   environmentEnabled: boolean
   onEnvironment: () => void
-  onLaunch: (command: FreeTerminalCommand) => string | undefined
+  onLaunch: (command: TermAgentsCommand) => string | undefined
   onCancelLaunch: (id: string) => void
   onCompatibility: (
-    command: FreeTerminalCommand,
+    command: TermAgentsCommand,
     report: RemoteCodexCompatibilityReport,
     sessionId: string,
   ) => void
@@ -75,7 +75,7 @@ export function AgentProjectPicker(props: {
   const [findingGit, setFindingGit] = useState(true)
   const [gitError, setGitError] = useState(false)
   const { target } = props
-  const initial = target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~"
+  const initial = target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~"
   const rows = projectRows(picker.recent, git.paths, chosen, initial)
   const selected = Math.max(
     0,
@@ -86,11 +86,7 @@ export function AgentProjectPicker(props: {
   const locked = picker.launching
   useEffect(() => {
     const controller = new AbortController()
-    void discoverAgentGitProjects(
-      target,
-      [FREE_TERMINAL_WORKING_DIRECTORY],
-      controller.signal,
-    ).then(
+    void discoverAgentGitProjects(target, [TERM_AGENTS_WORKING_DIRECTORY], controller.signal).then(
       (result) => {
         if (!controller.signal.aborted) {
           setGit(result)

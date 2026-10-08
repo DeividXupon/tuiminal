@@ -172,7 +172,7 @@ function PinnedToolSketch() {
 }
 
 /**
- * Simulated Free Terminal used by the guided tour. It paints over the live
+ * Simulated Term Agents used by the guided tour. It paints over the live
  * workspace without replacing it, so real PTYs keep running and keep their size.
  */
 export function TerminalTutorialDemo({

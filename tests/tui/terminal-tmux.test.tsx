@@ -7,7 +7,7 @@ import { getUiSettings, updateUiSettings } from "../../packages/core/src/setting
 import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import * as backend from "../../packages/feature-terminal/src/services/terminal-backend"
 import * as discovery from "../../packages/feature-terminal/src/services/tmux-agents"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 
 const originalSettings = getUiSettings()
 const originalAuto = process.env.TUIMINAL_TERMINAL_AUTO_MIRROR
@@ -20,7 +20,7 @@ function Fixture() {
   return (
     <box style={{ flexGrow: 1 }}>
       <box visible={terminal} style={{ flexGrow: 1 }}>
-        <FreeTerminal active={terminal} />
+        <TermAgents active={terminal} />
       </box>
       <box visible={!terminal} style={{ flexGrow: 1 }}>
         <text content="Git fixture" />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import type { AgentProviderId } from "../model/agent-provider"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
-import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
+import type { TermAgentsCommand, TerminalSession } from "../model/sessions"
 import {
   type AgentProjectTarget,
   readProjectDirectory,
@@ -12,7 +12,7 @@ import {
   rememberAgentProject,
 } from "../services/agent-project-recents"
 import { agentProviderAdapter } from "../services/agent-provider-adapters"
-import { FREE_TERMINAL_WORKING_DIRECTORY } from "../services/terminal"
+import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 
 const NO_RESUME_PROJECTS = [] as const
 const EMPTY_RESUME_PROJECTS = {
@@ -35,12 +35,12 @@ export function useAgentProjectPicker({
   providerId: AgentProviderId
   target: AgentProjectTarget
   sessions: readonly TerminalSession[]
-  onLaunch: (command: FreeTerminalCommand) => string | undefined
+  onLaunch: (command: TermAgentsCommand) => string | undefined
   onCancelLaunch: (id: string) => void
   onClose: () => void
   onLaunched: () => void
   onCompatibility: (
-    command: FreeTerminalCommand,
+    command: TermAgentsCommand,
     report: RemoteCodexCompatibilityReport,
     sessionId: string,
   ) => void
@@ -48,7 +48,7 @@ export function useAgentProjectPicker({
   const adapter = agentProviderAdapter(providerId)
   if (!adapter) throw new Error(`Agent provider ${providerId} is not available.`)
   const resume = adapter.resume ?? EMPTY_RESUME_PROJECTS
-  const initial = target.kind === "local" ? FREE_TERMINAL_WORKING_DIRECTORY : "~"
+  const initial = target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~"
   const [destination, setDestination] = useState(initial)
   const [launching, setLaunching] = useState(false)
   const [error, setError] = useState("")
@@ -58,7 +58,7 @@ export function useAgentProjectPicker({
   const request = useRef<AbortController | null>(null)
   const busy = useRef(false)
   const pendingRef = useRef<string | null>(null)
-  const pendingCommand = useRef<FreeTerminalCommand | null>(null)
+  const pendingCommand = useRef<TermAgentsCommand | null>(null)
   const threads = useSyncExternalStore(resume.subscribe, resume.snapshot, resume.snapshot)
   const recent = recentProjectsForTarget(providerId, target, saved, threads)
   useEffect(() => {

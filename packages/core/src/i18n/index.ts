@@ -345,14 +345,7 @@ const MESSAGES: readonly Message[] = [
   ["BANCO", "DATABASE", "BASE DE DATOS", "データベース", "数据库", "데이터베이스"],
   ["Banco", "Database", "Base de datos", "データベース", "数据库", "데이터베이스"],
   ["Terminal", "Terminal", "Terminal", "ターミナル", "终端", "터미널"],
-  [
-    "FREE TERMINAL",
-    "FREE TERMINAL",
-    "TERMINAL LIBRE",
-    "フリーターミナル",
-    "自由终端",
-    "자유 터미널",
-  ],
+  ["TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS"],
   ["[,] Config", "[,] Settings", "[,] Config", "[,] 設定", "[,] 设置", "[,] 설정"],
   ["[Q] Sair", "[Q] Quit", "[Q] Salir", "[Q] 終了", "[Q] 退出", "[Q] 종료"],
   ["[Esc] Sair", "[Esc] Exit", "[Esc] Salir", "[Esc] 終了", "[Esc] 退出", "[Esc] 종료"],
@@ -2996,12 +2989,12 @@ const MESSAGES: readonly Message[] = [
 
   // Validação e erros apresentados pela interface.
   [
-    "O Free Terminal precisa ser executado com o Bun.",
-    "Free Terminal must be run with Bun.",
-    "Terminal Libre debe ejecutarse con Bun.",
-    "フリーターミナルはBunで実行する必要があります。",
-    "自由终端必须使用 Bun 运行。",
-    "자유 터미널은 Bun으로 실행해야 합니다.",
+    "O Term Agents precisa ser executado com o Bun.",
+    "Term Agents must be run with Bun.",
+    "Term Agents debe ejecutarse con Bun.",
+    "Term Agents はBunで実行する必要があります。",
+    "Term Agents 必须使用 Bun 运行。",
+    "Term Agents는 Bun으로 실행해야 합니다.",
   ],
   [
     "O Bun não conseguiu criar o terminal PTY.",
@@ -3537,7 +3530,7 @@ const MESSAGES: readonly Message[] = [
     "스테이지를 비울 수 없습니다.",
   ],
 
-  // Estados, ações e mensagens do Runner e Terminal livre.
+  // Estados, ações e mensagens do Runner e Term Agents.
   ["RODANDO", "RUNNING", "EJECUTANDO", "実行中", "运行中", "실행 중"],
   ["ENCERRANDO", "STOPPING", "DETENIENDO", "停止中", "正在停止", "중지 중"],
   ["CONCLUÍDO", "COMPLETED", "COMPLETADO", "完了", "已完成", "완료됨"],
@@ -5023,22 +5016,22 @@ const MESSAGES: readonly Message[] = [
   ...GIT_COMPARE_MESSAGES,
   // Notificações globais.
   ...NOTIFICATION_MESSAGES,
-  // Terminal livre.
+  // Term Agents.
   [
-    "❯ FREE TERMINAL",
-    "❯ FREE TERMINAL",
-    "❯ TERMINAL LIBRE",
-    "❯ フリーターミナル",
-    "❯ 自由终端",
-    "❯ 자유 터미널",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
   ],
   [
-    "TERMINAIS LIVRES EM SEÇÕES 2 × 2",
-    "FREE TERMINALS IN 2 × 2 SECTIONS",
-    "TERMINALES LIBRES EN SECCIONES 2 × 2",
-    "2 × 2 セクションのフリーターミナル",
-    "2 × 2 分区自由终端",
-    "2 × 2 섹션의 자유 터미널",
+    "TERM AGENTS EM SEÇÕES 2 × 2",
+    "TERM AGENTS IN 2 × 2 SECTIONS",
+    "TERM AGENTS EN SECCIONES 2 × 2",
+    "2 × 2 セクションの TERM AGENTS",
+    "2 × 2 分区 TERM AGENTS",
+    "2 × 2 섹션의 TERM AGENTS",
   ],
   [
     "+ Nova seção · │+ split ao lado · ─+ split abaixo",

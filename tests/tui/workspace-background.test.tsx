@@ -9,7 +9,7 @@ import { DatabaseTutorialDemo } from "../../packages/feature-database/src/tutori
 import { GitTutorialDemo } from "../../packages/feature-git/src/tutorial/GitTutorialDemo"
 import { HttpTutorialDemo } from "../../packages/feature-http/src/tutorial/HttpTutorialDemo"
 import { Runner } from "../../packages/feature-runner/src/RunnerWorkspace"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
 
 const initialSettings = getUiSettings()
 let tui: TestRendererSetup | undefined
@@ -31,7 +31,7 @@ async function expectSurface(element: ReactElement, id: string, expected: string
 }
 
 for (const layout of ["framed", "compact"] as const) {
-  test(`workspaces respect ${layout} while Free Terminal always stays compact`, async () => {
+  test(`workspaces respect ${layout} while Term Agents always stays compact`, async () => {
     updateUiSettings({ layout, language: "pt-BR" })
     const expected = layout === "framed" ? COLORS.panel : COLORS.canvas
     await expectSurface(createElement(DatabaseTutorialDemo), "database-workspace", expected)
@@ -39,7 +39,7 @@ for (const layout of ["framed", "compact"] as const) {
     await expectSurface(createElement(Runner, { active: false }), "runner-workspace", expected)
     await expectSurface(createElement(HttpTutorialDemo), "http-workspace", expected)
     await expectSurface(
-      createElement(FreeTerminal, { active: false }),
+      createElement(TermAgents, { active: false }),
       "terminal-workspace",
       COLORS.canvas,
     )

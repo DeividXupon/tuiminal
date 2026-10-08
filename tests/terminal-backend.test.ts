@@ -7,7 +7,7 @@ import { parseTmuxPanes, supportsTmux } from "../packages/feature-terminal/src/m
 import { createTmuxMirrorCommand } from "../packages/feature-terminal/src/services/tmux-mirror-command"
 
 const preference = process.env.TUIMINAL_TERMINAL_BACKEND
-const command = terminal.createFreeTerminalCommand("echo first && echo second")
+const command = terminal.createTermAgentsCommand("echo first && echo second")
 const options = { onData: () => {}, onExit: () => {} }
 const restores: Array<() => void> = []
 afterEach(() => {
@@ -23,7 +23,7 @@ function fixture(available: boolean) {
     resize: mock(() => {}),
     stop: mock(async () => {}),
   }
-  const native = spyOn(terminal, "startFreeTerminalProcess").mockReturnValue(handle)
+  const native = spyOn(terminal, "startTermAgentsProcess").mockReturnValue(handle)
   const multiplexed = spyOn(tmux, "startTmuxTerminal").mockResolvedValue({
     ...handle,
     backend: "tmux",
@@ -78,7 +78,7 @@ test("a failed tmux launch never replays a potentially executed command natively
 test("closing while tmux is starting retires the late handle", async () => {
   process.env.TUIMINAL_TERMINAL_BACKEND = "auto"
   const { handle, multiplexed, native } = fixture(true)
-  const pending = Promise.withResolvers<terminal.FreeTerminalProcessHandle>()
+  const pending = Promise.withResolvers<terminal.TermAgentsProcessHandle>()
   multiplexed.mockReturnValue(pending.promise)
   const controller = new AbortController()
   const starting = startWorkspaceTerminal(command, options, controller.signal)

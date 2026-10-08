@@ -14,7 +14,7 @@ export function trackTerminalLaunch<T>(launch: Promise<T>): Promise<T> {
   return launch
 }
 
-export async function stopAllFreeTerminalProcesses() {
+export async function stopAllTermAgentsProcesses() {
   // A detached session may be between creation and attaching its local client.
   // Keep it owned until the launch has either registered a handle or cleaned up.
   await Promise.allSettled([...launches])

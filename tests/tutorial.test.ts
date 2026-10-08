@@ -65,7 +65,7 @@ describe("contextual tutorial", () => {
     }
   })
 
-  test("tours Free Terminal from the basics to remote agents with simulated views", async () => {
+  test("tours Term Agents from the basics to remote agents with simulated views", async () => {
     const { terminalTutorialVisualState } = await import(
       "../packages/feature-terminal/src/tutorial/TerminalTutorialVisualState"
     )

@@ -114,7 +114,7 @@ only pure aggregation, selector transitions, configuration parsing, and bounded
 LRU insertion. Each session checks the active request before caching a result;
 stale callbacks cannot release a replacement controller.
 The generic native unified/split diff surface and code-cell gutter sizing live in
-core so Git and Free Terminal's optional Live Diff share presentation without
+core so Git and Term Agents's optional Live Diff share presentation without
 one feature importing the other. Git retains its file/tree and staging behavior;
 Terminal owns its separate read-only local snapshot lifecycle.
 

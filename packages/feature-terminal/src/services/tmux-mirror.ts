@@ -5,11 +5,7 @@ import {
   TMUX_SCREEN_FORMAT,
   type TmuxScreen,
 } from "../rendering/tmux-screen"
-import type {
-  FreeTerminalExit,
-  FreeTerminalProcessHandle,
-  startFreeTerminalProcess,
-} from "./terminal"
+import type { TermAgentsExit, TermAgentsProcessHandle, startTermAgentsProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 import { runTmux } from "./tmux-command"
 import { sendTmuxInput } from "./tmux-input"
@@ -18,12 +14,12 @@ import { fitTmuxMirror } from "./tmux-mirror-size"
 import { readTmuxPaneWorkingDirectory } from "./tmux-pane-context"
 import { TerminalRetirementError } from "./terminal-lifecycle"
 
-type Options = Parameters<typeof startFreeTerminalProcess>[1]
+type Options = Parameters<typeof startTermAgentsProcess>[1]
 
 export async function startTmuxPaneMirror(
   target: TmuxPaneTarget,
   options: Options,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   const controller = new AbortController()
   const prefix = ["-S", target.socket]
   let sizing: Awaited<ReturnType<typeof fitTmuxMirror>> | undefined
@@ -80,7 +76,7 @@ export async function startTmuxPaneMirror(
     options.onData(new TextEncoder().encode(frame))
     previous = screen
   }
-  const finish = (result: FreeTerminalExit) => {
+  const finish = (result: TermAgentsExit) => {
     if (stopping) return stopping
     closed = true
     controller.abort()
@@ -118,7 +114,7 @@ export async function startTmuxPaneMirror(
         void finish({ code: 1, signal: null, stopped: false }).catch(() => {})
     },
   )
-  const handle: FreeTerminalProcessHandle = {
+  const handle: TermAgentsProcessHandle = {
     pid: screen.pid,
     backend: "tmux",
     async readAgentPid(signal) {

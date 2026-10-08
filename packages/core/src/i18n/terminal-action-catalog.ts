@@ -132,12 +132,12 @@ export const TERMINAL_ACTION_MESSAGES = [
   ],
   ["[Alt+4] HTTP", "[Alt+4] HTTP", "[Alt+4] HTTP", "[Alt+4] HTTP", "[Alt+4] HTTP", "[Alt+4] HTTP"],
   [
-    "[Alt+5] Free Terminal",
-    "[Alt+5] Free Terminal",
-    "[Alt+5] Free Terminal",
-    "[Alt+5] Free Terminal",
-    "[Alt+5] Free Terminal",
-    "[Alt+5] Free Terminal",
+    "[Alt+5] Term Agents",
+    "[Alt+5] Term Agents",
+    "[Alt+5] Term Agents",
+    "[Alt+5] Term Agents",
+    "[Alt+5] Term Agents",
+    "[Alt+5] Term Agents",
   ],
   ["[,] Configurações", "[,] Settings", "[,] Configuración", "[,] 設定", "[,] 设置", "[,] 설정"],
   [

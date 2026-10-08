@@ -3,13 +3,13 @@ import type { KeyboardScope } from "@xupon/tuiminal-core/keyboard/scope"
 export const terminalKeyboardScope = {
   ids: ["terminal-workspace", "terminal-command-input"],
   prefixes: [
-    "free-terminal-",
+    "term-agents-",
     "terminal-sidebar",
     "terminal-action",
     "terminal-dialog",
     "terminal-split-",
     "terminal-project-sync-",
   ],
-  interruptPrefixes: ["free-terminal-", "terminal-action"],
+  interruptPrefixes: ["term-agents-", "terminal-action"],
   deferEscape: true,
 } as const satisfies KeyboardScope

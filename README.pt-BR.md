@@ -13,7 +13,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#instalação)
 
-[Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribuir](#desenvolvimento)
+[Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Term Agents](#term-agents) · [Contribuir](#desenvolvimento)
 
 </div>
 
@@ -42,7 +42,7 @@ tuiminal
 Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 22 ou superior é usado pelo pequeno launcher do pacote.
 
 Uma instalação nova abre **Instalar ferramentas oficiais**. Escolha Database, Git,
-Runner, HTTP ou Free Terminal com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
+Runner, HTTP ou Term Agents com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
 para instalar e novamente para abrir. Use `[Space]` e `[I]` para instalar várias.
 Reabra a tela em `[,]` → **Ferramentas oficiais → Gerenciar ferramentas** ou com
 `tuiminal features`. Só as ferramentas instaladas aparecem nas abas; Runner é o
@@ -59,7 +59,7 @@ Cada ferramenta tem uma descrição detalhada. Passe o mouse sobre uma linha ou
 navegue com `[↑/↓/J/K]` para ver um ícone animado da ferramenta. Database preenche
 um cilindro com dados; Runner inicia, avança e conclui uma execução; HTTP envia
 uma requisição e recebe a resposta entre cliente e servidor. Git mostra uma
-ramificação e Free Terminal exibe uma janela com cursor piscando. Os ícones se
+ramificação e Term Agents exibe uma janela com cursor piscando. Os ícones se
 adaptam a terminais menores. Durante o download, o fundo da linha se preenche
 da esquerda para a direita conforme o progresso real.
 
@@ -102,7 +102,7 @@ Somente esses comandos e aliases são tratados como ferramentas; outros nomes s�
 | Abrir Git | `[Alt+2]` |
 | Abrir Runner | `[Alt+3]` |
 | Abrir HTTP | `[Alt+4]` |
-| Abrir Free Terminal | `[Alt+5]` |
+| Abrir Term Agents | `[Alt+5]` |
 | Abrir configurações | `[,]` |
 | Sair | `[Q]`, `[Esc]` ou `[Ctrl+C]` |
 
@@ -123,7 +123,7 @@ disponível para tentar novamente. Campos de senha mascarados copiam apenas a m�
 | `[Alt+2]` Git | Revisar diffs locais, PRs, Issues e notificações do GitHub. |
 | `[Alt+3]` Runner | Detectar comandos, executar serviços e acompanhar vários logs. |
 | `[Alt+4]` HTTP | Criar, salvar, executar e automatizar requisições de API. |
-| `[Alt+5]` Free Terminal | Abrir shells e qualquer CLI em seções compactas com até dois terminais. |
+| `[Alt+5]` Term Agents | Abrir shells e qualquer CLI em seções compactas com até dois terminais. |
 
 <a id="banco"></a>
 
@@ -241,7 +241,7 @@ do outro. `[C]` alterna a área local entre Diffs e Comparar.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox. No terminal, a tecla pertence ao autocomplete; em modais ou no stage parcial, ela não abre a configuração por cima do contexto atual.
 - O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
-- O tutorial do Free Terminal vai do básico ao avançado com um projeto de loja online inteiramente simulado: painéis PTY, faixa de metadados, sessões e pastas, comandos personalizados, menu da Master Key e `[1]`–`[9]`, renomear, seleção de caixas, divisões, lista de Agentes, seletores de provedor, projeto, pasta e ambiente, conversas para retomar, histórico de mensagens enviadas e detalhes do turno, todas as áreas do Live Diff e seu seletor de projetos, lateral fixada, espelhos tmux, agentes remotos, revisão, progresso e sincronização automática do projeto e o guia de preparação do servidor. Cada etapa abre a tela que está explicando. O tour é desenhado por cima do workspace real, então os terminais continuam rodando no mesmo tamanho e não recebem entrada; ele nunca inicia processos, lê Git, procura projetos nem conecta por SSH.
+- O tutorial do Term Agents vai do básico ao avançado com um projeto de loja online inteiramente simulado: painéis PTY, faixa de metadados, sessões e pastas, comandos personalizados, menu da Master Key e `[1]`–`[9]`, renomear, seleção de caixas, divisões, lista de Agentes, seletores de provedor, projeto, pasta e ambiente, conversas para retomar, histórico de mensagens enviadas e detalhes do turno, todas as áreas do Live Diff e seu seletor de projetos, lateral fixada, espelhos tmux, agentes remotos, revisão, progresso e sincronização automática do projeto e o guia de preparação do servidor. Cada etapa abre a tela que está explicando. O tour é desenhado por cima do workspace real, então os terminais continuam rodando no mesmo tamanho e não recebem entrada; ele nunca inicia processos, lê Git, procura projetos nem conecta por SSH.
 
 Os três dashboards remotos removem linhas vazias no modo moldurado. Em telas largas,
 PR e Issues colocam seções e ações na mesma linha; telas menores empilham esses
@@ -535,12 +535,12 @@ Em Params → Path, use segmentos `:id` ou tokens explícitos `{id}` (por exempl
 
 Valores de Path marcados como sensíveis seguem essa proteção, inclusive em URLs codificadas e linhas desativadas. Para salvar esses parâmetros em `.http`, use referências a variáveis privadas; valores secretos literais são recusados sem alterar o arquivo.
 
-<a id="free-terminal"></a>
+<a id="term-agents"></a>
 
-## Free Terminal
+## Term Agents
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Demonstração da tab Free Terminal do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Demonstração da tab Term Agents do Tuiminal" width="100%">
 </p>
 
 Um multiplexador genérico, não um terminal restrito a uma ferramenta. Novos terminais usam PTYs reais e podem executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
@@ -650,7 +650,7 @@ Repetir a Master Key envia essa tecla ao processo.
 | `[/]` | Focar o filtro de ações e conversas do `/resume` |
 | `[←/→]` ou `[H/L]`, depois `[Z←] [→V]` | Alternar Ações/Agentes e depois a aba de provedor recente |
 | `[1]`, `[2]`, … `[9]` | Ativar o agente ou terminal visível correspondente |
-| `[Alt+1–5]` | Abrir Banco, Git, Runner, HTTP ou Free Terminal |
+| `[Alt+1–5]` | Abrir Banco, Git, Runner, HTTP ou Term Agents |
 | `[B]` | Fixar / soltar a sidebar |
 | `[Shift+L]` | Focar a sidebar |
 | `[D]` | Abrir ou focar o Live Diff do agente |
@@ -830,7 +830,7 @@ O [checklist de prontidão para alfa](./ALPHA_READINESS_PLAN.md) resume o harden
 local e os aceites que ainda bloqueiam uma alfa. Ele não representa aprovação de
 release nem uma nova versão publicada no npm.
 
-Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
+Database, Git, Runner, HTTP e Term Agents são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
 
 O [plano do cliente HTTP](./HTTP_CLIENT_PLAN.md) registra os próximos passos dessa ferramenta.
 

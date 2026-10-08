@@ -27,7 +27,7 @@ initialization and dependency boundaries.
   selection listeners by documented mounted-editor limits; test resize/key leaks.
 - Preserve native refs, buffers and focus across theme, language and layout changes.
   Never key tab trees by appearance. Use `LAYOUT.workspaceBackground` for outer
-  surfaces; Free Terminal always uses compact geometry.
+  surfaces; Term Agents always uses compact geometry.
 - Password fields use core `PasswordInput` with runtime registration. Mask the
   full rendered width and expose only mask text to selection APIs, including
   Unicode, resize, scrolling and clearing.

@@ -46,9 +46,9 @@ export type AgentSessionIntegration = {
   transport: "app-server" | "hooks" | "screen"
 }
 
-export type FreeTerminalKind = TmuxTerminalKind
-export type FreeTerminalCommand = {
-  kind: FreeTerminalKind
+export type TermAgentsKind = TmuxTerminalKind
+export type TermAgentsCommand = {
+  kind: TermAgentsKind
   label: string
   shortLabel: string
   displayCommand: string
@@ -69,7 +69,7 @@ export type FreeTerminalCommand = {
   /** Manual local/remote terminals opened by an integrated-agent compatibility guide. */
   remoteCodexUpdate?: RemoteCodexUpdateGuide
 }
-export type TerminalSession = FreeTerminalCommand & {
+export type TerminalSession = TermAgentsCommand & {
   id: string
   sectionId: string
   folderId: string
@@ -124,11 +124,11 @@ export function agentSessionHasCapability(
   return providerId ? agentProviderHasCapability(providerId, capability) : false
 }
 
-export function codexAgentLaunch(command: FreeTerminalCommand) {
+export function codexAgentLaunch(command: TermAgentsCommand) {
   return command.agentLaunch?.providerId === "codex" ? command.agentLaunch : undefined
 }
 
-export function integratedAgentLaunch(command: FreeTerminalCommand) {
+export function integratedAgentLaunch(command: TermAgentsCommand) {
   return command.agentLaunch
 }
 

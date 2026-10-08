@@ -1,4 +1,4 @@
-# Free Terminal
+# Term Agents
 
 Use for PTY/tmux lifecycle, sidebar, observation and companion panels.
 Code: [feature](../../packages/feature-terminal/src/).
@@ -69,7 +69,7 @@ Code: [feature](../../packages/feature-terminal/src/).
 ## Validation
 
 Tests: `tests/terminal-*.test.ts` and Terminal TUI suites. For observer hot paths,
-use `bun scripts/benchmark-free-terminal.ts`; lifecycle changes need native tests.
+use `bun scripts/benchmark-term-agents.ts`; lifecycle changes need native tests.
 
 Fixtures/demos isolate config/data and disable `TUIMINAL_TERMINAL_WORKSPACE_STATE`,
 `TUIMINAL_TERMINAL_AUTO_MIRROR`, `TUIMINAL_TERMINAL_RESTORE`,

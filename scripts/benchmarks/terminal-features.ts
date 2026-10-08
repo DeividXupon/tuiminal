@@ -31,7 +31,7 @@ export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
   const { codexResumeThreads } = await import(
     "../../packages/feature-terminal/src/services/codex-resume"
   )
-  const { createCodexAgentCommand, createFreeTerminalCommand, createShellTerminalCommand } =
+  const { createCodexAgentCommand, createTermAgentsCommand, createShellTerminalCommand } =
     await import("../../packages/feature-terminal/src/services/terminal")
   type AgentMessageHistoryEntry =
     import("../../packages/feature-terminal/src/model/agent-message-history").AgentMessageHistoryEntry
@@ -176,7 +176,7 @@ export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
         let result = ""
         for (let index = 0; index < 1_000; index += 1) {
           result = createShellTerminalCommand().displayCommand
-          result = createFreeTerminalCommand(`bun test --filter feature-${index}`).displayCommand
+          result = createTermAgentsCommand(`bun test --filter feature-${index}`).displayCommand
           result = createCodexAgentCommand(`thread-${index}`).displayCommand
         }
         return result

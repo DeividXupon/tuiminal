@@ -1,12 +1,12 @@
 export const TERMINAL_TUTORIAL_BASICS_MESSAGES = [
   ["1 · O BÁSICO", "1 · THE BASICS", "1 · LO BÁSICO", "1 · 基本", "1 · 基础", "1 · 기본"],
   [
-    "Bem-vindo ao Free Terminal",
-    "Welcome to Free Terminal",
-    "Bienvenido a Free Terminal",
-    "Free Terminal へようこそ",
-    "欢迎使用 Free Terminal",
-    "Free Terminal에 오신 것을 환영합니다",
+    "Bem-vindo ao Term Agents",
+    "Welcome to Term Agents",
+    "Bienvenido a Term Agents",
+    "Term Agents へようこそ",
+    "欢迎使用 Term Agents",
+    "Term Agents에 오신 것을 환영합니다",
   ],
   [
     "Isto aqui é um terminal de verdade: shell, lazygit, servidor de dev, o que der na telha. O Tuiminal só organiza a bagunça. Tudo neste tour é de mentirinha, então explore sem medo.",

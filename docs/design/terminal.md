@@ -1,6 +1,6 @@
 # Terminal workspace
 
-Free Terminal is a generic PTY multiplexer for shells and arbitrary CLIs. Its
+Term Agents is a generic PTY multiplexer for shells and arbitrary CLIs. Its
 workspace always uses compact geometry, regardless of the global framed/compact
 preference. There is no tool header, command strip, per-pane title bar, running
 counter, pager, or permanent footer. A compact one-line metadata strip above each
@@ -364,7 +364,7 @@ menus and dialogs. While the modal is open, the first nine visible Agents or
 Terminals rows receive a key (`[1]`, `[2]`, … `[9]`), ordered as displayed with
 Agents first. Type its key to activate that existing pane; collapsed terminal
 folders do not receive a key. `[Alt+1–5]` keeps its global tool
-navigation role: Database, Git, Runner, HTTP, and Free Terminal. `[,]` opens
+navigation role: Database, Git, Runner, HTTP, and Term Agents. `[,]` opens
 settings, and `[Q]` requests application exit. In the Terminal header these global
 shortcut tokens remain muted until the Master Key is active, when they use the fixed
 blue brand accent. The temporary `[1]`–`[9]` sidebar labels use that same blue without
@@ -442,7 +442,7 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | `[S]` | Open or focus sent-message history for an integrated agent session |
 | `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
 | `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
-| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Free Terminal |
+| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Term Agents |
 | `[B]` | Pin / unpin the sidebar |
 | `[Shift+L]` | Focus the visible sidebar |
 | `[E]` | Rename selected terminal |
@@ -650,7 +650,7 @@ unchanged lines and line-number-only shifts are not added. When a line leaves
 the patch, it has no remaining row to highlight. Edits between two polling rounds
 are shown as one observed change. Highlighting never moves a manually scrolled
 preview or changes the PTY.
-Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the same gradual per-character shimmer curve, palette target, frame count, and cadence as Free Terminal shortcut keys while preserving its syntax color as the base.
+Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the same gradual per-character shimmer curve, palette target, frame count, and cadence as Term Agents shortcut keys while preserving its syntax color as the base.
 elapsed time and additions use the palette's blue, and deletions use its red.
 The path shows the project, an omitted-ancestors marker and only the file's
 immediate parent folder; folder names are middle-truncated to 12 display cells.

@@ -15,7 +15,7 @@ import {
 import { preflightLocalCodex } from "./local-codex-compatibility"
 import { createRemoteCodexAppServerLaunch, remoteCodexTuiCommand } from "./remote-codex-connection"
 import { preflightRemoteCodex } from "./remote-codex-handshake"
-import { type FreeTerminalProcessHandle, startFreeTerminalProcess } from "./terminal"
+import { type TermAgentsProcessHandle, startTermAgentsProcess } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
 export type { CodexObservedUserMessage } from "./codex-message-history"
@@ -31,7 +31,7 @@ export {
 } from "./codex-resume"
 export { codexAppServerUserMessage, codexAppServerUserMessageHistory }
 
-type TerminalOptions = Parameters<typeof startFreeTerminalProcess>[1]
+type TerminalOptions = Parameters<typeof startTermAgentsProcess>[1]
 type CodexTerminalOptions = TerminalOptions & {
   resumeThreadId?: string
   remote?: {
@@ -222,7 +222,7 @@ async function startRemoteCodexAppServerTerminal(
   options: CodexTerminalOptions & { remote: NonNullable<CodexTerminalOptions["remote"]> },
   events: CodexAppServerEvents,
   signal: AbortSignal,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   signal.throwIfAborted()
   const { remote, resumeThreadId, cwd: _localCwd, ...terminalOptions } = options
   void _localCwd
@@ -263,7 +263,7 @@ async function startRemoteCodexAppServerTerminal(
     return stopping
   }
   const unregister = registerTerminalResource({ stop: stopServer })
-  let terminal: FreeTerminalProcessHandle | null = null
+  let terminal: TermAgentsProcessHandle | null = null
   try {
     signal.throwIfAborted()
     const command = remoteCodexTuiCommand(
@@ -272,7 +272,7 @@ async function startRemoteCodexAppServerTerminal(
       resumeThreadId,
       resolveCodexExecutable(),
     )
-    const ownedTerminal = startFreeTerminalProcess(command, {
+    const ownedTerminal = startTermAgentsProcess(command, {
       ...terminalOptions,
       onExit(result) {
         void stopServer()
@@ -303,7 +303,7 @@ export async function startCodexAppServerTerminal(
   options: CodexTerminalOptions,
   events: CodexAppServerEvents,
   signal: AbortSignal,
-): Promise<FreeTerminalProcessHandle> {
+): Promise<TermAgentsProcessHandle> {
   if (options.remote)
     return startRemoteCodexAppServerTerminal(
       options as CodexTerminalOptions & { remote: NonNullable<CodexTerminalOptions["remote"]> },
@@ -337,7 +337,7 @@ export async function startCodexAppServerTerminal(
     return stopping
   }
   const unregister = registerTerminalResource({ stop: stopServer })
-  let terminal: FreeTerminalProcessHandle | null = null
+  let terminal: TermAgentsProcessHandle | null = null
   try {
     await waitForCodexAppServer(url, server, signal)
     relay = startCodexAppServerRelay(url, events)
@@ -347,7 +347,7 @@ export async function startCodexAppServerTerminal(
       : [codexExecutable, "--remote", relay.url]
     const { resumeThreadId: _resumeThreadId, ...terminalOptions } = options
     void _resumeThreadId
-    const ownedTerminal = startFreeTerminalProcess(terminalCommand, {
+    const ownedTerminal = startTermAgentsProcess(terminalCommand, {
       ...terminalOptions,
       onExit(result) {
         void stopServer()

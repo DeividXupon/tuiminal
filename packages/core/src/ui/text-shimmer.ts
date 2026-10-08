@@ -17,7 +17,7 @@ export function blendTextColor(from: RGBA, to: RGBA, ratio: number) {
   )
 }
 
-/** Smooth traveling highlight shared by Free Terminal shortcut and diff glyphs. */
+/** Smooth traveling highlight shared by Term Agents shortcut and diff glyphs. */
 export function textShimmerIntensity(
   position: number,
   length: number,

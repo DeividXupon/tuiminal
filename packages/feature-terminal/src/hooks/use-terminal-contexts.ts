@@ -7,7 +7,7 @@ import {
   type RemoteTerminalContextSource,
 } from "../services/remote-terminal-context"
 import { readTerminalRepositoryContext } from "../services/terminal-repository-context"
-import type { FreeTerminalProcessHandle } from "../services/terminal"
+import type { TermAgentsProcessHandle } from "../services/terminal"
 
 const CONTEXT_POLL_INTERVAL_MS = 2_000
 
@@ -96,7 +96,7 @@ function needsPendingContext(
 
 async function resolveSessionDirectory(
   session: TerminalSession,
-  handle: FreeTerminalProcessHandle | undefined,
+  handle: TermAgentsProcessHandle | undefined,
   signal: AbortSignal,
 ) {
   if (session.agentLaunch?.remote) return session.agentLaunch.remote.workingDirectory
@@ -122,7 +122,7 @@ export function useTerminalContexts(
   sectionId: string | null,
   activeStartedAt: number | null,
   sessions: RefObject<TerminalSession[]>,
-  handles: RefObject<Map<string, FreeTerminalProcessHandle>>,
+  handles: RefObject<Map<string, TermAgentsProcessHandle>>,
 ) {
   const [contexts, setContexts] = useState<ReadonlyMap<string, TerminalRepositoryContext>>(
     () => new Map(),

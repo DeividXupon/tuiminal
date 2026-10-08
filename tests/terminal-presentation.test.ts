@@ -58,7 +58,7 @@ export function session(id: string, patch: Partial<TerminalSession> = {}): Termi
   }
 }
 
-describe("Free Terminal presentation", () => {
+describe("Term Agents presentation", () => {
   test("bounds and formats integrated agent message history", () => {
     expect(agentMessageElapsedLabel(0, 1_000)).toBe("—")
     expect(agentMessageElapsedLabel(1_000, 1_999)).toBe("0s")

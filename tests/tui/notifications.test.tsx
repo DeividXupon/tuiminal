@@ -465,7 +465,7 @@ test("HTTP response completion reaches the global center", async () => {
   }
 })
 
-test("Free Terminal completion reaches the global center", async () => {
+test("Term Agents completion reaches the global center", async () => {
   process.env.TUIMINAL_ONLY_TAB = "terminal"
   tui = await testRender(<App />, { width: 120, height: 30 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-workspace")))

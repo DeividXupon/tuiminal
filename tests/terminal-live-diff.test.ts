@@ -145,12 +145,12 @@ test("discovers nearby Git projects for the Live Diff picker", async () => {
 })
 
 test("Live Diff rows shorten only ancestor folders and reserve aligned columns", () => {
-  expect(abbreviatedFolder("tuiminal-free-terminal-session-folds")).toBe("tuimi..folds")
+  expect(abbreviatedFolder("tuiminal-term-agents-session-folds")).toBe("tuimi..folds")
   expect(abbreviatedFolder("model")).toBe("model")
   expect(displayWidth(abbreviatedFolder("日本語のとても長いフォルダー名"))).toBeLessThanOrEqual(12)
   expect(
     liveDiffDisplayPath(
-      "/workspace/tuiminal-free-terminal-session-folds",
+      "/workspace/tuiminal-term-agents-session-folds",
       "packages/feature-terminal/src/model/sessions.ts",
     ),
   ).toBe("tuimi..folds/--/model/sessions.ts")

@@ -156,7 +156,7 @@ function command(id: SuiteId, file: string, config: ReturnType<typeof options>) 
     ]
   }
   if (id === "git-pr") return [join(import.meta.dir, "benchmark-git-pr.ts")]
-  if (id === "terminal-stress") return [join(import.meta.dir, "benchmark-free-terminal.ts")]
+  if (id === "terminal-stress") return [join(import.meta.dir, "benchmark-term-agents.ts")]
   const testFile = testFiles[id]
   if (!testFile) throw new Error(`Missing benchmark test for ${id}`)
   return ["test", "--preload", "./tests/tui/setup.ts", join(import.meta.dir, testFile)]

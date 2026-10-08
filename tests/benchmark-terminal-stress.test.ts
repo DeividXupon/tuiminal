@@ -17,7 +17,7 @@ const tinyWorkload: TerminalStressOptions = {
   sidebarPublications: 50,
 }
 
-describe("Free Terminal stress benchmarks", () => {
+describe("Term Agents stress benchmarks", () => {
   test("run every workload repeatedly without leaking fixture state", async () => {
     const cases = terminalStressBenchmarks(tinyWorkload)
     expect(cases.map((benchmark) => benchmark.id)).toEqual([
@@ -45,7 +45,7 @@ describe("Free Terminal stress benchmarks", () => {
     const root = mkdtempSync(join(tmpdir(), "tuiminal-terminal-stress-test-"))
     const output = join(root, "stress.json")
     try {
-      const child = Bun.spawnSync([process.execPath, "scripts/benchmark-free-terminal.ts"], {
+      const child = Bun.spawnSync([process.execPath, "scripts/benchmark-term-agents.ts"], {
         cwd: join(import.meta.dir, ".."),
         env: {
           ...process.env,

@@ -36,7 +36,7 @@ describe("application boundaries", () => {
     expect(ownsKeyboardFocus(databaseKeyboardScope, "database-saved-query-modal")).toBe(true)
     expect(ownsKeyboardFocus(databaseKeyboardScope, "db-connection-dialog")).toBe(true)
     expect(ownsInterrupt(databaseKeyboardScope, undefined)).toBe(true)
-    expect(ownsInterrupt(terminalKeyboardScope, "free-terminal-1")).toBe(true)
+    expect(ownsInterrupt(terminalKeyboardScope, "term-agents-1")).toBe(true)
     expect(ownsInterrupt(terminalKeyboardScope, "terminal-command-input")).toBe(false)
     expect(ownsInterrupt(runnerKeyboardScope, "runner-command-input")).toBe(false)
     expect(ownsKeyboardFocus(gitKeyboardScope, "git-pr-action-modal")).toBe(true)

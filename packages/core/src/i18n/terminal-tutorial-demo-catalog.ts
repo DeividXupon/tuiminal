@@ -1,4 +1,4 @@
-// Simulated project data shown only by the Free Terminal tour.
+// Simulated project data shown only by the Term Agents tour.
 export const TERMINAL_TUTORIAL_DEMO_MESSAGES = [
   [
     "Corrigir cálculo do frete",

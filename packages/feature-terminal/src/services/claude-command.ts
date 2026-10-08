@@ -1,11 +1,11 @@
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { FreeTerminalCommand, RemoteCodexTarget } from "../model/sessions"
-import { FREE_TERMINAL_WORKING_DIRECTORY } from "./terminal"
+import type { TermAgentsCommand, RemoteCodexTarget } from "../model/sessions"
+import { TERM_AGENTS_WORKING_DIRECTORY } from "./terminal"
 
 export function createClaudeAgentCommand(
   resumeThreadId?: string,
-  workingDirectory = FREE_TERMINAL_WORKING_DIRECTORY,
-): FreeTerminalCommand {
+  workingDirectory = TERM_AGENTS_WORKING_DIRECTORY,
+): TermAgentsCommand {
   return {
     kind: "custom",
     label: "Claude Code",
@@ -25,7 +25,7 @@ export function createClaudeAgentCommand(
 export function createRemoteClaudeAgentCommand(
   remote: RemoteCodexTarget,
   resumeThreadId?: string,
-): FreeTerminalCommand {
+): TermAgentsCommand {
   return {
     kind: "custom",
     label: `Claude Code · ${remote.profile.name}`,

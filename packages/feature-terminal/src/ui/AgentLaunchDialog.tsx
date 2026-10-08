@@ -2,7 +2,7 @@ import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/t
 import { useCallback, useEffect, useRef, useState } from "react"
 import { agentProviderHasCapability, type AgentProviderId } from "../model/agent-provider"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
-import type { FreeTerminalCommand, TerminalSession } from "../model/sessions"
+import type { TermAgentsCommand, TerminalSession } from "../model/sessions"
 import type { AgentProjectTarget } from "../services/agent-project-directories"
 import { projectSource } from "../services/agent-project-recents"
 import { listSshConfigProfiles } from "../services/ssh-config"
@@ -26,11 +26,11 @@ export function AgentLaunchDialog({
 }: {
   step: AgentLaunchStep
   onStep: (step: AgentLaunchStep) => void
-  onLaunch: (command: FreeTerminalCommand) => string | undefined
+  onLaunch: (command: TermAgentsCommand) => string | undefined
   onClose: () => void
   onCancelLaunch: (id: string) => void
   onCompatibility: (
-    command: FreeTerminalCommand,
+    command: TermAgentsCommand,
     report: RemoteCodexCompatibilityReport,
     sessionId: string,
   ) => void

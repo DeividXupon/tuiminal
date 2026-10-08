@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
-  createFreeTerminalCommand,
+  createTermAgentsCommand,
   createShellTerminalCommand,
-  startFreeTerminalProcess,
+  startTermAgentsProcess,
 } from "../packages/feature-terminal/src/services/terminal"
 
 for (const custom of [false, true]) {
-  test(`native Free Terminal ${custom ? "custom command" : "default shell"} delivers input and retires its child`, async () => {
+  test(`native Term Agents ${custom ? "custom command" : "default shell"} delivers input and retires its child`, async () => {
     const root = await mkdtemp(join(tmpdir(), "tuiminal-terminal-native-"))
     const oldShell = process.env.SHELL
     const oldHome = process.env.HOME
@@ -17,7 +17,7 @@ for (const custom of [false, true]) {
     delete process.env.SHELL
     process.env.HOME = root
     process.env.TUIMINAL_TEST_SUFFIX = "TERMINAL_OK"
-    let handle: ReturnType<typeof startFreeTerminalProcess> | undefined
+    let handle: ReturnType<typeof startTermAgentsProcess> | undefined
     let output = ""
     const decoder = new TextDecoder()
     const exited = Promise.withResolvers<{ code: number | null }>()
@@ -28,8 +28,8 @@ for (const custom of [false, true]) {
         ? "echo TUIMINAL_NATIVE_%TUIMINAL_TEST_SUFFIX%"
         : "echo TUIMINAL_NATIVE_$TUIMINAL_TEST_SUFFIX"
     try {
-      const command = custom ? createFreeTerminalCommand(script) : createShellTerminalCommand()
-      handle = startFreeTerminalProcess(command.command, {
+      const command = custom ? createTermAgentsCommand(script) : createShellTerminalCommand()
+      handle = startTermAgentsProcess(command.command, {
         cwd: root,
         onData: (data) => {
           output += decoder.decode(data, { stream: true })
