@@ -43,7 +43,7 @@ export type IntegratedAgentLaunch =
 
 export type AgentSessionIntegration = {
   providerId: AgentProviderId
-  transport: "app-server" | "hooks" | "screen"
+  transport: "app-server" | "hooks" | "background" | "screen"
 }
 
 export type TermAgentsKind = TmuxTerminalKind
@@ -121,6 +121,9 @@ export function agentSessionHasCapability(
   capability: AgentProviderCapability,
 ) {
   const providerId = session ? integratedAgentProvider(session) : null
+  // Official background supervisors publish turn state, never per-tool activity.
+  if (capability === "structured-activity" && session?.agentIntegration?.transport === "background")
+    return false
   return providerId ? agentProviderHasCapability(providerId, capability) : false
 }
 

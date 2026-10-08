@@ -1,16 +1,28 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { AgentMessageHistoryEntry } from "../packages/feature-terminal/src/model/agent-message-history"
 import type { AgentActivity, AgentState } from "../packages/feature-terminal/src/model/agent-state"
 import {
+  agentSessionHasCapability,
+  type TerminalSession,
+} from "../packages/feature-terminal/src/model/sessions"
+import {
   claudeResumeThreadsSnapshot,
+  publishClaudeResumeThreads,
   resetClaudeResumeThreadsForTests,
 } from "../packages/feature-terminal/src/model/claude-resume-threads"
 import { resolveAgentResumeCommand } from "../packages/feature-terminal/src/services/agent-resume-command"
 import {
+  type ClaudeBackgroundSession,
+  claudeBackgroundAgentState,
   ensureRemoteClaudeBackgroundSession,
+  loadRemoteClaudeResumeThreadsPage,
   parseClaudeBackgroundSessions,
+  refreshRemoteClaudeResumeThreads,
+  startRemoteClaudeBackgroundObserver,
 } from "../packages/feature-terminal/src/services/claude-background"
 import { preflightClaude } from "../packages/feature-terminal/src/services/claude-compatibility"
 import { resolveClaudeExecutable } from "../packages/feature-terminal/src/services/claude-executable"
@@ -23,10 +35,12 @@ import {
 import {
   claudeResumeStorePath,
   loadClaudeResumeThreads,
+  loadClaudeResumeThreadsPage,
   refreshClaudeResumeThreads,
   rememberClaudeResumeThread,
 } from "../packages/feature-terminal/src/services/claude-resume-store"
 import {
+  prepareRemoteClaudeBackground,
   remoteClaudeClose,
   retireFailedClaudeTerminalLaunch,
 } from "../packages/feature-terminal/src/services/claude-terminal"
@@ -456,6 +470,241 @@ test("Claude's official background JSON is projected without reading internal fi
   ])
 })
 
+test("Claude's placeholder background name is not published as a task title", () => {
+  expect(
+    parseClaudeBackgroundSessions(
+      JSON.stringify([
+        {
+          pid: 42,
+          id: "d783c713",
+          sessionId: SESSION_1,
+          cwd: "/srv/project",
+          kind: "background",
+          startedAt: 1_700_000_000_000,
+          name: "d783c713",
+          status: "shell",
+          state: "blocked",
+        },
+      ]),
+    ),
+  ).toEqual([
+    {
+      id: "d783c713",
+      sessionId: SESSION_1,
+      cwd: "/srv/project",
+      name: "",
+      startedAt: 1_700_000_000_000,
+      state: "blocked",
+      status: "shell",
+      waitingFor: "",
+    },
+  ])
+})
+
+test("Claude background state follows the live status before the reply classification", () => {
+  const session = (
+    state: ClaudeBackgroundSession["state"],
+    status: ClaudeBackgroundSession["status"],
+  ): ClaudeBackgroundSession => ({
+    id: "7c5dcf5d",
+    sessionId: SESSION_1,
+    cwd: "/srv/project",
+    name: "",
+    startedAt: 1_700_000_000_000,
+    state,
+    status,
+    waitingFor: "",
+  })
+
+  // An empty session and a reply asking a question are both reported as blocked.
+  expect(claudeBackgroundAgentState(session("blocked", "idle"), false)).toBe("idle")
+  expect(claudeBackgroundAgentState(session("blocked", "idle"), true)).toBe("done")
+  expect(claudeBackgroundAgentState(session("blocked", null), true)).toBe("done")
+  expect(claudeBackgroundAgentState(session("done", "idle"), false)).toBe("done")
+  expect(claudeBackgroundAgentState(session("blocked", "busy"), true)).toBe("working")
+  expect(claudeBackgroundAgentState(session("done", "shell"), true)).toBe("working")
+  expect(claudeBackgroundAgentState(session("working", "idle"), false)).toBe("working")
+  expect(claudeBackgroundAgentState(session("working", "waiting"), true)).toBe("blocked")
+  expect(claudeBackgroundAgentState(session("failed", null), true)).toBe("unknown")
+})
+
+test("the attached Claude title reports turns shorter than the roster interval", async () => {
+  process.env.TUIMINAL_TERMINAL_CLAUDE_RESUME = "0"
+  const states: AgentState[] = []
+  let reads = 0
+  const controller = new AbortController()
+  const observer = startRemoteClaudeBackgroundObserver(
+    {
+      profile: { id: "short-turn", name: "Work", host: "work-alias" },
+      workingDirectory: "/srv/project",
+    },
+    SESSION_1,
+    { onState: (state) => states.push(state), onTitle: () => undefined },
+    controller.signal,
+    {
+      intervalMs: 60_000,
+      async readSessions() {
+        reads += 1
+        // The roster never observes the turn: both reads see the reply classification.
+        return [
+          {
+            id: "7c5dcf5d",
+            sessionId: SESSION_1,
+            cwd: "/srv/project",
+            name: "",
+            startedAt: 1_700_000_000_000,
+            state: "blocked" as const,
+            status: "idle" as const,
+            waitingFor: "",
+          },
+        ]
+      },
+    },
+  )
+  try {
+    const waitFor = async (condition: () => boolean) => {
+      for (let attempt = 0; attempt < 100 && !condition(); attempt++) await Bun.sleep(5)
+      expect(condition()).toBe(true)
+    }
+    await waitFor(() => states.length === 1)
+    expect(states).toEqual(["idle"])
+
+    observer.observeTitle("◐ Fix auth")
+    observer.observeTitle("◑ Fix auth")
+    expect(states).toEqual(["idle", "working"])
+
+    observer.observeTitle("✳ Fix auth")
+    await waitFor(() => states.length === 3)
+    expect(states).toEqual(["idle", "working", "done"])
+    expect(reads).toBe(2)
+  } finally {
+    controller.abort()
+    await observer.stop()
+  }
+})
+
+test("official Claude background sessions do not offer per-tool activity", () => {
+  const session = (transport: "hooks" | "background") =>
+    ({ agentIntegration: { providerId: "claude", transport } }) as TerminalSession
+  expect(agentSessionHasCapability(session("hooks"), "structured-activity")).toBe(true)
+  expect(agentSessionHasCapability(session("background"), "structured-activity")).toBe(false)
+  expect(agentSessionHasCapability(session("background"), "resume")).toBe(true)
+})
+
+test("remote Claude resume rows show a question-ending reply as idle", async () => {
+  const page = await loadRemoteClaudeResumeThreadsPage(
+    { id: "work", name: "Work", host: "work-alias" },
+    new AbortController().signal,
+    12,
+    {
+      async readSessions() {
+        return [
+          {
+            id: "7c5dcf5d",
+            sessionId: SESSION_1,
+            cwd: "/srv/project",
+            name: "",
+            startedAt: 1_700_000_000_000,
+            state: "blocked" as const,
+            status: "idle" as const,
+            waitingFor: "",
+          },
+          {
+            id: "8d6edf6e",
+            sessionId: SESSION_2,
+            cwd: "/srv/project",
+            name: "Fix auth",
+            startedAt: 1_700_000_000_001,
+            state: "working" as const,
+            status: "waiting" as const,
+            waitingFor: "permission prompt",
+          },
+        ]
+      },
+    },
+  )
+  expect(page.threads.map(({ id, title, state }) => ({ id, title, state }))).toEqual([
+    { id: SESSION_2, title: "Fix auth", state: "blocked" },
+    { id: SESSION_1, title: "Claude Code", state: "idle" },
+  ])
+})
+
+test("remote Claude resume pages expose another batch from the official roster", async () => {
+  const sessions = Array.from({ length: 25 }, (_, index) => ({
+    id: `agent-${index}`,
+    sessionId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    cwd: `/srv/project-${index}`,
+    name: `Claude ${index}`,
+    startedAt: 1_700_000_000_000 + index,
+    updatedAt: 1_700_000_000_000 + index,
+    state: "done" as const,
+    status: "idle" as const,
+    waitingFor: "",
+  }))
+  const profile = { id: "work", name: "Work", host: "work-alias" }
+  const options = {
+    async readSessions() {
+      return sessions
+    },
+  }
+
+  const first = await loadRemoteClaudeResumeThreadsPage(
+    profile,
+    new AbortController().signal,
+    12,
+    options,
+  )
+  expect(first.threads).toHaveLength(12)
+  expect(first.hasMore).toBe(true)
+
+  const second = await loadRemoteClaudeResumeThreadsPage(
+    profile,
+    new AbortController().signal,
+    24,
+    options,
+  )
+  expect(second.threads).toHaveLength(24)
+  expect(second.hasMore).toBe(true)
+  expect(claudeResumeThreadsSnapshot()).toHaveLength(25)
+})
+
+test("remote Claude roster timeouts preserve cached sessions", async () => {
+  const cached = {
+    id: SESSION_1,
+    title: "Cached Claude session",
+    preview: "",
+    lastResponse: "",
+    cwd: "/srv/project",
+    projectName: "project",
+    gitBranch: "",
+    updatedAt: 1_700_000_000_000,
+    state: "idle" as const,
+    remoteProfileId: "work",
+    remoteProfileName: "Work",
+    remoteProfileHost: "work-alias",
+  }
+  publishClaudeResumeThreads([cached])
+
+  await expect(
+    refreshRemoteClaudeResumeThreads(
+      { id: "work", name: "Work", host: "work-alias" },
+      new AbortController().signal,
+      {
+        timeoutMs: 5,
+        async readSessions(_profile, signal) {
+          await new Promise<void>((_resolve, reject) => {
+            const abort = () => reject(signal.reason)
+            if (signal.aborted) abort()
+            else signal.addEventListener("abort", abort, { once: true })
+          })
+          return []
+        },
+      },
+    ),
+  ).rejects.toThrow("excedeu o tempo limite")
+  expect(claudeResumeThreadsSnapshot()).toEqual([cached])
+})
+
 test("Claude background dispatch resolves the official short id through fake remote calls", async () => {
   const remote = {
     profile: { id: "work", name: "Work", host: "work-alias" },
@@ -476,8 +725,9 @@ test("Claude background dispatch resolves the official short id through fake rem
           ? []
           : [
               {
+                // Claude 2.1.294 ignores --session-id with --bg and assigns its own.
                 id: "7c5dcf5d",
-                sessionId: SESSION_1,
+                sessionId: SESSION_2,
                 cwd: "/srv/project",
                 name: "Fix auth",
                 startedAt: 1_700_000_000_000,
@@ -489,12 +739,16 @@ test("Claude background dispatch resolves the official short id through fake rem
       },
       async runCommand(command) {
         commands.push(command)
-        return { exitCode: 0, stdout: "backgrounded · 7c5dcf5d\n", stderr: "" }
+        return {
+          exitCode: 0,
+          stdout: "backgrounded · \u001b[36m7c5dcf5d\u001b[39m\u001b[2m (idle)\u001b[22m\n",
+          stderr: "",
+        }
       },
     },
   )
 
-  expect(launch).toEqual({ sessionId: SESSION_1, shortId: "7c5dcf5d", created: true })
+  expect(launch).toEqual({ sessionId: SESSION_2, shortId: "7c5dcf5d", created: true })
   expect(commands).toHaveLength(1)
   expect(commands[0]?.at(-1)).toContain("--session-id")
   expect(commands[0]?.at(-1)).toContain(SESSION_1)
@@ -537,6 +791,36 @@ test("Claude background dispatch reports whether it reused an official session",
 
   expect(launch).toEqual({ sessionId: SESSION_1, shortId: "7c5dcf5d", created: false })
   expect(started).toBe(false)
+})
+
+test("remote Claude falls back to foreground when optional background dispatch is rejected", async () => {
+  const remote = {
+    profile: { id: "work", name: "Work", host: "work-alias" },
+    workingDirectory: "/srv/project",
+  }
+  await expect(
+    prepareRemoteClaudeBackground(
+      remote,
+      true,
+      SESSION_1,
+      "{}",
+      false,
+      new AbortController().signal,
+      async () => Promise.reject(new Error("background mode unavailable")),
+    ),
+  ).resolves.toBeNull()
+
+  await expect(
+    prepareRemoteClaudeBackground(
+      remote,
+      true,
+      SESSION_1,
+      "{}",
+      false,
+      new AbortController().signal,
+      async () => Promise.reject(new AggregateError([], "cleanup failed")),
+    ),
+  ).rejects.toThrow("cleanup failed")
 })
 
 test("Claude background dispatch retires a session created during cancellation", async () => {
@@ -808,7 +1092,7 @@ test("Claude-injected prompts never replace the user's preview or fallback title
 })
 
 test("Claude resume metadata is bounded, private and reloadable", () => {
-  const root = mkdtempSync("/tmp/opencode/tuiminal-claude-")
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-claude-"))
   const environment = {
     ...process.env,
     XDG_DATA_HOME: root,
@@ -919,6 +1203,45 @@ test("Claude resume metadata is bounded, private and reloadable", () => {
     expect(persisted).not.toContain("Done")
     expect(persisted).not.toContain("Second private")
     expect(persisted).not.toContain(longPrompt)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("local Claude resume pages re-read Tuiminal's index in batches", () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-claude-pages-"))
+  const environment = {
+    ...process.env,
+    XDG_DATA_HOME: root,
+    TUIMINAL_TERMINAL_WORKSPACE_STATE: "1",
+    TUIMINAL_TERMINAL_CLAUDE_RESUME: "1",
+  }
+  try {
+    for (let index = 0; index < 25; index++)
+      rememberClaudeResumeThread(
+        {
+          id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          title: `Claude ${index}`,
+          preview: "private prompt",
+          lastResponse: "private response",
+          cwd: `/workspace/project-${index}`,
+          projectName: `project-${index}`,
+          gitBranch: "",
+          updatedAt: index + 1,
+          state: "idle",
+        },
+        environment,
+      )
+
+    resetClaudeResumeThreadsForTests()
+    const first = loadClaudeResumeThreadsPage(12, environment)
+    expect(first.threads).toHaveLength(12)
+    expect(first.hasMore).toBe(true)
+
+    const second = loadClaudeResumeThreadsPage(24, environment)
+    expect(second.threads).toHaveLength(24)
+    expect(second.hasMore).toBe(true)
+    expect(claudeResumeThreadsSnapshot()).toHaveLength(25)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

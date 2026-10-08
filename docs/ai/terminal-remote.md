@@ -53,12 +53,14 @@ Code: [Terminal services](../../packages/feature-terminal/src/services/).
   resume query is retired afterward; never stop a reused server from that path. App
   exit detaches clients; pane close interrupts its turn. Require exact v2 versions
   and no local remote-cwd argv.
-- Remote Claude Code 2.1.285+ creates or attaches an official background UUID. App exit
-  detaches its TUI/observer; pane close runs `claude stop`, even after the attachment
-  exits. A failed/cancelled attachment retires only the background session it created,
-  never one it reused. Workers use hook-free settings and shared five-second
-  `claude agents --json --all` polling. Older versions use pane-owned foreground
-  hooks/`ssh -R`. Never read `~/.claude`.
+- Remote Claude Code 2.1.285+ first tries to create or attach an official background UUID.
+  App exit detaches its TUI/observer; pane close runs `claude stop`, even after the
+  attachment exits. A failed/cancelled attachment retires only the background session it
+  created, never one it reused. If the remote CLI rejects optional background dispatch
+  after safe cleanup, fall back to the pane-owned foreground hooks/`ssh -R` path used by
+  older versions; never swallow cancellation or cleanup failure. Background workers use
+  hook-free settings and shared five-second `claude agents --json --all` polling. Never
+  read `~/.claude`.
 - A missing provider CLI, capability or incompatible version opens a localized modal.
   `[Esc]` preserves intent; `[Enter]` opens manual local/SSH update terminals.
   Revalidation retains failures or closes only those terminals and retries. See the
@@ -66,7 +68,8 @@ Code: [Terminal services](../../packages/feature-terminal/src/services/).
   [OpenCode CLI](https://opencode.ai/v2/docs/cli/commands/) references.
 - Query local and active-remote recents independently and merge without erasing either
   source. Tag provider, profile and cwd; never fall back to another provider or host.
-  Rehydrate public history and state before consuming live events.
+  Bound the initial remote Claude roster query to 12 seconds and preserve cached rows
+  when it fails. Rehydrate public history and state before consuming live events.
 
 ## Remote Live Diff
 

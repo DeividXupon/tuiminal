@@ -246,15 +246,27 @@ sessions Tuiminal started; prompt previews and final responses are not persisted
 uses the exact `claude --resume <id>` only for UUID session IDs, cwd and original local origin or SSH profile, alias and
 host. Other conversations remain available through Claude's own `/resume`.
 
-For SSH projects, Claude Code 2.1.285 or newer creates an empty official background
-session with a preselected UUID, then attaches its TUI, or attaches the selected existing
-UUID. The official supervisor owns the worker. Its process-local settings contain no
-HTTP hooks, so a persistent worker never retains a URL owned by a disposable Tuiminal
-attachment. If attachment setup is cancelled or fails, Tuiminal stops only a background
-session created by that launch and preserves a reused one. Tuiminal polls the supported
+For SSH projects, Claude Code 2.1.285 or newer first tries to create an empty official
+background session with a preselected UUID, then attaches its TUI, or attaches the
+selected existing UUID. The official supervisor owns the worker. Its process-local
+settings contain no HTTP hooks, so a persistent worker never retains a URL owned by a
+disposable Tuiminal attachment. If the remote CLI rejects optional background dispatch
+after safe cleanup, Tuiminal falls back to the pane-owned foreground hook and reverse
+SSH tunnel used for older versions. Cancellation and cleanup failures remain fatal. If
+attachment setup is cancelled or fails, Tuiminal stops only a background session
+created by that launch and preserves a reused one. Tuiminal polls the supported
 `claude agents --json --all` command for
 `working`, `blocked`, `done`, `failed` and `stopped`; attachments for the same profile
-and cwd share one non-overlapping five-second poller. It never reads the files under
+and cwd share one non-overlapping five-second poller. Claude's `blocked` state also
+classifies a finished reply that asks the user something, and an empty session starts
+`blocked`, so the live `status` takes precedence: `waiting` is the only approval state and
+`busy` or `shell` is working. Without a live prompt, `blocked` is done after this
+attachment observed the turn and idle otherwise. The attached official TUI relays its
+terminal title, so a spinner title marks the turn as working before the next poll and the
+following `✳` title requests one immediate, non-overlapping poll to settle completion or
+an open prompt; turns shorter than the interval are not missed. An unnamed session
+reports its short ID as its name; that placeholder is not a task title. These sessions
+use the `background` transport, which shows no per-tool activity row. It never reads the files under
 `~/.claude/jobs`. Application shutdown removes only the attachment and observer, so an
 in-progress turn continues.
 Explicit pane close additionally resolves the public short ID and runs `claude stop`;

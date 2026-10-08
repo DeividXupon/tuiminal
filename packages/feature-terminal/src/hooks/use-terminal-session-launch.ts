@@ -7,10 +7,12 @@ import { agentProvider } from "../model/agent-provider"
 import type { AgentActivity, AgentState } from "../model/agent-state"
 import {
   cleanTerminalName,
+  type AgentSessionIntegration,
   type TermAgentsCommand,
   integratedAgentLaunch,
   type TerminalSession,
 } from "../model/sessions"
+import { terminalExitMessage } from "../rendering/presentation"
 import { AgentMonitor } from "../services/agent-monitor"
 import { startIntegratedAgentTerminal } from "../services/integrated-agent-terminal"
 import { OpenCodeSessionProjection } from "../services/opencode-session-projection"
@@ -89,14 +91,6 @@ function beginAgentOutput(id: string, size: TerminalSize, context: LaunchContext
   return output
 }
 
-function exitMessage(command: TermAgentsCommand, result: TermAgentsExit) {
-  const failed = result.code !== 0 && !result.stopped
-  const color = failed ? "38;2;255;107;107" : "38;2;130;144;163"
-  const status = translateUi(command.tmux ? "Espelho desconectado" : "sessão encerrada")
-  const code = result.code === null ? "" : ` · ${translateUi("código")} ${result.code}`
-  return { failed, text: `\r\n\u001b[${color}m◆ ${status}${code}\u001b[0m\r\n` }
-}
-
 function finishTerminalExit(
   id: string,
   command: TermAgentsCommand,
@@ -120,7 +114,7 @@ function finishTerminalExit(
     context.closeFinishedShell(id)
     return
   }
-  const message = exitMessage(command, result)
+  const message = terminalExitMessage(command, result)
   context.terminals.current.get(id)?.write(message.text)
   context.updateSession(id, {
     agent: null,
@@ -224,9 +218,9 @@ async function launchTerminal(
   let agentActivity: AgentActivity = "thinking"
   let agentTitle: string | undefined
   let hydrationRevision = 0
-  let agentTransport =
+  let agentTransport: AgentSessionIntegration["transport"] =
     integration?.providerId === "claude" && !integration.remote
-      ? ("screen" as const)
+      ? "screen"
       : (integration?.transport ?? "screen")
   const provider = agentProvider(integration?.providerId ?? "codex")
   const openCodeSessions = new OpenCodeSessionProjection(id, provider, integration?.resumeThreadId)
@@ -331,6 +325,9 @@ async function launchTerminal(
                 if (agentTransport === "hooks") return
                 agentTransport = "hooks"
                 updateIntegratedAgent()
+              },
+              onBackground() {
+                agentTransport = "background"
               },
               onHydrated(thread) {
                 if (!launch.isCurrent() || !integration.remote) return

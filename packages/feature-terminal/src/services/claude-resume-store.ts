@@ -3,6 +3,11 @@ import { join } from "node:path"
 import { atomicWriteFileSync, currentFileHash } from "@xupon/tuiminal-core/storage/atomic-file"
 import { cleanAgentMessage } from "../model/agent-message-history"
 import {
+  AGENT_RESUME_PAGE_SIZE,
+  AGENT_RESUME_SOURCE_LIMIT,
+  type AgentResumePage,
+} from "../model/agent-resume-thread"
+import {
   type ClaudeResumeThread,
   claudeResumeThreadKey,
   claudeResumeThreadsSnapshot,
@@ -12,7 +17,9 @@ import {
 import { projectName } from "../model/project-name"
 import { terminalWorkspaceStateDirectory } from "./terminal-workspace-state"
 
-const MAX_SESSIONS = 100
+const MAX_LOCAL_SESSIONS = AGENT_RESUME_SOURCE_LIMIT
+const MAX_REMOTE_SESSIONS = AGENT_RESUME_SOURCE_LIMIT
+const MAX_SESSIONS = MAX_LOCAL_SESSIONS + MAX_REMOTE_SESSIONS
 const STORED_TITLE_LENGTH = 60
 
 function resumeEnabled(environment: NodeJS.ProcessEnv) {
@@ -124,6 +131,34 @@ export function refreshClaudeResumeThreads(environment: NodeJS.ProcessEnv = proc
   return threads
 }
 
+/** Re-reads Tuiminal's bounded Claude index and reports an explicit local page boundary. */
+export function loadClaudeResumeThreadsPage(
+  limit = AGENT_RESUME_PAGE_SIZE,
+  environment: NodeJS.ProcessEnv = process.env,
+): AgentResumePage<ClaudeResumeThread> {
+  const maximum = Math.max(0, Math.min(AGENT_RESUME_SOURCE_LIMIT, limit))
+  refreshClaudeResumeThreads(environment)
+  const local = claudeResumeThreadsSnapshot().filter(
+    (thread) => thread.remoteProfileId === undefined,
+  )
+  return {
+    threads: local.slice(0, maximum),
+    nextCursor: null,
+    hasMore: maximum < AGENT_RESUME_SOURCE_LIMIT && local.length > maximum,
+  }
+}
+
+function boundedStoredSessions(threads: readonly ClaudeResumeThread[]) {
+  const ordered = [...threads].sort((left, right) => right.updatedAt - left.updatedAt)
+  const local = ordered
+    .filter((thread) => thread.remoteProfileId === undefined)
+    .slice(0, MAX_LOCAL_SESSIONS)
+  const remote = ordered
+    .filter((thread) => thread.remoteProfileId !== undefined)
+    .slice(0, MAX_REMOTE_SESSIONS)
+  return [...local, ...remote].sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
 export function rememberClaudeResumeThread(
   thread: ClaudeResumeThread,
   environment: NodeJS.ProcessEnv = process.env,
@@ -141,12 +176,12 @@ export function rememberClaudeResumeThread(
   const file = claudeResumeStorePath(environment)
   for (let attempt = 0; attempt < 2; attempt++) {
     const expectedHash = currentFileHash(file)
-    const sessions = [
+    const sessions = boundedStoredSessions([
       storedThread,
       ...loadClaudeResumeThreads(environment).filter(
         (candidate) => claudeResumeThreadKey(candidate) !== threadKey,
       ),
-    ].slice(0, MAX_SESSIONS)
+    ])
     try {
       atomicWriteFileSync(file, `${JSON.stringify({ version: 1, sessions })}\n`, {
         expectedHash,

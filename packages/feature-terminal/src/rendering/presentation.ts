@@ -1,8 +1,18 @@
 import { basename } from "node:path"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { TerminalSession } from "../model/sessions"
+import type { TermAgentsCommand, TerminalSession } from "../model/sessions"
+import type { TermAgentsExit } from "../services/terminal"
 
 export type TerminalPresentationStatus = "starting" | "running" | "exited" | "failed"
+
+export function terminalExitMessage(command: TermAgentsCommand, result: TermAgentsExit) {
+  const failed = result.code !== 0 && !result.stopped
+  const color = failed ? "38;2;255;107;107" : "38;2;130;144;163"
+  const status = translateUi(command.tmux ? "Espelho desconectado" : "sessão encerrada")
+  const code = result.code === null ? "" : ` · ${translateUi("código")} ${result.code}`
+  return { failed, text: `\r\n\u001b[${color}m◆ ${status}${code}\u001b[0m\r\n` }
+}
 
 export function terminalStatusMarker(status: TerminalPresentationStatus, busy = false) {
   switch (status) {

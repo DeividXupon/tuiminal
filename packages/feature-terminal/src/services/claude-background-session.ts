@@ -11,6 +11,8 @@ import {
 
 type RecordValue = Record<string, unknown>
 
+const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu")
+
 export type ClaudeBackgroundSession = {
   id: string
   sessionId: string
@@ -19,7 +21,7 @@ export type ClaudeBackgroundSession = {
   startedAt: number
   updatedAt?: number
   state: "working" | "blocked" | "done" | "failed" | "stopped"
-  status: "busy" | "waiting" | "idle" | null
+  status: "busy" | "shell" | "waiting" | "idle" | null
   waitingFor: string
 }
 
@@ -83,16 +85,18 @@ export function parseClaudeBackgroundSessions(value: string): ClaudeBackgroundSe
       !["working", "blocked", "done", "failed", "stopped"].includes(state)
     )
       return []
-    const status = ["busy", "waiting", "idle"].includes(String(entry.status))
+    const status = ["busy", "shell", "waiting", "idle"].includes(String(entry.status))
       ? (entry.status as ClaudeBackgroundSession["status"])
       : null
     const updatedAt = publicTimestamp(entry.updatedAt)
+    const name = clean(entry.name, 160)
     return [
       {
         id,
         sessionId: entry.sessionId,
         cwd,
-        name: clean(entry.name, 160),
+        // An unnamed session reports its short ID as the name; it is not a task title.
+        name: name === id ? "" : name,
         startedAt,
         ...(updatedAt ? { updatedAt } : {}),
         state: state as ClaudeBackgroundSession["state"],
@@ -121,7 +125,8 @@ export async function readRemoteClaudeBackgroundSessions(
 }
 
 function printedBackgroundId(value: string) {
-  return /(?:^|\n)backgrounded\s*[·:]\s*([\da-z-]{1,64})(?:\s|·|$)/iu.exec(value)?.[1] ?? null
+  const plain = value.replace(ANSI_SEQUENCE, "")
+  return /(?:^|\n)backgrounded\s*[·:]\s*([\da-z-]{1,64})(?:\s|·|$)/iu.exec(plain)?.[1] ?? null
 }
 
 async function retireAttemptedClaudeBackgroundSession(

@@ -51,22 +51,29 @@ function remoteClaudeSessionId(background: boolean, resumeThreadId?: string) {
   return background ? (resumeThreadId ?? randomUUID()) : resumeThreadId
 }
 
-async function prepareRemoteClaudeBackground(
+export async function prepareRemoteClaudeBackground(
   remote: RemoteCodexTarget | undefined,
   backgroundCapable: boolean,
   requestedSessionId: string | undefined,
   settings: string,
   resume: boolean,
   signal: AbortSignal,
+  ensureSession: typeof ensureRemoteClaudeBackgroundSession = ensureRemoteClaudeBackgroundSession,
 ) {
   if (!remote || !backgroundCapable || !requestedSessionId) return null
-  return ensureRemoteClaudeBackgroundSession(
-    remote,
-    requestedSessionId,
-    settings,
-    resume,
-    AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
-  )
+  try {
+    return await ensureSession(
+      remote,
+      requestedSessionId,
+      settings,
+      resume,
+      AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+    )
+  } catch (error) {
+    if (signal.aborted) signal.throwIfAborted()
+    if (error instanceof AggregateError) throw error
+    return null
+  }
 }
 
 function observeRemoteClaudeBackground(
@@ -297,6 +304,7 @@ export async function startClaudeHooksTerminal(
     )
     signal.throwIfAborted()
     const persistentRemote = Boolean(backgroundSession)
+    if (persistentRemote) events.onBackground?.()
     let settings = backgroundSettings
     if (!persistentRemote) {
       receiver = startClaudeHookServer(observer)
@@ -330,6 +338,7 @@ export async function startClaudeHooksTerminal(
         if (titles.titleRevision !== titleRevision) {
           titleRevision = titles.titleRevision
           observer.observeTerminalTitle(titles.title)
+          backgroundObserver?.observeTitle(titles.title)
         }
         options.onData(data)
       },

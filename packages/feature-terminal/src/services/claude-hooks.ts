@@ -30,6 +30,8 @@ export type ClaudeHookEvents = {
   onUserMessageHistory: (messages: readonly AgentMessageHistoryEntry[], replace: boolean) => void
   onHydrated?: (thread: CodexHydratedThread) => void
   onObserved?: () => void
+  /** The official supervisor owns the session and publishes state without per-tool activity. */
+  onBackground?: () => void
   onError: (message: string) => void
 }
 
