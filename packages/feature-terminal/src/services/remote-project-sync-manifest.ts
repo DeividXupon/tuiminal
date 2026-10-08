@@ -40,7 +40,7 @@ find . -mindepth 1 -exec sh -c '
     elif [ -d "$item" ]; then type=d
     elif [ -f "$item" ]; then type=f
     fi
-    metadata=$(stat -c "%a|%s|%Y|%Z" -- "$item" 2>/dev/null || stat -f "%p|%z|%m|%c" -- "$item" 2>/dev/null) || exit 74
+    metadata=$(stat -c "%a|%s|%.9Y|%.9Z" -- "$item" 2>/dev/null || stat -f "%p|%z|%.9Fm|%.9Fc" -- "$item" 2>/dev/null) || exit 74
     printf "TUIMINAL_ENTRY\000%s\000%s\000%s\000%s\000%s\000" "$path" "$type" "$metadata" "$target" "$link_kind"
   done
 ' sh {} +

@@ -15,7 +15,7 @@ import {
 } from "node:fs"
 import { mkdir, rename } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { delimiter, join } from "node:path"
 import { remoteProjectSyncReviewStatus } from "../packages/feature-terminal/src/model/remote-project-sync"
 import {
   inspectRemoteProjectSync,
@@ -136,6 +136,42 @@ test.each([
     expect(manifest.entries[0]?.mode).toBe(expected)
   },
 )
+
+test("fallback manifests detect equal-size edits with preserved modification times", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const bin = join(root, "bin")
+  await mkdir(source)
+  await mkdir(bin)
+  const systemFind = Bun.which("find")
+  if (!systemFind) throw new Error("Missing find utility for the manifest fixture")
+  writeFileSync(
+    join(bin, "find"),
+    '#!/bin/sh\nfor argument do\n  if [ "$argument" = "-printf" ]; then exit 1; fi\ndone\nexec "$TUIMINAL_TEST_SYSTEM_FIND" "$@"\n',
+    { mode: 0o700 },
+  )
+  const file = join(source, "change.txt")
+  const modified = new Date("2024-01-01T00:00:00.125Z")
+  writeFileSync(file, "before\n")
+  utimesSync(file, modified, modified)
+  const command = [
+    "env",
+    `PATH=${bin}${delimiter}${process.env.PATH ?? ""}`,
+    `TUIMINAL_TEST_SYSTEM_FIND=${systemFind}`,
+    ...localRemoteProjectManifestCommand(source),
+  ]
+  const signal = new AbortController().signal
+  const before = await readRemoteProjectFingerprint(remote(source), signal, { command })
+  expect(before.entries[0]?.modifiedAt).toBe(modified.getTime())
+  await Bun.sleep(5)
+  writeFileSync(file, "after!\n")
+  utimesSync(file, modified, modified)
+  const after = await readRemoteProjectFingerprint(remote(source), signal, { command })
+  expect(after.entries[0]?.size).toBe(before.entries[0]?.size)
+  expect(after.entries[0]?.modifiedAt).toBe(before.entries[0]?.modifiedAt)
+  expect(after.entries[0]?.metadataKey).not.toBe(before.entries[0]?.metadataKey)
+  expect(after.fingerprint).not.toBe(before.fingerprint)
+})
 
 test("always synchronizes the complete tree at a Git repository root", async () => {
   const root = temporaryRoot()
