@@ -237,6 +237,40 @@ sample, mean, min, max, runtime, platform, source commit, and dirty-worktree fla
 same host and Bun version; scheduler load, filesystem cache, and process startup
 can change results. The command does not enforce a universal latency budget.
 
+## Native terminal output and macOS comparison
+
+Run the output regression with optional input-to-output timings:
+
+```bash
+TUIMINAL_TEST_TERMINAL_TIMINGS=1 bun test --max-concurrency=1 tests/terminal-render-output.test.ts
+```
+
+The test runs a real OpenTUI renderer inside a PTY, with a second PTY hosting a
+synthetic interactive child. It decodes the renderer's actual stdout into an
+independent terminal. Frames advance automatically, without `renderOnce()`, mouse
+input or a continuous render loop. Cases cover paced typing, Unicode bursts,
+byte-fragmented ANSI/UTF-8 output, primary/alternate screens, output after an idle
+interval, resize and retirement of both owned processes. It uses temporary working
+directories and the test suite's isolated settings; no agent, SSH server or credentials
+are involved. Windows skips this POSIX renderer comparison.
+
+Each run compares OpenTUI's default output mode with `useThread: false`. In OpenTUI
+0.5.9 the default enables the output thread on macOS but disables it on Linux, so
+the Linux timings are a control, not evidence that the macOS paths are equivalent.
+The optional p50/p95/max values cover synthetic key delivery through both PTYs and
+the rendered output; they exclude SSH latency and the physical terminal's display.
+There is no timing threshold: a missing output marker fails with a bounded deadline.
+
+The CLI's macOS-only `useThread: false` setting is a candidate mitigation for the
+reported Ghostty stalls, pending a macOS comparison. Validate the current and candidate
+variants in the same Ghostty window size and remote Claude session scenario: idle
+typing, continuous output, pauses and pane switches, without clicking or scrolling
+to recover a frame. Record the macOS, Ghostty, Bun and Claude versions. Keep the
+mitigation only if that comparison consistently improves the affected case; if it
+does not, revert only this setting and trace key dispatch, PTY output arrival and
+frame composition before choosing another change. A passing Linux run alone does
+not establish that the remote freeze is fixed.
+
 ## Current coverage
 
 The default service suite has 207 portable cases across the five tools, plus one
