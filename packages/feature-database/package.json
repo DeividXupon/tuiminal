@@ -21,7 +21,7 @@
     "@xupon/tuiminal-core": "0.2.0-alpha.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@tuiparts/core": "^0.0.6",
     "@tuiparts/react": "^0.0.6",
     "string-width": "^7.2.0"

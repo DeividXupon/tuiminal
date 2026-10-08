@@ -6,7 +6,7 @@ The @opentui/core entry covers its same-version platform-specific native package
 | Package | Version | Declared license | Repository |
 | --- | --- | --- | --- |
 | @hono/node-server | 1.19.17 | MIT | https://github.com/honojs/node-server.git |
-| @modelcontextprotocol/sdk | 1.30.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk.git |
+| @modelcontextprotocol/sdk | 1.31.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk.git |
 | @opentui/core | 0.5.9 | MIT | https://github.com/anomalyco/opentui |
 | @opentui/react | 0.5.9 | MIT | https://github.com/anomalyco/opentui |
 | @tuiparts/core | 0.0.6 | MIT | https://github.com/tuiparts/tuiparts.git |
@@ -44,7 +44,7 @@ The @opentui/core entry covers its same-version platform-specific native package
 | express-rate-limit | 8.6.2 | MIT | https://github.com/express-rate-limit/express-rate-limit.git |
 | express | 5.2.1 | MIT | expressjs/express |
 | fast-deep-equal | 3.1.3 | MIT | https://github.com/epoberezkin/fast-deep-equal.git |
-| fast-uri | 3.1.6 | BSD-3-Clause | https://github.com/fastify/fast-uri.git |
+| fast-uri | 3.1.8 | BSD-3-Clause | https://github.com/fastify/fast-uri.git |
 | finalhandler | 2.1.1 | MIT | pillarjs/finalhandler |
 | forwarded | 0.2.0 | MIT | jshttp/forwarded |
 | fresh | 2.0.0 | MIT | jshttp/fresh |
@@ -55,11 +55,11 @@ The @opentui/core entry covers its same-version platform-specific native package
 | gopd | 1.2.0 | MIT | https://github.com/ljharb/gopd.git |
 | has-symbols | 1.1.0 | MIT | git://github.com/inspect-js/has-symbols.git |
 | hasown | 2.0.4 | MIT | https://github.com/inspect-js/hasOwn.git |
-| hono | 4.13.5 | MIT | https://github.com/honojs/hono.git |
+| hono | 4.13.7 | MIT | https://github.com/honojs/hono.git |
 | http-errors | 2.0.1 | MIT | jshttp/http-errors |
 | iconv-lite | 0.7.3 | MIT | https://github.com/pillarjs/iconv-lite.git |
 | inherits | 2.0.4 | ISC | git://github.com/isaacs/inherits |
-| ip-address | 10.5.0 | MIT | https://github.com/beaugunderson/ip-address.git |
+| ip-address | 10.7.3 | MIT | https://github.com/beaugunderson/ip-address.git |
 | ipaddr.js | 1.9.1 | MIT | git://github.com/whitequark/ipaddr.js |
 | is-promise | 4.0.0 | MIT | https://github.com/then/is-promise.git |
 | isexe | 2.0.0 | ISC | https://github.com/isaacs/isexe.git |
@@ -82,7 +82,7 @@ The @opentui/core entry covers its same-version platform-specific native package
 | path-key | 3.1.1 | MIT | sindresorhus/path-key |
 | path-to-regexp | 8.4.2 | MIT | https://github.com/pillarjs/path-to-regexp.git |
 | pkce-challenge | 5.0.1 | MIT | https://github.com/crouchcd/pkce-challenge.git |
-| proxy-addr | 2.0.7 | MIT | jshttp/proxy-addr |
+| proxy-addr | 2.0.8 | MIT | jshttp/proxy-addr |
 | qs | 6.16.0 | BSD-3-Clause | https://github.com/ljharb/qs.git |
 | range-parser | 1.3.0 | MIT | jshttp/range-parser |
 | raw-body | 3.0.2 | MIT | stream-utils/raw-body |
@@ -98,7 +98,7 @@ The @opentui/core entry covers its same-version platform-specific native package
 | setprototypeof | 1.2.0 | ISC | https://github.com/wesleytodd/setprototypeof.git |
 | shebang-command | 2.0.0 | MIT | kevva/shebang-command |
 | shebang-regex | 3.0.0 | MIT | sindresorhus/shebang-regex |
-| shell-quote | 1.10.0 | MIT | http://github.com/ljharb/shell-quote.git |
+| shell-quote | 1.11.0 | MIT | http://github.com/ljharb/shell-quote.git |
 | side-channel-list | 1.0.1 | MIT | https://github.com/ljharb/side-channel-list.git |
 | side-channel-map | 1.0.1 | MIT | https://github.com/ljharb/side-channel-map.git |
 | side-channel-weakmap | 1.0.2 | MIT | https://github.com/ljharb/side-channel-weakmap.git |
@@ -237,7 +237,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### @modelcontextprotocol/sdk@1.30.0 — LICENSE
+### @modelcontextprotocol/sdk@1.31.0 — LICENSE
 
 ```text
 MIT License
@@ -869,7 +869,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### etag@1.8.1, proxy-addr@2.0.7 — LICENSE
+### etag@1.8.1, proxy-addr@2.0.8 — LICENSE
 
 ```text
 (The MIT License)
@@ -1029,7 +1029,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### fast-uri@3.1.6 — LICENSE
+### fast-uri@3.1.8 — LICENSE
 
 ```text
 Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
@@ -1273,7 +1273,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### hono@4.13.5 — LICENSE
+### hono@4.13.7 — LICENSE
 
 ```text
 MIT License
@@ -1371,7 +1371,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### ip-address@10.5.0 — LICENSE
+### ip-address@10.7.3 — LICENSE
 
 ```text
 Copyright (C) 2011 by Beau Gunderson
@@ -2170,7 +2170,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### shell-quote@1.10.0 — LICENSE
+### shell-quote@1.11.0 — LICENSE
 
 ```text
 The MIT License
