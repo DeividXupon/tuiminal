@@ -1681,8 +1681,8 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   expect(liveDiff.screenY).toBe(sentMessages.screenY + 2)
   expect(remoteSync.screenY).toBe(liveDiff.screenY + 2)
   expect(chooseBox.screenY).toBe(remoteSync.screenY + 2)
-  for (const action of ["c", "g"])
-    expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-g")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-c")).toBeDefined()
   expect(spanColor("Novo agente", newCodex.screenY)).toEqual(RGBA.fromHex(COLORS.text).toInts())
   const featureTag = renderable("terminal-action-tag-d-feature")
   const agentTag = renderable("terminal-action-tag-d-agent")
@@ -2311,9 +2311,10 @@ test("an agent launched under a shell keeps its pair in Tuiminais without restar
 test("removed Master Key actions are absent while new terminals stay in Tuiminais", async () => {
   await mount()
   await key("b", true)
-  for (const action of ["t", "tab", "p", "f", "o", "c", "g"])
+  for (const action of ["t", "tab", "p", "f", "o", "g"])
     expect(tui?.renderer.root.findDescendantById(`terminal-action-${action}`)).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-action-a")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-action-c")).toBeDefined()
   await key("c")
   expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
   await key("r")
@@ -3149,9 +3150,33 @@ test("Remote server configuration opens SSH above a guided barrier flow", async 
     "ssh",
     "-tt",
     "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "ConnectionAttempts=1",
+    "-o",
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
+    "-o",
+    "RemoteCommand=none",
+    "-o",
+    "SessionType=default",
+    "-o",
+    "StdinNull=no",
+    "-o",
+    "ForkAfterAuthentication=no",
+    "-o",
+    "PermitLocalCommand=no",
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPersist=no",
+    "-S",
+    "none",
+    "-o",
+    "ClearAllForwardings=yes",
     "remote-setup",
   ])
   const terminal = focusedTerminal()

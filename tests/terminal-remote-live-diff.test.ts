@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { RemoteCodexTarget } from "../packages/feature-terminal/src/model/sessions"
@@ -117,8 +117,11 @@ test("remote Live Diff reconnects its owned helper after a transport exit", asyn
   }
 })
 
-test("remote Live Diff SSH command uses the selected profile and keeps the directory as data", () => {
-  const target = remote("/srv/project with 'quote'")
+test("remote Live Diff SSH command uses the selected profile and keeps the directory as data", async () => {
+  const root = join(fixtureRoot(), "project with 'quote' $variable")
+  mkdirSync(root)
+  git(root, "init", "-q")
+  const target = remote(root)
   const command = remoteLiveDiffSshCommand(target.profile, target.workingDirectory)
 
   expect(command.slice(0, -1)).toEqual([
@@ -134,8 +137,32 @@ test("remote Live Diff SSH command uses the selected profile and keeps the direc
     "ServerAliveInterval=30",
     "-o",
     "ServerAliveCountMax=3",
+    "-o",
+    "RemoteCommand=none",
+    "-o",
+    "SessionType=default",
+    "-o",
+    "StdinNull=no",
+    "-o",
+    "ForkAfterAuthentication=no",
+    "-o",
+    "PermitLocalCommand=no",
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPersist=no",
+    "-S",
+    "none",
+    "-o",
+    "ClearAllForwardings=yes",
     "fixture-vps",
   ])
-  expect(command.at(-1)).toContain("tuiminal-live-diff '/srv/project with '")
-  expect(command.at(-1)).not.toContain("git -C '/srv/project with")
+  const source = createRemoteLiveDiffSource(target, {
+    command: ["sh", "-c", command.at(-1)!],
+  })
+  try {
+    expect(await source.repositoryRoot(root, new AbortController().signal)).toBe(root)
+  } finally {
+    source.close()
+  }
 })
