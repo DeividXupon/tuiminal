@@ -594,6 +594,10 @@ async function nativeTerminalFrames() {
     const frames = [snapshot(tui, "Terminal · sessões e agentes na sidebar", undefined, 140)]
     await prefix("a")
     await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("terminal-dialog-agent-provider")),
+    )
+    await pressKey(tui, "enter")
+    await settle(tui, () =>
       Boolean(tui.renderer.root.findDescendantById("terminal-dialog-project-picker")),
     )
     await settle(tui, () => !tui.captureCharFrame().includes("Procurando projetos Git"))
@@ -627,6 +631,7 @@ async function nativeTerminalFrames() {
         220,
       ),
     )
+    await pressKey(tui, "escape")
     await pressKey(tui, "escape")
     await pressKey(tui, "escape")
     await clickRenderable(tui, "terminal-sidebar-command")
