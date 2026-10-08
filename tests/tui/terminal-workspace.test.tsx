@@ -26,6 +26,10 @@ import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 import type { ProcessIdentity } from "../../packages/feature-terminal/src/model/agent-detection"
 import { EMPTY_AGENT_MESSAGE_TURN_DETAIL } from "../../packages/feature-terminal/src/model/agent-message-history"
 import {
+  publishClaudeResumeThreads,
+  resetClaudeResumeThreadsForTests,
+} from "../../packages/feature-terminal/src/model/claude-resume-threads"
+import {
   publishCodexResumeThreads,
   resetCodexResumeThreadsForTests,
 } from "../../packages/feature-terminal/src/model/codex-resume-threads"
@@ -140,6 +144,7 @@ let remoteOpenCodeResumeSpy:
   | ReturnType<typeof spyOn<typeof openCodeServer, "refreshRemoteOpenCodeResumeThreads">>
   | undefined
 let codexEvents: codexServer.CodexAppServerEvents | undefined
+let claudeEvents: Parameters<typeof claudeTerminal.startClaudeHooksTerminal>[1] | undefined
 let openCodeEvents: OpenCodeObserverEvents | undefined
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
 let repositoryContextSpy:
@@ -163,6 +168,7 @@ afterEach(() => {
   openCodeResumeSpy?.mockRestore()
   remoteOpenCodeResumeSpy?.mockRestore()
   codexEvents = undefined
+  claudeEvents = undefined
   openCodeEvents = undefined
   inspectionSpy?.mockRestore()
   repositoryContextSpy = undefined
@@ -173,6 +179,7 @@ afterEach(() => {
   snapshot = []
   resetPinnedTerminalSidebarForTests()
   resetCodexResumeThreadsForTests()
+  resetClaudeResumeThreadsForTests()
   resetOpenCodeResumeThreadsForTests()
   updateUiSettings(originalSettings)
   if (originalOnlyTab === undefined) delete process.env.TUIMINAL_ONLY_TAB
@@ -240,7 +247,8 @@ async function mount(
     },
   )
   claudeSpy = spyOn(claudeTerminal, "startClaudeHooksTerminal").mockImplementation(
-    async (options) => {
+    async (options, events) => {
+      claudeEvents = events
       commands.push([
         "claude",
         ...(options.resumeThreadId ? ["--resume", options.resumeThreadId] : []),
@@ -1026,6 +1034,73 @@ test("Master Key resumes an OpenCode conversation with the official attached TUI
     "/workspace/opencode-project",
   ])
 })
+
+for (const providerId of ["codex", "claude", "opencode"] as const) {
+  for (const remote of [false, true]) {
+    test(`resumed ${remote ? "remote" : "local"} ${providerId} keeps its title before live updates`, async () => {
+      await mount(false, 140, 36)
+      const profile = { id: "work-server", name: "Work", host: "work-server" }
+      if (remote)
+        updateUiSettings({
+          terminalRemoteCodexProfiles: [profile],
+          terminalRemoteCodexActiveProfileId: profile.id,
+        })
+      const publish = {
+        codex: publishCodexResumeThreads,
+        claude: publishClaudeResumeThreads,
+        opencode: publishOpenCodeResumeThreads,
+      }[providerId]
+      await act(async () =>
+        publish([
+          {
+            id: "d4bfcb32-59a0-4abf-bef4-948e948afc12",
+            title: "Saved conversation",
+            preview: "Different prompt preview",
+            lastResponse: "",
+            cwd: remote ? "/srv/project" : "/workspace/project",
+            projectName: "project",
+            gitBranch: "",
+            updatedAt: Date.now(),
+            state: "idle",
+            ...(remote ? { remoteProfileId: profile.id } : {}),
+          },
+        ]),
+      )
+      await tui?.renderOnce()
+      await key("b", true)
+      await arrow("right")
+      await key("enter")
+      const terminal = focusedTerminal()
+      const sessionId = terminal.id.replace("term-agents-", "")
+      const titleId = `terminal-agent-context-${sessionId}`
+      const titleText = () => tui?.captureCharFrame().split("\n")[renderable(titleId).screenY]
+      expect(titleText()).toContain("Saved conversation")
+
+      const events = { codex: codexEvents, claude: claudeEvents, opencode: openCodeEvents }[
+        providerId
+      ]
+      if (!events) throw new Error("Expected resumed provider events")
+      await act(async () => {
+        if (providerId === "claude") claudeEvents?.onObserved?.()
+        events.onState("working")
+      })
+      await tui?.renderOnce()
+      expect(titleText()).toContain("Saved conversation")
+      const row = renderable(`terminal-agent-${sessionId}`)
+      await act(async () => events.onTitle("Updated title"))
+      await tui?.renderOnce()
+      expect(titleText()).toContain("Updated title")
+      expect(renderable(`terminal-agent-${sessionId}`) === row).toBe(true)
+      expect(focusedTerminal() === terminal).toBe(true)
+      expect(starts).toHaveLength(1)
+
+      await act(async () => events.onTitle(""))
+      await tui?.renderOnce()
+      expect(tui?.renderer.root.findDescendantById(titleId)).toBeUndefined()
+      expect(row.height).toBe(2)
+    })
+  }
+}
 
 test("Master Key Agents merges local and remote Codex conversations", async () => {
   const profile = {

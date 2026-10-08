@@ -5,8 +5,8 @@ import { type RefObject, useCallback, useRef } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { agentProvider } from "../model/agent-provider"
 import type { AgentActivity, AgentState } from "../model/agent-state"
+import { cleanAgentTaskTitle } from "../model/agent-task-title"
 import {
-  cleanTerminalName,
   type AgentSessionIntegration,
   type TermAgentsCommand,
   integratedAgentLaunch,
@@ -216,7 +216,7 @@ async function launchTerminal(
   const active: ActiveLaunch = { handle: null, ended: false }
   let agentState: AgentState = "idle"
   let agentActivity: AgentActivity = "thinking"
-  let agentTitle: string | undefined
+  let agentTitle = cleanAgentTaskTitle(integration?.resumeTitle ?? "")
   let hydrationRevision = 0
   let agentTransport: AgentSessionIntegration["transport"] =
     integration?.providerId === "claude" && !integration.remote
@@ -283,7 +283,7 @@ async function launchTerminal(
         updateIntegratedAgent()
       },
       onTitle(title: string) {
-        agentTitle = cleanTerminalName(title)
+        agentTitle = cleanAgentTaskTitle(title)
         updateIntegratedAgent()
       },
       onUserMessage(message: AgentMessageHistoryEntry) {

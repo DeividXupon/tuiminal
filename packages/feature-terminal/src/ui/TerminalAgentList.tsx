@@ -13,7 +13,9 @@ import {
   type TerminalSession,
 } from "../model/sessions"
 import { agentPresentation, codexActivityIndicators } from "../rendering/agent-presentation"
+import { agentTaskTitleWidth } from "../rendering/agent-title-marquee"
 import { AgentProviderWordmark } from "./AgentProviderWordmark"
+import { TerminalAgentTaskTitle } from "./TerminalAgentTaskTitle"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
 function agentPrimaryColor(
@@ -51,7 +53,7 @@ function agentRowLayout(
     primaryColor: compact ? agentPrimaryColor(compact, agent.taskTitle, selected) : status.color,
     trailingColor: compact ? status.color : selected ? COLORS.text : COLORS.muted,
     showActivity,
-    rowHeight: compact ? 1 : showActivity ? 3 : 2,
+    rowHeight: compact ? 1 : 1 + Number(Boolean(agent.taskTitle)) + Number(showActivity),
     activityIndicators: showActivity
       ? codexActivityIndicators(agent.state, agent.activity, frame)
       : [],
@@ -67,6 +69,7 @@ function activityIndicatorColor(active: boolean, bright: boolean) {
 function TerminalAgentRow({
   compact,
   frame,
+  titleFrame,
   session,
   selected,
   cursor,
@@ -76,6 +79,7 @@ function TerminalAgentRow({
 }: {
   compact: boolean
   frame: number
+  titleFrame: number
   session: TerminalSession
   selected: boolean
   cursor: boolean
@@ -133,14 +137,24 @@ function TerminalAgentRow({
         <box style={{ height: layout.rowHeight, flexGrow: 1, minWidth: 0 }}>
           <box style={{ height: 1, flexDirection: "row", width: "100%" }}>
             <text content={`${status.marker} `} style={{ fg: status.color, flexShrink: 0 }} />
-            <text
-              id={`terminal-agent-primary-${session.id}`}
-              content={truncateDisplay(
-                layout.primary,
-                Math.max(2, width - layout.trailingWidth - 6 - shortcutWidth),
-              )}
-              style={{ fg: layout.primaryColor, flexGrow: 1 }}
-            />
+            {compact && agent.taskTitle ? (
+              <TerminalAgentTaskTitle
+                id={`terminal-agent-primary-${session.id}`}
+                title={agent.taskTitle}
+                width={agentTaskTitleWidth(agent, compact, width, shortcutWidth)}
+                frame={titleFrame}
+                color={layout.primaryColor}
+              />
+            ) : (
+              <text
+                id={`terminal-agent-primary-${session.id}`}
+                content={truncateDisplay(
+                  layout.primary,
+                  Math.max(2, width - layout.trailingWidth - 6 - shortcutWidth),
+                )}
+                style={{ fg: layout.primaryColor, flexGrow: 1 }}
+              />
+            )}
             <text
               id={`terminal-agent-${layout.trailingId}-${session.id}`}
               style={{
@@ -160,11 +174,14 @@ function TerminalAgentRow({
               )}
             </text>
           </box>
-          {!compact && (
-            <text
+          {!compact && agent.taskTitle && (
+            <TerminalAgentTaskTitle
               id={`terminal-agent-context-${session.id}`}
-              content={`  ${truncateDisplay(agent.taskTitle || session.title, width - 5)}`}
-              style={{ fg: agent.taskTitle ? COLORS.focus : COLORS.muted }}
+              title={agent.taskTitle}
+              width={agentTaskTitleWidth(agent, compact, width, shortcutWidth)}
+              frame={titleFrame}
+              color={COLORS.focus}
+              indent="  "
             />
           )}
           {layout.showActivity && (
@@ -199,6 +216,7 @@ function TerminalAgentRow({
 export function TerminalAgentList({
   compact = false,
   frame,
+  titleFrame = 0,
   sessions,
   activeSessionId,
   cursorSessionId,
@@ -209,6 +227,7 @@ export function TerminalAgentList({
 }: {
   compact?: boolean
   frame: number
+  titleFrame?: number
   sessions: TerminalSession[]
   activeSessionId: string | null
   cursorSessionId?: string | null
@@ -307,6 +326,7 @@ export function TerminalAgentList({
                 key={session.id}
                 compact={compact}
                 frame={frame}
+                titleFrame={titleFrame}
                 session={session}
                 selected={session.id === activeSessionId}
                 cursor={session.id === cursorSessionId}

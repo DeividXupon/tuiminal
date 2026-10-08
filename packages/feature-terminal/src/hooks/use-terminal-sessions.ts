@@ -4,6 +4,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
 import { agentProvider } from "../model/agent-provider"
+import { cleanAgentTaskTitle } from "../model/agent-task-title"
 import {
   type TermAgentsCommand,
   type TermAgentsKind,
@@ -57,6 +58,7 @@ function createTerminalSession(
   kindSequences.current.set(command.kind, number)
   const integration = integratedAgentLaunch(command)
   const provider = integration ? agentProvider(integration.providerId) : null
+  const taskTitle = cleanAgentTaskTitle(integration?.resumeTitle ?? "")
   return {
     ...command,
     ...placement,
@@ -70,6 +72,7 @@ function createTerminalSession(
           profile: provider.profile,
           state: "idle",
           activity: null,
+          ...(taskTitle ? { taskTitle } : {}),
         }
       : null,
     ...(provider

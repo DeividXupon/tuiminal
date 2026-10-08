@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { AgentProviderId } from "../packages/feature-terminal/src/model/agent-provider"
+import {
+  type AgentProviderId,
+  agentProvider,
+} from "../packages/feature-terminal/src/model/agent-provider"
 import {
   type AgentResumeThread,
   agentResumeThreadsForTab,
@@ -21,6 +24,7 @@ import {
   publishOpenCodeResumeThreads,
   resetOpenCodeResumeThreadsForTests,
 } from "../packages/feature-terminal/src/model/opencode-resume-threads"
+import { resolveAgentResumeCommand } from "../packages/feature-terminal/src/services/agent-resume-command"
 
 function thread(
   providerId: AgentProviderId,
@@ -44,6 +48,55 @@ function thread(
 }
 
 describe("Master Key recent agents", () => {
+  test.each(["codex", "claude", "opencode"] as const)(
+    "%s carries the selected local or remote title as display-only launch metadata",
+    (providerId) => {
+      const profile = { id: "work", name: "Work", host: "work" }
+      for (const remoteProfileId of [undefined, profile.id]) {
+        const selected = {
+          ...thread(providerId, "resume-title", 100, remoteProfileId),
+          title: "  Fix\n\u001b[31mlogin\u001b[0m\u202e  ",
+        }
+        const { command, error } = resolveAgentResumeCommand(selected, [profile])
+        expect(error).toBeNull()
+        expect(command?.agentLaunch).toMatchObject({
+          providerId,
+          resumeThreadId: selected.id,
+          resumeTitle: "Fix login",
+        })
+        expect(command?.workingDirectory).toBe(selected.cwd)
+        expect(command?.agentLaunch?.remote).toEqual(
+          remoteProfileId ? { profile, workingDirectory: selected.cwd } : undefined,
+        )
+        expect(command?.command).not.toContain("Fix login")
+        expect(command?.displayCommand).not.toContain("Fix login")
+        expect(selected.title).toContain("\u001b")
+      }
+    },
+  )
+
+  test.each(["codex", "claude", "opencode"] as const)(
+    "%s leaves genuinely untitled resumes without a task-title placeholder",
+    (providerId) => {
+      for (const title of ["", "\n\u202e", agentProvider(providerId).label]) {
+        const { command } = resolveAgentResumeCommand(
+          { ...thread(providerId, "untitled", 100), title },
+          [],
+        )
+        expect(command?.agentLaunch).toBeDefined()
+        expect(command?.agentLaunch).not.toHaveProperty("resumeTitle")
+      }
+    },
+  )
+
+  test("bounds resume titles without splitting graphemes", () => {
+    const { command } = resolveAgentResumeCommand(
+      { ...thread("codex", "long-title", 100), title: "👩‍💻".repeat(170) },
+      [],
+    )
+    expect(command?.agentLaunch?.resumeTitle).toBe("👩‍💻".repeat(160))
+  })
+
   test("sorts mixed provider timestamp units by the actual last interaction", () => {
     const threads = [
       thread("opencode", "millisecond-older", 1_700_000_000_500),

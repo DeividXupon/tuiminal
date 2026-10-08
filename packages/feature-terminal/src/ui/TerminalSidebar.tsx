@@ -1,6 +1,6 @@
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS, type TerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
@@ -19,6 +19,7 @@ import {
   visibleTerminalShortcutTargets,
 } from "../model/sessions"
 import { AGENT_WORKING_FRAMES } from "../rendering/agent-presentation"
+import { agentTaskTitleWidth } from "../rendering/agent-title-marquee"
 import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { TerminalAgentList } from "./TerminalAgentList"
 import { TerminalFocusSelection } from "./TerminalFocusSelection"
@@ -175,12 +176,20 @@ export const TerminalSidebar = memo(function TerminalSidebar({
     (session) =>
       session.status === "running" &&
       (session.agent?.state === "working" ||
-        (session.agentIntegration && session.agentIntegration.transport !== "screen")),
+        (session.agentIntegration && session.agentIntegration.transport !== "screen") ||
+        (session.agent?.taskTitle &&
+          displayWidth(session.agent.taskTitle) >
+            agentTaskTitleWidth(
+              session.agent,
+              compactAgents,
+              width - Number(borderRight),
+              displayWidth(shortcuts.get(session.id) ?? ""),
+            ))),
   )
   useEffect(() => {
     if (!active || !animatingAgents || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") return
     const timer = setInterval(() => {
-      setFrame((current) => (current + 1) % AGENT_WORKING_FRAMES.length)
+      setFrame((current) => current + 1)
     }, 100)
     return () => clearInterval(timer)
   }, [active, animatingAgents])
@@ -291,7 +300,8 @@ export const TerminalSidebar = memo(function TerminalSidebar({
         {(agentCount > 0 || !compactAgents) && (
           <TerminalAgentList
             compact={compactAgents}
-            frame={frame}
+            frame={frame % AGENT_WORKING_FRAMES.length}
+            titleFrame={frame}
             sessions={sessions}
             activeSessionId={activeSessionId}
             cursorSessionId={cursorId}

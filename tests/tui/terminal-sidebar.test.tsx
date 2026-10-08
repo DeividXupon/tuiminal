@@ -89,7 +89,7 @@ test("sidebar separates numbered terminals from independently clickable agent st
   )
   await tui.renderOnce()
   const frame = tui.captureCharFrame()
-  for (const label of ["Terminais", "Agentes", "Lendo", "Aguardando", "Concluído", "Task Claude"])
+  for (const label of ["Terminais", "Agentes", "Lendo", "Aguardando", "Concluído"])
     expect(frame).toContain(label)
   const lines = frame.split("\n")
   const count = (id: string) => lines[tui!.renderer.root.findDescendantById(id)!.screenY]
@@ -99,6 +99,8 @@ test("sidebar separates numbered terminals from independently clickable agent st
     expect(tui.renderer.root.findDescendantById(`terminal-sidebar-pane-${id}`)).toBeUndefined()
     expect(tui.renderer.root.findDescendantById(`terminal-sidebar-section-${id}`)).toBeUndefined()
     expect(tui.renderer.root.findDescendantById(`terminal-agent-${id}`)).toBeDefined()
+    expect(tui.renderer.root.findDescendantById(`terminal-agent-context-${id}`)).toBeUndefined()
+    expect(frame).not.toContain(`Task ${id}`)
   }
   for (const id of ["Shell", "Exited", "Failed"]) {
     expect(tui.renderer.root.findDescendantById(`terminal-sidebar-pane-${id}`)).toBeDefined()
@@ -114,9 +116,9 @@ test("sidebar separates numbered terminals from independently clickable agent st
   expect(lines[section.screenY]).toMatch(/▌01\s+● Task Shell\s+Executando/)
   expect(lines[section.screenY + 1]).toContain("workspace · native")
   expect(agent.screenY).toBeLessThan(section.screenY)
-  expect(codexAgent.height).toBe(2)
+  expect(codexAgent.height).toBe(1)
   expect(lines[codexAgent.screenY]).toMatch(/⠋ Lendo\s+Codex/)
-  expect(lines[codexAgent.screenY + 1]).toContain("Task Codex")
+  expect(agent.screenY).toBe(codexAgent.screenY + 1)
   expect(lines[agent.screenY]).toMatch(/! Aguardando\s+Claude/)
   await act(async () => tui?.mockMouse.click(agent.screenX + 2, agent.screenY))
   expect(selections).toEqual(["Claude"])
@@ -129,6 +131,7 @@ test("integrated Codex rows show a third activity line", async () => {
   const codex = session("Codex", "working")
   codex.agentIntegration = { providerId: "codex", transport: "app-server" }
   codex.agent!.activity = "running"
+  codex.agent!.taskTitle = "Fix login"
   tui = await testRender(
     <TerminalSidebar
       sessions={[codex]}
@@ -150,6 +153,7 @@ test("integrated Codex rows show a third activity line", async () => {
   const row = tui.renderer.root.findDescendantById("terminal-agent-Codex")!
   const lines = tui.captureCharFrame().split("\n")
   expect(row.height).toBe(3)
+  expect(lines[row.screenY + 1]).toContain("Fix login")
   expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
 })
 
@@ -179,7 +183,9 @@ test("integrated OpenCode rows name the current structured action", async () => 
   const row = tui.renderer.root.findDescendantById("terminal-agent-OpenCode")!
   const lines = tui.captureCharFrame().split("\n")
   expect(lines[row.screenY]).toMatch(/⠋ Usando ferramenta\s+OpenCode/)
-  expect(lines[row.screenY + 2]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
+  expect(row.height).toBe(2)
+  expect(tui.renderer.root.findDescendantById("terminal-agent-context-OpenCode")).toBeUndefined()
+  expect(lines[row.screenY + 1]).toMatch(/\.\.\.\s+\{\}\s+>_\s+txt\s+●/)
 })
 
 for (const colorMode of ["dark", "light"] as const) {
@@ -694,6 +700,59 @@ test.each([8, 30])(
   },
 )
 
+test.each([false, true])(
+  "agent title lines resize in place when titles appear or disappear (integrated: %s)",
+  async (integrated) => {
+    const base = session("Codex", "idle")
+    if (integrated) base.agentIntegration = { providerId: "codex", transport: "app-server" }
+    const selections: string[] = []
+    let changeTitle: (title: string | null) => void = () => {}
+    function Fixture() {
+      const [taskTitle, setTaskTitle] = useState<string | null>(null)
+      changeTitle = setTaskTitle
+      if (!base.agent) throw new Error("Expected agent fixture")
+      return (
+        <TerminalSidebar
+          sessions={[{ ...base, agent: { ...base.agent, taskTitle } }]}
+          folders={[{ id: "terminal", name: "Terminal" }]}
+          selectedFolder="terminal"
+          activeSessionId="Codex"
+          width={32}
+          height={30}
+          masterKey="Ctrl+B"
+          onActivate={(id) => selections.push(id)}
+          onSelectFolder={() => undefined}
+          onActions={() => undefined}
+          onNew={() => undefined}
+        />
+      )
+    }
+    tui = await testRender(<Fixture />, { width: 32, height: 30 })
+    await tui.renderOnce()
+    const row = tui.renderer.root.findDescendantById("terminal-agent-Codex")
+    if (!row) throw new Error("Expected agent row")
+    const activity = tui.renderer.root.findDescendantById("terminal-agent-activity-Codex")
+    for (const title of [null, "Fix login", "", "Another task", null]) {
+      await act(async () => changeTitle(title))
+      await tui.renderOnce()
+      expect(tui.renderer.root.findDescendantById(row.id)).toBe(row)
+      expect(row.height).toBe(1 + Number(integrated) + Number(Boolean(title)))
+      const context = tui.renderer.root.findDescendantById("terminal-agent-context-Codex")
+      if (title) {
+        expect(context?.screenY).toBe(row.screenY + 1)
+        expect(tui.captureCharFrame()).toContain(title)
+      } else expect(context).toBeUndefined()
+      expect(tui.captureCharFrame()).not.toContain("Task Codex")
+      if (integrated) {
+        expect(tui.renderer.root.findDescendantById("terminal-agent-activity-Codex")).toBe(activity)
+        expect(activity?.screenY).toBe(row.screenY + row.height - 1)
+      }
+      await act(async () => tui?.mockMouse.click(row.screenX + 2, row.screenY))
+    }
+    expect(selections).toEqual(Array(5).fill("Codex"))
+  },
+)
+
 test("working agents share an animated loader that stops with activity, visibility or teardown", async () => {
   const originalStatic = process.env.TUIMINAL_TEST_STATIC_LOADERS
   process.env.TUIMINAL_TEST_STATIC_LOADERS = "0"
@@ -798,3 +857,132 @@ test("working agents share an animated loader that stops with activity, visibili
     else process.env.TUIMINAL_TEST_STATIC_LOADERS = originalStatic
   }
 })
+
+test.each([8, 30])(
+  "%i-row task titles scroll with shared timing and retain their row",
+  async (height) => {
+    const originalStatic = process.env.TUIMINAL_TEST_STATIC_LOADERS
+    process.env.TUIMINAL_TEST_STATIC_LOADERS = "0"
+    const timers = new Map<ReturnType<typeof setInterval>, () => void>()
+    const originalSetInterval = globalThis.setInterval
+    const originalClearInterval = globalThis.clearInterval
+    const schedule = spyOn(globalThis, "setInterval").mockImplementation(
+      new Proxy(originalSetInterval, {
+        apply(target, receiver, args) {
+          if (args[1] !== 100) return Reflect.apply(target, receiver, args)
+          const timer = Reflect.apply(target, receiver, [() => {}, 60_000])
+          timers.set(timer, args[0])
+          return timer
+        },
+      }),
+    )
+    const cancel = spyOn(globalThis, "clearInterval").mockImplementation(
+      new Proxy(originalClearInterval, {
+        apply(target, receiver, args) {
+          timers.delete(args[0])
+          return Reflect.apply(target, receiver, args)
+        },
+      }),
+    )
+    const title = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    let changeTitle: (title: string) => void = () => {}
+    let changeActive: (active: boolean) => void = () => {}
+    let changeWidth: (width: number) => void = () => {}
+    const selections: string[] = []
+    function Fixture() {
+      const [taskTitle, setTitle] = useState(title)
+      const [active, setActive] = useState(true)
+      const [width, setWidth] = useState(32)
+      changeTitle = setTitle
+      changeActive = setActive
+      changeWidth = setWidth
+      const agents = [session("Codex", "idle"), session("Claude", "idle")].map((agent) => {
+        if (!agent.agent) throw new Error("Expected agent fixture")
+        return { ...agent, agent: { ...agent.agent, taskTitle } }
+      })
+      return (
+        <TerminalSidebar
+          active={active}
+          sessions={agents}
+          folders={[{ id: "terminal", name: "Terminal" }]}
+          selectedFolder="terminal"
+          activeSessionId="Codex"
+          width={width}
+          height={height}
+          masterKey="Ctrl+B"
+          onActivate={(id) => selections.push(id)}
+          onSelectFolder={() => undefined}
+          onActions={() => undefined}
+          onNew={() => undefined}
+        />
+      )
+    }
+    const tick = async (count: number) => {
+      await act(async () => {
+        for (let index = 0; index < count; index++)
+          for (const callback of timers.values()) callback()
+      })
+      await tui?.renderOnce()
+    }
+    try {
+      updateUiSettings({ language: "pt-BR" })
+      tui = await testRender(<Fixture />, { width: 40, height })
+      await tui.renderOnce()
+      const row = tui.renderer.root.findDescendantById("terminal-agent-Codex")
+      if (!row) throw new Error("Missing agent row")
+      const rowText = () => tui?.captureCharFrame().split("\n")[row.screenY + (height < 10 ? 0 : 1)]
+      const visibleWidth = height < 10 ? 19 : 26
+      const start = title.slice(0, visibleWidth)
+      const end = title.slice(-visibleWidth)
+      expect(timers.size).toBe(1)
+      expect(rowText()).toContain(start)
+      expect(rowText()).not.toContain("…")
+      await tick(19)
+      expect(rowText()).toContain(start)
+      await tick(1)
+      expect(rowText()).toContain(title.slice(1, visibleWidth + 1))
+      await tick(title.length - visibleWidth - 1)
+      expect(rowText()).toContain(end)
+      await tick(9)
+      expect(rowText()).toContain(end)
+      await tick(1)
+      expect(rowText()).toContain(start)
+      expect(tui.renderer.root.findDescendantById(row.id)).toBe(row)
+      await act(async () => tui?.mockMouse.click(row.screenX + 2, row.screenY))
+      expect(selections).toEqual(["Codex"])
+      await tick(20)
+      await act(async () => changeWidth(36))
+      await tui.renderOnce()
+      expect(rowText()).toContain(title.slice(0, visibleWidth + 4))
+      await tick(21)
+      await act(async () => changeTitle(title.toLowerCase()))
+      await tui.renderOnce()
+      expect(rowText()).toContain(title.toLowerCase().slice(0, visibleWidth + 4))
+      await tick(19)
+      expect(rowText()).toContain(title.toLowerCase().slice(0, visibleWidth + 4))
+      await tick(1)
+      expect(rowText()).toContain(title.toLowerCase().slice(1, visibleWidth + 5))
+      await act(async () => changeActive(false))
+      expect(timers.size).toBe(0)
+      await act(async () => changeActive(true))
+      expect(timers.size).toBe(1)
+      await act(async () => changeTitle("Short"))
+      await tui.renderOnce()
+      expect(rowText()).toContain("Short")
+      expect(timers.size).toBe(0)
+      await act(async () => changeTitle(title))
+      expect(timers.size).toBe(1)
+      await act(async () => tui?.renderer.destroy())
+      tui = undefined
+      expect(timers.size).toBe(0)
+    } finally {
+      act(() => tui?.renderer.destroy())
+      tui = undefined
+      for (const timer of timers.keys()) clearInterval(timer)
+      schedule.mockRestore()
+      cancel.mockRestore()
+      if (originalStatic === undefined) delete process.env.TUIMINAL_TEST_STATIC_LOADERS
+      else process.env.TUIMINAL_TEST_STATIC_LOADERS = originalStatic
+    }
+  },
+)

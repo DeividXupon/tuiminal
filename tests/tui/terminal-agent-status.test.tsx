@@ -118,7 +118,10 @@ test.each(["native", "tmux"])("%s Codex names hide MainThread", async (backend) 
   ).toBeUndefined()
   const agent = tui!.renderer.root.findDescendantById(`terminal-agent-${sessionId}`)!
   expect(lines[agent.screenY]).toContain("Codex")
-  expect(lines[agent.screenY + 1]).toContain("codex")
+  expect(agent.height).toBe(1)
+  expect(
+    tui!.renderer.root.findDescendantById(`terminal-agent-context-${sessionId}`),
+  ).toBeUndefined()
   expect(tui!.captureCharFrame()).not.toContain("MainThread")
   expect(tui!.renderer.currentFocusedRenderable).toBe(terminal)
   expect(starts).toHaveLength(1)
@@ -140,9 +143,10 @@ test("task titles update existing agent rows, retain manual names and retire wit
   const terminal = tui!.renderer.currentFocusedRenderable!
   const sessionId = terminal.id.replace("term-agents-", "")
   const rowId = `terminal-agent-${sessionId}`
+  const titleId = `terminal-agent-context-${sessionId}`
   const titleRow = () => {
-    const row = tui?.renderer.root.findDescendantById(rowId)
-    return row ? (tui!.captureCharFrame().split("\n")[row.screenY + 1] ?? "") : ""
+    const row = tui?.renderer.root.findDescendantById(titleId)
+    return row ? (tui!.captureCharFrame().split("\n")[row.screenY] ?? "") : ""
   }
   snapshot = [{ pid: 101, parentPid: 1, executable: "sh", command: "sh" }]
   await waitFor(() => {
@@ -182,12 +186,13 @@ test("task titles update existing agent rows, retain manual names and retire wit
   expect(tui!.captureCharFrame().split("\n")[shellRow.screenY]).toContain("Manual termi")
   snapshot = [{ pid: 112, parentPid: 101, executable: "opencode", command: "opencode" }]
   await waitFor(() => Boolean(tui?.renderer.root.findDescendantById(rowId)))
-  expect(titleRow()).toContain("Manual terminal")
-  expect(titleRow()).not.toContain("Add tests")
+  expect(tui!.renderer.root.findDescendantById(titleId)).toBeUndefined()
+  expect(tui!.renderer.root.findDescendantById(rowId)?.height).toBe(1)
   await output("\x1b]2;OC | New task\x07")
   await waitFor(() => titleRow().includes("New task"))
   await output("\x1b]2;OpenCode\x07")
-  await waitFor(() => titleRow().includes("Manual terminal"))
+  await waitFor(() => !tui?.renderer.root.findDescendantById(titleId))
+  expect(tui!.renderer.root.findDescendantById(rowId)?.height).toBe(1)
   expect(starts).toHaveLength(1)
 }, 20_000)
 

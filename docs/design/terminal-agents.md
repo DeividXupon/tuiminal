@@ -113,14 +113,14 @@ transport and explicit mirrors are described in the [workspace contract](termina
 Sessions lists ordinary terminals with their process states; running recognized
 agents appear only in Agents, including idle and unknown agents. In a mixed split,
 only the ordinary terminal appears in Sessions, without changing the actual split.
-A dedicated Agents list shows every running agent in two lines: its marker, name
-and right-aligned localized status; its published task title or, when unavailable,
-its terminal name. The list groups screen-observed native, tmux and external-terminal
+A dedicated Agents list shows every running agent with its marker, name and localized
+status. A separate line appears only when a published task title is available; otherwise
+the row has no title line or placeholder. The list groups screen-observed native, tmux and external-terminal
 agents under `Local • term`, then integrated structured sessions under
 `Local • localhost`. These names describe the current transports without claiming a
 real remote runtime. Keyboard navigation and Master Key numbering follow that visual
 order. Compact layouts omit the subgroup headings while retaining the same order.
-Integrated Codex, Claude Code and OpenCode sessions add a third line with thinking, code, command,
+Integrated Codex, Claude Code and OpenCode sessions add an activity line with thinking, code, command,
 user-visible text, and tool indicators; only the current public provider activity
 pulses.
 Always use the broadly supported `...`, `{}`, `>_`, `txt`, and `●` markers so the
@@ -137,11 +137,15 @@ badge background. The semantic palette colors adapt this treatment for dark and 
 The agent list has its own bounded scroll area and uses single-line rows on very
 short layouts so running agents remain accessible. Compact rows prefer the task
 title to the agent label when one is available, retaining the status marker.
+Overflowing task titles scroll by one grapheme every 100 ms, after holding the start
+for two seconds. They hold the final window for one second, jump directly to the
+start, and repeat. Fitting titles stay still; title or available-width changes restart
+the cycle. The animation also applies to compact rows and pinned sidebars.
 Sections stay in their chosen folders as agents start, change state and stop;
 there is no automatic AI folder. Working markers and integrated-agent activity
 indicators animate in Agents using one shared 100 ms timer. The timer stops when no
-running agent is working and no integrated session remains, when the Terminal
-tool is inactive, and on unmount. Animation updates only the
+running agent is working, no integrated session remains and no task title overflows;
+it also stops when the Terminal tool is inactive and on unmount. Animation updates only the
 sidebar and preserves scrolling, focus and terminal instances. Color supplements
 the marker rather than being the only signal.
 
@@ -410,6 +414,12 @@ Depending on the CLI, the title describes a conversation, a named session, the
 current prompt, or the current public activity summary, rather than always a new
 title for each prompt.
 
+Resuming from Recent agents seeds the sidebar task title from the selected conversation's
+sanitized title for every provider and origin, without waiting for a new title event.
+State/activity updates retain it; subsequent provider title events replace or clear it.
+Empty titles and provider-name placeholders do not create a task-title line. The seed
+is display-only launch metadata and is never inserted into the command or sent as input.
+
 | Agent | Title handling |
 | --- | --- |
 | Codex | Removes spinner and standalone status/app components; retains user-configured title context |
@@ -423,8 +433,8 @@ title for each prompt.
 Pi and Kimi executable/module identities are recognized alongside the existing
 agent commands. Generic support includes tools such as Aider and Goose
 **when they publish a useful title**; it does not imply every
-version or configuration does so. Missing or disabled titles fall back to the
-terminal name. Arbitrary title components cannot be reliably separated into a
+version or configuration does so. Missing or disabled titles omit the task-title
+line. Arbitrary title components cannot be reliably separated into a
 task and project without a typed provider protocol.
 
 Title observation shares the existing sampler and does not create another timer.
@@ -434,7 +444,7 @@ summary; an empty/default title, agent identity change or launch replacement
 clears it. The value is bounded to 160 graphemes, sanitized and rendered as user
 text without translation or shortcut styling. Updating only the title updates
 the existing row without restarting the PTY, moving focus or marking a result seen.
-Manual terminal names remain unchanged and serve as the fallback.
+Manual terminal names remain unchanged and are not used as task-title placeholders.
 
 Mirrors read the exact pane's `pane_title` in the same bounded capture as its
 screen, including the initial title of an already-running agent. tmux removes

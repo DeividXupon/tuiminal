@@ -32,12 +32,14 @@ export type IntegratedAgentLaunch =
       providerId: "codex" | "opencode"
       transport: "app-server"
       resumeThreadId?: string
+      resumeTitle?: string
       remote?: RemoteCodexTarget
     }
   | {
       providerId: "claude"
       transport: "hooks"
       resumeThreadId?: string
+      resumeTitle?: string
       remote?: RemoteCodexTarget
     }
 
