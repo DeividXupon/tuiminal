@@ -108,9 +108,12 @@ describe("external database discovery", () => {
 
     const result = await discoverExternalDatabaseConnections({
       home,
-      platform: "linux",
+      platform: process.platform,
       effectiveUserId: process.geteuid?.() ?? 0,
-      environment: {},
+      environment: {
+        PGSERVICEFILE: join(home, ".pg_service.conf"),
+        PGPASSFILE: join(home, ".pgpass"),
+      },
       runMysqlConfigEditor: async () =>
         "[remote]\nuser = login-user\npassword = *****\nhost = login.test\nport = 3306\n",
     })
@@ -222,7 +225,12 @@ describe("external database discovery", () => {
     expect(
       resolvePgpassPassword(
         { host: "saved.test", port: 5432, database: "app", username: "saved-user" },
-        { home, platform: "linux", environment: {}, effectiveUserId: process.geteuid?.() ?? 0 },
+        {
+          home,
+          platform: process.platform,
+          environment: { PGPASSFILE: join(home, ".pgpass") },
+          effectiveUserId: process.geteuid?.() ?? 0,
+        },
       ),
     ).toBe("saved-secret")
   })

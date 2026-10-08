@@ -9,6 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { agentProvider } from "../packages/feature-terminal/src/model/agent-provider"
 import {
@@ -813,7 +814,7 @@ test("temporary OpenCode connections retire only servers they created", async ()
 test.skipIf(process.platform === "win32")(
   "local OpenCode supervisor retires its server when the owner pipe closes",
   async () => {
-    const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-supervisor-")
+    const root = mkdtempSync(join(tmpdir(), "tuiminal-opencode-supervisor-"))
     const executable = join(root, "opencode")
     const pidFile = join(root, "pid")
     writeFileSync(
@@ -1066,7 +1067,7 @@ test("OpenCode resume fallback never hides cancellation", async () => {
 test.skipIf(process.platform === "win32")(
   "remote OpenCode's detached server survives startup and its registry stop retires it",
   async () => {
-    const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-daemon-")
+    const root = mkdtempSync(join(tmpdir(), "tuiminal-opencode-daemon-"))
     const home = join(root, "home")
     const state = join(root, "state")
     const project = join(root, "project")
@@ -1247,7 +1248,7 @@ test("remote OpenCode version preflight uses the configured SSH alias", () => {
 })
 
 test("remote OpenCode treats the selected directory as shell data", async () => {
-  const root = mkdtempSync("/tmp/opencode/tuiminal-opencode-quote-")
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-opencode-quote-"))
   const marker = join(root, "not-run")
   const bin = join(root, "bin")
   mkdirSync(bin, { recursive: true })
