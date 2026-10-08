@@ -31,6 +31,19 @@ function expectVisible(id: string, width: number, height: number) {
   expect(target.screenY).toBeLessThan(height)
 }
 
+async function waitForTerminalContextLayout(terminal: EmbeddedTerminalRenderable) {
+  const sessionId = terminal.id.replace("term-agents-", "")
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await act(async () => Bun.sleep(10))
+    await tui?.renderOnce()
+    const frame = tui?.renderer.root.findDescendantById(`terminal-pane-frame-${sessionId}`)
+    const context = tui?.renderer.root.findDescendantById(`terminal-context-${sessionId}`)
+    if (frame && context && context.height > 0 && terminal.height === frame.height - context.height)
+      return
+  }
+  throw new Error("Terminal context layout did not settle")
+}
+
 test.each([
   [160, 45, "pt-BR"],
   [100, 30, "en"],
@@ -150,6 +163,7 @@ test("the tour paints over live terminals without input, relaunch or resize", as
     await act(async () => tui?.mockInput.pressKey("n"))
     await tui.renderOnce()
     const terminal = tui.renderer.currentFocusedRenderable as EmbeddedTerminalRenderable
+    await waitForTerminalContextLayout(terminal)
     const size = { width: terminal.width, height: terminal.height }
     expect(starts).toBe(1)
     const resizeCount = resizes.length
