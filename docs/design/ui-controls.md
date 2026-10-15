@@ -12,12 +12,32 @@ its keyboard scope, focus stack, data, and side effects.
   such as Term Agents keep their geometry and colors independent of global
   layout. Do not manually color a shortcut or translate a label only to pass it
   to `InlineButton`.
+  An optional `backgroundColor` changes only its resting background; active,
+  focused, selected and pressed highlights take precedence.
 - Use `DirectionalButton` for contextual previous/next controls. Use the native
   tuiparts `Button` for selectable rows, cards, spatial hit targets, and controls
   whose interaction or layout is not a one-line action. Paint-only dimmers are
   plain boxes, not focusable buttons.
+- Bracketed hints use the fixed `BRAND_COLOR`. Keys that open an action list use the
+  fixed `ACTION_KEY_COLOR` purple: `shortcutContent` applies it to `[?]` automatically
+  and to exact tokens passed as `actionKeys`, such as the configured Master Key. An
+  explicit `shortcutColor` (muted or disabled states) still wins.
 - Every visible keyboard action should have a mouse-accessible control where
   practical. Do not style logs, code, query results, or user data as shortcuts.
+
+## Global tool navigation
+
+`[Alt+1]` through `[Alt+5]` select Database, Git, Runner, HTTP and Term Agents.
+The CLI accepts OpenTUI's `meta` and `option` modifiers with both Kitty and legacy
+terminal input. Some macOS terminals send `¡`, `™`, `£`, `¢` and `∞` instead;
+these exact characters are aliases for the same five shortcuts, even when no
+modifier survives. This also works when the macOS terminal connects to another OS.
+
+Aliases use the same global focus guard as Alt shortcuts. Focused inputs, editors,
+PTYs, pickers and modals retain their input; isolated tools cannot switch features.
+Ctrl/Shift/Super combinations and unmodified digits do not select tools. Bracketed
+paste remains text and does not trigger navigation. The Term Agents Master Key
+menu accepts the same aliases when its search field is unfocused.
 
 ## Text selection and clipboard
 
@@ -31,6 +51,14 @@ Child controls that consume a mouse event retain ownership, including embedded
 terminal programs using mouse reporting. Password inputs expose only mask characters
 through their native selection API, never their underlying value.
 
+The HTTP response toolbar's Copy action uses the complete captured content of
+the active view, independently of native text selection and the 50,000-character
+display limit. Pretty copies formatted JSON or the complete JSONPath result;
+Raw copies the captured text. Line numbers and folded summaries are display-only.
+Headers copy without line numbers. Copy line retains its explicit search-match
+target. The 1.5 MB capture limit still applies; truncated responses expose the
+separate full-download action.
+
 ## Workspace surfaces
 
 Top-level application, feature, installer, loading, and tutorial workspaces use
@@ -39,6 +67,21 @@ padding and gaps match the bordered panels, and to `COLORS.canvas` in compact mo
 Term Agents is an always-compact exception and uses `COLORS.canvas` in both modes.
 Internal editor, code, log, input, dimmer, and raised-panel surfaces keep their
 explicit palette colors because those contrasts communicate structure or state.
+
+Database workspaces and their tutorial keep outer padding only on the horizontal
+axis, so bordered panels fill the available height without empty rows above or below.
+The table footer uses a top divider in place of an empty row. Its selection and
+editing actions use `space-between` to distribute the available width.
+Rows marked with `[Space]` or `[Alt+Space]` have a subtle, palette-aware Database
+tint across the table and SQL result grids. The active cell keeps its stronger
+highlight, and pending-write colors remain visible underneath the row tint.
+
+The application invalidates the renderer's comparison frame once when switching
+tools or layout modes, resizing the terminal, or opening/closing its top-level
+overlays. The next normal output flush repaints unchanged header cells and blank
+gaps too. Routine native layout events from typing, status updates, scrolling and
+animations keep incremental output; they must not trigger full-screen repaints.
+Retained feature trees, PTYs and cursor state stay mounted and intact.
 
 ## Settings center
 
@@ -64,8 +107,11 @@ without turning it into another focus target.
 
 ## Notifications
 
-`NotificationProvider` owns one top-right stack of at most three non-focusable
-cards. Cards always use the compact four-row geometry: a single semantic left rail,
+`NotificationProvider` owns one right-aligned stack of at most three non-focusable
+cards. The application anchors it to the bottom while Database is active, including
+isolated Database mode, and to the top in other tools. Switching tools moves the
+existing stack without recreating cards or restarting their timers.
+Cards always use the compact four-row geometry: a single semantic left rail,
 one header row, two message rows, and a thin `─` countdown line at the bottom. The layout does not
 change between framed and compact workspaces. Information uses `BRAND_COLOR`, while
 success, warning, and error use their palette semantic colors.
@@ -106,12 +152,37 @@ favorites, and history dialogs; and CLI global settings and sensitive terms.
 The shared surface intentionally does not
 standardize their content or keybindings. The Git creation dialog retains its
 feature-owned busy-state close guard, and its child picker uses a higher layer.
-Git PR and Issue action menus additionally share `GitActionMenuView` for their
-identical header, action-row, and footer presentation; each menu keeps its own
-action model and keyboard selection policy. Their query/section editors share
+Git PR and Issue query/section editors share
 `GitRemoteSectionEditor`, including focus stack, autocomplete placement, fields,
 and footer. PR and Issue wrappers still supply their own allowed columns,
 option parsing, query kind, and callbacks.
+
+`ActionPalette` is the shared `[?]` action list for feature workspaces: search,
+colored tags and unavailable rows with translated reasons. An optional `side` column
+takes one third of the width with equal-height feature-owned blocks; rows share one
+selection, and labels are user data that are never translated or styled as shortcuts. Features supply ordered
+actions (`action-palette.ts` helpers), mount it only while open, register its dialog
+and `-search` IDs in their keyboard scope, block their own handlers while it is open,
+and restore focus before running the chosen action. An action may declare a direct `key`
+that runs it while the search is unfocused; palette navigation keys always win.
+An empty search field shows the localized `[/] Search` hint while unfocused and
+its search placeholder while focused. Keyboard and mouse focus update the hint
+without replacing the query.
+Action palettes and the Master Key omit instructional footers; their lists use the
+available height while action shortcuts remain on the controls themselves.
+`FocusSelectionOverlay` paints "choose a box" targets; `focus-navigation.ts` owns
+the spatial movement shared with Term Agents. Adopters: Git Diffs, and the PR,
+Issues and Inbox tabs through `useGitRemoteActionPalette`; Database catalog and SQL
+workspaces; and Runner. Database and Runner share `useActionPalette` for mounted
+modal lifetime and focus restoration, while supplying their own opening key,
+fallback focus, availability rules and guarded action callbacks. Dimension listeners
+exist only while the palette is mounted. Database SQL retains literal `?` in its
+editor; its `[?]` button opens the palette while editing. Database `[M]` selects
+visible catalog, table and inspector boxes, or SQL editor, result and inspector
+boxes. Arrows or `[H/J/K/L]` move the highlight; `[Enter]` or a click focuses the
+box, and `[Esc]` or `[M]` cancels. Text inputs retain literal `m`; the `[M]` button
+and the palette expose the same action while editing. Database write actions
+continue staging changes and requiring SQL review and confirmation.
 
 Git configuration is intentionally embedded in the global settings detail pane.
 Its lists, local-target picker, and PR/Issue section editor replace that pane while
