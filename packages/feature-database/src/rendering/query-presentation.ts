@@ -33,6 +33,17 @@ export function queryRowColors(kind: DatabaseTableMutation["kind"] | undefined, 
   }
 }
 
+export function queryBatchSelectionBackground(background: string) {
+  const channels = [1, 3, 5].map((offset) => {
+    const base = Number.parseInt(background.slice(offset, offset + 2), 16)
+    const accent = Number.parseInt(COLORS.database.slice(offset, offset + 2), 16)
+    return Math.round(base + (accent - base) * 0.12)
+      .toString(16)
+      .padStart(2, "0")
+  })
+  return `#${channels.join("")}`
+}
+
 export function queryCellForeground(
   selected: boolean,
   changed: boolean,

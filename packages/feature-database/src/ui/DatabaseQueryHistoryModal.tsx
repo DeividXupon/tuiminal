@@ -421,8 +421,8 @@ export function DatabaseQueryHistoryModal({
                       sensitiveVisibility === "confirm"
                         ? "[V] Confirmar exibição"
                         : sensitiveVisibility === "visible"
-                          ? "[V] Ocultar sensíveis"
-                          : "[V] Revelar sensíveis",
+                          ? "[V] Mascarar"
+                          : "[V] Revelar",
                     )
               }
               accent={sensitiveVisibility === "visible" ? COLORS.database : COLORS.danger}

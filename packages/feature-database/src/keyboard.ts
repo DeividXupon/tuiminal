@@ -1,8 +1,14 @@
 import type { KeyboardScope } from "@xupon/tuiminal-core/keyboard/scope"
 
 export const databaseKeyboardScope = {
-  ids: ["table-search", "database-cell-editor-value", "database-connection-list"],
+  ids: [
+    "database-box-selection",
+    "table-search",
+    "database-cell-editor-value",
+    "database-connection-list",
+  ],
   prefixes: [
+    "database-action-palette",
     "db-connection-",
     "database-query-",
     "database-saved-query-",

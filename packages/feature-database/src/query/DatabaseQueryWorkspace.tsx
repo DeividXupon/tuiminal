@@ -1,3 +1,13 @@
+import {
+  databaseQueryBoxTargets,
+  useDatabaseBoxSelection,
+} from "../hooks/use-database-box-selection"
+import { DatabaseQueryNotice } from "../ui/DatabaseQueryNotice"
+import { DatabaseQueryTabs } from "../ui/DatabaseQueryTabs"
+import { databaseQueryActions } from "../ui/database-query-actions"
+import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
+import { useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
+import { databaseGridActions } from "../ui/database-grid-actions"
 import type { BoxRenderable, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { RenderableEvents, RGBA } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
@@ -180,6 +190,16 @@ export function DatabaseQueryWorkspace({
   const [queryError, setQueryError] = useState("")
   const [busy, setBusy] = useState(false)
   const [editorMode, setEditorMode] = useState(true)
+  const actionPalette = useActionPalette({
+    id: `database-query-${tabId}-action-palette`,
+    active,
+    restoreFocus: () => {
+      if (editorMode) focusQueryEditor()
+      else focusResultPane(resultPane)
+    },
+  })
+  const paletteOpenRef = useRef(false)
+  paletteOpenRef.current = actionPalette.isOpen
   const [columnOffset, setColumnOffset] = useState(0)
   const [selectedResultRowIndex, setSelectedResultRowIndex] = useState(0)
   const [selectedResultColumnIndex, setSelectedResultColumnIndex] = useState(0)
@@ -917,6 +937,21 @@ export function DatabaseQueryWorkspace({
     [resultSideInspectorVisible],
   )
 
+  const boxSelection = useDatabaseBoxSelection({
+    id: queryElementId("box-selection"),
+    buttonLabel: "[M]",
+    active,
+    blocked: [
+      actionPalette.isOpen,
+      resultCellEditorOpen,
+      changesModalOpen,
+      resultBatchExportOpen,
+      favoriteMode,
+    ],
+    current: editorMode ? "editor" : resultPane,
+    targets: databaseQueryBoxTargets(queryElementId, focusQueryEditor, focusResultPane),
+  })
+
   const moveResultRow = useCallback(
     (delta: number) => {
       const current = selectedResultRowIndexRef.current
@@ -1426,7 +1461,7 @@ export function DatabaseQueryWorkspace({
   }, [querySensitiveVisibility])
 
   useEffect(() => {
-    if (!active || favoriteMode) return
+    if (!active || favoriteMode || paletteOpenRef.current) return
     const timeout = setTimeout(focusQueryEditor, 0)
     return () => clearTimeout(timeout)
   }, [active, favoriteMode, focusQueryEditor])
@@ -1434,7 +1469,13 @@ export function DatabaseQueryWorkspace({
   useEffect(() => () => queryAbortRef.current?.abort(), [])
 
   useEffect(() => {
-    if (!active || !result?.columns.length || lastAutoFocusedResultRef.current === result) return
+    if (
+      !active ||
+      paletteOpenRef.current ||
+      !result?.columns.length ||
+      lastAutoFocusedResultRef.current === result
+    )
+      return
     lastAutoFocusedResultRef.current = result
     const timeout = setTimeout(() => {
       setEditorMode(false)
@@ -1481,7 +1522,8 @@ export function DatabaseQueryWorkspace({
   }, [editorMode])
 
   useKeyboard((key) => {
-    if (!active || resultCellEditorOpen || changesModalOpen || resultBatchExportOpen) return
+    if (key.defaultPrevented || boxSelection.blocked || boxSelection.open) return
+
     if (key.name === "escape" && suppressWorkspaceEscapeRef.current) {
       key.preventDefault()
       key.stopPropagation()
@@ -1489,6 +1531,13 @@ export function DatabaseQueryWorkspace({
     }
     if (favoriteMode) return
     const editorFocused = editorRef.current?.focused ?? false
+    if (!editorFocused && boxSelection.handleOpeningKey(key)) return
+    if (!editorFocused && isActionPaletteKey(key)) {
+      key.preventDefault()
+      key.stopPropagation()
+      actionPalette.open()
+      return
+    }
     if (key.ctrl && key.name === "x" && busy) {
       key.preventDefault()
       key.stopPropagation()
@@ -1739,44 +1788,15 @@ export function DatabaseQueryWorkspace({
       focusable
       style={{ flexGrow: 1, flexDirection: "column" }}
     >
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          border: ["bottom"],
-          borderColor: COLORS.border,
-          backgroundColor: COLORS.panel,
-        }}
-      >
-        {tabs.map((tab, index) => (
-          <InlineButton
-            key={tab.id}
-            id={`database-query-tab-${tab.id}`}
-            label={`[${index + 1}] ${shorten(tab.title, Math.max(5, Math.floor((availableWidth - 24) / tabs.length) - 4))}`}
-            accent={COLORS.database}
-            active={tab.id === activeTabId}
-            onPress={() => onSelectTab(tab.id)}
-          />
-        ))}
-        {tabs.length > 1 ? (
-          <>
-            <InlineButton
-              label="[Alt+←]"
-              accent={COLORS.database}
-              onPress={() => onSwitchTab(-1)}
-            />
-            <InlineButton label="[Alt+→]" accent={COLORS.database} onPress={() => onSwitchTab(1)} />
-          </>
-        ) : null}
-        <InlineButton
-          label="[Ctrl+N] +"
-          accent={COLORS.success}
-          disabled={tabs.length >= SQL_TAB_LIMIT}
-          onPress={onNewTab}
-        />
-        <InlineButton label="[Ctrl+W] ×" accent={COLORS.danger} onPress={() => onCloseTab(tabId)} />
-      </box>
+      <DatabaseQueryTabs
+        tabs={tabs}
+        activeTabId={activeTabId}
+        availableWidth={availableWidth}
+        onSelectTab={onSelectTab}
+        onSwitchTab={onSwitchTab}
+        onNewTab={onNewTab}
+        onCloseTab={onCloseTab}
+      />
       <box
         style={{
           height: 1,
@@ -1799,8 +1819,10 @@ export function DatabaseQueryWorkspace({
         />
       </box>
       <box
+        id={queryElementId("editor-box")}
         visible={editorVisible}
         style={{
+          position: "relative",
           height: editorVisible ? editorHeight : 0,
           flexShrink: 0,
           overflow: "hidden",
@@ -1945,6 +1967,7 @@ export function DatabaseQueryWorkspace({
             })}
           </box>
         ) : null}
+        {boxSelection.overlay(queryElementId("editor-box"))}
       </box>
       <box
         style={{
@@ -1954,6 +1977,13 @@ export function DatabaseQueryWorkspace({
         }}
       >
         <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          <InlineButton
+            id={`database-query-${tabId}-action-palette-open`}
+            label="[?]"
+            accent={COLORS.database}
+            onPress={actionPalette.open}
+          />
+          {boxSelection.button}
           <InlineButton
             label={
               busy
@@ -1966,7 +1996,7 @@ export function DatabaseQueryWorkspace({
                     : "[Ctrl+A]"
                   : writeConfirmation
                     ? `[Ctrl+A] Confirmar ${writeConfirmation.command}`
-                    : "[Ctrl+A] Executar atual"
+                    : "[Ctrl+A] Executar"
             }
             accent={busy ? COLORS.danger : writeConfirmation ? COLORS.warning : COLORS.success}
             active={busy}
@@ -2003,8 +2033,8 @@ export function DatabaseQueryWorkspace({
                   querySensitiveVisibility === "confirm"
                     ? "[V] Confirmar sensíveis"
                     : querySensitiveVisibility === "visible"
-                      ? "[V] Ocultar sensíveis"
-                      : "[V] Revelar sensíveis"
+                      ? "[V] Mascarar"
+                      : "[V] Revelar"
                 }
                 accent={querySensitiveDataMasked ? COLORS.danger : COLORS.database}
                 active={querySensitiveDataMasked}
@@ -2081,44 +2111,8 @@ export function DatabaseQueryWorkspace({
           ) : null}
         </box>
       </box>
-      {writeConfirmation ? (
-        <box
-          style={{
-            minHeight: 3,
-            flexShrink: 0,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.warning,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text
-            content={`⚠ ${translateUi("CONFIRMAR")} ${writeConfirmation.command}`}
-            style={{ fg: COLORS.warning }}
-          />
-          <text
-            content={translateUi(
-              "Este comando pode alterar o banco. Execute novamente para confirmar.",
-            )}
-            style={{ fg: COLORS.text }}
-          />
-        </box>
-      ) : queryError ? (
-        <box
-          style={{
-            minHeight: 3,
-            flexShrink: 0,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.danger,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text content={translateUi("ERRO SQL")} style={{ fg: COLORS.danger }} />
-          <text content={translateUi(queryError)} style={{ fg: COLORS.text }} />
-        </box>
+      {writeConfirmation || queryError ? (
+        <DatabaseQueryNotice writeConfirmation={writeConfirmation} queryError={queryError} />
       ) : (
         <text
           content={windowLoadingStatus || translateUi(resultNotice || resultSummary)}
@@ -2148,7 +2142,7 @@ export function DatabaseQueryWorkspace({
                 }}
               />
               <InlineButton
-                label={compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"}
+                label={compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Intervalo"}
                 accent={COLORS.database}
                 active={selectionSweep.active}
                 disabled={!queryGridRows.length}
@@ -2156,7 +2150,7 @@ export function DatabaseQueryWorkspace({
               />
               {!resultBatchRows.length ? (
                 <InlineButton
-                  label={compactActions ? "[Ctrl+A]+" : translateUi("[Ctrl+A] Nova linha")}
+                  label={compactActions ? "[Ctrl+A]+" : "[Ctrl+A] Criar"}
                   accent={COLORS.runner}
                   disabled={!resultTableCanWrite || writeBusy}
                   onPress={createQueryResultRow}
@@ -2170,7 +2164,7 @@ export function DatabaseQueryWorkspace({
                       : `[E] Editar ${resultBatchRows.length}`
                     : compactActions
                       ? "[E]"
-                      : translateUi("[Enter] Editar célula")
+                      : "[Enter] Editar"
                 }
                 accent={COLORS.warning}
                 disabled={
@@ -2185,10 +2179,10 @@ export function DatabaseQueryWorkspace({
                   resultBatchRows.length
                     ? compactActions
                       ? `[dd]${resultBatchRows.length}`
-                      : `[dd] Excluir ${resultBatchRows.length}`
+                      : `[dd] Deletar ${resultBatchRows.length}`
                     : compactActions
                       ? "[dd]"
-                      : translateUi("[dd] Preparar exclusão")
+                      : "[dd] Deletar"
                 }
                 accent={COLORS.danger}
                 active={resultDeleteSequenceArmed}
@@ -2211,13 +2205,7 @@ export function DatabaseQueryWorkspace({
                 />
               ) : null}
               <InlineButton
-                label={
-                  resultBatchRows.length && !compactActions
-                    ? "[U] Desfazer selecionadas"
-                    : compactActions
-                      ? "[U]"
-                      : translateUi("[U] Desfazer linha")
-                }
+                label={compactActions ? "[U]" : "[U] Desfazer"}
                 accent={COLORS.database}
                 disabled={
                   resultBatchRows.length
@@ -2248,7 +2236,10 @@ export function DatabaseQueryWorkspace({
             </box>
             <box style={{ flexGrow: 1, flexDirection: "row" }}>
               {!resultInspectorOnly ? (
-                <box style={{ flexGrow: 1 }}>
+                <box
+                  id={queryElementId("result-box")}
+                  style={{ flexGrow: 1, position: "relative" }}
+                >
                   <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
                     <Button
                       id={queryElementId("selection-sweep")}
@@ -2323,10 +2314,12 @@ export function DatabaseQueryWorkspace({
                       />
                     ))}
                   </scrollbox>
+                  {boxSelection.overlay(queryElementId("result-box"))}
                 </box>
               ) : null}
               {resultInspectorVisible ? (
                 <RowInspector
+                  overlay={boxSelection.overlay(queryElementId("inspector"))}
                   columns={resultInspectorColumns}
                   row={selectedResultRow}
                   rowIndex={selectedResultRowIndex}
@@ -2422,6 +2415,64 @@ export function DatabaseQueryWorkspace({
         onClose={() => setResultCellEditorOpen(false)}
         onApply={resultBatchRows.length ? stageQueryBatchValue : stageQueryResultCellValue}
       />
+      {boxSelection.focusNode}
+      {actionPalette.isOpen
+        ? actionPalette.render({
+            title: "AÇÕES DO SQL",
+            accent: COLORS.database,
+            actions: databaseQueryActions(
+              {
+                confirming: Boolean(writeConfirmation),
+                busy,
+                canNewTab: tabs.length < SQL_TAB_LIMIT,
+                hasRow: Boolean(selectedResultGridRow),
+              },
+              {
+                run: () => void runQuery(),
+                cancel: cancelQuery,
+                editor: focusQueryEditor,
+                clear: clearQuery,
+                save: openSaveFavorite,
+                favorites: openFavorites,
+                newTab: onNewTab,
+                closeTab: () => onCloseTab(tabId),
+                catalog: onReturnToCatalog,
+                maximize: toggleWorkspaceMaximize,
+                sensitive: toggleQuerySensitiveData,
+                inspector: () => focusResultPane("inspector"),
+              },
+              databaseGridActions({
+                canCreate: resultTableCanWrite,
+                canEdit: resultBatchRows.length
+                  ? resultBatchCanWrite && Boolean(writableSelectedResultColumn)
+                  : selectedResultRowCanWrite,
+                canDelete: resultBatchRows.length ? resultBatchCanWrite : selectedResultRowCanWrite,
+                canUndo: resultBatchRows.length
+                  ? resultBatchHasChanges
+                  : Boolean(selectedResultGridRow?.change),
+                hasRow: Boolean(selectedResultGridRow),
+                hasRows: Boolean(queryGridRows.length),
+                hasSelection: Boolean(resultBatchRows.length),
+                hasChanges: Boolean(connectionStagedChangeCount),
+                writeBusy: writeBusy || busy,
+                writeBlockReason: resultBatchRows.length
+                  ? resultBatchWriteBlockReason
+                  : resultWriteBlockReason,
+                create: createQueryResultRow,
+                edit: openQueryResultCellEditor,
+                delete: stageDeleteQueryResultRow,
+                undo: undoQueryResultChange,
+                select: () => {
+                  if (selectedResultGridRow) toggleResultBatchRow(selectedResultGridRow)
+                },
+                sweep: selectionSweep.toggle,
+                export: () => setResultBatchExportOpen(true),
+                review: onOpenChangesReview,
+              }),
+              boxSelection.action,
+            ),
+          })
+        : null}
       <DatabaseBatchExportModal
         open={resultBatchExportOpen}
         tableName={

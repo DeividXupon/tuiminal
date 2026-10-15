@@ -1,3 +1,10 @@
+import {
+  databaseTableBoxTargets,
+  useDatabaseBoxSelection,
+} from "./hooks/use-database-box-selection"
+import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
+import { paletteAction, useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
+import { databaseGridActions } from "./ui/database-grid-actions"
 import type { InputRenderable, ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
@@ -16,11 +23,9 @@ import {
   focusedPanelBorder,
   LAYOUT,
 } from "@xupon/tuiminal-core/settings/theme"
-import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-core/ui/selectMouse"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDatabaseConnections } from "./hooks/use-database-connections"
@@ -81,7 +86,7 @@ import {
   TABLE_HISTORY_LIMIT,
 } from "./rendering/constants"
 import { tableReadNotification } from "./rendering/table-read-notification"
-import { fitCell, shorten, tableHistoryPresentation } from "./rendering/workspace-shared"
+import { fitCell, shorten } from "./rendering/workspace-shared"
 import {
   applyTableMutations,
   DatabaseMutationCommitUncertainError,
@@ -104,6 +109,7 @@ import { DatabaseEmptyState } from "./ui/DatabaseEmptyState"
 import { DatabaseGridRowView } from "./ui/DatabaseGridRowView"
 import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
 import { DatabaseSchemaView } from "./ui/DatabaseSchemaView"
+import { DatabaseTableHeader } from "./ui/DatabaseTableHeader"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
 import { RowInspector } from "./ui/RowInspector"
 
@@ -193,6 +199,11 @@ export function DatabaseViewer({
   const [tableHistoryByConnection, setTableHistoryByConnection] = useState<
     Record<string, DatabaseTable[]>
   >({})
+  const actionPalette = useActionPalette({
+    id: "database-action-palette",
+    active: active && !queryOpen,
+    restoreFocus: () => focusPane(activePaneRef.current),
+  })
   useDatabaseWorkspaceNotifications(connectionNotice, error, changesModalNotice, writeNotice)
 
   const activatePane = useCallback((pane: DatabasePane) => {
@@ -228,12 +239,9 @@ export function DatabaseViewer({
   const sidebarWidth = databaseSidebarWidth(terminal.width)
   // Account for the outer gap, panel border and horizontal padding.
   const tableAreaWidth = Math.max(16, terminal.width - sidebarWidth - 7)
-  const {
-    itemWidth: historyItemWidth,
-    currentIndex: currentTableHistoryIndex,
-    visibleStart: visibleTableHistoryStart,
-    visible: visibleTableHistory,
-  } = tableHistoryPresentation(tableHistory, selectedTable, tableAreaWidth)
+  const currentTableHistoryIndex = selectedTable
+    ? tableHistory.findIndex((table) => tableKey(table) === tableKey(selectedTable))
+    : -1
   const sideInspectorVisible =
     terminal.width >= ROW_INSPECTOR_BREAKPOINT &&
     view === "data" &&
@@ -258,13 +266,12 @@ export function DatabaseViewer({
   const hasPrimaryKey = pageData?.columns.some((column) => column.key === "PRI") ?? false
   const tableCanWrite = connectionCanWrite && selectedTable?.type === "table"
   const compactActions = tableAreaWidth < COMPACT_ACTIONS_BREAKPOINT
+  const tableActionsVisible = Boolean(selectedTable) && view === "data"
   const actionRowCount = databaseActionRowCount(tableAreaWidth, view === "data")
   const veryNarrowActions = actionRowCount === 3
   const loadingInsets = databaseLoadingInsets({
-    hasTableHistory: Boolean(tableHistory.length && selectedTable),
     hasSelectedTable: Boolean(selectedTable),
     actionRowCount,
-    compactActions,
   })
   const compactEmptyState = terminal.height < 24 || terminal.width < 72
   const metadataNameWidth = Math.max(10, Math.min(28, Math.floor(tableAreaWidth * 0.34)))
@@ -607,6 +614,21 @@ export function DatabaseViewer({
     },
     [activatePane, renderer, terminal.width],
   )
+
+  const gridBoxId = view === "data" && pageData ? "tutorial-db-table-grid" : "tutorial-db-grid"
+  const boxSelection = useDatabaseBoxSelection({
+    active: active && !queryOpen,
+    blocked: [
+      actionPalette.isOpen,
+      connectionModalOpen,
+      cellEditorOpen,
+      changesModalOpen,
+      tableSearchOpen,
+      batchExportOpen,
+    ],
+    current: activePane,
+    targets: databaseTableBoxTargets(gridBoxId, focusPane),
+  })
 
   const closeQueryTab = useCallback(
     (tabId: string) => {
@@ -1338,7 +1360,9 @@ export function DatabaseViewer({
       !queryOpen &&
       !connectionModalOpen &&
       !cellEditorOpen &&
-      !changesModalOpen
+      !changesModalOpen &&
+      !actionPalette.isOpen &&
+      !boxSelection.open
     ) {
       tableListRef.current?.focus()
     }
@@ -1347,6 +1371,8 @@ export function DatabaseViewer({
     catalog,
     cellEditorOpen,
     changesModalOpen,
+    actionPalette.isOpen,
+    boxSelection.open,
     connectionModalOpen,
     queryOpen,
     selectedTable,
@@ -1407,12 +1433,19 @@ export function DatabaseViewer({
   }, [activePane, selectedColumnIndex])
 
   useEffect(() => {
-    if (!active || activePane !== "catalog" || connectionModalOpen) return
+    if (
+      !active ||
+      activePane !== "catalog" ||
+      connectionModalOpen ||
+      actionPalette.isOpen ||
+      boxSelection.open
+    )
+      return
     const focusedId = renderer.currentFocusedRenderable?.id
     if (focusedId === "table-list" || focusedId === "table-search") return
     const timeout = setTimeout(() => tableListRef.current?.focus(), 0)
     return () => clearTimeout(timeout)
-  }, [active, activePane, connectionModalOpen, renderer])
+  }, [active, activePane, connectionModalOpen, actionPalette.isOpen, boxSelection.open, renderer])
 
   useEffect(() => {
     if (!writeNotice) return
@@ -1577,15 +1610,7 @@ export function DatabaseViewer({
   ])
 
   useKeyboard((key) => {
-    if (
-      !active ||
-      connectionModalOpen ||
-      cellEditorOpen ||
-      changesModalOpen ||
-      tableSearchOpen ||
-      batchExportOpen
-    )
-      return
+    if (key.defaultPrevented || boxSelection.blocked || boxSelection.open) return
 
     if (queryOpen) return
 
@@ -1615,6 +1640,13 @@ export function DatabaseViewer({
       return
     }
 
+    if (boxSelection.handleOpeningKey(key)) return
+    if (isActionPaletteKey(key)) {
+      key.preventDefault()
+      key.stopPropagation()
+      actionPalette.open()
+      return
+    }
     if (key.name === "escape" && (currentBatchRows.length || selectionSweep.active)) {
       key.preventDefault()
       key.stopPropagation()
@@ -1865,13 +1897,135 @@ export function DatabaseViewer({
         : "",
   )
   if (tutorialMode) return <DatabaseTutorialDemo />
+
+  function renderColumnMetadata(column: TablePage["columns"][number]) {
+    const attributes = [
+      column.key === "PRI" ? "PK" : column.key || "",
+      column.nullable ? "NULL" : "NOT NULL",
+      column.defaultValue === null ? translateUi("sem padrão") : `= ${column.defaultValue}`,
+    ]
+      .filter(Boolean)
+      .join(" · ")
+    return (
+      <text
+        key={column.field}
+        content={`${fitCell(column.field, metadataNameWidth)}${fitCell(column.type, metadataTypeWidth)}${fitCell(attributes, metadataDetailWidth)}`}
+        style={{ fg: column.key === "PRI" ? COLORS.database : COLORS.text }}
+      />
+    )
+  }
+
+  function renderColumnHeader(column: TablePage["columns"][number], visibleIndex: number) {
+    const absoluteIndex = columnOffset + visibleIndex
+    const selected = activePane === "grid" && absoluteIndex === selectedColumnIndex
+    const sortMarker =
+      activeTableQuery.sort?.column === column.field
+        ? activeTableQuery.sort.direction === "asc"
+          ? " ↑"
+          : " ↓"
+        : ""
+    return (
+      <box key={column.field} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        <text
+          content={fitCell(`${column.key === "PRI" ? "◆ " : ""}${column.field}${sortMarker}`)}
+          style={{
+            fg: selected ? selectionColors.foreground : COLORS.database,
+            bg: selected ? selectionColors.background : COLORS.panelRaised,
+          }}
+        />
+        {visibleIndex < visibleColumns.length - 1 ? (
+          <text content="│" style={{ fg: COLORS.border, bg: COLORS.panelRaised }} />
+        ) : null}
+      </box>
+    )
+  }
+
+  function renderIndex(index: DatabaseIndex) {
+    return (
+      <text
+        key={index.name}
+        content={`${fitCell(index.name, indexNameWidth)}${fitCell(index.unique ? "UNIQUE" : "INDEX", indexTypeWidth)}${fitCell(index.definition, indexDefinitionWidth)}`}
+        style={{ fg: index.unique ? COLORS.database : COLORS.text }}
+      />
+    )
+  }
+
+  const queryWorkspaces =
+    activeConnection && activeConnectionId
+      ? queryTabs.map((tab) => {
+          const visible = queryOpen && tab.id === activeQueryTabId
+          return (
+            <box
+              key={tab.id}
+              visible={visible}
+              style={{
+                flexGrow: visible ? 1 : 0,
+                flexShrink: visible ? 1 : 0,
+                width: visible ? "100%" : 0,
+                height: visible ? "100%" : 0,
+                overflow: "hidden",
+              }}
+            >
+              <DatabaseQueryWorkspace
+                active={active && visible}
+                tabId={tab.id}
+                tabs={queryTabs}
+                activeTabId={activeQueryTabId}
+                connection={activeConnection}
+                connectionId={activeConnectionId}
+                tables={catalog?.tables ?? []}
+                selectedTable={selectedTable}
+                selectedTableColumns={pageData?.columns ?? null}
+                availableWidth={tableAreaWidth}
+                rerunRequest={
+                  tab.id === activeQueryTabId &&
+                  queryRerunRequest?.connectionId === activeConnectionId
+                    ? queryRerunRequest
+                    : null
+                }
+                onRerunRequestHandled={onQueryRerunRequestHandled}
+                onClose={closeQueryWorkspace}
+                onReturnToCatalog={() => {
+                  setQueryOpen(false)
+                  focusPane("catalog")
+                }}
+                onSelectTab={setActiveQueryTabId}
+                onNewTab={() => createQueryTab()}
+                onCloseTab={closeQueryTab}
+                onSwitchTab={switchQueryTab}
+                stagedChanges={stagedChanges}
+                setStagedChanges={setStagedChanges}
+                changesModalOpen={changesModalOpen}
+                onOpenChangesReview={() => {
+                  setChangesModalNotice("")
+                  setChangesModalOpen(true)
+                }}
+                writeBusy={writeBusy}
+                dataRevision={refreshKey}
+                maskingTermsSignature={maskingTermsSignature}
+                onDatabaseChanged={() => {
+                  loadedCatalogKeyRef.current = null
+                  loadedPageKeyRef.current = null
+                  setCatalogRefreshKey((current) => current + 1)
+                  setRefreshKey((current) => current + 1)
+                  if (view === "indexes") setIndexesLoading(true)
+                  if (view === "schema") setStructureLoading(true)
+                  setIndexes(null)
+                  setTableStructure(null)
+                }}
+              />
+            </box>
+          )
+        })
+      : null
+
   return (
     <box
       id="database-workspace"
       style={{
         flexGrow: 1,
         flexDirection: connections.length ? "row" : "column",
-        padding: LAYOUT.outerPadding,
+        paddingX: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
         backgroundColor: LAYOUT.workspaceBackground,
         ...(connections.length
@@ -1881,6 +2035,7 @@ export function DatabaseViewer({
     >
       {connections.length === 0 ? (
         <DatabaseEmptyState
+          onOpenActions={actionPalette.open}
           key={LAYOUT.compact ? "database-empty-compact" : "database-empty-framed"}
           compact={compactEmptyState}
           terminalWidth={terminal.width}
@@ -1894,6 +2049,7 @@ export function DatabaseViewer({
           <box
             id="tutorial-db-catalog"
             style={{
+              position: "relative",
               width: sidebarWidth,
               ...focusedPanelBorder(activePane === "catalog", COLORS.database),
               backgroundColor:
@@ -1987,9 +2143,18 @@ export function DatabaseViewer({
                 selectedTextColor: COLORS.database,
               }}
             />
+            {!queryOpen ? (
+              <InlineButton
+                id="database-action-palette-open"
+                label="[?] Ações"
+                accent={COLORS.database}
+                onPress={actionPalette.open}
+              />
+            ) : null}
+            {!queryOpen ? boxSelection.button : null}
             <InlineButton
               id="tutorial-db-new-connection"
-              label={sidebarWidth < 28 ? "[C] Conexões" : "[C] Criar nova / conexões"}
+              label="[C] Conexões"
               accent={COLORS.database}
               onPress={() => {
                 setConnectionModalStartsInForm(false)
@@ -1998,11 +2163,12 @@ export function DatabaseViewer({
             />
             <InlineButton
               id="tutorial-db-new-query"
-              label={sidebarWidth < 28 ? "[W] Query" : "[W] Criar query"}
+              label="[W] Query"
               accent={COLORS.success}
               active={queryOpen}
               onPress={openQueryWorkspace}
             />
+            {boxSelection.overlay("tutorial-db-catalog")}
           </box>
 
           <box
@@ -2019,118 +2185,231 @@ export function DatabaseViewer({
               paddingRight: 1,
             }}
           >
-            {tableHistory.length && !queryOpen ? (
-              <box
-                id="tutorial-db-table-history"
-                style={{
-                  height: 2,
-                  flexShrink: 0,
-                  flexDirection: "column",
-                  backgroundColor: COLORS.panel,
+            {selectedTable && !queryOpen ? (
+              <DatabaseTableHeader
+                width={tableAreaWidth}
+                view={view}
+                history={tableHistory}
+                selectedTable={selectedTable}
+                onView={(nextView) => {
+                  if (nextView === "indexes") setIndexesLoading(!indexes)
+                  if (nextView === "schema") setStructureLoading(!tableStructure)
+                  setView(nextView)
+                  focusPane("grid")
+                  if (nextView === "schema") {
+                    setTimeout(() => structureScrollRef.current?.focus(), 0)
+                  }
                 }}
-              >
-                <box
-                  style={{
-                    height: 1,
-                    flexShrink: 0,
-                    flexDirection: "row",
-                    border: ["bottom"],
-                    borderColor: COLORS.border,
-                  }}
-                >
-                  <DirectionalButton
-                    direction={-1}
-                    accent={COLORS.database}
-                    disabled={currentTableHistoryIndex <= 0}
-                    onPress={() => navigateTableHistory(-1)}
-                  />
-                  {visibleTableHistory.map((table, visibleIndex) => {
-                    const historyIndex = visibleTableHistoryStart + visibleIndex
-                    const current = historyIndex === currentTableHistoryIndex
-                    return (
-                      <InlineButton
-                        key={tableKey(table)}
-                        label={shorten(table.name, historyItemWidth - 2)}
-                        accent={COLORS.database}
-                        active={Boolean(current)}
-                        onPress={() => openTable(table, false)}
-                      />
-                    )
-                  })}
-                  <DirectionalButton
-                    direction={1}
-                    accent={COLORS.database}
-                    disabled={
-                      currentTableHistoryIndex < 0 ||
-                      currentTableHistoryIndex >= tableHistory.length - 1
-                    }
-                    onPress={() => navigateTableHistory(1)}
-                  />
-                </box>
-                <box
-                  style={{
-                    height: 1,
-                    flexShrink: 0,
-                    border: ["bottom"],
-                    borderColor: COLORS.border,
-                  }}
-                />
-              </box>
+                onTable={(table) => openTable(table, false)}
+                onNavigate={navigateTableHistory}
+              />
             ) : null}
 
-            {selectedTable && !queryOpen ? (
+            {queryWorkspaces}
+
+            {!queryOpen ? (
+              error ? (
+                <box
+                  style={{
+                    border: true,
+                    borderStyle: "rounded",
+                    borderColor: COLORS.danger,
+                    padding: 1,
+                  }}
+                >
+                  <text content="ERRO DE CONEXÃO" style={{ fg: COLORS.danger }} />
+                  <text content={error} style={{ fg: COLORS.text }} />
+                  <InlineButton
+                    label="[C] Trocar ou adicionar conexão"
+                    accent={COLORS.database}
+                    onPress={() => {
+                      setConnectionModalStartsInForm(false)
+                      setConnectionModalOpen(true)
+                    }}
+                  />
+                </box>
+              ) : !selectedTable ? (
+                <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
+                  <text
+                    content={`${catalog?.tables.length ?? 0} objetos em ${schemaCount} schema${schemaCount === 1 ? "" : "s"}`}
+                    style={{ fg: COLORS.database }}
+                  />
+                  <text
+                    content="Escolha uma tabela no catálogo à esquerda"
+                    style={{ fg: COLORS.text }}
+                  />
+                  <text content="Dados · colunas · índices · schema" style={{ fg: COLORS.muted }} />
+                  {connectionNotice ? (
+                    <text content={connectionNotice} style={{ fg: COLORS.warning }} />
+                  ) : null}
+                </box>
+              ) : rowsLoading || !pageData ? (
+                <box style={{ flexGrow: 1 }} />
+              ) : view === "columns" ? (
+                <box style={{ flexGrow: 1 }}>
+                  <text
+                    content={`${fitCell(translateUi("COLUNA"), metadataNameWidth)}${fitCell(translateUi("TIPO"), metadataTypeWidth)}${fitCell(translateUi("ATRIBUTOS"), metadataDetailWidth)}`}
+                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
+                  />
+                  {pageData.columns.map(renderColumnMetadata)}
+                </box>
+              ) : view === "indexes" ? (
+                <box style={{ flexGrow: 1 }}>
+                  <text
+                    content={`${fitCell(translateUi("ÍNDICE"), indexNameWidth)}${fitCell(translateUi("TIPO"), indexTypeWidth)}${fitCell(translateUi("DEFINIÇÃO / COLUNAS"), indexDefinitionWidth)}`}
+                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
+                  />
+                  {indexesLoading ? null : indexes?.length ? (
+                    indexes.map(renderIndex)
+                  ) : (
+                    <text content="Nenhum índice encontrado." style={{ fg: COLORS.muted }} />
+                  )}
+                </box>
+              ) : view === "schema" ? (
+                <DatabaseSchemaView
+                  table={selectedTable}
+                  structure={tableStructure}
+                  loading={structureLoading}
+                  diagramOpen={schemaDiagramOpen}
+                  availableWidth={tableAreaWidth}
+                  scrollRef={structureScrollRef}
+                  onToggleDiagram={() => {
+                    setSchemaDiagramOpen((current) => !current)
+                    setTimeout(() => structureScrollRef.current?.focus(), 0)
+                  }}
+                />
+              ) : (
+                <box style={{ flexGrow: 1, flexDirection: "row" }}>
+                  {!detailOnly ? (
+                    <box id="tutorial-db-table-grid" style={{ flexGrow: 1, position: "relative" }}>
+                      <text
+                        id="database-table-summary"
+                        content={
+                          writeNotice ||
+                          tableWindow.loadError ||
+                          tableLoadingSummary ||
+                          `${sensitiveSummary}${dataSummary}`
+                        }
+                        style={{
+                          height: 1,
+                          flexShrink: 0,
+                          fg:
+                            writeNotice.startsWith("Erro") || tableWindow.loadError
+                              ? COLORS.danger
+                              : writeNotice || sensitiveDataMasked
+                                ? COLORS.warning
+                                : COLORS.muted,
+                        }}
+                      />
+                      {visibleColumns.length ? (
+                        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+                          <Button
+                            id="database-selection-sweep-gutter"
+                            onPress={selectionSweep.toggle}
+                            height={1}
+                            width={BATCH_SELECTOR_WIDTH}
+                            flexShrink={0}
+                          >
+                            <text
+                              content={selectionSweep.active ? "◆ " : "◇ "}
+                              style={{
+                                fg: selectionSweep.active ? COLORS.database : COLORS.muted,
+                                bg: COLORS.panelRaised,
+                              }}
+                            />
+                          </Button>
+                          <text content="│" style={{ fg: COLORS.border, bg: COLORS.panelRaised }} />
+                          {visibleColumns.map(renderColumnHeader)}
+                        </box>
+                      ) : (
+                        <text content="Tabela sem colunas visíveis" style={{ fg: COLORS.muted }} />
+                      )}
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: capture row keys before native scroll */}
+                      <scrollbox
+                        ref={tableGridScrollRef}
+                        id="database-table-rows"
+                        onKeyDown={selectionSweep.handleVerticalKey}
+                        scrollY
+                        viewportCulling
+                        style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
+                        verticalScrollbarOptions={{
+                          trackOptions: {
+                            backgroundColor: COLORS.panel,
+                            foregroundColor: COLORS.border,
+                          },
+                        }}
+                      >
+                        {gridRows.length ? (
+                          gridRows.map((gridRow, index) => (
+                            <DatabaseGridRowView
+                              key={gridRow.id}
+                              gridRow={gridRow}
+                              rowIndex={index}
+                              idPrefix="database"
+                              rowIdSegment="row"
+                              columns={visibleColumnFields}
+                              columnOffset={columnOffset}
+                              cellWidth={CELL_WIDTH}
+                              separateCells
+                              selectedColumnIndex={
+                                activePane === "grid" && index === selectedRowIndex
+                                  ? selectedColumnIndex
+                                  : -1
+                              }
+                              batchSelected={currentBatchRowIds.has(
+                                databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                              )}
+                              selectionForeground={selectionColors.foreground}
+                              selectionBackground={selectionColors.background}
+                              onToggleBatch={selectTableBatchRow}
+                              onSelectCell={selectTableGridCell}
+                            />
+                          ))
+                        ) : (
+                          <text
+                            content={translateUi("A consulta não retornou linhas.")}
+                            style={{ fg: COLORS.muted }}
+                          />
+                        )}
+                      </scrollbox>
+                      {boxSelection.overlay("tutorial-db-table-grid")}
+                    </box>
+                  ) : null}
+                  {sideInspectorVisible || detailOnly ? (
+                    <RowInspector
+                      overlay={boxSelection.overlay("tutorial-db-inspector")}
+                      columns={pageData.columns}
+                      row={selectedRow}
+                      rowIndex={selectedRowIndex}
+                      rowCount={gridRows.length}
+                      width={detailOnly ? "100%" : rowInspectorWidth}
+                      scrollRef={rowInspectorRef}
+                      active={activePane === "inspector"}
+                      selectedColumnIndex={selectedColumnIndex}
+                      onActivate={() => activatePane("inspector")}
+                      onSelectColumn={(index) => {
+                        selectedColumnIndexRef.current = index
+                        setSelectedColumnIndex(index)
+                      }}
+                    />
+                  ) : null}
+                </box>
+              )
+            ) : null}
+
+            {!queryOpen ? (
               <box
+                id="tutorial-db-navigation"
                 style={{
-                  height: actionRowCount,
+                  height: 1 + (tableActionsVisible ? actionRowCount : 1),
                   flexShrink: 0,
+                  border: ["top"],
+                  borderColor: COLORS.border,
                   flexDirection: "column",
                 }}
               >
                 <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                  <InlineButton
-                    id="tutorial-db-view-data"
-                    label={compactActions ? "[1]" : "[1] Dados"}
-                    accent={COLORS.database}
-                    active={view === "data"}
-                    onPress={() => {
-                      setView("data")
-                      focusPane("grid")
-                    }}
-                  />
-                  <InlineButton
-                    id="tutorial-db-view-columns"
-                    label={compactActions ? "[2]" : "[2] Colunas"}
-                    accent={COLORS.database}
-                    active={view === "columns"}
-                    onPress={() => {
-                      setView("columns")
-                      focusPane("grid")
-                    }}
-                  />
-                  <InlineButton
-                    id="tutorial-db-view-indexes"
-                    label={compactActions ? "[3]" : "[3] Índices"}
-                    accent={COLORS.database}
-                    active={view === "indexes"}
-                    onPress={() => {
-                      setIndexesLoading(!indexes)
-                      setView("indexes")
-                      focusPane("grid")
-                    }}
-                  />
-                  <InlineButton
-                    id="tutorial-db-view-schema"
-                    label={compactActions ? "[4]" : "[4] Schema"}
-                    accent={COLORS.database}
-                    active={view === "schema"}
-                    onPress={() => {
-                      setStructureLoading(!tableStructure)
-                      setView("schema")
-                      focusPane("grid")
-                      setTimeout(() => structureScrollRef.current?.focus(), 0)
-                    }}
-                  />
-                  {view === "data" ? (
+                  {tableActionsVisible ? (
                     <InlineButton
                       id="database-table-sort"
                       label={
@@ -2138,7 +2417,7 @@ export function DatabaseViewer({
                           ? `[O]${activeTableQuery.sort?.direction === "asc" ? "↑" : activeTableQuery.sort ? "↓" : "↕"}`
                           : activeTableQuery.sort
                             ? `[O] ${translateUi("Ordem")} ${truncateDisplay(activeTableQuery.sort.column, 10)} ${activeTableQuery.sort.direction === "asc" ? "↑" : "↓"}`
-                            : `[O] ${translateUi("Ordem normal")}`
+                            : "[O] Ordenar"
                       }
                       accent={COLORS.database}
                       active={Boolean(activeTableQuery.sort)}
@@ -2146,7 +2425,7 @@ export function DatabaseViewer({
                       onPress={cycleTableSort}
                     />
                   ) : null}
-                  {view === "data" && !veryNarrowActions ? (
+                  {tableActionsVisible && !veryNarrowActions ? (
                     <InlineButton
                       id="database-table-search-open"
                       label={
@@ -2167,7 +2446,7 @@ export function DatabaseViewer({
                       }}
                     />
                   ) : null}
-                  {view === "data" ? (
+                  {tableActionsVisible ? (
                     <InlineButton
                       id="tutorial-db-sensitive"
                       label={
@@ -2180,15 +2459,15 @@ export function DatabaseViewer({
                           : sensitiveVisibility === "confirm"
                             ? "[V] Confirmar exibição"
                             : revealSensitive
-                              ? "[V] Ocultar sensíveis"
-                              : "[V] Revelar sensíveis"
+                              ? "[V] Mascarar"
+                              : "[V] Revelar"
                       }
                       accent={sensitiveDataMasked ? COLORS.danger : COLORS.database}
                       active={sensitiveDataMasked}
                       onPress={toggleSensitiveData}
                     />
                   ) : null}
-                  {view === "data" && terminal.width < ROW_INSPECTOR_BREAKPOINT ? (
+                  {tableActionsVisible && terminal.width < ROW_INSPECTOR_BREAKPOINT ? (
                     <InlineButton
                       id="tutorial-db-inspector-toggle"
                       label={compactActions ? "[I]" : "[I] Inspetor"}
@@ -2197,9 +2476,31 @@ export function DatabaseViewer({
                       onPress={() => focusPane(narrowDetailOpen ? "grid" : "inspector")}
                     />
                   ) : null}
+                  <box style={{ flexGrow: 1 }} />
+                  <InlineButton
+                    id="database-refresh-catalog"
+                    label={compactActions ? "[R]" : "[R] Atualizar"}
+                    accent={COLORS.database}
+                    disabled={catalogLoading || rowsLoading}
+                    onPress={() => {
+                      setCatalogRefreshKey((current) => current + 1)
+                      setRefreshKey((current) => current + 1)
+                      if (view === "indexes") setIndexesLoading(true)
+                      if (view === "schema") setStructureLoading(true)
+                      setIndexes(null)
+                      setTableStructure(null)
+                    }}
+                  />
                 </box>
-                {view === "data" ? (
-                  <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+                {tableActionsVisible ? (
+                  <box
+                    style={{
+                      height: 1,
+                      flexShrink: 0,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
                     {veryNarrowActions ? (
                       <InlineButton
                         id="database-table-search-open"
@@ -2229,9 +2530,7 @@ export function DatabaseViewer({
                     />
                     <InlineButton
                       id="database-selection-sweep"
-                      label={
-                        compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"
-                      }
+                      label={compactActions ? "[Alt+Space] Sel" : "[Alt+Space] Intervalo"}
                       accent={COLORS.database}
                       active={selectionSweep.active}
                       disabled={!gridRows.length}
@@ -2242,7 +2541,7 @@ export function DatabaseViewer({
                         {!currentBatchRows.length ? (
                           <InlineButton
                             id="tutorial-db-new-row"
-                            label={compactActions ? "[Ctrl+A]+" : "[Ctrl+A] Nova linha"}
+                            label={compactActions ? "[Ctrl+A]+" : "[Ctrl+A] Criar"}
                             accent={COLORS.runner}
                             disabled={!tableCanWrite || writeBusy}
                             onPress={() => {
@@ -2260,7 +2559,7 @@ export function DatabaseViewer({
                                 : `[E] Editar ${currentBatchRows.length}`
                               : compactActions
                                 ? "[E]"
-                                : "[Enter] Editar célula"
+                                : "[Enter] Editar"
                           }
                           accent={COLORS.warning}
                           disabled={
@@ -2276,10 +2575,10 @@ export function DatabaseViewer({
                             currentBatchRows.length
                               ? compactActions
                                 ? `[dd]${currentBatchRows.length}`
-                                : `[dd] Excluir ${currentBatchRows.length}`
+                                : `[dd] Deletar ${currentBatchRows.length}`
                               : compactActions
                                 ? "[dd]"
-                                : "[dd] Preparar exclusão"
+                                : "[dd] Deletar"
                           }
                           accent={COLORS.danger}
                           active={deleteSequenceArmed}
@@ -2308,13 +2607,7 @@ export function DatabaseViewer({
                       <>
                         <InlineButton
                           id="tutorial-db-undo-row"
-                          label={
-                            currentBatchRows.length && !compactActions
-                              ? "[U] Desfazer selecionadas"
-                              : compactActions
-                                ? "[U]"
-                                : "[U] Desfazer linha"
-                          }
+                          label={compactActions ? "[U]" : "[U] Desfazer"}
                           accent={COLORS.database}
                           disabled={
                             currentBatchRows.length
@@ -2342,8 +2635,15 @@ export function DatabaseViewer({
                     ) : null}
                   </box>
                 ) : null}
-                {view === "data" && veryNarrowActions ? (
-                  <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+                {tableActionsVisible && veryNarrowActions ? (
+                  <box
+                    style={{
+                      height: 1,
+                      flexShrink: 0,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
                     {!currentBatchRows.length ? (
                       <InlineButton
                         id="tutorial-db-new-row"
@@ -2413,382 +2713,6 @@ export function DatabaseViewer({
                 ) : null}
               </box>
             ) : null}
-
-            {activeConnection && activeConnectionId
-              ? queryTabs.map((tab) => (
-                  <box
-                    key={tab.id}
-                    visible={queryOpen && tab.id === activeQueryTabId}
-                    style={{
-                      flexGrow: queryOpen && tab.id === activeQueryTabId ? 1 : 0,
-                      flexShrink: queryOpen && tab.id === activeQueryTabId ? 1 : 0,
-                      width: queryOpen && tab.id === activeQueryTabId ? "100%" : 0,
-                      height: queryOpen && tab.id === activeQueryTabId ? "100%" : 0,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <DatabaseQueryWorkspace
-                      active={active && queryOpen && tab.id === activeQueryTabId}
-                      tabId={tab.id}
-                      tabs={queryTabs}
-                      activeTabId={activeQueryTabId}
-                      connection={activeConnection}
-                      connectionId={activeConnectionId}
-                      tables={catalog?.tables ?? []}
-                      selectedTable={selectedTable}
-                      selectedTableColumns={pageData?.columns ?? null}
-                      availableWidth={tableAreaWidth}
-                      rerunRequest={
-                        tab.id === activeQueryTabId &&
-                        queryRerunRequest?.connectionId === activeConnectionId
-                          ? queryRerunRequest
-                          : null
-                      }
-                      onRerunRequestHandled={onQueryRerunRequestHandled}
-                      onClose={closeQueryWorkspace}
-                      onReturnToCatalog={() => {
-                        setQueryOpen(false)
-                        focusPane("catalog")
-                      }}
-                      onSelectTab={setActiveQueryTabId}
-                      onNewTab={() => createQueryTab()}
-                      onCloseTab={closeQueryTab}
-                      onSwitchTab={switchQueryTab}
-                      stagedChanges={stagedChanges}
-                      setStagedChanges={setStagedChanges}
-                      changesModalOpen={changesModalOpen}
-                      onOpenChangesReview={() => {
-                        setChangesModalNotice("")
-                        setChangesModalOpen(true)
-                      }}
-                      writeBusy={writeBusy}
-                      dataRevision={refreshKey}
-                      maskingTermsSignature={maskingTermsSignature}
-                      onDatabaseChanged={() => {
-                        loadedCatalogKeyRef.current = null
-                        loadedPageKeyRef.current = null
-                        setCatalogRefreshKey((current) => current + 1)
-                        setRefreshKey((current) => current + 1)
-                        if (view === "indexes") setIndexesLoading(true)
-                        if (view === "schema") setStructureLoading(true)
-                        setIndexes(null)
-                        setTableStructure(null)
-                      }}
-                    />
-                  </box>
-                ))
-              : null}
-
-            {!queryOpen ? (
-              error ? (
-                <box
-                  style={{
-                    border: true,
-                    borderStyle: "rounded",
-                    borderColor: COLORS.danger,
-                    padding: 1,
-                  }}
-                >
-                  <text content="ERRO DE CONEXÃO" style={{ fg: COLORS.danger }} />
-                  <text content={error} style={{ fg: COLORS.text }} />
-                  <InlineButton
-                    label="[C] Trocar ou adicionar conexão"
-                    accent={COLORS.database}
-                    onPress={() => {
-                      setConnectionModalStartsInForm(false)
-                      setConnectionModalOpen(true)
-                    }}
-                  />
-                </box>
-              ) : !selectedTable ? (
-                <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-                  <text
-                    content={`${catalog?.tables.length ?? 0} objetos em ${schemaCount} schema${schemaCount === 1 ? "" : "s"}`}
-                    style={{ fg: COLORS.database }}
-                  />
-                  <text
-                    content="Escolha uma tabela no catálogo à esquerda"
-                    style={{ fg: COLORS.text }}
-                  />
-                  <text content="Dados · colunas · índices · schema" style={{ fg: COLORS.muted }} />
-                  {connectionNotice ? (
-                    <text content={connectionNotice} style={{ fg: COLORS.warning }} />
-                  ) : null}
-                </box>
-              ) : rowsLoading || !pageData ? (
-                <box style={{ flexGrow: 1 }} />
-              ) : view === "columns" ? (
-                <box style={{ flexGrow: 1 }}>
-                  <text
-                    content={`${fitCell(translateUi("COLUNA"), metadataNameWidth)}${fitCell(translateUi("TIPO"), metadataTypeWidth)}${fitCell(translateUi("ATRIBUTOS"), metadataDetailWidth)}`}
-                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                  />
-                  {pageData.columns.map((column) => {
-                    const attributes = [
-                      column.key === "PRI" ? "PK" : column.key || "",
-                      column.nullable ? "NULL" : "NOT NULL",
-                      column.defaultValue === null
-                        ? translateUi("sem padrão")
-                        : `= ${column.defaultValue}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                    return (
-                      <text
-                        key={column.field}
-                        content={`${fitCell(column.field, metadataNameWidth)}${fitCell(column.type, metadataTypeWidth)}${fitCell(attributes, metadataDetailWidth)}`}
-                        style={{ fg: column.key === "PRI" ? COLORS.database : COLORS.text }}
-                      />
-                    )
-                  })}
-                </box>
-              ) : view === "indexes" ? (
-                <box style={{ flexGrow: 1 }}>
-                  <text
-                    content={`${fitCell(translateUi("ÍNDICE"), indexNameWidth)}${fitCell(translateUi("TIPO"), indexTypeWidth)}${fitCell(translateUi("DEFINIÇÃO / COLUNAS"), indexDefinitionWidth)}`}
-                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                  />
-                  {indexesLoading ? null : indexes?.length ? (
-                    indexes.map((index) => (
-                      <text
-                        key={index.name}
-                        content={`${fitCell(index.name, indexNameWidth)}${fitCell(index.unique ? "UNIQUE" : "INDEX", indexTypeWidth)}${fitCell(index.definition, indexDefinitionWidth)}`}
-                        style={{ fg: index.unique ? COLORS.database : COLORS.text }}
-                      />
-                    ))
-                  ) : (
-                    <text content="Nenhum índice encontrado." style={{ fg: COLORS.muted }} />
-                  )}
-                </box>
-              ) : view === "schema" ? (
-                <DatabaseSchemaView
-                  table={selectedTable}
-                  structure={tableStructure}
-                  loading={structureLoading}
-                  diagramOpen={schemaDiagramOpen}
-                  availableWidth={tableAreaWidth}
-                  scrollRef={structureScrollRef}
-                  onToggleDiagram={() => {
-                    setSchemaDiagramOpen((current) => !current)
-                    setTimeout(() => structureScrollRef.current?.focus(), 0)
-                  }}
-                />
-              ) : (
-                <box style={{ flexGrow: 1, flexDirection: "row" }}>
-                  {!detailOnly ? (
-                    <box id="tutorial-db-table-grid" style={{ flexGrow: 1 }}>
-                      <text
-                        id="database-table-summary"
-                        content={
-                          writeNotice ||
-                          tableWindow.loadError ||
-                          tableLoadingSummary ||
-                          `${sensitiveSummary}${dataSummary}`
-                        }
-                        style={{
-                          height: 1,
-                          flexShrink: 0,
-                          fg:
-                            writeNotice.startsWith("Erro") || tableWindow.loadError
-                              ? COLORS.danger
-                              : writeNotice || sensitiveDataMasked
-                                ? COLORS.warning
-                                : COLORS.muted,
-                        }}
-                      />
-                      {visibleColumns.length ? (
-                        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                          <Button
-                            id="database-selection-sweep-gutter"
-                            onPress={selectionSweep.toggle}
-                            height={1}
-                            width={BATCH_SELECTOR_WIDTH}
-                            flexShrink={0}
-                          >
-                            <text
-                              content={selectionSweep.active ? "◆ " : "◇ "}
-                              style={{
-                                fg: selectionSweep.active ? COLORS.database : COLORS.muted,
-                                bg: COLORS.panelRaised,
-                              }}
-                            />
-                          </Button>
-                          <text content="│" style={{ fg: COLORS.border, bg: COLORS.panelRaised }} />
-                          {visibleColumns.map((column, visibleIndex) => {
-                            const absoluteIndex = columnOffset + visibleIndex
-                            const selected =
-                              activePane === "grid" && absoluteIndex === selectedColumnIndex
-                            const sortMarker =
-                              activeTableQuery.sort?.column === column.field
-                                ? activeTableQuery.sort.direction === "asc"
-                                  ? " ↑"
-                                  : " ↓"
-                                : ""
-                            return (
-                              <box
-                                key={column.field}
-                                style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-                              >
-                                <text
-                                  content={fitCell(
-                                    `${column.key === "PRI" ? "◆ " : ""}${column.field}${sortMarker}`,
-                                  )}
-                                  style={{
-                                    fg: selected ? selectionColors.foreground : COLORS.database,
-                                    bg: selected ? selectionColors.background : COLORS.panelRaised,
-                                  }}
-                                />
-                                {visibleIndex < visibleColumns.length - 1 ? (
-                                  <text
-                                    content="│"
-                                    style={{ fg: COLORS.border, bg: COLORS.panelRaised }}
-                                  />
-                                ) : null}
-                              </box>
-                            )
-                          })}
-                        </box>
-                      ) : (
-                        <text content="Tabela sem colunas visíveis" style={{ fg: COLORS.muted }} />
-                      )}
-                      {/* biome-ignore lint/a11y/noStaticElementInteractions: capture row keys before native scroll */}
-                      <scrollbox
-                        ref={tableGridScrollRef}
-                        id="database-table-rows"
-                        onKeyDown={selectionSweep.handleVerticalKey}
-                        scrollY
-                        viewportCulling
-                        style={{ flexGrow: 1, backgroundColor: COLORS.panel }}
-                        verticalScrollbarOptions={{
-                          trackOptions: {
-                            backgroundColor: COLORS.panel,
-                            foregroundColor: COLORS.border,
-                          },
-                        }}
-                      >
-                        {gridRows.length ? (
-                          gridRows.map((gridRow, index) => (
-                            <DatabaseGridRowView
-                              key={gridRow.id}
-                              gridRow={gridRow}
-                              rowIndex={index}
-                              idPrefix="database"
-                              rowIdSegment="row"
-                              columns={visibleColumnFields}
-                              columnOffset={columnOffset}
-                              cellWidth={CELL_WIDTH}
-                              separateCells
-                              selectedColumnIndex={
-                                activePane === "grid" && index === selectedRowIndex
-                                  ? selectedColumnIndex
-                                  : -1
-                              }
-                              batchSelected={currentBatchRowIds.has(
-                                databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                              )}
-                              selectionForeground={selectionColors.foreground}
-                              selectionBackground={selectionColors.background}
-                              onToggleBatch={selectTableBatchRow}
-                              onSelectCell={selectTableGridCell}
-                            />
-                          ))
-                        ) : (
-                          <text
-                            content={translateUi("A consulta não retornou linhas.")}
-                            style={{ fg: COLORS.muted }}
-                          />
-                        )}
-                      </scrollbox>
-                    </box>
-                  ) : null}
-                  {sideInspectorVisible || detailOnly ? (
-                    <RowInspector
-                      columns={pageData.columns}
-                      row={selectedRow}
-                      rowIndex={selectedRowIndex}
-                      rowCount={gridRows.length}
-                      width={detailOnly ? "100%" : rowInspectorWidth}
-                      scrollRef={rowInspectorRef}
-                      active={activePane === "inspector"}
-                      selectedColumnIndex={selectedColumnIndex}
-                      onActivate={() => activatePane("inspector")}
-                      onSelectColumn={(index) => {
-                        selectedColumnIndexRef.current = index
-                        setSelectedColumnIndex(index)
-                      }}
-                    />
-                  ) : null}
-                </box>
-              )
-            ) : null}
-
-            {!queryOpen ? (
-              <box
-                id="tutorial-db-navigation"
-                style={{
-                  height: compactActions ? 2 : 1,
-                  flexShrink: 0,
-                  marginTop: 1,
-                  flexDirection: compactActions ? "column" : "row",
-                  justifyContent: "space-between",
-                }}
-              >
-                <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                  {selectedTable && view === "data" ? (
-                    <>
-                      <InlineButton
-                        label="[H/←]"
-                        accent={COLORS.database}
-                        onPress={() => navigateHorizontally(-1)}
-                      />
-                      <InlineButton
-                        label="[L/→]"
-                        accent={COLORS.database}
-                        onPress={() => navigateHorizontally(1)}
-                      />
-                    </>
-                  ) : null}
-                  {!compactActions ? (
-                    <ShortcutText
-                      content={translateUi(
-                        ` [H/←] [L/→] navegação contextual · ${activePane === "catalog" ? "TABELAS" : activePane === "grid" ? "GRADE" : "REGISTRO"}`,
-                      )}
-                      style={{ fg: COLORS.muted }}
-                    />
-                  ) : null}
-                </box>
-                <box
-                  style={{
-                    height: 1,
-                    flexShrink: 0,
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  {compactActions ? (
-                    <ShortcutText
-                      content={translateUi(
-                        `[H/←] [L/→] ${activePane === "catalog" ? "TABELAS" : activePane === "grid" ? "GRADE" : "REGISTRO"}`,
-                      )}
-                      style={{ fg: COLORS.muted }}
-                    />
-                  ) : null}
-                  <InlineButton
-                    label={compactActions ? "[R]" : "[R] Atualizar catálogo"}
-                    accent={COLORS.database}
-                    disabled={catalogLoading || rowsLoading}
-                    onPress={() => {
-                      setCatalogRefreshKey((current) => current + 1)
-                      setRefreshKey((current) => current + 1)
-                      if (view === "indexes") setIndexesLoading(true)
-                      if (view === "schema") setStructureLoading(true)
-                      setIndexes(null)
-                      setTableStructure(null)
-                    }}
-                  />
-                </box>
-              </box>
-            ) : null}
             <DatabaseLoadingOverlay
               id="database-content-loader"
               catalog={!queryOpen && catalogLoading && !catalog && !selectedTable}
@@ -2799,10 +2723,170 @@ export function DatabaseViewer({
               top={loadingInsets.top}
               bottom={loadingInsets.bottom}
             />
+            {gridBoxId === "tutorial-db-grid" ? boxSelection.overlay(gridBoxId) : null}
           </box>
         </>
       )}
 
+      {boxSelection.focusNode}
+      {actionPalette.isOpen
+        ? actionPalette.render({
+            title: "AÇÕES DO BANCO",
+            accent: COLORS.database,
+            actions: [
+              boxSelection.action,
+              paletteAction(
+                "connections",
+                "[C]",
+                "Conexões",
+                "Gerencie as conexões do banco de dados.",
+                "NAVEGAÇÃO",
+                () => {
+                  setConnectionModalStartsInForm(false)
+                  setConnectionModalOpen(true)
+                },
+              ),
+              paletteAction(
+                "query",
+                "[W]",
+                "Editor SQL",
+                "Abre o editor SQL da conexão atual.",
+                "SQL",
+                openQueryWorkspace,
+                !activeConnection && "Selecione uma conexão",
+              ),
+              paletteAction(
+                "filter",
+                "[/]",
+                "Filtro rápido",
+                "Filtra a árvore pelo nome do schema ou da tabela sem consultar novamente o banco.",
+                "NAVEGAÇÃO",
+                () => {
+                  activatePane("catalog")
+                  searchRef.current?.focus()
+                },
+                !catalog && "Carregando…",
+              ),
+              ...(["data", "columns", "indexes", "schema"] as const).map((target, index) =>
+                paletteAction(
+                  `view-${target}`,
+                  `[${index + 1}]`,
+                  { data: "Dados", columns: "Colunas", indexes: "Índices", schema: "Schema" }[
+                    target
+                  ],
+                  "Altera a visualização da tabela selecionada.",
+                  "NAVEGAÇÃO",
+                  () => {
+                    setView(target)
+                    if (target === "indexes") setIndexesLoading(!indexes)
+                    if (target === "schema") setStructureLoading(!tableStructure)
+                    focusPane("grid")
+                  },
+                  !selectedTable && "Selecione uma tabela",
+                ),
+              ),
+              paletteAction(
+                "refresh",
+                "[R]",
+                "Atualizar",
+                "Atualiza o catálogo e a tabela selecionada.",
+                "NAVEGAÇÃO",
+                () => {
+                  setCatalogRefreshKey((current) => current + 1)
+                  setRefreshKey((current) => current + 1)
+                  setIndexes(null)
+                  setTableStructure(null)
+                },
+                (!activeConnection || catalogLoading || rowsLoading) &&
+                  "Selecione uma conexão disponível",
+              ),
+              paletteAction(
+                "sort",
+                "[O]",
+                "Ordenar",
+                "Alterna a ordenação pela coluna selecionada.",
+                "Dados",
+                cycleTableSort,
+                (!tableActionsVisible || !pageData?.columns.length || rowsLoading) &&
+                  "Abra os dados de uma tabela",
+              ),
+              paletteAction(
+                "search",
+                "[S]",
+                "Buscar",
+                "Busca valores na tabela selecionada.",
+                "Dados",
+                () => setTableSearchOpen(true),
+                (!tableActionsVisible || !pageData?.columns.length || rowsLoading) &&
+                  "Abra os dados de uma tabela",
+              ),
+              paletteAction(
+                "sensitive",
+                "[V]",
+                "Dados sensíveis",
+                "Campos sensíveis começam visíveis. [V] mascara os valores; para revelá-los novamente, confirme com [V].",
+                "Dados",
+                toggleSensitiveData,
+                !tableActionsVisible && "Abra os dados de uma tabela",
+              ),
+              paletteAction(
+                "inspector",
+                "[I]",
+                "Inspetor",
+                "Mostra os campos da linha selecionada.",
+                "Dados",
+                () => focusPane("inspector"),
+                !tableActionsVisible && "Abra os dados de uma tabela",
+              ),
+              paletteAction(
+                "diagram",
+                "[G]",
+                "Diagrama",
+                "Alterna o diagrama de relacionamentos.",
+                "Schema",
+                () => setSchemaDiagramOpen((current) => !current),
+                view !== "schema" && "Abra o schema da tabela",
+              ),
+              ...databaseGridActions({
+                canCreate: tableActionsVisible && tableCanWrite,
+                canEdit:
+                  tableActionsVisible &&
+                  (currentBatchRows.length
+                    ? batchRowsCanWrite && Boolean(selectedColumn)
+                    : selectedRowCanWrite),
+                canDelete:
+                  tableActionsVisible &&
+                  (currentBatchRows.length ? batchRowsCanWrite : selectedRowCanWrite),
+                canUndo:
+                  tableActionsVisible &&
+                  (currentBatchRows.length
+                    ? currentBatchHasChanges
+                    : Boolean(selectedGridRow?.change)),
+                hasRow: tableActionsVisible && Boolean(selectedGridRow),
+                hasRows: tableActionsVisible && Boolean(gridRows.length),
+                hasSelection: tableActionsVisible && Boolean(currentBatchRows.length),
+                hasChanges: Boolean(activeConnectionChanges.length),
+                writeBusy,
+                writeBlockReason: tableActionsVisible
+                  ? tableWriteBlockReason
+                  : "Abra os dados de uma tabela",
+                create: createNewRow,
+                edit: openCellEditor,
+                delete: stageDeleteSelectedRow,
+                undo: undoSelectedChange,
+                select: () => {
+                  if (selectedGridRow) toggleCurrentBatchRow(selectedGridRow)
+                },
+                sweep: selectionSweep.toggle,
+                export: () => setBatchExportOpen(true),
+                review: () => {
+                  setChangesModalNotice("")
+                  setChangesModalOpen(true)
+                },
+              }),
+            ],
+          })
+        : null}
       <MountWhen when={cellEditorOpen}>
         <DatabaseCellEditor
           open

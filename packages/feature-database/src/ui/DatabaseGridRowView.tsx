@@ -3,7 +3,11 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { memo } from "react"
 import type { DatabaseGridRow } from "../model/workspace"
 import { BATCH_SELECTOR_WIDTH } from "../rendering/constants"
-import { queryCellForeground, queryRowColors } from "../rendering/query-presentation"
+import {
+  queryBatchSelectionBackground,
+  queryCellForeground,
+  queryRowColors,
+} from "../rendering/query-presentation"
 import { fitCell } from "../rendering/workspace-shared"
 
 export const DatabaseGridRowView = memo(function DatabaseGridRowView({
@@ -38,7 +42,8 @@ export const DatabaseGridRowView = memo(function DatabaseGridRowView({
   onSelectCell: (rowIndex: number, columnIndex: number) => void
 }) {
   const mutationKind = gridRow.change?.mutation.kind
-  const { background: rowBackground, accent: rowAccent } = queryRowColors(mutationKind, rowIndex)
+  const { background, accent: rowAccent } = queryRowColors(mutationKind, rowIndex)
+  const rowBackground = batchSelected ? queryBatchSelectionBackground(background) : background
   return (
     <box
       id={`${idPrefix}-${rowIdSegment}-${rowIndex}`}

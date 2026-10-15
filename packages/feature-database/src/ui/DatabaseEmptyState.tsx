@@ -5,9 +5,11 @@ export function DatabaseEmptyState({
   compact,
   terminalWidth,
   onOpenConnections,
+  onOpenActions,
 }: {
   compact: boolean
   terminalWidth: number
+  onOpenActions?: (() => void) | undefined
   onOpenConnections: () => void
 }) {
   return (
@@ -44,9 +46,17 @@ export function DatabaseEmptyState({
         {compact ? null : <text content="◇ leitura somente" style={{ fg: COLORS.success }} />}
       </box>
       <box style={{ marginTop: compact ? 0 : 1, flexDirection: "row" }}>
+        {onOpenActions ? (
+          <InlineButton
+            id="database-action-palette-open"
+            label="[?] Ações"
+            accent={COLORS.database}
+            onPress={onOpenActions}
+          />
+        ) : null}
         <InlineButton
           id="tutorial-db-empty-add"
-          label="[C] Criar nova / conexões"
+          label="[C] Conexões"
           accent={COLORS.database}
           onPress={onOpenConnections}
         />

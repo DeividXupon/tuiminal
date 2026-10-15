@@ -1,6 +1,6 @@
 import "./setup"
-import { afterEach, expect, spyOn, test } from "bun:test"
 import { Database } from "bun:sqlite"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -139,12 +139,133 @@ test("catalog search Enter focuses the filtered list without opening a table", a
 
   await key("RETURN")
   expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-list")
-  expect(tui?.captureCharFrame()).not.toContain("─[A←]─ log_entry")
+  expect(tui?.renderer.root.findDescendantById("database-table-header")).toBeUndefined()
   expect(tui?.captureCharFrame()).not.toContain("◆ DDL")
 
   await key("RETURN")
-  await settle(() => tui?.captureCharFrame().includes("─[A←]─ log_entry") ?? false)
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-table-header")))
+  const history = tui?.renderer.root.findDescendantById("tutorial-db-table-history")
+  expect(tui?.captureCharFrame().split("\n")[history?.screenY ?? 0]).toContain("log_entry")
 })
+
+test.each(["framed", "compact"] as const)(
+  "table actions stay below the grid and remain clickable in %s",
+  async (layout) => {
+    await mount(layout, 2, false)
+    await key("ARROW_DOWN")
+    await key("RETURN")
+    await settle(() => tui?.captureCharFrame().includes("kept result") ?? false)
+    const element = (id: string) => {
+      const found = tui?.renderer.root.findDescendantById(id)
+      if (!found) throw new Error(`Missing ${id}\n${tui?.captureCharFrame()}`)
+      return found
+    }
+    const click = async (id: string) => {
+      await tui?.renderOnce()
+      const target = element(id)
+      await act(async () => tui?.mockMouse.click(target.screenX + 1, target.screenY))
+      await tui?.renderOnce()
+    }
+    const actionIds = [
+      "database-table-sort",
+      "database-table-search-open",
+      "tutorial-db-sensitive",
+      "database-select-current-row",
+      "database-selection-sweep",
+      "tutorial-db-new-row",
+      "tutorial-db-edit-cell",
+      "tutorial-db-delete-row",
+      "tutorial-db-undo-row",
+      "tutorial-db-review",
+      "database-refresh-catalog",
+    ]
+    for (const width of [90, 140, 220]) {
+      await act(async () => tui?.resize(width, 28))
+      await tui?.renderOnce()
+      const footer = element("tutorial-db-navigation")
+      const grid = element("tutorial-db-table-grid")
+      expect(footer.screenY).toBeGreaterThanOrEqual(grid.screenY + grid.height)
+      for (const id of actionIds) {
+        const action = element(id)
+        expect(action.screenY).toBeGreaterThanOrEqual(footer.screenY)
+        expect(action.screenY + action.height).toBeLessThanOrEqual(footer.screenY + footer.height)
+        expect(action.screenX).toBeGreaterThanOrEqual(footer.screenX)
+        expect(action.screenX + action.width).toBeLessThanOrEqual(footer.screenX + footer.width)
+      }
+      expect(element("database-table-sort").screenY).toBe(
+        element("database-refresh-catalog").screenY,
+      )
+    }
+    await click("tutorial-db-edit-cell")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-cell-editor-modal")))
+    await key("ESCAPE")
+    await settle(() => !tui?.renderer.root.findDescendantById("database-cell-editor-modal"))
+
+    const original = service.loadTablePage
+    let release = () => {}
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const reads = spyOn(service, "loadTablePage").mockImplementation(async (...args) => {
+      await waiting
+      return original(...args)
+    })
+    try {
+      await click("database-refresh-catalog")
+      expect(reads).toHaveBeenCalledTimes(1)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-content-loader")))
+      const loader = element("database-content-loader")
+      const footer = element("tutorial-db-navigation")
+      const header = element("database-table-header")
+      expect(loader.screenY).toBeGreaterThanOrEqual(header.screenY + header.height)
+      expect(loader.screenY + loader.height).toBeLessThanOrEqual(footer.screenY)
+      release()
+      await settle(() => !tui?.renderer.root.findDescendantById("database-content-loader"))
+    } finally {
+      release()
+      await Promise.allSettled(reads.mock.results.map((result) => result.value))
+      reads.mockRestore()
+    }
+    await key("2")
+    await settle(() => !tui?.renderer.root.findDescendantById("database-table-sort"))
+    expect(element("database-refresh-catalog").screenY).toBe(
+      element("tutorial-db-navigation").screenY + 1,
+    )
+    await key("w")
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("database-query-sql-1-editor")),
+    )
+    expect(tui?.renderer.root.findDescendantById("tutorial-db-navigation")).toBeUndefined()
+    await key("w", { ctrl: true })
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("tutorial-db-navigation")))
+  },
+)
+
+test.each(["\u001b ", "\u00a0", "\u001b[32;3u", "\u001b[27;3;32~"])(
+  "range selection accepts terminal sequence %j and keeps its anchor",
+  async (sequence) => {
+    await mount("compact", 4, false)
+    await key("ARROW_DOWN")
+    await key("RETURN")
+    await settle(() => tui?.captureCharFrame().includes("kept result") ?? false)
+    await key(sequence)
+    await settle(() => tui?.captureCharFrame().includes("[E]1") ?? false)
+    expect(tui?.captureCharFrame()).toContain("[E]1")
+    await keys("ARROW_DOWN", 2)
+    await settle(() => tui?.captureCharFrame().includes("[E]3") ?? false)
+    expect(tui?.captureCharFrame()).toContain("[E]3")
+    await key("ARROW_UP")
+    await settle(() => tui?.captureCharFrame().includes("[E]2") ?? false)
+    expect(tui?.captureCharFrame()).toContain("[E]2")
+    await key(sequence)
+    await key("ARROW_DOWN")
+    await settle(() => tui?.captureCharFrame().includes("CÉLULA 3,1") ?? false)
+    expect(tui?.captureCharFrame()).toContain("[E]2")
+    await key("ESCAPE")
+    await settle(() => !tui?.captureCharFrame().includes("[E]2"))
+    expect(tui?.captureCharFrame()).not.toContain("[E]2")
+  },
+)
 
 test("schema toggles a relationship diagram without querying a different table", async () => {
   await mount("compact", 1, false, true)
@@ -166,7 +287,7 @@ test("schema toggles a relationship diagram without querying a different table",
   await key("h")
   await key("ARROW_DOWN")
   await key("RETURN")
-  await settle(() => tui?.captureCharFrame().includes("log_entry ─") ?? false)
+  await settle(() => tui?.captureCharFrame().includes("demo_id") ?? false)
   await key("4")
   await settle(() => tui?.captureCharFrame().includes("fk_log_entry_0") ?? false)
   await key("g")
@@ -199,7 +320,7 @@ test("a delayed schema response cannot replace the diagram after a table switch"
     await key("h")
     await key("ARROW_DOWN")
     await key("RETURN")
-    await settle(() => tui?.captureCharFrame().includes("log_entry ─") ?? false)
+    await settle(() => tui?.captureCharFrame().includes("demo_id") ?? false)
     await key("4")
     await settle(() => tui?.captureCharFrame().includes("main.demo") ?? false)
     release()
@@ -426,4 +547,96 @@ test("rapid review confirmation applies one transaction and locks its approved s
   } finally {
     database.close()
   }
+})
+
+test("Database action palette protects the catalog and hands focus to connection management", async () => {
+  await mount("compact", 1, false)
+  const find = (id: string) => tui?.renderer.root.findDescendantById(id)
+  const focus = () => tui?.renderer.currentFocusedRenderable?.id
+  const listenerCount = tui?.renderer.keyInput.listenerCount("keypress")
+  const resizeCount = tui?.renderer.listenerCount("resize")
+  await key("?")
+  await settle(() => focus() === "database-action-palette")
+  expect(tui?.captureCharFrame()).toContain("AÇÕES DO BANCO")
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("Preparar nova linha"))
+  await key("RETURN")
+  expect(find("database-action-palette")).toBeDefined()
+  expect(tui?.captureCharFrame()).toContain("Abra os dados de uma tabela")
+  await key("ESCAPE")
+  await settle(() => focus() === "database-action-palette")
+  await key("ESCAPE")
+  await settle(() => focus() === "table-list")
+  await key("?")
+  await key("w")
+  await key("c")
+  expect(focus()).toBe("database-action-palette")
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("conexões"))
+  await key("ESCAPE")
+  await settle(() => focus() === "database-action-palette")
+  await key("RETURN")
+  await settle(() => Boolean(find("database-connection-list")))
+  expect(find("database-action-palette")).toBeUndefined()
+  await key("ESCAPE")
+  await settle(() => focus() === "table-list")
+  await key("?")
+  await key("ESCAPE")
+  await settle(() => !find("database-action-palette"))
+  expect(focus()).toBe("table-list")
+  expect(tui?.renderer.keyInput.listenerCount("keypress")).toBe(listenerCount)
+  expect(tui?.renderer.listenerCount("resize")).toBe(resizeCount)
+  await key("/")
+  await key("?")
+  expect(focus()).toBe("table-search")
+  expect(find("database-action-palette")).toBeUndefined()
+})
+
+test("SQL action palette preserves its editor and stages writes through the existing review", async () => {
+  await mount("framed")
+  const find = (id: string) => tui?.renderer.root.findDescendantById(id)
+  const sqlEditor = editor()
+  await key("?")
+  await settle(() => Boolean(find("database-query-sql-1-action-palette")))
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("Preparar nova linha"))
+  await key("RETURN")
+  await settle(() => !find("database-query-sql-1-action-palette"))
+  expect(editor()).toBe(sqlEditor)
+  expect(editor().plainText).toContain("SELECT id, name FROM demo")
+  await key("?")
+  await settle(() => Boolean(find("database-query-sql-1-action-palette")))
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("Revisar alterações"))
+  await key("RETURN")
+  await settle(() => Boolean(find("database-changes-modal")))
+  const db = new Database(join(fixtureRoot, "fixture.sqlite"), { readonly: true })
+  try {
+    expect(db.query("SELECT count(*) AS n FROM demo").get()).toEqual({ n: 1 })
+  } finally {
+    db.close()
+  }
+})
+
+test("SQL palette opens by mouse from the editor and leaves literal question marks untouched", async () => {
+  await mount("compact")
+  const focus = () => tui?.renderer.currentFocusedRenderable?.id
+  const find = (id: string) => tui?.renderer.root.findDescendantById(id)
+  await key("a")
+  await settle(() => focus() === "database-query-sql-1-editor")
+  const sqlEditor = editor()
+  const source = sqlEditor.plainText
+  await key("?")
+  expect(sqlEditor.plainText).toContain("?")
+  expect(find("database-query-sql-1-action-palette")).toBeUndefined()
+  const opener = find("database-query-sql-1-action-palette-open")
+  if (!opener) throw new Error("Missing SQL palette button")
+  const listeners = tui?.renderer.listenerCount("resize")
+  await act(async () => tui?.mockMouse.click(opener.screenX + 1, opener.screenY))
+  await settle(() => focus() === "database-query-sql-1-action-palette")
+  await key("ESCAPE")
+  await settle(() => focus() === "database-query-sql-1-editor")
+  expect(editor()).toBe(sqlEditor)
+  expect(sqlEditor.plainText.replace("?", "")).toBe(source)
+  expect(tui?.renderer.listenerCount("resize")).toBe(listeners)
 })

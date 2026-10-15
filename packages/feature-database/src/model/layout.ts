@@ -5,7 +5,7 @@ export function databaseSidebarWidth(terminalWidth: number) {
 }
 
 export function databaseActionRowCount(tableAreaWidth: number, dataView: boolean) {
-  if (!dataView) return 1
+  if (!dataView) return 0
   return tableAreaWidth < 64 ? 3 : 2
 }
 
@@ -19,19 +19,15 @@ export function nextDatabaseTableSort(
 }
 
 export function databaseLoadingInsets({
-  hasTableHistory,
   hasSelectedTable,
   actionRowCount,
-  compactActions,
 }: {
-  hasTableHistory: boolean
   hasSelectedTable: boolean
   actionRowCount: number
-  compactActions: boolean
 }) {
   return {
-    top: (hasTableHistory ? 2 : 0) + (hasSelectedTable ? actionRowCount : 0),
-    bottom: compactActions ? 3 : 2,
+    top: hasSelectedTable ? 1 : 0,
+    bottom: 1 + Math.max(1, hasSelectedTable ? actionRowCount : 0),
   }
 }
 
