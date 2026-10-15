@@ -102,7 +102,10 @@ function checkState(value: string): PullRequestCheckState {
   return "unknown"
 }
 
-function normalizeNode(node: unknown, host: string): PullRequestSummary | null {
+export function normalizePullRequestSummary(
+  node: unknown,
+  host: string,
+): PullRequestSummary | null {
   if (!node || typeof node !== "object") return null
   const raw = node as Record<string, unknown>
   const repository = raw.repository as { name?: unknown; owner?: { login?: unknown } } | undefined
@@ -144,7 +147,7 @@ export function normalizePullRequestSearchPage(
   const search = raw.data?.search
   const nodes = Array.isArray(search?.nodes) ? search.nodes : []
   const items = nodes.flatMap((node) => {
-    const item = normalizeNode(node, host)
+    const item = normalizePullRequestSummary(node, host)
     return item ? [item] : []
   })
   return {

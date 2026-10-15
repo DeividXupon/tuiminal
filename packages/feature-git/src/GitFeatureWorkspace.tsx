@@ -31,11 +31,13 @@ function MountedGitWorkspace({
   children: React.ReactNode
 }) {
   if (!mounted) return null
+  // Native renderables clamp zero-height boxes to one row; hide retained tabs explicitly.
   return (
     <box
+      visible={selected}
       style={{
-        height: selected ? "100%" : 0,
-        flexGrow: selected ? 1 : 0,
+        height: "100%",
+        flexGrow: 1,
         overflow: "hidden",
       }}
     >
@@ -91,7 +93,9 @@ function GitInteractiveWorkspace({
   const [compareMounted, setCompareMounted] = useState(false)
   const [localMode, setLocalMode] = useState<GitLocalMode>("diffs")
   const [baseRefreshRequest, setBaseRefreshRequest] = useState(0)
-  const localTargetRoot = useLocalGitTargetRoot(localConfigurationRevision)
+  const [paletteProjectRevision, setPaletteProjectRevision] = useState(0)
+  // Both revisions only increase, so their sum changes whenever either source changes.
+  const localTargetRoot = useLocalGitTargetRoot(localConfigurationRevision + paletteProjectRevision)
   const browser = useGitBrowser()
   const workspaceActive = active && !browser.modalOpen
   const identity = useGitHubNavigationIdentity(activeTab, configurationRevision)
@@ -138,20 +142,19 @@ function GitInteractiveWorkspace({
           else selectTab("base")
         }}
       />
-      <box
-        style={{
-          height: activeTab === "base" && localMode === "diffs" ? "100%" : 0,
-          flexGrow: activeTab === "base" && localMode === "diffs" ? 1 : 0,
-          overflow: "hidden",
-        }}
-      >
+      <MountedGitWorkspace mounted selected={activeTab === "base" && localMode === "diffs"}>
         <GitBaseWorkspace
           active={workspaceActive && activeTab === "base" && localMode === "diffs"}
           refreshRequest={baseRefreshRequest}
           targetDirectory={localTargetRoot}
           onOpenLocalConfiguration={onOpenLocalConfiguration}
+          onNavigate={(target) => {
+            if (target === "compare") toggleLocalMode()
+            else selectTab(target)
+          }}
+          onProjectChanged={() => setPaletteProjectRevision((current) => current + 1)}
         />
-      </box>
+      </MountedGitWorkspace>
       <MountedGitWorkspace
         mounted={compareMounted}
         selected={activeTab === "base" && localMode === "compare"}
@@ -169,6 +172,7 @@ function GitInteractiveWorkspace({
           configurationRevision={configurationRevision}
           onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
+          onSelectTab={selectTab}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={issuesMounted} selected={activeTab === "issues"}>
@@ -177,6 +181,7 @@ function GitInteractiveWorkspace({
           configurationRevision={configurationRevision}
           onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
+          onSelectTab={selectTab}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={inboxMounted} selected={activeTab === "inbox"}>
@@ -184,6 +189,7 @@ function GitInteractiveWorkspace({
           active={workspaceActive && activeTab === "inbox"}
           configurationRevision={configurationRevision}
           onOpenBrowser={browser.open}
+          onSelectTab={selectTab}
         />
       </MountedGitWorkspace>
       {browser.modal}

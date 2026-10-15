@@ -1,5 +1,5 @@
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { PullRequestSection } from "../../model/pr/types"
@@ -29,6 +29,7 @@ export function SectionStrip({
           label={`${translateUi(section.title)} ${counts[section.id] ?? "…"}`}
           accent={COLORS.git}
           active={index === activeIndex}
+          backgroundColor={index % 2 === 0 ? COLORS.panel : COLORS.panelAlt}
           onPress={() => onSelect(index)}
         />
       ))}

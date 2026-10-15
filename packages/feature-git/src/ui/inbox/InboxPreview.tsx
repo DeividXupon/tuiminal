@@ -1,11 +1,20 @@
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { formatUiDateTime, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
+import type { RefObject } from "react"
 import type { InboxNotification } from "../../model/inbox/types"
+import { InboxConversationContent } from "./InboxConversationContent"
+import type { InboxConversationController } from "./useInboxConversation"
 
 export function InboxPreview({
   item,
   saved,
+  focused,
+  scrollRef,
+  conversation,
+  onFocus,
   onOpen,
   onRead,
   onDone,
@@ -14,6 +23,10 @@ export function InboxPreview({
 }: {
   item: InboxNotification | null
   saved: boolean
+  focused: boolean
+  scrollRef: RefObject<ScrollBoxRenderable | null>
+  conversation: InboxConversationController
+  onFocus: () => void
   onOpen: () => void
   onRead: () => void
   onDone: () => void
@@ -24,20 +37,69 @@ export function InboxPreview({
     return <text content={translateUi("Selecione uma notificação.")} style={{ fg: COLORS.muted }} />
   }
   return (
-    <box style={{ flexGrow: 1, gap: 1 }}>
-      <text content={item.title} style={{ fg: COLORS.git }} />
-      <text content={`${item.repository} · ${item.subjectType}`} style={{ fg: COLORS.text }} />
+    <box style={{ flexGrow: 1, width: "100%" }}>
+      <text
+        content={`${item.repository} · ${item.subjectType}`}
+        wrapMode="none"
+        truncate
+        style={{ height: 1, flexShrink: 0, fg: focused ? COLORS.git : COLORS.text }}
+      />
+      <text
+        id="git-inbox-preview-title"
+        content={item.title}
+        wrapMode="none"
+        truncate
+        style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
+      />
       <text
         content={`${translateUi("Motivo")}: ${item.reason} · ${translateUi("Atualizada em")}: ${formatUiDateTime(item.updatedAt, { dateStyle: "short", timeStyle: "short" })}`}
-        style={{ fg: COLORS.muted }}
+        wrapMode="none"
+        truncate
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
-      <text content={item.url} style={{ fg: COLORS.muted }} />
-      <box style={{ height: 2, flexShrink: 0, flexDirection: "row", flexWrap: "wrap" }}>
+      {conversation.available ? (
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          {focused ? (
+            <DirectionalButton
+              direction={-1}
+              level="nested"
+              accent={COLORS.git}
+              onPress={() =>
+                conversation.changeTab(conversation.tab === "overview" ? "activity" : "overview")
+              }
+            />
+          ) : null}
+          {(["overview", "activity"] as const).map((tab) => (
+            <InlineButton
+              key={tab}
+              id={`git-inbox-preview-tab-${tab}`}
+              label={tab === "overview" ? "VISÃO GERAL" : "ATIVIDADE"}
+              active={conversation.tab === tab}
+              accent={COLORS.git}
+              onPress={() => {
+                conversation.changeTab(tab)
+                onFocus()
+              }}
+            />
+          ))}
+          {focused ? (
+            <DirectionalButton
+              direction={1}
+              level="nested"
+              accent={COLORS.git}
+              onPress={() =>
+                conversation.changeTab(conversation.tab === "overview" ? "activity" : "overview")
+              }
+            />
+          ) : null}
+        </box>
+      ) : null}
+      <box style={{ flexShrink: 0, flexDirection: "row", flexWrap: "wrap" }}>
         <InlineButton id="git-inbox-open" label="[O] Abrir" accent={COLORS.git} onPress={onOpen} />
         {item.unread ? (
           <InlineButton
             id="git-inbox-read"
-            label="[M] Marcar lida"
+            label="[Shift+M] Marcar lida"
             accent={COLORS.git}
             onPress={onRead}
           />
@@ -61,12 +123,29 @@ export function InboxPreview({
           onPress={onUnsubscribe}
         />
       </box>
-      <text
-        content={translateUi(
-          "Marcar como lida mantém a notificação; concluir remove da caixa de entrada.",
+      <scrollbox
+        key={`${item.id}:${conversation.tab}`}
+        id="git-inbox-preview-scroll"
+        ref={scrollRef}
+        scrollY
+        viewportCulling
+        style={{ flexGrow: 1, width: "100%" }}
+      >
+        {conversation.available ? (
+          <InboxConversationContent conversation={conversation} onFocus={onFocus} />
+        ) : (
+          <>
+            <text content={translateUi("DETALHES")} style={{ fg: COLORS.git }} />
+            <text content={item.url} style={{ fg: COLORS.muted }} />
+            <text
+              content={translateUi(
+                "Marcar como lida mantém a notificação; concluir remove da caixa de entrada.",
+              )}
+              style={{ fg: COLORS.muted, marginTop: 1 }}
+            />
+          </>
         )}
-        style={{ fg: COLORS.muted }}
-      />
+      </scrollbox>
     </box>
   )
 }

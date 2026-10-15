@@ -14,7 +14,6 @@ import {
 import {
   adjacentPreviewTab,
   movePullRequestIndex,
-  nextPullRequestPreviewPosition,
   pullRequestActionKindForShortcut,
   pullRequestNavigationAction,
   pullRequestWorkspaceAction,
@@ -105,12 +104,6 @@ describe("Git Diffs/PR workspace", () => {
     expect(resolvePullRequestLayout(140, 30)).toBe("side-by-side")
     expect(resolvePullRequestLayout(90, 24)).toBe("stacked")
     expect(resolvePullRequestLayout(60, 18)).toBe("single")
-    expect(resolvePullRequestLayout(100, 24, "right")).toBe("side-by-side")
-    expect(resolvePullRequestLayout(100, 24, "bottom")).toBe("stacked")
-    expect(resolvePullRequestLayout(70, 18, "bottom")).toBe("single")
-    expect(nextPullRequestPreviewPosition("auto")).toBe("right")
-    expect(nextPullRequestPreviewPosition("right")).toBe("bottom")
-    expect(nextPullRequestPreviewPosition("bottom")).toBe("auto")
   })
 
   test("bounds rows and cycles preview tabs", () => {
@@ -186,7 +179,7 @@ describe("Git Diffs/PR workspace", () => {
         focus: "list",
         hasSelection: true,
       }),
-    ).toEqual({ type: "toggle-preview" })
+    ).toBeNull()
     expect(
       pullRequestWorkspaceAction({
         keyName: "d",
@@ -202,15 +195,20 @@ describe("Git Diffs/PR workspace", () => {
         focus: "list",
         hasSelection: true,
       }),
-    ).toEqual({ type: "cycle-preview-position" })
+    ).toBeNull()
     expect(
       pullRequestNavigationAction({
-        keyName: "g",
-        shift: true,
+        keyName: "end",
         focus: "list",
         hasSelection: true,
       }),
     ).toEqual({ type: "select-edge", target: "last" })
+    // [G] / [Shift+G] no longer jump to the list edges.
+    for (const shift of [false, true]) {
+      expect(
+        pullRequestNavigationAction({ keyName: "g", shift, focus: "list", hasSelection: true }),
+      ).toBeNull()
+    }
   })
 })
 

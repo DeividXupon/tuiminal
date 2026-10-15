@@ -1,9 +1,6 @@
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import type { PullRequestPreviewConfig } from "../../model/pr/config"
+import type { ReactNode } from "react"
 import type { PullRequestFocus, PullRequestLayoutMode } from "../../model/pr/navigation"
 import type { PullRequestComment, PullRequestPreviewTab } from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
@@ -16,6 +13,7 @@ import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
 
 type DashboardPanelsProps = {
+  paginationActive: boolean
   presentation: PullRequestDashboardPresentation
   layout: PullRequestLayoutMode
   focus: PullRequestFocus
@@ -36,7 +34,6 @@ type DashboardPanelsProps = {
   onCopyUrl: () => void
   onCopyNumber: () => void
   onOpenDiff: () => void
-  onOpenActions: () => void
   watching: boolean
   onToggleWatch: () => void
   loadingMoreDetails: boolean
@@ -47,9 +44,12 @@ type DashboardPanelsProps = {
   onOpenWorkflow: (runId: number) => void
   onReactComment: (comment: PullRequestComment) => void
   onReplyComment: (comment: PullRequestComment) => void
+  /** `[M]` box-selection paint for the list or preview panel. */
+  boxOverlay?: ((box: "list" | "preview") => ReactNode) | undefined
 }
 
 function DashboardPanels({
+  paginationActive,
   presentation,
   layout,
   focus,
@@ -68,7 +68,6 @@ function DashboardPanels({
   onCopyUrl,
   onCopyNumber,
   onOpenDiff,
-  onOpenActions,
   watching,
   onToggleWatch,
   loadingMoreDetails,
@@ -81,6 +80,7 @@ function DashboardPanels({
   onOpenWorkflow,
   onReactComment,
   onReplyComment,
+  boxOverlay,
 }: DashboardPanelsProps) {
   const showList = layout !== "single" || focus === "list"
   const showPreview = layout !== "single" || focus === "preview"
@@ -115,6 +115,7 @@ function DashboardPanels({
             loadingMore={loadingMore}
             {...(presentation.section.columns ? { columns: presentation.section.columns } : {})}
           />
+          {boxOverlay?.("list")}
         </box>
       ) : null}
       {showPreview ? (
@@ -133,7 +134,7 @@ function DashboardPanels({
             item={selected}
             details={details}
             activeTab={previewTab}
-            focused={focus === "preview"}
+            focused={paginationActive && focus === "preview"}
             width={previewWidth}
             scrollOffset={previewScrollOffset}
             descriptionExpanded={descriptionExpanded}
@@ -146,7 +147,6 @@ function DashboardPanels({
             onCopyUrl={onCopyUrl}
             onCopyNumber={onCopyNumber}
             onOpenDiff={onOpenDiff}
-            onOpenActions={onOpenActions}
             watching={watching}
             onToggleWatch={onToggleWatch}
             loadingMore={loadingMoreDetails}
@@ -157,6 +157,7 @@ function DashboardPanels({
             onReactComment={onReactComment}
             onReplyComment={onReplyComment}
           />
+          {boxOverlay?.("preview")}
         </box>
       ) : null}
     </box>
@@ -165,6 +166,7 @@ function DashboardPanels({
 
 export function PullRequestDashboardView({
   active,
+  paginationActive,
   dashboard,
   presentation,
   layout,
@@ -197,35 +199,25 @@ export function PullRequestDashboardView({
   onOpenWorkflow,
   onReactComment,
   onReplyComment,
+  boxOverlay,
   onSelectSection,
   onEditQuery,
-  notice,
   loadingMore,
   refreshing,
   onSelectRow,
   onPreviewTab,
   onRetry,
-  onLoadMore,
-  previewPosition,
-  previewVisible,
-  onCyclePreviewPosition,
-  onTogglePreview,
 }: DashboardPanelsProps & {
   active: boolean
   dashboard: PullRequestDashboardState
   onSelectSection: (index: number) => void
   onEditQuery: () => void
   onCreate: () => void
+  onOpenActions: () => void
   canCreate: boolean
-  notice: string
   refreshing: boolean
   onRetry: () => void
-  onLoadMore: () => void
   terminalWidth: number
-  previewPosition: PullRequestPreviewConfig["position"]
-  previewVisible: boolean
-  onCyclePreviewPosition: () => void
-  onTogglePreview: () => void
 }) {
   const background = LAYOUT.workspaceBackground
   return (
@@ -235,7 +227,9 @@ export function PullRequestDashboardView({
         position: "relative",
         flexGrow: 1,
         backgroundColor: background,
-        padding: LAYOUT.outerPadding,
+        border: ["top"],
+        borderColor: COLORS.border,
+        paddingX: LAYOUT.outerPadding,
         gap: 0,
       }}
     >
@@ -245,16 +239,14 @@ export function PullRequestDashboardView({
         refreshing={refreshing}
         demo={dashboard.status === "demo"}
         canCreate={canCreate}
-        previewVisible={previewVisible}
-        previewPosition={previewPosition}
         onCreate={onCreate}
         onSelectSection={onSelectSection}
         onEditQuery={onEditQuery}
-        onTogglePreview={onTogglePreview}
-        onCyclePreviewPosition={onCyclePreviewPosition}
+        onOpenActions={onOpenActions}
       />
       {presentation.showDashboard ? (
         <DashboardPanels
+          paginationActive={paginationActive}
           presentation={presentation}
           layout={layout}
           focus={focus}
@@ -275,7 +267,6 @@ export function PullRequestDashboardView({
           onCopyUrl={onCopyUrl}
           onCopyNumber={onCopyNumber}
           onOpenDiff={onOpenDiff}
-          onOpenActions={onOpenActions}
           watching={watching}
           onToggleWatch={onToggleWatch}
           loadingMoreDetails={loadingMoreDetails}
@@ -286,6 +277,7 @@ export function PullRequestDashboardView({
           onOpenWorkflow={onOpenWorkflow}
           onReactComment={onReactComment}
           onReplyComment={onReplyComment}
+          boxOverlay={boxOverlay}
         />
       ) : (
         <DashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />
@@ -296,26 +288,6 @@ export function PullRequestDashboardView({
         accent={COLORS.git}
         background={background}
       />
-      {dashboard.status === "ready" && dashboard.hasNextPage ? (
-        <InlineButton
-          id="git-pr-load-more"
-          label={loadingMore ? "[N] Carregando…" : "[N] Carregar mais"}
-          accent={COLORS.git}
-          disabled={loadingMore}
-          onPress={onLoadMore}
-        />
-      ) : null}
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <ShortcutText
-          content={translateUi(
-            "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [D] Diff  [?] Ações",
-          )}
-          style={{ fg: COLORS.muted }}
-        />
-        {notice ? <text content={notice} style={{ fg: COLORS.danger }} /> : null}
-      </box>
     </box>
   )
 }

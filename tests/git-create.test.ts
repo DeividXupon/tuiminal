@@ -5,12 +5,12 @@ import { join } from "node:path"
 import { validateGitHubCreateDraft } from "../packages/feature-git/src/model/create-item"
 import { issueWorkspaceAction } from "../packages/feature-git/src/model/issue/navigation"
 import { pullRequestWorkspaceAction } from "../packages/feature-git/src/model/pr/navigation"
-import { createGitHubItem } from "../packages/feature-git/src/services/github/create-item"
-import { listGitHubRepositoryBranches } from "../packages/feature-git/src/services/github/branch-list"
 import {
   commitSubject,
   readGitHubBranchCommitTitle,
 } from "../packages/feature-git/src/services/github/branch-commit-title"
+import { listGitHubRepositoryBranches } from "../packages/feature-git/src/services/github/branch-list"
+import { createGitHubItem } from "../packages/feature-git/src/services/github/create-item"
 import { readGitHubRepositoryDefaultBranch } from "../packages/feature-git/src/services/github/repository-default-branch"
 
 const directory = mkdtempSync(join(tmpdir(), "tuiminal-git-create-"))
@@ -114,8 +114,6 @@ test("creation validates before any GitHub request and keeps Ctrl+N available wi
       key: { name: "n", ctrl: true },
       focus: "list",
       hasSelection: false,
-      canLoadMore: false,
-      canLoadPreview: false,
     }),
   ).toEqual({ type: "create-issue" })
   expect(
@@ -124,7 +122,6 @@ test("creation validates before any GitHub request and keeps Ctrl+N available wi
       ctrl: true,
       focus: "list",
       hasSelection: false,
-      canLoadMore: false,
     }),
   ).toEqual({ type: "create-pr" })
 })

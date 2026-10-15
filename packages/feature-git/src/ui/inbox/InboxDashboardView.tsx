@@ -1,22 +1,23 @@
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
   COLORS,
   focusedPanelBorder,
   LAYOUT,
   panelBorder,
 } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import type { ReactNode, RefObject } from "react"
 import type { InboxNotification, InboxSection } from "../../model/inbox/types"
-import { InboxList } from "./InboxList"
-import { InboxPreview } from "./InboxPreview"
 import {
   GitHubAuthenticationPanel,
   GitHubCliRequirementPanel,
 } from "../shared/GitHubCliRequirementPanel"
+import { InboxList } from "./InboxList"
+import { InboxPreview } from "./InboxPreview"
 import type { InboxDashboardState } from "./useInboxDashboard"
+import type { InboxConversationController } from "./useInboxConversation"
 
 export function inboxDashboardError(state: InboxDashboardState) {
   if (state.status === "error" || state.status === "config-error") return state.error
@@ -38,44 +39,54 @@ type ReadyViewProps = {
   loadingFrame: string
   onSelect: (index: number) => void
   onFocusList: () => void
+  onFocusPreview: () => void
+  previewScrollRef: RefObject<ScrollBoxRenderable | null>
+  conversation: InboxConversationController
   onOpen: () => void
   onRead: () => void
   onDone: () => void
   onSave: () => void
   onUnsubscribe: () => void
+  /** `[M]` box-selection paint for the list or preview panel. */
+  boxOverlay?: ((box: "list" | "preview") => ReactNode) | undefined
 }
 
 function InboxReadyView(props: ReadyViewProps) {
   return (
     <box style={{ flexGrow: 1, flexDirection: props.wide ? "row" : "column", gap: LAYOUT.gap }}>
-      <box
-        id="git-inbox-list-panel"
-        style={{
-          ...focusedPanelBorder(props.focus === "list", COLORS.git),
-          width: props.wide ? props.listWidth : "100%",
-          flexGrow: props.wide ? 0 : 1,
-          backgroundColor: COLORS.panel,
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <InboxList
-          items={props.items}
-          selectedIndex={props.selectedIndex}
-          focused={props.focus === "list"}
-          width={props.listWidth}
-          savedIds={props.savedIds}
-          loadingMore={props.loadingMore}
-          loadingFrame={props.loadingFrame}
-          onSelect={(index) => {
-            props.onSelect(index)
-            props.onFocusList()
+      {props.wide || props.focus === "list" ? (
+        <box
+          id="git-inbox-list-panel"
+          style={{
+            ...focusedPanelBorder(props.focus === "list", COLORS.git),
+            width: props.wide ? props.listWidth : "100%",
+            flexGrow: props.wide ? 0 : 1,
+            backgroundColor: COLORS.panel,
+            paddingLeft: 1,
+            paddingRight: 1,
           }}
-        />
-      </box>
+        >
+          <InboxList
+            items={props.items}
+            selectedIndex={props.selectedIndex}
+            focused={props.focus === "list"}
+            width={props.listWidth}
+            savedIds={props.savedIds}
+            loadingMore={props.loadingMore}
+            loadingFrame={props.loadingFrame}
+            onSelect={(index) => {
+              props.onSelect(index)
+              props.onFocusList()
+            }}
+          />
+          {props.boxOverlay?.("list")}
+        </box>
+      ) : null}
       {props.wide || props.focus === "preview" ? (
+        // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI pane focus also has H/L/Enter/Esc keyboard controls.
         <box
           id="git-inbox-preview-panel"
+          onMouseDown={props.onFocusPreview}
           style={{
             ...focusedPanelBorder(props.focus === "preview", COLORS.git),
             flexGrow: 1,
@@ -87,12 +98,17 @@ function InboxReadyView(props: ReadyViewProps) {
           <InboxPreview
             item={props.selected}
             saved={Boolean(props.selected && props.savedIds.has(props.selected.id))}
+            focused={props.focus === "preview"}
+            scrollRef={props.previewScrollRef}
+            conversation={props.conversation}
+            onFocus={props.onFocusPreview}
             onOpen={props.onOpen}
             onRead={props.onRead}
             onDone={props.onDone}
             onSave={props.onSave}
             onUnsubscribe={props.onUnsubscribe}
           />
+          {props.boxOverlay?.("preview")}
         </box>
       ) : null}
     </box>
@@ -148,6 +164,7 @@ export function InboxDashboardView({
   sectionCounts,
   sectionIndex,
   onSelectSection,
+  onOpenActions,
   readyProps,
   onRetry,
 }: {
@@ -158,6 +175,7 @@ export function InboxDashboardView({
   sectionCounts: readonly number[]
   sectionIndex: number
   onSelectSection: (index: number) => void
+  onOpenActions: () => void
   readyProps: ReadyViewProps
   onRetry: () => void
 }) {
@@ -170,14 +188,15 @@ export function InboxDashboardView({
         position: "relative",
         flexGrow: 1,
         backgroundColor: background,
-        padding: LAYOUT.outerPadding,
+        border: ["top"],
+        borderColor: COLORS.border,
+        paddingX: LAYOUT.outerPadding,
         gap: 0,
       }}
     >
       <box
         id="git-inbox-title"
         style={{
-          ...panelBorder(),
           height: 1,
           flexShrink: 0,
           flexDirection: "row",
@@ -187,10 +206,21 @@ export function InboxDashboardView({
           backgroundColor: COLORS.panel,
         }}
       >
-        <text
-          content={translateUi(state.status === "demo" ? "INBOX · DEMO" : "INBOX DO GITHUB")}
-          style={{ fg: COLORS.git }}
-        />
+        <box style={{ flexDirection: "row", height: 1, gap: 1, minWidth: 0 }}>
+          <text
+            id="git-inbox-title-label"
+            content={translateUi(state.status === "demo" ? "INBOX · DEMO" : "INBOX DO GITHUB")}
+            wrapMode="none"
+            truncate
+            style={{ fg: COLORS.git, minWidth: 0 }}
+          />
+          <InlineButton
+            id="git-inbox-open-actions"
+            label="[?] Ações"
+            accent={COLORS.git}
+            onPress={onOpenActions}
+          />
+        </box>
         {refreshing ? (
           <text
             content={translateUi("ATUALIZANDO TODAS AS NOTIFICAÇÕES…")}
@@ -211,6 +241,7 @@ export function InboxDashboardView({
             label={`${section.title} ${sectionCounts[index] ?? 0}`}
             accent={COLORS.git}
             active={index === sectionIndex}
+            backgroundColor={index % 2 === 0 ? COLORS.panel : COLORS.panelAlt}
             onPress={() => onSelectSection(index)}
           />
         ))}
@@ -232,10 +263,7 @@ export function InboxDashboardView({
         accent={COLORS.git}
         background={background}
       />
-      <ShortcutText
-        content="[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [R] Atualizar  [O] Abrir  [M] Lida  [B] Salvar  [D] Concluir  [U] Parar de acompanhar"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
     </box>
   )
 }
+import type { ScrollBoxRenderable } from "@opentui/core"

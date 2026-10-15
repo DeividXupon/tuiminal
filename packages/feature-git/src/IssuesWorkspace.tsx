@@ -1,18 +1,20 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { sortedIssueComments } from "./model/issue/activity"
+import { useCallback, useEffect, useState } from "react"
 import { defaultCreateRepository } from "./model/create-item"
+import { sortedIssueComments } from "./model/issue/activity"
 import {
   adjacentIssuePreviewTab,
-  moveIssueIndex,
-  resolveIssueLayout,
   type IssueFocus,
   type IssueWorkspaceAction,
+  moveIssueIndex,
+  resolveIssueLayout,
 } from "./model/issue/navigation"
 import { issueIdentityKey } from "./model/issue/query"
 import type { IssuePreviewTab } from "./model/issue/types"
 import { remoteDashboardHasNextPage } from "./model/remote-pagination"
+import type { GitWorkspaceTab } from "./model/workspace"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 import { IssueDashboardView } from "./ui/issue/IssueDashboardView"
 import { issueDashboardPresentation } from "./ui/issue/presentation"
 import { useIssueActions } from "./ui/issue/useIssueActions"
@@ -20,27 +22,29 @@ import { useIssueConfiguration } from "./ui/issue/useIssueConfiguration"
 import { useIssueDashboard } from "./ui/issue/useIssueDashboard"
 import { useIssueDetails } from "./ui/issue/useIssueDetails"
 import { useIssueNotifications } from "./ui/issue/useIssueNotifications"
+import { useIssuePalette } from "./ui/issue/useIssuePalette"
 import { useIssueWorkspaceKeyboard } from "./ui/issue/useIssueWorkspaceKeyboard"
-import { useAutoPage } from "./ui/useAutoPagination"
-import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
-import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
-import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
   issueDashboardAuth,
   issueDashboardProfileTarget,
   openIssueWithNotice,
 } from "./ui/issue/workspace-helpers"
+import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
+import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
+import { useAutoPage } from "./ui/useAutoPagination"
 
 export function IssuesWorkspace({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
   onOpenBrowser = defaultGitBrowserOpener,
+  onSelectTab,
 }: {
   active: boolean
   configurationRevision?: number
   onLocalCheckout?: () => void
   onOpenBrowser?: GitBrowserOpener
+  onSelectTab?: ((tab: GitWorkspaceTab) => void) | undefined
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -50,7 +54,6 @@ export function IssuesWorkspace({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [selectedIdentity, setSelectedIdentity] = useState<string | null>(null)
   const [focus, setFocus] = useState<IssueFocus>("list")
-  const [previewVisible, setPreviewVisible] = useState(true)
   const [previewTab, setPreviewTab] = useState<IssuePreviewTab>("overview")
   const [previewOffsets, setPreviewOffsets] = useState<Record<IssuePreviewTab, number>>({
     overview: 0,
@@ -137,12 +140,7 @@ export function IssuesWorkspace({
       ? sortedIssueComments(details.details.comments, details.details.identity)
       : []
   const selectedComment = comments[selectedCommentIndex] ?? null
-  const responsiveLayout = resolveIssueLayout(
-    terminal.width,
-    terminal.height,
-    configuration.previewPosition,
-  )
-  const layout = previewVisible ? responsiveLayout : "single"
+  const layout = resolveIssueLayout(terminal.width, terminal.height)
   const modalOpen = configuration.modalOpen || issueActions.modalOpen || creation.open
   useIssueNotifications(notice, dashboard, details)
 
@@ -235,7 +233,6 @@ export function IssuesWorkspace({
         selectRow(action.target === "first" ? 0 : Math.max(0, presentation.items.length - 1))
         break
       case "focus":
-        if (action.target === "preview") setPreviewVisible(true)
         setFocus(action.target)
         break
       case "move-preview-tab":
@@ -244,7 +241,8 @@ export function IssuesWorkspace({
       case "scroll-preview":
         setPreviewOffsets((current) => ({
           ...current,
-          [previewTab]: Math.max(0, current[previewTab] + action.delta),
+          // This is a relative keyboard counter; the viewport clamps the actual position.
+          [previewTab]: current[previewTab] + action.delta,
         }))
         break
       case "toggle-description":
@@ -257,46 +255,41 @@ export function IssuesWorkspace({
         void refresh()
         void refreshDetailsQuietly()
         break
-      case "load-more":
-        void loadMore()
-        break
-      case "load-preview-more":
-        void loadMoreDetails()
-        break
       case "open-action-menu":
-        issueActions.openMenu()
+        palette.openPalette()
         break
       case "prepare-action":
         issueActions.openAction(action.kind)
         break
-      case "toggle-preview":
-        setFocus("list")
-        setPreviewVisible((current) => !current)
-        break
-      case "cycle-preview-position":
-        configuration.cyclePreviewPosition()
-        break
     }
   }
 
+  const palette = useIssuePalette({
+    active: active && !modalOpen,
+    focus,
+    hasSelection: Boolean(selected),
+    previewTab,
+    selectedComment,
+    creation,
+    actions: issueActions,
+    onSelectTab,
+    dispatch: handleAction,
+  })
   useIssueWorkspaceKeyboard({
     active,
     blocked:
-      modalOpen || dashboard.status === "requirements" || dashboard.status === "authentication",
+      modalOpen ||
+      palette.open ||
+      dashboard.status === "requirements" ||
+      dashboard.status === "authentication",
     focus,
     hasSelection: Boolean(selected),
-    canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
-    canLoadPreview: details.status === "ready" && details.details.commentPage.hasNextPage,
     previewTab,
     commentCount: comments.length,
     onCommentMove: (delta) =>
       setSelectedCommentIndex((current) => moveIssueIndex(current, comments.length, delta)),
-    onCommentReact: () => {
-      if (selectedComment) issueActions.openCommentAction("reaction", selectedComment)
-    },
-    onCommentReply: () => {
-      if (selectedComment) issueActions.openCommentAction("reply", selectedComment)
-    },
+    onCommentReact: palette.reactToComment,
+    onCommentReply: palette.replyToComment,
     onWorkspaceAction: handleAction,
   })
 
@@ -309,6 +302,7 @@ export function IssuesWorkspace({
     <>
       <IssueDashboardView
         active={active}
+        paginationActive={active && !modalOpen && !palette.open}
         terminalWidth={terminal.width}
         dashboard={dashboard}
         presentation={presentation}
@@ -323,9 +317,6 @@ export function IssuesWorkspace({
         descriptionExpanded={descriptionExpanded}
         selectedCommentIndex={selectedCommentIndex}
         loadingMoreDetails={loadingMoreDetails}
-        previewPosition={configuration.previewPosition}
-        previewVisible={previewVisible}
-        notice={notice}
         loadingMore={loadingMore}
         refreshing={refreshing}
         onSelectRow={(index) => {
@@ -340,7 +331,8 @@ export function IssuesWorkspace({
         onOpenBrowser={() => handleAction({ type: "open-browser" })}
         onCopyUrl={() => handleAction({ type: "copy-url" })}
         onCopyNumber={() => handleAction({ type: "copy-number" })}
-        onOpenActions={issueActions.openMenu}
+        onOpenActions={palette.openPalette}
+        boxOverlay={palette.boxOverlay}
         onCreate={creation.openModal}
         canCreate={creation.available}
         onSelectComment={(index) => {
@@ -353,15 +345,11 @@ export function IssuesWorkspace({
         onSelectSection={selectSection}
         onEditQuery={configuration.openQuery}
         onRetry={() => void refresh()}
-        onLoadMore={() => void loadMore()}
-        onCyclePreviewPosition={configuration.cyclePreviewPosition}
-        onTogglePreview={() => {
-          setFocus("list")
-          setPreviewVisible((current) => !current)
-        }}
       />
       {configuration.modals}
       {issueActions.modals}
+      {palette.palette}
+      {palette.boxFocusNode}
       {creation.modal}
     </>
   )

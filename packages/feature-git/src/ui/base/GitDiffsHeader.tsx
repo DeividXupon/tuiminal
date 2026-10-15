@@ -1,29 +1,26 @@
-import { memo } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { memo } from "react"
 import type { GitSnapshot } from "../../model/types"
 import { LOADING_FRAMES } from "../../rendering/constants"
-import { fitLine } from "../../rendering/diff"
 
 export const GitDiffsHeader = memo(function GitDiffsHeader({
   snapshot,
   loading,
   motionFrame,
-  stagedCount,
-  unstagedCount,
   narrow,
-  terminalWidth,
   onConfigure,
+  actionsButtonId,
+  onOpenActions,
 }: {
   snapshot: GitSnapshot | null
   loading: boolean
   motionFrame: number
-  stagedCount: number
-  unstagedCount: number
   narrow: boolean
-  terminalWidth: number
   onConfigure?: (() => void) | undefined
+  actionsButtonId: string
+  onOpenActions: () => void
 }) {
   const repository = snapshot?.isRepository
     ? `◆ ${snapshot.repositoryName}  /  ${snapshot.branch}`
@@ -31,9 +28,7 @@ export const GitDiffsHeader = memo(function GitDiffsHeader({
   const status = loading
     ? `${LOADING_FRAMES[motionFrame]} ATUALIZANDO`
     : snapshot?.isRepository
-      ? narrow
-        ? `●${stagedCount} ○${unstagedCount}`
-        : `${snapshot.files.length} ALT  ●${stagedCount} ○${unstagedCount}  ↑${snapshot.ahead} ↓${snapshot.behind}`
+      ? `↑${snapshot.ahead} ↓${snapshot.behind}`
       : "◇ FORA DE UM REPOSITÓRIO"
   return (
     <box
@@ -48,23 +43,52 @@ export const GitDiffsHeader = memo(function GitDiffsHeader({
         justifyContent: "space-between",
       }}
     >
-      <box style={{ flexGrow: 1, flexDirection: "row" }}>
+      <text
+        content={repository}
+        style={{
+          fg: COLORS.git,
+          flexGrow: 1,
+          flexBasis: 0,
+          minWidth: 0,
+          height: 1,
+          wrapMode: "none",
+          truncate: true,
+        }}
+      />
+      <InlineButton
+        id="git-open-local-configuration"
+        label={translateUi(narrow ? "[Ctrl+P] Alterar" : "[Ctrl+P] Alterar projeto/branch")}
+        accent={COLORS.git}
+        disabled={!onConfigure}
+        onPress={() => onConfigure?.()}
+      />
+      <box
+        style={{
+          flexGrow: 1,
+          flexBasis: 0,
+          minWidth: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        }}
+      >
         <text
-          content={fitLine(
-            repository,
-            narrow ? Math.max(10, terminalWidth - 34) : Math.max(18, terminalWidth - 72),
-          )}
-          style={{ fg: COLORS.git }}
+          content={status}
+          style={{
+            fg: loading ? COLORS.git : COLORS.muted,
+            flexShrink: 1,
+            minWidth: 0,
+            height: 1,
+            wrapMode: "none",
+            truncate: true,
+          }}
         />
         <InlineButton
-          id="git-open-local-configuration"
-          label={translateUi(narrow ? "[Ctrl+P] Alterar" : "[Ctrl+P] Alterar projeto/branch")}
+          id={actionsButtonId}
+          label={narrow ? "[?]" : "[?] Ações"}
           accent={COLORS.git}
-          disabled={!onConfigure}
-          onPress={() => onConfigure?.()}
+          onPress={onOpenActions}
         />
       </box>
-      <text content={status} style={{ fg: loading ? COLORS.git : COLORS.muted }} />
     </box>
   )
 })

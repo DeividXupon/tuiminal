@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { discussionActionTargetPayload } from "../../model/discussion-actions"
 import {
+  type PullRequestActionAvailability,
   type PullRequestActionKind,
   preparePullRequestAction,
   pullRequestActionAvailability,
 } from "../../model/pr/actions"
+import { PULL_REQUEST_MUTATIONS } from "../../model/pr/palette"
 import { pullRequestIdentityKey } from "../../model/pr/query"
 import type {
   PullRequestAuthContext,
@@ -18,23 +19,7 @@ import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
 import { PullRequestActionCoordinator } from "../../services/pr-actions"
 import { inspectCheckoutClone } from "../../services/pr-checkout"
 import { addPullRequestClonePath, loadPullRequestConfig } from "../../storage/pr/config"
-import { ActionMenuModal, type PullRequestActionMenuItem } from "./ActionMenuModal"
 import { PullRequestActionModal } from "./PullRequestActionModal"
-
-const ACTIONS: ReadonlyArray<Pick<PullRequestActionMenuItem, "kind" | "label" | "shortcut">> = [
-  { kind: "comment", label: "Comentar", shortcut: "[C]" },
-  { kind: "reaction", label: "Reagir", shortcut: "[Shift+E]" },
-  { kind: "approve", label: "Aprovar com comentário", shortcut: "[V]" },
-  { kind: "assign", label: "Adicionar responsável", shortcut: "[A]" },
-  { kind: "unassign", label: "Remover responsável", shortcut: "[Shift+A]" },
-  { kind: "ready", label: "Marcar draft como pronto", shortcut: "[Shift+W]" },
-  { kind: "close", label: "Fechar", shortcut: "[X]" },
-  { kind: "reopen", label: "Reabrir", shortcut: "[Shift+X]" },
-  { kind: "checkout", label: "Checkout local", shortcut: "[Shift+C]" },
-  { kind: "update-branch", label: "Atualizar com a base", shortcut: "[U]" },
-  { kind: "merge", label: "Merge", shortcut: "[M]" },
-  { kind: "approve-workflow", label: "Autorizar workflow", shortcut: "[Ctrl+A]" },
-]
 
 type UiActionResult =
   | { status: "confirmed" }
@@ -64,16 +49,18 @@ async function executeSelectedAction({
   item,
   auth,
   coordinator,
+  demo,
 }: {
   kind: PullRequestActionKind
   payload: Readonly<Record<string, unknown>>
   item: PullRequestSummary
   auth: PullRequestAuthContext
   coordinator: PullRequestActionCoordinator
+  demo: boolean
 }): Promise<UiActionResult> {
   const checkoutError = await validateCheckout(kind, payload, item)
   if (checkoutError) return { status: "rejected", reason: checkoutError }
-  if (process.env.TUIMINAL_GIT_PR_DEMO === "1") return { status: "confirmed" }
+  if (demo) return { status: "confirmed" }
   const prepared = preparePullRequestAction({
     actionId: `${Date.now()}-${kind}`,
     kind,
@@ -111,6 +98,7 @@ export function usePullRequestActions({
   details,
   auth,
   profileRoot,
+  demo = process.env.TUIMINAL_GIT_PR_DEMO === "1",
   workflows,
   onNotice,
   onRefresh,
@@ -120,6 +108,7 @@ export function usePullRequestActions({
   details: PullRequestDetails | null
   auth: PullRequestAuthContext | null
   profileRoot: string | null
+  demo?: boolean
   workflows: PullRequestWorkflowRun[]
   onNotice: (message: string) => void
   onRefresh: () => void
@@ -129,7 +118,6 @@ export function usePullRequestActions({
   const [coordinator] = useState(
     () => new PullRequestActionCoordinator(executable ? { executable } : {}),
   )
-  const [menuOpen, setMenuOpen] = useState(false)
   const [kind, setKind] = useState<PullRequestActionKind | null>(null)
   const [targetComment, setTargetComment] = useState<PullRequestComment | null>(null)
   const [value, setValue] = useState("")
@@ -142,19 +130,22 @@ export function usePullRequestActions({
   )
   const eligibleWorkflows = workflows.filter((run) => run.eligibleForApproval)
 
-  const actions = useMemo(() => {
-    if (!item || !details || !auth) return []
-    return ACTIONS.map((action) => ({
-      ...action,
-      availability: pullRequestActionAvailability({
-        kind: action.kind,
-        summary: item,
-        details,
-        viewerLogin: auth.viewerLogin,
-        hasCheckout: configuration.paths.length > 0,
-        workflowCount: eligibleWorkflows.length,
-      }),
-    }))
+  const availability = useMemo(() => {
+    if (!item || !details || !auth)
+      return new Map<PullRequestActionKind, PullRequestActionAvailability>()
+    return new Map(
+      PULL_REQUEST_MUTATIONS.map((mutation) => [
+        mutation.kind,
+        pullRequestActionAvailability({
+          kind: mutation.kind,
+          summary: item,
+          details,
+          viewerLogin: auth.viewerLogin,
+          hasCheckout: configuration.paths.length > 0,
+          workflowCount: eligibleWorkflows.length,
+        }),
+      ]),
+    )
   }, [auth, configuration.paths.length, details, eligibleWorkflows.length, item])
 
   const draftKey = (
@@ -174,19 +165,17 @@ export function usePullRequestActions({
     return ""
   }
   const openAction = (action: PullRequestActionKind) => {
-    const available = actions.find((candidate) => candidate.kind === action)?.availability
+    const available = availability.get(action)
     if (!available?.enabled) {
       onNotice(translateUi(available?.reason ?? "Ação indisponível."))
       return
     }
-    setMenuOpen(false)
     setTargetComment(null)
     setKind(action)
     setValue(defaultValue(action, null))
     setError("")
   }
   const openCommentAction = (action: "reaction" | "reply", comment: PullRequestComment) => {
-    setMenuOpen(false)
     setTargetComment(comment)
     setKind(action)
     setValue(drafts.current.get(draftKey(action, comment)) ?? "")
@@ -210,6 +199,7 @@ export function usePullRequestActions({
         item,
         auth,
         coordinator,
+        demo,
       })
       if (result.status === "confirmed") {
         notifyCheckout(kind, onLocalCheckout)
@@ -217,7 +207,7 @@ export function usePullRequestActions({
         setKind(null)
         setTargetComment(null)
         onNotice(
-          process.env.TUIMINAL_GIT_PR_DEMO === "1"
+          demo
             ? translateUi("DEMO · ação confirmada sem alterar o GitHub.")
             : translateUi("Ação confirmada pelo GitHub."),
         )
@@ -232,45 +222,33 @@ export function usePullRequestActions({
     }
   }
 
-  const modalOpen = menuOpen || kind !== null
-  const modals = item ? (
-    <>
-      <MountWhen when={menuOpen}>
-        <ActionMenuModal
-          open
-          item={item}
-          actions={actions}
-          onClose={() => setMenuOpen(false)}
-          onSelect={openAction}
-        />
-      </MountWhen>
-      {kind ? (
-        <PullRequestActionModal
-          open
-          kind={kind}
-          item={item}
-          initialValue={value}
-          workflows={eligibleWorkflows}
-          mergeMethods={details?.permissions.mergeMethods ?? []}
-          checkoutPaths={[
-            ...new Set([...configuration.paths, ...(profileRoot ? [profileRoot] : [])]),
-          ]}
-          mergeQueueConfigured={details?.mergeQueueConfigured ?? false}
-          mergeQueuePosition={details?.mergeQueueEntry?.position ?? null}
-          autoMergeEnabled={Boolean(details?.autoMergeRequest)}
-          targetComment={targetComment}
-          reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
-          busy={busy}
-          error={error}
-          onValueChange={updateValue}
-          onClose={() => {
-            setKind(null)
-            setTargetComment(null)
-          }}
-          onSubmit={(payload) => void submit(payload)}
-        />
-      ) : null}
-    </>
-  ) : null
-  return { modalOpen, modals, openMenu: () => setMenuOpen(true), openAction, openCommentAction }
+  const modalOpen = kind !== null
+  const modals =
+    item && kind ? (
+      <PullRequestActionModal
+        open
+        kind={kind}
+        item={item}
+        initialValue={value}
+        workflows={eligibleWorkflows}
+        mergeMethods={details?.permissions.mergeMethods ?? []}
+        checkoutPaths={[
+          ...new Set([...configuration.paths, ...(profileRoot ? [profileRoot] : [])]),
+        ]}
+        mergeQueueConfigured={details?.mergeQueueConfigured ?? false}
+        mergeQueuePosition={details?.mergeQueueEntry?.position ?? null}
+        autoMergeEnabled={Boolean(details?.autoMergeRequest)}
+        targetComment={targetComment}
+        reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
+        busy={busy}
+        error={error}
+        onValueChange={updateValue}
+        onClose={() => {
+          setKind(null)
+          setTargetComment(null)
+        }}
+        onSubmit={(payload) => void submit(payload)}
+      />
+    ) : null
+  return { modalOpen, modals, availability, openAction, openCommentAction }
 }

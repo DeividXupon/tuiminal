@@ -1,30 +1,38 @@
 import type { BoxRenderable } from "@opentui/core"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 import {
   COLORS,
   focusedPanelBorder,
   LAYOUT,
   panelBorder,
 } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  GIT_ACTION_PALETTE_OPEN_ID,
+  type GitBaseNavigationTarget,
+  useGitBaseActionPalette,
+} from "./hooks/use-git-base-action-palette"
 import { useGitBaseKeyboard } from "./hooks/use-git-base-keyboard"
 import { useGitCommandConsole } from "./hooks/use-git-command-console"
 import { useGitDiffLoader } from "./hooks/use-git-diff-loader"
 import { useGitDiffTarget } from "./hooks/use-git-diff-target"
 import { useGitFileActions } from "./hooks/use-git-file-actions"
 import { useGitPartialStage } from "./hooks/use-git-partial-stage"
-import { useGitPreviewFocus } from "./hooks/use-git-preview-focus"
+import {
+  focusGitPaneFromMouse,
+  useGitDiffAutoFocus,
+  useGitPaneFocus,
+  useGitPreviewFocus,
+} from "./hooks/use-git-preview-focus"
 import { useGitSnapshot } from "./hooks/use-git-snapshot"
 import { useLocalConfigurationShortcut } from "./hooks/use-local-configuration-shortcut"
 import {
   compactGitActionFooter,
-  gitBaseShortcutHint,
   gitFileTreeIsActiveOutsidePartialStage,
   gitMiniGraphLayout,
   gitPartialStageHeaderMeta,
@@ -80,11 +88,16 @@ export function GitBaseWorkspace({
   refreshRequest = 0,
   targetDirectory = GIT_LAUNCH_DIRECTORY,
   onOpenLocalConfiguration,
+  onNavigate,
+  onProjectChanged,
 }: {
   active: boolean
   refreshRequest?: number
   targetDirectory?: string
   onOpenLocalConfiguration?: (() => void) | undefined
+  onNavigate?: ((target: GitBaseNavigationTarget) => void) | undefined
+  /** Reloads the Diffs target after the `[?]` palette selects a project. */
+  onProjectChanged?: (() => void) | undefined
 }) {
   const terminal = useTerminalDimensions()
   const renderer = useRenderer()
@@ -231,7 +244,10 @@ export function GitBaseWorkspace({
     () => new Map((snapshot?.commits ?? []).map((commit) => [commit.fullHash, commit])),
     [snapshot?.commits],
   )
-  const estimatedMainHeight = Math.max(4, terminal.height - (narrowGit ? 10 : 8))
+  const estimatedMainHeight = Math.max(
+    4,
+    terminal.height - (narrowGit ? 9 : 7) + LAYOUT.outerPadding * 3,
+  )
   const visibleHeight = Math.max(
     3,
     estimatedMainHeight - 5 - gitCommandConsoleHeight(LAYOUT.compact) - LAYOUT.gap,
@@ -258,28 +274,15 @@ export function GitBaseWorkspace({
   const showPreviewPane = useCallback(() => {
     if (narrowGit) setNarrowPane("preview")
   }, [narrowGit])
-  const focusGitPane = useCallback(
-    (pane: GitFocusPane) => {
-      setFocusedPane(pane)
-      if (narrowGit) setNarrowPane(pane === "files" ? "files" : "preview")
-      setTimeout(() => {
-        if (pane === "files") {
-          renderer.root
-            .findDescendantById(gitFileTreeRowId("git-file-list", selectedTreeIndex))
-            ?.focus()
-        } else if (pane === "preview") {
-          if (view === "log" || view === "graph") focusHistory()
-          else {
-            focusDiff()
-            renderer.root.findDescendantById("git-base-diff")?.focus()
-          }
-        } else {
-          renderer.root.findDescendantById("git-command-input")?.focus()
-        }
-      }, 0)
-    },
-    [focusDiff, focusHistory, narrowGit, renderer, selectedTreeIndex, view],
-  )
+  const focusGitPane = useGitPaneFocus({
+    view,
+    narrowGit,
+    selectedTreeIndex,
+    setFocusedPane,
+    setNarrowPane,
+    focusDiff,
+    focusHistory,
+  })
   const repositoryRoot = snapshot?.root
   useEffect(() => {
     if (!active || !snapshot?.isRepository || !repositoryRoot) return
@@ -397,14 +400,6 @@ export function GitBaseWorkspace({
       ),
     [activeDiff, loadedDiffPath, selectedFile?.path, view],
   )
-  useEffect(() => {
-    if (!active || focusedPane !== "preview" || partialStage.active || !diffDocuments.length) return
-    const timeout = setTimeout(() => {
-      focusDiff()
-      renderer.root.findDescendantById("git-base-diff")?.focus()
-    }, 0)
-    return () => clearTimeout(timeout)
-  }, [active, diffDocuments.length, focusDiff, focusedPane, partialStage.active, renderer])
   const additions = parsedDiff.filter((line) => line.kind === "added").length
   const deletions = parsedDiff.filter((line) => line.kind === "removed").length
   const diffRowCount = diffDocuments.reduce(
@@ -448,9 +443,69 @@ export function GitBaseWorkspace({
     if (!partialStage.active) scrollDiff(diffOffset)
   }, [diffOffset, partialStage.active, scrollDiff])
 
+  const actionPalette = useGitBaseActionPalette({
+    active,
+    blocked: Boolean(discardTarget),
+    state: {
+      repository: Boolean(snapshot?.isRepository),
+      focusedPane,
+      view,
+      partialStage: partialStage.active,
+      partialStageStartDisabled: partialStage.startDisabled,
+      fileCount: snapshot?.files.length ?? 0,
+      selectedActionFileCount: selectedActionFiles.length,
+      selectedFolder: Boolean(selectedFolder),
+      busy: busy || commandConsole.running,
+      stagePending,
+      hasSelectedCommit: Boolean(selectedCommit),
+      commitCount: snapshot?.commits.length ?? 0,
+      terminalExpanded,
+      navigation: Boolean(onNavigate),
+      localConfiguration: Boolean(onOpenLocalConfiguration),
+    },
+    handlers: {
+      fileOptions,
+      selectedTreeIndex,
+      commitCount: snapshot?.commits.length ?? 0,
+      stagePending,
+      activateFileTreeOption,
+      runStageAction,
+      openDiscardTarget,
+      partialStage,
+      setView,
+      setDiffLayout,
+      setDiffOffset,
+      setSelectedCommitIndex,
+      setTerminalExpanded,
+      showPreviewPane,
+      focusGitPane: leavePartialStage,
+      refresh,
+      onNavigate,
+      onOpenLocalConfiguration,
+    },
+    observed: {
+      root: snapshot?.root,
+      onProjectChanged,
+      callbacks: {
+        setBusy,
+        recordCommand: commandConsole.recordCommand,
+        recordResult: commandConsole.recordResult,
+        setMessage,
+        setError,
+      },
+    },
+  })
+
+  useGitDiffAutoFocus(
+    active && focusedPane === "preview" && !partialStage.active,
+    diffDocuments.length,
+    focusDiff,
+    actionPalette.blocksKeyboard || Boolean(discardTarget),
+  )
+
   useGitBaseKeyboard({
     active,
-    discardOpen: Boolean(discardTarget),
+    discardOpen: Boolean(discardTarget) || actionPalette.blocksKeyboard,
     autocompleteOpen: commandConsole.autocomplete.open,
     dismissAutocomplete: commandConsole.autocomplete.dismiss,
     focusedPane,
@@ -505,8 +560,7 @@ export function GitBaseWorkspace({
         position: "relative",
         flexGrow: 1,
         backgroundColor: LAYOUT.workspaceBackground,
-        padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        paddingX: LAYOUT.outerPadding,
       }}
     >
       <GitDiffsHeader
@@ -514,11 +568,10 @@ export function GitBaseWorkspace({
         snapshot={snapshot}
         loading={loading}
         motionFrame={loading ? motionFrame : 0}
-        stagedCount={stagedCount}
-        unstagedCount={unstagedCount}
         narrow={narrowGit}
-        terminalWidth={terminal.width}
         onConfigure={onOpenLocalConfiguration}
+        actionsButtonId={GIT_ACTION_PALETTE_OPEN_ID}
+        onOpenActions={actionPalette.openPalette}
       />
 
       {!loading && snapshot && !snapshot.isRepository ? (
@@ -557,6 +610,10 @@ export function GitBaseWorkspace({
               onMouseDown={() => {
                 partialStage.cancel()
                 setFocusedPane("files")
+                focusGitPaneFromMouse(
+                  renderer,
+                  gitFileTreeRowId("git-file-list", selectedTreeIndex),
+                )
               }}
               style={{
                 width: narrowGit ? "100%" : FILES_PANEL_WIDTH,
@@ -686,6 +743,7 @@ export function GitBaseWorkspace({
                   )}
                 </box>
               ) : null}
+              {actionPalette.boxOverlay("files")}
             </box>
           ) : null}
 
@@ -694,7 +752,13 @@ export function GitBaseWorkspace({
             <box
               id="git-base-preview-panel"
               key={LAYOUT.compact ? "git-preview-compact" : "git-preview-framed"}
-              onMouseDown={() => setFocusedPane("preview")}
+              onMouseDown={() => {
+                setFocusedPane("preview")
+                focusGitPaneFromMouse(
+                  renderer,
+                  view === "log" || view === "graph" ? "git-base-history" : "git-base-diff",
+                )
+              }}
               style={{
                 flexGrow: 1,
                 ...focusedPanelBorder(active && focusedPane === "preview", COLORS.git),
@@ -917,6 +981,7 @@ export function GitBaseWorkspace({
                   accent={COLORS.git}
                   background={LAYOUT.alternatePanel}
                 />
+                {actionPalette.boxOverlay("preview")}
               </box>
 
               {showGitActionStatus(terminalExpanded, busy, error, message) ? (
@@ -1005,6 +1070,7 @@ export function GitBaseWorkspace({
                     setTerminalExpanded((current) => !current)
                     focusGitPane("terminal")
                   }}
+                  overlay={actionPalette.boxOverlay("terminal")}
                 />
               ) : null}
             </box>
@@ -1025,30 +1091,13 @@ export function GitBaseWorkspace({
           }}
         />
       ) : null}
+      {actionPalette.palette}
+      {actionPalette.boxSelectionFocus}
       <PlasmaLoadingOverlay
         active={loading && !snapshot}
         label="CARREGANDO REPOSITÓRIO…"
         accent={COLORS.git}
         background={COLORS.canvas}
-      />
-      <ShortcutText
-        id="git-base-shortcut-footer"
-        content={translateUi(
-          gitBaseShortcutHint(
-            terminal.width,
-            view === "log" || view === "graph",
-            partialStage.active,
-          ),
-        )}
-        style={{
-          width: "100%",
-          height: 1,
-          flexShrink: 0,
-          overflow: "hidden",
-          fg: COLORS.muted,
-          bg: COLORS.panelRaised,
-          zIndex: 30,
-        }}
       />
     </box>
   )

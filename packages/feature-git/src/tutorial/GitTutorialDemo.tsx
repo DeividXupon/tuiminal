@@ -1,26 +1,25 @@
 import { useTerminalDimensions } from "@opentui/react"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import {
   COLORS,
   focusedPanelBorder,
   LAYOUT,
   panelBorder,
 } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { FILES_PANEL_WIDTH } from "../rendering/constants"
 import { gitCommandConsoleHeight } from "../ui/base/GitCommandConsole"
+import { GitNavigationHeader } from "../ui/GitNavigationHeader"
 import { GitTutorialCompareView } from "./GitTutorialCompareView"
 import { TutorialDiffPanel } from "./GitTutorialDiffView"
-import { GitTutorialProjectModal } from "./GitTutorialProjectModal"
 import { TutorialGitLogView, TutorialLogActions } from "./GitTutorialLogView"
+import { GitTutorialProjectModal } from "./GitTutorialProjectModal"
 import {
   TutorialGitGraphView,
   TutorialGraphActions,
   TutorialPartialStageView,
 } from "./GitTutorialStateViews"
 import { gitTutorialVisualState, isCompareTutorialState } from "./GitTutorialVisualState"
-import { GitNavigationHeader } from "../ui/GitNavigationHeader"
 
 const FILES = [
   { status: " M", path: "README.md", color: COLORS.warning },
@@ -57,6 +56,7 @@ function TutorialRepositoryHeader({
   configurationOpen: boolean
   onPress: () => void
 }) {
+  const narrow = useTerminalDimensions().width < 78
   return (
     <box
       id="tutorial-git-repository"
@@ -71,17 +71,45 @@ function TutorialRepositoryHeader({
         paddingRight: 1,
       }}
     >
-      <box style={{ flexGrow: 1, flexDirection: "row", overflow: "hidden" }}>
-        <text content="◆ tuiminal  /  development  " style={{ fg: COLORS.git }} />
+      <text
+        content="◆ tuiminal  /  development"
+        style={{
+          fg: COLORS.git,
+          flexGrow: 1,
+          flexBasis: 0,
+          minWidth: 0,
+          height: 1,
+          wrapMode: "none",
+          truncate: true,
+        }}
+      />
+      <InlineButton
+        {...(configurationOpen ? {} : { id: "tutorial-git-local-configuration" })}
+        label={translateUi(narrow ? "[Ctrl+P] Alterar" : "[Ctrl+P] Alterar projeto/branch")}
+        accent={COLORS.git}
+        active={configurationOpen}
+        onPress={onPress}
+      />
+      <box
+        style={{
+          flexGrow: 1,
+          flexBasis: 0,
+          minWidth: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        }}
+      >
+        <text
+          content="↑0 ↓0"
+          style={{ fg: COLORS.muted, flexShrink: 1, height: 1, truncate: true }}
+        />
         <InlineButton
-          {...(configurationOpen ? {} : { id: "tutorial-git-local-configuration" })}
-          label={translateUi("[Ctrl+P] Alterar projeto/branch")}
+          id="tutorial-git-shortcuts"
+          label={narrow ? "[?]" : "[?] Ações"}
           accent={COLORS.git}
-          active={configurationOpen}
           onPress={onPress}
         />
       </box>
-      <text content="3 ALT  ●1 ○2  ↑0 ↓0" style={{ fg: COLORS.muted }} />
     </box>
   )
 }
@@ -276,8 +304,7 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
             position: "relative",
             flexGrow: 1,
             backgroundColor: LAYOUT.workspaceBackground,
-            padding: LAYOUT.outerPadding,
-            gap: LAYOUT.gap,
+            paddingX: LAYOUT.outerPadding,
           }}
         >
           <TutorialRepositoryHeader
@@ -285,6 +312,7 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
             onPress={noop}
           />
           <box
+            id="tutorial-git-navigation"
             style={{
               flexGrow: 1,
               flexShrink: 1,
@@ -340,25 +368,6 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
                 </>
               )}
             </box>
-          </box>
-          <box
-            id="tutorial-git-shortcuts"
-            style={{
-              width: "100%",
-              height: 1,
-              flexShrink: 0,
-              overflow: "hidden",
-              backgroundColor: COLORS.panelRaised,
-              zIndex: 30,
-            }}
-          >
-            <ShortcutText
-              id="tutorial-git-navigation"
-              content={translateUi(
-                "[Tab/H/L/←/→] Árvore/diff/terminal  [T] Terminal  [V] Visualização  [O] Log  [R] Atualizar",
-              )}
-              style={{ width: "100%", height: 1, flexShrink: 0, fg: COLORS.muted }}
-            />
           </box>
         </box>
       )}

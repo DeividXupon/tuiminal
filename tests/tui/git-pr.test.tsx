@@ -16,6 +16,7 @@ import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
 import { App } from "../../apps/cli/src/App"
 import { TutorialOverlay } from "../../apps/cli/src/tutorial/TutorialOverlay"
+import type { LanguageId } from "../../packages/core/src/i18n"
 import {
   COLORS,
   getUiSettings,
@@ -30,7 +31,6 @@ import { GitBaseWorkspace } from "../../packages/feature-git/src/GitWorkspace"
 import { PullRequestsWorkspace } from "../../packages/feature-git/src/PullRequestsWorkspace"
 import { loadLocalGitTarget } from "../../packages/feature-git/src/services/local-target"
 import { SectionEditorModal } from "../../packages/feature-git/src/ui/pr/SectionEditorModal"
-import type { LanguageId } from "../../packages/core/src/i18n"
 
 function diffCodeCells(root: Renderable): CodeRenderable[] {
   return root
@@ -80,7 +80,7 @@ async function waitForText(text: string) {
     await tui?.renderOnce()
     if (tui?.captureCharFrame().includes(text)) return
   }
-  throw new Error(`TUI did not show: ${text}`)
+  throw new Error(`TUI did not show: ${text}\n${tui?.captureCharFrame()}`)
 }
 
 async function waitForFocusedId(prefix: string) {
@@ -233,18 +233,30 @@ test("Git tutorial renders the local Diffs screen and essential workflows", asyn
   ) as BoxRenderable
   const terminal = tui.renderer.root.findDescendantById("tutorial-git-terminal") as BoxRenderable
   const shortcuts = tui.renderer.root.findDescendantById("tutorial-git-shortcuts") as BoxRenderable
+  const configuration = tui.renderer.root.findDescendantById("tutorial-git-local-configuration")
+  if (!configuration) throw new Error("Missing tutorial project control")
   expect(repository.screenX).toBe(1)
+  expect(repository.screenY).toBe(2)
+  expect(files.screenY).toBe(repository.screenY + repository.height)
+  expect(files.screenY + files.height).toBe(30)
+  expect(
+    Math.abs(
+      configuration.screenX + configuration.width / 2 - repository.screenX - repository.width / 2,
+    ),
+  ).toBeLessThanOrEqual(0.5)
   expect(files.screenX).toBe(repository.screenX)
   expect(files.width).toBe(31)
   expect(preview.screenX).toBe(files.screenX + files.width + 1)
   expect(terminal.screenX).toBeGreaterThan(preview.screenX)
   expect(terminal.width).toBeLessThan(preview.width)
   expect(terminal.height).toBe(11)
-  expect(shortcuts.screenX).toBe(repository.screenX)
-  expect(shortcuts.width).toBe(repository.width)
+  expect(shortcuts.screenY).toBe(repository.screenY + 1)
+  expect(shortcuts.screenX + shortcuts.width).toBeLessThanOrEqual(
+    repository.screenX + repository.width,
+  )
 })
 
-test("Git tutorial keeps the one-line shortcut footer readable on its final step", async () => {
+test("Git tutorial highlights the header action button on its help step", async () => {
   updateUiSettings({ layout: "compact", language: "pt-BR" })
   const finalStep = GIT_TUTORIAL_STEPS.find((step) => step.targetId === "tutorial-git-shortcuts")
   if (!finalStep) throw new Error("Git tutorial requires a final step")
@@ -262,11 +274,14 @@ test("Git tutorial keeps the one-line shortcut footer readable on its final step
   }
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff/terminal")
+  expect(frame).not.toContain("[Tab/H/L/←/→] Árvore/diff/terminal")
+  expect(frame).toContain("[?] Ações")
   expect(frame).toContain("Atalhos disponíveis")
   const outline = tui.renderer.root.findDescendantById("tutorial-target-outline") as BoxRenderable
-  expect(renderableBorderSides(outline).top).toBe(true)
-  expect(renderableBorderSides(outline).bottom).toBe(false)
+  const actions = tui.renderer.root.findDescendantById("tutorial-git-shortcuts")
+  expect(actions).toBeDefined()
+  expect(outline.screenY).toBeLessThanOrEqual(actions?.screenY ?? 0)
+  expect(outline.width).toBeGreaterThanOrEqual(actions?.width ?? 0)
 })
 
 test("Git tutorial enters Compare and presents its complete simulated selector flow", async () => {
@@ -473,13 +488,16 @@ test("Git opens on Diffs, lazy mounts PR and preserves both tab states", async (
   expect(tui.captureCharFrame()).toContain("ABERTO · main")
 
   await key("p")
-  expect(tui.captureCharFrame()).not.toContain("ABERTO · main")
+  expect(tui.captureCharFrame()).toContain("ABERTO · main")
   await key("p")
   expect(tui.captureCharFrame()).toContain("ABERTO · main")
 
+  // [G] / [Shift+G] no longer jump; [End] / [Home] still reach the list edges.
   await key("g", { shift: true })
+  expect(tui.captureCharFrame()).toContain("▶ ◆ equipe/api #142")
+  await key("END")
   expect(tui.captureCharFrame()).toContain("▶ ● equipe/cli #55")
-  await key("g")
+  await key("HOME")
   expect(tui.captureCharFrame()).toContain("▶ ◆ equipe/api #142")
 
   await key("j")
@@ -509,7 +527,7 @@ test("Diffs opens its local project and branch settings directly", async () => {
   expect(opened).toBe(2)
 })
 
-test("Diffs keeps shortcuts visible and moves between its file tree and diff", async () => {
+test("Diffs keeps actions in the header and moves between its file tree and diff", async () => {
   const repository = mkdtempSync(join(tmpdir(), "tuiminal-diffs-tui-"))
   execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository])
   writeFileSync(join(repository, "README.md"), "base\n")
@@ -562,10 +580,11 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(fileRow).toBeDefined()
     expect(fileRow?.slice(0, 40)).not.toMatch(/[●○◐]/)
     expect(frame).toContain("[V] Unificado")
-    expect(frame).toContain("[O] Log")
-    expect(frame).toContain("[Tab/H/L/←/→] Árvore/diff")
+    expect(frame).toContain("[O]")
+    expect(frame).not.toContain("[Tab/H/L/←/→] Árvore/diff")
+    expect(frame).toContain("[?] Ações")
     await waitForMiniGraphAnchor("framed")
-    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
+    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")).toBeUndefined()
     expect(tui.renderer.currentFocusedRenderable?.id).toStartWith("git-file-list-row-")
     expect(
       (
@@ -659,8 +678,8 @@ test("Diffs keeps shortcuts visible and moves between its file tree and diff", a
     expect(logFrame).toContain("second")
     expect(logFrame).toContain("ARQ. 1")
     expect(logFrame).toContain("+1 −0")
-    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")?.zIndex).toBe(30)
-    expect(tui.captureCharFrame()).toContain("[J/K/↑/↓] Navegar")
+    expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")).toBeUndefined()
+    expect(tui.captureCharFrame()).toContain("[?] Ações")
     await key("l")
     await act(async () => Bun.sleep(10))
     await tui.renderOnce()
@@ -1098,6 +1117,47 @@ test("Git command terminal preserves multiline output and scrolls", async () => 
   }
 })
 
+test("Git command terminal releases focus on Escape in a clean worktree", async () => {
+  const repository = mkdtempSync(join(tmpdir(), "tuiminal-git-terminal-escape-tui-"))
+  execFileSync("git", ["init", "--quiet", "--initial-branch=main", repository])
+  writeFileSync(join(repository, "README.md"), "base\n")
+  execFileSync("git", ["-C", repository, "add", "README.md"])
+  execFileSync("git", [
+    "-C",
+    repository,
+    "-c",
+    "user.name=Tuiminal Test",
+    "-c",
+    "user.email=tuiminal@example.test",
+    "commit",
+    "--quiet",
+    "-m",
+    "base",
+  ])
+
+  try {
+    updateUiSettings({ layout: "framed", language: "pt-BR" })
+    tui = await testRender(<GitBaseWorkspace active targetDirectory={repository} />, {
+      width: 120,
+      height: 30,
+    })
+    await waitForText("Working tree limpo")
+    await key("t")
+    await waitForFocusedId("git-command-input")
+    await key("escape")
+    expect(tui.renderer.currentFocusedRenderable?.id).toBeUndefined()
+    await act(async () => tui?.mockInput.typeText("xy"))
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).not.toContain("git xy")
+    await key("t")
+    await waitForFocusedId("git-command-input")
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    rmSync(repository, { recursive: true, force: true })
+  }
+})
+
 test("Diffs renders a single-child folder chain as separate lines and one navigation block", async () => {
   const repository = mkdtempSync(join(tmpdir(), "tuiminal-diffs-folders-tui-"))
   const directory = join(repository, "usr", "outra-pasta", "mais-uma", "outra")
@@ -1454,7 +1514,7 @@ test("mouse reaches Git tabs, sections, rows, preview tabs and actions", async (
   await click("git-pr-preview-tab-checks")
   expect(tui.captureCharFrame()).toContain("GitHub Actions")
   await click("git-pr-open-actions")
-  expect(tui.captureCharFrame()).toContain("AÇÕES DO PULL REQUEST")
+  expect(tui.captureCharFrame()).toContain("AÇÕES DO GIT · PULL REQUESTS")
 })
 
 test("PR dashboard survives the documented size, language, palette and layout matrix", async () => {
@@ -1600,6 +1660,37 @@ test("PR activity comments expose reaction and reply flows to the keyboard", asy
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-action-input")
 })
 
+test("PR activity navigates reviews and events without retargeting comment actions", async () => {
+  process.env.TUIMINAL_GIT_PR_DEMO = "1"
+  updateUiSettings({ layout: "compact", language: "pt-BR" })
+  tui = await testRender(<PullRequestsWorkspace active />, { width: 120, height: 30 })
+  await tui.renderOnce()
+  await key("l")
+  await key("v")
+  await key("v")
+  await key("j")
+  await key("j")
+  const review = tui
+    .captureCharFrame()
+    .split("\n")
+    .find((line) => line.includes("▶ @ana"))
+  expect(review).toMatch(/\d{2}\/\d{2}/)
+  expect(tui.captureCharFrame()).toContain("Revisão fictícia para validar a interface.")
+  expect(tui.captureCharFrame()).not.toContain("[Enter] Responder")
+  await key("e")
+  await key("RETURN")
+  expect(tui.captureCharFrame()).not.toContain("COMENTÁRIO")
+  await key("j")
+  expect(tui.captureCharFrame()).not.toContain("▶ @ana")
+  expect(tui.captureCharFrame()).not.toContain("[E] Reagir")
+  await key("k")
+  expect(tui.captureCharFrame()).toContain("▶ @ana")
+  await click("git-pr-activity-1-select")
+  await key("RETURN")
+  expect(tui.captureCharFrame()).toContain("RESPONDER COMENTÁRIO")
+  expect(tui.captureCharFrame()).toContain("@ana")
+})
+
 test("action menu and remote diff are navigable without leaving PR", async () => {
   process.env.TUIMINAL_GIT_PR_DEMO = "1"
   updateUiSettings({ layout: "compact", language: "pt-BR" })
@@ -1607,8 +1698,10 @@ test("action menu and remote diff are navigable without leaving PR", async () =>
   await tui.renderOnce()
   await key("2")
   await key("?")
-  expect(tui.captureCharFrame()).toContain("AÇÕES DO PULL REQUEST")
-  expect(tui.captureCharFrame()).toContain("[C] Comentar")
+  expect(tui.captureCharFrame()).toContain("AÇÕES DO GIT · PULL REQUESTS")
+  expect(
+    tui.renderer.root.findDescendantById("git-action-palette-row-mutation:comment"),
+  ).toBeTruthy()
   await key("ESCAPE")
 
   await key("d")

@@ -4,6 +4,7 @@ import type { InputRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
+import { NotificationProvider } from "../../packages/core/src/notifications/index"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import { IssuesWorkspace } from "../../packages/feature-git/src/IssuesWorkspace"
 import { PullRequestsWorkspace } from "../../packages/feature-git/src/PullRequestsWorkspace"
@@ -114,7 +115,12 @@ test("PR creation opens by mouse and Ctrl+N, preserving the modal Escape focus s
 test("Issue creation is available without selecting an item and has a mouse control", async () => {
   process.env.TUIMINAL_GIT_ISSUES_DEMO = "1"
   updateUiSettings({ language: "pt-BR", layout: "compact" })
-  tui = await testRender(<IssuesWorkspace active />, { width: 120, height: 30 })
+  tui = await testRender(
+    <NotificationProvider>
+      <IssuesWorkspace active />
+    </NotificationProvider>,
+    { width: 120, height: 30 },
+  )
   await render()
   await key("n", { ctrl: true })
   expect(tui.captureCharFrame()).toContain("CRIAR ISSUE")

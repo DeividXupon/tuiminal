@@ -1,6 +1,6 @@
+import { configObject, parseRemoteConfigBase } from "../remote-config"
 import { validateIssueRepositoryName } from "./query"
 import type { IssueColumn, IssueSection, IssueSort } from "./types"
-import { configObject, parseRemoteConfigBase } from "../remote-config"
 
 export const ISSUE_COLUMNS: readonly IssueColumn[] = [
   "updated",
@@ -32,6 +32,7 @@ export type IssueProfile = {
   host: string
   repositories: string[]
   sections: IssueSection[]
+  /** Legacy setting retained on read/write; dashboard layout is automatic. */
   previewPosition?: IssuePreviewConfig["position"]
 }
 

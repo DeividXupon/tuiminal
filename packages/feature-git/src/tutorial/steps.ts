@@ -121,14 +121,14 @@ export const GIT_TUTORIAL_STEPS = [
     title: "Mover o foco pelo workspace",
     description:
       "[Enter] abre e foca o diff do arquivo selecionado. [Tab] percorre árvore, diff e terminal; [H/L/←/→] move para o painel vizinho e [Shift+H/L/←/→] rola linhas largas lateralmente.",
-    kind: "control",
+    kind: "block",
   },
   {
     targetId: "tutorial-git-shortcuts",
     group: "DIFFS · AJUDA",
     title: "Atalhos disponíveis",
     description:
-      "A última linha resume os atalhos válidos no estado atual, para que você não precise memorizar toda a navegação.",
+      "[?] Ações no cabeçalho abre o menu de comandos do Git, com atalhos e busca para encontrar cada ação.",
     kind: "control",
   },
   {

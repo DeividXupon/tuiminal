@@ -77,6 +77,19 @@ function headerSnapshot() {
   }
 }
 
+function expectCenteredConfiguration() {
+  const header = tui?.renderer.root.findDescendantById("git-diffs-header")
+  const button = tui?.renderer.root.findDescendantById("git-open-local-configuration")
+  const actions = tui?.renderer.root.findDescendantById("git-action-palette-open")
+  if (!header || !button || !actions) throw new Error("Missing Git header controls")
+  expect(
+    Math.abs(button.screenX + button.width / 2 - header.screenX - header.width / 2),
+  ).toBeLessThanOrEqual(0.5)
+  expect(actions.screenY).toBe(button.screenY)
+  expect(actions.screenX).toBeGreaterThanOrEqual(button.screenX + button.width)
+  expect(actions.screenX + actions.width).toBeLessThanOrEqual(header.screenX + header.width)
+}
+
 for (const layout of ["compact", "framed"] as const) {
   test.each([26, 36])(
     `Git header remains painted during held arrows: ${layout}/%i`,
@@ -93,6 +106,17 @@ for (const layout of ["compact", "framed"] as const) {
       await ready()
       const initial = headerSnapshot()
       expect(initial.line).toContain("[Ctrl+P]")
+      expect(initial.line).toContain("[?] Ações")
+      expect(initial.line).toContain("↑0 ↓0")
+      expect(initial.line).not.toMatch(/\bALT\b|[●○]/)
+      expect(tui.renderer.root.findDescendantById("git-base-shortcut-footer")).toBeUndefined()
+      const workspace = tui.renderer.root.findDescendantById("git-diffs-workspace")
+      const files = tui.renderer.root.findDescendantById("git-base-files-panel")
+      if (!workspace || !files) throw new Error("Missing Git workspace panels")
+      expect(initial.y).toBe(workspace.screenY)
+      expect(files.screenY).toBe(initial.y + initial.height)
+      expect(files.screenY + files.height).toBe(workspace.screenY + workspace.height)
+      expectCenteredConfiguration()
       for (const direction of ["down", "up"] as const) {
         for (let index = 0; index < 11; index += 1) {
           act(() => tui?.mockInput.pressArrow(direction))
@@ -104,6 +128,11 @@ for (const layout of ["compact", "framed"] as const) {
             `git-file-list-row-${direction === "down" ? index + 1 : 10 - index}`,
           )
         }
+      }
+      for (const width of [160, 90, 60, 40]) {
+        act(() => tui?.resize(width, height))
+        await settle()
+        expectCenteredConfiguration()
       }
     },
   )

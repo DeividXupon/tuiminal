@@ -1,20 +1,18 @@
 import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
-import type { IssuePreviewConfig } from "../../model/issue/config"
+import type { ReactNode } from "react"
 import type { IssueFocus, IssueLayoutMode } from "../../model/issue/navigation"
 import type { IssueComment, IssuePreviewTab } from "../../model/issue/types"
+import { IssueDashboardHeader } from "./IssueDashboardHeader"
 import { IssueDashboardStatePanel } from "./IssueDashboardStatePanel"
 import { IssueList } from "./IssueList"
 import { IssuePreviewPane } from "./IssuePreviewPane"
-import { IssueDashboardHeader } from "./IssueDashboardHeader"
 import type { IssueDashboardPresentation } from "./presentation"
 import type { IssueDashboardState } from "./useIssueDashboard"
 import type { IssueDetailsState } from "./useIssueDetails"
 
 type IssuePanelsProps = {
+  paginationActive: boolean
   presentation: IssueDashboardPresentation
   layout: IssueLayoutMode
   focus: IssueFocus
@@ -33,12 +31,13 @@ type IssuePanelsProps = {
   onOpenBrowser: () => void
   onCopyUrl: () => void
   onCopyNumber: () => void
-  onOpenActions: () => void
   onLoadMoreDetails: () => void
   onSelectComment: (index: number) => void
   onReactComment: (comment: IssueComment) => void
   onReplyComment: (comment: IssueComment) => void
   loadingMore: boolean
+  /** `[M]` box-selection paint for the list or preview panel. */
+  boxOverlay?: ((box: "list" | "preview") => ReactNode) | undefined
 }
 
 function IssuePanels(props: IssuePanelsProps) {
@@ -77,6 +76,7 @@ function IssuePanels(props: IssuePanelsProps) {
               ? { columns: props.presentation.section.columns }
               : {})}
           />
+          {props.boxOverlay?.("list")}
         </box>
       ) : null}
       {showPreview ? (
@@ -95,7 +95,7 @@ function IssuePanels(props: IssuePanelsProps) {
             item={selected}
             details={props.details}
             activeTab={props.previewTab}
-            focused={props.focus === "preview"}
+            focused={props.paginationActive && props.focus === "preview"}
             width={props.previewWidth}
             scrollOffset={props.previewScrollOffset}
             descriptionExpanded={props.descriptionExpanded}
@@ -106,12 +106,12 @@ function IssuePanels(props: IssuePanelsProps) {
             onOpenBrowser={props.onOpenBrowser}
             onCopyUrl={props.onCopyUrl}
             onCopyNumber={props.onCopyNumber}
-            onOpenActions={props.onOpenActions}
             onLoadMore={props.onLoadMoreDetails}
             onSelectComment={props.onSelectComment}
             onReactComment={props.onReactComment}
             onReplyComment={props.onReplyComment}
           />
+          {props.boxOverlay?.("preview")}
         </box>
       ) : null}
     </box>
@@ -120,6 +120,7 @@ function IssuePanels(props: IssuePanelsProps) {
 
 export function IssueDashboardView({
   active,
+  paginationActive,
   dashboard,
   presentation,
   layout,
@@ -133,9 +134,6 @@ export function IssueDashboardView({
   descriptionExpanded,
   selectedCommentIndex,
   loadingMoreDetails,
-  previewPosition,
-  previewVisible,
-  notice,
   loadingMore,
   refreshing,
   terminalWidth,
@@ -155,25 +153,18 @@ export function IssueDashboardView({
   onSelectSection,
   onEditQuery,
   onRetry,
-  onLoadMore,
-  onCyclePreviewPosition,
-  onTogglePreview,
+  boxOverlay,
 }: IssuePanelsProps & {
   active: boolean
   dashboard: IssueDashboardState
-  previewPosition: IssuePreviewConfig["position"]
-  previewVisible: boolean
-  notice: string
   refreshing: boolean
   terminalWidth: number
   onSelectSection: (index: number) => void
   onEditQuery: () => void
   onCreate: () => void
+  onOpenActions: () => void
   canCreate: boolean
   onRetry: () => void
-  onLoadMore: () => void
-  onCyclePreviewPosition: () => void
-  onTogglePreview: () => void
 }) {
   const background = LAYOUT.workspaceBackground
   return (
@@ -183,7 +174,9 @@ export function IssueDashboardView({
         position: "relative",
         flexGrow: 1,
         backgroundColor: background,
-        padding: LAYOUT.outerPadding,
+        border: ["top"],
+        borderColor: COLORS.border,
+        paddingX: LAYOUT.outerPadding,
         gap: 0,
       }}
     >
@@ -193,16 +186,14 @@ export function IssueDashboardView({
         refreshing={refreshing}
         demo={dashboard.status === "demo"}
         canCreate={canCreate}
-        previewVisible={previewVisible}
-        previewPosition={previewPosition}
         onCreate={onCreate}
         onSelectSection={onSelectSection}
         onEditQuery={onEditQuery}
-        onTogglePreview={onTogglePreview}
-        onCyclePreviewPosition={onCyclePreviewPosition}
+        onOpenActions={onOpenActions}
       />
       {presentation.showDashboard ? (
         <IssuePanels
+          paginationActive={paginationActive}
           presentation={presentation}
           layout={layout}
           focus={focus}
@@ -222,11 +213,11 @@ export function IssueDashboardView({
           onOpenBrowser={onOpenBrowser}
           onCopyUrl={onCopyUrl}
           onCopyNumber={onCopyNumber}
-          onOpenActions={onOpenActions}
           onLoadMoreDetails={onLoadMoreDetails}
           onSelectComment={onSelectComment}
           onReactComment={onReactComment}
           onReplyComment={onReplyComment}
+          boxOverlay={boxOverlay}
         />
       ) : (
         <IssueDashboardStatePanel active={active} state={dashboard} onRetry={onRetry} />
@@ -238,26 +229,6 @@ export function IssueDashboardView({
         accent={COLORS.git}
         background={background}
       />
-      {dashboard.status === "ready" && dashboard.hasNextPage ? (
-        <InlineButton
-          id="git-issue-load-more"
-          label={translateUi(loadingMore ? "[N] Carregando…" : "[N] Carregar mais")}
-          accent={COLORS.git}
-          disabled={loadingMore}
-          onPress={onLoadMore}
-        />
-      ) : null}
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <ShortcutText
-          content={translateUi(
-            "[J/K] Navegar  [H/L] Foco  [A←] [F→] Seção  [Z←] [V→] Aba  [P] Prévia  [?] Ações",
-          )}
-          style={{ fg: COLORS.muted }}
-        />
-        {notice ? <text content={notice} style={{ fg: COLORS.danger }} /> : null}
-      </box>
     </box>
   )
 }

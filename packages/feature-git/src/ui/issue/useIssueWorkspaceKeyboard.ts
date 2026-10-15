@@ -1,8 +1,9 @@
 import { useKeyboard } from "@opentui/react"
+import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import {
-  issueWorkspaceAction,
   type IssueFocus,
   type IssueWorkspaceAction,
+  issueWorkspaceAction,
 } from "../../model/issue/navigation"
 import type { IssuePreviewTab } from "../../model/issue/types"
 
@@ -30,8 +31,6 @@ export function useIssueWorkspaceKeyboard({
   blocked,
   focus,
   hasSelection,
-  canLoadMore,
-  canLoadPreview,
   previewTab,
   commentCount,
   onWorkspaceAction,
@@ -43,8 +42,6 @@ export function useIssueWorkspaceKeyboard({
   blocked: boolean
   focus: IssueFocus
   hasSelection: boolean
-  canLoadMore: boolean
-  canLoadPreview: boolean
   previewTab: IssuePreviewTab
   commentCount: number
   onWorkspaceAction: (action: IssueWorkspaceAction) => void
@@ -54,6 +51,12 @@ export function useIssueWorkspaceKeyboard({
 }) {
   useKeyboard((key) => {
     if (!active || blocked) return
+    // `[?]` opens the action palette with or without a selected issue.
+    if (isActionPaletteKey(key)) {
+      key.preventDefault()
+      onWorkspaceAction({ type: "open-action-menu" })
+      return
+    }
     const commentAction = issueCommentKeyboardAction({
       keyName: key.name,
       focus,
@@ -77,8 +80,6 @@ export function useIssueWorkspaceKeyboard({
       },
       focus,
       hasSelection,
-      canLoadMore,
-      canLoadPreview,
     })
     if (!action) return
     key.preventDefault()
