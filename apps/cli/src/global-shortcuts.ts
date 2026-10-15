@@ -1,3 +1,4 @@
+import { altNumberShortcut } from "@xupon/tuiminal-core/keyboard/scope"
 import { TOOL_SHORTCUTS, type ToolId } from "./tool-catalog"
 
 type GlobalShortcutKey = {
@@ -8,6 +9,7 @@ type GlobalShortcutKey = {
   meta?: boolean
   option?: boolean
   shift?: boolean
+  super?: boolean
 }
 
 export function globalApplicationShortcut(
@@ -17,9 +19,7 @@ export function globalApplicationShortcut(
 ): ToolId | "settings" | null {
   if (!available) return null
   if (!key.shift && [key.name, key.sequence, key.raw].includes(",")) return "settings"
-  if (isolated || (!key.meta && !key.option) || key.ctrl || key.shift) return null
-  return (
-    TOOL_SHORTCUTS.find((candidate) => [key.name, key.sequence, key.raw].includes(candidate.key))
-      ?.tab ?? null
-  )
+  if (isolated) return null
+  const number = altNumberShortcut(key)
+  return TOOL_SHORTCUTS.find((candidate) => candidate.key === number)?.tab ?? null
 }
