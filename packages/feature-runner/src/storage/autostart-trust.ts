@@ -3,6 +3,7 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import type { RunnerEnvironmentProfile } from "../model/config"
+import { createRunnerPlan, type RunnerFlow } from "../model/plan"
 import type { RunnerCommand } from "../model/types"
 import { atomicWriteFileSync, fileContentHash } from "@xupon/tuiminal-core/storage/atomic-file"
 
@@ -20,6 +21,7 @@ type RunnerAutostartTrustFile = {
 export type RunnerAutostartReview = {
   root: string
   fingerprint: string
+  flows: RunnerFlow[]
   commands: Array<{
     id: string
     label: string
@@ -28,6 +30,9 @@ export type RunnerAutostartReview = {
     environmentNames: string[]
     environmentFile: string | null
     interactive: boolean
+    policy: string
+    profile: string | null
+    profileEnvironmentFile: string | null
   }>
   profile: {
     id: string
@@ -51,21 +56,51 @@ function sortedEnvironment(environment: Record<string, string> | undefined) {
   )
 }
 
+function environmentFileFingerprint(path: string | undefined) {
+  if (!path) return null
+  try {
+    return fileContentHash(readFileSync(path, "utf8"))
+  } catch {
+    return "unreadable"
+  }
+}
+function reviewedEnvironmentProfile(profile: RunnerEnvironmentProfile | undefined) {
+  return profile
+    ? { ...profile, environmentFileFingerprint: environmentFileFingerprint(profile.envFile) }
+    : null
+}
+
 export function createRunnerAutostartReview(
   root: string,
   commands: RunnerCommand[],
   profile?: RunnerEnvironmentProfile,
+  flows: RunnerFlow[] = [],
+  profiles: RunnerEnvironmentProfile[] = [],
 ): RunnerAutostartReview | null {
   const canonical = canonicalRoot(root)
-  const reviewedCommands = commands
-    .filter((command) => command.autostart)
+  const autoFlows = flows.filter((flow) => flow.autostart)
+  const nodes = new Map(
+    createRunnerPlan(
+      commands,
+      commands.filter((command) => command.autostart).map((command) => command.id),
+    ).map((node) => [node.command.id, node]),
+  )
+  for (const flow of autoFlows)
+    for (const node of createRunnerPlan(commands, [], flow)) nodes.set(node.command.id, node)
+  const reviewedCommands = [...nodes.values()]
+    .map((node) => node.command)
     .map((command) => ({
       id: command.id,
       label: command.label,
       command: command.displayCommand,
+      program: command.program,
+      args: command.args,
+      dependsOn: nodes.get(command.id)!.dependencies,
+      profile: reviewedEnvironmentProfile(profiles.find((item) => item.id === command.profile)),
       cwd: command.workingDirectory ?? canonical,
       environment: sortedEnvironment(command.env),
       environmentFile: command.envFile ?? null,
+      environmentFileFingerprint: environmentFileFingerprint(command.envFile),
       interactive: Boolean(command.interactive),
       restartPolicy: command.restartPolicy ?? "never",
       restartDelayMs: command.restartDelayMs ?? 1_000,
@@ -81,6 +116,7 @@ export function createRunnerAutostartReview(
         label: profile.label,
         environment: sortedEnvironment(profile.env),
         environmentFile: profile.envFile ?? null,
+        environmentFileFingerprint: environmentFileFingerprint(profile.envFile),
       }
     : null
   const fingerprint = createHash("sha256")
@@ -90,20 +126,36 @@ export function createRunnerAutostartReview(
         root: canonical,
         commands: reviewedCommands,
         profile: reviewedProfile,
+        flows: autoFlows,
       }),
     )
     .digest("hex")
   return {
     root: canonical,
     fingerprint,
+    flows: autoFlows,
     commands: reviewedCommands.map((command) => ({
       id: command.id,
       label: command.label,
       command: command.command,
       cwd: command.cwd,
-      environmentNames: Object.keys(command.environment),
+      environmentNames: [
+        ...new Set([
+          ...Object.keys(command.profile?.env ?? {}),
+          ...Object.keys(command.environment),
+        ]),
+      ],
       environmentFile: command.environmentFile,
       interactive: command.interactive,
+      profile: command.profile?.label ?? null,
+      profileEnvironmentFile: command.profile?.envFile ?? null,
+      policy: JSON.stringify({
+        restart: command.restartPolicy,
+        delay: command.restartDelayMs,
+        maxRestarts: command.maxRestarts,
+        health: command.healthCheck,
+        dependsOn: command.dependsOn,
+      }),
     })),
     profile: reviewedProfile
       ? {

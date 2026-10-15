@@ -1,22 +1,17 @@
 import { ISSUE_COLUMNS, ISSUE_SORTS } from "./config"
 import { normalizeIssueQuery } from "./query"
 import type { IssueColumn, IssueSection, IssueSort, IssueSummary } from "./types"
-
-const SECTION_ID_PATTERN = /[^a-z0-9]+/g
+import {
+  createRemoteSectionId,
+  moveRemoteSection,
+  normalizeRemoteColumns,
+  orderRemoteItems,
+  parseRemoteSectionOptions,
+  removeRemoteSection,
+} from "../remote-sections"
 
 export function createIssueSectionId(title: string, sections: readonly IssueSection[]) {
-  const base =
-    title
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(SECTION_ID_PATTERN, "-")
-      .replace(/^-|-$/g, "") || "section"
-  const identifiers = new Set(sections.map((section) => section.id))
-  if (!identifiers.has(base)) return base
-  let suffix = 2
-  while (identifiers.has(`${base}-${suffix}`)) suffix += 1
-  return `${base}-${suffix}`
+  return createRemoteSectionId(title, sections)
 }
 
 export function makeIssueSection({
@@ -73,9 +68,7 @@ export function updateIssueSection(
 }
 
 export function normalizeIssueColumns(columns: readonly string[]) {
-  return [...new Set(columns)].filter((column): column is IssueColumn =>
-    ISSUE_COLUMNS.includes(column as IssueColumn),
-  )
+  return normalizeRemoteColumns(columns, ISSUE_COLUMNS)
 }
 
 export function parseIssueSectionOptions({
@@ -83,24 +76,11 @@ export function parseIssueSectionOptions({
   sort,
   limit,
 }: Record<"columns" | "sort" | "limit", string>) {
-  const parsedColumns = normalizeIssueColumns(columns.split(/[\s,]+/).filter(Boolean))
-  const parsedSort = ISSUE_SORTS.includes(sort as IssueSort) ? (sort as IssueSort) : null
-  const parsedLimit = Number(limit)
-  if (!parsedColumns.length) throw new Error("At least one valid column is required")
-  if (!parsedSort) throw new Error("Invalid section sort")
-  if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-    throw new Error("Section limit must be between 1 and 100")
-  }
-  return { columns: parsedColumns, sort: parsedSort, limit: parsedLimit }
+  return parseRemoteSectionOptions({ columns, sort, limit }, ISSUE_COLUMNS, ISSUE_SORTS)
 }
 
 export function orderIssueItems(items: readonly IssueSummary[], sort: IssueSort = "updated-desc") {
-  return [...items].sort((left, right) => {
-    if (sort === "updated-asc") return left.updatedAt.localeCompare(right.updatedAt)
-    if (sort === "number-desc") return right.identity.number - left.identity.number
-    if (sort === "number-asc") return left.identity.number - right.identity.number
-    return right.updatedAt.localeCompare(left.updatedAt)
-  })
+  return orderRemoteItems(items, sort)
 }
 
 export function duplicateIssueSection(sections: readonly IssueSection[], id: string) {
@@ -119,17 +99,9 @@ export function duplicateIssueSection(sections: readonly IssueSection[], id: str
 }
 
 export function moveIssueSection(sections: readonly IssueSection[], id: string, delta: -1 | 1) {
-  const source = sections.findIndex((section) => section.id === id)
-  if (source < 0 || sections.length < 2) return [...sections]
-  const destination = Math.max(0, Math.min(sections.length - 1, source + delta))
-  if (destination === source) return [...sections]
-  const result = [...sections]
-  const [section] = result.splice(source, 1)
-  if (section) result.splice(destination, 0, section)
-  return result
+  return moveRemoteSection(sections, id, delta)
 }
 
 export function removeIssueSection(sections: readonly IssueSection[], id: string) {
-  if (sections.length <= 1) throw new Error("At least one section is required")
-  return sections.filter((section) => section.id !== id)
+  return removeRemoteSection(sections, id)
 }

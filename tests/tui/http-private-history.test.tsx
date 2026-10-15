@@ -5,9 +5,8 @@ import { testRender } from "@opentui/react/test-utils"
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { act } from "react"
-import { HttpClient } from "../../packages/feature-http/src/HttpWorkspace"
+import { HttpClient } from "../../packages/feature-http/src/HttpClient"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import { DEFAULT_HTTP_WORKSPACE_CONFIG } from "../../packages/feature-http/src/storage/config"
 
 let tui: TestRendererSetup | undefined
 let server: ReturnType<typeof Bun.serve> | undefined
@@ -52,11 +51,6 @@ async function press(id: string) {
   await currentTui().renderOnce()
 }
 
-async function entries() {
-  const source = await readFile(historyPath, "utf8").catch(() => "")
-  return source ? (JSON.parse(source) as { entries: Array<Record<string, unknown>> }).entries : []
-}
-
 afterEach(async () => {
   act(() => tui?.renderer.destroy())
   tui = undefined
@@ -71,7 +65,7 @@ afterEach(async () => {
 })
 
 for (const layout of ["compact", "framed"] as const) {
-  test(`single-send protects success/error history and honors no-log (${layout})`, async () => {
+  test(`legacy defaults are ignored and private values stay out of persisted history (${layout})`, async () => {
     updateUiSettings({ layout })
     const received: string[] = []
     server = Bun.serve({
@@ -101,7 +95,7 @@ for (const layout of ["compact", "framed"] as const) {
     await fixture(
       resolve(root, ".tuiminal/http/config.json"),
       JSON.stringify({
-        ...DEFAULT_HTTP_WORKSPACE_CONFIG,
+        version: 1,
         defaultEnvironment: "alpha-fixture",
         history: { persistMetadata: true, persistBodies: true },
       }),
@@ -116,26 +110,31 @@ for (const layout of ["compact", "framed"] as const) {
       ),
     )
     await press("http-navigation-project-alpha-history.http#success")
-    await settle(() => currentTui().captureCharFrame().includes("alpha-fixture"))
+    await press("http-environment-button")
+    await settle(() =>
+      Boolean(
+        currentTui().renderer.root.findDescendantById("http-environment-choice-alpha-fixture"),
+      ),
+    )
+    expect(currentTui().captureCharFrame()).toContain("Sem ambiente")
+    await press("http-environment-choice-alpha-fixture")
+    await settle(() => currentTui().captureCharFrame().includes("[E] alpha-fixture"))
     await press("http-send-button")
-    await settle(async () => (await entries()).length === 1)
+    await settle(() => received.length === 1 && currentTui().captureCharFrame().includes(secret))
     expect(received[0]).toContain(`q=${secret}`)
     expect(tui.captureCharFrame()).toContain(secret)
-    expect(await entries()).toMatchObject([{ status: 200, bodyDiscarded: true }])
-    expect(await readFile(historyPath, "utf8")).not.toContain(secret)
-    expect(await readFile(historyPath, "utf8")).not.toContain("bodyBase64")
+    expect(await readFile(historyPath, "utf8").catch(() => "")).toBe("")
 
     await press("http-navigation-project-alpha-history.http#failure")
     await press("http-send-button")
-    await settle(async () => (await entries()).length === 2)
-    expect((await entries())[0]?.error).toBeString()
-    expect(await readFile(historyPath, "utf8")).not.toContain(secret)
+    await settle(() => received.length === 2)
+    expect(await readFile(historyPath, "utf8").catch(() => "")).toBe("")
     expect(tui.captureCharFrame()).not.toContain(secret)
 
     await press("http-navigation-project-alpha-history.http#no-log")
     await press("http-send-button")
     await settle(() => currentTui().captureCharFrame().includes(secret))
-    expect(await entries()).toHaveLength(2)
+    expect(await readFile(historyPath, "utf8").catch(() => "")).toBe("")
     expect(received.filter((url) => new URL(url).pathname === "/ok")).toHaveLength(2)
   }, 15_000)
 }

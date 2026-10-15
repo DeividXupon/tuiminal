@@ -20,6 +20,7 @@ import {
   TutorialPartialStageView,
 } from "./GitTutorialStateViews"
 import { gitTutorialVisualState, isCompareTutorialState } from "./GitTutorialVisualState"
+import { GitNavigationHeader } from "../ui/GitNavigationHeader"
 
 const FILES = [
   { status: " M", path: "README.md", color: COLORS.warning },
@@ -35,33 +36,17 @@ const COMMITS = [
 
 function TutorialGitTabs({ compare, onPress }: { compare: boolean; onPress: () => void }) {
   return (
-    <box
+    <GitNavigationHeader
       id="tutorial-git-mode-tabs"
-      style={{
-        height: 1,
-        flexShrink: 0,
-        flexDirection: "row",
-        backgroundColor: COLORS.panel,
-        paddingLeft: LAYOUT.outerPadding,
-      }}
-    >
-      <box
-        id={compare ? "tutorial-git-compare-tab" : "tutorial-git-diffs-tab"}
-        style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-      >
-        <InlineButton label="[1]" accent={COLORS.git} active onPress={onPress} />
-        <InlineButton
-          {...(compare ? { id: "tutorial-git-compare-return" } : {})}
-          label={translateUi(compare ? "[C] GIT · COMPARAR" : "[C] GIT · DIFFS")}
-          accent={COLORS.git}
-          active
-          onPress={onPress}
-        />
-      </box>
-      <InlineButton label={translateUi("[2] PR")} accent={COLORS.git} onPress={onPress} />
-      <InlineButton label={translateUi("[3] ISSUES")} accent={COLORS.git} onPress={onPress} />
-      <InlineButton label={translateUi("[4] INBOX")} accent={COLORS.git} onPress={onPress} />
-    </box>
+      localActionsId={compare ? "tutorial-git-compare-tab" : "tutorial-git-diffs-tab"}
+      compareButtonId={compare ? "tutorial-git-compare-return" : "git-mode-compare"}
+      localRoot="/demo/tuiminal"
+      identity={{ host: "github.com", viewerLogin: "demo" }}
+      selected="base"
+      localMode={compare ? "compare" : "diffs"}
+      onSelect={onPress}
+      onToggleMode={onPress}
+    />
   )
 }
 
@@ -278,7 +263,10 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
   const filesPanelWidth = Math.min(FILES_PANEL_WIDTH, Math.max(24, terminal.width - 24))
   const filesContentWidth = Math.max(12, filesPanelWidth - (LAYOUT.compact ? 2 : 4))
   return (
-    <box style={{ position: "relative", flexGrow: 1, backgroundColor: COLORS.canvas }}>
+    <box
+      id="git-tutorial-workspace"
+      style={{ position: "relative", flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}
+    >
       <TutorialGitTabs compare={compare} onPress={noop} />
       {compare ? (
         <GitTutorialCompareView state={visualState} onPress={noop} />
@@ -287,7 +275,7 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
           style={{
             position: "relative",
             flexGrow: 1,
-            backgroundColor: COLORS.canvas,
+            backgroundColor: LAYOUT.workspaceBackground,
             padding: LAYOUT.outerPadding,
             gap: LAYOUT.gap,
           }}

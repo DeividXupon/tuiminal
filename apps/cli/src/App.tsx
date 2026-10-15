@@ -1,66 +1,74 @@
-import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
-import { type ToolId as AppTab, TOOL_LABELS as TAB_LABELS, resolveToolLaunch } from "./tool-catalog"
-import {
-  focusedRenderableId,
-  ownsKeyboardFocus,
-  ownsInterrupt,
-} from "@xupon/tuiminal-core/keyboard/scope"
-import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Tabs } from "@tuiparts/react/tabs"
-import { useCallback, useMemo, useRef, useState } from "react"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
-  ConfigurationModal,
-  type ConfigurationSection,
-  configurationSectionsForContext,
-  normalizeConfigurationSectionForContext,
-} from "./ui/ConfigurationModal"
+  focusedRenderableId,
+  ownsInterrupt,
+  ownsKeyboardFocus,
+} from "@xupon/tuiminal-core/keyboard/scope"
+import { withNotifications } from "@xupon/tuiminal-core/notifications/index"
+import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
+import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
+import type {
+  DatabaseQueryHistoryEntry,
+  DatabaseQueryRerunRequest,
+} from "@xupon/tuiminal-feature-database"
+import type { HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import {
   DatabaseQueryHistoryModal,
   DatabaseViewer,
-  FreeTerminal,
+  databaseQueryHistoryCanRerun,
+  TermAgents,
   GitViewer,
   HttpClient,
-  Runner,
-  databaseQueryHistoryCanRerun,
   listDatabaseQueryHistory,
+  PinnedTerminalSidebar,
+  Runner,
 } from "./features/components"
-import { withFeatures, useFeatureWorkspace, WorkspaceInstaller } from "./features/workspace"
 import { loadedFeature } from "./features/registry"
 import { useFeatureRetirement } from "./features/use-feature-retirement"
-import { type DatabaseQueryRerunRequest } from "@xupon/tuiminal-feature-database"
-import { type GitConfigurationTab } from "@xupon/tuiminal-feature-git"
-import { type HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
-import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
-import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
-import type { DatabaseQueryHistoryEntry } from "@xupon/tuiminal-feature-database"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import {
-  COLORS,
-  getUiSettings,
-  LAYOUT,
-  resetUiSettings,
-  separatorBorder,
-  type UiSettings,
-  updateUiSettings,
-} from "@xupon/tuiminal-core/settings/theme"
-import { WorkspaceHeader } from "./ui/WorkspaceHeader"
-import { applicationExitLayer } from "./ui/application-exit-layer"
-import { useApplicationExit } from "./hooks/use-application-exit"
-import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
-import {
-  useNotificationFromValue,
-  withNotifications,
-} from "@xupon/tuiminal-core/notifications/index"
+import { useFeatureWorkspace, WorkspaceInstaller, withFeatures } from "./features/workspace"
 import { globalApplicationShortcut } from "./global-shortcuts"
+import { useApplicationExit } from "./hooks/use-application-exit"
+import { useConfigurationLayer } from "./hooks/use-configuration-layer"
+import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
+import { useRemoteServerSetup } from "./hooks/use-remote-server-setup"
 import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
-import { configurationSettingPatch } from "./model/configuration-options"
+import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } from "./tool-catalog"
+import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
+import { applicationExitLayer } from "./ui/application-exit-layer"
+import type { ConfigurationSection } from "./ui/ConfigurationModal"
+import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { withStartupAnimation } from "./ui/StartupAnimation"
+import { WorkspaceConfigurationOverlay } from "./ui/WorkspaceConfigurationOverlay"
+import { WorkspaceHeader } from "./ui/WorkspaceHeader"
+import { contextualRemoteSettingsOwnKey } from "./ui/terminal-remote-settings"
+
+function syncVisitedTools(
+  visited: Set<AppTab>,
+  installed: readonly AppTab[],
+  closed: ReadonlySet<AppTab>,
+  active: AppTab,
+) {
+  for (const id of visited) {
+    if (!installed.includes(id) || closed.has(id)) visited.delete(id)
+  }
+  if (installed.includes(active) && !closed.has(active) && loadedFeature(active))
+    visited.add(active)
+}
+
+function contextualSettingsOwnKey(focusedId: string | null | undefined, keyName: string) {
+  if (focusedId === "configuration-terminal-agent-input") return true
+  return contextualRemoteSettingsOwnKey(focusedId, keyName)
+}
 
 export function AppContent() {
   const features = useFeatureWorkspace()
@@ -72,17 +80,7 @@ export function AppContent() {
   const [activeTab, setActiveTab] = useState<AppTab>(features.initial ?? INITIAL_TAB)
   const visitedTabsRef = useRef(new Set<AppTab>())
   const { closed, retire, resume } = useFeatureRetirement()
-  for (const id of visitedTabsRef.current) {
-    if (!features.state.installed.includes(id) || closed.has(id)) visitedTabsRef.current.delete(id)
-  }
-  if (
-    features.state.installed.includes(activeTab) &&
-    !closed.has(activeTab) &&
-    loadedFeature(activeTab)
-  )
-    visitedTabsRef.current.add(activeTab)
-  const [settings, setSettings] = useState(getUiSettings)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  syncVisitedTools(visitedTabsRef.current, features.state.installed, closed, activeTab)
   const [sensitiveTermsOpen, setSensitiveTermsOpen] = useState(false)
   const [queryHistoryOpen, setQueryHistoryOpen] = useState(false)
   const [queryHistoryEntries, setQueryHistoryEntries] = useState<DatabaseQueryHistoryEntry[]>([])
@@ -91,10 +89,20 @@ export function AppContent() {
   const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialTargetId, setTutorialTargetId] = useState<string | null>(null)
-  const [configurationSection, setConfigurationSection] = useState<ConfigurationSection>("palette")
-  const [settingsNotice, setSettingsNotice] = useState("")
-  useNotificationFromValue(settingsNotice, { source: "Configurações" })
-  const settingsRef = useRef(settings)
+  const [terminalMasterKeyActive, setTerminalMasterKeyActive] = useState(false)
+  const [terminalSidebarFocused, setTerminalSidebarFocused] = useState(false)
+  useEffect(() => {
+    const update = () =>
+      setTerminalSidebarFocused(
+        focusedRenderableId(renderer.currentFocusedRenderable)?.startsWith("terminal-sidebar") ??
+          false,
+      )
+    update()
+    renderer.on("focused_renderable", update)
+    return () => {
+      renderer.off("focused_renderable", update)
+    }
+  }, [renderer])
   const selectTab = useCallback(
     async (id: AppTab) => {
       if (ONLY_TAB && id !== ONLY_TAB) return
@@ -117,7 +125,6 @@ export function AppContent() {
     },
     [selectTab],
   )
-  const configurationSectionRef = useRef(configurationSection)
   const queryRerunCounterRef = useRef(0)
   const exit = useApplicationExit(renderer, visitedTabsRef)
   const gitConfiguration = useGitConfigurationLayer()
@@ -126,50 +133,33 @@ export function AppContent() {
   const configurationContext = features.showInstaller
     ? "installer"
     : configurationContextForTool(tutorialScreen)
-  const configurationSections = useMemo(
-    () => configurationSectionsForContext(configurationContext),
-    [configurationContext],
-  )
+  const configuration = useConfigurationLayer(configurationContext)
+  const {
+    settings,
+    open: settingsOpen,
+    applySettings,
+    close: closeSettings,
+    openSettings: openConfiguration,
+    openGit: openGitConfiguration,
+    handleKey: handleConfigurationKey,
+  } = configuration
+  const openTerminalForSetup = useCallback(() => void selectTab("terminal"), [selectTab])
+  const remoteSetup = useRemoteServerSetup(closeSettings, openTerminalForSetup)
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
-  const modalBlocked = settingsOpen || gitConfiguration.open || tutorialOpen || exit.open
+  const modalBlocked = settingsOpen || tutorialOpen || exit.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
-  const applySettings = useCallback((patch: Partial<UiSettings>) => {
-    const result = updateUiSettings(patch)
-    settingsRef.current = result.settings
-    setSettings(result.settings)
-    setSettingsNotice(result.error ?? "Configuração salva")
-  }, [])
-  const selectConfigurationSection = useCallback((section: ConfigurationSection) => {
-    configurationSectionRef.current = section
-    setConfigurationSection(section)
-  }, [])
-  const restoreDefaultSettings = useCallback(() => {
-    const result = resetUiSettings()
-    settingsRef.current = result.settings
-    setSettings(result.settings)
-    setSettingsNotice(result.error ?? "Configuração padrão restaurada")
-  }, [])
+  const backgroundToolActive = !interactionBlocked && !terminalSidebarFocused
   const openSettings = useCallback(() => {
-    setSettingsNotice("")
-    selectConfigurationSection(configurationSections[0] ?? "palette")
+    openConfiguration()
     setQueryHistoryEntries(configurationContext === "database" ? listDatabaseQueryHistory() : [])
     setSensitiveTermsOpen(false)
-    setSettingsOpen(true)
-  }, [configurationContext, configurationSections, selectConfigurationSection])
+  }, [configurationContext, openConfiguration])
   const openQueryHistory = useCallback(() => {
     if (configurationContext !== "database") return
     setQueryHistoryEntries(listDatabaseQueryHistory())
     setQueryHistoryOpen(true)
   }, [configurationContext])
 
-  const openGitConfiguration = useCallback(
-    (tab: GitConfigurationTab = "diffs") => {
-      setSettingsOpen(false)
-      setSettingsNotice("")
-      gitConfiguration.openModal(tab)
-    },
-    [gitConfiguration.openModal],
-  )
   const queryHistoryCanRerun = useCallback(
     (entry: DatabaseQueryHistoryEntry) => {
       return (ONLY_TAB === null || ONLY_TAB === "database") && databaseQueryHistoryCanRerun(entry)
@@ -186,72 +176,48 @@ export function AppContent() {
         sql: entry.sql,
       })
       setQueryHistoryOpen(false)
-      setSettingsOpen(false)
-      setSettingsNotice("")
+      closeSettings()
       if (!ONLY_TAB) setActiveTab("database")
     },
-    [ONLY_TAB, queryHistoryCanRerun],
+    [ONLY_TAB, closeSettings, queryHistoryCanRerun],
   )
   const startTutorial = useCallback(() => {
-    setSettingsOpen(false)
-    setSettingsNotice("")
+    closeSettings()
     setTutorialTargetId(null)
     setTutorialOpen(true)
-  }, [])
+  }, [closeSettings])
   const closeTutorial = useCallback(() => {
     setTutorialOpen(false)
     setTutorialTargetId(null)
   }, [])
-  const cycleConfigurationSection = useCallback(
-    (direction: -1 | 1) => {
-      const currentSection = normalizeConfigurationSectionForContext(
-        configurationSectionRef.current,
-        configurationContext,
-      )
-      const index = configurationSections.indexOf(currentSection)
-      const nextIndex =
-        (index + direction + configurationSections.length) % configurationSections.length
-      const next = configurationSections[nextIndex]
-      if (next) selectConfigurationSection(next)
-    },
-    [configurationContext, configurationSections, selectConfigurationSection],
-  )
-
-  const cycleConfiguration = useCallback(
-    (direction: -1 | 1) => {
-      const currentSettings = settingsRef.current
-      const patch = configurationSettingPatch(
-        configurationSectionRef.current,
-        currentSettings,
-        direction,
-      )
-      if (patch) applySettings(patch)
-    },
-    [applySettings],
-  )
-
   const openFeatures = useCallback(() => {
-    setSettingsOpen(false)
+    closeSettings()
     features.setInstaller(true)
-  }, [features.setInstaller])
-  const activateConfiguration = useCallback(() => {
-    activateConfigurationSection(configurationSectionRef.current, {
-      startTutorial,
-      openFeatures,
-      openHistory: openQueryHistory,
-      openSensitive: () => setSensitiveTermsOpen(true),
-      openGit: openGitConfiguration,
-      close: () => setSettingsOpen(false),
-    })
-  }, [openGitConfiguration, openQueryHistory, startTutorial, openFeatures])
+  }, [closeSettings, features.setInstaller])
+  const activateConfiguration = useCallback(
+    (section: ConfigurationSection) => {
+      activateConfigurationSection(section, {
+        startTutorial,
+        openFeatures,
+        openHistory: openQueryHistory,
+        openSensitive: () => setSensitiveTermsOpen(true),
+        focusRemoteConnection: () =>
+          renderer.root.findDescendantById("configuration-terminal-remote-view")?.focus(),
+      })
+    },
+    [openFeatures, openQueryHistory, renderer, startTutorial],
+  )
 
   useKeyboard((key) => {
     exit.guardKey(key)
     const focusedId = focusedRenderableId(renderer.currentFocusedRenderable)
+    const sidebarOwnsFocus = focusedId?.startsWith("terminal-sidebar") ?? false
     if (features.installerModal.current || focusedId?.startsWith("feature-uninstall-")) return
     const keyboardScope = features.showInstaller ? {} : TOOL_KEYBOARD_SCOPES[ONLY_TAB ?? activeTab]
     const globalLayerAvailable =
-      !modalBlocked && (features.showInstaller || !ownsKeyboardFocus(keyboardScope, focusedId))
+      !modalBlocked &&
+      !sidebarOwnsFocus &&
+      (features.showInstaller || !ownsKeyboardFocus(keyboardScope, focusedId))
     const globalShortcut = globalApplicationShortcut(key, globalLayerAvailable, Boolean(ONLY_TAB))
     if (globalShortcut) {
       key.preventDefault()
@@ -262,42 +228,30 @@ export function AppContent() {
 
     if (key.defaultPrevented) return
 
-    if (queryHistoryOpen || sensitiveTermsOpen || gitConfiguration.open) return
+    if (queryHistoryOpen || sensitiveTermsOpen) return
 
     if (tutorialOpen) {
       key.preventDefault()
       return
     }
 
-    if (settingsOpen) {
-      key.preventDefault()
-      if (key.name === "escape" || key.name === "q") {
-        setSettingsOpen(false)
-      } else if (key.name === "enter" || key.name === "return") {
-        activateConfiguration()
-      } else if (key.name === "up") {
-        cycleConfigurationSection(-1)
-      } else if (key.name === "down" || key.name === "tab") {
-        cycleConfigurationSection(1)
-      } else if (key.name === "left") {
-        cycleConfiguration(-1)
-      } else if (key.name === "right") {
-        cycleConfiguration(1)
-      } else if (key.name === "r") {
-        restoreDefaultSettings()
-      }
-      return
-    }
+    if (settingsOpen && contextualSettingsOwnKey(focusedId, key.name)) return
+    if (handleConfigurationKey(key, activateConfiguration)) return
 
     if (features.showInstaller && !(key.ctrl && key.name === "c") && key.name !== "q") return
 
-    if (key.ctrl && key.name === "c" && !ownsInterrupt(keyboardScope, focusedId)) {
+    if (
+      key.ctrl &&
+      key.name === "c" &&
+      !sidebarOwnsFocus &&
+      !ownsInterrupt(keyboardScope, focusedId)
+    ) {
       features.controller.cancel()
       void exit.quit()
       return
     }
 
-    if (ownsKeyboardFocus(keyboardScope, focusedId)) return
+    if (sidebarOwnsFocus || ownsKeyboardFocus(keyboardScope, focusedId)) return
 
     if (key.name === "escape" && keyboardScope.deferEscape) {
       setTimeout(() => {
@@ -343,29 +297,18 @@ export function AppContent() {
           }}
         />
       </MountWhen>
-      <MountWhen when={settingsOpen}>
-        <ConfigurationModal
-          open
-          settings={settings}
-          section={configurationSection}
-          notice={settingsNotice}
-          onClose={() => setSettingsOpen(false)}
-          onSectionChange={selectConfigurationSection}
-          onPaletteChange={(palette) => applySettings({ palette })}
-          onColorModeChange={(colorMode) => applySettings({ colorMode })}
-          onLayoutChange={(layout) => applySettings({ layout })}
-          onLanguageChange={(language) => applySettings({ language })}
-          onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
-          onReset={restoreDefaultSettings}
-          onOpenQueryHistory={openQueryHistory}
-          onStartTutorial={startTutorial}
-          onOpenFeatures={openFeatures}
-          queryHistoryCount={queryHistoryEntries.length}
-          tutorialLabel={TAB_LABELS[tutorialScreen]}
-          context={configurationContext}
-          onOpenGitConfiguration={openGitConfiguration}
-        />
-      </MountWhen>
+      <WorkspaceConfigurationOverlay
+        configuration={configuration}
+        context={configurationContext}
+        tutorialScreen={tutorialScreen}
+        queryHistoryCount={queryHistoryEntries.length}
+        onOpenSensitiveTerms={() => setSensitiveTermsOpen(true)}
+        onOpenQueryHistory={openQueryHistory}
+        onStartTutorial={startTutorial}
+        onOpenFeatures={openFeatures}
+        onGitConfigurationChanged={gitConfiguration.onChanged}
+        onConfigureRemoteServer={remoteSetup.configure}
+      />
       <MountWhen when={sensitiveTermsOpen}>
         <SensitiveTermsModal
           open
@@ -395,23 +338,28 @@ export function AppContent() {
           onStepChange={setTutorialTargetId}
         />
       </MountWhen>
-      {gitConfiguration.modal}
       {exitModal}
     </>
   )
   if (ONLY_TAB) {
+    const compact = ONLY_TAB === "terminal" || LAYOUT.compact
+    const headerHeight = compact ? 1 : 2
+    const shortcutColor =
+      ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
+    const isolatedToolAvailable =
+      features.state.installed.includes(ONLY_TAB) && !closed.has(ONLY_TAB)
     return (
-      <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
+      <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
         <box
           id="tutorial-app-header"
           style={{
-            height: LAYOUT.compact ? 1 : 2,
+            height: headerHeight,
             flexShrink: 0,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            ...separatorBorder(),
-            backgroundColor: LAYOUT.compact ? COLORS.panel : COLORS.canvas,
+            ...(ONLY_TAB === "terminal" ? { border: false } : separatorBorder()),
+            backgroundColor: COLORS.panel,
             paddingLeft: 1,
             paddingRight: 1,
           }}
@@ -423,36 +371,45 @@ export function AppContent() {
           />
           <box style={{ flexDirection: "row", alignItems: "center" }}>
             <InlineButton
+              compact={compact}
               id="tutorial-settings-button"
               label={compactNavigation ? "[,]" : "[,] Config"}
               accent={COLORS.focus}
+              shortcutColor={shortcutColor}
               onPress={openSettings}
             />
             <InlineButton
+              compact={compact}
               id="app-exit-button"
               label={compactNavigation ? "[Q]" : "[Q] Sair"}
               accent={COLORS.focus}
+              shortcutColor={shortcutColor}
               onPress={() => void exit.quit()}
             />
           </box>
         </box>
 
-        <box id="tutorial-current-tool" style={{ flexGrow: 1 }}>
-          {features.state.installed.includes(ONLY_TAB) &&
-            !closed.has(ONLY_TAB) &&
-            ONLY_TAB === "database" && (
+        <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
+          <PinnedTerminalSidebar
+            active={!interactionBlocked}
+            height={Math.max(1, terminal.height - headerHeight)}
+            onOpenTerminal={() => {
+              if (ONLY_TAB === "terminal") return
+              void selectTab("terminal")
+            }}
+          />
+          <box id="tutorial-current-tool" style={{ flexGrow: 1, minWidth: 1 }}>
+            {isolatedToolAvailable && ONLY_TAB === "database" && (
               <DatabaseViewer
-                active={!interactionBlocked}
+                active={backgroundToolActive}
                 tutorialMode={tutorialOpen}
                 queryRerunRequest={databaseQueryRerunRequest}
                 onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
               />
             )}
-          {features.state.installed.includes(ONLY_TAB) &&
-            !closed.has(ONLY_TAB) &&
-            ONLY_TAB === "git" && (
+            {isolatedToolAvailable && ONLY_TAB === "git" && (
               <GitViewer
-                active={!interactionBlocked}
+                active={backgroundToolActive}
                 tutorialMode={tutorialOpen}
                 tutorialTargetId={tutorialTargetId}
                 configurationRevision={gitConfiguration.revision}
@@ -460,21 +417,32 @@ export function AppContent() {
                 onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
               />
             )}
-          {features.state.installed.includes(ONLY_TAB) &&
-            !closed.has(ONLY_TAB) &&
-            ONLY_TAB === "runner" && <Runner active={!interactionBlocked} />}
-          {features.state.installed.includes(ONLY_TAB) &&
-            !closed.has(ONLY_TAB) &&
-            ONLY_TAB === "http" && (
+            {isolatedToolAvailable && ONLY_TAB === "runner" && (
+              <Runner active={backgroundToolActive} />
+            )}
+            {isolatedToolAvailable && ONLY_TAB === "http" && (
               <HttpClient
-                active={!interactionBlocked}
+                active={backgroundToolActive}
                 tutorialMode={tutorialOpen}
                 onUnsavedChangesChange={exit.track}
               />
             )}
-          {features.state.installed.includes(ONLY_TAB) &&
-            !closed.has(ONLY_TAB) &&
-            ONLY_TAB === "terminal" && <FreeTerminal active={!interactionBlocked} />}
+            {isolatedToolAvailable && ONLY_TAB === "terminal" && (
+              <TermAgents
+                tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
+                active={!interactionBlocked}
+                externalSidebarHost
+                remoteSetupRequest={remoteSetup.request}
+                onRemoteSetupRequestHandled={remoteSetup.handled}
+                onMasterKeyActiveChange={setTerminalMasterKeyActive}
+                onOpenSettings={openSettings}
+                onQuit={() => {
+                  features.controller.cancel()
+                  void exit.quit()
+                }}
+              />
+            )}
+          </box>
         </box>
         {overlays}
       </box>
@@ -486,12 +454,14 @@ export function AppContent() {
       value={activeTab}
       onValueChange={(value) => void selectTab(value as AppTab)}
       flexGrow={1}
-      backgroundColor={COLORS.canvas}
+      backgroundColor={LAYOUT.workspaceBackground}
     >
       <WorkspaceHeader
+        terminalCompact={activeTab === "terminal"}
         installed={features.state.installed}
         compactNavigation={compactNavigation}
         minimalNavigation={minimalNavigation}
+        terminalMasterKeyActive={terminalMasterKeyActive}
         openSettings={openSettings}
         onQuit={() => {
           features.controller.cancel()
@@ -499,79 +469,106 @@ export function AppContent() {
         }}
       />
 
-      <Tabs.Panel value="database" flexGrow={1} keepMounted>
-        {visitedTabsRef.current.has("database") ? (
-          <box
-            {...(activeTab === "database" ? { id: "tutorial-current-tool" } : {})}
-            style={{ flexGrow: 1 }}
-          >
-            <DatabaseViewer
-              active={activeTab === "database" && !interactionBlocked}
-              tutorialMode={tutorialOpen}
-              queryRerunRequest={databaseQueryRerunRequest}
-              onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
-            />
-          </box>
-        ) : null}
-      </Tabs.Panel>
-      <Tabs.Panel value="git" flexGrow={1} keepMounted>
-        {visitedTabsRef.current.has("git") ? (
-          <box
-            {...(activeTab === "git" ? { id: "tutorial-current-tool" } : {})}
-            style={{ flexGrow: 1 }}
-          >
-            <GitViewer
-              active={activeTab === "git" && !interactionBlocked}
-              tutorialMode={tutorialOpen}
-              tutorialTargetId={tutorialTargetId}
-              configurationRevision={gitConfiguration.revision}
-              localConfigurationRevision={gitConfiguration.localRevision}
-              onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
-            />
-          </box>
-        ) : null}
-      </Tabs.Panel>
-      <Tabs.Panel value="runner" flexGrow={1} keepMounted>
-        {visitedTabsRef.current.has("runner") ? (
-          <box
-            {...(activeTab === "runner" ? { id: "tutorial-current-tool" } : {})}
-            style={{ flexGrow: 1 }}
-          >
-            <Runner
-              active={activeTab === "runner" && !interactionBlocked}
-              onOpenHttp={openRunnerPortInHttp}
-            />
-          </box>
-        ) : null}
-      </Tabs.Panel>
-      <Tabs.Panel value="http" flexGrow={1} keepMounted>
-        {visitedTabsRef.current.has("http") ? (
-          <box
-            {...(activeTab === "http" ? { id: "tutorial-current-tool" } : {})}
-            style={{ flexGrow: 1 }}
-          >
-            <HttpClient
-              active={activeTab === "http" && !interactionBlocked}
-              tutorialMode={tutorialOpen}
-              initialUrlRequest={runnerHttpRequest}
-              onUnsavedChangesChange={exit.track}
-            />
-          </box>
-        ) : null}
-      </Tabs.Panel>
-      <Tabs.Panel value="terminal" flexGrow={1} keepMounted>
-        {visitedTabsRef.current.has("terminal") ? (
-          <box
-            {...(activeTab === "terminal" ? { id: "tutorial-current-tool" } : {})}
-            style={{ flexGrow: 1 }}
-          >
-            <FreeTerminal active={activeTab === "terminal" && !interactionBlocked} />
-          </box>
-        ) : null}
-      </Tabs.Panel>
+      <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
+        <PinnedTerminalSidebar
+          active={!interactionBlocked}
+          height={Math.max(
+            1,
+            terminal.height - (activeTab === "terminal" || LAYOUT.compact ? 1 : 2),
+          )}
+          onOpenTerminal={() => void selectTab("terminal")}
+        />
+        <box style={{ flexGrow: 1, minWidth: 1 }}>
+          <Tabs.Panel value="database" flexGrow={1} keepMounted>
+            {visitedTabsRef.current.has("database") ? (
+              <box
+                {...(activeTab === "database" ? { id: "tutorial-current-tool" } : {})}
+                style={{ flexGrow: 1 }}
+              >
+                <DatabaseViewer
+                  active={activeTab === "database" && backgroundToolActive}
+                  tutorialMode={tutorialOpen}
+                  queryRerunRequest={databaseQueryRerunRequest}
+                  onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
+                />
+              </box>
+            ) : null}
+          </Tabs.Panel>
+          <Tabs.Panel value="git" flexGrow={1} keepMounted>
+            {visitedTabsRef.current.has("git") ? (
+              <box
+                {...(activeTab === "git" ? { id: "tutorial-current-tool" } : {})}
+                style={{ flexGrow: 1 }}
+              >
+                <GitViewer
+                  active={activeTab === "git" && backgroundToolActive}
+                  tutorialMode={tutorialOpen}
+                  tutorialTargetId={tutorialTargetId}
+                  configurationRevision={gitConfiguration.revision}
+                  localConfigurationRevision={gitConfiguration.localRevision}
+                  onOpenLocalConfiguration={() => openGitConfiguration("diffs")}
+                />
+              </box>
+            ) : null}
+          </Tabs.Panel>
+          <Tabs.Panel value="runner" flexGrow={1} keepMounted>
+            {visitedTabsRef.current.has("runner") ? (
+              <box
+                {...(activeTab === "runner" ? { id: "tutorial-current-tool" } : {})}
+                style={{ flexGrow: 1 }}
+              >
+                <Runner
+                  active={activeTab === "runner" && backgroundToolActive}
+                  onOpenHttp={openRunnerPortInHttp}
+                />
+              </box>
+            ) : null}
+          </Tabs.Panel>
+          <Tabs.Panel value="http" flexGrow={1} keepMounted>
+            {visitedTabsRef.current.has("http") ? (
+              <box
+                {...(activeTab === "http" ? { id: "tutorial-current-tool" } : {})}
+                style={{ flexGrow: 1 }}
+              >
+                <HttpClient
+                  active={activeTab === "http" && backgroundToolActive}
+                  tutorialMode={tutorialOpen}
+                  initialUrlRequest={runnerHttpRequest}
+                  onUnsavedChangesChange={exit.track}
+                />
+              </box>
+            ) : null}
+          </Tabs.Panel>
+          <Tabs.Panel value="terminal" flexGrow={1} keepMounted>
+            {visitedTabsRef.current.has("terminal") ? (
+              <box
+                {...(activeTab === "terminal" ? { id: "tutorial-current-tool" } : {})}
+                style={{ flexGrow: 1 }}
+              >
+                <TermAgents
+                  tutorial={tutorialOpen ? { targetId: tutorialTargetId } : null}
+                  active={activeTab === "terminal" && !interactionBlocked}
+                  externalSidebarHost
+                  remoteSetupRequest={remoteSetup.request}
+                  onRemoteSetupRequestHandled={remoteSetup.handled}
+                  onMasterKeyActiveChange={setTerminalMasterKeyActive}
+                  onOpenSettings={openSettings}
+                  onSelectTool={(tool) => void selectTab(tool)}
+                  onQuit={() => {
+                    features.controller.cancel()
+                    void exit.quit()
+                  }}
+                />
+              </box>
+            ) : null}
+          </Tabs.Panel>
+        </box>
+      </box>
       {overlays}
     </Tabs.Root>
   )
 }
 
-export const App = withNotifications(withStartupAnimation(withFeatures(AppContent)))
+export const App = withNotifications(
+  withSelectionClipboard(withStartupAnimation(withFeatures(AppContent))),
+)

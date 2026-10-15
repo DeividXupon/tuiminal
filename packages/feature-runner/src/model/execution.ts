@@ -22,3 +22,32 @@ export type RunnerExecution = {
   restartAttempt: number
   health: "none" | "checking" | "healthy" | "unhealthy"
 }
+
+export function executionPlanOutcome(
+  stopped: boolean,
+  code: number | null,
+  hasHealth: boolean,
+  healthResolved: boolean,
+) {
+  if (stopped) return "stopped"
+  return code === 0 && (!hasHealth || healthResolved) ? "success" : "failed"
+}
+export function runnerShouldRestart(
+  command: RunnerCommand,
+  stopped: boolean,
+  code: number | null,
+  attempt: number,
+) {
+  return (
+    !stopped &&
+    attempt < (command.maxRestarts ?? 5) &&
+    (command.restartPolicy === "always" || (command.restartPolicy === "on-failure" && code !== 0))
+  )
+}
+export function runnerLogHealthMatches(pattern: string, line: string) {
+  try {
+    return new RegExp(pattern, "i").test(line)
+  } catch {
+    return line.toLocaleLowerCase().includes(pattern.toLocaleLowerCase())
+  }
+}

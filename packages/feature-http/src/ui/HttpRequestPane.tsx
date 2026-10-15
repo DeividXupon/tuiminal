@@ -18,15 +18,19 @@ import type {
   HttpRequestView,
   HttpRequestMoreView,
 } from "../model/types"
-import { COMMON_HTTP_HEADER_NAMES } from "../model/key-value"
 import type { HttpParameterSection } from "../model/parameter-navigation"
+import {
+  consumeHttpRequestTableKey,
+  useHttpRequestTables,
+  type HttpRequestTableKey,
+} from "../hooks/use-http-request-tables"
 import type { HttpPreparedRequestPreview } from "../services/request-preview"
 import { HttpAuthEditor } from "./HttpAuthEditor"
 import { HttpKeyValueEditor } from "./HttpKeyValueEditor"
 import { HttpMultipartEditor } from "./HttpMultipartEditor"
 import { HttpOpaqueRequestContent } from "./HttpOpaqueRequestContent"
 import { HttpRequestMoreEditor } from "./HttpRequestMoreEditor"
-import { HttpBodyKindButtons, HttpRequestPaneKeyboard } from "./HttpRequestPaneControls"
+import { HttpBodyKindButtons } from "./HttpRequestPaneControls"
 import { HttpRequestViewTabs } from "./HttpRequestViewTabs"
 
 function RequestPaneTitle({ dirty }: { dirty: boolean }) {
@@ -50,6 +54,7 @@ function RequestPaneTitle({ dirty }: { dirty: boolean }) {
 
 export function HttpRequestPane({
   document,
+  requestTableKeyRef,
   visible,
   focused,
   position,
@@ -82,6 +87,7 @@ export function HttpRequestPane({
   preparedPreview,
 }: {
   document: HttpDocumentState
+  requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
   visible: boolean
   focused: boolean
   position: { left: number; top: number; width: number; height: number }
@@ -124,10 +130,23 @@ export function HttpRequestPane({
   const bodyDisabled = request.body.kind === "none"
   const textBody =
     request.body.kind === "json" || request.body.kind === "text" || request.body.kind === "xml"
-
-  const focusParameterSection = (section: HttpParameterSection) => {
-    onFocus()
-    setParameterSection(section)
+  const tables = useHttpRequestTables({
+    request,
+    view: document.requestView,
+    focused: visible && focused,
+    parameterSection,
+    onParameterSectionChange: setParameterSection,
+    onFocus,
+    changes: {
+      query: onQueryChange,
+      path: onPathChange,
+      header: onHeadersChange,
+      form: onBodyFormChange,
+      multipart: onBodyMultipartChange,
+    },
+  })
+  if (visible && focused) {
+    requestTableKeyRef.current = (key) => consumeHttpRequestTableKey(key, tables.handleKey)
   }
 
   if (request.source.kind === "file" && request.source.supported === false) {
@@ -171,18 +190,6 @@ export function HttpRequestPane({
         overflow: "hidden",
       }}
     >
-      {visible && focused ? (
-        <HttpRequestPaneKeyboard
-          document={document}
-          parameterSection={parameterSection}
-          onParameterSectionChange={setParameterSection}
-          onQueryChange={onQueryChange}
-          onPathChange={onPathChange}
-          onHeadersChange={onHeadersChange}
-          onBodyFormChange={onBodyFormChange}
-          onBodyMultipartChange={onBodyMultipartChange}
-        />
-      ) : null}
       {dense ? null : <RequestPaneTitle dirty={dirty} />}
       <HttpRequestViewTabs
         current={document.requestView}
@@ -201,9 +208,7 @@ export function HttpRequestPane({
             entries={request.query}
             onChange={onQueryChange}
             dense={dense}
-            showAddAction={focused && parameterSection === "query"}
-            sectionFocused={focused && parameterSection === "query"}
-            onSectionFocus={() => focusParameterSection("query")}
+            navigation={tables.keyValueNavigation("query")}
           />
           <HttpKeyValueEditor
             idPrefix={`${request.id}-path`}
@@ -211,9 +216,7 @@ export function HttpRequestPane({
             entries={request.path}
             onChange={onPathChange}
             dense={dense}
-            showAddAction={focused && parameterSection === "path"}
-            sectionFocused={focused && parameterSection === "path"}
-            onSectionFocus={() => focusParameterSection("path")}
+            navigation={tables.keyValueNavigation("path")}
           />
         </box>
         <box
@@ -227,9 +230,8 @@ export function HttpRequestPane({
             onChange={onHeadersChange}
             registerFirstInput={registerHeaderInput}
             detectSensitiveNames
-            nameSuggestions={COMMON_HTTP_HEADER_NAMES}
             dense={dense}
-            showAddAction={focused}
+            navigation={tables.keyValueNavigation("header")}
           />
         </box>
         <box
@@ -274,7 +276,7 @@ export function HttpRequestPane({
               entries={request.body.form}
               onChange={onBodyFormChange}
               dense={dense}
-              showAddAction={focused}
+              navigation={tables.keyValueNavigation("form")}
             />
           </box>
           <box visible={request.body.kind === "multipart"} style={{ flexGrow: 1 }}>
@@ -282,7 +284,7 @@ export function HttpRequestPane({
               requestId={request.id}
               parts={request.body.multipart ?? []}
               onChange={onBodyMultipartChange}
-              active={visible && focused}
+              navigation={tables.multipartNavigation()}
             />
           </box>
           <box visible={request.body.kind === "file"} style={{ flexGrow: 1, paddingTop: 1 }}>

@@ -13,7 +13,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#instalação)
 
-[Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Free Terminal](#free-terminal) · [Contribuir](#desenvolvimento)
+[Instalação](#instalação) · [Banco](#banco) · [Git](#git) · [Runner](#runner) · [HTTP](#http) · [Term Agents](#term-agents) · [Contribuir](#desenvolvimento)
 
 </div>
 
@@ -25,7 +25,8 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 - Interface densa construída com Bun, OpenTUI, React e tuiparts.
 - Funciona em qualquer diretório; Git, Runner e terminais usam o projeto informado ao CLI.
 - Teclado e mouse são cidadãos de primeira classe.
-- Layout moldurado ou compacto, sete paletas e seis idiomas.
+- Layout moldurado com uma superfície contínua entre os painéis, ou layout compacto
+  com seu canvas mais denso; sete paletas e seis idiomas.
 - Processos e PTYs permanecem vivos enquanto você troca de tab.
 - Dados sensíveis, escritas e operações remotas recebem proteções explícitas.
 
@@ -41,7 +42,7 @@ tuiminal
 Você **não precisa instalar o Bun** para usar o pacote publicado. O npm baixa o binário compatível com macOS, Linux glibc ou Windows, nas arquiteturas x64 e ARM64. Node.js 22 ou superior é usado pelo pequeno launcher do pacote.
 
 Uma instalação nova abre **Instalar ferramentas oficiais**. Escolha Database, Git,
-Runner, HTTP ou Free Terminal com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
+Runner, HTTP ou Term Agents com `[↑/↓]` / `[J/K]` ou o mouse; pressione `[Enter]`
 para instalar e novamente para abrir. Use `[Space]` e `[I]` para instalar várias.
 Reabra a tela em `[,]` → **Ferramentas oficiais → Gerenciar ferramentas** ou com
 `tuiminal features`. Só as ferramentas instaladas aparecem nas abas; Runner é o
@@ -58,7 +59,7 @@ Cada ferramenta tem uma descrição detalhada. Passe o mouse sobre uma linha ou
 navegue com `[↑/↓/J/K]` para ver um ícone animado da ferramenta. Database preenche
 um cilindro com dados; Runner inicia, avança e conclui uma execução; HTTP envia
 uma requisição e recebe a resposta entre cliente e servidor. Git mostra uma
-ramificação e Free Terminal exibe uma janela com cursor piscando. Os ícones se
+ramificação e Term Agents exibe uma janela com cursor piscando. Os ícones se
 adaptam a terminais menores. Durante o download, o fundo da linha se preenche
 da esquerda para a direita conforme o progresso real.
 
@@ -83,7 +84,7 @@ tuiminal ../meu-projeto
 tuiminal banco ./meu-projeto
 tuiminal git ./meu-projeto
 tuiminal runner ./meu-projeto
-tuiminal http ./meu-projeto
+tuiminal http
 tuiminal terminal ./meu-projeto
 ```
 
@@ -101,13 +102,18 @@ Somente esses comandos e aliases são tratados como ferramentas; outros nomes s�
 | Abrir Git | `[Alt+2]` |
 | Abrir Runner | `[Alt+3]` |
 | Abrir HTTP | `[Alt+4]` |
-| Abrir Free Terminal | `[Alt+5]` |
+| Abrir Term Agents | `[Alt+5]` |
 | Abrir configurações | `[,]` |
 | Sair | `[Q]`, `[Esc]` ou `[Ctrl+C]` |
 
 No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combinações, ative **Use Option as Meta key** ou a opção equivalente. Os números sem modificador continuam livres para ações locais das ferramentas.
 
-As ferramentas compartilham notificações flutuantes: no máximo três ficam retidas, sem tirar o foco do teclado. Mensagens temporárias expiram automaticamente; erros permanecem até você fechá-los. Eventos substituídos ou removidos também liberam seus timers, inclusive em rajadas de notificações.
+As ferramentas compartilham notificações compactas no canto superior direito: no máximo três ficam visíveis, sem tirar o foco do teclado. Cada cartão tem uma linha fina e colorida de tempo e uma animação curta para entrar e sair. Informações são azuis, sucessos são verdes e erros são vermelhos e permanecem um pouco mais. Passar o mouse sobre qualquer cartão pausa todas as notificações visíveis; os tempos continuam quando o ponteiro sai.
+
+Para copiar texto, selecione arrastando com o botão esquerdo e clique com o botão
+direito sobre a seleção. Isso também funciona nas ferramentas isoladas e nos modais.
+A cópia usa o suporte OSC52 do terminal; se houver uma falha local, a seleção fica
+disponível para tentar novamente. Campos de senha mascarados copiam apenas a máscara.
 
 ## Cinco ferramentas, um único fluxo
 
@@ -117,7 +123,7 @@ As ferramentas compartilham notificações flutuantes: no máximo três ficam re
 | `[Alt+2]` Git | Revisar diffs locais, PRs, Issues e notificações do GitHub. |
 | `[Alt+3]` Runner | Detectar comandos, executar serviços e acompanhar vários logs. |
 | `[Alt+4]` HTTP | Criar, salvar, executar e automatizar requisições de API. |
-| `[Alt+5]` Free Terminal | Abrir shells e qualquer CLI em seções com splits `2 × 2`. |
+| `[Alt+5]` Term Agents | Abrir shells e qualquer CLI em seções compactas com até dois terminais. |
 
 <a id="banco"></a>
 
@@ -132,13 +138,13 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 ### O que você pode fazer
 
 - **Conectar:** MySQL/MariaDB, PostgreSQL, SQLite e servidores MySQL MCP opcionais. MCP é sempre explícito e somente leitura.
-- **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos.
-- **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas, paginar e navegar horizontalmente sem perder a linha selecionada.
+- **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos. `[/]` filtra o catálogo; `[Enter]` leva do filtro à lista de tabelas encontradas, e outro `[Enter]` abre a tabela selecionada. Em `[4]` Schema, `[G]` alterna um diagrama ASCII das relações diretas da tabela aberta; em terminais estreitos, cada chave estrangeira aparece empilhada verticalmente.
+- **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas e navegar horizontalmente sem perder a linha selecionada. A grade mantém até 50 linhas carregadas e busca mais 40 em qualquer extremidade ao pressionar novamente a tecla de direção. Cada leitura da tabela mostra uma prévia colorida do SELECT em uma notificação, com a tabela e `LIMIT`/`OFFSET`; colunas projetadas e textos de busca são abreviados.
 - **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
 - **Editar grandes seleções:** preparação em lote com busca indexada das alterações existentes, preservando snapshots e chaves `BigInt` exatas antes da revisão.
 - **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
-- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado. Trocar o layout ou maximizar o resultado preserva o editor e seu rascunho.
+- **Escrever SQL:** manter até seis abas independentes, executar somente o comando sob o cursor, cancelar consultas e ajustar a divisão editor/resultado. Os resultados mantêm no máximo 50 linhas carregadas; pressionar `[↓]` novamente na última linha ou `[↑]` novamente na primeira carrega o próximo bloco sobreposto de 40. Trocar o layout ou maximizar o resultado preserva o editor e seu rascunho.
 - **Inspecionar e exportar:** visualizar todos os campos da linha e exportar as linhas marcadas em CSV, TSV ou JSON.
 - **Proteger informações:** mascarar colunas sensíveis sob demanda e personalizar os termos usados para reconhecê-las.
 
@@ -150,13 +156,15 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
 
-Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração. A paginação acompanha a altura do terminal sem pular registros quando cabem mais de 50 linhas.
+Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração.
 
 Resultados SQL só permitem edição quando selecionam diretamente colunas ou `*` de uma única tabela. Expressões, colunas renomeadas, agrupamentos e `DISTINCT` permanecem somente leitura; editar ou excluir também exige todas as colunas da chave primária no resultado.
 
 No MySQL, campos não qualificados entre aspas duplas ficam somente leitura, pois podem ser textos literais; prefira identificadores entre crases. Colunas entre aspas duplas continuam editáveis no PostgreSQL e SQLite.
 
 Perfis começam em **somente leitura**. Senhas não são gravadas no JSON de configuração: quando solicitado, são enviadas ao Keychain do macOS, libsecret no Linux ou Credential Manager no Windows. `DATABASE_URL`, `MYSQL_URL` e `POSTGRES_URL` podem ser descobertas sem virar perfis editáveis silenciosamente.
+
+O gerenciador também lista perfis válidos somente na sessão vindos de `~/.my.cnf` e `mysql_config_editor` no MySQL, além de `~/.pg_service.conf` e `~/.pgpass` no PostgreSQL (com os caminhos correspondentes no Windows). `[R]` refaz a descoberta. Campos ausentes são pedidos para a sessão atual; senhas externas nunca são copiadas para as configurações do Tuiminal. Perfis PostgreSQL salvos podem usar `pgpass` no lugar do Keychain. No Unix, segredos de arquivos com dono ou permissões inseguros são ignorados. Perfis externos descobertos permitem escrita, mantendo obrigatórias a revisão e a confirmação explícita normais.
 
 O campo de senha mantém a máscara também durante edição e redimensionamento com caracteres largos, como ideogramas e emojis.
 
@@ -176,6 +184,7 @@ A prévia de exportação processa só as primeiras linhas visíveis e mantém o
 | --- | --- |
 | Gerenciar conexões | `[C]` |
 | Dados, colunas, índices e schema | `[1]`, `[2]`, `[3]`, `[4]` |
+| Detalhes do schema / diagrama de relações | `[G]` no Schema |
 | Navegar por linhas | `[J/K]` ou `[↑/↓]` |
 | Abrir tabela ou editar célula | `[Enter]` |
 | Buscar tabela / buscar nos dados | `[/]` / `[S]` |
@@ -205,6 +214,18 @@ Configurações de conexões e metadados do histórico ficam em `~/.config/tuimi
 
 Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-dash. Diffs funciona offline; PR, Issues e Inbox são carregados separadamente somente quando você os abre.
 
+A navegação separa o projeto local da conta do GitHub:
+
+```text
+LOCAL · …/tuiminal      │ GITHUB · @conta
+[1] [C] DIFFS           │ [2] PR  [3] ISSUES  [4] INBOX
+```
+
+O rótulo local acompanha o projeto selecionado. GitHub mostra a conta já carregada
+pela aba remota ativa, ou `—` enquanto ela não estiver disponível; o cabeçalho não
+faz consultas adicionais ao GitHub. Em terminais estreitos, os grupos ficam um abaixo
+do outro. `[C]` alterna a área local entre Diffs e Comparar.
+
 ### `[1] Diffs`
 
 - Agrupa arquivos modificados em uma árvore real. Cadeias sem ramificações mostram cada pasta em sua própria linha, sem recuo artificial entre elas, mas `[J/K]` trata toda a cadeia como um único bloco navegável.
@@ -219,12 +240,19 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 - Um terminal Git sob o diff mantém sete linhas visíveis e até 2.000 linhas de histórico, preservando a saída real dos comandos em vez de resumi-la. `[T]` leva o foco a ele para executar comandos manuais, `[↑/↓]` e o mouse rolam a saída, e `[F10]` maximiza/restaura o terminal dentro do painel de preview; o prefixo `git` é fixo e não há composição de comando por shell. Enquanto você digita, o autocomplete sugere comandos, opções, branches locais/remotas já conhecidas, tags, remotes e arquivos alterados; use `[Ctrl+N/P]` para navegar, `[Ctrl+Y]` para aplicar e `[Esc]` para fechar as sugestões.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox. No terminal, a tecla pertence ao autocomplete; em modais ou no stage parcial, ela não abre a configuração por cima do contexto atual.
-- O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Git · Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
+- O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
+- O tutorial do Term Agents vai do básico ao avançado com um projeto de loja online inteiramente simulado: painéis PTY, faixa de metadados, sessões e pastas, comandos personalizados, menu da Master Key e `[1]`–`[9]`, renomear, seleção de caixas, divisões, lista de Agentes, seletores de provedor, projeto, pasta e ambiente, conversas para retomar, histórico de mensagens enviadas e detalhes do turno, todas as áreas do Live Diff e seu seletor de projetos, lateral fixada, espelhos tmux, agentes remotos, revisão, progresso e sincronização automática do projeto e o guia de preparação do servidor. Cada etapa abre a tela que está explicando. O tour é desenhado por cima do workspace real, então os terminais continuam rodando no mesmo tamanho e não recebem entrada; ele nunca inicia processos, lê Git, procura projetos nem conecta por SSH.
+
+Os três dashboards remotos removem linhas vazias no modo moldurado. Em telas largas,
+PR e Issues colocam seções e ações na mesma linha; telas menores empilham esses
+controles. O modo compacto mantém sua geometria atual.
 
 ### `[2] PR`
 
+- `[Ctrl+N]` abre o formulário de criação com seletores pesquisáveis de repositório e das branches remotas base e comparada, título, descrição em Markdown e opção draft. A base começa com a branch padrão do repositório selecionado e pode ser trocada. O título começa com a primeira linha do último commit da branch comparada e continua editável. O Tuiminal verifica as duas branches escolhidas antes de um único envio à API do GitHub; ele não faz push da branch local.
 - Começa com **My PRs**, **Review requested**, **All**, **Open** e **Closed**; os três últimos mostram todos os PRs não arquivados, somente os abertos ou somente os fechados dentro do escopo atual.
 - Lista estado, repositório, revisão, CI, autor, responsáveis, comentários, labels e tamanho do diff.
+- O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
 - Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
@@ -234,8 +262,10 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 
 ### `[3] Issues`
 
+- `[Ctrl+N]` abre o formulário de criação com seletor pesquisável de repositório, título e descrição em Markdown. Os dois formulários preservam o rascunho em memória até o envio e exigem `[Ctrl+S]` para criar.
 - Começa com **My Issues**, **All**, **Open** e **Closed**; os três últimos mostram todas as issues não arquivadas, somente as abertas ou somente as fechadas dentro do escopo atual.
 - Combina uma lista densa de duas linhas com visão geral e atividade da issue.
+- O símbolo do estado fica verde para aberta e vermelho para fechada.
 - Na Atividade, `[J/K]` seleciona comentários, `[E]` reage com 👍 ❤️ 🎉 😄 ou 👀 e `[Enter]` responde; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage à própria issue.
 - Permite comentar, atribuir/remover responsáveis, editar labels, criar branch com checkout, fechar e reabrir.
 - A busca sempre fica limitada a issues não arquivadas e nunca vira acidentalmente uma pesquisa global do GitHub.
@@ -243,10 +273,13 @@ Uma área local no estilo lazygit e três dashboards remotos inspirados no gh-da
 ### `[4] Inbox`
 
 - Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
+- As bolinhas preenchida e vazia continuam indicando não lida e lida. Em PRs e issues, elas também recebem a cor do estado, mostrado em texto; outros assuntos ou estados indisponíveis ficam neutros.
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
 
 PR e Issues usam o repositório do `origin` quando ele é reconhecido. Fora de um repositório, o escopo padrão é a conta autenticada — organizações e repositórios externos incluídos de forma explícita — em vez de uma busca aberta em todo o GitHub. As áreas remotas exigem o [GitHub CLI](https://cli.github.com/) 2.40.0 ou mais recente. Quando `gh` não está disponível ou precisa ser atualizado, PR, Issues e Inbox explicam sua função, mostram o comando oficial detectado, oferecem `[C]` para copiá-lo e um mini terminal interativo focado com `[Enter]` ou mouse. O Tuiminal abre somente o shell: o usuário cola e executa o comando, e a versão é detectada automaticamente; se o shell encerrar, `[Enter]` abre outro. A falta de autenticação abre o mesmo passo a passo para `gh auth login --hostname <host> --web`; o login e o token permanecem sob responsabilidade do `gh`/GitHub, e a tela recarrega ao detectar a conta.
+
+Com a aba PR ou Issues ativa, a lista visível e os detalhes selecionados são atualizados aproximadamente a cada 30 segundos. Assim, issues e comentários criados no GitHub aparecem sem reabrir a aba. `[R]` consulta ambos imediatamente. O intervalo configurado mais longo continua atualizando todas as seções até a profundidade de páginas já carregada.
 
 As chamadas automáticas ao `gh` têm limite de tempo e aguardam o encerramento do
 processo ao cancelar. Se uma escrita em PR/Issue ficar sem confirmação — por
@@ -261,21 +294,34 @@ Na aba Checks, execuções e erros de outro PR desaparecem assim que a seleção
 muda; respostas atrasadas não reaparecem no PR atual. PR, Issues e Inbox reutilizam o
 texto das linhas ao navegar, preservando atualizações de idioma, cores e dados.
 
-Nas configurações Git, projetos locais e repositórios remotos aparecem assim que
-cada busca termina, sem esperar a outra. Fechar ou recarregar o modal cancela a
-consulta remota anterior. O autocomplete de queries processa só os candidatos
+As configurações Git aparecem como cinco itens abertos por `[,]`: Diffs fica em
+**GIT**, enquanto Pull Requests, Issues, Repositórios e Navegador ficam em
+**GITHUB**. O item focado é renderizado imediatamente no painel de detalhes, e `[Enter]` leva
+o foco do teclado para esse painel. Projetos locais e repositórios remotos aparecem
+assim que cada busca termina, sem
+esperar a outra. Sair ou recarregar o contexto Git cancela a consulta remota anterior.
+Os seletores de projeto/branch e os editores de seções de PR/Issues substituem o
+conteúdo desse mesmo painel e voltam com `[Esc]`; nenhum segundo modal de
+configuração é aberto. O autocomplete de queries processa só os candidatos
 necessários para preencher as sugestões visíveis.
 
+No Git, abra `[,]` → Contexto → Navegador para escolher onde `[O]` abre PRs,
+Issues, notificações do Inbox e execuções de workflow. O padrão usa o navegador
+do sistema. Browsh e Carbonyl abrem em um terminal integrado ao Git, que pode
+ser fechado com `[Ctrl+Q]`. `terminal-browser` abre um painel separado do terminal.
+Instale o comando escolhido no `PATH` antes de abrir um link. A escolha vale para
+todo o Git e fica em `~/.config/tuiminal/git-browser.json`.
+
 Nos seletores de projeto e branch local, pressionar `[Enter]` repetidamente não
-repete uma seleção em andamento. Fechar o seletor por `[Esc]`, pelo botão ou fora
-do modal impede que sua resposta atrasada feche outro seletor aberto depois.
-Fechar não cancela nem desfaz um comando Git que já foi iniciado.
+repete uma seleção em andamento. Sair do seletor por `[Esc]` ou pelo botão impede
+que sua resposta atrasada feche outro seletor aberto depois. Sair não cancela nem
+desfaz um comando Git que já foi iniciado.
 
 Na busca de PRs e Issues, texto entre aspas permanece literal: mencionar `repo:`
 ou `author:@me` dentro de uma frase não remove o filtro da conta. Valores como
 `label:"help wanted"` preservam os espaços, e aspas abertas precisam ser fechadas
 antes de enviar a consulta. Aplicar ou salvar uma busca incompleta mostra o aviso
-no próprio modal, mantendo o texto e o foco para você corrigir.
+no próprio painel de contexto, mantendo o texto e o foco para você corrigir.
 
 ### Atalhos essenciais do Git
 
@@ -290,6 +336,8 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
 | Abrir ações remotas | `[?]` |
+| Abrir PR, Issue ou notificação selecionada | `[O]` |
+| Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
 | Stage parcial por hunk ou linha no diff focado | `[S]`; depois `[S]`, `[H/L/←/→]`, `[J/K]`, `[Space]` e `[Enter]` |
 | Descartar arquivo/pasta com confirmação | `[D]` |
@@ -299,7 +347,7 @@ no próprio modal, mantendo o texto e o foco para você corrigir.
 | Alterar projeto/branch de Diffs | `[Ctrl+P]` |
 | Editar query remota | `[/]` |
 
-O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separada em `~/.config/tuiminal/git-diffs.json`; itens salvos do Inbox ficam em `~/.config/tuiminal/git-inbox.json` com permissão `0600`.
+O escopo remoto é salvo nos perfis de Git. A escolha local de Diffs fica separada em `~/.config/tuiminal/git-diffs.json`; o navegador fica em `~/.config/tuiminal/git-browser.json`; itens salvos do Inbox ficam em `~/.config/tuiminal/git-inbox.json` com permissão `0600`.
 
 <a id="runner"></a>
 
@@ -318,7 +366,10 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 - **Manter processos vivos:** selecionar um comando já ativo abre a sessão existente. `[R]` é a ação separada para iniciar outra instância.
 - **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
 - **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
-- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos em paralelo; grupos não fingem ser grafos de dependência.
+- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos juntos; grupos simples executam em paralelo.
+- **Ordenar comandos e serviços:** dependências aguardam conclusão com sucesso ou início com health check. Ciclos e referências inexistentes são rejeitados antes de executar; falha ou cancelamento bloqueia dependentes pendentes.
+- **Salvar fluxos por projeto:** `[Ctrl+Y]` abre o arquivo YAML de configuração dentro do terminal. Crie fluxos nomeados com etapas sequenciais e paralelas e execute, pare ou reinicie pela TUI.
+- **Editar comandos localmente:** configure comando literal, diretório, ambiente/perfil, PTY, reinício e health check, inclusive para comandos detectados. O editor mostra documentação, validação e sugestões por teclado e mouse sem alterar arquivos do projeto.
 - **Trocar de projeto:** `[N]` abre outro repositório ou diretório sem interromper processos atuais. Até quatro projetos ficam em tabs locais `[1]–[4]`.
 - **Usar portas detectadas:** abrir a URL, copiá-la ou enviar a requisição diretamente para a tab HTTP.
 
@@ -328,7 +379,7 @@ Single e Multi preservam o idioma original da saída dos programas; somente mens
 
 A busca de projetos evita repetir pastas sobrepostas e faz até 16 leituras simultâneas, respeitando o limite de 300 projetos e sete níveis. Os comandos detectados usam os caminhos do projeto selecionado, e arquivos Deno JSONC preservam o texto das tarefas mesmo quando contêm marcadores de comentário.
 
-Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` declarado no arquivo do Tuiminal pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
+Arquivos `.tuiminal/runner.yaml`, `mprocs.yaml`, `Procfile`, `Procfile.dev`, `Taskfile`, `Makefile` e outros formatos reconhecidos alimentam a descoberta. Somente `autostart: true` explícito na configuração do Tuiminal, incluindo comandos e fluxos salvos localmente, pode solicitar início automático. Na primeira vez, o Runner mostra o projeto, os comandos, diretórios, perfil e nomes das variáveis para aprovação; a confiança é local e uma mudança material na configuração exige nova confirmação. `mprocs` e `Procfile` nunca recebem início implícito.
 
 ```yaml
 version: 1
@@ -352,6 +403,8 @@ commands:
       timeoutMs: 30000
 ```
 
+Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe e ajuda contextual. Uma lista de recomendações somente para consulta acompanha o cursor durante a digitação ou ao usar as setas, mostra opções do bloco YAML atual e descreve a opção selecionada ao lado da lista. Depois de `flows:` e `[Enter]`, ela mostra um exemplo de ID de fluxo (`dev:`); ao digitar outro ID, indica os dois-pontos necessários e, dentro do fluxo, oferece campos como `label` e `stages`. A mesma orientação aparece para IDs de comandos e perfis e nomes de variáveis de ambiente. Erros de digitação próximos mostram alternativas prováveis desse bloco; textos sem relação fecham a lista de recomendações. Use `[Ctrl+J/K]` ou um clique para consultar as opções; digite a chave ou o valor desejado. `[Enter]` recua a próxima linha conforme mapas, listas e blocos literais de comando; `[Tab]` insere dois espaços. `[Esc]` fecha as recomendações e depois volta ao gerenciamento de comandos e fluxos. Dependências usam `dependsOn` com `commandId` e `condition`; etapas usam `commandIds` e `waitFor`. `started` aguarda o health check configurado. `[Ctrl+S]` valida e salva. Veja exemplos completos na [especificação do Runner](docs/design/runner.md).
+
 ### Atalhos essenciais do Runner
 
 | Ação | Atalho |
@@ -359,6 +412,11 @@ commands:
 | Executar ou abrir processo existente | `[Enter]` |
 | Iniciar outra instância | `[R]` |
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
+| Editor YAML | `[Ctrl+Y]` |
+| Novo comando / fluxo (lista de gerenciamento) | `[Ctrl+N]` / `[Ctrl+F]` |
+| Executar / parar / reiniciar fluxo selecionado | `[Ctrl+R]` / `[Ctrl+K]` / `[Ctrl+T]` |
+| Nova linha e recuo YAML / sugestões / salvar | `[Enter]` e `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
+| Consultar recomendações YAML | `[Ctrl+J/K]` |
 | Comandos / processos ativos | `[P]` |
 | Visualização única / múltipla | `[M]` |
 | Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
@@ -372,7 +430,7 @@ commands:
 | Alternar projetos do Runner | `[1]`–`[4]` |
 | Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
 
-Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
+O editor YAML salva em `~/.config/tuiminal/runner/<hash-do-projeto>/runner.yaml`, sem alterar arquivos do projeto. Comandos e fluxos existentes são incluídos no primeiro salvamento. `runner.json` mantém sessões, histórico e definições antigas dos projetos que ainda não têm YAML. Logs só são persistidos por opt-in ou exportação para `tuiminal-logs/`. Ao sair do Tuiminal, ele encerra somente os processos que iniciou.
 
 <a id="http"></a>
 
@@ -382,18 +440,22 @@ Estado de sessão e comandos salvos ficam em `~/.config/tuiminal/runner.json`. L
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Demonstração da tab HTTP do Tuiminal" width="100%">
 </p>
 
-Um cliente de API compacto com documentos, coleção, builder, resposta e automação. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
+Um cliente de API compacto com documentos, coleção, builder, resposta e automação. Os dados da interface HTTP ficam em um único diretório global (`$XDG_DATA_HOME/tuiminal/http` ou `~/.local/share/tuiminal/http`), independentemente do projeto aberto. O layout passa de três colunas para split ou painel único conforme o espaço, sem perder drafts, cursor, resposta ou foco.
 
 ### O que você pode fazer
 
 - **Montar requests:** método, URL, query params, headers, JSON/texto/XML, form URL encoded, multipart, arquivo e autenticação Bearer, Basic ou API Key.
-- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores; no response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual.
+- **Inspecionar respostas:** status, duração, tamanho, headers, timing, Pretty/Raw, busca, JSONPath, cópia, salvamento e comparação. JSON válido recebe formatação e cores, com controles da árvore em uma coluna separada e destaque na linha inteira do bloco selecionado. No response focado, `[↑/↓]` ou `[J/K]` percorrem blocos, `[←/→]` recolhem/expandem e `[Enter]` alterna o bloco atual. O Pretty JSON navegável mantém uma linha por entrada para posicionar a seleção corretamente; Wrap continua disponível em Raw e nas outras visualizações da resposta.
 - **Controlar o espaço:** request e response começam em `50/50`; `[Ctrl+↑/↓]` e o drag handle usam a mesma proporção por documento, limitada entre 25% e 70%.
-- **Versionar coleções:** abrir e salvar `.http`/`.rest` interoperáveis sem regravar silenciosamente blocos que o Tuiminal não entende.
-- **Importar:** Postman v2.1 e OpenAPI 3.0/3.1, com preview das conversões, avisos de perda e proteção para segredos encontrados.
+- **Salvar coleções:** importar e salvar `.http`/`.rest` interoperáveis no diretório global do HTTP sem regravar silenciosamente blocos que o Tuiminal não entende.
+- **Organizar coleções com teclado ou mouse:** percorrer a árvore com `[↑/↓]` ou `[J/K]`, recolher e expandir com `[←/→]` e abrir requests com `[Enter]`. Criar pastas, coleções `.http` e requests; renomear ou excluir os itens selecionados. Pastas e coleções vazias continuam visíveis. A exclusão exige confirmação; requests abertos com alterações ou em execução precisam ser resolvidos antes.
+- **Importar:** informe um caminho completo ou iniciado por `~/` para um arquivo Postman v2.0/v2.1 ou OpenAPI 3.0/3.1, use `[↑/↓]` e `[Tab]` para completá-lo, ou solte um arquivo na área de importação quando o terminal colar seu caminho. O Tuiminal identifica o formato pelo conteúdo e o mostra na prévia com os avisos de conversão; o `.http` resultante só é salvo na biblioteca global do HTTP após a confirmação, independentemente do projeto aberto.
+- **Conectar uma conta Postman:** execute `tuiminal postman login` para informar a chave de API sem eco no terminal, ou envie a chave para `tuiminal postman login --api-key-stdin`; acrescente `--region eu` para uma conta da região europeia. Com a conta conectada, o HTTP abre com dois cartões, Local e Postman; `[Ctrl+G]` permite trocar de origem. No modo Postman, escolha um workspace para carregar todas as coleções, inicialmente com todas as coleções e pastas fechadas; `[E]` seleciona um ambiente opcional. A árvore à esquerda mostra o nome do workspace sobre as coleções, omite a pasta interna `postman/` e usa as cores dos métodos do Postman. `[?]` mostra as ações e os atalhos da coleção. A chave e os valores das variáveis importadas ficam no gerenciador de credenciais do sistema. O Tuiminal cria arquivos `.http` vinculados para as novas coleções no diretório global do HTTP e ambientes privados selecionáveis quando há variáveis; não altera o projeto aberto. `[Shift+N]` cria uma coleção na origem escolhida; o Postman usa o workspace ativo ou pede um antes da seleção. Criar, renomear, duplicar e excluir requests vinculadas; criar, renomear e excluir coleções e pastas aninhadas; essas ações atualizam o Postman e a cópia local. `[Ctrl+S]` envia alterações de uma request vinculada; para uma request nova, permite escolher coleção ou pasta de destino e a cria no Postman. `[Ctrl+P] Postman` tenta novamente um envio pendente. Conflitos e falhas remotas são informados. Mover requests entre arquivos ainda não está disponível no Postman. Edições dos ambientes importados permanecem locais. Valores do Vault indisponíveis pela API, scripts, respostas salvas e autenticação não suportada são avisados ou omitidos. Veja [acesso à conta Postman](./docs/design/postman-account.md) para os limites exatos.
 - **Automatizar:** assertions de status/header/body/JSONPath, dependências entre requests e extração de variáveis públicas ou voláteis.
 - **Executar coleções:** resolver dependências em ordem topológica, usar dataset JSON/CSV, limitar concorrência e emitir relatórios text, JSON ou JUnit. Selecionar um request funciona também quando há nomes iguais. Reabrir o executor ou mudar seu alvo cancela a execução anterior; resultados atrasados não substituem a nova execução.
-- **Trabalhar com ambientes:** variáveis públicas/privadas por diretório, defaults do workspace e referências opacas ao gerenciador de credenciais do sistema. O campo de valor privado mantém a máscara durante edição e redimensionamento, inclusive com ideogramas e emojis.
+- **Trabalhar com ambientes:** `[E]` lista os ambientes selecionáveis; `[N]` cria um, `[E]` edita ou renomeia o selecionado, e `[D]` o exclui após confirmação. `[G]` abre `Globals`, sempre ativo e com nome fixo. Cada formulário tem nome e tabela de variável/valor; `[/]` escolhe um bloco, `[↑/↓]` move a barra de foco e `[Enter]` abre o bloco. As linhas alternam o fundo, e a célula selecionada tem destaque próprio. `[Tab]` avança pelos campos; tabelas preenchidas aceitam setas ou `[H/J/K/L]`, `[Enter]` para editar e `[Esc]` em camadas para sair. Os valores ficam visíveis durante a edição e são sempre salvos no gerenciador de credenciais do sistema; o arquivo privado de ambientes contém somente referências opacas para valores novos ou editados. O modal com borda assume o foco enquanto está aberto. Os defaults do workspace não são mais aplicados.
+- **Editar tabelas da requisição:** em Query/Path Params, `[J/K]` ou `[↑/↓]` escolhe o bloco. `[Enter]` abre a primeira célula de uma tabela vazia ou a navegação pelas linhas existentes. Setas ou `[H/J/K/L]` alcançam a bolinha de ativação, os campos Nome/Valor e o `[×]`; `[Enter]` aciona o controle selecionado, inclusive excluindo pelo `[×]`. `[Space]` ativa ou desativa a linha, e `[Tab]` avança pelos inputs até uma linha de rascunho, criada de fato quando você digita. `[Esc]` volta do input para a tabela e depois para o bloco. Headers, form URL encoded e Multipart seguem o mesmo fluxo; Multipart também permite selecionar o controle texto/arquivo. `[N]` não adiciona mais linhas nessas tabelas.
+- **Escrever URLs rapidamente:** digite `{` na URL para ver os nomes das variáveis disponíveis e use `[Tab]` para completar `{{nome}}`. Pares de query como `?manga=2` aparecem em Params e podem ser editados ali sem envio duplicado.
 - **Controlar transporte:** timeout, redirects, cookie jar, proxy HTTP/HTTPS e TLS. O jar valida domínios pela Public Suffix List, impõe limites e fica isolado por ambiente e diretório da coleção; `[C]` pode desativar tanto leitura quanto escrita de cookies por request. Desabilitar verificação TLS é explícito, visível em vermelho e exige aprovação por destino.
 - **Revisar redirects sensíveis:** antes de enviar um corpo ou URL com valores privados para outra origem, ou trocar HTTPS por HTTP, o envio pausa para sua autorização. `[Y]` continua somente aquele salto; `[Esc]` recusa. O destino e os riscos aparecem na confirmação, com valores privados conhecidos mascarados. Cancelar não desfaz uma requisição que o servidor anterior já recebeu.
 - **Tratar respostas externas com cautela:** `[O]` abre somente imagens raster allowlisted quando MIME e assinatura conferem. SVG, PDF, binários genéricos e conteúdo disfarçado ficam bloqueados no handler do sistema, mas ainda podem ser salvos explicitamente. O download completo reenvia apenas GET, tem teto de 256 MB e remove arquivos parciais em falhas. Acionamentos repetidos não duplicam o download; fechar o documento que o iniciou cancela a operação. O arquivo só é publicado depois da gravação completa, sem substituir um destino existente.
@@ -408,11 +470,17 @@ Um cliente de API compacto com documentos, coleção, builder, resposta e automa
 | Ciclar Params, headers, body, auth e mais com a requisição focada | `[A←]` / `[F→]` |
 | Ciclar opções internas de Body, Auth ou Mais | `[Z←]` / `[V→]` |
 | Alternar Query Params / Path Params | `[J/K]` ou `[↑/↓]` |
-| Adicionar item ao subpainel focado | `[N]` |
+| Entrar numa tabela da requisição / editar a célula selecionada | `[Enter]` |
+| Percorrer controles / inputs da tabela | `[H/J/K/L]` ou setas / `[Tab]` |
+| Ativar/desativar a linha / excluir pelo `[×]` selecionado | `[Space]` / `[Enter]` |
 | Navegar / recolher / expandir JSON | `[↑/↓]` ou `[J/K]` / `[←/→]` / `[Enter]` |
 | Abrir ambientes | `[E]` |
 | Alternar visualização principal / aba interna da resposta | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
 | Abrir coleção / histórico | `[C]` / `[Y]` |
+| Navegar entre itens da coleção / primeiro ou último | `[↑/↓]` ou `[J/K]` / `[Home/End]` |
+| Recolher ou expandir / abrir request selecionado | `[←/→]` / `[Enter]` |
+| Novo request / coleção / pasta no painel da coleção | `[N]` / `[Shift+N]` / `[P]` |
+| Renomear / excluir item selecionado | `[E]` / `[D]`, depois `[Enter]` para confirmar a exclusão |
 | Nova tab / fechar tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Alternar documentos | `[Alt+←/→]` |
 | Salvar `.http` | `[Ctrl+S]` |
@@ -439,6 +507,11 @@ tuiminal http run api.http#buscar-usuario --env local --report text
 tuiminal http run api.http --data cases.json --concurrency 4 --report junit
 tuiminal http import postman collection.json --output .tuiminal/http/imported
 tuiminal http import openapi openapi.yaml --output .tuiminal/http/imported
+tuiminal postman workspaces
+tuiminal postman collections <workspace-id>
+tuiminal postman environments <workspace-id>
+tuiminal postman pull <workspace-id> <collection-id> --environment <environment-id>
+tuiminal postman push postman/<file>.http "<nome-da-request>"
 ```
 
 No modo sem interface, redirects que transportam corpo/URL privada exigem
@@ -454,7 +527,7 @@ requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sess�
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. A captura libera o leitor ao terminar ou falhar e só marca truncamento quando encontra bytes além do limite. A busca acompanha linhas e colunas sem reprocessar todo o texto anterior a cada ocorrência. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
-O histórico persistente é opcional e mascara os segredos conhecidos também nas URLs, redirecionamentos e metadados. Mesmo com **Persistir bodies** ativado, execuções com variáveis privadas, autenticação ou cookies conhecidos mantêm o corpo apenas na sessão. A resposta original continua disponível na memória para inspeção e exportação explícita. Outros corpos podem conter dados privados que o Tuiminal não reconhece: o opt-in não os torna seguros para compartilhar. Essa proteção não limpa automaticamente históricos antigos, arquivos exportados nem backups.
+O histórico HTTP fica somente na sessão atual e não persiste corpos de requests ou responses. A resposta original continua disponível na memória para inspeção e exportação explícita. Preview, cURL, relatórios e erros mascaram segredos conhecidos; arquivos exportados explicitamente e arquivos antigos de versões anteriores ficam separados do histórico da sessão.
 
 Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
 
@@ -462,51 +535,211 @@ Em Params → Path, use segmentos `:id` ou tokens explícitos `{id}` (por exempl
 
 Valores de Path marcados como sensíveis seguem essa proteção, inclusive em URLs codificadas e linhas desativadas. Para salvar esses parâmetros em `.http`, use referências a variáveis privadas; valores secretos literais são recusados sem alterar o arquivo.
 
-<a id="free-terminal"></a>
+<a id="term-agents"></a>
 
-## Free Terminal
+## Term Agents
 
 <p align="center">
-  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Demonstração da tab Free Terminal do Tuiminal" width="100%">
+  <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Demonstração da tab Term Agents do Tuiminal" width="100%">
 </p>
 
-Um multiplexador genérico, não um terminal restrito a uma ferramenta. Cada painel usa um PTY real e pode executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
+Um multiplexador genérico, não um terminal restrito a uma ferramenta. Novos terminais usam PTYs reais e podem executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
 
 Comandos personalizados aceitam expressões completas do shell, incluindo `&&`, `||`, `;`, pipes, variáveis e laços. Por exemplo, `npm install && npm run dev` executa a segunda etapa se a primeira terminar com sucesso.
 
+O tmux é opcional. Novos terminais usam tmux 3.2+ automaticamente quando disponível
+no Linux, macOS ou WSL; caso contrário, usam o terminal nativo, inclusive no Windows.
+Nos dois modos, os terminais ficam dentro desta aba: trocar para Git oculta os
+painéis enquanto os comandos continuam executando. Nada é instalado automaticamente.
+Defina `TUIMINAL_TERMINAL_BACKEND=native` antes de iniciar o Tuiminal para usar sempre
+terminais nativos (`auto` é o padrão; `tmux` exige explicitamente o tmux).
+
+Ao abrir o Terminal, as janelas da sessão tmux persistente `tuiminal` voltam para
+**Tuiminais**, enquanto painéis comuns encontrados em outros servidores são espelhados
+na pasta **tmux**. Agentes reconhecidos de qualquer origem aparecem
+exclusivamente em **Agentes**, inclusive quando estão em painéis da mesma sessão.
+Novos painéis são encontrados sem mudar o foco atual. Fechar um espelho externo mantém
+seu processo executando e dispensa o painel durante esta execução. A descoberta respeita o limite de 12 terminais.
+Defina `TUIMINAL_TERMINAL_AUTO_MIRROR=0` antes de iniciar para desativá-la; os
+painéis persistentes do Tuiminal ainda são restaurados.
+
+Painéis ao lado do Tuiminal na mesma sessão tmux são descobertos automaticamente.
+O espelho carrega a tela que já existe e continua seguindo
+esse painel mesmo quando outra janela é selecionada no terminal original.
+O teclado é compartilhado; fechar o espelho apenas desconecta o Tuiminal.
+As atualizações aceleram enquanto a saída muda e são solicitadas imediatamente
+após a entrada. O texto inalterado permanece na tela, e painéis parados reduzem a
+frequência de atualização.
+
+Painéis externos não podem ser reiniciados pelo Tuiminal. Suas dimensões acompanham
+temporariamente o espaço disponível ao lado da barra lateral, incluindo as divisões
+locais. O agente se reorganiza nesse tamanho nos dois terminais. O tamanho e o layout
+originais são restaurados ao desconectar o último espelho daquela janela. Quando você
+volta à janela de origem, o Tuiminal libera o tamanho manual temporário e o tmux ajusta
+imediatamente a janela ao cliente visível, mantendo os splits atuais, inclusive a
+sidebar fixada. Depois que você sai da janela de origem, o Tuiminal adota o layout mais
+recente antes de ajustar o espelho novamente. Alterações manuais não são sobrescritas.
+Janelas que contêm o próprio Tuiminal mantêm o tamanho e usam recorte para evitar um
+ciclo de redimensionamento.
+O espelhamento atualiza
+a tela atual do aplicativo; não importa o histórico de rolagem, a interface do modo
+de cópia do tmux ou a entrada do mouse. Terminais já abertos fora do tmux aparecem
+como metadados somente para leitura em **Outros**, mas ainda não podem ser espelhados;
+ao selecionar um deles, o Tuiminal informa o TTY original sem substituir o painel ativo.
+Sem tmux, crie terminais
+dentro do Tuiminal para usar divisões, estados dos agentes e execução em segundo
+plano com o backend nativo.
+
 ### O que você pode fazer
 
-- Criar seções independentes e manter até 12 terminais na execução.
-- Organizar cada seção em até quatro painéis numa grade `2 × 2`.
-- Dividir o painel ativo para o lado ou criar uma linha inferior.
-- Alternar entre a seção inteira e um terminal maximizado.
-- Ao reiniciar, fechar um painel ou sair do Tuiminal, aguardar a saída observada dos processos próprios; após um período de graça, o encerramento escala para a árvore criada, sem procurar ou matar processos por nome/porta.
-- Redimensionar a tela preserva a saída e não executa novamente comandos encerrados. Pedidos repetidos de reinício criam apenas a sessão mais recente; fechar o painel cancela um reinício ainda aguardando o processo anterior.
-- Preservar cores, cursor, prompts interativos e aplicações TUI em tela cheia.
-- Trocar de tab sem encerrar as sessões.
-- Focar, dividir, reiniciar e fechar painéis pelo teclado ou mouse.
+- Manter até 12 terminais, com no máximo dois por seção, lado a lado ou um acima do outro.
+- Ver no canto superior direito de cada painel a pasta do projeto, a branch e o estado Git **Limpo** ou **Alterado**. Passe o mouse sobre uma tag para ver uma explicação curta. As tags acompanham `cd` em terminais locais e tmux sem reduzir o PTY; fora de um repositório mostram **Sem Git**, e sessões remotas de agentes integrados consultam o projeto selecionado por SSH.
+- **Novo terminal** sempre abre uma seção separada. Para dividir a seção atual, use a Master Key seguida de `[C]` (lado) ou `[Shift+H]` (abaixo).
+- A lista de ações da Master Key usa títulos na cor primária adequada ao tema e tags coloridas alinhadas à direita para recursos, capacidades exclusivas de agentes, operações de terminal, controles da sidebar, navegação e ações do app. `[C]` e `[G]` não fazem parte desse menu; `[R]` fica disponível para o projeto remoto do agente integrado ativo.
+- Use a Master Key `[M]` para escolher entre a sidebar e os boxes visíveis de terminal, histórico de mensagens enviadas e Live Diff. O box que tinha foco fica destacado em azul, as outras opções ficam levemente escurecidas e a instrução central usa um fundo próprio adaptado ao tema; navegue com as setas ou `[H/J/K/L]` e pressione `[Enter]` para focá-lo.
+- Use o botão **Comando** da sidebar para iniciar um comando personalizado em uma nova seção.
+- Use a Master Key `[A]` ou **Novo agente** para escolher Codex, Claude Code ou OpenCode. Escolher um provedor abre **Projetos recentes** e **Projetos Git** encontrados automaticamente. `[E]` seleciona Local ou qualquer alias SSH de `~/.ssh/config` sem mudar o alias ativo nas configurações. As listas ficam separadas por provedor e máquina/servidor; a descoberta Git é limitada e ocorre em segundo plano. Clique em um projeto ou pressione `[Enter]` para iniciar o agente. `[P]` abre uma tela de busca de pasta com `~/` já focado. As sugestões atualizam enquanto você digita; as setas selecionam uma sugestão, `[Tab]` completa o caminho e entra na pasta. `[Enter]` escolhe a pasta digitada e volta à lista de projetos. `[Esc]` volta de projetos para provedores e depois cancela. O loader compartilhado aparece apenas enquanto o agente inicia, a pasta escolhida é validada, os aliases SSH ainda estão carregando ou o catálogo de projetos do Live Diff não está disponível; a descoberta de projetos e o autocomplete em segundo plano continuam interativos. Falhas ao iniciar mantêm o destino disponível para tentar novamente. Se o CLI selecionado do Codex, Claude Code ou OpenCode estiver ausente ou incompatível, um terminal local guiado mostra comandos manuais de atualização e instalação oficial; lançamentos remotos adicionam um terminal SSH quando necessário. O Tuiminal nunca digita nem executa esses comandos, e uma revalidação bem-sucedida repete exatamente a abertura original. Tarefas e aprovações continuam na interface oficial do provedor selecionado.
+- Em `[,]` → **Conexão remota**, pressione `[Enter]` para escolher um alias `Host` explícito descoberto de `~/.ssh/config` (inclusive em arquivos `Include` limitados), ative-o com `[Enter]` ou `[A]` e teste o acesso. Configure usuário, endpoint, porta, identidade, agente, proxy e jump hosts somente no OpenSSH; o Tuiminal não solicita nem armazena esses valores e chama `ssh` com o alias escolhido. Aberturas automatizadas neutralizam comandos remotos, masters de conexão e forwards definidos pelo alias; aliases usados por túneis não podem definir seus próprios forwards dinâmicos, locais ou remotos. **Verificar servidor** confere o GitHub via SSH e se o Codex CLI está instalado, autenticado e oferece o app-server. **Configurar servidor** abre um terminal SSH interativo com um tutorial passo a passo embaixo; você executa cada comando, e **Confirmar configuração** testa novamente a barreira atual antes de avançar. Antes de abrir uma interface Codex remota, o Tuiminal valida os CLIs local e remoto, o SSH, a pasta escolhida, a conta remota do Codex, versões compatíveis, os recursos de daemon/proxy, a inicialização do daemon persistente e a resposta `initialize` do proxy. As versões do CLI local, CLI remoto, app-server do daemon e app-server inicializado devem ser exatamente iguais. Recurso ausente ou incompatível abre um modal localizado: `[Esc]` preserva a seleção da abertura, enquanto `[Enter]` abre terminais local e remoto divididos que mostram as versões detectadas, `codex update` e a alternativa do instalador POSIX oficial. O Tuiminal nunca preenche nem executa esses comandos; uma revalidação bem-sucedida fecha somente os terminais do guia e repete a sessão nova ou retomada original. A instalação remota é dona do daemon compartilhado, enquanto o Tuiminal fecha somente sua TUI local, relay e proxy SSH descartável — nunca o daemon. O Tuiminal combina os agentes recentes das duas máquinas no painel Agentes da Master Key, identificando as linhas remotas pelo perfil; selecione uma conversa remota ali para retomá-la com o histórico público e o estado atual reidratados. A Master Key `[N]` sempre abre um terminal local. Nenhuma porta do servidor é exposta. A navegação e a inicialização não copiam projetos, e o Tuiminal não instala ferramentas nem conecta contas por você. O [protocolo app-server é experimental e depende da versão](https://learn.chatgpt.com/docs/app-server); consulte o comando oficial [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update).
+- O OpenCode usa seu próprio caminho remoto first-party: o Tuiminal inicia ou reutiliza um `opencode serve` por versão e diretório em uma porta de loopback escolhida no remoto, recupera registros obsoletos e o transporta por um encaminhamento SSH descartável, negocia o protocolo público v2/v1 e abre a TUI oficial local. HTTP e SSE públicos fornecem estado, título, atividade, histórico, alterações por mensagem e metadados de retomada. A TUI v2 pertencente ao Tuiminal oculta sua barra de abas sem alterar configurações globais. Cada terminal físico tem uma única linha em Agentes para a sessão raiz visível; sessões filhas/subagentes não aparecem. Fechar o Tuiminal desconecta TUI, observador e encaminhamento enquanto servidor e turno remotos continuam; fechar o painel explicitamente interrompe apenas o turno raiz selecionado. Nenhuma porta é exposta publicamente.
+- O Claude Code 2.1.63+ roda localmente em sua TUI oficial com hooks HTTP por execução enviados por `--settings`; o Tuiminal não lê nem altera `~/.claude`. A persistência remota é habilitada no Claude Code 2.1.285+: o Tuiminal cria ou anexa uma sessão oficial em segundo plano com configurações de processo sem hooks e observa o estado público por um único poller compartilhado de `claude agents --json --all` a cada cinco segundos por projeto. Fechar o Tuiminal desconecta anexo e observador enquanto o turno pertencente ao supervisor continua; fechar o painel explicitamente executa `claude stop`. Versões anteriores ainda suportadas mantêm o ciclo de vida foreground anexado anterior. Sessões persistentes em segundo plano expõem estado público e metadados limitados de retomada sem ler arquivos internos do Claude; o histórico detalhado de hooks não fica disponível nessas sessões.
+- Na sessão remota de agente integrado ativa, use a Master Key `[R]` para criar ou atualizar um espelho local completo. A tag do painel mostra o último estado conhecido; a comparação e a sincronização também mantêm um diálogo de progresso focado para que `[Esc]` possa cancelar com segurança. No primeiro uso, escolha uma pasta local; o projeto remoto `/tui` será salvo como `tui-sync` dentro dela. Um destino preexistente desconhecido nunca é substituído. Toda comparação explícita inclui arquivos ocultos e ignorados, dependências, caches e `.git`, reaproveita hashes de conteúdo salvos e calcula novamente apenas candidatos cujos metadados mudaram. Alterações restritas a metadados do controle de versão, árvores de dependências/cache ou saídas geradas não acionam o indicador de dessincronização do painel, mas continuam aparecendo na revisão e sendo sincronizadas normalmente. Uma revisão paginada mostra caminhos novos, alterados, removidos e em conflito, e uma confirmação explícita permite que o remoto substitua mudanças locais. Durante a verificação, a revisão ou a transferência, `[A]` alterna a sincronização automática para esse projeto remoto. Quando ativada, cada prompt concluído com sucesso executa uma sincronização remota para local em segundo plano, considera a configuração como autorização para substituir alterações locais, mostra o progresso na tag do painel e notifica somente em caso de falha. Retomar uma thread concluída enquanto estava fechada agenda um único catch-up coalescido depois da reidratação; threads ativas, com falha, interrompidas ou aguardando aprovação não sincronizam. Somente bytes de arquivos novos ou com conteúdo alterado trafegam pelo SSH; um delta com journal atualiza o destino e faz rollback em cancelamento ou falha. Varredura, hashes e snapshots pesados rodam fora do renderer do terminal, e nenhuma árvore de projeto é consultada periodicamente.
+- Usar um layout compacto inspirado no Herdr: a lista de agentes aparece primeiro na sidebar, seguida pelos terminais numerados em duas linhas. Um shell aguardando mostra `○ Ocioso`; `● Executando` aparece apenas enquanto há uma ferramenta ou comando em primeiro plano. A segunda linha mostra diretório, comando ou código de saída e o backend `native`/`tmux`; referências externas somente para leitura mostram seu TTY. A seção ativa recebe uma barra de destaque. Os terminais ocupam toda a área restante até os cantos, e divisões usam apenas um separador.
+- Novos terminais e comandos personalizados abrem em **Tuiminais**. `[C]` / `[Shift+H]` pergunta se a divisão deve iniciar um novo shell ou usar o terminal de um agente em execução; mover o agente mantém seu processo ativo. Renomeie terminais quando precisar. Clique no cabeçalho de uma pasta, ou destaque-o com `[↑/↓]` / `[J/K]` e pressione `[Enter]`, para recolher ou expandir seus terminais. Esse estado e a posição reservada das sessões tmux são salvos por projeto fora da pasta do projeto e restaurados na próxima abertura. Somente pastas reservadas não vazias aparecem. A pasta **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Terminais divididos mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
+- Os nomes dos terminais acompanham a ferramenta em execução automaticamente: `zsh` → `lazygit` → `zsh`. Agentes reconhecidos mostram o nome do CLI, como `codex`, mesmo quando o runtime informa `MainThread` ou `node`. Isso também funciona nos espelhos tmux. Nomes definidos manualmente pela ação `[E]` da Master Key permanecem fixos, inclusive após reiniciar.
+- Acompanhar agentes reconhecidos exclusivamente em **Agentes**, separados entre **Local • term** para agentes observados por terminais nativos, tmux ou externos, **Local • localhost** para sessões integradas locais e **Remoto • perfil** para sessões integradas via SSH. Os agentes de terminal aparecem primeiro, com um loader animado enquanto trabalham. As linhas integradas de Codex, Claude Code e OpenCode ganham uma linha adicional para atividade de código, comando, plano e ferramenta; o ícone atual pulsa conforme os eventos públicos correspondentes. Os ícones compatíveis `{}`, `>_`, `txt` e `●` são sempre usados, sem exigir uma fonte modificada. Quando um agente integrado está parado, o estado da primeira linha o representa e todos os ícones de atividade permanecem inativos. **Terminais** mostra os demais terminais. As pastas e divisões originais são preservadas, e o terminal volta para Terminais quando o agente encerra. Com a Master Key aberta, os primeiros nove agentes e terminais visíveis mostram teclas sequenciais `[1]`, `[2]`, … `[9]` na ordem da sidebar; digite uma delas para ativá-lo.
+- Abra abaixo do terminal o histórico de mensagens enviadas de uma sessão integrada do Codex, Claude Code ou OpenCode com a Master Key seguida de `[S]`. As colunas seguem a ordem tempo decorrido, status, mensagem, imagem, áudio, skill e modelo. O status combina a duração do turno com `✓` para conclusão, `×` para falha ou interrupção e `…` durante a execução, como `18m ✓`. Imagem, áudio e skill mostram `✓` somente quando aquela entrada foi enviada. A configuração do modelo aparece quando o provedor a publica e, caso contrário, mostra `—`. Use `[J/K]`, `[↑/↓]` ou o mouse para selecionar uma linha e `[Enter]` para abrir os detalhes. O detalhe expandido usa metade da coluna do terminal e preenche essa área com cards de mensagem, resposta, atividade e alterações adaptados ao tema. Ele oferece `[M]` mensagem, `[R]` resposta final e outros textos públicos do agente, `[A]` atividade pública completa e `[D]` alterações daquele turno. A tela de alterações separa o patch específico do prompt em blocos por arquivo, cada um com caminho visível, tipo da mudança, estatísticas, syntax highlighting, gutter com números de linha e fundos para adições e remoções; patches antigos incompletos usam linhas coloridas em vez de uma prévia vazia. `[Esc]` volta sucessivamente de seção, detalhe, lista e terminal; `[X]` fecha o painel. No Codex, o histórico vem das entradas e eventos públicos do app-server; no Claude local e foreground, vem dos hooks públicos configurados por execução, enquanto sessões remotas persistentes não preenchem o histórico detalhado; no OpenCode, vem das APIs públicas de mensagens e diffs. O histórico de hooks do Claude cobre os prompts observados na execução atual do Tuiminal; Codex e OpenCode podem reidratar turnos públicos anteriores. Conteúdo de raciocínio privado nunca é mostrado. A visualização em memória é limpa ao reiniciar ou fechar até que o provedor possa carregá-la novamente. Com o Live Diff aberto, ele continua ocupando toda a altura à direita.
+- Em uma divisão com dois terminais de agentes integrados, cada terminal pode manter seu próprio histórico de mensagens enviadas aberto; abrir ou fechar um não substitui o outro.
+- Abra e foque o **Live Diff** para um agente reconhecido com a Master Key seguida de `[D]`; use o mesmo atalho novamente para restaurar o foco e pressione `[X]` enquanto estiver focado para fechá-lo. Ele usa o painel existente do agente e mostra o patch Git completo ao lado do terminal. O painel mantém a largura catorze colunas menor que sua divisão habitual; ao focar o código, só a prévia se alarga em 30 colunas, enquanto **Arquivos** e **Info** mantêm suas larguras. As linhas longas do diff não quebram até você focar o código com `[Enter]`; então passam a quebrar. No código, `[J/K]` ou `[↑/↓]` rolam uma linha, `[H/L]` ou `[←/→]` rolam meia página, e `[Esc]` volta à lista e ao acompanhamento automático. As linhas identificam alterações **New**, **Edit**, **Delete**, **Rename**, **Copy** e **Type**. Quando uma rodada de consulta detecta mudanças em um ou vários arquivos, cada linha afetada recebe um fundo azul que volta gradualmente ao normal em dois segundos. Na lista, `[J/K]` seleciona arquivos e `[H/L]` ou `[←/→]` destaca um projeto. `[N]` mostra ou oculta os arquivos desse projeto; o fundo vivo indica visível, e o fundo opaco indica oculto. O resumo de Info mostra o nome da pasta do último projeto alterado à direita dos totais, na mesma linha; o cabeçalho do Live Diff mostra `Show auto: true/false`. As caixas de Arquivos e Info não têm títulos. **Observando** lista os projetos como `/nome-da-pasta`, com fundos separados e linhas de continuação equilibradas e alinhadas à esquerda quando necessário. O Git continua sendo consultado para projetos ocultos. Em sessões locais, pressione `[A]` na navegação do Live Diff ou clique em **Adicionar projeto** junto dos outros atalhos para abrir um seletor pesquisável de projetos Git próximos; worktrees relacionados são descobertos automaticamente. Em uma sessão remota de agente integrado, o cabeçalho identifica o perfil e um canal SSH persistente lê o diretório remoto selecionado e seus worktrees relacionados; o seletor de projetos locais não aparece. A prévia acompanha o arquivo visível mais recente e o último hunk alterado; selecionar um arquivo mais antigo pausa esse acompanhamento. `[Esc]` na lista devolve o foco ao terminal. O último estado permanece após o agente sair até o painel ser fechado.
+- Em uma seção com dois terminais divididos, cada agente reconhecido pode manter seu próprio Live Diff aberto; abrir ou fechar o segundo não substitui o primeiro. O Live Diff normalmente usa cerca de metade do espaço do terminal selecionado, mantendo a outra metade e o terminal irmão visíveis. O diff empilhado usa toda a largura do pane, sem a reserva de catorze colunas do layout lado a lado. Ele cobre o espaço selecionado somente em layouts muito pequenos. Os dois processos permanecem montados, e `[Esc]` ou `[X]` restaura o terminal sem reiniciar nenhum deles.
+- Fixar a sidebar ativa com a Master Key seguida de `[B]` para manter Terminais e Agentes visíveis, sem borda direita, ao navegar pelas ferramentas do Tuiminal. Use `[Shift+L]` no menu de ações para focá-la, percorra cabeçalhos de pastas, Terminais e Agentes continuamente com `[↑/↓]` ou `[J/K]` e pressione `[Enter]` para alternar uma pasta ou abrir o item destacado. Um light sweep rápido atravessa o fundo inteiro da barra quando ela recebe o foco. Dentro do tmux, o Tuiminal também mantém um split lateral esquerdo marcado em cada janela do servidor atual: depois de selecionar esse split pela navegação normal do tmux, seus controles diretos já funcionam, e ele continua clicável enquanto o terminal vizinho está focado. Recolher ou expandir uma pasta mantém esse split da sidebar selecionado. Selecionar um terminal ou agente em qualquer split fixado sempre retorna ao Tuiminal e o abre no workspace Terminal. Se esse painel ainda não estiver aberto ali, o Tuiminal cria seu espelho e o lista em Agentes ou Terminais conforme o caso. A Master Key desse split abre as mesmas ações e executa ações sem diálogo sem sair da janela. Soltar a barra remove apenas esses splits auxiliares e restaura a configuração anterior de mouse do tmux.
+- Digitar `exit` em um shell interativo fecha o terminal e o remove de Terminais; comandos personalizados concluídos mantêm a saída final disponível para consulta e reinício.
+- Usar nos painéis embutidos as cores ANSI e as cores padrão de texto e fundo informadas pelo terminal externo, preservando cores RGB explícitas. Preservar cores, cursor, saída e processos ao redimensionar, trocar de seção ou de ferramenta. Reinícios aguardam o encerramento do processo anterior; ao sair, o Tuiminal desconecta clientes persistentes de tmux, OpenCode remoto, Claude Code remoto e Codex remoto e encerra somente os processos pertencentes à conexão atual.
 
-O prefixo `[Ctrl+B]`, inspirado no tmux, separa os comandos do multiplexador das teclas enviadas ao processo aberto:
+Em `[,]` → **Terminal**, escolha a **Master Key** (padrão `[Ctrl+B]`). Ao pressioná-la,
+abre um modal central com as ações em lista vertical e duas linhas por item: atalho
+entre colchetes e nome, seguidos de uma descrição curta. O lado de Agentes tem abas
+**Global**, **Codex**, **Claude** e **OpenCode**, ordenadas pelo horário real da última
+interação. Global equilibra até sete conversas locais e sete do remoto ativo por provedor;
+uma aba de provedor começa com até 12 de cada origem e carrega mais 12 de cada origem
+disponível ao chegar ao fim da lista, com limite de 120 por origem. As linhas em cache
+continuam visíveis enquanto um loader informa cada atualização em segundo plano. As listas
+vêm das superfícies públicas dos provedores e do índice limitado de retomada do Claude mantido pelo Tuiminal. Cada conversa tem uma tag colorida de origem **Local** ou
+**Remoto**, com fundo próprio. Seu item de três linhas mostra primeiro nome e estado,
+depois o resumo na cor normal do tema e, na terceira linha, origem, nome do projeto e
+branch Git; os itens remotos mantêm o nome do perfil ao lado da tag. O título da tarefa
+tem um fundo elevado discreto, com uma reta horizontal até o estado alinhado à direita.
+Um `└` diretamente abaixo do marcador de estado introduz o resumo. Três células `▌`
+discretas marcam cada item, alternam entre duas cores e usam o destaque mais vivo do
+Terminal na seleção. Pressione uma
+tecla de ação ou clique no controle; selecione uma conversa para retomá-la na interface
+oficial do respectivo provedor em uma nova seção. Pressione `[/]` para focar o filtro de ações e
+conversas. Ao digitar, a busca inclui conversas além das recentes exibidas inicialmente e
+carrega automaticamente mais páginas do provedor selecionado, ou de todos na aba Global,
+até 120 conversas por provedor e origem. Os resultados aparecem conforme as páginas chegam;
+limpar o filtro restaura a lista de recentes e interrompe a solicitação de novas páginas.
+`[←/→]` ou `[H/L]` alterna entre Ações e Agentes; dentro de Agentes,
+`[Z←] [→V]` troca a aba de provedor. `[C]` fica reservado para **Dividir lado**. `[Esc]`
+primeiro sai do filtro e depois fecha o modal, devolvendo o foco
+ao terminal. Os atalhos globais da barra superior ficam em cinza até a Master Key ser
+ativada; então ficam azuis junto das teclas temporárias da sidebar, sem deslocar o layout.
+Repetir a Master Key envia essa tecla ao processo.
 
-| Depois de `[Ctrl+B]` | Ação |
+| Após a Master Key | Ação |
 | --- | --- |
-| `[C]` | Criar seção |
-| `[V]` | Dividir para o lado |
-| `[S]` | Dividir para baixo |
-| `[N]` / `[P]` | Próximo terminal / terminal anterior |
-| `[1]`–`[4]` | Focar terminal visível |
-| `[M]` ou `[F]` | Alternar seção / foco |
-| `[[]` / `[]]` | Seção anterior / seguinte |
-| `[R]` | Reiniciar sessão |
-| `[X]` | Fechar sessão |
-| `[G]` | Liberar o terminal para usar os atalhos globais |
-| `[Ctrl+B]` | Enviar `Ctrl+B` ao processo aberto |
+| `[N]` | Abrir uma nova seção de terminal local |
+| `[A]` | Escolher um provedor de agente, depois seu projeto e ambiente de execução |
+| `[C]` / `[Shift+H]` | Escolher novo shell ou agente existente e dividir para o lado / abaixo |
+| `[S]` | Abrir ou focar histórico de mensagens enviadas de um agente integrado |
+| `[M]` | Escolher a sidebar ou outro box visível com setas ou `[H/J/K/L]` e focá-lo com `[Enter]` |
+| `[/]` | Focar o filtro de ações e conversas do `/resume` |
+| `[←/→]` ou `[H/L]`, depois `[Z←] [→V]` | Alternar Ações/Agentes e depois a aba de provedor recente |
+| `[1]`, `[2]`, … `[9]` | Ativar o agente ou terminal visível correspondente |
+| `[Alt+1–5]` | Abrir Banco, Git, Runner, HTTP ou Term Agents |
+| `[B]` | Fixar / soltar a sidebar |
+| `[Shift+L]` | Focar a sidebar |
+| `[D]` | Abrir ou focar o Live Diff do agente |
+| `[E]` | Renomear terminal |
+| `[R]` | Sincronizar o projeto remoto do agente integrado selecionado |
+| `[X]` | Fechar terminal |
+| `[,]` | Abrir Configurações |
+| `[Q]` | Sair do Tuiminal |
+| `[Esc]` | Cancelar a Master Key |
 
-O campo `CMD` é opcional: vazio abre o shell padrão; preenchido executa o comando informado. Ao fechar o Tuiminal, somente os processos criados por ele são encerrados.
+Os marcadores da sidebar mostram um loader animado enquanto o agente trabalha, `!` aguardando você, `✓`
+concluído e ainda não visto, `○` ocioso e `?` desconhecido. A lista separada de
+**Agentes** mostra todos os agentes em execução sob **Local • term** ou **Local • localhost**, com estado alinhado à direita e
+uma linha abaixo para o título da tarefa somente quando ele estiver disponível.
+O título da tarefa usa a cor de foco própria de cada paleta. Títulos longos rolam
+horizontalmente, pausando dois segundos no início e um segundo no final antes de
+voltar imediatamente ao início. Em telas baixas, linhas compactas mantêm os agentes
+acessíveis. Clique em uma linha para focar aquele terminal. As
+atividades incluem lendo, pesquisando, pensando, escrevendo ou executando quando
+a interface do agente fornece esse sinal. O acompanhamento continua nas seções
+ocultas; abrir o painel concluído marca o resultado como visto.
+Pedidos de ação e conclusões não vistas em segundo plano também geram uma
+notificação; clique nela para abrir o painel exato ou dispense-a sem mudar o foco.
+
+Os títulos de tarefa usam o texto que o agente publica no terminal, inclusive em
+espelhos tmux já existentes. Os formatos abrangem Codex, Claude Code, OpenCode,
+Qwen, Pi e o resumo dinâmico de atividade do Gemini, além de qualquer outro agente
+reconhecido ou cadastrado que publique um título útil. Alguns títulos descrevem a
+sessão inteira, em vez de cada prompt. Não são necessários hooks, chamadas extras
+de modelo ou alterações na configuração dos agentes; quando o título não é
+exposto, o item não mostra a linha de título da tarefa.
+Ao abrir uma conversa em Agentes recentes, a sidebar reutiliza imediatamente o título
+conhecido; atualizações posteriores do agente substituem esse título.
+
+O Live Diff local consulta o Git a cada 250 ms enquanto o agente está em execução, sem reiniciar
+o terminal ou alterar os arquivos do projeto. Descobre projetos pelo diretório do terminal,
+pelos diretórios de trabalho dos processos associados quando disponíveis e por worktrees
+Git relacionados. É uma visão das mudanças nesses diretórios, não uma atribuição precisa
+de cada edição ao agente. Em sistemas sem inspeção de diretórios dos processos, use a
+adição manual para incluir projetos adicionais. Ao terminar o agente, o painel conserva
+o último estado até ser fechado. Em sessões remotas de agentes integrados, a consulta ocorre
+a cada 750 ms no host e diretório marcados na sessão por um canal SSH separado e somente
+leitura, sem fallback para o filesystem local.
+As linhas recém-detectadas mantêm o fundo azul enquanto permanecerem no patch, mesmo
+quando um arquivo alterado só for aberto depois. As linhas azuis mantêm o brilho em
+loop, edições posteriores somam outras linhas azuis e um espaço mínimo separa hunks adjacentes.
+
+Os perfis locais reconhecem controles visíveis de Codex, Claude Code, Gemini,
+OpenCode, Amp, Antigravity, Cline, GitHub Copilot, Cursor Agent, Devin, Droid,
+Grok, Hermes, Kilo, Kimi, Kiro, Letta, Maki, Muse, Pi, Qoder e Qwen, além de
+títulos de estado de alguns agentes. OMP e MastraCode são identificados, mas
+não têm perfil local confiável de atividade. Não instala hooks nem
+altera configurações dos agentes. Identidade e atividade são heurísticas; agentes
+sem perfil e telas não reconhecidas podem permanecer com estado desconhecido.
+Para identificar um CLI privado ou renomeado, cadastre seu executável/módulo em
+**Terminal → Comandos de agentes adicionais**; isso não adiciona um perfil de
+estados. Veja o [contrato e estudo do Herdr](docs/design/terminal-agents.md).
+O estado recolhido ou expandido das pastas predefinidas e a pasta atribuída a cada painel tmux são salvos por
+projeto no diretório de dados do Tuiminal, sem modificar o projeto aberto. A Master Key e as regras
+adicionais são salvas nas configurações. Quando o tmux está disponível, os terminais
+criados pelo Tuiminal são janelas persistentes na sessão compartilhada `tuiminal` e
+voltam para **Tuiminais** quando o aplicativo é reaberto. Fechar o Tuiminal desconecta
+apenas seus clientes temporários; `[X]` encerra somente a janela selecionada.
+Terminais nativos encerram junto com o aplicativo, e sessões tmux externas são apenas
+desconectadas. A identificação de agentes acompanha cada painel espelhado, inclusive
+em janelas com vários agentes.
 
 ## Interface e personalização
 
-`[,]` abre configurações contextuais. As mudanças são aplicadas sem desmontar editores, perder foco ou apagar o estado das ferramentas.
+`[,]` abre a central de configurações contextuais. Em terminais largos, ela usa uma
+barra lateral de categorias e um painel de detalhes; em terminais estreitos, mostra
+uma categoria por vez. Use `[J/K]` ou `[↑/↓]` para navegar entre categorias e
+`[H/L]` ou `[←/→]` para alterar a opção atual. As mudanças são salvas
+automaticamente sem desmontar editores, perder foco ou apagar o estado das
+ferramentas.
+
+Quando o Git está ativo, aparecem cinco itens sem prefixos numéricos: Diffs no
+grupo **GIT**, e Pull Requests, Issues, Repositórios e Navegador no grupo
+**GITHUB**. `[J/K]` ou
+`[↑/↓]` move o foco e renderiza imediatamente o detalhe da linha focada. Somente
+essa linha mostra `[Enter]` em azul; `[Enter]` ou `[L]` transfere o foco do teclado
+para o painel de detalhes. Uma linha azul à esquerda indica qual painel está em
+foco. Dentro de um detalhe do Git, `[J/K]` navega nas linhas e `[Esc]` volta à lista
+de categorias. `[Ctrl+P]` em Diffs abre essa mesma central diretamente nos
+controles de projeto e branch local.
 
 - **Modo de cor:** Dark ou Light.
 - **Paletas:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin e Tokyo Night.
@@ -546,7 +779,24 @@ Comandos principais:
 | `bun run dev` | Gerar pacotes locais e abrir o fluxo de instalação |
 | `bun run build:features` | Gerar os cinco pacotes oficiais instaláveis |
 | `bun run test:unit` | Testar regras e integrações locais |
-| `bun run test:tui` | Testar a interface com o renderer real do OpenTUI |
+| `bun run test:tui` | Testar a interface nativa e o carregamento dos cinco pacotes de ferramentas |
+| `bun run benchmark` | Medir tempos de resposta locais das cinco ferramentas; veja o [guia de benchmarks](./docs/performance-benchmarks.md) |
+| `bun run benchmark:all` | Reunir as suítes mantidas de serviços, interface nativa e inicialização em um relatório JSON |
+| `bun run benchmark:database:drivers` | Medir SQLite, MySQL, MariaDB e PostgreSQL com containers Docker descartáveis |
+| `bun run benchmark:startup` | Medir a inicialização da CLI até o primeiro quadro pronto de cada ferramenta |
+| `bun run benchmark:tui` | Medir o tempo até renderizar trocas de aba e ações das ferramentas no renderer nativo de teste |
+| `bun run benchmark:terminal:sync` | Medir a primeira sincronização completa, a verificação sem mudanças, a comparação e um delta pequeno |
+| `bun run benchmark:terminal:stress` | Medir throughput sustentado de saída, observação, resize e sidebar do Terminal |
+| `bun run benchmark:terminal:ui` | Medir os diálogos de compatibilidade remota e sincronização de projeto no renderer nativo |
+| `bun run benchmark:runner:execution` | Medir a política de reinício e a persistência opcional de logs no Runner montado |
+| `bun run benchmark:runner:flow` | Medir execução, reinício e parada de um fluxo real pela interface nativa do Runner |
+| `bun run benchmark:http:response` | Medir a conclusão e o cancelamento de downloads na resposta HTTP montada |
+| `bun run benchmark:git:ui` | Medir grafo, log, layout de diff, stage parcial e ações em pastas na interface Git nativa |
+| `bun run benchmark:git:remote:ui` | Medir listas, detalhes, paginação e atualização de PRs e issues na interface nativa |
+| `bun run benchmark:git:inbox:ui` | Medir lista, paginação e atualização do Inbox na interface nativa |
+| `bun run benchmark:git:pr` | Medir seleção, mesclagem de cache, Markdown e parsing de diff com PRs grandes |
+| `bun run benchmark:http:ui` | Medir Enviar, busca na resposta, navegação JSON, download e cancelamento na interface HTTP nativa |
+| `bun run benchmark:database:ui` | Medir abertura do catálogo, navegação na grade e execução SQL na interface nativa do Banco |
 | `bun run check` | Typecheck, formato, lint, workspaces, arquitetura, manutenção e testes |
 | `bun run check:workspaces` | Conferir versões, exports e dependências de cada pacote |
 | `bun run build:packages` | Gerar JavaScript, tipos e manifests dos seis módulos internos |
@@ -588,7 +838,7 @@ O [checklist de prontidão para alfa](./ALPHA_READINESS_PLAN.md) resume o harden
 local e os aceites que ainda bloqueiam uma alfa. Ele não representa aprovação de
 release nem uma nova versão publicada no npm.
 
-Database, Git, Runner, HTTP e Free Terminal são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
+Database, Git, Runner, HTTP e Term Agents são funcionalidades oficiais mantidas internamente pelo Tuiminal. Não há plano de SDK público, marketplace ou carregamento de plugins comunitários. A instalação mínima baixa componentes oficiais compatíveis sob demanda, sempre gerenciados pelo próprio Tuiminal e sem modificar o projeto aberto pelo usuário.
 
 O [plano do cliente HTTP](./HTTP_CLIENT_PLAN.md) registra os próximos passos dessa ferramenta.
 

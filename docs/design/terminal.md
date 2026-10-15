@@ -1,0 +1,920 @@
+# Terminal workspace
+
+Term Agents is a generic PTY multiplexer for shells and arbitrary CLIs. Its
+workspace always uses compact geometry, regardless of the global framed/compact
+preference. There is no tool header, command strip, per-pane title bar, running
+counter, pager, or permanent footer. A compact one-line metadata strip above each
+visible PTY shows its project folder, Git branch and localized Clean/Changed state;
+outside a repository it shows the current folder and No Git. The strip has its own
+layout row and never covers permanent terminal content. A recognized agent also shows
+a left-aligned Local or Remote tag, using distinct semantic colors and the same
+traveling text shimmer as Terminal shortcut hints; only integrated remote agents are
+classified as Remote. The remaining metadata stays right-aligned. The strip follows
+local and tmux working-directory changes. Integrated remote agent panes inspect their
+selected remote project through a bounded SSH helper; generic interactive SSH panes do
+not claim remote Git context. Hovering each context tag opens a localized one-line
+explanation over the PTY directly below the metadata and leaving it closes the tooltip.
+The application
+navigation stays available in a single row. The sidebar contains names and status;
+the remaining area belongs to the PTYs. The layout follows the visual hierarchy of
+[Herdr's terminal workspace](https://github.com/herdrdev/herdr/blob/d59d0603d53bb88c5320ea508a4fb9858b61af68/assets/screenshot.png):
+a dedicated agent list first and session navigation below it. Terminal content fills
+the remaining workspace up to every edge, without outer borders, margins, padding
+or gaps at any terminal size. A split uses only one shared separator column or row.
+The sidebar highlights the active terminal, and split separators use the active
+accent when applicable. Resizing preserves the embedded terminal and its process.
+When an overlay cannot fit, it retains repository state first, then branch, then
+folder. Metadata polling is read-only, limited to visible panes and stops when a pane
+is hidden or retired.
+
+## Sections and folders
+
+A section contains one or two terminal panes, horizontally or vertically split.
+Two panes are the limit, not two additional panes beside an original. Closing one
+expands its sibling. There are at most 12 terminals in a workspace. New terminal
+always opens a new section in the reserved Tuiminais folder, including when the current
+section has room for a second pane. New section does the same. Only the explicit
+Split right / below actions open a confirmation that can either start a new shell
+or move an already-running agent terminal into the second pane. Moving an agent
+preserves its PTY and process, and its former section expands any remaining sibling.
+Custom commands create a new section and are passed unchanged to the native shell.
+
+The left sidebar has a Terminals heading and a count of its visible sections,
+followed by non-empty folders and zero-padded numbered sections. Clicking a folder
+header, or highlighting it with the sidebar cursor and pressing Enter, collapses
+or expands its rows, and that fold state is restored per project;
+empty folders stay out of the sidebar. Terminals lists only terminals without a running recognized
+agent, including completed custom commands whose output is retained. A naturally
+exited interactive shell is closed and removed from the workspace.
+Running agents appear exclusively in Agents, regardless of their activity state.
+A session item uses two rows. The first shows its colored process marker, terminal
+name and a right-aligned localized state. A live shell waiting at its prompt is
+Idle; Running appears only while process inspection finds a foreground non-shell
+tool such as `lazygit`, `tuiminal`, or `bun run test`. The second row shows the
+most useful context: project-directory basename for shells, original command for
+custom launches, source directory for mirrors, or exit code after completion,
+followed by `native` or `tmux`. The selected section has a terminal-colored left
+rail and its selected pane has a raised background. A paired section places two
+independently clickable two-row items beside one shared vertical separator. Status
+markers distinguish starting, idle, running, exited and failed processes using the
+active palette's semantic colors. Reserved folder fold state and tmux pane assignments
+are stored per project in Tuiminal's user data directory, outside the opened project.
+Legacy custom folders are ignored. Native sessions end at shutdown. Tuiminais is the default folder for
+new terminals and restored panes without a saved assignment;
+the reserved tmux folder contains ordinary panes discovered on external servers.
+Users can rename terminals; the only folders are Tuiminais, tmux and Others.
+The New terminal action sits below navigation; the Master Key stays at the bottom.
+In a shell/agent split, Terminals shows only the shell and Agents shows the agent;
+the actual split, section and folder assignment remain intact. When the agent
+returns to its shell, its terminal reappears in Terminals; if the shell itself
+exits, the terminal is removed instead.
+
+Terminal names automatically follow the foreground executable: opening `lazygit`
+inside `zsh` changes the name to `lazygit`, and closing it restores `zsh`. Naming
+uses the existing two-second process snapshot for native terminals and the source
+pane's shell PID for tmux, including mirrors. Shell wrappers and a tool's helper
+children do not replace its name. POSIX background, stopped and zombie jobs are
+excluded; Windows uses the owned descendant tree as a best-effort fallback.
+The selected foreground process is checked with the same agent-identity rules as
+the Agents list. Recognized agents use their CLI name (`codex`, `claude`, `gemini`,
+`opencode`) or their configured entry-point name, so runtime names such as
+`MainThread` or `node` do not replace the recognized agent name. Identification
+stays scoped to the selected process; an agent child cannot rename its parent tool.
+Otherwise the cleaned executable basename is displayed. Arbitrary arguments and
+screen text never supply a name. A missing or failed snapshot keeps the previous name. Retained
+finished custom commands keep their last name and output. Renaming through `[E]` makes that name manual for
+the rest of the session, including restarts. Name updates preserve pane instances,
+focus, section placement and the original command used for restart.
+
+A separate Agents list comes first and targets 40% of the sidebar, with at
+least four rows when space allows.
+Each clickable agent row shows a colored state marker, agent name, right-aligned
+activity/status, and the agent's published task/session title beneath, falling
+back to the terminal name when unavailable. Published task titles use the palette's
+focus accent so they remain legible across every light/dark palette and distinct
+from state colors. All running agents are listed,
+including agents in other sections. The list scrolls independently and selecting a
+row activates the existing pane. Empty lists say there are no active agents.
+Below ten available rows, running
+agents remain accessible as compact single-line rows with task title (or agent
+name) and status. With
+agents present, the creation buttons are hidden below eight rows and the Sessions
+heading below six; their actions remain available through the Master Key. Empty
+agent lists are omitted in compact layouts. Sidebar widths range from 16 to 32 columns.
+Status changes do not reset either list's scroll position.
+Task titles come from the agent's own terminal title, including tmux pane titles;
+they do not change automatic/manual terminal names. Supported formats and limits
+are documented in [agent task titles](terminal-agents.md#task-titles).
+
+Agent recognition leaves each section in its chosen folder. The dedicated Agents
+list provides access to running agents without introducing an automatic AI folder
+or regrouping paired terminals. Working agents show an animated loader in Agents; other states retain
+their static markers. One sidebar timer advances the loader every 100 ms while
+the tool is active and at least one running agent is working. It stops when no
+longer needed and is released on unmount, without updating terminal panes or focus.
+
+## Master Key and focus
+
+Settings opened from Terminal contain a Terminal category with the persisted
+`terminalMasterKey`. The default is `[Ctrl+B]`; supported alternatives are
+`[Ctrl+A]`, `[Ctrl+Space]`, `[Ctrl+F]`, `[Ctrl+G]`, `[Ctrl+N]`, `[Ctrl+P]`, `[Ctrl+T]`.
+The global layout selector is hidden in this context because Terminal is always
+compact. Other tools retain their layout preference.
+
+The Terminal settings context exposes a separate **Remote Connection** category
+beside **Terminal**. Tuiminal discovers explicit `Host` aliases from the user's
+`~/.ssh/config` and bounded files reached through `Include`; wildcard and negated
+patterns do not become selectable rows. The settings file persists only the selected
+alias reference. SSH user, endpoint, port, identity, agent, proxy, jump-host, and
+other connection options remain exclusively in OpenSSH configuration and never
+appear in Tuiminal inputs. Legacy profiles containing connection details are rejected
+rather than reused with different authentication behavior. Selecting an alias does
+not connect.
+**Test connection** runs one bounded, non-interactive `ssh` probe with argument-array
+spawning, `BatchMode=yes`, the selected alias, the user's normal `known_hosts`
+verification, and a constant remote `printf` marker. It does not pass `-i`, `-p`, or
+a synthesized `user@host`; OpenSSH resolves the complete connection. The probe reports
+an invalid alias, unknown host keys, authentication failures,
+unreachable hosts, timeouts, cancellation, and a missing SSH client without exposing
+command output. Leaving the screen cancels its owned probe. **Check server** runs two
+read-only probes through the same SSH profile: GitHub SSH authentication with
+`ssh -T git@github.com`, then Codex CLI installation, `codex app-server` support,
+and account state with
+`codex login status`. Each remote script is fixed and returns only a bounded result marker.
+
+**Configure server** is one generic action, not a GitHub-specific action. It closes
+settings and opens an interactive SSH shell in a new Terminal section. A setup guide
+under that terminal checks both barriers on entry, selects the first one that failed,
+and shows commands for the user to run manually. **Confirm configuration** rechecks
+only the current barrier and advances only after success. Codex installation guidance
+must add `$HOME/.local/bin` to the current SSH session's `PATH` and verify
+`codex --version` before asking the user to authenticate. Device-code guidance tells
+the user to complete the flow in a local browser, wait for success in the remote
+terminal, and verify the saved session with `codex login status`; browser success alone
+does not advance the guide. The explicit `PATH` step remains necessary when the
+readiness probe finds the standalone binary directly but the interactive shell has not
+reloaded its startup file. Tuiminal does not create keys, install software,
+register GitHub keys, authenticate accounts, copy projects, or run tutorial commands
+automatically. Master Key `[N]` always opens a local terminal section, independently
+of the active remote profile. Master Key `[A]` and **New agent** first open the
+first-party provider selector. Codex, Claude Code and OpenCode are available. Choosing a provider opens
+the project selector, including when no remote alias is active. It starts in Local;
+`[E]` opens a list of explicit SSH aliases discovered from `~/.ssh/config`.
+Choosing an alias applies to this launch without changing the active settings alias.
+Recent projects combine that provider and origin's public conversations and successful
+selector launches. They are deduplicated by absolute path, ordered by last use,
+and limited to 20 per provider and origin. Successful launches are stored atomically in
+`terminal/agent-projects.json` under Tuiminal's user data directory, outside projects.
+Legacy entries without a provider belong to Codex and migrate on the next write.
+Choosing a recent project prepares a new conversation; existing resume actions
+still resume the original thread and resolve its original SSH alias.
+
+The starting screen is a keyboard-navigable list grouped into recent projects,
+discovered Git projects and the starting folder. Repositories already present in
+recents are not repeated. Read-only discovery runs in the background, scoped to the
+selected host. Local discovery scans the CLI project, its parent and the user's
+home (or explicit `TUIMINAL_PROJECT_ROOTS`); remote discovery scans the SSH user's
+home. Both detect `.git` directories and worktree `.git` files, skip hidden and
+dependency/build directories, and do not descend through symlinks or repositories.
+Discovery is limited to five levels, 600 directories, 200 projects and ten seconds;
+reaching a limit is visible and never disables manual folder selection. Permission
+or discovery failures leave the recent list usable. No project contents are read.
+
+`[P]` opens a separate folder-search screen with a single, focused `~/` input.
+The list updates while typing: the final path segment filters directory suggestions,
+and changing its parent triggers a cancellable query after 150 ms. Up to 20 parent
+listings are cached for this screen's lifetime, so typing a prefix does not create
+an SSH connection per keystroke. `[↑/↓]` highlights a suggestion; `[Tab]` completes
+it in the input and enters that folder, retaining `~/` notation and focus. Hidden
+folders appear when the final segment begins with a dot. Absolute paths and Windows
+local separators are supported. `[Enter]` or **Use folder** validates the typed
+directory and returns it as the selected project.
+Git is not required. `[Esc]` returns to the project list without starting an agent.
+
+Folder queries list only one level, including directory symlinks, with a limit of
+2,000 entries. Remote discovery and folder queries use fixed read-only scripts
+through batch-mode SSH, quoted path arguments, bounded output and a ten-second
+timeout. Switching host, editing the parent path or leaving the screen cancels
+owned queries and ignores stale replies. No interactive shell or project writes
+are involved. `[Tab]` completes paths; it never moves between inputs.
+
+In the project list, arrows or `[J/K]` select a row, and `[Enter]` or **Start agent**
+validates and starts a new conversation in that visible origin/directory. Mouse
+selection starts the project directly. Startup failures keep the chosen destination
+available for retry. Cancelling retires only the pending owned session.
+`[Esc]` closes the list and restores terminal focus. Headers and actions remain
+visible while the lists scroll. Each screen keeps its hints, confirmation and
+`[Esc]` together in one footer row. Automated SSH commands neutralize alias-owned
+remote commands, stdin/session modes, local commands, connection masters and inherited
+forwards, and execute fixed scripts through `/bin/sh`. Tunnel startup rejects aliases
+that already define dynamic, local or remote forwards. Before opening a remote TUI,
+Tuiminal runs one cancellable staged preflight for the local Codex binary/version, SSH authentication, the
+selected directory, the remote Codex binary/version and account status, `app-server daemon` and
+`app-server proxy`, daemon startup and the proxy's `initialize` response. The exact
+local CLI, remote CLI, daemon app-server and initialized app-server versions must match.
+An absent or unparsable version is incompatible. The daemon lifecycle JSON and response
+`userAgent` identify the versions actually serving the request and must agree.
+Authentication, host identity, reachability, missing Codex, missing directory,
+missing capability, daemon startup, proxy startup, protocol and timeout failures stay
+distinct and do not open the TUI.
+
+Claude Code launch performs its own bounded local or remote version check and requires
+2.1.63 or newer. Local sessions run the official TUI with a loopback-only hook receiver
+supplied through process-local `--settings`. Remote sessions on 2.1.285 or newer create
+an empty official background session with a Tuiminal-generated UUID and immediately
+attach to it, or attach to the selected existing UUID. Persistent workers receive no
+HTTP hook URL; a shared five-second `claude agents --json --all` poller rehydrates public
+state without depending on a disposable attachment. The process-local settings keep background
+edits in the selected checkout instead of moving them to an automatic worktree. No global
+Claude settings, transcript or credential is read or changed. Failed or cancelled attachment
+setup stops only the background session that launch created, never a reused session.
+Application shutdown closes the PTY attachment and shared observer but leaves the
+supervisor-owned turn running; explicit pane close additionally resolves its short ID through
+the public command and runs `claude stop`, even if the attachment has already exited.
+Remote versions from 2.1.63 through 2.1.284 retain the previous foreground lifecycle:
+their SSH TUI, hook receiver and reverse tunnel remain pane-owned and stop together.
+
+The remote Codex installation owns one persistent shared daemon started or reused by
+`codex app-server daemon start`. Tuiminal carries the daemon's WebSocket transport,
+including its HTTP Upgrade, through a disposable `codex app-server proxy` over
+`ssh -T` to a loopback-only relay for the local official Codex TUI. The proxy stdio is
+a raw tunnel to the Unix control socket, not app-server JSONL. Tuiminal passes the
+selected remote directory through `-C` and exposes no remote TCP listener. A pane
+owns only its local TUI, relay and SSH proxy, and closes only those resources.
+Preflight and history queries likewise close only their temporary proxies. Tuiminal
+never invokes daemon stop, so closing a pane cannot cancel a daemon turn or invalidate
+another client.
+
+OpenCode uses an independent first-party transport. A local launch starts one owned
+`opencode serve --hostname 127.0.0.1` in the selected directory and opens the official
+TUI after validating authenticated JSON server information and negotiating v2
+`opencode --server <url> <cwd>` or legacy v1
+`opencode attach <url> --dir <cwd>`. On POSIX, an owner pipe retires the local server
+if Tuiminal exits before normal cleanup. A remote launch starts or reuses a version- and
+directory-scoped server on remote loopback, then runs the same official TUI locally through
+a disposable SSH `-L`. Its random password, PID, process start identity and remotely
+selected port live only in a mode-0700/0600 Tuiminal state directory on the remote host;
+stale registrations are invalidated and retried once. A server created solely for a
+temporary resume query is retired afterward; a reused server is only detached. If
+the remote directory does not exist locally, the v2 client omits its positional directory
+instead of attempting a local `chdir`; the server's selected working directory remains
+authoritative.
+Each local launch keeps one random password in memory; remote startup sends a proposed
+password only through SSH stdin and reconnect reads the registered password only through
+the encrypted SSH command. Distinct tunnel endpoints keep self-referential aliases valid.
+A remote v2 launch requires exact local/remote OpenCode versions before the TUI opens.
+Application shutdown closes the local TUI, observer and tunnel but leaves the registered
+server and active turn running. Explicit pane close calls the public interrupt endpoint for
+the selected root session, then disconnects without disrupting other server sessions. No
+server port is exposed publicly. Public HTTP and SSE provide
+session identity, title, state,
+permission waits, structured activity, messages, per-message diffs, and resume hydration.
+Input and approvals stay in the official TUI; Tuiminal neither scrapes its screen nor
+displays OpenCode reasoning part text.
+
+If a capability is absent or Codex/OpenCode versions are incompatible, a localized
+focused modal shows both detected versions and the provider-specific constraint.
+`[Esc]` returns to the project selector or resume list with the original intent intact.
+`[Enter]` opens local `~/` and remote SSH `~/` terminals in one split with the detected
+version, the applicable [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update)
+or [`opencode upgrade`](https://opencode.ai/v2/docs/cli/commands/) command, and the
+official POSIX installer alternative. Tuiminal does not prefill or execute any command.
+The split's inline `[Esc]` and `[Enter]` actions own their keyboard scope.
+Revalidation failure leaves both terminals and the refreshed report open; success
+closes only those two terminals and retries the exact original profile, directory and
+optional thread ID.
+
+Public app-server events provide integrated activity, sent-message history, and remote
+`/resume` entries. Those entries retain the source profile and remote cwd, so resuming
+never silently falls back to the local machine. Resume first rehydrates public history,
+active/completed/failed state and approval waits from the daemon, then continues with
+live events.
+Remote integrated agents are grouped under `Remote • <profile>`. Their Live Diff reads the selected remote
+working directory and linked worktrees through a separate owned SSH channel; it never
+falls back to a same-named local path. Selecting the category renders a read-only
+summary of the active SSH alias. `[Enter]` switches the detail pane to a focused list
+loaded from `~/.ssh/config`. `[J/K/↑/↓]` moves through aliases, `[Enter]` or `[A]`
+activates the cursor-selected alias, `[R]` reloads the config, and `[Esc]` returns to
+the summary; another `[Esc]` closes settings. Every alias shows an explicit localized
+`ACTIVE`/`INACTIVE` label. The alias list scrolls while readiness, status, and actions
+remain fixed at the bottom of the detail pane. Short terminals restrict the alias list
+to one row and collapse readiness while keeping the actions visible. No SSH connection
+field or private-key path is editable or displayed.
+
+The Master Key opens a centered, mouse-accessible modal up to 120 columns wide without
+dimming or changing the embedded terminal geometry. It contains solid, borderless
+side-by-side Actions and Agents boxes inside the modal's single outer border;
+`[←/→]` or `[H/L]` changes the active box, while `[↑/↓]` or `[J/K]` moves inside it.
+Every action
+is a vertical two-line row: bracketed shortcut and name first, then a short description.
+The name uses the palette's primary text color so it stays light in dark mode and dark
+in light mode. Colored, localized tags align at the opposite end of the title row and
+classify agent-only features, general features, terminal operations, sidebar operations,
+navigation, and application actions. Agent-only features may show both feature and agent
+tags. Actions are ordered by those purposes. `[G]` is not a Master Key action.
+`[R]` is enabled only for the selected integrated remote agent session and
+synchronizes its project to a protected local copy.
+Inside the narrow tmux helper pane, the same menu is a borderless, full-width bottom
+sheet. Actions and Agents become clickable tabs, `[←/→]` or `[H/L]` switches tabs, and
+only the active tab's content is rendered.
+Agents contains Global, Codex, Claude, and OpenCode tabs. The tab strip is flanked by
+`[Z←]` and `[→V]`; either the displayed controls or those keys move between providers
+whenever Agents owns navigation. The active tab carries the animated loader while its
+provider sources are still loading. Agent-list navigation stops at the first and last
+visible rows instead of wrapping; moving down from a provider's last loaded row requests
+its next page when available. Side and lower splits use `[C]` and `[Shift+H]`.
+Global takes up to seven local and seven
+active-remote conversations per provider, then sorts the combined projection by normalized
+last-interaction time. Provider tabs initially expose up to 12 conversations from each
+origin. Reaching the list bottom requests 12 more from every origin that still has data,
+with a safety cap of 120 conversations per provider and origin. Existing cached rows remain
+interactive while an initial or incremental loader is visible. Codex uses app-server
+`thread/list`; OpenCode uses its official JSON session list with the public server API
+as fallback. The lists cover recent conversations across the corresponding local or
+SSH host. Each provider and source refreshes independently. A valid OpenCode CLI list
+remains available if its optional response hydration fails, and SSH login banners cannot
+invalidate its marked JSON payload. The remote Claude roster has a 12-second bound and
+keeps cached rows on failure. One source never erases the other. Every row presents
+Local or Remote as a colored tag
+with its own palette-aware background; remote rows keep their profile name beside the
+tag as user data. Each item has three lines: name and state; the prompt preview in the
+palette's primary black-or-white text color, introduced by a border-colored `└` aligned
+directly below the state marker; then origin, optional remote profile, the project name
+derived from the final `cwd` segment, and the Git-colored optional `gitInfo.branch`. The
+title uses the low-contrast raised-panel background, and a
+border-colored horizontal rule fills the space between it and the right-aligned state.
+Three `▌` cells form a rail beside the item: unselected rows alternate subdued border
+and raised-panel colors, while the selected row uses the brighter Terminal accent.
+The modal footer provides the single `[Enter]` hint instead of repeating it in every
+item. Project and branch also participate in filtering. A
+short-lived owned provider connection loads each local list and bounded public history
+when Terminal becomes active, even before an integrated pane exists; integrated panes
+keep it current afterward. An agent row shows `[Enter]`, its
+name, prompt preview and live state. Idle rows append the elapsed time since their last
+activity using the palette's primary text color, which stays bright on dark palettes
+and dark on light palettes. Focusing an agent keeps that row intact and shows up to three wrapped lines
+of its latest public `agentMessage` below the Agents list; the response follows
+`[↑/↓]` selection. Its marker, title, state and response use semantic state/focus
+colors. Selecting it opens a new section running the matching provider's official TUI.
+Codex resumes through its relay; OpenCode attaches with the exact `--session` and source
+directory. Provider and source identity are stable, so a resume never changes tools or
+silently falls back from remote to local. `[/]` focuses one filter for actions and agents.
+A nonempty query searches beyond the initial recent rows and automatically requests
+remaining pages for the selected provider, or all providers in Global, after a 150 ms
+typing pause. Search keeps the active local/remote scope and the 120-conversation cap
+per provider and origin, but does not apply Global's seven-row or the provider tab's
+visible-page limit to matches. Cached matches stay usable as more pages arrive; loaders
+remain visible until pending pages finish. Clearing the query or closing the modal stops
+requesting further pages. A page that makes no progress is not retried automatically for
+the same query. Horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
+selected result. `[Esc]` first unfocuses the filter,
+then closes the modal. The modal owns input until an enabled action is chosen or
+cancelled. There is no timeout. Unknown or disabled actions leave it open.
+Repeating the Master Key sends its literal
+control byte to the selected PTY. Neither the prefix, action nor cancellation
+reaches the shell. Dialogs own their keyboard and Escape; closing one restores the
+selected terminal. Switching tools or opening global settings dismisses local
+menus and dialogs. While the modal is open, the first nine visible Agents or
+Terminals rows receive a key (`[1]`, `[2]`, … `[9]`), ordered as displayed with
+Agents first. Type its key to activate that existing pane; collapsed terminal
+folders do not receive a key. `[Alt+1–5]` keeps its global tool
+navigation role: Database, Git, Runner, HTTP, and Term Agents. `[,]` opens
+settings, and `[Q]` requests application exit. In the Terminal header these global
+shortcut tokens remain muted until the Master Key is active, when they use the fixed
+blue brand accent. The temporary `[1]`–`[9]` sidebar labels use that same blue without
+changing the sidebar's geometry. The custom-command dialog remains
+available from a sidebar button.
+
+Master Key then `[M]` closes the action modal and enters box-selection mode for
+the visible sidebar, terminal panes, remote setup guides, sent-message history, and Live Diff panels. The box
+that owned focus before the Master Key opens is selected first, receives a
+translucent blue background, and shows `Press [Enter] to focus` on its own solid,
+theme-aware surface with a blue border. Every other selectable box receives a
+subtle translucent black layer so the active choice remains visually dominant. Arrow keys and
+`[H/J/K/L]` move spatially among the open boxes; `[Enter]` transfers focus,
+`[Esc]` restores the original focus, and clicking a box focuses it directly.
+Selection mode consumes every key so none reaches a PTY or focused companion.
+
+`[B]` after the Master Key pins the terminal sidebar to the left side of the
+application. The same live Terminals and Agents navigation then remains visible without a right border
+while the user switches among installed tools; Terminal removes its internal copy
+so there is still exactly one sidebar. Selecting a terminal or agent from the
+pinned sidebar opens Terminal and focuses the existing pane. Unpinning returns the
+sidebar to the Terminal workspace without restarting a PTY or changing its folder.
+`[Shift+L]` from the action menu focuses the visible sidebar. Its `[↑/↓]` and `[J/K]`
+cursor crosses the Terminals/Agents boundary as one ordered list, and `[Enter]`
+activates the highlighted existing pane. While the pinned sidebar owns focus, the
+tool behind it does not process keyboard input.
+
+When Tuiminal itself runs inside tmux, pinning also maintains one narrow left split
+in every window on that inherited tmux server. Each split runs the verified
+`terminal-sidebar.mjs` helper, is marked with the pane-local
+`@tuiminal_sidebar` option, and is excluded from ordinary pane/agent discovery.
+The tmux split replaces the in-app host so only one sidebar is visible. While the
+app is reachable, helpers receive its live sidebar snapshot, including reserved
+folders, manual names, status, agent task titles, language and palette colors. If
+that channel is unavailable, they fall back to read-only process and pane metadata;
+they do not attach another client or mirror screen contents. A terminal or agent activation from any helper asks the app over a private `0600`
+local socket to open or focus the target inside Terminal, then returns the client to
+the Tuiminal pane. If the target has no existing workspace session, Tuiminal creates
+a mirror and its normal classification places it under Agents or Sessions. Helpers
+never switch the client directly to the source pane. While these helper splits exist, Tuiminal enables
+tmux mouse routing so the sidebar remains clickable even when the adjacent content
+pane owns focus. It restores an initially disabled mouse option when the sidebar is
+unpinned and leaves an initially enabled option unchanged. Each helper consumes its
+renderer's terminal-identification replies before mounting the interactive sidebar,
+so changing panes cannot deliver late DA or XTVERSION responses to a shell. The
+global tmux option retains the pinned
+choice and reconciliation adds a replica for later windows. Unpinning kills only
+marked helper panes. Reconciliation removes a helper that became the only pane in
+its window so it cannot keep an otherwise closed tmux window alive. Without tmux,
+pinning remains entirely inside the current Tuiminal application. The helper is
+bounded to its pane height so a long Sessions list scrolls without pushing the
+Agents list outside the visible split. It owns keyboard focus while its tmux pane
+is selected. A pane-local `after-select-pane` hook publishes a pane-scoped tmux
+`wait-for` event whenever tmux selects that helper. The helper consumes the event
+to focus its navigation and display a fast translucent diagonal light sweep across
+the full sidebar background in the active palette's focus color. Focus handoff never sends
+an operating-system signal to a pane process, so changing selection cannot signal
+or terminate the Tuiminal host. Its direct
+`[↑/↓]`/`[J/K]` and `[Enter]` controls work as
+soon as tmux selects the pane; Tuiminal's Master Key remains available for the
+action menu. Folding updates the helper immediately and keeps its tmux pane
+selected. The helper forwards actions over
+the private control channel. Actions that need a dialog return to the Tuiminal pane;
+other enabled actions can complete while the client stays in another tmux window.
+When `[Ctrl+B]` is both the configured Master Key and tmux's untouched default root
+binding, pinning installs a pane-conditional bridge: helper panes receive the key
+and every other pane still enters tmux's prefix table. Unpinning restores the stock
+binding. Tuiminal never overwrites a customized `C-b` root binding.
+
+| Key after the Master Key | Action |
+| --- | --- |
+| `[N]` | Open a new local terminal section |
+| `[A]` | Choose an agent provider, then its project and execution environment |
+| `[C]` / `[Shift+H]` | Choose a new shell or an existing agent, then split right / below |
+| `[S]` | Open or focus sent-message history for an integrated agent session |
+| `[M]` | Choose an open box with arrows or `[H/J/K/L]`, then focus it with `[Enter]` |
+| `[1]`, `[2]`, … `[9]` | Activate the matching visible agent or terminal |
+| `[Alt+1–5]` | Open Database, Git, Runner, HTTP, or Term Agents |
+| `[B]` | Pin / unpin the sidebar |
+| `[Shift+L]` | Focus the visible sidebar |
+| `[E]` | Rename selected terminal |
+| `[D]` | Open Live Diff for a recognized agent, or focus it when already open |
+| `[R]` | Synchronize the selected integrated remote agent project to its local copy |
+| `[X]` | Close selected terminal |
+| `[,]` | Open settings |
+| `[Q]` | Quit Tuiminal |
+| `[Esc]` | Cancel without changing terminal focus |
+
+An integrated remote agent pane also carries a project synchronization tag. Before
+the first copy it says **Not synced** and exposes the configured Master Key followed
+by `[R]`. The first synchronization asks for a local parent and derives
+`<remote-basename>-sync`; for example, remote `/tui` becomes `tui-sync` inside the
+selected parent. A pre-existing destination that is not a saved mapping is never
+adopted or replaced. Successful mappings are persisted outside the project and later
+syncs reuse the same destination. The tag retains the last known state; an explicit
+`[R]` comparison updates it through checking, out-of-sync, syncing, synced and error
+states without polling the complete project tree in the background. Only changes to
+project-facing paths make the settled tag out-of-sync; `.git`, dependency/cache trees
+and generated outputs remain quiet in that indicator.
+The checking state sweeps the tag background, while synchronization fills that
+background with measured delta progress without changing the tag text.
+
+The checking, review and transfer states also expose `[A]` **Automatic sync** with
+an `OFF` or `ON` state. Its value is saved per remote-project mapping. When
+enabled, every successfully completed integrated-agent turn starts a background remote-to-local
+sync without opening or focusing a modal; the pane tag carries its progress and only
+failures notify. This is standing authorization to replace local changes with the
+remote result. Enabling it during an open review does not confirm that review, while
+enabling it during the first transfer is saved as soon as the initial mapping succeeds.
+Manual work remains first in line, and completions received while a sync is busy
+collapse into one pending run. Disabling removes that pending run; a failure waits for
+another completed turn instead of retrying immediately. If resume hydration finds one
+successful turn that completed while the pane was closed, it requests one coalesced
+catch-up sync after hydration. Active, failed, interrupted or approval-pending turns do
+not request one, and this recovery path does not create a new incremental-sync cursor.
+
+For a saved mapping, Master Key `[R]` first compares detailed remote, local and last
+successful manifests. If nothing differs, it shows a brief notification. Otherwise a
+review lists every pending new, changed, removed or conflicting path before one
+confirmation starts the sync. A conflict means the local path also changed since the
+last successful sync, so its confirmation explicitly says that local changes will be
+replaced. Every comparison covers the complete remote and local trees, including
+hidden and ignored content, dependencies, caches and `.git`; Git status cannot define
+the mirror because it omits ignored paths. Metadata is enumerated first and content
+digests from the last successful snapshot are reused unless size, mode, modification
+time or change time moved. Quiet paths still appear in the review and are synchronized
+normally; the distinction affects only the settled pane tag.
+
+Synchronization confirmation, progress and review use compact centered surfaces with
+consistent outer margins. Their header and footer bands separate status from actions;
+primary and cancel actions occupy opposite footer edges. In the review, pagination
+stays beside the page counter above the automatic-sync control instead of competing
+with the destructive confirmation row. The change list receives the flexible height,
+and all three surfaces clamp to the available terminal dimensions.
+
+Only new or content-changed regular-file bytes cross SSH. A separate installed helper
+performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal
+renderer remains responsive. The focused progress dialog owns `[Esc]` cancellation,
+and the review pages large change lists instead of mounting the full manifest. Hash and
+archive path lists are NUL-delimited over stdin, keeping each phase to one SSH connection
+regardless of tree size. Tuiminal validates received bytes, creates native symbolic links,
+rechecks the reviewed trees and applies a journaled path delta. Each replacement/removal has a sibling backup; error,
+cancellation or an incomplete owned journal rolls back without rebuilding the complete
+destination. A source change after review requires a fresh review.
+
+## Sent-message history
+
+Master Key then `[S]` opens a compact table below the selected integrated agent
+terminal and focuses it. Columns are ordered as elapsed time, status, message,
+image, audio, skill, and model. Status combines turn duration with `✓` for
+completion, `×` for failure or interruption, and `…` while queued or running, for
+example `18m ✓`. Image, audio, and skill use `✓` as presence indicators. Model
+configuration combines model, reasoning effort, and service tier as
+`gpt-6-sol · medium · fast`; historical messages fall back to the selected
+thread's current configuration and use `—` only when neither source is available.
+`[J/K]` and `[↑/↓]` wrap through the rows, mouse presses select a row, and
+`[Enter]` opens the selected turn's detail. The detail expands the lower region to
+half of the terminal column, leaving the other half for the terminal.
+Its overview uses the bracketed title actions `[M]` for the full user message,
+`[R]` for the final response and other public agent text, `[A]` for complete public
+activity, and `[D]` for that turn's files and diff. `[J/K]` and `[↑/↓]` scroll a
+full section. `[Esc]` returns from a section to the overview, from the overview to
+the table, then to the terminal. Focused `[X]` or the close control removes the panel.
+Every bracketed history shortcut, including the overview title actions, uses a blue
+brand base with a smooth per-character highlight while history owns keyboard focus.
+Its top separator uses the same blue brand color while focused. The shortcuts become
+static palette-muted gray and the separator returns to the normal border color while
+the visible panel is unfocused.
+The overview fills the expanded region with theme-aware cards rather than leaving
+unused rows. Its activity and change previews use alternating backgrounds, while
+status, model, additions, and removals retain semantic colors. The `[D]` section
+splits the turn patch into file blocks with a visible path, change kind, and local
+statistics before each shared native diff renderer. Those renderers provide syntax
+highlighting, line-number gutters, and addition/removal backgrounds. It renders only the patch associated with the
+selected turn, not the current repository-wide Live Diff. A colored line renderer
+keeps legacy or partial patches without unified hunks readable.
+
+For Codex, the history combines text input carried by the public outbound app-server requests
+`turn/start`, `turn/steer`, and `thread/queue/add` with earlier `userMessage` items
+from public thread history responses. After a thread is resumed or forked, the
+relay requests `thread/turns/list` pages with full items until `nextCursor` is
+empty. Selecting another thread replaces the table; additional
+`thread/turns/list` and `thread/items/list` pages merge by stable message ID. The
+outbound message is linked to the `turn.id` returned by `turn/start` even when
+that response does not repeat its `userMessage` item, so public item, diff,
+status, and duration events update an open detail immediately without a reset. The
+relay does not inspect the rendered terminal, read private reasoning content, or
+submit anything to Codex. It associates each message with public `agentMessage`,
+`reasoning.summary`, plan, command, tool, file-change, and `turn/diff/updated`
+events from the same turn. The response section labels reasoning summaries as
+public and states that internal private reasoning is not displayed. The complete sanitized user-message
+history is session-local and cached in memory, with each entry limited to 4,000
+code points; restart and close clear the cache until the selected thread is
+hydrated again. The action is disabled for screen-observed agents and ordinary
+terminals.
+
+For OpenCode, the same view maps public message parts, tool state, attachments, model
+identity, final responses, and per-message session diffs into the shared history model.
+Hydration reads the complete public transcript and refreshes after relevant SSE events.
+OpenCode reasoning part text is deliberately omitted; no terminal output is scraped and
+no input or approval is submitted by Tuiminal.
+
+Each integrated agent session can keep its own sent-message history panel open.
+In a split, opening, focusing, or closing one session's history does not replace
+or mutate the sibling session's panel.
+
+The table consumes roughly the lower 30% of the terminal column and the detail
+expands it to 50%; both retain a usable terminal minimum and consume no
+terminal slot. With side-by-side
+Live Diff, the diff remains full-height on the right and the history divides only
+the terminal column. In the narrow stacked Live Diff layout, history divides the
+terminal region above the diff.
+
+## Live Diff companion
+
+Master Key then `[D]` opens a read-only Live Diff beside the selected recognized
+agent's existing PTY and focuses it immediately. Repeating `[D]` focuses the open Live Diff; its close control or `[X]` removes it. The companion does not consume a terminal slot or create a
+tmux pane. In a section with two split terminals, it normally shares the selected
+terminal's pane at an approximately 52/48 terminal-to-diff ratio while the other
+terminal remains visible. Only when that pane is too narrow or short to keep both
+regions useful does Live Diff temporarily cover the selected pane. Both PTYs remain
+mounted; `[Esc]` or `[X]` restores the covered terminal without relaunching either
+process. Otherwise, Live Diff shares one separator with the PTY and stacks below it
+when the available width is narrow. Toggling it off,
+switching sections, changing theme, and refreshing Git never relaunch the agent or
+remount its embedded terminal. Each recognized agent session can keep its own companion
+open; opening, focusing, adding projects to, or closing one Live Diff does not replace
+or mutate another session's panel.
+The focused file list supports `[J/K]` / `[↑/↓]` to select a file, `[Enter]` to
+focus its code preview, `[H/L]` / `[←/→]` to highlight a monitored project,
+`[N]` to show or hide that project's files, `[A]` in local sessions to open a searchable picker of nearby Git projects, `[X]` to close Live Diff, and `[Esc]` to
+return focus to the terminal. In the code preview, `[J/K]` / `[↑/↓]` scroll by
+one rendered row and `[H/L]` / `[←/→]` by half a viewport; `[Esc]` re-enables
+automatic follow, selects the newest file and returns to file navigation without
+leaving Live Diff. Clicking the preview focuses it, while
+clicking a file returns to file navigation. Clicking a project chip highlights it;
+the close control and, for local sessions, the `[A]` Add project button in the bottom shortcut area are also clickable. Remote sessions monitor their selected directory and linked worktrees without exposing the local project picker. The Master Key's `[N]` still creates a terminal; it is not captured
+by Live Diff.
+
+All bracketed Live Diff shortcuts use a blue brand base with a smooth per-character
+highlight while either its file navigation or code preview owns keyboard focus.
+They switch to static palette-muted gray when focus returns to the PTY or another
+box, without hiding the panel. The shared separator follows the same focus state,
+using the blue brand color while focused and the normal border color otherwise.
+
+The panel has a scrollable unified patch for the selected file, a scrollable
+Files list, and a compact Info summary. The Live Diff code heading shows
+`Show auto: true/false`; Info keeps theme-colored totals, additions, deletions and projects; while code
+is focused, it shows the contextual `[Esc]` action. In the side-by-side layout, the
+panel reserves fourteen fewer columns than its usual split and keeps that width while
+focused. A stacked panel uses the complete pane width so it leaves no unused strip
+beside the diff. Focusing the code widens only its preview by 30 columns toward available space; Files and Info
+keep their widths. Long code lines stay on
+one row until the code preview is focused, then wrap and remain vertically
+scrollable. The Files list follows keyboard selection. Its
+table rows align status, compact path, elapsed time, added and deleted line counts;
+files are ordered by their latest detected change, newest first. The preview
+automatically follows the newest file, pauses that follow when an older file is
+selected, and resumes it when the newest file is selected again. A file that
+disappears while selected returns the preview to newest-file follow mode.
+After the initial snapshot, every file changed in a polling round independently
+starts with a blue row background that fades back to its normal selected or
+unselected background over two seconds. Files changed in the same round animate
+together.
+Both automatic follow and manual selection retain the complete unified patch
+with three Git context lines and one numberless visual separator row between
+hunks. Automatic follow scrolls the preview to the newly
+edited line within the hunk whose changes differ from its prior snapshot, or
+the last hunk when a file is first observed. Line-number shifts alone do not
+move the preview. Manually selected files leave scrolling to the user. This
+changes only Live Diff, not the Git Diffs tool.
+After the initial repository snapshot establishes the baseline, lines newly present
+in each later snapshot receive a palette-aware blue gutter and text background that
+stays visible while those lines remain in the current patch. This includes files
+that changed before their first preview, so selecting another file cannot silently
+turn an observed edit into baseline. A light band repeatedly shimmers across only
+the blue glyphs in a 1.6-second cycle. Later edits to the same file add their
+new lines to the blue set, including edits in another hunk; they do not clear the
+earlier highlights. The blue set survives switching files for up to 16 recently
+previewed files in one Live Diff session. The normal green/red diff backgrounds
+remain on baseline rows. Multiple new lines in one snapshot shimmer together;
+unchanged lines and line-number-only shifts are not added. When a line leaves
+the patch, it has no remaining row to highlight. Edits between two polling rounds
+are shown as one observed change. Highlighting never moves a manually scrolled
+preview or changes the PTY.
+Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the same gradual per-character shimmer curve, palette target, frame count, and cadence as Term Agents shortcut keys while preserving its syntax color as the base.
+elapsed time and additions use the palette's blue, and deletions use its red.
+The path shows the project, an omitted-ancestors marker and only the file's
+immediate parent folder; folder names are middle-truncated to 12 display cells.
+There is no selected-file heading above the code. Info sums the current
+visible changed files and textual additions/deletions. The last changed root's
+folder name appears at the right of the totals on the same Info row. The Files and Info boxes omit their redundant headings, and the Add project button shares the bottom shortcut row when it fits. Beneath the last project, the Watching
+row shows each monitored root as `/folder-name`, with spacing between chips and
+compact, left-aligned continuation rows when they do not fit. Avoid a single orphan chip
+on the final row when two balanced rows fit. Visible project names have a vivid background;
+hidden names have a muted background. Hiding a root
+filters the file list, preview and totals while Git polling continues. Counts are the final Git
+worktree state against `HEAD`, not cumulative edit history: staged and unstaged
+changes are not double-counted, and a commit can clear the list. Untracked text
+files are included; binary, oversized, and mode-only changes have unknown line
+counts instead of false zeroes. A repository without a commit treats present
+files as additions. Very large patches show a non-text preview fallback.
+
+For local sessions, activation and discovery every two seconds check the launch/tmux path,
+the recognized agent's process tree cwd where the OS exposes it, and Git-linked
+worktrees. A path entered through Add project is resolved locally and need not be linked
+to the launch repository. Up to four canonical roots are monitored. On macOS cwd
+inspection uses `lsof`; on Linux it uses `/proc/<pid>/cwd`; Windows falls back
+to known launch/tmux/manual paths. A remote integrated agent session instead starts
+from its tagged remote working directory and discovers linked worktrees on that host.
+It never inspects a local path with the same text. The file list is limited to the first 1,000
+changed paths per root and visibly warns when truncated.
+
+While its agent is running, one non-overlapping read-only Git round starts at
+most every 250 ms locally or 750 ms remotely. A separate one-second display timer advances elapsed labels
+without rereading Git. Git commands use argv, bounded output/time, disable
+optional index locks and external diff/textconv, and never stage, restore, commit,
+write project files or read credentials. Remote reads use one persistent, batch-mode
+SSH helper per open panel. Its framed protocol accepts only fixed operations, treats
+encoded roots and paths as data, bounds responses, retries after transport failure,
+and is stopped when the panel closes. It carries Git metadata and patch text only;
+the project is not copied and the provider protocol stream remains independent.
+Closing the companion aborts its reads.
+Agent exit stops the polling but retains the last visible snapshot; terminal
+close, restart, or agent identity replacement releases that snapshot. These are
+*observed repository changes*, not proof that the agent made them: pre-existing
+edits and other processes in the same worktree can appear, and an agent can touch
+an unobserved absolute path. The panel does not feed filesystem activity into
+agent working/done classification.
+
+## Native and tmux sessions
+
+New terminals automatically use tmux 3.2 or newer when it is available on POSIX
+(including WSL). Otherwise they use the native Bun PTY, including on native
+Windows. No installation is required or performed. Both backends support shells,
+custom commands, splits, agent observation and background execution across tool
+switches. `TUIMINAL_TERMINAL_BACKEND=native` always uses the native backend for new
+terminals; `auto` is the default. `tmux` requires a compatible installation and
+reports absence instead of falling back.
+
+Owned terminals are separate persistent windows in the shared tmux session
+`tuiminal` on the stable server of the same name, which ignores the user's tmux
+configuration. Each internal terminal embeds its own tmux client through a temporary
+linked session so simultaneous windows retain independent selection; those client
+sessions disappear on detach while the `tuiminal` session and its windows remain.
+The private server keeps mouse mode enabled so the wheel enters tmux copy mode and
+scrolls pane history while its client occupies the embedded terminal's alternate
+screen. Native terminals use the embedded terminal's own bounded scrollback.
+Each embedded pane loads the hosting terminal's reported ANSI colors 0–15,
+default foreground/background and cursor color. Available colors are applied to
+existing content without restarting its PTY; explicit RGB output retains its own
+color. If the host does not report a color, the embedded terminal keeps its
+default for that slot. The workspace owns one renderer palette subscription for
+all panes and releases it when the workspace unmounts.
+Tuiminal owns all workspace content splits and hides them with the Terminal tab.
+Creating or splitting a terminal never changes the enclosing tmux layout; the
+explicit pinned-sidebar helper described above is the only enclosing split owned by
+this feature. The private server disables its status bar and prefix keys, forwards
+pane titles, and retains dead panes until their final output and actual command exit
+status have been collected. Once collected, an exited interactive shell and its
+owned window are removed; a custom command keeps its dead pane and final output for
+inspection and restart. The original command kind is stored on each owned window so
+restoration preserves this distinction. Native launch arguments are passed unchanged. Fallback
+occurs only during capability detection: a failed
+detached launch is cleaned up and never rerun automatically in another backend.
+Closing the application detaches the local clients and leaves the shared session
+alive. Reopening Tuiminal discovers its windows and restores each as a section in
+the Tuiminais folder. Explicit `[X]` destroys only the selected owned tmux window.
+
+When Terminal mounts, Tuiminal restores its own persistent panes and automatically
+discovers ordinary panes and recognized foreground agents on the default and
+inherited tmux servers. Ordinary external panes enter the tmux folder; recognized
+agents from every source appear exclusively in Agents. Discovery
+repeats every two seconds after the previous scan finishes, including while another
+tool is visible. Without compatible tmux it retries every 30 seconds and leaves
+native terminals available. Identity uses the existing process-tree rules and
+configured agent command names, never window names or transcript text.
+
+Each newly discovered pane gets one mirror with its existing screen; no new agent
+or shell is launched. The first mirror becomes visible in an empty workspace;
+later discoveries preserve the selected terminal, keyboard focus, menus and dialogs.
+Recognized running mirrors appear only in Agents; an owned pane returns to Terminal
+when its agent ends, while an external pane returns to tmux. Linked windows
+are deduplicated by socket and pane ID. The 12-terminal limit
+still applies; remaining candidates can be added after space becomes available.
+Closing a mirror dismisses that pane for the current execution, so the next scan
+does not reopen it. Failed/disconnected mirrors remain visible instead of being retried repeatedly.
+Set `TUIMINAL_TERMINAL_AUTO_MIRROR=0` before launching to disable external automatic
+discovery; owned persistent panes are still restored. This is independent of the
+backend for newly created terminals. Tests, documentation
+captures and release smoke fixtures disable it unless using isolated discovery data.
+
+On POSIX, a separate read-only scan groups foreign processes by controlling TTY and
+lists them in the reserved Others folder. It excludes the TTY hosting Tuiminal,
+Tuiminal-owned descendants and PTYs whose ancestry belongs to tmux, so Terminal and
+tmux rows are not duplicated. Each row shows the foreground executable, idle/running
+state, directory when `/proc` exposes it, and TTY identifier. These references do not
+count toward the 12-session limit. Recognized agents move to Agents with unknown
+activity because their external screen is unavailable. Since Tuiminal does not own their PTYs or screen
+buffers, activating one reports its original TTY without replacing the active pane,
+sending input or closing the external process. Windows returns an empty read-only
+set until a console API can provide stable terminal identity. Set
+`TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY=0` to disable this scan.
+
+Automatic discovery mirrors individual panes on Tuiminal's named server, the default
+tmux server and the inherited tmux socket, if present. The enclosing `TMUX_PANE`
+is excluded to prevent recursion; linked windows are deduplicated by socket and pane ID.
+
+A mirror reads the selected pane's current application screen before reporting a
+connection. Changed screens schedule the next capture after 33 ms; unchanged
+captures progressively back off to 250 ms. Delivered keyboard/paste input requests
+an immediate capture, coalesced after any capture already in flight. Captures never
+overlap or accumulate a backlog. These are scheduling intervals, not a guaranteed
+frame rate: capture and rendering time still apply.
+
+Identical snapshots skip parsing and rendering. A changed screen repaints from the
+first changed row onward, retaining preceding text and its inherited colors;
+cursor-only changes do not repaint the text. Viewport shifts and size changes
+force a full repaint. Capture and keyboard input target the immutable
+pane ID, independently of the original client's selected window or active pane.
+No new shell, session, external split or attached client is created for a mirror.
+A missing pane fails visibly instead of opening an empty replacement terminal.
+Mirrors temporarily fit the source pane to the actual embedded viewport, after
+subtracting the sidebar, application navigation and split separators. The Master
+Key modal overlays this viewport and does not resize it.
+The source application receives the new terminal dimensions and can redraw/reflow
+its own interface. This changes its size in the original terminal too: one running
+PTY cannot provide two independent application layouts.
+tmux's [window sizing contract](https://github.com/tmux/tmux/wiki/Advanced-Use#window-sizes)
+is the basis for this shared sizing behavior.
+
+Sizing is coordinated per source window. Its existing pane IDs, split arrangement,
+selection and zoom are retained. When several mirrors share a window, shared axes
+use the smallest requested size; tmux's minimum pane sizes still apply. Window
+dimensions, layout and the local/inherited `window-size` option are saved before
+the first adjustment. Whenever an attached tmux client displays the source window,
+Tuiminal suspends fitting, releases its temporary manual size and immediately asks
+tmux to recalculate the window from the attached client. A pinned-sidebar pane
+created after fitting is retained instead of being mistaken for a user resize,
+including when tmux expands the manual window to keep the mirrored pane unchanged
+while adding the helper. The content returns to the attached client's available
+size without removing or shrinking the marked sidebar.
+While visible, size and layout changes belong to the user.
+After the last client leaves that window, Tuiminal adopts its latest state as the
+new restoration baseline and fits the mirror again. The latest baseline is also
+restored after the last mirror disconnects. Pending resizes are serialized/coalesced
+and drained before restoration; failed cleanup stays registered for retry. A newer
+manual source layout/size change takes precedence over an owned fitted layout.
+
+A source window that also contains Tuiminal is left unchanged to avoid recursive
+resizing of Tuiminal itself. The renderer retains clipping and cursor tracking for
+that case, tmux minimum sizes, and frames arriving before an application redraws.
+This is a sampled screen mirror: it does not import the original scrollback, tmux
+status bar, copy-mode UI or mouse protocol. The original terminal remains the
+place to use those features.
+
+Keyboard input goes directly to the selected application; tmux prefix bindings are
+not interpreted in the mirror. Input is serialized and never replayed on an uncertain
+failure. Paste uses a temporary named buffer and the source application's bracketed
+paste mode; only Tuiminal's buffer is cleaned up. Closing a mirror cancels pending
+captures and queued input, restores its temporary sizing, and never interrupts or
+kills the original process.
+Different panes in one session can have separate mirrors. Restart is disabled for
+borrowed panes; agent identity follows the mirrored pane's shell PID.
+
+Terminals already open outside tmux cannot yet be mirrored. The read-only references
+in **Others** expose their metadata and original
+TTY without changing that limitation. Without tmux, new native terminals, splits,
+agent observation and background execution remain available inside Tuiminal.
+Arbitrary custom sockets and screen/input integration for unrelated terminals need
+a separate integration; opening an empty shell is never presented as mirroring an
+existing terminal.
+
+## Agent recognition and activity
+
+See [Terminal agent activity MVP](terminal-agents.md) for the maintained detector
+contract, Herdr research, supported signals, state transitions and limitations.
+A read-only process snapshot identifies agents from owned foreground jobs on
+POSIX and owned descendant trees on Windows. Runtime entry points and configured
+executable/module names also participate; arbitrary arguments and screen banners
+alone do not identify an agent.
+
+Local profiles cover Codex, Claude Code, Gemini, OpenCode and additional named
+agents with recognizable live controls; a profile with no reliable idle signal
+can remain unknown. Unseen completion appears as done until its pane is
+viewed. The sidebar keeps split terminal items side by side in two-row panes, adds
+state markers and colors, and shows every agent's state/activity in the separate agent list. Recognized
+live activity rows can report reading, searching, thinking, writing or running.
+Unsupported identified agents appear in the agent list with unknown activity.
+Offscreen transitions into blocked or done notify once; clicking the card selects
+the exact pane without submitting input or stealing keyboard focus.
+
+Independent native observers follow the live screen even while the actual pane is
+hidden or scrolled. No agent hooks, credentials, project files or integration
+settings are changed. Recognition and activity are heuristic; registration of an
+additional agent command gives it an identity, not a lifecycle profile.
+
+The Terminal workspace uses the shared plasma loading surface only for blocking waits:
+integrated agent startup, selected-directory validation, SSH alias loading, and initial
+Live Diff project discovery. Background Git discovery and directory autocomplete stay
+interactive and use inline status instead of covering their results.
+
+## Guided tutorial
+
+Settings → Tutorial opened from Terminal runs a contextual tour of
+[`TERMINAL_TUTORIAL_STEPS`](../../packages/feature-terminal/src/tutorial/steps.ts), ordered from
+the basics (PTY, metadata strip, sessions, folders, commands) through the Master Key, splits,
+agents, history and Live Diff to pinned/tmux/remote features, project sync and server setup.
+Each step selects a simulated visual state that opens the dialog or companion it explains.
+The simulated workspace paints over the live one instead of replacing it: real PTYs stay
+mounted with their geometry, the tool is inactive and receives no input. Dialogs reused by the
+tour accept `inactive`, which disables focus and keyboard ownership. Fixtures are fictional
+paths, aliases and agents; the tour never spawns processes, reads Git, discovers projects or
+opens SSH. Tour copy is translated in the six UI languages.
+
+## Resource ownership
+
+Presentation never launches or restarts an existing PTY. Pane callbacks remain
+stable across sidebar, settings and sibling updates. Each explicit launch/restart
+uses a generation; only the current generation may write or update its session.
+Restart waits for the previous owned process to retire. Closing or unmounting
+invalidates pending launches. EOF draining, bounded stop escalation and global
+shutdown retain the existing native process contract.
+
+Local clients remain registered for shutdown, and pending detached launches remain
+tracked through creation and failed cleanup. Per-terminal launch queues
+cancel stale generations and wait for their cleanup before a replacement starts.
+Closing Tuiminal retires its own native processes, removes temporary linked client
+sessions and leaves the shared `tuiminal` session intact. Its windows are restored
+on the next launch; external sessions are only disconnected. Explicit close
+destroys one selected owned window and never kills a borrowed session.
+
+Tests cover grouping, native input, Master Key capture/cancel/passthrough, mouse
+selection, pinned in-app/tmux sidebars, direct helper navigation and focus signaling,
+shared-session window ownership, reserved and persisted folder placement, settings,
+split limits, stable agent folder placement, loader lifecycle,
+activity and unread completion, hidden observers, finished-output retention and restart races.
+Run focused coverage while implementing Terminal changes and include the complete
+suite in the repository validation gate.

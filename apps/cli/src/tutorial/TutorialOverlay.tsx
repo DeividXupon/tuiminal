@@ -118,7 +118,8 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     targetId: "tutorial-db-view-data",
     group: "DADOS · ATIVAÇÃO",
     title: "Registros",
-    description: "Exibe as linhas da tabela e habilita navegação, edição e paginação.",
+    description:
+      "Exibe as linhas da tabela e habilita navegação, edição e carregamento incremental.",
     hint: "Atalho: [1]",
     kind: "control",
   },
@@ -270,12 +271,12 @@ const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
     kind: "control",
   },
   {
-    targetId: "tutorial-db-pagination",
+    targetId: "tutorial-db-window-navigation",
     group: "DADOS · NAVEGAÇÃO",
-    title: "Paginação e foco",
+    title: "Janela de linhas e foco",
     description:
-      "Avance páginas, mova a célula ativa e confira qual dos três blocos está recebendo o teclado.",
-    hint: "[P/N] muda a página · [H/←] [L/→] navega célula ou bloco",
+      "Ao passar da última ou primeira linha, carregue mais 40 e mantenha até 50 na grade. Confira qual bloco recebe o teclado.",
+    hint: "[↑/↓] carrega nas extremidades · [H/←] [L/→] navega célula ou bloco",
     kind: "control",
   },
 ]
@@ -363,6 +364,7 @@ export function getTutorialSteps(screen: string): TutorialStep[] {
   if (screen === "database") return DATABASE_TUTORIAL_STEPS
   if (screen === "git") return [...(loadedFeature("git")?.GIT_TUTORIAL_STEPS ?? [])]
   if (screen === "http") return [...(loadedFeature("http")?.HTTP_TUTORIAL_STEPS ?? [])]
+  if (screen === "terminal") return [...(loadedFeature("terminal")?.TERMINAL_TUTORIAL_STEPS ?? [])]
   return GENERIC_TUTORIAL_STEPS
 }
 

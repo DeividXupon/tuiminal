@@ -1,0 +1,42 @@
+export const DATABASE_CONNECTION_MESSAGES = [
+  [
+    "COMPLETAR CONEXÃO EXTERNA",
+    "COMPLETE EXTERNAL CONNECTION",
+    "COMPLETAR CONEXIÓN EXTERNA",
+    "外部接続を完了",
+    "完成外部连接",
+    "외부 연결 완료",
+  ],
+  [
+    "Complete os campos ausentes.",
+    "Complete the missing fields.",
+    "Complete los campos que faltan.",
+    "不足している項目を入力してください。",
+    "请填写缺少的字段。",
+    "누락된 필드를 입력하세요.",
+  ],
+  [
+    "Conexão externa disponível nesta sessão",
+    "External connection available for this session",
+    "Conexión externa disponible durante esta sesión",
+    "外部接続はこのセッションで利用できます",
+    "外部连接在本次会话中可用",
+    "외부 연결을 이 세션에서 사용할 수 있음",
+  ],
+  [
+    "[R] Lendo…",
+    "[R] Reading…",
+    "[R] Leyendo…",
+    "[R] 読み取り中…",
+    "[R] 正在读取…",
+    "[R] 읽는 중…",
+  ],
+  [
+    "Informe uma senha para deixar de usar pgpass.",
+    "Enter a password to stop using pgpass.",
+    "Ingrese una contraseña para dejar de usar pgpass.",
+    "pgpass の使用をやめるにはパスワードを入力してください。",
+    "请输入密码以停止使用 pgpass。",
+    "pgpass 사용을 중지하려면 비밀번호를 입력하세요.",
+  ],
+] as const

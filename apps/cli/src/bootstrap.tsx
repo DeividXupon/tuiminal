@@ -7,6 +7,9 @@ initializeUiSettings()
 const { App } = await import("./App")
 
 const renderer = await createCliRenderer({
+  // Avoid the separate native output thread on macOS; Linux already disables it.
+  // Compare both paths with tests/terminal-render-output.test.ts.
+  ...(process.platform === "darwin" ? { useThread: false } : {}),
   exitOnCtrlC: false,
   useMouse: true,
   enableMouseMovement: true,

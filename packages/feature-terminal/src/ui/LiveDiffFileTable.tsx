@@ -1,0 +1,239 @@
+import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { type LiveDiffFile, liveDiffElapsedLabel } from "../model/live-diff"
+import {
+  fittedLiveDiffPath,
+  LIVE_DIFF_CHANGE_WIDTH,
+  LIVE_DIFF_ROW_HIGHLIGHT_MS,
+  LIVE_DIFF_STATUS_WIDTH,
+  LIVE_DIFF_TIME_WIDTH,
+  liveDiffFileStatus,
+  liveDiffPathWidth,
+  liveDiffRowBackground,
+  liveDiffRowHighlightProgress,
+} from "../rendering/live-diff-table"
+
+const fileKey = (file: Pick<LiveDiffFile, "root" | "path">) => `${file.root}\0${file.path}`
+const rightAligned = (value: string, width: number) => value.padStart(width - 1).padEnd(width)
+const statusColor = (status: ReturnType<typeof liveDiffFileStatus>) => {
+  if (status === "New") return COLORS.gitMerged
+  if (status === "Delete") return COLORS.danger
+  if (status === "Copy") return COLORS.success
+  if (status === "Rename") return COLORS.focus
+  return COLORS.warning
+}
+
+export function LiveDiffFileTable({
+  sessionId,
+  files,
+  selected,
+  now,
+  error,
+  active,
+  onSelect,
+  onFocus,
+  height,
+}: {
+  sessionId: string
+  files: LiveDiffFile[]
+  selected: LiveDiffFile | null
+  now: number
+  error: string
+  active: boolean
+  onSelect: (file: LiveDiffFile) => void
+  onFocus: (event: { stopPropagation: () => void }) => void
+  height: number
+}) {
+  const fileList = useRef<ScrollBoxRenderable | null>(null)
+  const [listWidth, setListWidth] = useState(80)
+  const [sweepFrame, setSweepFrame] = useState<number | null>(null)
+  const [animationNow, setAnimationNow] = useState(Date.now())
+  const hasNewFile = files.some((file) => liveDiffFileStatus(file) === "New")
+  const latestListHighlight = files.reduce(
+    (latest, file) => Math.max(latest, file.listHighlightAt ?? 0),
+    0,
+  )
+  const animationEnabled = process.env.TUIMINAL_TEST_STATIC_LOADERS !== "1"
+  useEffect(() => {
+    if (!active || !hasNewFile || process.env.TUIMINAL_TEST_STATIC_LOADERS === "1") {
+      setSweepFrame(null)
+      return
+    }
+    const timer = setInterval(() => setSweepFrame((frame) => ((frame ?? -1) + 1) % 8), 70)
+    return () => clearInterval(timer)
+  }, [active, hasNewFile])
+
+  useEffect(() => {
+    if (!active || !animationEnabled || latestListHighlight === 0) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const frame = () => {
+      const current = Date.now()
+      setAnimationNow(current)
+      const remaining = latestListHighlight + LIVE_DIFF_ROW_HIGHLIGHT_MS - current
+      if (remaining > 0) timer = setTimeout(frame, Math.min(40, remaining))
+    }
+    const remaining = latestListHighlight + LIVE_DIFF_ROW_HIGHLIGHT_MS - Date.now()
+    if (remaining > 0) timer = setTimeout(frame, Math.min(40, remaining))
+    return () => clearTimeout(timer)
+  }, [active, animationEnabled, latestListHighlight])
+
+  const selectedFileKey = selected ? fileKey(selected) : null
+  const selectedIndex = files.findIndex((file) => fileKey(file) === selectedFileKey)
+  useEffect(() => {
+    const scroll = fileList.current
+    if (!scroll || !selectedFileKey || selectedIndex < 0) return
+    if (selectedIndex < scroll.scrollTop) scroll.scrollTo(selectedIndex)
+    else if (selectedIndex >= scroll.scrollTop + scroll.height)
+      scroll.scrollTo(Math.max(0, selectedIndex - scroll.height + 1))
+  }, [selectedIndex, selectedFileKey])
+
+  const pathWidth = liveDiffPathWidth(listWidth)
+  const displayPaths = useMemo(
+    () => files.map((file) => fittedLiveDiffPath(file.root, file.path, pathWidth)),
+    [files, pathWidth],
+  )
+  const renderedAnimationNow = Math.max(animationNow, Date.now())
+
+  return (
+    <box
+      id={`live-diff-file-table-${sessionId}`}
+      style={{
+        height,
+        minHeight: 4,
+        flexShrink: 0,
+        border: ["top"],
+        borderColor: COLORS.border,
+      }}
+    >
+      <box
+        style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: COLORS.panelAlt }}
+      >
+        <text
+          content={translateUi("Estado")}
+          wrapMode="none"
+          style={{ width: LIVE_DIFF_STATUS_WIDTH, fg: COLORS.muted }}
+        />
+        <text
+          content={translateUi("Caminho")}
+          wrapMode="none"
+          style={{ width: pathWidth, fg: COLORS.muted }}
+        />
+        <text
+          content={translateUi("Tempo")}
+          wrapMode="none"
+          style={{ width: LIVE_DIFF_TIME_WIDTH, fg: COLORS.muted }}
+        />
+        <text
+          content={rightAligned("+", LIVE_DIFF_CHANGE_WIDTH)}
+          style={{ width: LIVE_DIFF_CHANGE_WIDTH, fg: COLORS.graphAccent }}
+        />
+        <text
+          content={rightAligned("−", LIVE_DIFF_CHANGE_WIDTH)}
+          style={{ width: LIVE_DIFF_CHANGE_WIDTH, fg: COLORS.danger }}
+        />
+      </box>
+      <scrollbox
+        ref={fileList}
+        id={`live-diff-files-${sessionId}`}
+        scrollY
+        viewportCulling
+        onSizeChange={function (this: BoxRenderable) {
+          setListWidth((current) => (current === this.width ? current : this.width))
+        }}
+        style={{ flexGrow: 1, minHeight: 1 }}
+      >
+        {files.map((file, index) => {
+          const isSelected = selected && fileKey(file) === fileKey(selected)
+          const status = liveDiffFileStatus(file)
+          const normalBackground = isSelected ? COLORS.panelRaised : COLORS.canvas
+          const highlightProgress = animationEnabled
+            ? liveDiffRowHighlightProgress(file.listHighlightAt, renderedAnimationNow)
+            : 0
+          return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: file rows are also selectable from the keyboard with J/K.
+            <box
+              key={fileKey(file)}
+              id={`live-diff-file-${sessionId}-${index}`}
+              focusable
+              onMouseDown={(event) => {
+                onSelect(file)
+                onFocus(event)
+              }}
+              style={{
+                height: 1,
+                flexShrink: 0,
+                flexDirection: "row",
+                backgroundColor: liveDiffRowBackground(
+                  normalBackground,
+                  COLORS.diffRecentBg,
+                  highlightProgress,
+                ),
+              }}
+            >
+              <box
+                style={{
+                  width: LIVE_DIFF_STATUS_WIDTH,
+                  height: 1,
+                  flexShrink: 0,
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                {status === "New" && sweepFrame !== null && (
+                  <box
+                    position="absolute"
+                    top={0}
+                    left={Math.max(0, sweepFrame - 2)}
+                    width={2}
+                    height={1}
+                    backgroundColor={COLORS.gitMerged}
+                    opacity={0.2}
+                  />
+                )}
+                <text
+                  content={translateUi(status)}
+                  wrapMode="none"
+                  style={{
+                    width: LIVE_DIFF_STATUS_WIDTH,
+                    fg: statusColor(status),
+                  }}
+                />
+              </box>
+              <text
+                content={displayPaths[index] ?? ""}
+                wrapMode="none"
+                style={{ width: pathWidth, fg: isSelected ? COLORS.focus : COLORS.text }}
+              />
+              <text
+                content={rightAligned(
+                  liveDiffElapsedLabel(file.changedAt, now),
+                  LIVE_DIFF_TIME_WIDTH,
+                )}
+                wrapMode="none"
+                style={{ width: LIVE_DIFF_TIME_WIDTH, fg: COLORS.graphAccent }}
+              />
+              <text
+                content={rightAligned(`+${file.additions ?? "—"}`, LIVE_DIFF_CHANGE_WIDTH)}
+                wrapMode="none"
+                style={{ width: LIVE_DIFF_CHANGE_WIDTH, fg: COLORS.graphAccent }}
+              />
+              <text
+                content={rightAligned(`−${file.deletions ?? "—"}`, LIVE_DIFF_CHANGE_WIDTH)}
+                wrapMode="none"
+                style={{ width: LIVE_DIFF_CHANGE_WIDTH, fg: COLORS.danger }}
+              />
+            </box>
+          )
+        })}
+        {!files.length && (
+          <text
+            content={error || translateUi("Nenhum arquivo alterado")}
+            style={{ fg: COLORS.muted }}
+          />
+        )}
+      </scrollbox>
+    </box>
+  )
+}

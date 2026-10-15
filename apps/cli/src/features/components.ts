@@ -16,10 +16,10 @@ export function GitViewer(props: ComponentProps<FeatureModules["git"]["GitViewer
   const Component = loadedFeature("git")?.GitViewer
   return Component ? createElement(Component, props) : null
 }
-export function GitConfigurationModal(
-  props: ComponentProps<FeatureModules["git"]["GitConfigurationModal"]>,
+export function GitConfigurationView(
+  props: ComponentProps<FeatureModules["git"]["GitConfigurationView"]>,
 ) {
-  const Component = loadedFeature("git")?.GitConfigurationModal
+  const Component = loadedFeature("git")?.GitConfigurationView
   return Component ? createElement(Component, props) : null
 }
 export function Runner(props: ComponentProps<FeatureModules["runner"]["Runner"]>) {
@@ -30,8 +30,14 @@ export function HttpClient(props: ComponentProps<FeatureModules["http"]["HttpCli
   const Component = loadedFeature("http")?.HttpClient
   return Component ? createElement(Component, props) : null
 }
-export function FreeTerminal(props: ComponentProps<FeatureModules["terminal"]["FreeTerminal"]>) {
-  const Component = loadedFeature("terminal")?.FreeTerminal
+export function TermAgents(props: ComponentProps<FeatureModules["terminal"]["TermAgents"]>) {
+  const Component = loadedFeature("terminal")?.TermAgents
+  return Component ? createElement(Component, props) : null
+}
+export function PinnedTerminalSidebar(
+  props: ComponentProps<FeatureModules["terminal"]["PinnedTerminalSidebar"]>,
+) {
+  const Component = loadedFeature("terminal")?.PinnedTerminalSidebar
   return Component ? createElement(Component, props) : null
 }
 export const listDatabaseQueryHistory: FeatureModules["database"]["listDatabaseQueryHistory"] = (
@@ -39,3 +45,11 @@ export const listDatabaseQueryHistory: FeatureModules["database"]["listDatabaseQ
 ) => requireFeature("database").listDatabaseQueryHistory(...args)
 export const databaseQueryHistoryCanRerun: FeatureModules["database"]["databaseQueryHistoryCanRerun"] =
   (...args) => requireFeature("database").databaseQueryHistoryCanRerun(...args)
+export const testRemoteCodexConnection: FeatureModules["terminal"]["testRemoteCodexConnection"] = (
+  ...args
+) => requireFeature("terminal").testRemoteCodexConnection(...args)
+export const checkRemoteServerReadiness: FeatureModules["terminal"]["checkRemoteServerReadiness"] =
+  (...args) => requireFeature("terminal").checkRemoteServerReadiness(...args)
+export const listSshConfigProfiles: FeatureModules["terminal"]["listSshConfigProfiles"] = (
+  ...args
+) => requireFeature("terminal").listSshConfigProfiles(...args)

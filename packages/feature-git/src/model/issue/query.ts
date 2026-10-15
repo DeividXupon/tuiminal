@@ -5,6 +5,7 @@ export { normalizeGitHubSearchQuery as normalizeIssueQuery } from "../search-que
 
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const ACCOUNT_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+const identityKeyCache = new WeakMap<IssueIdentity, IssueIdentity & { key: string }>()
 
 export type EffectiveIssueQuery = {
   repository: string | null
@@ -39,8 +40,21 @@ export function validateIssueIdentity(identity: IssueIdentity) {
 }
 
 export function issueIdentityKey(identity: IssueIdentity) {
+  const cached = identityKeyCache.get(identity)
+  if (
+    cached?.host === identity.host &&
+    cached.nodeId === identity.nodeId &&
+    cached.owner === identity.owner &&
+    cached.repository === identity.repository &&
+    cached.number === identity.number &&
+    cached.url === identity.url
+  ) {
+    return cached.key
+  }
   if (!validateIssueIdentity(identity)) throw new Error("Invalid issue identity")
-  return `${identity.host.toLowerCase()}:${identity.nodeId}`
+  const key = `${identity.host.toLowerCase()}:${identity.nodeId}`
+  identityKeyCache.set(identity, { ...identity, key })
+  return key
 }
 
 export function buildEffectiveIssueQueries({

@@ -16,6 +16,7 @@ export type PullRequestNavigationAction =
 export type PullRequestWorkspaceAction =
   | PullRequestNavigationAction
   | { type: "edit-query" }
+  | { type: "create-pr" }
   | { type: "refresh" }
   | { type: "load-more" }
   | { type: "load-preview-more" }
@@ -173,6 +174,7 @@ export function pullRequestWorkspaceAction({
   option?: boolean
   meta?: boolean
 }): PullRequestWorkspaceAction | null {
+  if (ctrl && keyName === "n") return { type: "create-pr" }
   const configuration = pullRequestConfigurationAction({
     keyName,
     shift,

@@ -1,6 +1,5 @@
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   DEFAULT_SENSITIVE_TERMS,
@@ -10,6 +9,7 @@ import {
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 
 type SensitiveTermsModalProps = {
   open: boolean
@@ -105,151 +105,123 @@ export function SensitiveTermsModal({ open, terms, onClose, onSave }: SensitiveT
   const empty = parsedCount === 0
 
   return (
-    <>
-      <Button
-        id="database-sensitive-terms-backdrop"
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={930}
-        backgroundColor="#030509"
-        opacity={0.9}
-      />
+    <ModalSurface
+      id="database-sensitive-terms-dialog"
+      layerId="database-sensitive-terms-modal"
+      layerFocusable
+      dialogFocusable={false}
+      width={width}
+      height={height}
+      zIndex={930}
+      borderColor={COLORS.warning}
+      backdropOpacity={0.9}
+      horizontalPadding={compact ? 1 : 2}
+      onBackdropPress={onClose}
+    >
       <box
-        id="database-sensitive-terms-modal"
-        focusable
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 931,
-          alignItems: "center",
-          justifyContent: "center",
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
       >
-        <box
-          style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.warning,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: compact ? 1 : 2,
-            paddingRight: compact ? 1 : 2,
-          }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text content="◆ TERMOS SENSÍVEIS" style={{ fg: COLORS.warning }} />
-            <InlineButton label={compact ? "[Esc]" : "[Esc] Cancelar"} onPress={onClose} />
-          </box>
-
-          <text
-            content={translateUi("Informe fragmentos encontrados no nome das colunas.")}
-            style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
-          />
-          {compact ? null : (
-            <text
-              content={translateUi(
-                "Separe por vírgula ou linha · maiúsculas e separadores são ignorados.",
-              )}
-              style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-            />
-          )}
-
-          <box
-            style={{
-              height: editorHeight,
-              flexShrink: 0,
-              border: true,
-              borderColor: error ? COLORS.danger : COLORS.border,
-              backgroundColor: COLORS.panel,
-            }}
-          >
-            <textarea
-              ref={editorRef}
-              id="database-sensitive-terms-editor"
-              initialValue={terms.join(", ")}
-              placeholder="password, token, cpf, email"
-              width="100%"
-              height="100%"
-              onMouseDown={() => editorRef.current?.focus()}
-              onContentChange={() => {
-                setDraft(editorRef.current?.plainText ?? "")
-                setError("")
-              }}
-              style={{
-                backgroundColor: COLORS.panel,
-                focusedBackgroundColor: COLORS.panel,
-                textColor: COLORS.text,
-                focusedTextColor: COLORS.text,
-                cursorColor: COLORS.warning,
-                placeholderColor: COLORS.muted,
-                paddingLeft: 1,
-                paddingRight: 1,
-              }}
-            />
-          </box>
-
-          <box
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
-          >
-            <text
-              content={
-                error ||
-                (empty
-                  ? "⚠ Lista vazia: mascaramento automático desativado."
-                  : `${parsedCount ?? "?"}/${SENSITIVE_TERMS_LIMIT} termos`)
-              }
-              style={{ fg: error || empty ? COLORS.danger : COLORS.muted }}
-            />
-          </box>
-
-          <box
-            style={{
-              height: 1,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "flex-end",
-            }}
-          >
-            <InlineButton
-              label={compact ? "[Ctrl+L]" : "[Ctrl+L] Limpar"}
-              accent={COLORS.danger}
-              onPress={clearDraft}
-            />
-            <InlineButton
-              label={compact ? "[Ctrl+R]" : "[Ctrl+R] Restaurar padrão"}
-              accent={COLORS.muted}
-              onPress={restoreDraft}
-            />
-            <InlineButton
-              label={compact ? "[Ctrl+S]" : "[Ctrl+S] Salvar"}
-              accent={COLORS.warning}
-              onPress={save}
-            />
-          </box>
-        </box>
+        <text content="◆ TERMOS SENSÍVEIS" style={{ fg: COLORS.warning }} />
+        <InlineButton label={compact ? "[Esc]" : "[Esc] Cancelar"} onPress={onClose} />
       </box>
-    </>
+
+      <text
+        content={translateUi("Informe fragmentos encontrados no nome das colunas.")}
+        style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
+      />
+      {compact ? null : (
+        <text
+          content={translateUi(
+            "Separe por vírgula ou linha · maiúsculas e separadores são ignorados.",
+          )}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+      )}
+
+      <box
+        style={{
+          height: editorHeight,
+          flexShrink: 0,
+          border: true,
+          borderColor: error ? COLORS.danger : COLORS.border,
+          backgroundColor: COLORS.panel,
+        }}
+      >
+        <textarea
+          ref={editorRef}
+          id="database-sensitive-terms-editor"
+          initialValue={terms.join(", ")}
+          placeholder="password, token, cpf, email"
+          width="100%"
+          height="100%"
+          onMouseDown={() => editorRef.current?.focus()}
+          onContentChange={() => {
+            setDraft(editorRef.current?.plainText ?? "")
+            setError("")
+          }}
+          style={{
+            backgroundColor: COLORS.panel,
+            focusedBackgroundColor: COLORS.panel,
+            textColor: COLORS.text,
+            focusedTextColor: COLORS.text,
+            cursorColor: COLORS.warning,
+            placeholderColor: COLORS.muted,
+            paddingLeft: 1,
+            paddingRight: 1,
+          }}
+        />
+      </box>
+
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <text
+          content={
+            error ||
+            (empty
+              ? "⚠ Lista vazia: mascaramento automático desativado."
+              : `${parsedCount ?? "?"}/${SENSITIVE_TERMS_LIMIT} termos`)
+          }
+          style={{ fg: error || empty ? COLORS.danger : COLORS.muted }}
+        />
+      </box>
+
+      <box
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        }}
+      >
+        <InlineButton
+          label={compact ? "[Ctrl+L]" : "[Ctrl+L] Limpar"}
+          accent={COLORS.danger}
+          onPress={clearDraft}
+        />
+        <InlineButton
+          label={compact ? "[Ctrl+R]" : "[Ctrl+R] Restaurar padrão"}
+          accent={COLORS.muted}
+          onPress={restoreDraft}
+        />
+        <InlineButton
+          label={compact ? "[Ctrl+S]" : "[Ctrl+S] Salvar"}
+          accent={COLORS.warning}
+          onPress={save}
+        />
+      </box>
+    </ModalSurface>
   )
 }

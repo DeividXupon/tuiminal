@@ -13,6 +13,9 @@ import { searchPullRequestsPage } from "./github/search"
 import type { GhTransportOptions } from "./github/transport"
 import { cachedSectionPageDepth } from "./page-depth"
 import { resolveGitProjectContext } from "./git"
+import { mapWithConcurrency } from "./map-concurrently"
+import { rememberRemoteCacheEntry } from "./remote-cache"
+import { aggregateRemotePages, mergeRemoteItems } from "./remote-session-items"
 
 const pullRequestSessionDisposers = new Set<() => void | Promise<void>>()
 const PULL_REQUEST_SECTION_CACHE_LIMIT = 64
@@ -65,41 +68,8 @@ type PullRequestCacheEntry = Extract<PullRequestSessionResult, { status: "ready"
   pageDepth: number
 }
 
-async function mapWithConcurrency<T, R>(
-  values: readonly T[],
-  concurrency: number,
-  operation: (value: T) => Promise<R>,
-) {
-  const results = new Array<R>(values.length)
-  let cursor = 0
-  async function worker() {
-    while (cursor < values.length) {
-      const index = cursor
-      cursor += 1
-      const value = values[index]
-      if (value !== undefined) results[index] = await operation(value)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()))
-  return results
-}
-
 function aggregatePages(pages: Awaited<ReturnType<typeof searchPullRequestsPage>>[]) {
-  const items = new Map<string, PullRequestSummary>()
-  let totalCount = 0
-  let totalKnown = true
-  let partial = false
-  for (const page of pages) {
-    partial ||= page.partial || page.hasNextPage
-    if (page.totalCount === null) totalKnown = false
-    else totalCount += page.totalCount
-    for (const item of page.items) items.set(pullRequestIdentityKey(item.identity), item)
-  }
-  return {
-    items: [...items.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    totalCount: totalKnown ? totalCount : null,
-    partial,
-  }
+  return aggregateRemotePages(pages, (item) => pullRequestIdentityKey(item.identity))
 }
 
 function cacheKey({
@@ -131,9 +101,7 @@ export function mergePullRequestItems(
   current: readonly PullRequestSummary[],
   additions: readonly PullRequestSummary[],
 ) {
-  const items = new Map(current.map((item) => [pullRequestIdentityKey(item.identity), item]))
-  for (const item of additions) items.set(pullRequestIdentityKey(item.identity), item)
-  return [...items.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  return mergeRemoteItems(current, additions, (item) => pullRequestIdentityKey(item.identity))
 }
 
 export class PullRequestSession {
@@ -154,13 +122,7 @@ export class PullRequestSession {
   }
 
   private remember(key: string, entry: PullRequestCacheEntry) {
-    this.cache.delete(key)
-    this.cache.set(key, entry)
-    while (this.cache.size > PULL_REQUEST_SECTION_CACHE_LIMIT) {
-      const oldest = this.cache.keys().next().value
-      if (typeof oldest !== "string") break
-      this.cache.delete(oldest)
-    }
+    rememberRemoteCacheEntry(this.cache, key, entry, PULL_REQUEST_SECTION_CACHE_LIMIT)
   }
 
   async loadSection(
@@ -346,6 +308,7 @@ export class PullRequestSession {
     sectionIds: readonly string[],
     activeSectionId: string | undefined,
     queryOverride: string | null,
+    refreshAccountScope = true,
   ): Promise<PullRequestSessionResult> {
     let activeResult: PullRequestSessionResult | null = null
     const sectionDepths = new Map(
@@ -358,7 +321,13 @@ export class PullRequestSession {
       ? cachedSectionPageDepth(this.cache.values(), root, activeSectionId, queryOverride)
       : 1
     for (const [index, sectionId] of sectionIds.entries()) {
-      let result = await this.loadSection(root, sectionId, null, true, index === 0)
+      let result = await this.loadSection(
+        root,
+        sectionId,
+        null,
+        true,
+        refreshAccountScope && index === 0,
+      )
       for (
         let page = 1;
         page < (sectionDepths.get(sectionId) ?? 1) &&
@@ -382,10 +351,16 @@ export class PullRequestSession {
       return result
     }
     return (
-      activeResult ?? this.loadSection(root, activeSectionId, null, true, sectionIds.length === 0)
+      activeResult ??
+      this.loadSection(
+        root,
+        activeSectionId,
+        null,
+        true,
+        refreshAccountScope && sectionIds.length === 0,
+      )
     )
   }
-
   cancelActiveLoad() {
     this.activeController?.abort()
     this.activeController = null

@@ -207,12 +207,12 @@ export const FEATURE_MESSAGES = [
     "도구 설치 취소됨",
   ],
   [
-    "Não foi possível preparar a ferramenta. No desenvolvimento, execute bun run build:features.",
-    "Unable to prepare this feature. In development, run bun run build:features.",
-    "No se pudo preparar la herramienta. En desarrollo, ejecuta bun run build:features.",
-    "ツールを準備できません。開発環境では bun run build:features を実行してください。",
-    "无法准备此工具。在开发环境中运行 bun run build:features。",
-    "도구를 준비할 수 없습니다. 개발 환경에서 bun run build:features를 실행하세요.",
+    "Não foi possível carregar a ferramenta. Reinicie o Tuiminal e tente novamente.",
+    "Unable to load this tool. Restart Tuiminal and try again.",
+    "No se pudo cargar la herramienta. Reinicia Tuiminal e inténtalo de nuevo.",
+    "ツールを読み込めません。Tuiminalを再起動して、もう一度お試しください。",
+    "无法加载此工具。请重启 Tuiminal 后重试。",
+    "도구를 불러올 수 없습니다. Tuiminal을 다시 시작한 후 다시 시도하세요.",
   ],
   [
     "A ferramenta falhou na verificação. Instale-a novamente.",

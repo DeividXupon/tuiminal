@@ -20,6 +20,8 @@ import type { GhTransportOptions } from "../../services/github/transport"
 import { loadIssueConfig, updateIssueProfile } from "../../storage/issue/config"
 import { loadPullRequestConfig, updatePullRequestProfile } from "../../storage/pr/config"
 import { loadGitDiffsConfig, updateGitDiffsTarget } from "../../storage/local/config"
+import { loadGitBrowserConfig, saveGitBrowserConfig } from "../../storage/browser/config"
+import type { GitBrowser } from "../../model/browser"
 
 export type GitConfigurationChange = "local" | "remote"
 
@@ -39,6 +41,8 @@ export type GitConfigurationReadyState = {
   availableLocalProjects: LocalGitProject[]
   localProjectsLoading: boolean
   localProjectError: string
+  browser: GitBrowser
+  browserError: string
 }
 
 export type GitConfigurationState =
@@ -75,6 +79,7 @@ async function loadInitialGitConfiguration(
   const pullRequests = loadPullRequestConfig()
   const issues = loadIssueConfig()
   const local = loadGitDiffsConfig()
+  const browser = loadGitBrowserConfig()
   if (pullRequests.error || issues.error) {
     throw new Error(pullRequests.error ?? issues.error ?? "Invalid Git configuration")
   }
@@ -123,6 +128,8 @@ async function loadInitialGitConfiguration(
     availableLocalProjects: localTarget.isRepository ? [localTarget] : [],
     localProjectsLoading: true,
     localProjectError,
+    browser: browser.browser,
+    browserError: browser.error ?? "",
   }
 }
 
@@ -347,6 +354,21 @@ export function useGitConfiguration(
     }
   }
 
+  const saveBrowser = (browser: GitBrowser) => {
+    if (state.status !== "ready") return false
+    try {
+      saveGitBrowserConfig(browser)
+      setState((current) =>
+        current.status === "ready" ? { ...current, browser, browserError: "" } : current,
+      )
+      setNotice(translateUi("Navegador do Git salvo."))
+      return true
+    } catch (error) {
+      setNotice(failureMessage(error))
+      return false
+    }
+  }
+
   return {
     state,
     notice,
@@ -356,5 +378,6 @@ export function useGitConfiguration(
     saveRepositories,
     saveLocalProject,
     saveLocalBranch,
+    saveBrowser,
   }
 }

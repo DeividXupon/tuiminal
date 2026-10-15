@@ -10,6 +10,7 @@ import {
 import { saveInboxSavedIds } from "../../storage/inbox/state"
 import type { InboxDestructiveAction } from "./InboxActionModal"
 import type { InboxDashboardState } from "./useInboxDashboard"
+import type { GitBrowserOpener } from "../browser/useGitBrowser"
 
 export function useInboxActions({
   state,
@@ -17,12 +18,14 @@ export function useInboxActions({
   savedIds,
   setSavedIds,
   updateItems,
+  onOpenBrowser,
 }: {
   state: InboxDashboardState
   selected: InboxNotification | null
   savedIds: Set<string>
   setSavedIds: (savedIds: Set<string>) => void
   updateItems: (update: (items: InboxNotification[]) => InboxNotification[]) => void
+  onOpenBrowser: GitBrowserOpener
 }) {
   const [notice, setNotice] = useState("")
   const [pendingAction, setPendingAction] = useState<InboxDestructiveAction | null>(null)
@@ -57,7 +60,9 @@ export function useInboxActions({
     if (!selected) return
     if (state.status === "demo") return setNotice(translateUi("DEMO · nenhuma página foi aberta."))
     try {
-      await openNotificationInBrowser(selected, host, transport)
+      await onOpenBrowser(selected.url, host, () =>
+        openNotificationInBrowser(selected, host, transport),
+      )
       setNotice(translateUi("Notificação aberta no navegador."))
     } catch (error) {
       setNotice(

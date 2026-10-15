@@ -46,7 +46,7 @@ could produce different hashes for the same release URLs. Each runner:
 6. Installs all five pinned payloads over loopback, exercises `--version`, `--help`,
    an HTTP request, and SQLite worker IPC through the minimal executable. Opens and
    closes each downloaded tool through native terminal input in an empty disposable
-   project. Source tests also exercise the default and custom Free Terminal shell
+   project. Source tests also exercise the default and custom Term Agents shell
    with real input, output, and child retirement on the native host.
 7. Removes the temporary installation.
 

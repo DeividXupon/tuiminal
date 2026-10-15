@@ -3,11 +3,14 @@ import { truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { HTTP_DOCUMENT_LIMIT } from "../model/workspace"
 import type { HttpDocumentState } from "../model/types"
+import type { HttpSourceMode } from "../model/source-mode"
 
 export function HttpDocumentBar({
   documents,
   activeDocumentId,
   compact,
+  sourceMode,
+  onChooseSource,
   onSelect,
   onClose,
   onAdd,
@@ -15,6 +18,8 @@ export function HttpDocumentBar({
   documents: HttpDocumentState[]
   activeDocumentId: string
   compact: boolean
+  sourceMode: HttpSourceMode
+  onChooseSource: () => void
   onSelect: (documentId: string) => void
   onClose: (documentId: string) => void
   onAdd: () => void
@@ -30,6 +35,12 @@ export function HttpDocumentBar({
         overflow: "hidden",
       }}
     >
+      <InlineButton
+        id="http-change-source"
+        label={compact ? "[Ctrl+G]" : `[Ctrl+G] ${sourceMode === "postman" ? "Postman" : "Local"}`}
+        accent={COLORS.http}
+        onPress={onChooseSource}
+      />
       {documents.map((document) => {
         const active = document.request.id === activeDocumentId
         const dirty = document.revision !== document.savedRevision

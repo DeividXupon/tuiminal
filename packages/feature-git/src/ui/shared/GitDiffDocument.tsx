@@ -1,10 +1,9 @@
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { NativeDiff } from "@xupon/tuiminal-core/ui/NativeDiff"
 import type { DiffDocument, DiffLayout } from "../../model/view"
-import { DIFF_SYNTAX_STYLE } from "../../rendering/constants"
 import { documentLineCount } from "../../rendering/diff"
 import { InlineDiffLine } from "./GitInlineDiffLine"
-import { fitGitDiffCodeCells } from "../../rendering/diff-scroll"
 
 export function GitDiffDocument({
   document,
@@ -28,26 +27,11 @@ export function GitDiffDocument({
           <InlineDiffLine key={row.key} row={row} filetype={document.filetype} />
         ))
       ) : document.unifiedLineCount ? (
-        <diff
-          renderBefore={function () {
-            fitGitDiffCodeCells(this)
-          }}
-          diff={document.source}
+        <NativeDiff
+          patch={document.source}
           filetype={document.filetype}
-          syntaxStyle={DIFF_SYNTAX_STYLE}
           view={layout === "split" ? "split" : "unified"}
-          wrapMode="none"
-          showLineNumbers
-          lineNumberFg={COLORS.muted}
-          lineNumberBg={COLORS.diffGutterBg}
-          addedBg={COLORS.diffAddedBg}
-          removedBg={COLORS.diffRemovedBg}
-          contextBg={COLORS.panel}
-          addedSignColor={COLORS.success}
-          removedSignColor={COLORS.danger}
-          addedLineNumberBg={COLORS.diffAddedBg}
-          removedLineNumberBg={COLORS.diffRemovedBg}
-          style={{ width: "100%", height, flexShrink: 0 }}
+          height={height}
         />
       ) : (
         <text

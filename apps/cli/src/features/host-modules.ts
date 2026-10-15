@@ -30,11 +30,21 @@ import * as shared26 from "@xupon/tuiminal-core/ui/directional-shortcut"
 import * as shared27 from "@xupon/tuiminal-core/ui/selectMouse"
 import * as shared28 from "@xupon/tuiminal-core/ui/syntax-style"
 import * as shared29 from "@xupon/tuiminal-core/runtime/feature-host"
+import * as shared30 from "@xupon/tuiminal-core/ui/ModalSurface"
+import * as shared31 from "@xupon/tuiminal-core/ui/NativeDiff"
+import * as shared32 from "@xupon/tuiminal-core/ui/text-shimmer"
 
-export function prepareFeatureHost(version: string, sqliteWorkerCommand: () => string[]) {
+export function prepareFeatureHost(
+  version: string,
+  sqliteWorkerCommand: () => string[],
+  terminalSidebarCommand?: (args: string[]) => string[],
+  terminalProjectSyncWorkerCommand?: () => string[],
+) {
   registerFeatureHost({
     version,
     sqliteWorkerCommand,
+    ...(terminalSidebarCommand ? { terminalSidebarCommand } : {}),
+    ...(terminalProjectSyncWorkerCommand ? { terminalProjectSyncWorkerCommand } : {}),
     modules: {
       react: shared0,
       "react/jsx-runtime": shared1,
@@ -66,6 +76,9 @@ export function prepareFeatureHost(version: string, sqliteWorkerCommand: () => s
       "@xupon/tuiminal-core/ui/selectMouse": shared27,
       "@xupon/tuiminal-core/ui/syntax-style": shared28,
       "@xupon/tuiminal-core/runtime/feature-host": shared29,
+      "@xupon/tuiminal-core/ui/ModalSurface": shared30,
+      "@xupon/tuiminal-core/ui/NativeDiff": shared31,
+      "@xupon/tuiminal-core/ui/text-shimmer": shared32,
     },
   })
 }

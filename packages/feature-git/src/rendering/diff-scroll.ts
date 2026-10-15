@@ -4,9 +4,8 @@ import {
   type Renderable,
   type ScrollBoxRenderable,
 } from "@opentui/core"
+import { fitNativeDiffCodeCells } from "@xupon/tuiminal-core/ui/NativeDiff"
 import { gitDiffHorizontalScrollDelta } from "../model/base-navigation"
-
-const fittedCells = new WeakSet<CodeRenderable>()
 
 function codeCells(root: Renderable): CodeRenderable[] {
   const result: CodeRenderable[] = []
@@ -21,22 +20,7 @@ function codeCells(root: Renderable): CodeRenderable[] {
 }
 
 export function fitGitDiffCodeCells(root: Renderable | null) {
-  if (!root) return
-  for (const cell of codeCells(root)) {
-    const parent = cell.parent
-    if (!parent) continue
-    if (!fittedCells.has(cell)) {
-      // Keep the native gutter fixed; percentage/flex sizing can clip the last cell.
-      cell.flexGrow = 0
-      cell.flexShrink = 0
-      fittedCells.add(cell)
-    }
-    const gutter = parent
-      .getChildren()
-      .reduce((width, sibling) => width + (sibling === cell ? 0 : sibling.width), 0)
-    cell.width = Math.max(1, parent.width - gutter)
-    cell.scrollX = Math.min(cell.scrollX, cell.maxScrollX)
-  }
+  fitNativeDiffCodeCells(root)
 }
 
 function applyOffset(cells: CodeRenderable[], offset: number) {

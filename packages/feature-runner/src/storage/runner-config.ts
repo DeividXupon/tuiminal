@@ -3,43 +3,14 @@ import type {
   RunnerHealthCheck,
   RunnerConfiguredCommand,
   RunnerEnvironmentProfile,
-  RunnerPersistedExecution,
-  RunnerSessionState,
 } from "../model/config"
 export type * from "../model/config"
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { parse as parseYaml } from "yaml"
 import { definedProperties } from "@xupon/tuiminal-core/data/defined-properties"
-import { RunnerSettingsFileState } from "./runner-settings-file"
-
-type RunnerSettings = {
-  version: 2
-  savedCommands: Record<string, RunnerConfiguredCommand[]>
-  sessions: Record<string, RunnerSessionState>
-  history: RunnerPersistedExecution[]
-}
-
-const configRoot = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config")
-export const RUNNER_SETTINGS_PATH = join(configRoot, "tuiminal", "runner.json")
-
-const EMPTY_SETTINGS: RunnerSettings = {
-  version: 2,
-  savedCommands: {},
-  sessions: {},
-  history: [],
-}
-const runnerSettingsFile = new RunnerSettingsFileState<RunnerSettings>()
-
-function emptyRunnerSession(): RunnerSessionState {
-  return {
-    openedProjects: [],
-    activeProject: null,
-    viewMode: "single",
-    environmentProfiles: {},
-  }
-}
+import { loadRunnerDefinitions, canonicalRunnerRoot } from "./runner-settings"
+export * from "./runner-settings"
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -53,23 +24,6 @@ function stringValue(value: unknown) {
 
 function booleanValue(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback
-}
-
-function runnerSessionValue(value: unknown): RunnerSessionState {
-  const session = objectValue(value)
-  if (!session) return emptyRunnerSession()
-  return {
-    openedProjects: Array.isArray(session.openedProjects)
-      ? session.openedProjects
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => resolve(item))
-          .slice(-4)
-      : [],
-    activeProject:
-      typeof session.activeProject === "string" ? resolve(session.activeProject) : null,
-    viewMode: session.viewMode === "multi" ? "multi" : "single",
-    environmentProfiles: (objectValue(session.environmentProfiles) as Record<string, string>) ?? {},
-  }
 }
 
 function numberValue(value: unknown, fallback: number, minimum: number, maximum: number) {
@@ -169,6 +123,8 @@ function configuredCommand(
     command: sourceCommand,
     description: stringValue(definition?.description) ?? `Comando importado de ${options.source}`,
     source: options.source,
+    dependsOn: definition?.dependsOn as RunnerConfiguredCommand["dependsOn"],
+    profile: profileName ? `config:${profileName}` : undefined,
     cwd: resolveInside(options.root, stringValue(definition?.cwd)),
     env: {
       ...(profile?.env ?? {}),
@@ -254,147 +210,18 @@ export function parseProcfile(source: string, root: string) {
   })
 }
 
-function decodeRunnerSettings(content: string): RunnerSettings {
-  const source = objectValue(JSON.parse(content))
-  if (!source) throw new Error("A configuração do Runner não é um objeto JSON.")
-  const storedSessions = objectValue(source.sessions) ?? {}
-  const sessions = Object.fromEntries(
-    Object.entries(storedSessions).map(([root, session]) => [
-      resolve(root),
-      runnerSessionValue(session),
-    ]),
-  )
-  const legacySession = runnerSessionValue(source.session)
-  const legacyScope = legacySession.openedProjects[0]
-  if (legacyScope && !sessions[legacyScope]) sessions[legacyScope] = legacySession
-  return {
-    version: 2,
-    savedCommands: (objectValue(source.savedCommands) as RunnerSettings["savedCommands"]) ?? {},
-    sessions,
-    history: Array.isArray(source.history)
-      ? source.history
-          .filter((item): item is RunnerPersistedExecution => Boolean(objectValue(item)))
-          .slice(0, 30)
-      : [],
-  }
-}
-
-function readSettingsFile(path: string) {
-  return runnerSettingsFile.read(path, decodeRunnerSettings, EMPTY_SETTINGS)
-}
-
-function writeSettingsFile(settings: RunnerSettings, path: string) {
-  runnerSettingsFile.write(path, settings)
-}
-
-function mutateSettings(callback: (settings: RunnerSettings) => void, path = RUNNER_SETTINGS_PATH) {
-  const settings = readSettingsFile(path)
-  callback(settings)
-  writeSettingsFile(settings, path)
-  return settings
-}
-
-export function loadRunnerSession(scopeRoot: string, path = RUNNER_SETTINGS_PATH) {
-  return readSettingsFile(path).sessions[resolve(scopeRoot)] ?? emptyRunnerSession()
-}
-
-export function loadRunnerStartupState(scopeRoot: string, path = RUNNER_SETTINGS_PATH) {
-  const settings = readSettingsFile(path)
-  return {
-    session: settings.sessions[resolve(scopeRoot)] ?? emptyRunnerSession(),
-    history: settings.history,
-  }
-}
-
-export function saveRunnerSession(
-  scopeRoot: string,
-  session: RunnerSessionState,
-  path = RUNNER_SETTINGS_PATH,
-) {
-  mutateSettings((settings) => {
-    settings.sessions[resolve(scopeRoot)] = {
-      openedProjects: [...new Set(session.openedProjects)].slice(-4),
-      activeProject: session.activeProject,
-      viewMode: session.viewMode,
-      environmentProfiles: session.environmentProfiles,
-    }
-  }, path)
-}
-
-export function listSavedRunnerCommands(root: string, path = RUNNER_SETTINGS_PATH) {
-  return readSettingsFile(path).savedCommands[resolve(root)] ?? []
-}
-
-export function saveRunnerCommand(
-  root: string,
-  input: { label: string; command: string; interactive?: boolean },
-  path = RUNNER_SETTINGS_PATH,
-) {
-  const projectRoot = resolve(root)
-  const normalizedLabel = input.label.trim().slice(0, 80)
-  const normalizedCommand = input.command.trim()
-  if (!normalizedLabel || !normalizedCommand) {
-    throw new Error("Informe um nome e um comando para salvar.")
-  }
-  const id = `saved:${Buffer.from(normalizedLabel.toLocaleLowerCase())
-    .toString("base64url")
-    .slice(0, 80)}`
-  const saved: RunnerConfiguredCommand = {
-    id,
-    label: normalizedLabel,
-    command: normalizedCommand,
-    description: "Comando salvo neste projeto",
-    source: "saved",
-    interactive: Boolean(input.interactive),
-    autostart: false,
-    restartPolicy: "never",
-    restartDelayMs: 1_000,
-    maxRestarts: 5,
-    persistLogs: false,
-  }
-  mutateSettings((settings) => {
-    const current = settings.savedCommands[projectRoot] ?? []
-    settings.savedCommands[projectRoot] = [
-      saved,
-      ...current.filter((command) => command.id !== id),
-    ].slice(0, 50)
-  }, path)
-  return saved
-}
-
-export function removeSavedRunnerCommand(root: string, id: string, path = RUNNER_SETTINGS_PATH) {
-  const projectRoot = resolve(root)
-  mutateSettings((settings) => {
-    settings.savedCommands[projectRoot] = (settings.savedCommands[projectRoot] ?? []).filter(
-      (command) => command.id !== id,
-    )
-  }, path)
-}
-
-export function normalizeRunnerManualCommand(source: string) {
-  return source.trim()
-}
-
-export function loadRunnerHistory(path = RUNNER_SETTINGS_PATH) {
-  return readSettingsFile(path).history
-}
-
-export function saveRunnerHistoryEntry(
-  execution: RunnerPersistedExecution,
-  path = RUNNER_SETTINGS_PATH,
-) {
-  mutateSettings((settings) => {
-    settings.history = [
-      execution,
-      ...settings.history.filter((item) => item.id !== execution.id),
-    ].slice(0, 30)
-  }, path)
-}
-
 export function loadRunnerProjectConfiguration(root: string) {
-  const projectRoot = resolve(root)
-  const commands: RunnerConfiguredCommand[] = [...listSavedRunnerCommands(projectRoot)]
-  const profiles: RunnerEnvironmentProfile[] = []
+  const projectRoot = canonicalRunnerRoot(root)
+  const local = loadRunnerDefinitions(projectRoot)
+  const commands: RunnerConfiguredCommand[] = local.commands.map((command) => ({
+    ...command,
+    ...(command.cwd ? { cwd: resolve(projectRoot, command.cwd) } : {}),
+    ...(command.envFile ? { envFile: resolve(projectRoot, command.envFile) } : {}),
+  }))
+  const profiles: RunnerEnvironmentProfile[] = local.profiles.map((profile) => ({
+    ...profile,
+    ...(profile.envFile ? { envFile: resolve(projectRoot, profile.envFile) } : {}),
+  }))
   const tuiminalCandidates = [
     join(projectRoot, ".tuiminal", "runner.yaml"),
     join(projectRoot, ".tuiminal", "runner.yml"),
@@ -406,7 +233,9 @@ export function loadRunnerProjectConfiguration(root: string) {
     try {
       const parsed = parseTuiminalRunnerConfig(readFileSync(tuiminalPath, "utf8"), projectRoot)
       commands.push(...parsed.commands)
-      profiles.push(...parsed.profiles)
+      profiles.push(
+        ...parsed.profiles.filter((profile) => !profiles.some((local) => local.id === profile.id)),
+      )
     } catch {
       // Invalid optional configuration must not hide automatically detected commands.
     }
@@ -428,7 +257,7 @@ export function loadRunnerProjectConfiguration(root: string) {
       // Ignore unreadable optional process files.
     }
   }
-  return { commands, profiles }
+  return { commands, profiles, flows: local.flows }
 }
 
 export function discoverRunnerEnvironmentProfiles(

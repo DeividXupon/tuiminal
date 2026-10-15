@@ -2,6 +2,7 @@ import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { IssueIdentity } from "../../model/issue/types"
 import { openIssueInBrowser } from "../../services/github/issue-read-actions"
 import type { IssueDashboardState } from "./useIssueDashboard"
+import type { GitBrowserOpener } from "../browser/useGitBrowser"
 
 const DEMO_AUTH = {
   host: "github.com",
@@ -24,10 +25,16 @@ export function issueError(error: unknown) {
   return error instanceof Error ? error.message : translateUi("A ação falhou")
 }
 
-export function openIssueWithNotice(identity: IssueIdentity, setNotice: (notice: string) => void) {
+export function openIssueWithNotice(
+  identity: IssueIdentity,
+  setNotice: (notice: string) => void,
+  openBrowser: GitBrowserOpener,
+) {
   const executable = process.env.TUIMINAL_GH_EXECUTABLE?.trim()
   setNotice(translateUi("Abrindo issue no navegador…"))
-  void openIssueInBrowser(identity, executable ? { executable } : {})
+  void openBrowser(identity.url, identity.host, () =>
+    openIssueInBrowser(identity, executable ? { executable } : {}),
+  )
     .then(() => setNotice(translateUi("Issue aberta no navegador.")))
     .catch((error) => setNotice(issueError(error)))
 }

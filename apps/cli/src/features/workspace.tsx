@@ -16,7 +16,7 @@ import { FeatureController } from "./controller"
 import { FeatureInstaller } from "./FeatureInstaller"
 import { preferredInstalledFeature, type FeatureId } from "./model"
 import { resolveToolLaunch } from "../tool-catalog"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 
 function useWorkspaceState(createController: () => FeatureController) {
@@ -99,7 +99,7 @@ export function withFeatures(
           <box
             style={{
               flexGrow: 1,
-              backgroundColor: COLORS.canvas,
+              backgroundColor: LAYOUT.workspaceBackground,
               justifyContent: "center",
               alignItems: "center",
             }}

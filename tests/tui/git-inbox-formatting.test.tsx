@@ -1,9 +1,10 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
+import { RGBA } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
-import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import { DEMO_INBOX_NOTIFICATIONS } from "../../packages/feature-git/src/model/inbox/fixtures"
 import { InboxList } from "../../packages/feature-git/src/ui/inbox/InboxList"
 
@@ -88,5 +89,62 @@ test("Inbox invalidates formatting only for changed saved markers, widths and la
   h.reset()
   act(() => updateUiSettings({ palette: "nord" }))
   h.change((current) => ({ ...current }))
+  await tui.renderOnce()
   expect(h.reads()).toBe(0)
+  const mark = tui
+    .captureSpans()
+    .lines.flatMap((line) => line.spans)
+    .find((span) => span.text === "●")
+  expect(mark?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.success).toInts())
+})
+
+test("Inbox keeps unread glyphs and colors PR/Issue states after enrichment", async () => {
+  updateUiSettings({ language: "pt-BR", palette: "prime", colorMode: "dark" })
+  const seed = DEMO_INBOX_NOTIFICATIONS[0]
+  if (!seed) throw new Error("Missing Inbox fixture")
+  const items = [
+    { ...seed, id: "open", repository: "team/open", subjectState: "open" as const },
+    { ...seed, id: "draft", repository: "team/draft", subjectState: "draft" as const },
+    { ...seed, id: "merged", repository: "team/merged", subjectState: "merged" as const },
+    {
+      ...seed,
+      id: "closed",
+      repository: "team/closed",
+      subjectState: "closed" as const,
+      unread: false,
+    },
+    {
+      ...seed,
+      id: "unknown",
+      repository: "team/unknown",
+      subjectType: "Discussion",
+      subjectState: null,
+    },
+  ]
+  tui = await testRender(
+    <InboxList
+      items={items}
+      selectedIndex={0}
+      focused
+      width={100}
+      savedIds={new Set()}
+      loadingMore={false}
+      loadingFrame=""
+      onSelect={() => undefined}
+    />,
+    { width: 100, height: 16 },
+  )
+  await tui.renderOnce()
+  const colors = [COLORS.success, COLORS.muted, COLORS.gitMerged, COLORS.danger, COLORS.muted]
+  for (const [index, item] of items.entries()) {
+    const line = tui.captureSpans().lines.find((row) =>
+      row.spans
+        .map((span) => span.text)
+        .join("")
+        .includes(item.repository),
+    )
+    const marker = line?.spans.find((span) => span.text === (item.unread ? "●" : "○"))
+    expect(marker?.fg.toInts()).toEqual(RGBA.fromHex(colors[index] ?? "#000000").toInts())
+  }
+  expect(tui.captureCharFrame()).toContain("MESCLADO")
 })

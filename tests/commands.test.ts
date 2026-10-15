@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
-  createFreeTerminalCommand,
+  createTermAgentsCommand,
   createShellTerminalCommand,
-  startFreeTerminalProcess,
-  stopAllFreeTerminalProcesses,
+  startTermAgentsProcess,
+  stopAllTermAgentsProcesses,
 } from "../packages/feature-terminal/src/services/terminal"
 import { tmpdir } from "node:os"
 import { spawn } from "node:child_process"
@@ -33,7 +33,7 @@ describe("terminal and runner commands", () => {
         ? process.env.COMSPEC?.trim() || "cmd.exe"
         : process.env.SHELL?.trim() || "/bin/sh"
 
-    expect(createFreeTerminalCommand("  /usr/local/bin/codex --help  ")).toMatchObject({
+    expect(createTermAgentsCommand("  /usr/local/bin/codex --help  ")).toMatchObject({
       kind: "custom",
       label: "codex",
       shortLabel: "COD",
@@ -121,7 +121,7 @@ describe("terminal and runner commands", () => {
       detached: true,
       stdio: "ignore",
     })
-    let target: ReturnType<typeof startFreeTerminalProcess> | undefined
+    let target: ReturnType<typeof startTermAgentsProcess> | undefined
     try {
       let output = ""
       let firstStop: Promise<void> | undefined
@@ -130,7 +130,7 @@ describe("terminal and runner commands", () => {
           void target?.stop().catch(() => undefined)
           reject(new Error("terminal tree did not exit"))
         }, 6_000)
-        target = startFreeTerminalProcess(
+        target = startTermAgentsProcess(
           [
             "/bin/sh",
             "-c",
@@ -160,7 +160,7 @@ describe("terminal and runner commands", () => {
       expect(unrelated.exitCode).toBeNull()
       expect(unrelated.pid && process.kill(unrelated.pid, 0)).toBe(true)
     } finally {
-      await stopAllFreeTerminalProcesses().catch(() => undefined)
+      await stopAllTermAgentsProcesses().catch(() => undefined)
       if (unrelated.pid) {
         try {
           process.kill(-unrelated.pid, "SIGKILL")

@@ -36,6 +36,10 @@ function contextualHelp(document: HttpDocumentState, activePane: HttpPane) {
   return [
     "[/] Focar URL · [M] Trocar método · [S] Enviar",
     "[A←]/[F→] Alternar Params, Headers, Body, Auth e Mais",
+    ...(document.request.source.kind === "file" &&
+    document.request.source.path.replaceAll("\\", "/").startsWith("postman/")
+      ? ["[Ctrl+S] Salvar no Postman · [Ctrl+P] Reenviar"]
+      : []),
     "[Tab/Shift+Tab/H/L] Alternar painéis",
   ]
 }

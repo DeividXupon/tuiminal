@@ -23,8 +23,13 @@ function tokenColor(kind: HttpJsonTokenKind, palette: ColorPalette) {
 }
 
 export function buildHttpJsonDocument(
-  tree: HttpJsonTree,
-  options: { palette: ColorPalette; lineNumbers: boolean; focused: boolean },
+  tree: Pick<HttpJsonTree, "lines" | "selectedPath"> | HttpJsonTree,
+  options: {
+    palette: ColorPalette
+    lineNumbers: boolean
+    focused: boolean
+    highlightSelection?: boolean
+  },
 ) {
   const chunks: TextChunk[] = []
   const colors = new Map<string, RGBA>()
@@ -43,7 +48,7 @@ export function buildHttpJsonDocument(
   }
 
   tree.lines.forEach((line, lineIndex) => {
-    const selected = line.path === tree.selectedPath
+    const selected = options.highlightSelection !== false && line.path === tree.selectedPath
     const background = selected ? selectedBackground : canvas
     if (options.lineNumbers) {
       chunks.push({

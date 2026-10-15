@@ -12,7 +12,9 @@
     "bun": "1.4.2"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./cli/sidebar": "./src/cli/sidebar.tsx",
+    "./cli/project-sync-worker": "./src/cli/project-sync-worker.ts"
   },
   "peerDependencies": {
     "@opentui/core": "^0.5.9",
@@ -20,7 +22,9 @@
     "react": "^19.2.8",
     "@xupon/tuiminal-core": "0.2.0-alpha.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@tuiparts/react": "^0.0.6"
+  },
   "devDependencies": {
     "@xupon/tuiminal-core": "workspace:*"
   },

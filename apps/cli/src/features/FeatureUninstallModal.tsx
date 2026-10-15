@@ -39,7 +39,6 @@ export function FeatureUninstallModal({
   })
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Native terminal overlay consumes backdrop mouse events.
-    // biome-ignore lint/a11y/useKeyWithMouseEvents: The focused dialog owns keyboard confirmation and Escape.
     <box
       id="feature-uninstall-overlay"
       onMouseDown={(event) => {

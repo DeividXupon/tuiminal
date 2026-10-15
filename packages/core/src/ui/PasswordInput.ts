@@ -20,6 +20,10 @@ export class PasswordInputRenderable extends InputRenderable {
     super(ctx, inputOptions)
   }
 
+  override getSelectedText() {
+    return "*".repeat([...super.getSelectedText()].length)
+  }
+
   protected override renderSelf(buffer: OptimizedBuffer) {
     super.renderSelf(buffer)
     const maskLength = Math.min([...this.plainText].length, this.width)
@@ -31,7 +35,7 @@ export class PasswordInputRenderable extends InputRenderable {
       this.screenX,
       this.screenY,
       parseColor(COLORS.text),
-      parseColor(COLORS.panelRaised),
+      this.backgroundColor.a === 0 ? parseColor(COLORS.panelRaised) : this.backgroundColor,
     )
   }
 }

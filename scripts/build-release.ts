@@ -90,7 +90,7 @@ async function compile(entrypoint: string, outfile: string, target: ReleaseTarge
           }))
           build.onLoad({ filter: /[/\\]features[/\\]source-loader\.ts$/ }, () => ({
             contents:
-              'export function loadSourceFeature() { throw new Error("Source features are unavailable in a release") }; export const sourceHttpCommand = loadSourceFeature;',
+              'export function loadSourceFeature() { throw new Error("Source features are unavailable in a release") }; export const sourceHttpCommand = loadSourceFeature; export const sourceTerminalSidebar = loadSourceFeature;',
             loader: "ts",
           }))
           build.onLoad({ filter: /[/\\]packages[/\\]feature-[^/\\]+[/\\]src[/\\]/ }, (args) => {

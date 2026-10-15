@@ -1,4 +1,7 @@
 export const GIT_COMPARE_MESSAGES = [
+  ["LOCAL", "LOCAL", "LOCAL", "ローカル", "本地", "로컬"],
+  ["[C] DIFFS", "[C] DIFFS", "[C] DIFFS", "[C] DIFF", "[C] 差异", "[C] DIFFS"],
+  ["[C] COMPARAR", "[C] COMPARE", "[C] COMPARAR", "[C] 比較", "[C] 比较", "[C] 비교"],
   [
     "[C] GIT · DIFFS",
     "[C] GIT · DIFFS",

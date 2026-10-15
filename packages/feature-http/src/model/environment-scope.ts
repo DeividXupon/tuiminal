@@ -6,6 +6,8 @@ export type HttpEnvironment = {
   directory: string
 }
 
+export const GLOBAL_HTTP_ENVIRONMENT_NAME = "Globals"
+
 export type HttpEnvironmentCatalog = {
   scopes: Array<{ directory: string; environments: HttpEnvironment[] }>
 }
@@ -68,6 +70,7 @@ export function environmentVariableContext(
   environment: HttpEnvironment | undefined,
   fileValues: Readonly<Record<string, string>> = {},
   requestValues: Readonly<Record<string, string>> = {},
+  globals?: HttpEnvironment,
 ) {
   const privateValues: Record<string, string> = {}
   const publicValues: Record<string, string> = {}
@@ -80,6 +83,7 @@ export function environmentVariableContext(
     { origin: "file", values: fileValues },
     { origin: "private", values: privateValues, secret: true },
     { origin: "public", values: publicValues },
+    { origin: "private", values: globals?.values ?? {}, secret: true },
     { origin: "built-in", values: httpBuiltInVariables() },
   ])
 }

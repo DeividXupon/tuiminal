@@ -3,7 +3,7 @@ import {
   useNotificationFromValue,
   useNotifications,
 } from "@xupon/tuiminal-core/notifications/index"
-import type { FreeTerminalExit } from "../services/terminal"
+import type { TermAgentsExit } from "../services/terminal"
 
 type Notify = (input: NotificationInput) => string
 
@@ -13,7 +13,7 @@ export function useTerminalNotifications(notice: string) {
   return notify
 }
 
-export function notifyTerminalExit(notify: Notify, label: string, result: FreeTerminalExit) {
+export function notifyTerminalExit(notify: Notify, label: string, result: TermAgentsExit) {
   const failed = result.code !== 0 && !result.stopped
   if (failed) {
     notify({

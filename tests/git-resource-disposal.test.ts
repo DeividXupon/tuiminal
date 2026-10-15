@@ -47,6 +47,42 @@ test.each(resources)(
   },
 )
 
+test("browser disposal awaits owned processes and keeps later registrations", async () => {
+  const result = await isolatedRegistry(
+    "browser",
+    "registerGitBrowserDisposer",
+    "disposeGitBrowserResources",
+    `
+    const events = [];
+    register(() => { events.push("first"); register(() => events.push("next")) });
+    register(async () => { await Bun.sleep(10); events.push("async") });
+    await dispose();
+    const first = [...events];
+    await dispose();
+    console.log(JSON.stringify({ first, events }));
+  `,
+  )
+  expect(result).toEqual({ first: ["first", "async"], events: ["first", "async", "next"] })
+})
+
+test("browser disposal reports a failure after running every disposer", async () => {
+  const result = await isolatedRegistry(
+    "browser",
+    "registerGitBrowserDisposer",
+    "disposeGitBrowserResources",
+    `
+    const events = [];
+    register(() => { events.push("throwing"); throw new Error("fixture failure") });
+    register(async () => { await Bun.sleep(10); events.push("async") });
+    register(() => { events.push("last") });
+    let error = null;
+    try { await dispose() } catch (failure) { error = failure.message }
+    console.log(JSON.stringify({ events, error }));
+  `,
+  )
+  expect(result).toEqual({ events: ["throwing", "last", "async"], error: "fixture failure" })
+})
+
 test.each(resources)(
   "%s disposal does not erase a newly registered generation",
   async (_name, module, register, dispose) => {

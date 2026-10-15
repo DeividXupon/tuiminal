@@ -139,7 +139,8 @@ export async function executeIssueMutation(
       (error.kind === "timeout" ||
         error.kind === "cancelled" ||
         error.kind === "output-limit" ||
-        error.kind === "input-failed")
+        error.kind === "input-failed" ||
+        error.kind === "network")
     ) {
       return { status: "uncertain", reason: error.kind }
     }

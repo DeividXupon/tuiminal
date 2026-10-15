@@ -52,6 +52,7 @@ function mapNotification(item: GitHubNotificationPayload, host: string): InboxNo
     lastReadAt: item.last_read_at,
     title: sanitizeGitHubText(item.subject.title),
     subjectType,
+    subjectState: null,
     repository,
     repositoryUrl: item.repository.html_url,
     subjectApiUrl,

@@ -3,6 +3,7 @@ import type { IssueDetails, IssueSummary } from "../model/issue/types"
 import { loadIssueDetails } from "./github/issue-details"
 import { type GhTransportOptions, GitHubTransportError } from "./github/transport"
 import { registerIssueResourceDisposer } from "./issue-session"
+import { rememberRemoteCacheEntry } from "./remote-cache"
 
 const ISSUE_DETAILS_CACHE_LIMIT = 32
 
@@ -34,13 +35,7 @@ export class IssueDetailsSession {
   }
 
   private remember(key: string, details: IssueDetails) {
-    this.cache.delete(key)
-    this.cache.set(key, details)
-    while (this.cache.size > ISSUE_DETAILS_CACHE_LIMIT) {
-      const oldest = this.cache.keys().next().value
-      if (typeof oldest !== "string") break
-      this.cache.delete(oldest)
-    }
+    rememberRemoteCacheEntry(this.cache, key, details, ISSUE_DETAILS_CACHE_LIMIT)
   }
 
   async load(item: IssueSummary) {

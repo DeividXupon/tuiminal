@@ -5,6 +5,10 @@ import { loadPullRequestConfig } from "../storage/pr/config"
 import { detectGhCapabilities, type GhCapabilities, loadGhAuthContext } from "./github/auth"
 import { assertAllowedGitHubHost } from "./github/host"
 import { loadNotificationsPage } from "./github/notifications"
+import {
+  loadInboxSubjectStates,
+  type InboxSubjectStateCache,
+} from "./github/notification-subject-state"
 import type { GhTransportOptions } from "./github/transport"
 import { resolveGitProjectContext } from "./git"
 
@@ -42,6 +46,8 @@ type ReadyResult = Extract<InboxSessionResult, { status: "ready" }>
 
 export class InboxSession {
   private activeController: AbortController | null = null
+  private subjectController: AbortController | null = null
+  private readonly subjectCache: InboxSubjectStateCache = new Map()
   private cache: ReadyResult | null = null
   private readonly unregister: () => void
 
@@ -52,6 +58,7 @@ export class InboxSession {
   }
 
   async load(root: string, force = false): Promise<InboxSessionResult> {
+    this.cancelSubjectLoad()
     const loaded = this.options.configPath
       ? loadPullRequestConfig(this.options.configPath)
       : loadPullRequestConfig()
@@ -78,9 +85,19 @@ export class InboxSession {
       perPage: pageSize,
       options: transport,
     })
+    const retained =
+      this.cache?.root === root && this.cache.host === host
+        ? new Map(this.cache.items.map((item) => [item.id, item]))
+        : new Map<string, InboxNotification>()
     const result: ReadyResult = {
       status: "ready",
-      items: page.items,
+      items: page.items.map((item) => {
+        const previous = retained.get(item.id)
+        return previous?.subjectApiUrl === item.subjectApiUrl &&
+          previous.updatedAt === item.updatedAt
+          ? { ...item, subjectState: previous.subjectState }
+          : item
+      }),
       host,
       viewerLogin: auth.viewerLogin,
       page: 1,
@@ -97,6 +114,7 @@ export class InboxSession {
 
   async loadNextPage(current: ReadyResult): Promise<InboxSessionResult> {
     if (!current.hasNextPage) return current
+    this.cancelSubjectLoad()
     this.activeController?.abort()
     const controller = new AbortController()
     this.activeController = controller
@@ -130,14 +148,38 @@ export class InboxSession {
     return result
   }
 
+  async loadSubjectStates(items: readonly InboxNotification[], host: string) {
+    this.cancelSubjectLoad()
+    const controller = new AbortController()
+    this.subjectController = controller
+    try {
+      const states = await loadInboxSubjectStates(
+        items,
+        host,
+        { ...this.options.transport, host, signal: controller.signal },
+        this.subjectCache,
+      )
+      return this.subjectController === controller && !controller.signal.aborted ? states : null
+    } finally {
+      if (this.subjectController === controller) this.subjectController = null
+    }
+  }
+
+  cancelSubjectLoad() {
+    this.subjectController?.abort()
+    this.subjectController = null
+  }
+
   cancelActiveLoad() {
     this.activeController?.abort()
     this.activeController = null
+    this.cancelSubjectLoad()
   }
 
   dispose() {
     this.cancelActiveLoad()
     this.cache = null
+    this.subjectCache.clear()
     this.unregister()
   }
 }

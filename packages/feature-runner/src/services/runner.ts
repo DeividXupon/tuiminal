@@ -1,3 +1,5 @@
+import { canonicalRunnerRoot } from "../storage/runner-settings"
+import type { RunnerFlow } from "../model/plan"
 import { dirname, resolve } from "node:path"
 import {
   discoverRunnerEnvironmentProfiles,
@@ -45,10 +47,12 @@ async function discoverRunnerCommandsWithConfiguration(
     discoverDockerCommands(root),
   ])
   const unique = new Map<string, RunnerCommand>()
-  for (const command of [...configured, ...discovered.flat()]) {
-    if (!unique.has(command.displayCommand)) {
-      unique.set(command.displayCommand, command)
-    }
+  for (const command of configured) if (!unique.has(command.id)) unique.set(command.id, command)
+  const displays = new Set([...unique.values()].map((command) => command.displayCommand))
+  for (const command of discovered.flat()) {
+    if (unique.has(command.id) || displays.has(command.displayCommand)) continue
+    unique.set(command.id, command)
+    displays.add(command.displayCommand)
   }
   return [...unique.values()]
 }
@@ -63,13 +67,14 @@ export async function discoverRunnerCommands(root = RUNNER_WORKING_DIRECTORY) {
 export type RunnerProjectContext = {
   root: string
   commands: RunnerCommand[]
+  flows: RunnerFlow[]
   environmentProfiles: RunnerEnvironmentProfile[]
 }
 
 async function runnerProjectDiscovery(root: string) {
   const configuration = loadRunnerProjectConfiguration(root)
   const commands = await discoverRunnerCommandsWithConfiguration(root, configuration.commands)
-  return { root, commands, configuredProfiles: configuration.profiles }
+  return { root, commands, flows: configuration.flows, configuredProfiles: configuration.profiles }
 }
 
 function completeRunnerProjectContext(
@@ -78,6 +83,7 @@ function completeRunnerProjectContext(
   return {
     root: discovery.root,
     commands: discovery.commands,
+    flows: discovery.flows,
     environmentProfiles: discoverRunnerEnvironmentProfiles(
       discovery.root,
       discovery.configuredProfiles,
@@ -88,7 +94,7 @@ function completeRunnerProjectContext(
 export async function resolveRunnerProjectContext(
   directory = RUNNER_WORKING_DIRECTORY,
 ): Promise<RunnerProjectContext | null> {
-  const requestedRoot = resolve(directory)
+  const requestedRoot = canonicalRunnerRoot(resolve(directory))
   const requested = await runnerProjectDiscovery(requestedRoot)
   if (requested.commands.length || isGitWorktreeRoot(requestedRoot)) {
     return completeRunnerProjectContext(requested)

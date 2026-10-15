@@ -16,7 +16,7 @@ export function IssueSectionStrip({
   onSelect: (index: number) => void
 }) {
   return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+    <box id="git-issue-sections" style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
       <DirectionalButton
         direction={-1}
         accent={COLORS.git}

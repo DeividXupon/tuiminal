@@ -4,13 +4,10 @@ import {
   databaseHorizontalKeyDirection,
   databaseHorizontalNavigationAction,
   databaseLoadingInsets,
-  databasePageChromeRows,
-  databasePageSize,
   databaseResultHorizontalNavigationAction,
   databaseResultScrollTop,
   databaseSidebarWidth,
   nextDatabaseTableSort,
-  preserveDatabasePageSelection,
 } from "../packages/feature-database/src/model/layout"
 
 describe("database responsive layout", () => {
@@ -41,30 +38,7 @@ describe("database responsive layout", () => {
     })
   })
 
-  test("reserves a tab row and a full divider below table history", () => {
-    expect(
-      databasePageChromeRows({
-        hasTableHistory: true,
-        actionRowCount: 2,
-        compactActions: false,
-      }),
-    ).toBe(15)
-    expect(
-      databasePageChromeRows({
-        hasTableHistory: false,
-        actionRowCount: 2,
-        compactActions: false,
-      }),
-    ).toBe(13)
-  })
-
-  test("uses every terminal row available below the table controls", () => {
-    expect(databasePageSize(20, 12)).toBe(8)
-    expect(databasePageSize(53, 15)).toBe(38)
-    expect(databasePageSize(3, 12)).toBe(4)
-  })
-
-  test("keeps loading overlays between table controls and pagination", () => {
+  test("keeps loading overlays between table controls and the navigation footer", () => {
     expect(
       databaseLoadingInsets({
         hasTableHistory: true,
@@ -241,24 +215,5 @@ describe("database responsive layout", () => {
         rowCount: 20,
       }),
     ).toBe(2)
-  })
-
-  test("preserves the absolute selected record when page size changes", () => {
-    expect(
-      preserveDatabasePageSelection({
-        pageIndex: 2,
-        rowIndex: 7,
-        previousPageSize: 10,
-        nextPageSize: 21,
-      }),
-    ).toEqual({ pageIndex: 1, rowIndex: 6 })
-    expect(
-      preserveDatabasePageSelection({
-        pageIndex: 1,
-        rowIndex: 14,
-        previousPageSize: 21,
-        nextPageSize: 10,
-      }),
-    ).toEqual({ pageIndex: 3, rowIndex: 5 })
   })
 })

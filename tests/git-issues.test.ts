@@ -173,6 +173,14 @@ describe("Issue queries and identity", () => {
       validateIssueIdentity({ ...item.identity, url: "http://github.com/team/api/issues/318" }),
     ).toBe(false)
   })
+
+  test("cached identity keys revalidate mutated issues", () => {
+    const identity = { ...item.identity }
+    expect(issueIdentityKey(identity)).toBe("github.com:I_demo_api_318")
+    expect(issueIdentityKey(identity)).toBe("github.com:I_demo_api_318")
+    identity.host = "github.enterprise.test"
+    expect(() => issueIdentityKey(identity)).toThrow("Invalid issue identity")
+  })
 })
 
 describe("Prepared Issue actions", () => {

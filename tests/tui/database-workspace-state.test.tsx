@@ -4,10 +4,11 @@ import { Database } from "bun:sqlite"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { TextareaRenderable } from "@opentui/core"
+import { TextareaRenderable, TextRenderable } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
+import { NotificationProvider } from "../../packages/core/src/notifications/index"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import { DatabaseViewer } from "../../packages/feature-database/src/DatabaseWorkspace"
 import * as service from "../../packages/feature-database/src/services/database"
@@ -44,20 +45,49 @@ async function key(name: string, options: { ctrl?: boolean } = {}) {
   })
 }
 
+async function keys(name: string, count: number) {
+  await act(async () => {
+    for (let index = 0; index < count; index += 1) tui?.mockInput.pressKey(name)
+    await Bun.sleep(10)
+    await tui?.renderOnce()
+  })
+}
+
 function editor(tab = 1) {
   const value = tui?.renderer.root.findDescendantById(`database-query-sql-${tab}-editor`)
   if (!(value instanceof TextareaRenderable)) throw new Error(`Missing editor ${tab}`)
   return value
 }
 
-async function mount(layout: "compact" | "framed") {
+function tableSummary() {
+  const value = tui?.renderer.root.findDescendantById("database-table-summary")
+  if (!(value instanceof TextRenderable)) return ""
+  return value.content.chunks.map((chunk) => chunk.text).join("")
+}
+
+async function mount(
+  layout: "compact" | "framed",
+  rowCount = 1,
+  openQuery = true,
+  withRelationships = false,
+  withNotifications = false,
+) {
   previousDefault = getDefaultDatabaseConnectionId()
   fixtureRoot = mkdtempSync(join(tmpdir(), "tuiminal-workspace-state-"))
   const filename = join(fixtureRoot, "fixture.sqlite")
   const database = new Database(filename, { create: true })
-  database.exec(
-    "CREATE TABLE demo (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO demo VALUES (1, 'kept result');",
-  )
+  database.exec("CREATE TABLE demo (id INTEGER PRIMARY KEY, name TEXT);")
+  if (withRelationships) {
+    database.exec(
+      "CREATE TABLE log_entry (id INTEGER PRIMARY KEY, demo_id INTEGER REFERENCES demo(id));",
+    )
+  }
+  const insert = database.prepare("INSERT INTO demo VALUES (?, ?)")
+  database.transaction(() => {
+    for (let id = 1; id <= rowCount; id += 1) {
+      insert.run(id, id === 1 ? "kept result" : `row ${id}`)
+    }
+  })()
   database.close()
   const { profile } = await addDatabaseConnection(
     { name: "Workspace fixture", driver: "sqlite", filename, ssl: false, writeEnabled: true },
@@ -70,12 +100,14 @@ async function mount(layout: "compact" | "framed") {
   function Harness() {
     const [, setRevision] = useState(0)
     repaint = () => setRevision((current) => current + 1)
-    return <DatabaseViewer active />
+    const viewer = <DatabaseViewer active />
+    return withNotifications ? <NotificationProvider>{viewer}</NotificationProvider> : viewer
   }
   await act(async () => {
     tui = await testRender(<Harness />, { width: 140, height: 36 })
   })
   await settle(() => tui?.captureCharFrame().includes("▦ demo") ?? false)
+  if (!openQuery) return
   await key("w")
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-query-sql-1-editor")))
   await act(async () => tui?.mockInput.typeText("SELECT id, name FROM demo"))
@@ -93,6 +125,150 @@ afterEach(async () => {
   updateUiSettings(initialSettings)
   if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
   fixtureRoot = ""
+})
+
+test("catalog search Enter focuses the filtered list without opening a table", async () => {
+  await mount("compact", 1, false, true)
+  await key("/")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-search")
+  await act(async () => {
+    tui?.mockInput.typeText("log_entry")
+    await tui?.renderOnce()
+  })
+  await settle(() => tui?.captureCharFrame().includes("▦ log_entry") ?? false)
+
+  await key("RETURN")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-list")
+  expect(tui?.captureCharFrame()).not.toContain("─[A←]─ log_entry")
+  expect(tui?.captureCharFrame()).not.toContain("◆ DDL")
+
+  await key("RETURN")
+  await settle(() => tui?.captureCharFrame().includes("─[A←]─ log_entry") ?? false)
+})
+
+test("schema toggles a relationship diagram without querying a different table", async () => {
+  await mount("compact", 1, false, true)
+  await key("ARROW_DOWN")
+  await key("RETURN")
+  await settle(() => tui?.captureCharFrame().includes("kept result") ?? false)
+  await key("4")
+  await settle(() => tui?.captureCharFrame().includes("fk_log_entry_0") ?? false)
+  expect(tui?.captureCharFrame()).toContain("◆ DDL")
+  await key("g")
+  await settle(() => tui?.captureCharFrame().includes("main.log_entry") ?? false)
+  const diagram = tui?.captureCharFrame() ?? ""
+  expect(diagram).toContain("main.demo")
+  expect(diagram).toContain("--->")
+  expect(diagram).not.toContain("◆ DDL")
+  await key("g")
+  await settle(() => tui?.captureCharFrame().includes("◆ DDL") ?? false)
+  expect(tui?.captureCharFrame()).toContain("◆ DDL")
+  await key("h")
+  await key("ARROW_DOWN")
+  await key("RETURN")
+  await settle(() => tui?.captureCharFrame().includes("log_entry ─") ?? false)
+  await key("4")
+  await settle(() => tui?.captureCharFrame().includes("fk_log_entry_0") ?? false)
+  await key("g")
+  await settle(() => tui?.captureCharFrame().includes("[G] Detalhes") ?? false)
+  const outgoingDiagram = tui?.captureCharFrame() ?? ""
+  expect(outgoingDiagram).toContain("main.log_entry")
+  expect(outgoingDiagram).toContain("main.demo")
+  expect(outgoingDiagram).toContain("--->")
+  expect(outgoingDiagram).not.toContain("◆ DDL")
+})
+
+test("a delayed schema response cannot replace the diagram after a table switch", async () => {
+  await mount("compact", 1, false, true)
+  await key("ARROW_DOWN")
+  await key("RETURN")
+  await settle(() => tui?.captureCharFrame().includes("kept result") ?? false)
+  const original = service.loadDatabaseTableStructure
+  let release = () => {}
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const calls = spyOn(service, "loadDatabaseTableStructure").mockImplementation(async (...args) => {
+    if (args[1].name === "demo") await waiting
+    return original(...args)
+  })
+  try {
+    await key("4")
+    await settle(() => calls.mock.calls.length > 0)
+    await key("g")
+    await key("h")
+    await key("ARROW_DOWN")
+    await key("RETURN")
+    await settle(() => tui?.captureCharFrame().includes("log_entry ─") ?? false)
+    await key("4")
+    await settle(() => tui?.captureCharFrame().includes("main.demo") ?? false)
+    release()
+    await act(async () => {
+      await Bun.sleep(20)
+      await tui?.renderOnce()
+    })
+    expect(tui?.captureCharFrame()).toContain("main.log_entry")
+    expect(tui?.captureCharFrame()).toContain("--->")
+    expect(tui?.captureCharFrame()).not.toContain("◆ DDL")
+  } finally {
+    release()
+    calls.mockRestore()
+  }
+})
+
+test("table grid shifts a 50-row window only after crossing an edge", async () => {
+  await mount("compact", 160, false, false, true)
+  await key("ARROW_DOWN")
+  await key("RETURN")
+  await settle(() => tableSummary().includes("1–50 ↓"))
+  await settle(() => tui?.captureCharFrame().includes("LIMIT 51 OFFSET 0") ?? false)
+  expect(tui?.captureCharFrame()).toContain('SELECT … FROM "demo"')
+  expect(tui?.renderer.root.findDescendantById("database-row-49")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("database-row-50")).toBeUndefined()
+  expect(tui?.captureCharFrame()).not.toContain("[P]")
+  expect(tui?.captureCharFrame()).not.toContain("[N]")
+
+  const original = service.loadTablePage
+  let release = () => {}
+  const ready = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const calls = spyOn(service, "loadTablePage").mockImplementation(async (...args) => {
+    if (args[2] === 50) await ready
+    return original(...args)
+  })
+  try {
+    await keys("ARROW_DOWN", 49)
+    expect(calls).toHaveBeenCalledTimes(0)
+    await key("ARROW_DOWN")
+    await settle(() => tableSummary().includes("Carregando 40 linhas abaixo…"))
+    expect(calls).toHaveBeenCalledTimes(1)
+    await key("ARROW_DOWN")
+    expect(calls).toHaveBeenCalledTimes(1)
+    expect(calls.mock.calls[0]?.slice(2, 4)).toEqual([50, 40])
+    expect(calls.mock.calls[0]?.[6]).toMatchObject({ recordHistory: false })
+    release()
+    await settle(() => tableSummary().includes("41–90 ↑↓"))
+    await settle(() => tui?.captureCharFrame().includes("LIMIT 41 OFFSET 50") ?? false)
+    expect(tui?.renderer.root.findDescendantById("database-row-49")).toBeDefined()
+    expect(tui?.renderer.root.findDescendantById("database-row-50")).toBeUndefined()
+
+    await keys("ARROW_UP", 10)
+    await key("ARROW_UP")
+    await settle(() => tableSummary().includes("1–50 ↓"))
+    await settle(() => tui?.captureCharFrame().includes("LIMIT 41 OFFSET 0") ?? false)
+    expect(calls).toHaveBeenCalledTimes(2)
+    expect(calls.mock.calls[1]?.slice(2, 4)).toEqual([0, 40])
+
+    await key("h")
+    await key("RETURN")
+    await settle(() => calls.mock.calls.length === 3)
+    expect(calls.mock.calls[2]?.slice(2, 4)).toEqual([0, 50])
+  } finally {
+    release()
+    await Promise.allSettled(calls.mock.results.map((call) => call.value))
+    calls.mockRestore()
+  }
 })
 
 test.each(["framed", "compact"] as const)(

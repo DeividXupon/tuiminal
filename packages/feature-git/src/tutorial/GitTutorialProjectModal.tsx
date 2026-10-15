@@ -3,19 +3,18 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 
 function TutorialLocalTargetRow({
   id,
   selected,
   title,
-  shortcut,
   value,
   description,
 }: {
   id?: string | undefined
   selected: boolean
   title: string
-  shortcut: string
   value: string
   description: string
 }) {
@@ -31,7 +30,7 @@ function TutorialLocalTargetRow({
     >
       <box {...(id ? { id } : {})} style={{ height: 2, flexShrink: 0, width: id ? 42 : "100%" }}>
         <text
-          content={`${selected ? "▶" : " "} ${translateUi(title)}  ${shortcut}`}
+          content={`${selected ? "▶" : " "} ${translateUi(title)}`}
           style={{ fg: selected ? COLORS.git : COLORS.text }}
         />
         <text content={`  ${value}`} style={{ fg: COLORS.text }} />
@@ -98,46 +97,61 @@ export function GitTutorialProjectModal({
               borderColor: COLORS.border,
             }}
           >
-            <text content={translateUi("◆ CONFIGURAÇÕES DO GIT")} style={{ fg: COLORS.git }} />
-            <InlineButton
-              label={translateUi("[Esc] Fechar")}
-              accent={COLORS.git}
-              onPress={onPress}
+            <text
+              content={`${translateUi("◆ CONFIGURAÇÕES")} · GIT`}
+              style={{ fg: COLORS.focus }}
             />
+            <InlineButton label="Fechar" accent={COLORS.git} onPress={onPress} />
           </box>
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <InlineButton label="[1] Diffs" accent={COLORS.git} active onPress={onPress} />
-            <InlineButton label="[2] PR" accent={COLORS.git} onPress={onPress} />
-            <InlineButton label="[3] Issues" accent={COLORS.git} onPress={onPress} />
-            <InlineButton label="[4] Repos" accent={COLORS.git} onPress={onPress} />
+          <box style={{ flexGrow: 1, flexDirection: "row" }}>
+            <box style={{ width: 27, flexShrink: 0, paddingRight: 1 }}>
+              <text content="GIT" style={{ height: 1, flexShrink: 0, fg: COLORS.muted }} />
+              <box
+                style={{
+                  height: 1,
+                  flexShrink: 0,
+                  flexDirection: "row",
+                  backgroundColor: COLORS.panelRaised,
+                }}
+              >
+                <text content="▌" style={{ width: 2, fg: BRAND_COLOR }} />
+                <text content={translateUi("DIFFS")} style={{ flexGrow: 1, fg: COLORS.focus }} />
+                <ShortcutText content="[Enter]" highlight={false} style={{ fg: BRAND_COLOR }} />
+              </box>
+              <box style={{ height: 6, flexShrink: 0, paddingTop: 1 }}>
+                <text content="GITHUB" style={{ fg: COLORS.muted }} />
+                <text content={`  ${translateUi("PULL REQUESTS")}`} style={{ fg: COLORS.text }} />
+                <text content={`  ${translateUi("ISSUES")}`} style={{ fg: COLORS.text }} />
+                <text content={`  ${translateUi("REPOSITÓRIOS")}`} style={{ fg: COLORS.text }} />
+                <text content={`  ${translateUi("NAVEGADOR")}`} style={{ fg: COLORS.text }} />
+              </box>
+            </box>
+            <box
+              id="tutorial-git-local-configuration-rows"
+              style={{ flexGrow: 1, border: ["left"], borderColor: COLORS.canvas, paddingLeft: 2 }}
+            >
+              <text
+                content={`${translateUi("REPOSITÓRIO LOCAL")}: tuiminal / development`}
+                style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+              />
+              <box style={{ flexGrow: 1, marginTop: 1 }}>
+                <TutorialLocalTargetRow
+                  id={targetProjectRow ? targetId : "tutorial-git-local-project-row"}
+                  selected
+                  title="PROJETO LOCAL"
+                  value="tuiminal"
+                  description="Escolha qualquer repositório Git local"
+                />
+                <TutorialLocalTargetRow
+                  id="tutorial-git-local-branch-row"
+                  selected={false}
+                  title="BRANCH LOCAL"
+                  value="development"
+                  description="Somente branches existentes neste repositório"
+                />
+              </box>
+            </box>
           </box>
-          <text
-            content={`${translateUi("REPOSITÓRIO LOCAL")}: tuiminal / development`}
-            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-          />
-          <box id="tutorial-git-local-configuration-rows" style={{ flexGrow: 1, marginTop: 1 }}>
-            <TutorialLocalTargetRow
-              id={targetProjectRow ? targetId : undefined}
-              selected
-              title="PROJETO LOCAL"
-              shortcut="[P]"
-              value="tuiminal"
-              description="Escolha qualquer repositório Git local"
-            />
-            <TutorialLocalTargetRow
-              selected={false}
-              title="BRANCH LOCAL"
-              shortcut="[B]"
-              value="development"
-              description="Somente branches existentes neste repositório"
-            />
-          </box>
-          <ShortcutText
-            content={translateUi(
-              "[P] Projeto  [B] Branch  [J/K] Navegar  [Enter] Alterar  [1/2/3/4] Aba",
-            )}
-            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-          />
         </box>
       </box>
     </>

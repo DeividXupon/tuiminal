@@ -1,36 +1,17 @@
+import { writeFileSync } from "node:fs"
 import { pullRequestMarkdownLines } from "../packages/feature-git/src/model/pr/content"
 import { movePullRequestIndex } from "../packages/feature-git/src/model/pr/navigation"
 import type { PullRequestSummary } from "../packages/feature-git/src/model/pr/types"
 import { parseDiffDocuments } from "../packages/feature-git/src/rendering/diff"
 import { mergePullRequestItems } from "../packages/feature-git/src/services/pr-session"
+import { defineBenchmark, measureBenchmark } from "./benchmarks/harness"
 
-type Measurement = {
-  name: string
-  samples: number[]
-  p50: number
-  p95: number
-  budget: string
-}
-
-function percentile(values: number[], fraction: number) {
-  const ordered = [...values].sort((left, right) => left - right)
-  return ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * fraction))] ?? 0
-}
-
-function measure(name: string, operation: () => void, budget: string): Measurement {
-  operation()
-  const samples = Array.from({ length: 7 }, () => {
-    const startedAt = performance.now()
-    operation()
-    return performance.now() - startedAt
-  })
-  return {
-    name,
-    samples,
-    p50: percentile(samples, 0.5),
-    p95: percentile(samples, 0.95),
-    budget,
-  }
+function benchmarkCounts() {
+  const samples = Number(process.env.BENCHMARK_SAMPLES ?? 20)
+  const warmup = Number(process.env.BENCHMARK_WARMUP ?? 3)
+  if (!Number.isSafeInteger(samples) || samples < 1) throw new Error("Invalid BENCHMARK_SAMPLES")
+  if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error("Invalid BENCHMARK_WARMUP")
+  return { samples, warmup }
 }
 
 function fixture(index: number): PullRequestSummary {
@@ -83,7 +64,10 @@ function largeDiff(targetBytes = 2 * 1024 * 1024) {
 }
 
 const current = Array.from({ length: 20_000 }, (_, index) => fixture(index))
-const additions = Array.from({ length: 5_000 }, (_, index) => fixture(index + 17_500))
+const additions = Array.from({ length: 5_000 }, (_, index) => {
+  const item = fixture(index + 17_500)
+  return { ...item, title: `Updated ${item.title}` }
+})
 const markdown =
   `${"# Título\n- item com **ênfase** e [link](https://example.test)\n".repeat(4_500)}`.slice(
     0,
@@ -91,41 +75,90 @@ const markdown =
   )
 const diff = largeDiff()
 
-const results = [
-  measure(
-    "100 mil movimentos de seleção",
-    () => {
+const cases = [
+  defineBenchmark({
+    id: "git.pr_large_selection",
+    tool: "git",
+    description: "Move PR selection 100,000 times within a bounded list",
+    operationsPerSample: 100_000,
+    run: () => {
       let index = 0
-      for (let step = 0; step < 100_000; step += 1) index = movePullRequestIndex(index, 20, 1)
+      let direction: -1 | 1 = 1
+      let movements = 0
+      for (let step = 0; step < 100_000; step += 1) {
+        const next = movePullRequestIndex(index, 20, direction)
+        if (next !== index) movements += 1
+        index = next
+        if (index === 19) direction = -1
+        else if (index === 0) direction = 1
+      }
+      return { index, movements }
     },
-    "interação individual p95 < 50 ms",
-  ),
-  measure(
-    "reconciliar cache 20k + 5k PRs",
-    () => {
-      mergePullRequestItems(current, additions)
+    verify: ({ index, movements }) => {
+      if (index !== 16 || movements !== 100_000) {
+        throw new Error("Large PR selection did not move within its bounds")
+      }
     },
-    "operação local limitada e sem rede",
-  ),
-  measure(
-    "interpretar Markdown de 256 KiB",
-    () => {
-      pullRequestMarkdownLines(markdown)
+  }),
+  defineBenchmark({
+    id: "git.pr_large_merge",
+    tool: "git",
+    description: "Merge 5,000 PR updates into a 20,000-item cache",
+    run: () => mergePullRequestItems(current, additions),
+    verify: (items) => {
+      const updated = items.find((item) => item.identity.nodeId === "PR_benchmark_17500")
+      const appended = items.find((item) => item.identity.nodeId === "PR_benchmark_22499")
+      if (
+        items.length !== 22_500 ||
+        updated?.title !== "Updated Mudança Unicode 日本語 17500" ||
+        appended?.title !== "Updated Mudança Unicode 日本語 22499"
+      ) {
+        throw new Error("Large PR merge did not update and append the expected items")
+      }
     },
-    "descrição limitada a 256 KiB",
-  ),
-  measure(
-    "interpretar diff de 2 MiB",
-    () => {
-      parseDiffDocuments(diff)
+  }),
+  defineBenchmark({
+    id: "git.pr_large_markdown",
+    tool: "git",
+    description: "Parse a bounded 256 KiB PR description",
+    run: () => pullRequestMarkdownLines(markdown),
+    verify: (lines) => {
+      if (!lines.length) throw new Error("Large PR Markdown returned no lines")
     },
-    "diff remoto limitado a 2 MiB",
-  ),
+  }),
+  defineBenchmark({
+    id: "git.pr_large_diff",
+    tool: "git",
+    description: "Parse a bounded 2 MiB remote PR diff",
+    run: () => parseDiffDocuments(diff),
+    verify: (documents) => {
+      if (!documents.length) throw new Error("Large PR diff returned no documents")
+    },
+  }),
 ]
 
-console.log("Benchmark Git/PR local (7 amostras após aquecimento; sem rede)")
-for (const result of results) {
+const { samples, warmup } = benchmarkCounts()
+const results = []
+for (const benchmark of cases) {
+  const result = await measureBenchmark(benchmark, samples, warmup)
+  results.push(result)
   console.log(
-    `${result.name}: p50=${result.p50.toFixed(2)}ms p95=${result.p95.toFixed(2)}ms · ${result.budget}`,
+    `${result.id.padEnd(28)} p50 ${result.p50Ms.toFixed(6)} ms  p95 ${result.p95Ms.toFixed(6)} ms`,
+  )
+}
+if (process.env.BENCHMARK_OUTPUT) {
+  writeFileSync(
+    process.env.BENCHMARK_OUTPUT,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        createdAt: new Date().toISOString(),
+        runtime: { bun: Bun.version, platform: process.platform, arch: process.arch },
+        configuration: { samples, warmup },
+        results,
+      },
+      null,
+      2,
+    )}\n`,
   )
 }

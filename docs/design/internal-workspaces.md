@@ -25,6 +25,7 @@ Cross-workspace imports use npm names and only paths declared in `exports`; rela
 imports stay within their package. Core exposes small subpaths to preserve explicit
 initialization and prevent version queries from loading UI or services. Features
 expose `src/index.ts`; HTTP also exposes `cli/run` and `cli/import` for headless commands.
+Terminal exposes private CLI entries for its sidebar and project-sync workers.
 
 The CLI depends on all six packages through `workspace:*`. Features require the
 exact core version as a peer and use `workspace:*` during local development. React
@@ -48,7 +49,8 @@ its JavaScript SQLite helper for subprocess execution.
 
 `bun run build:release <platform>` generates the `tuiminal` npm launcher and
 minimal binaries under `dist/npm`, plus version-matched official downloads.
-The downloaded SQLite worker runs through the host executable over IPC.
+The downloaded SQLite worker and Terminal project-sync worker run through the host
+executable over IPC.
 End users do not need Bun for this distribution. Source, internal packages, and
 executables must share one version before a release is built.
 

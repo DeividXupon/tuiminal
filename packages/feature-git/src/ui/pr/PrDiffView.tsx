@@ -227,9 +227,10 @@ export function PrDiffView({
   }
   return (
     <box
+      id="git-pr-diff-workspace"
       style={{
         flexGrow: 1,
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
       }}

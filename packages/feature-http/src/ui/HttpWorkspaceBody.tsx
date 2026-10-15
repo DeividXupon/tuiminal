@@ -7,6 +7,7 @@ import type {
 import { Fragment, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { HttpLayout } from "../model/layout"
+import type { HttpRequestTableKey } from "../hooks/use-http-request-tables"
 import type {
   HttpAssertionDefinition,
   HttpBodyKind,
@@ -25,8 +26,14 @@ import type {
 import type { HttpCookie } from "../services/cookies"
 import type { HttpPreparedRequestPreview } from "../services/request-preview"
 import { HttpNavigationPane } from "./HttpNavigationPane"
+import type { HttpCollectionTreeRow } from "../model/collection-tree"
+import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
+import type { HttpKey } from "../model/keyboard-types"
 import { HttpRequestPane } from "./HttpRequestPane"
 import { HttpResponsePane } from "./HttpResponsePane"
+import type { HttpSourceMode } from "../model/source-mode"
+import type { PostmanCollectionFolder } from "../postman/sync"
+import type { PostmanWorkspace } from "../postman/api"
 
 type HttpWorkspaceBodyProps = {
   state: HttpWorkspaceState
@@ -38,6 +45,8 @@ type HttpWorkspaceBodyProps = {
   registerScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
   registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
   registerCollectionSearch: (input: InputRenderable | null) => void
+  requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
+  collectionTreeKeyRef: { current: ((key: HttpKey) => boolean) | null }
   onSelectDocument: (documentId: string) => void
   onNavigationView: (view: HttpNavigationView) => void
   onCloseNavigation: () => void
@@ -60,10 +69,22 @@ type HttpWorkspaceBodyProps = {
   onBodyFileChange: (documentId: string, path: string) => void
   onSend: (documentId: string) => void
   projectRequests: HttpProjectRequestItem[]
+  projectDirectories: string[]
+  projectFiles: string[]
+  postmanFolders: PostmanCollectionFolder[]
+  postmanWorkspace: PostmanWorkspace | null
+  onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
   projectErrors: number
+  sourceMode: HttpSourceMode
   onOpenProjectRequest: (item: HttpProjectRequestItem) => void
   onImportCollection: () => void
+  onOpenPostman: () => void
   onRunCollection: () => void
+  onManageCollection: (
+    action: HttpCollectionAction,
+    row: HttpCollectionTreeRow | null,
+    name?: string,
+  ) => Promise<boolean>
   onNameChange: (documentId: string, name: string) => void
   onMethodChange: (documentId: string, method: string) => void
   onOptionsChange: (
@@ -139,6 +160,8 @@ export function HttpWorkspaceBody({
   registerScroll,
   registerResponseSearch,
   registerCollectionSearch,
+  requestTableKeyRef,
+  collectionTreeKeyRef,
   onSelectDocument,
   onNavigationView,
   onCloseNavigation,
@@ -158,10 +181,18 @@ export function HttpWorkspaceBody({
   onBodyFileChange,
   onSend,
   projectRequests,
+  projectDirectories,
+  projectFiles,
+  postmanFolders,
+  postmanWorkspace,
+  onPostmanWorkspaceChange,
   projectErrors,
+  sourceMode,
   onOpenProjectRequest,
   onImportCollection,
+  onOpenPostman,
   onRunCollection,
+  onManageCollection,
   onNameChange,
   onMethodChange,
   onOptionsChange,
@@ -235,8 +266,9 @@ export function HttpWorkspaceBody({
           <Fragment key={document.request.id}>
             <HttpRequestPane
               document={document}
+              requestTableKeyRef={requestTableKeyRef}
               visible={requestVisible}
-              focused={active && state.activePane === "request"}
+              focused={active && state.overlay === null && state.activePane === "request"}
               position={maximizedPane === "request" ? maximizedPosition : layout.request}
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
@@ -273,7 +305,7 @@ export function HttpWorkspaceBody({
             <HttpResponsePane
               document={document}
               visible={responseVisible}
-              focused={active && state.activePane === "response"}
+              focused={active && state.overlay === null && state.activePane === "response"}
               position={maximizedPane === "response" ? maximizedPosition : layout.response}
               registerScroll={(scroll) => registerScroll(document.request.id, scroll)}
               registerSearchInput={(input) => registerResponseSearch(document.request.id, input)}
@@ -296,7 +328,7 @@ export function HttpWorkspaceBody({
       <HttpNavigationPane
         state={state}
         visible={navigationVisible}
-        focused={state.activePane === "navigation"}
+        focused={state.overlay === null && state.activePane === "navigation"}
         overlay={!layout.navigationFixed}
         position={layout.navigation}
         onViewChange={onNavigationView}
@@ -304,11 +336,20 @@ export function HttpWorkspaceBody({
         onClose={onCloseNavigation}
         onFocus={() => onSelectPane("navigation")}
         projectRequests={projectRequests}
+        projectDirectories={projectDirectories}
+        projectFiles={projectFiles}
+        postmanFolders={postmanFolders}
+        postmanWorkspace={postmanWorkspace}
+        onPostmanWorkspaceChange={onPostmanWorkspaceChange}
         projectErrors={projectErrors}
+        sourceMode={sourceMode}
         onOpenProjectRequest={onOpenProjectRequest}
         onImportCollection={onImportCollection}
+        onOpenPostman={onOpenPostman}
         onRunCollection={onRunCollection}
+        onManageCollection={onManageCollection}
         registerCollectionSearch={registerCollectionSearch}
+        collectionTreeKeyRef={collectionTreeKeyRef}
         onToggleHistory={onToggleHistory}
         onCompareHistory={onCompareHistory}
         onOpenHistory={onOpenHistory}

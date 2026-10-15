@@ -15,6 +15,7 @@ export function HttpClientFooter({
   onJump,
   onHelp,
   onSave,
+  onPushPostman,
 }: {
   availableWidth: number
   minimum: boolean
@@ -27,6 +28,7 @@ export function HttpClientFooter({
   onJump: () => void
   onHelp: () => void
   onSave: () => void
+  onPushPostman: () => void
 }) {
   return (
     <HttpWorkspaceFooter
@@ -52,6 +54,11 @@ export function HttpClientFooter({
       onJump={onJump}
       onHelp={onHelp}
       onSave={onSave}
+      onPushPostman={onPushPostman}
+      postmanRequest={
+        document.request.source.kind === "file" &&
+        document.request.source.path.replaceAll("\\", "/").startsWith("postman/")
+      }
       notice={notice}
       responseJsonTree={responseJsonTree}
     />

@@ -1,9 +1,9 @@
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { useState } from "react"
 import { ownsKeyboardFocus } from "@xupon/tuiminal-core/keyboard/scope"
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
+import { GitNavigationHeader } from "./ui/GitNavigationHeader"
+import { GitNavigationProvider, useGitHubNavigationIdentity } from "./ui/GitNavigationContext"
 import { GitCompareWorkspace } from "./GitCompareWorkspace"
 import { GitBaseWorkspace } from "./GitWorkspace"
 import { useLocalGitTargetRoot } from "./hooks/use-local-git-target-root"
@@ -17,6 +17,7 @@ import {
 } from "./model/workspace"
 import { PullRequestsWorkspace } from "./PullRequestsWorkspace"
 import { GitTutorialDemo } from "./tutorial/GitTutorialDemo"
+import { useGitBrowser } from "./ui/browser/useGitBrowser"
 
 type GitLocalMode = "diffs" | "compare"
 
@@ -60,12 +61,14 @@ export function GitViewer({
 }) {
   if (tutorialMode) return <GitTutorialDemo activeTargetId={tutorialTargetId} />
   return (
-    <GitInteractiveWorkspace
-      active={active}
-      configurationRevision={configurationRevision}
-      localConfigurationRevision={localConfigurationRevision}
-      onOpenLocalConfiguration={onOpenLocalConfiguration}
-    />
+    <GitNavigationProvider>
+      <GitInteractiveWorkspace
+        active={active}
+        configurationRevision={configurationRevision}
+        localConfigurationRevision={localConfigurationRevision}
+        onOpenLocalConfiguration={onOpenLocalConfiguration}
+      />
+    </GitNavigationProvider>
   )
 }
 
@@ -89,6 +92,9 @@ function GitInteractiveWorkspace({
   const [localMode, setLocalMode] = useState<GitLocalMode>("diffs")
   const [baseRefreshRequest, setBaseRefreshRequest] = useState(0)
   const localTargetRoot = useLocalGitTargetRoot(localConfigurationRevision)
+  const browser = useGitBrowser()
+  const workspaceActive = active && !browser.modalOpen
+  const identity = useGitHubNavigationIdentity(activeTab, configurationRevision)
 
   const selectTab = (tab: GitWorkspaceTab) => {
     if (tab === "pr") setPullRequestsMounted(true)
@@ -103,7 +109,7 @@ function GitInteractiveWorkspace({
   }
 
   useKeyboard((key) => {
-    if (!active || key.ctrl || key.meta || key.super) return
+    if (!workspaceActive || key.ctrl || key.meta || key.super) return
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (ownsKeyboardFocus(gitKeyboardScope, focusedId)) return
     if (activeTab === "base" && localMode === "diffs" && key.name === "c") {
@@ -120,55 +126,18 @@ function GitInteractiveWorkspace({
   })
 
   return (
-    <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          backgroundColor: COLORS.panel,
-          paddingLeft: LAYOUT.outerPadding,
+    <box id="git-workspace" style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
+      <GitNavigationHeader
+        localRoot={localTargetRoot}
+        identity={identity}
+        selected={activeTab}
+        localMode={localMode}
+        onSelect={selectTab}
+        onToggleMode={() => {
+          if (activeTab === "base") toggleLocalMode()
+          else selectTab("base")
         }}
-      >
-        <InlineButton
-          id="git-tab-base"
-          label="[1]"
-          accent={COLORS.git}
-          active={activeTab === "base"}
-          onPress={() => selectTab("base")}
-        />
-        <InlineButton
-          id="git-mode-compare"
-          label={translateUi(localMode === "diffs" ? "[C] GIT · DIFFS" : "[C] GIT · COMPARAR")}
-          accent={COLORS.git}
-          active={activeTab === "base"}
-          onPress={() => {
-            if (activeTab === "base") toggleLocalMode()
-            else selectTab("base")
-          }}
-        />
-        <InlineButton
-          id="git-tab-pr"
-          label={translateUi("[2] PR")}
-          accent={COLORS.git}
-          active={activeTab === "pr"}
-          onPress={() => selectTab("pr")}
-        />
-        <InlineButton
-          id="git-tab-issues"
-          label={translateUi("[3] ISSUES")}
-          accent={COLORS.git}
-          active={activeTab === "issues"}
-          onPress={() => selectTab("issues")}
-        />
-        <InlineButton
-          id="git-tab-inbox"
-          label={translateUi("[4] INBOX")}
-          accent={COLORS.git}
-          active={activeTab === "inbox"}
-          onPress={() => selectTab("inbox")}
-        />
-      </box>
+      />
       <box
         style={{
           height: activeTab === "base" && localMode === "diffs" ? "100%" : 0,
@@ -177,7 +146,7 @@ function GitInteractiveWorkspace({
         }}
       >
         <GitBaseWorkspace
-          active={active && activeTab === "base" && localMode === "diffs"}
+          active={workspaceActive && activeTab === "base" && localMode === "diffs"}
           refreshRequest={baseRefreshRequest}
           targetDirectory={localTargetRoot}
           onOpenLocalConfiguration={onOpenLocalConfiguration}
@@ -188,7 +157,7 @@ function GitInteractiveWorkspace({
         selected={activeTab === "base" && localMode === "compare"}
       >
         <GitCompareWorkspace
-          active={active && activeTab === "base" && localMode === "compare"}
+          active={workspaceActive && activeTab === "base" && localMode === "compare"}
           targetDirectory={localTargetRoot}
           onOpenLocalConfiguration={onOpenLocalConfiguration}
           onExit={() => setLocalMode("diffs")}
@@ -196,24 +165,28 @@ function GitInteractiveWorkspace({
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={pullRequestsMounted} selected={activeTab === "pr"}>
         <PullRequestsWorkspace
-          active={active && activeTab === "pr"}
+          active={workspaceActive && activeTab === "pr"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={issuesMounted} selected={activeTab === "issues"}>
         <IssuesWorkspace
-          active={active && activeTab === "issues"}
+          active={workspaceActive && activeTab === "issues"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
           onLocalCheckout={() => setBaseRefreshRequest((current) => current + 1)}
         />
       </MountedGitWorkspace>
       <MountedGitWorkspace mounted={inboxMounted} selected={activeTab === "inbox"}>
         <InboxWorkspace
-          active={active && activeTab === "inbox"}
+          active={workspaceActive && activeTab === "inbox"}
           configurationRevision={configurationRevision}
+          onOpenBrowser={browser.open}
         />
       </MountedGitWorkspace>
+      {browser.modal}
     </box>
   )
 }

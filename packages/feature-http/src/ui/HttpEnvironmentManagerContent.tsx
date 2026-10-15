@@ -1,232 +1,325 @@
-import type { InputRenderable } from "@opentui/core"
-import type { ButtonRenderable } from "@tuiparts/core/button"
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type { PasswordInputRenderable } from "@xupon/tuiminal-core/ui/PasswordInput"
-import "@xupon/tuiminal-core/ui/PasswordInput"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { HttpEnvironment } from "../storage/environments"
+import {
+  HttpEnvironmentTableRow,
+  type HttpEnvironmentFormMode,
+  type HttpEnvironmentRow,
+} from "./HttpEnvironmentTableRow"
 
-function fieldStyle(secret = false) {
-  return {
-    flexGrow: 1,
-    backgroundColor: COLORS.panelRaised,
-    focusedBackgroundColor: COLORS.panelRaised,
-    textColor: secret ? COLORS.panelRaised : COLORS.text,
-    focusedTextColor: secret ? COLORS.panelRaised : COLORS.text,
-    selectionFg: secret ? COLORS.panelRaised : COLORS.text,
-    cursorColor: COLORS.http,
-    placeholderColor: COLORS.muted,
-  }
+export type { HttpEnvironmentFormMode, HttpEnvironmentRow } from "./HttpEnvironmentTableRow"
+
+export function environmentFormRows(environment?: HttpEnvironment): HttpEnvironmentRow[] {
+  return [
+    ...Object.entries(environment?.values ?? {}).map(([name, value]) => ({
+      id: crypto.randomUUID(),
+      name,
+      value,
+    })),
+    { id: crypto.randomUUID(), name: "", value: "" },
+  ]
+}
+
+const inputStyle = {
+  flexGrow: 1,
+  backgroundColor: COLORS.panelRaised,
+  focusedBackgroundColor: COLORS.panelRaised,
+  textColor: COLORS.text,
+  focusedTextColor: COLORS.text,
+  selectionFg: COLORS.text,
+  cursorColor: COLORS.http,
+  placeholderColor: COLORS.muted,
 }
 
 export function HttpEnvironmentList({
   environments,
   activeName,
   selection,
+  contentWidth,
   onSelect,
   onCreate,
-  onOpenWorkspaceSettings,
+  onOpenGlobals,
+  onEdit,
+  onDelete,
 }: {
   environments: HttpEnvironment[]
   activeName: string | null
   selection: number
+  contentWidth: number
   onSelect: (name: string | null) => void
   onCreate: () => void
-  onOpenWorkspaceSettings: () => void
+  onOpenGlobals: () => void
+  onEdit: (name: string) => void
+  onDelete: (name: string) => void
 }) {
-  const listRefs = useRef(new Map<number, ButtonRenderable>())
+  const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const choices: Array<string | null> = [
     null,
     ...environments.map((environment) => environment.name),
   ]
-
+  const createLabel = "[N] Novo ambiente"
+  const hintsWidth = Math.max(1, contentWidth - displayWidth(translateUi(createLabel)) - 2)
+  const hintSegments = translateUi("[↑/↓] Navegar · [Enter] Usar · [E] Editar · [D] Excluir").split(
+    " · ",
+  )
+  let visibleHints = ""
+  for (const segment of hintSegments) {
+    const next = visibleHints ? `${visibleHints} · ${segment}` : segment
+    if (displayWidth(next) > hintsWidth) break
+    visibleHints = next
+  }
+  if (!visibleHints) visibleHints = truncateDisplay(hintSegments[0] ?? "", hintsWidth)
   useEffect(() => {
-    const timer = setTimeout(() => listRefs.current.get(selection)?.focus(), 0)
-    return () => clearTimeout(timer)
+    scrollRef.current?.scrollTo(Math.max(0, selection - 2))
   }, [selection])
-
   return (
     <>
       <text
         content={translateUi("Escolha o ambiente usado para preparar e enviar requests.")}
         style={{ fg: COLORS.muted }}
       />
-      <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
+      <InlineButton
+        id="http-environment-globals"
+        label="[G] Globals · sempre ativo"
+        accent={COLORS.http}
+        active
+        onPress={onOpenGlobals}
+      />
+      <scrollbox ref={scrollRef} scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
         {choices.map((name, index) => {
           const environment = name
             ? environments.find((candidate) => candidate.name === name)
             : undefined
-          const details = environment
-            ? `${environment.production ? " · PROD" : ""} · ${translateUi(`${environment.privateNames.size} privado(s)`)} · ${environment.directory || "/"}`
-            : ""
+          const details = environment?.production ? " · PROD" : ""
           return (
-            <InlineButton
-              key={name ?? "none"}
-              id={`http-environment-choice-${name ?? "none"}`}
-              buttonRef={(button) => {
-                if (button) listRefs.current.set(index, button)
-                else listRefs.current.delete(index)
-              }}
-              label={`${name === activeName ? "◆" : "◇"} ${name ?? "Sem ambiente"}${details}`}
-              accent={environment?.production ? COLORS.danger : COLORS.http}
-              active={index === selection}
-              onPress={() => onSelect(name)}
-            />
+            <box key={name ?? "none"} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+              <box style={{ flexGrow: 1, overflow: "hidden" }}>
+                <InlineButton
+                  id={`http-environment-choice-${name ?? "none"}`}
+                  label={truncateDisplay(
+                    `${name === activeName ? "◆" : "◇"} ${name ?? translateUi("Sem ambiente")}${details}`,
+                    Math.max(12, contentWidth - (name ? 24 : 2)),
+                  )}
+                  accent={environment?.production ? COLORS.danger : COLORS.http}
+                  active={index === selection}
+                  onPress={() => onSelect(name)}
+                />
+              </box>
+              {name ? (
+                <>
+                  <InlineButton
+                    id={`http-environment-edit-${name}`}
+                    label="[E] Editar"
+                    accent={COLORS.http}
+                    onPress={() => onEdit(name)}
+                  />
+                  <InlineButton
+                    id={`http-environment-delete-${name}`}
+                    label="[D] Excluir"
+                    accent={COLORS.danger}
+                    onPress={() => onDelete(name)}
+                  />
+                </>
+              ) : null}
+            </box>
           )
         })}
       </scrollbox>
-      <text content={translateUi("[↑/↓] Navegar · [Enter] Usar")} style={{ fg: COLORS.muted }} />
-      <InlineButton
-        id="http-environment-new-private"
-        label="[N] Novo ambiente privado"
-        accent={COLORS.http}
-        onPress={onCreate}
-      />
-      <InlineButton
-        id="http-environment-workspace-settings"
-        label="[W] Defaults do workspace"
-        accent={COLORS.http}
-        onPress={onOpenWorkspaceSettings}
-      />
+      <box
+        id="http-environment-list-footer"
+        style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}
+      >
+        <ShortcutText
+          id="http-environment-list-hints"
+          content={visibleHints}
+          style={{ width: hintsWidth, flexShrink: 0, overflow: "hidden", fg: COLORS.muted }}
+        />
+        <InlineButton
+          id="http-environment-new"
+          label={createLabel}
+          accent={COLORS.http}
+          onPress={onCreate}
+        />
+      </box>
     </>
   )
 }
 
-export function HttpPrivateEnvironmentForm({
-  environmentName,
-  variableName,
-  secret,
-  addToGitignore,
-  storeInKeychain,
+export function HttpEnvironmentCreateForm({
+  formKind,
+  name,
+  rows,
+  mode,
+  target,
+  rowIndex,
+  column,
   busy,
   error,
-  privateEnvironmentPath,
-  onEnvironmentNameChange,
-  onVariableNameChange,
-  onSecretChange,
-  onToggleGitignore,
-  onToggleKeychain,
-  onBack,
+  onNameChange,
+  onRowChange,
+  onChooseName,
+  onChooseTable,
   onSave,
+  onFocusName,
+  onFocusCell,
 }: {
-  environmentName: string
-  variableName: string
-  secret: string
-  addToGitignore: boolean
-  storeInKeychain: boolean
+  formKind: "create" | "edit" | "globals"
+  name: string
+  rows: HttpEnvironmentRow[]
+  mode: HttpEnvironmentFormMode
+  target: "name" | "table"
+  rowIndex: number
+  column: 0 | 1
   busy: boolean
   error: string
-  privateEnvironmentPath: string
-  onEnvironmentNameChange: (value: string) => void
-  onVariableNameChange: (value: string) => void
-  onSecretChange: (value: string) => void
-  onToggleGitignore: () => void
-  onToggleKeychain: () => void
-  onBack: () => void
+  onNameChange: (value: string) => void
+  onRowChange: (index: number, column: 0 | 1, value: string) => void
+  onChooseName: () => void
+  onChooseTable: () => void
   onSave: () => void
+  onFocusName: () => void
+  onFocusCell: (index: number, column: 0 | 1) => void
 }) {
-  const environmentRef = useRef<InputRenderable | null>(null)
-  const variableRef = useRef<InputRenderable | null>(null)
-  const secretRef = useRef<PasswordInputRenderable | null>(null)
-
+  const tableScrollRef = useRef<ScrollBoxRenderable | null>(null)
   useEffect(() => {
-    const timer = setTimeout(() => environmentRef.current?.focus(), 0)
-    return () => clearTimeout(timer)
-  }, [])
-
+    if (mode === "table" || mode === "cell") {
+      tableScrollRef.current?.scrollTo(Math.max(0, rowIndex - 2))
+    }
+  }, [mode, rowIndex])
   return (
     <>
       <text
-        content={translateUi("Crie uma variável secreta sem gravá-la no request.")}
-        style={{ fg: COLORS.muted }}
-      />
-      <text
-        content={`${translateUi("ARQUIVO")}  ${privateEnvironmentPath}`}
-        style={{ fg: COLORS.muted }}
-      />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("AMBIENTE")} style={{ width: 14, fg: COLORS.muted }} />
-        <input
-          ref={environmentRef}
-          id="http-environment-create-name"
-          value={environmentName}
-          placeholder="local"
-          maxLength={80}
-          onInput={onEnvironmentNameChange}
-          onMouseDown={() => environmentRef.current?.focus()}
-          style={fieldStyle()}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("VARIÁVEL")} style={{ width: 14, fg: COLORS.muted }} />
-        <input
-          ref={variableRef}
-          id="http-environment-create-variable"
-          value={variableName}
-          placeholder="apiToken"
-          maxLength={120}
-          onInput={onVariableNameChange}
-          onMouseDown={() => variableRef.current?.focus()}
-          style={fieldStyle()}
-        />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("VALOR PRIVADO")} style={{ width: 14, fg: COLORS.muted }} />
-        <password-input
-          ref={secretRef}
-          id="http-environment-create-secret"
-          value={secret}
-          placeholder={translateUi("não será exibido")}
-          maxLength={4096}
-          onInput={onSecretChange}
-          onMouseDown={() => secretRef.current?.focus()}
-          style={fieldStyle(true)}
-        />
-      </box>
-      <InlineButton
-        id="http-environment-gitignore"
-        label={`[G] ${addToGitignore ? "◆" : "◇"} Adicionar ao .gitignore`}
-        accent={addToGitignore ? COLORS.http : COLORS.warning}
-        active={addToGitignore}
-        onPress={onToggleGitignore}
-      />
-      <InlineButton
-        id="http-environment-keychain"
-        label={`[Ctrl+K] ${storeInKeychain ? "◆" : "◇"} Guardar no keychain`}
-        accent={COLORS.http}
-        active={storeInKeychain}
-        onPress={onToggleKeychain}
-      />
-      <text
         content={translateUi(
-          storeInKeychain
-            ? "O JSON guardará apenas uma referência opaca ao keychain."
-            : "O valor será gravado somente no arquivo privado protegido.",
+          formKind === "create"
+            ? "Novo ambiente global"
+            : formKind === "edit"
+              ? "Editar ambiente"
+              : "Globals · sempre ativo",
         )}
-        style={{ fg: COLORS.muted }}
+        style={{ fg: COLORS.http }}
       />
-      <text
-        content={translateUi(
-          addToGitignore
-            ? "O arquivo privado será protegido por uma regra do projeto."
-            : "Atenção: o arquivo privado poderá ser incluído em um commit.",
+      <box
+        id="http-environment-name-block"
+        style={{
+          height: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          backgroundColor: COLORS.panelRaised,
+        }}
+      >
+        <box
+          id="http-environment-name-rail"
+          style={{
+            width: 1,
+            flexShrink: 0,
+            backgroundColor:
+              mode === "choose" && target === "name" ? COLORS.http : COLORS.panelRaised,
+          }}
+        />
+        {mode === "choose" && formKind !== "globals" ? (
+          <InlineButton
+            id="http-environment-target-name"
+            label="[Enter] Nome"
+            accent={COLORS.http}
+            active={target === "name"}
+            onPress={onChooseName}
+          />
+        ) : (
+          <text content={translateUi("NOME")} style={{ width: 12, fg: COLORS.muted }} />
         )}
-        style={{ fg: addToGitignore ? COLORS.muted : COLORS.warning }}
-      />
+        {formKind === "globals" ? (
+          <text content="Globals" style={{ flexGrow: 1, fg: COLORS.text, bg: COLORS.canvas }} />
+        ) : (
+          <input
+            id="http-environment-create-name"
+            value={name}
+            placeholder={translateUi("Nome do ambiente")}
+            maxLength={80}
+            onInput={onNameChange}
+            onMouseDown={onFocusName}
+            style={{
+              ...inputStyle,
+              backgroundColor: COLORS.canvas,
+              focusedBackgroundColor: COLORS.canvas,
+            }}
+          />
+        )}
+      </box>
+      <box
+        id="http-environment-table-block"
+        style={{ flexGrow: 1, flexDirection: "row", backgroundColor: COLORS.panelRaised }}
+      >
+        <box
+          id="http-environment-table-rail"
+          style={{
+            width: 1,
+            flexShrink: 0,
+            backgroundColor:
+              mode === "choose" && target === "table" ? COLORS.http : COLORS.panelRaised,
+          }}
+        />
+        <box style={{ flexGrow: 1 }}>
+          {mode === "choose" ? (
+            <InlineButton
+              id="http-environment-target-table"
+              label="[Enter] Tabela"
+              accent={COLORS.http}
+              active={target === "table"}
+              onPress={onChooseTable}
+            />
+          ) : null}
+          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+            <text content={translateUi("VARIÁVEL")} style={{ width: "50%", fg: COLORS.muted }} />
+            <text content={translateUi("VALOR")} style={{ fg: COLORS.muted }} />
+          </box>
+          <scrollbox ref={tableScrollRef} scrollY viewportCulling style={{ flexGrow: 1 }}>
+            {rows.map((row, index) => (
+              <HttpEnvironmentTableRow
+                key={row.id}
+                row={row}
+                index={index}
+                mode={mode}
+                rowIndex={rowIndex}
+                column={column}
+                onRowChange={onRowChange}
+                onFocusCell={onFocusCell}
+              />
+            ))}
+          </scrollbox>
+        </box>
+      </box>
+      {mode === "choose" ? (
+        <ShortcutText
+          id="http-environment-form-hints"
+          content="[↑/↓] Nome/Tabela · [Enter] Editar · [Esc] Voltar"
+          style={{ fg: COLORS.muted }}
+        />
+      ) : (
+        <ShortcutText
+          id="http-environment-form-hints"
+          content={
+            formKind === "globals"
+              ? "[/] Tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
+              : "[/] Nome ou tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
+          }
+          style={{ fg: COLORS.muted }}
+        />
+      )}
       {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
-      <box style={{ flexGrow: 1 }} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
         <InlineButton
-          id="http-environment-back"
-          label="[B] Ambientes"
-          accent={COLORS.http}
-          onPress={onBack}
-        />
-        <InlineButton
           id="http-environment-create-save"
-          label={busy ? "SALVANDO…" : "[Ctrl+S] Criar privado"}
+          label={
+            busy
+              ? "SALVANDO…"
+              : formKind === "create"
+                ? "[Ctrl+S] Criar ambiente"
+                : "[Ctrl+S] Salvar ambiente"
+          }
           accent={COLORS.http}
           disabled={busy}
           onPress={onSave}

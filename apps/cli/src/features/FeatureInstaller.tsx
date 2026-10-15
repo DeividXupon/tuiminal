@@ -154,7 +154,7 @@ export function FeatureInstaller({
         top: 0,
         width: "100%",
         height: "100%",
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         padding: LAYOUT.compact || short ? 1 : 2,
       }}
     >

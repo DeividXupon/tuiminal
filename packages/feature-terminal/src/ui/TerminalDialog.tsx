@@ -1,0 +1,77 @@
+import type { BoxRenderable, InputRenderable } from "@opentui/core"
+import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
+import { useEffect, useRef, useState } from "react"
+import { TerminalInlineButton } from "./TerminalShortcut"
+
+export type TerminalDialogKind = "command" | "rename"
+const TITLES = {
+  command: "Novo comando",
+  rename: "Renomear terminal",
+}
+export function TerminalDialog({
+  kind,
+  initialValue,
+  onSave,
+  onClose,
+  inactive = false,
+}: {
+  kind: TerminalDialogKind
+  initialValue: string
+  onSave: (value: string) => void
+  onClose: () => void
+  /** Renders without taking focus or keyboard input, as in simulated tutorials. */
+  inactive?: boolean
+}) {
+  const dimensions = useTerminalDimensions()
+  const dialogRef = useRef<BoxRenderable | null>(null)
+  const ref = useRef<InputRenderable | null>(null)
+  const [value, setValue] = useState(initialValue)
+  useEffect(() => {
+    if (!inactive) ref.current?.focus()
+  }, [inactive])
+  const submit = () => {
+    if (value.trim()) onSave(value.trim())
+  }
+  useKeyboard((key) => {
+    if (!inactive && key.name === "escape") {
+      key.preventDefault()
+      key.stopPropagation()
+      onClose()
+    }
+  })
+  return (
+    <ModalSurface
+      dialogRef={dialogRef}
+      id="terminal-dialog"
+      width={Math.max(1, Math.min(64, dimensions.width - 2))}
+      height={Math.min(dimensions.height, 7)}
+      borderColor={COLORS.terminal}
+      zIndex={800}
+      onBackdropPress={onClose}
+    >
+      <text content={translateUi(TITLES[kind])} style={{ height: 1, fg: COLORS.terminal }} />
+      <input
+        ref={ref}
+        id="terminal-command-input"
+        value={value}
+        onInput={setValue}
+        onSubmit={submit}
+        onMouseDown={() => ref.current?.focus()}
+        width="100%"
+        style={{
+          backgroundColor: COLORS.panelRaised,
+          textColor: COLORS.text,
+          focusedBackgroundColor: COLORS.panelRaised,
+          focusedTextColor: COLORS.text,
+        }}
+      />
+      <box style={{ height: 1, flexDirection: "row", flexShrink: 0 }}>
+        <TerminalInlineButton compact label="[Enter] Salvar" onPress={submit} />
+        <TerminalInlineButton compact label="[Esc] Cancelar" onPress={onClose} />
+      </box>
+    </ModalSurface>
+  )
+}

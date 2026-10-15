@@ -1,0 +1,14 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "bun-test-failures",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^\\(fail\\) (.+)$",
+          "message": 1
+        }
+      ]
+    }
+  ]
+}

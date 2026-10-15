@@ -1,3 +1,5 @@
+export type RunnerDependency = { commandId: string; condition: "started" | "completed" }
+
 export type RunnerRestartPolicy = "never" | "on-failure" | "always"
 
 export type RunnerHealthCheck =
@@ -24,6 +26,8 @@ export type RunnerConfiguredCommand = {
   command: string
   description: string
   source: "tuiminal" | "mprocs" | "procfile" | "saved"
+  dependsOn?: RunnerDependency[]
+  profile?: string
   cwd?: string
   env?: Record<string, string>
   envFile?: string

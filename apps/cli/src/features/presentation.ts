@@ -22,7 +22,7 @@ export const FEATURE_PRESENTATIONS: Record<FeatureId, { title: string; descripti
       "Monte requisições com headers, autenticação e body. Explore respostas, organize coleções e teste APIs no terminal.",
   },
   terminal: {
-    title: "Free Terminal",
+    title: "Term Agents",
     description:
       "Abra sessões de shell no diretório do projeto. Execute seus comandos e alterne entre terminais mantendo cada sessão ativa.",
   },

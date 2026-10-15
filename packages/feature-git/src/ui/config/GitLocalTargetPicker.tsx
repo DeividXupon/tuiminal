@@ -1,5 +1,5 @@
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -11,6 +11,7 @@ import type { LocalGitProject, LocalGitTarget } from "../../services/local-targe
 export type GitLocalTargetPickerKind = "project" | "branch"
 
 export function GitLocalTargetPicker({
+  width,
   kind,
   target,
   projects,
@@ -20,6 +21,7 @@ export function GitLocalTargetPicker({
   onSelectProject,
   onSelectBranch,
 }: {
+  width: number
   kind: GitLocalTargetPickerKind
   target: LocalGitTarget
   projects: readonly LocalGitProject[]
@@ -30,7 +32,6 @@ export function GitLocalTargetPicker({
   onSelectBranch: (branch: string) => Promise<boolean>
 }) {
   const renderer = useRenderer()
-  const terminal = useTerminalDimensions()
   const dialogRef = useRef<BoxRenderable | null>(null)
   const inputRef = useRef<InputRenderable | null>(null)
   const listRef = useRef<SelectRenderable | null>(null)
@@ -126,150 +127,109 @@ export function GitLocalTargetPicker({
     }
   })
 
-  const width = Math.max(48, Math.min(92, terminal.width - 6))
-  const height = Math.max(14, Math.min(28, terminal.height - 4))
   const title = kind === "project" ? "◆ ESCOLHER PROJETO LOCAL" : "◆ ESCOLHER BRANCH LOCAL"
   return (
-    <>
+    <box
+      id="git-local-target-picker"
+      ref={dialogRef}
+      focusable
+      style={{ width: "100%", height: "100%", flexGrow: 1, backgroundColor: COLORS.canvas }}
+    >
       <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={980}
-        backgroundColor="#030509"
-        opacity={0.94}
-      />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: native modal backdrop; Escape is handled above. */}
-      <box
-        onMouseDown={(event) => {
-          if (event.button !== 0 || event.target !== event.currentTarget) return
-          event.preventDefault()
-          event.stopPropagation()
-          close()
+        style={{
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={981}
-        alignItems="center"
-        justifyContent="center"
       >
-        <box
-          ref={dialogRef}
-          id="git-local-target-picker"
-          focusable
-          style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.git,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
+        <text content={translateUi(title)} style={{ fg: COLORS.git }} />
+        <InlineButton
+          id="git-local-target-close"
+          label="Voltar"
+          accent={COLORS.git}
+          onPress={close}
+        />
+      </box>
+      <input
+        ref={inputRef}
+        id="git-local-target-search"
+        value={query}
+        placeholder={translateUi("⌕ Filtrar por nome ou caminho…")}
+        onInput={setQuery}
+        onSubmit={() => listRef.current?.focus()}
+        onMouseDown={() => inputRef.current?.focus()}
+        width={Math.max(8, width - 4)}
+        style={{
+          marginTop: 1,
+          marginBottom: 1,
+          backgroundColor: COLORS.panelRaised,
+          focusedBackgroundColor: COLORS.panelRaised,
+          textColor: COLORS.text,
+          focusedTextColor: COLORS.text,
+          cursorColor: COLORS.git,
+        }}
+      />
+      {options.length ? (
+        <select
+          ref={listRef}
+          id="git-local-target-list"
+          options={options}
+          onSelect={(_index, option) => {
+            if (typeof option?.value === "string") void select(option.value)
           }}
-        >
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text content={translateUi(title)} style={{ fg: COLORS.git }} />
-            <InlineButton
-              id="git-local-target-close"
-              label={translateUi("[Esc] Voltar")}
-              accent={COLORS.git}
-              onPress={close}
-            />
-          </box>
-          <input
-            ref={inputRef}
-            id="git-local-target-search"
-            value={query}
-            placeholder={translateUi("⌕ Filtrar por nome ou caminho…")}
-            onInput={setQuery}
-            onSubmit={() => listRef.current?.focus()}
-            onMouseDown={() => inputRef.current?.focus()}
-            width={width - 4}
-            style={{
-              marginTop: 1,
-              marginBottom: 1,
-              backgroundColor: COLORS.panelRaised,
-              focusedBackgroundColor: COLORS.panelRaised,
-              textColor: COLORS.text,
-              focusedTextColor: COLORS.text,
-              cursorColor: COLORS.git,
-            }}
-          />
-          {options.length ? (
-            <select
-              ref={listRef}
-              id="git-local-target-list"
-              options={options}
-              onSelect={(_index, option) => {
-                if (typeof option?.value === "string") void select(option.value)
-              }}
-              onMouseDown={(event) =>
-                handleSelectMouseDown(event, listRef.current, {
-                  optionCount: options.length,
-                  showDescription: true,
-                  activateOnClick: true,
-                })
-              }
-              onMouseScroll={(event) => handleSelectMouseScroll(event, listRef.current)}
-              showDescription
-              showScrollIndicator
-              wrapSelection
-              style={{
-                flexGrow: 1,
-                backgroundColor: COLORS.panel,
-                focusedBackgroundColor: COLORS.panel,
-                textColor: COLORS.muted,
-                focusedTextColor: COLORS.text,
-                selectedBackgroundColor: COLORS.panelRaised,
-                selectedTextColor: COLORS.git,
-                descriptionColor: COLORS.muted,
-                selectedDescriptionColor: COLORS.text,
-              }}
-            />
-          ) : (
-            <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-              <text
-                content={translateUi(
-                  kind === "project"
-                    ? "Nenhum repositório Git local encontrado."
-                    : "Nenhuma branch local encontrada.",
-                )}
-                style={{ fg: COLORS.muted }}
-              />
-            </box>
-          )}
-          {projectsLoading && kind === "project" ? (
-            <text
-              content={translateUi("◷ Procurando repositórios Git locais…")}
-              style={{ fg: COLORS.git }}
-            />
-          ) : null}
-          {error || (kind === "project" ? projectError : "") ? (
-            <text content={error || projectError} style={{ fg: COLORS.danger }} />
-          ) : null}
-          <ShortcutText
+          onMouseDown={(event) =>
+            handleSelectMouseDown(event, listRef.current, {
+              optionCount: options.length,
+              showDescription: true,
+              activateOnClick: true,
+            })
+          }
+          onMouseScroll={(event) => handleSelectMouseScroll(event, listRef.current)}
+          showDescription
+          showScrollIndicator
+          wrapSelection
+          style={{
+            flexGrow: 1,
+            backgroundColor: COLORS.panel,
+            focusedBackgroundColor: COLORS.panel,
+            textColor: COLORS.muted,
+            focusedTextColor: COLORS.text,
+            selectedBackgroundColor: COLORS.panelRaised,
+            selectedTextColor: COLORS.git,
+            descriptionColor: COLORS.muted,
+            selectedDescriptionColor: COLORS.text,
+          }}
+        />
+      ) : (
+        <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
+          <text
             content={translateUi(
-              busy ? "Aplicando seleção…" : "[/] Filtrar  [↑/↓] Navegar  [Enter] Selecionar",
+              kind === "project"
+                ? "Nenhum repositório Git local encontrado."
+                : "Nenhuma branch local encontrada.",
             )}
-            style={{ height: 1, flexShrink: 0, fg: busy ? COLORS.git : COLORS.muted }}
+            style={{ fg: COLORS.muted }}
           />
         </box>
-      </box>
-    </>
+      )}
+      {projectsLoading && kind === "project" ? (
+        <text
+          content={translateUi("◷ Procurando repositórios Git locais…")}
+          style={{ fg: COLORS.git }}
+        />
+      ) : null}
+      {error || (kind === "project" ? projectError : "") ? (
+        <text content={error || projectError} style={{ fg: COLORS.danger }} />
+      ) : null}
+      <ShortcutText
+        content={translateUi(
+          busy ? "Aplicando seleção…" : "[/] Filtrar  [↑/↓] Navegar  [Enter] Selecionar",
+        )}
+        style={{ height: 1, flexShrink: 0, fg: busy ? COLORS.git : COLORS.muted }}
+      />
+    </box>
   )
 }

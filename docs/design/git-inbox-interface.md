@@ -6,7 +6,8 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
 ## Anatomy
 
 ```text
-┌ [1] [C] Diffs  [2] PR  [3] Issues  [4] Inbox ───────────────────────────┐
+LOCAL · …/project           │ GITHUB · @viewer
+[1] [C] DIFFS               │ [2] PR  [3] ISSUES  [4] INBOX
 │ GITHUB INBOX                                                            │
 │ Inbox 12  Review 3  Assigned 2  Mentioned 4  Saved 1                    │
 ├─────────────────────────────────────┬───────────────────────────────────┤
@@ -21,6 +22,9 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
 
 ## Behavior
 
+- In framed mode, title, sections, and panels are adjacent on one continuous
+  panel-colored surface. Compact mode retains its existing geometry and canvas
+  background.
 - Wide (`≥92 × 20`): list and preview side by side. Smaller terminals use one pane,
   with `[L/→/Enter]` for preview and `[H/←]` for the list.
 - `[A←]`/`[F→]` cycles sections; both controls also accept mouse input.
@@ -30,15 +34,20 @@ and adapted to Tuiminal's focus, safety, and responsive layout rules.
   Selection and visible data remain stable during the request.
 - The header shows refresh state only while a request is active, without permanent
   explanatory copy for automatic behavior that cannot be disabled.
-- Unread items use `●`, read items `○`, and saved items `★`; meaning is not color-only.
+- Unread items use `●`, read items `○`, and saved items `★`. PR/Issue marks take
+  the subject state color: open green, merged purple, draft gray, closed red.
+  A localized text label repeats the state. Other subjects or unavailable states
+  stay neutral, while filled/hollow shapes keep read status distinct.
 - Rows reuse formatting while notification, width, language, and saved state remain
   unchanged. Navigation, loader animation, and palette changes do not recompute
   dates/truncation; styling and controls remain current.
 
 ## Actions and layers
 
-- `[O]` opens PR/Issue subjects with the corresponding `gh` command; other subjects
-  use repository-pinned `gh browse`.
+- `[O]` opens the selected notification through the Git-wide browser choice.
+  The system-browser default uses the corresponding `gh` PR/Issue command or
+  repository-pinned `gh browse`; Browsh, Carbonyl, and terminal-browser receive
+  the validated HTTPS subject URL. See [Git configuration](./git-pr-interface.md).
 - `[M]` marks a thread read and keeps its row.
 - `[B]` toggles local saving without changing the GitHub subscription.
 - `[D]` and `[U]` open a confirmation stating target and consequence. `[Ctrl+S]`
@@ -66,6 +75,11 @@ responses, and `[Enter]` reopens an exited shell.
 
 - Reads use REST `notifications?all=true` on the authenticated PR-profile host.
   Inbox does not reuse PR/Issue search filters as thread scope.
+- Notification pages do not contain PR/Issue state. After rendering the page,
+  Inbox resolves only validated subject URLs through repository-pinned read-only
+  `gh api` calls with bounded concurrency. These reads have separate cancellation,
+  a 128-entry short-lived cache, and generation checks; failures keep the list
+  usable with a neutral mark and never request a URL supplied by the payload.
 - `[M]` uses `PATCH notifications/threads/{id}`; `[D]` uses `DELETE` on that resource;
   `[U]` uses `DELETE notifications/threads/{id}/subscription`. Pin host and thread
   ID in confirmation. Execute once: timeout/cancellation after dispatch produces

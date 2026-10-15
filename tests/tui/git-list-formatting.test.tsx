@@ -86,6 +86,66 @@ async function frame() {
 }
 
 describe.each(["pr", "issue"] as const)("%s list formatting", (kind) => {
+  test("colors each state marker while keeping the rest of the row readable", async () => {
+    updateUiSettings({ palette: "prime", colorMode: "dark" })
+    const pr = DEMO_PULL_REQUESTS[0]
+    const issue = DEMO_ISSUES[0]
+    if (!pr || !issue) throw new Error("Missing Git list fixtures")
+    const states =
+      kind === "pr"
+        ? (["open", "draft", "merged", "closed"] as const)
+        : (["open", "closed"] as const)
+    const items = states.map((state, index) =>
+      kind === "pr"
+        ? {
+            ...pr,
+            state,
+            identity: { ...pr.identity, nodeId: `color-${index}`, number: 801 + index },
+          }
+        : {
+            ...issue,
+            state,
+            identity: { ...issue.identity, nodeId: `color-${index}`, number: 801 + index },
+          },
+    )
+    tui = await testRender(
+      kind === "pr" ? (
+        <PullRequestList
+          items={items as PullRequestSummary[]}
+          selectedIndex={0}
+          focused
+          width={100}
+          onSelect={() => undefined}
+        />
+      ) : (
+        <IssueList
+          items={items as IssueSummary[]}
+          selectedIndex={0}
+          focused
+          width={100}
+          onSelect={() => undefined}
+        />
+      ),
+      { width: 100, height: 16 },
+    )
+    await frame()
+    const marks = kind === "pr" ? ["◆", "◇", "●", "○"] : ["◆", "○"]
+    const colors =
+      kind === "pr"
+        ? [COLORS.success, COLORS.muted, COLORS.gitMerged, COLORS.danger]
+        : [COLORS.success, COLORS.danger]
+    for (const [index, mark] of marks.entries()) {
+      const line = tui.captureSpans().lines.find((row) =>
+        row.spans
+          .map((span) => span.text)
+          .join("")
+          .includes(`#${801 + index}`),
+      )
+      const marker = line?.spans.find((span) => span.text === mark)
+      expect(marker?.fg.toInts()).toEqual(RGBA.fromHex(colors[index] ?? "#000000").toInts())
+    }
+  })
+
   test("reuses row text when only selection, focus or the containing array changes", async () => {
     const h = fixture(kind)
     tui = await testRender(<h.Harness />, { width: 160, height: 20 })
@@ -149,6 +209,15 @@ describe.each(["pr", "issue"] as const)("%s list formatting", (kind) => {
       .lines.flatMap((line) => line.spans)
       .find((value) => value.text.includes("Entry 1"))
     expect(span?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.text).toInts())
+    const colorLine = tui.captureSpans().lines.find((line) =>
+      line.spans
+        .map((value) => value.text)
+        .join("")
+        .includes("Entry 1"),
+    )
+    expect(colorLine?.spans.find((value) => value.text === "◆")?.fg.toInts()).toEqual(
+      RGBA.fromHex(COLORS.success).toInts(),
+    )
     const row = tui.renderer.root.findDescendantById(`git-${kind}-row-1`)
     if (!row) throw new Error("Missing second list row")
     await act(async () => tui?.mockMouse.click(row.x + 5, row.y))

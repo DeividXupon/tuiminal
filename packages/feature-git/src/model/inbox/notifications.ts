@@ -1,4 +1,4 @@
-import type { InboxNotification, InboxSectionId } from "./types"
+import type { InboxNotification, InboxSectionId, InboxSubjectState } from "./types"
 
 const REASONS_BY_SECTION: Partial<Record<InboxSectionId, readonly string[]>> = {
   review: ["review_requested"],
@@ -46,4 +46,28 @@ export function mergeInboxNotifications(
   const merged = new Map(current.map((item) => [item.id, item]))
   for (const item of additions) merged.set(item.id, item)
   return [...merged.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+}
+
+export function applyInboxSubjectStates(
+  current: InboxNotification[],
+  requested: readonly InboxNotification[],
+  states: ReadonlyMap<string, InboxSubjectState>,
+) {
+  const requestedById = new Map(requested.map((item) => [item.id, item]))
+  let changed = false
+  const next = current.map((item) => {
+    const original = requestedById.get(item.id)
+    const state = states.get(item.id)
+    if (
+      !original ||
+      !state ||
+      item.subjectApiUrl !== original.subjectApiUrl ||
+      item.updatedAt !== original.updatedAt ||
+      item.subjectState === state
+    )
+      return item
+    changed = true
+    return { ...item, subjectState: state }
+  })
+  return changed ? next : current
 }

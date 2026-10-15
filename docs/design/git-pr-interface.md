@@ -28,6 +28,9 @@ Observed composition, deliberately omitting sample data:
 - Top strip with section names/counts and an emphasized active section.
 - Query directly above the table, showing the active filters.
 - Rows with PR identity, title, and compact review/CI/change signals.
+- Tuiminal keeps distinct state glyphs, colored green for open, purple for merged,
+  muted gray for draft, and red for closed; the text and shape remain readable
+  without color.
 - Full-width row selection rather than a separate card for each PR.
 - Simple vertical divider; preview shows identity, title, state, and branches.
 - `Overview`, `Checks`, and `Activity` organize details.
@@ -81,6 +84,24 @@ receive shortcut styling. Support all six UI languages.
 
 ## 4. Conceptual wireframes
 
+The shared `GitNavigationHeader` has two source groups, each with a context row and
+an action row. `LOCAL · …/project` follows the independently selected local root;
+`GITHUB · @viewer` uses the active PR, Issues, or Inbox dashboard's authenticated
+identity. Non-default GitHub hosts accompany the account when space permits.
+Before a remote dashboard loads, the account is `—`; returning to Local retains
+the last remote identity. Configuration changes invalidate the displayed identity
+until the relevant dashboard reloads, and authentication/errors clear it. No header
+read initializes a remote tool or calls GitHub. The remote repository scope remains
+in its owning dashboard.
+
+Wide layouts separate the groups with a two-row `│`. Group widths reserve the
+translated action labels; long context text truncates by display width. Below that
+combined minimum, groups stack and action rows wrap, preserving mouse targets.
+The tutorial uses the same header with a fixed project/account fixture and its
+existing target IDs. `[1–4]` and local `[C]` keep their existing behavior.
+`tests/tui/git-navigation-header.test.tsx` covers sources, identity lifecycle,
+resizing, six languages, both layout modes, and mouse controls.
+
 These diagrams use fictional data and are not pixel-for-pixel copies of the official
 images. Final dimensions must be checked in the native renderer.
 
@@ -88,7 +109,8 @@ images. Final dimensions must be checked in the native renderer.
 
 ```text
 ◆ TUIMINAL [Alt+1] Database [Alt+2] Git [Alt+3] Runner [Alt+4] HTTP [Alt+5] Terminal [,] Settings
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox       github.com · @viewer
+LOCAL · …/project           │ GITHUB · @viewer
+[1] [C] DIFFS               │ [2] PR [3] Issues [4] Inbox
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me             Scope: all account projects
 ───────────────────────────────────────────┬──────────────────────────────────
@@ -110,6 +132,11 @@ GIT [1] Diffs [2] PR [3] Issues [4] Inbox       github.com · @viewer
 
 Blank list space represents a short result set, not reserved footer height. Longer
 lists fill all usable rows. Search, titles, and tabs must not reserve empty lines.
+In framed mode, title, controls, query, and panels are adjacent. When every translated
+label fits, section navigation and PR actions share one row; narrower framed screens
+stack those controls without spacer rows. Compact mode retains its existing dense
+four-row header. The framed dashboard surface uses the panel background so padding
+and any space between bordered panels do not introduce a second background color.
 
 Local, comparison, and PR diffs share the code viewport. In the focused pane,
 `[Shift+H/L]` or `[Shift+←/→]` scrolls horizontally; clickable controls occupy a
@@ -120,7 +147,8 @@ leaving the diff or changing the file/layout resets it to the left.
 ### 4.2. Medium terminal — preview below
 
 ```text
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox   github.com · @viewer
+LOCAL · …/project       │ GITHUB · @viewer
+[1] [C] DIFFS           │ [2] PR [3] Issues [4] Inbox
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me
    Repo      PR / Title                          Rev CI
@@ -137,7 +165,10 @@ Description…                     Reviewers and code owners…
 ### 4.3. Narrow/short terminal — one pane at a time
 
 ```text
-GIT [1] Diffs [2] PR [3] Issues [4] Inbox
+LOCAL · …/project
+[1] [C] DIFFS
+GITHUB · @viewer
+[2] PR [3] Issues [4] Inbox
 [A←] Review requested · 4 [F→]
 [/] review-requested:@me
 ▶ #142 Fix cache
@@ -186,6 +217,33 @@ in remote diffs.
 
 ### 4.6. Forms and confirmations
 
+PR creation opens from `[Ctrl+N]` or its mouse control, independently of list
+selection. The form chooses an explicit `owner/repository` from the searchable
+authenticated repository catalog, then remote base and compare branches in that
+repository, title, Markdown body, and draft flag. The repository picker retains
+the current valid selection while the catalog loads and can retry a failed read.
+It renders at most 100 matching rows at once and lets search reach the rest.
+Closing it cancels the catalog request. Both branch
+controls open a searchable list from the selected repository's remote branches,
+loaded in bounded pages on demand. Changing the repository clears both selections;
+the form then reads that repository's `default_branch` and suggests it as base.
+This read is cancelled on close or repository change, and a late response cannot
+replace a manually selected base. If the read fails, the base picker remains
+available. The base is never inferred from a selected PR, whose base may differ
+from the repository default. Closing the picker cancels its read. Selecting the
+compare branch reads the latest remote commit subject and suggests it as the PR
+title. A changed repository or
+compare branch retires the previous read; late results cannot replace a newer
+selection or a manually edited title. Failure leaves the title editable and does
+not block creation. The compare selection maps to GitHub's `head` field on
+submission. It never pushes
+or checks out a local branch. `[Ctrl+S]` validates the form, rereads authentication,
+repository identity, and both branches, then sends one JSON request through `gh api`.
+Only a response with the matching host, repository, PR path, and number confirms
+creation. An error after dispatch is uncertain and must not trigger automatic replay;
+the form retains its draft until the user verifies GitHub. Empty/account-scoped
+lists can still open it.
+
 ```text
 ┌ Approve PR ──────────────────────────────────────┐
 │ github.com · team/api #142 · account: @reviewer  │
@@ -215,18 +273,27 @@ in remote diffs.
 
 ### 4.7. Section editor
 
-In Git, `[,]` opens contextual settings. The GitHub option opens one manager for
-PR selectors, Issue selectors, and repositories. Forms expose name, filters, order,
+In Git, `[,]` opens contextual settings. Its sidebar places the unnumbered local
+Diffs target under `GIT`, with Pull Requests, Issues, Repositories, and Browser under
+`GITHUB`.
+`[J/K]` moves category focus and renders that row's controls in the detail pane
+immediately. Only the focused row shows a blue `[Enter]`; `[Enter]` or `[L]`
+transfers keyboard focus to the detail, and `[Esc]` returns to the category list. A
+blue left rail marks the focused row or detail pane. Diffs uses its focused row and
+`[Enter]` without `[P]`/`[B]` aliases. PR and Issue ordering uses mouse controls
+without `Alt+arrow` shortcuts. Project/branch pickers and section editors replace this detail content
+and return to it instead of opening a second configuration modal.
+Forms expose name, filters, order,
 limit, and columns, plus save, rename, duplicate, reorder, and delete. Deleting a
 section never closes PRs or removes local/remote repositories. Only saving promotes
 a temporary query into persisted configuration.
 
 Local projects and remote repositories publish independently with their own loading
-and error states. Closing/reloading cancels the previous remote read; stale results
+and error states. Leaving/reloading cancels the previous remote read; stale results
 do not affect the current screen. Repeated local picker activations while a selection
-is pending do not dispatch more operations. Closing via `[Esc]`, button, or outside
-click retires that instance: its result cannot close a later picker. Internal controls
-remain clickable. Closing UI does not cancel or undo an already-started Git operation.
+is pending do not dispatch more operations. Leaving via `[Esc]` or the back button
+retires that instance: its result cannot close a later picker. Internal controls
+remain clickable. Leaving the UI does not cancel or undo an already-started Git operation.
 
 New profiles start with `My PRs`, `Review requested`, `All`, `Open`, and `Closed`.
 State filters select non-archived PRs within the current scope; preset names remain
@@ -234,8 +301,20 @@ English across all UI languages.
 
 Queries retain spaces and escapes inside quotes; literal qualifier text cannot
 change scope. Missing closing quotes produce translated guidance without submitting.
-The draft stays editable and focused in the same modal. Both `[Enter]` and `[Ctrl+S]`
+The draft stays editable and focused in the same context pane. Both `[Enter]` and `[Ctrl+S]`
 use this validation.
+
+The Browser context row saves one Git-wide choice in
+`$XDG_CONFIG_HOME/tuiminal/git-browser.json` (`~/.config/tuiminal/` by default),
+using atomic `0600` writes. The default keeps the existing `gh --web` and
+`gh browse` actions for the system browser.
+Browsh starts as `browsh --startup-url <url>` and Carbonyl as `carbonyl <url>`
+inside an owned PTY modal; `[Ctrl+Q]` closes it and stops its process tree.
+`terminal-browser open <url> --split right` opens beside Tuiminal. These
+executables are optional and must already be on `PATH`; a missing command
+produces visible feedback. Openers receive only validated HTTPS URLs for the
+selected GitHub host and pass arguments without a shell. The same choice applies
+to PRs, Issues, Inbox subjects, and workflow runs.
 
 ## 5. Responsive contract
 
@@ -389,9 +468,9 @@ admin bypass and automatic branch deletion are absent.
 
 ### Local Diffs and Compare
 
-`[1] [C] Git · Diffs` uses only an available local repository. The header shows
-project/branch and `[Ctrl+P]` selection; the same control is the first tab in Git
-settings opened with `[,]`. Changing this target does not change remote scope,
+`[1] [C] Diffs` uses only an available local repository. The header shows
+project/branch and `[Ctrl+P]` selection; the shortcut opens the first tab of the same
+Git context shown by `[,]`. Changing this target does not change remote scope,
 which may include repositories without a local clone.
 
 `[C]` toggles that tab to Compare. Before results, three centered cards select the
@@ -447,7 +526,7 @@ offer partial staging.
 
 ### Simulated local tutorial
 
-The first tutorial module fully simulates `[1] Git · Diffs`: local tab, repository/
+The first tutorial module fully simulates `[1] Diffs`: local tab, repository/
 branch, files, mini commit graph, diff, contextual actions, terminal, and shortcuts.
 Dedicated steps demonstrate file/folder staging with `[Space]`, navigation/focus,
 project/branch selection `[Ctrl+P]`, layouts `[V]`, full graph `[G]`, detailed Log `[O]`,
@@ -489,6 +568,14 @@ the configured interval refresh all sections to their loaded depth. Query autoco
 uses `[Ctrl+N/P]` and `[Ctrl+Y]`. See [Inbox](./git-inbox-interface.md) for the sibling
 workspace.
 
+While PR is active, the visible section and selected PR details refresh every 30
+seconds; activating a stale tab refreshes them promptly. `[R]` reads both immediately.
+The configured interval remains a separate full-section sweep, including loaded page
+depth. Failed background detail reads retain the usable preview. Cancellation of a
+superseded list or detail read does not show an error. Explicit refresh can replace
+a pending page without letting that page overwrite the new list; timed and
+foreground refreshes wait while pagination is active.
+
 Full-panel loads use shared ASCII plasma behind foreground status text with a short
 dissolve. Incremental pagination and background refresh remain inline over usable
 content. Local context/remote section LRU caches are capped at 64 entries; session-owned
@@ -518,8 +605,10 @@ and [Inbox](./git-inbox-interface.md) keep separate models, services, and state.
   list also means account scope, never GitHub-wide search.
 - Actions prepare exact host, account, repository, node ID, number, head SHA, and auth
   generation; reauthenticate, reread eligibility, confirm, execute once, and reconcile.
-  Timeout, cancellation, incomplete stdin, or output limits after dispatch do not
-  prove failure: preserve an uncertain result without retry.
+  Timeout, cancellation, incomplete stdin, output limits, or connection failures
+  after dispatch do not prove failure: preserve an uncertain result without retry.
+  Failed list/detail reads show localized connection guidance rather than raw socket
+  output.
 - Automated calls pass explicit arguments/stdin to `gh`, without shell interpolation,
   token reads, or global account switching. The user's guided PTY is a separate transport.
 - Merge uses `--match-head-commit`, never `--admin` or `--delete-branch`, and respects
@@ -544,5 +633,15 @@ resource disposal, and watches have dedicated suites; `tests/tui/` covers the re
 interface, including guided terminals, focus, rendering, and simulated tutorials.
 Remote reads/writes use fixtures or fake `gh`, never the user's account.
 
-For list/rendering cost, use `bun scripts/benchmark-git-pr.ts`. Measure again on the
-checkout under review; older results do not guarantee current latency.
+Large-list reconciliation caches a validated PR or Issue identity key only
+alongside an exact snapshot of every identity field, so a mutated identity is
+validated again. GitHub timestamps use ordinal ISO ordering, Markdown
+destinations are parsed once per description, and diff documents defer line-array
+allocation until intraline rows are requested. These optimizations must preserve
+inert text, URL validation,
+newest-first ordering, source boundaries, and lazy intraline comparison.
+
+For large-list and rendering cost, use `bun run benchmark:git:pr`; use the dedicated
+`benchmark:git:ui`, `benchmark:git:remote:ui`, and `benchmark:git:inbox:ui` commands
+for mounted interaction latency. Measure again on the checkout under review; older
+results do not guarantee current latency.

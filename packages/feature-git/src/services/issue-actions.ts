@@ -8,7 +8,7 @@ import { loadGhAuthContext } from "./github/auth"
 import { loadIssueDetails } from "./github/issue-details"
 import { executeIssueMutation } from "./github/issue-mutations"
 import { executeGitHubReactionWrite } from "./github/reaction-state"
-import type { GhTransportOptions } from "./github/transport"
+import { type GhTransportOptions, GitHubTransportError } from "./github/transport"
 
 export class IssueActionCoordinator {
   private readonly busy = new Set<string>()
@@ -32,13 +32,26 @@ export class IssueActionCoordinator {
   private async executeOnce(prepared: IssueActionState): Promise<IssueActionState> {
     if (prepared.status !== "prepared") return prepared
     const action = prepared.action
-    const currentAuth = await loadGhAuthContext({
-      host: action.target.host,
-      generation: action.authGeneration,
-      options: this.transport,
-    })
-    if (currentAuth.viewerId !== action.authViewerId) currentAuth.generation += 1
-    const before = await loadIssueDetails({ identity: action.target, options: this.transport })
+    let currentAuth: Awaited<ReturnType<typeof loadGhAuthContext>>
+    let before: Awaited<ReturnType<typeof loadIssueDetails>>
+    try {
+      currentAuth = await loadGhAuthContext({
+        host: action.target.host,
+        generation: action.authGeneration,
+        options: this.transport,
+      })
+      if (currentAuth.viewerId !== action.authViewerId) currentAuth.generation += 1
+      before = await loadIssueDetails({ identity: action.target, options: this.transport })
+    } catch (error) {
+      if (error instanceof GitHubTransportError && error.kind === "network") {
+        return {
+          status: "rejected",
+          action,
+          reason: "Não foi possível verificar a issue no GitHub. A ação não foi enviada.",
+        }
+      }
+      throw error
+    }
     if (!before) return { status: "rejected", action, reason: "issue-not-found" }
     const executing = beginIssueAction(prepared, currentAuth, before)
     if (executing.status !== "executing") return executing
@@ -46,7 +59,11 @@ export class IssueActionCoordinator {
       return executeIssueReaction(action, this.transport)
     }
     const result = await executeIssueMutation(action, this.transport)
-    if (result.status !== "confirmed" || action.kind === "checkout") {
+    if (
+      action.kind === "checkout" ||
+      (result.status !== "confirmed" &&
+        !(result.status === "uncertain" && result.reason === "network"))
+    ) {
       return { ...result, action }
     }
     try {
@@ -61,9 +78,18 @@ export class IssueActionCoordinator {
         })
       return confirmed
         ? { status: "confirmed", action, message: `${action.kind}-reconciled` }
-        : { status: "uncertain", action, reason: "accepted-awaiting-reconciliation" }
+        : {
+            status: "uncertain",
+            action,
+            reason:
+              result.status === "uncertain" ? result.reason : "accepted-awaiting-reconciliation",
+          }
     } catch {
-      return { status: "uncertain", action, reason: "accepted-reconciliation-failed" }
+      return {
+        status: "uncertain",
+        action,
+        reason: result.status === "uncertain" ? result.reason : "accepted-reconciliation-failed",
+      }
     }
   }
 }

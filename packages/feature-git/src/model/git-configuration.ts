@@ -1,46 +1,21 @@
-export type GitConfigurationTab = "diffs" | "pull-requests" | "issues" | "repositories"
+export type GitConfigurationTab = "diffs" | "pull-requests" | "issues" | "repositories" | "browser"
 export type GitConfigurationMutation = "duplicate" | "delete" | "up" | "down"
 export type GitConfigurationAction =
-  | { type: "close" }
   | { type: "create" }
   | { type: "edit" }
   | { type: "configure-local"; target: "project" | "branch" }
   | { type: "toggle-repository" }
-  | { type: "select-tab"; tab: GitConfigurationTab }
+  | { type: "select-browser" }
+  | { type: "back-to-navigation" }
   | { type: "move-selection"; delta: -1 | 1 }
   | { type: "mutate"; mutation: GitConfigurationMutation }
-
-export const GIT_CONFIGURATION_TABS: readonly GitConfigurationTab[] = [
-  "diffs",
-  "pull-requests",
-  "issues",
-  "repositories",
-]
-
-export function gitConfigurationTabLabel(tab: GitConfigurationTab, compact = false) {
-  if (tab === "diffs") return "[1] Diffs"
-  if (compact) {
-    if (tab === "pull-requests") return "[2] PR"
-    if (tab === "issues") return "[3] Issues"
-    return "[4] Repos"
-  }
-  if (tab === "pull-requests") return "[2] Seletores de PR"
-  if (tab === "issues") return "[3] Seletores de Issues"
-  return "[4] Repositórios"
-}
-
-function tabSelectionAction(keyName: string): GitConfigurationAction | null {
-  const tab = GIT_CONFIGURATION_TABS[Number(keyName) - 1]
-  return tab ? { type: "select-tab", tab } : null
-}
 
 function listMovementAction(key: {
   name: string
   option?: boolean
+  shift?: boolean
 }): GitConfigurationAction | null {
-  if (key.option && (key.name === "up" || key.name === "down")) {
-    return { type: "mutate", mutation: key.name === "up" ? "up" : "down" }
-  }
+  if (key.option || key.shift) return null
   if (key.name === "j" || key.name === "down") return { type: "move-selection", delta: 1 }
   if (key.name === "k" || key.name === "up") return { type: "move-selection", delta: -1 }
   return null
@@ -62,19 +37,15 @@ export function gitConfigurationAction({
   hasSelection,
   selectedIndex = 0,
 }: {
-  key: { name: string; option?: boolean }
+  key: { name: string; option?: boolean; shift?: boolean }
   tab: GitConfigurationTab
   hasSelection: boolean
   selectedIndex?: number
 }): GitConfigurationAction | null {
-  if (key.name === "escape") return { type: "close" }
-  const tabSelection = tabSelectionAction(key.name)
-  if (tabSelection) return tabSelection
+  if (key.name === "escape") return { type: "back-to-navigation" }
   const movement = listMovementAction(key)
   if (movement) return movement
   if (tab === "diffs") {
-    if (key.name === "p") return { type: "configure-local", target: "project" }
-    if (key.name === "b") return { type: "configure-local", target: "branch" }
     if (["return", "enter"].includes(key.name)) {
       return { type: "configure-local", target: selectedIndex === 1 ? "branch" : "project" }
     }
@@ -84,6 +55,10 @@ export function gitConfigurationAction({
     return { type: "toggle-repository" }
   }
   if (tab === "repositories") return null
+  if (tab === "browser" && ["space", "return", "enter"].includes(key.name)) {
+    return { type: "select-browser" }
+  }
+  if (tab === "browser") return null
   return selectorAction(key.name, hasSelection)
 }
 

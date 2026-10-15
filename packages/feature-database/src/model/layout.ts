@@ -18,24 +18,6 @@ export function nextDatabaseTableSort(
   return null
 }
 
-export function databasePageChromeRows({
-  hasTableHistory,
-  actionRowCount,
-  compactActions,
-}: {
-  hasTableHistory: boolean
-  actionRowCount: number
-  compactActions: boolean
-}) {
-  // History has one row for table tabs and another for its full-width divider.
-  const historyRows = hasTableHistory ? 2 : 0
-  return 12 + historyRows + Math.max(0, actionRowCount - 1) + (compactActions ? 1 : 0)
-}
-
-export function databasePageSize(terminalHeight: number, chromeRows: number) {
-  return Math.max(4, Math.floor(terminalHeight) - Math.max(0, Math.floor(chromeRows)))
-}
-
 export function databaseLoadingInsets({
   hasTableHistory,
   hasSelectedTable,
@@ -146,25 +128,4 @@ export function databaseResultScrollTop({
     return Math.min(maximumScrollTop, selected - visibleRows + 1)
   }
   return current
-}
-
-export function preserveDatabasePageSelection({
-  pageIndex,
-  rowIndex,
-  previousPageSize,
-  nextPageSize,
-}: {
-  pageIndex: number
-  rowIndex: number
-  previousPageSize: number
-  nextPageSize: number
-}) {
-  const safePreviousSize = Math.max(1, Math.floor(previousPageSize))
-  const safeNextSize = Math.max(1, Math.floor(nextPageSize))
-  const absoluteRowIndex =
-    Math.max(0, Math.floor(pageIndex)) * safePreviousSize + Math.max(0, Math.floor(rowIndex))
-  return {
-    pageIndex: Math.floor(absoluteRowIndex / safeNextSize),
-    rowIndex: absoluteRowIndex % safeNextSize,
-  }
 }

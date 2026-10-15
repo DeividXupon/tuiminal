@@ -12,13 +12,16 @@ import { useInboxActions } from "./ui/inbox/useInboxActions"
 import { useInboxDashboard } from "./ui/inbox/useInboxDashboard"
 import { useInboxWorkspaceKeyboard } from "./ui/inbox/useInboxWorkspaceKeyboard"
 import { useAutoPagination } from "./ui/useAutoPagination"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 
 export function InboxWorkspace({
   active,
   configurationRevision = 0,
+  onOpenBrowser = defaultGitBrowserOpener,
 }: {
   active: boolean
   configurationRevision?: number
+  onOpenBrowser?: GitBrowserOpener
 }) {
   const terminal = useTerminalDimensions()
   const { state, refresh, loadMore, loadingMore, refreshing, backgroundError, updateItems } =
@@ -36,7 +39,14 @@ export function InboxWorkspace({
     [savedIds, section?.id, sourceItems],
   )
   const selected = items[Math.min(selectedIndex, Math.max(0, items.length - 1))] ?? null
-  const actions = useInboxActions({ state, selected, savedIds, setSavedIds, updateItems })
+  const actions = useInboxActions({
+    state,
+    selected,
+    savedIds,
+    setSavedIds,
+    updateItems,
+    onOpenBrowser,
+  })
   const wide = terminal.width >= 92 && terminal.height >= 20
 
   useNotificationFromValue(actions.notice, { source: "Git · Inbox" })

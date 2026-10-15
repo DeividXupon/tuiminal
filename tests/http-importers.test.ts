@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 import YAML from "yaml"
 import { importOpenApiDocument } from "../packages/feature-http/src/importing/openapi"
 import { importPostmanCollection } from "../packages/feature-http/src/importing/postman"
@@ -9,6 +10,11 @@ import {
   applyHttpCollectionImport,
   previewHttpCollectionImport,
 } from "../packages/feature-http/src/services/collection-import"
+import {
+  pastedHttpImportSourcePath,
+  resolveHttpImportSourcePath,
+  suggestHttpImportSourcePaths,
+} from "../packages/feature-http/src/services/import-source-path"
 import { writeImportedHttpCollection } from "../packages/feature-http/src/storage/imports"
 
 const roots: string[] = []
@@ -178,15 +184,36 @@ describe("HTTP collection importers", () => {
     expect(report.warnings).toEqual(["Users / Create: scripts ignorados."])
   })
 
+  test.each(["v2.0.0", "v2.1.0"])("imports Postman %s collections", (version) => {
+    const report = importPostmanCollection({
+      info: {
+        schema: `https://schema.getpostman.com/json/collection/${version}/collection.json`,
+      },
+      item: [
+        { name: "Ping", request: { method: "GET", url: "https://example.test/ping" } },
+        {
+          name: "Create",
+          request: {
+            method: "POST",
+            url: "https://example.test/items",
+            body: { mode: "raw", raw: '{"name":"Ada"}' },
+          },
+        },
+      ],
+    })
+    expect(report.requests).toHaveLength(2)
+    expect(report.requests[1]?.body).toMatchObject({ text: '{"name":"Ada"}' })
+  })
+
   test("rejects an explicitly incompatible Postman collection version", () => {
     expect(() =>
       importPostmanCollection({
         info: {
-          schema: "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+          schema: "https://schema.getpostman.com/json/collection/v1.0.0/collection.json",
         },
         item: [{ name: "Ping", request: { method: "GET", url: "https://example.test" } }],
       }),
-    ).toThrow("Postman v2.1")
+    ).toThrow("Use v2.0 ou v2.1")
   })
 
   test("imports OpenAPI 3 paths, parameters, auth, body examples and status assertions", () => {
@@ -250,25 +277,23 @@ describe("HTTP collection importers", () => {
     expect((await stat(root)).mode & 0o777).toBe(0o700)
   })
 
-  test("previews before writing and keeps TUI imports inside the project", async () => {
+  test("imports an external file into the global HTTP home after preview", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-preview-"))
-    roots.push(root)
+    const outside = await mkdtemp(resolve(tmpdir(), "tuiminal-http-source-"))
+    roots.push(root, outside)
+    const sourcePath = resolve(outside, "collection.json")
     await writeFile(
-      resolve(root, "collection.json"),
+      sourcePath,
       JSON.stringify({
         item: [{ name: "Ping", request: { method: "GET", url: "https://example.test" } }],
       }),
     )
 
-    const preview = await previewHttpCollectionImport(
-      root,
-      "postman",
-      "collection.json",
-      ".tuiminal/http/imported",
-    )
+    const preview = await previewHttpCollectionImport(root, sourcePath)
     expect(preview).toMatchObject({
-      sourcePath: "collection.json",
-      plannedPath: ".tuiminal/http/imported/collection.http",
+      format: "postman",
+      sourcePath: await realpath(sourcePath),
+      plannedPath: "imported/collection.http",
       conflicts: 0,
     })
     expect(await Bun.file(resolve(root, preview.plannedPath)).exists()).toBe(false)
@@ -277,16 +302,11 @@ describe("HTTP collection importers", () => {
     expect(applied.outputPath).toBe(preview.plannedPath)
     expect(await readFile(resolve(root, applied.outputPath), "utf8")).toContain("# @name ping")
 
-    const next = await previewHttpCollectionImport(
-      root,
-      "postman",
-      "collection.json",
-      ".tuiminal/http/imported",
-    )
+    const next = await previewHttpCollectionImport(root, sourcePath)
     expect(next.conflicts).toBe(1)
     expect(next.plannedPath).toEndWith("collection-2.http")
     await writeFile(
-      resolve(root, "collection.json"),
+      sourcePath,
       JSON.stringify({
         item: [
           { name: "Ping", request: { method: "GET", url: "https://example.test" } },
@@ -298,26 +318,93 @@ describe("HTTP collection importers", () => {
       "origem mudou depois da prévia",
     )
 
-    const racePreview = await previewHttpCollectionImport(
-      root,
-      "postman",
-      "collection.json",
-      ".tuiminal/http/imported",
-    )
+    const racePreview = await previewHttpCollectionImport(root, sourcePath)
     await writeFile(resolve(root, racePreview.plannedPath), "occupied")
     await expect(applyHttpCollectionImport(root, racePreview)).rejects.toThrow(
       "destino mudou depois da prévia",
     )
-    const outside = await mkdtemp(resolve(tmpdir(), "tuiminal-http-outside-"))
-    roots.push(outside)
-    const outsideFile = resolve(outside, "outside.json")
-    await writeFile(outsideFile, "{}")
-    await expect(
-      previewHttpCollectionImport(root, "postman", outsideFile, ".tuiminal/http/imported"),
-    ).rejects.toThrow("dentro do projeto")
-    await expect(
-      previewHttpCollectionImport(root, "postman", "collection.json", "../outside"),
-    ).rejects.toThrow("dentro do projeto")
+    await expect(previewHttpCollectionImport(root, "collection.json")).rejects.toThrow(
+      "caminho completo",
+    )
+    if (process.platform !== "win32") {
+      const blockedRoot = await mkdtemp(resolve(tmpdir(), "tuiminal-http-blocked-"))
+      const destinationRoot = await mkdtemp(resolve(tmpdir(), "tuiminal-http-destination-"))
+      roots.push(blockedRoot, destinationRoot)
+      await symlink(destinationRoot, resolve(blockedRoot, "imported"))
+      await expect(previewHttpCollectionImport(blockedRoot, sourcePath)).rejects.toThrow(
+        "symlink externo",
+      )
+    }
+  })
+
+  test("detects Postman and OpenAPI from file contents rather than the extension", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "tuiminal-http-detect-"))
+    const sources = await mkdtemp(resolve(tmpdir(), "tuiminal-http-detect-sources-"))
+    roots.push(root, sources)
+    const postmanPath = resolve(sources, "requests.yaml")
+    const openApiPath = resolve(sources, "api.json")
+    const unknownPath = resolve(sources, "unknown.json")
+    const malformedPath = resolve(sources, "malformed.json")
+    await writeFile(
+      postmanPath,
+      JSON.stringify({
+        info: { schema: "https://schema.getpostman.com/json/collection/v2.0.0/collection.json" },
+        item: [{ name: "Ping", request: { method: "GET", url: "https://example.test/ping" } }],
+      }),
+    )
+    await writeFile(
+      openApiPath,
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "API", version: "1.0.0" },
+        paths: {
+          "/ping": { get: { operationId: "ping", responses: { 200: { description: "OK" } } } },
+        },
+      }),
+    )
+    await writeFile(unknownPath, "{}")
+    await writeFile(malformedPath, "{]")
+    const postman = await previewHttpCollectionImport(root, postmanPath)
+    const openApi = await previewHttpCollectionImport(root, openApiPath)
+    expect(postman.format).toBe("postman")
+    expect(postman.report.requests).toHaveLength(1)
+    expect(openApi.format).toBe("openapi")
+    expect(openApi.report.requests).toHaveLength(1)
+    await expect(previewHttpCollectionImport(root, unknownPath)).rejects.toThrow(
+      "Formato não reconhecido",
+    )
+    await expect(previewHttpCollectionImport(root, malformedPath)).rejects.toThrow(
+      "JSON ou YAML malformado",
+    )
+  })
+
+  test("expands home paths and suggests matching directories and import files", async () => {
+    const home = await mkdtemp(resolve(tmpdir(), "tuiminal-http-home-"))
+    roots.push(home)
+    const downloads = resolve(home, "Downloads")
+    await mkdir(downloads)
+    await writeFile(resolve(downloads, "my collection.json"), "{}")
+    await writeFile(resolve(downloads, "my schema.yaml"), "openapi: 3.0.0")
+    await writeFile(resolve(downloads, "ignore.txt"), "ignored")
+    expect(resolveHttpImportSourcePath("~/Downloads/my collection.json", home)).toBe(
+      resolve(downloads, "my collection.json"),
+    )
+    expect(pastedHttpImportSourcePath(`'${resolve(downloads, "my collection.json")}'`)).toBe(
+      resolve(downloads, "my collection.json"),
+    )
+    expect(
+      pastedHttpImportSourcePath(resolve(downloads, "my collection.json").replaceAll(" ", "\\ ")),
+    ).toBe(resolve(downloads, "my collection.json"))
+    expect(
+      pastedHttpImportSourcePath(pathToFileURL(resolve(downloads, "my collection.json")).href),
+    ).toBe(resolve(downloads, "my collection.json"))
+    expect(await suggestHttpImportSourcePaths("~/Down", home)).toEqual([
+      { label: "Downloads/", path: "~/Downloads/", directory: true },
+    ])
+    expect(await suggestHttpImportSourcePaths("~/Downloads/my", home)).toEqual([
+      { label: "my collection.json", path: "~/Downloads/my collection.json", directory: false },
+      { label: "my schema.yaml", path: "~/Downloads/my schema.yaml", directory: false },
+    ])
   })
 
   test("imports a versioned fixture through the public CLI without leaking literals", async () => {

@@ -3,53 +3,72 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
-import { FreeTerminal } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import { TermAgents } from "../../packages/feature-terminal/src/TerminalWorkspace"
+import * as inspection from "../../packages/feature-terminal/src/services/agent-processes"
 import * as terminalService from "../../packages/feature-terminal/src/services/terminal"
 
 let tui: TestRendererSetup | undefined
-type TerminalOptions = Parameters<typeof terminalService.startFreeTerminalProcess>[1]
+type TerminalOptions = Parameters<typeof terminalService.startTermAgentsProcess>[1]
 const starts: TerminalOptions[] = []
 const inputs: string[][] = []
-let finishStop = () => {}
-let spawnSpy:
-  | ReturnType<typeof spyOn<typeof terminalService, "startFreeTerminalProcess">>
-  | undefined
+let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
+let spawnSpy: ReturnType<typeof spyOn<typeof terminalService, "startTermAgentsProcess">> | undefined
 
 afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
   spawnSpy?.mockRestore()
+  inspectionSpy?.mockRestore()
   starts.length = 0
   inputs.length = 0
 })
 
-async function startFixture(deferStop = false) {
-  spawnSpy = spyOn(terminalService, "startFreeTerminalProcess").mockImplementation(
+async function startFixture(shell = false) {
+  inspectionSpy = spyOn(inspection, "readTerminalProcesses").mockResolvedValue([])
+  spawnSpy = spyOn(terminalService, "startTermAgentsProcess").mockImplementation(
     (_command, options) => {
       starts.push(options)
       const received: string[] = []
       inputs.push(received)
-      const stopping = Promise.withResolvers<void>()
-      finishStop = () => stopping.resolve()
       return {
         pid: 123,
         write: (data) => {
           received.push(typeof data === "string" ? data : new TextDecoder().decode(data))
         },
         resize: () => undefined,
-        stop: () => (deferStop ? stopping.promise : Promise.resolve()),
+        stop: () => Promise.resolve(),
       }
     },
   )
-  tui = await testRender(<FreeTerminal active />, { width: 100, height: 28 })
-  await act(async () => {
-    tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
-    await tui?.mockInput.typeText("fixture-command")
-  })
-  await act(async () => tui?.mockInput.pressEnter())
+  tui = await testRender(<TermAgents active />, { width: 100, height: 28 })
+  await tui.renderOnce()
+  if (shell) await leader("n")
+  else {
+    const command = tui?.renderer.root.findDescendantById("terminal-sidebar-command")
+    if (!command) throw new Error("Missing command control")
+    await act(async () => tui?.mockMouse.click(command.screenX + 1, command.screenY))
+    await tui?.renderOnce()
+    expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
+    await act(async () => {
+      tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
+      await tui?.mockInput.typeText("fixture-command")
+    })
+    await act(async () => tui?.mockInput.pressEnter())
+  }
   await tui.renderOnce()
   expect(starts).toHaveLength(1)
 }
+
+test("exiting an interactive shell removes its session and empty folder", async () => {
+  await startFixture(true)
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")).toBeDefined()
+
+  act(() => starts[0]?.onExit({ code: 0, signal: null, stopped: false }))
+  await tui?.renderOnce()
+
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")).toBeUndefined()
+  expect(tui?.captureCharFrame()).toContain("Novo terminal")
+})
 
 test("resizing a finished terminal preserves its output without rerunning its command", async () => {
   await startFixture()
@@ -70,44 +89,10 @@ async function leader(key: string) {
   await tui?.renderOnce()
 }
 
-test("repeated restart requests create only the newest replacement shell", async () => {
-  await startFixture(true)
-  await leader("r")
-  await leader("r")
-  expect(starts).toHaveLength(1)
-  await act(async () => finishStop())
-  await tui?.renderOnce()
-  expect(starts).toHaveLength(2)
-  act(() => starts[0]?.onExit({ code: 1, signal: null, stopped: true }))
-  await act(async () => {
-    await tui?.mockInput.typeText("replacement input")
-  })
-  expect(inputs[1]?.join("")).toContain("replacement input")
-  expect(inputs[0]?.join("")).toBe("")
-})
-
-test("closing a pane while its shell stops cancels a pending restart", async () => {
-  await startFixture(true)
-  await leader("r")
-  await leader("x")
-  await act(async () => finishStop())
-  await tui?.renderOnce()
-  expect(starts).toHaveLength(1)
-  expect(tui?.captureCharFrame()).toContain("TERMINAIS LIVRES")
-})
-
-test("unmount cancels a replacement waiting for the old shell to stop", async () => {
-  await startFixture(true)
-  await leader("r")
-  act(() => tui?.renderer.destroy())
-  tui = undefined
-  await act(async () => finishStop())
-  expect(starts).toHaveLength(1)
-})
-
-test("an explicit restart still reopens a finished command", async () => {
+test("removed restart shortcut leaves the current shell untouched", async () => {
   await startFixture()
-  act(() => starts[0]?.onExit({ code: 0, signal: null, stopped: false }))
   await leader("r")
-  expect(starts).toHaveLength(2)
+  expect(starts).toHaveLength(1)
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  expect(inputs[0]?.join("")).toBe("")
 })

@@ -1,3 +1,4 @@
+import { homedir } from "node:os"
 import { resolve } from "node:path"
 import {
   forceKillOwnedProcessTree,
@@ -6,29 +7,42 @@ import {
   processStopDeadlineError,
   signalOwnedProcessGroup,
 } from "@xupon/tuiminal-core/process/owned-process"
+import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import type { AgentProviderId } from "../model/agent-provider"
+import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
+import type { TermAgentsCommand, RemoteCodexTarget } from "../model/sessions"
+import type { TmuxPaneTarget } from "../model/tmux"
+import { remoteInteractiveSshCommand } from "./remote-codex-connection"
+import { registerTerminalResource } from "./terminal-resources"
+import { readProcessWorkingDirectory } from "./terminal-working-directory"
 
-export type FreeTerminalKind = "shell" | "custom"
+export type { TermAgentsCommand, TermAgentsKind } from "../model/sessions"
+export { stopAllTermAgentsProcesses } from "./terminal-resources"
 
-export type FreeTerminalExit = {
+export type TermAgentsExit = {
   code: number | null
   signal: string | null
   stopped: boolean
 }
 
-export type FreeTerminalProcessHandle = {
+export type TermAgentsProcessHandle = {
   pid: number
+  backend?: "native" | "tmux"
+  tmux?: TmuxPaneTarget
+  /** The tmux client is not the parent of the shell running in its server. */
+  readAgentPid?: (signal?: AbortSignal) => Promise<number | null>
+  /** Read-only best effort cwd for metadata; never used to reconstruct a command. */
+  readWorkingDirectory?: (signal?: AbortSignal) => Promise<string | null>
   write: (data: string | Uint8Array) => void
   resize: (columns: number, rows: number) => void
   stop: () => Promise<void>
-}
-
-export type FreeTerminalCommand = {
-  kind: FreeTerminalKind
-  label: string
-  shortLabel: string
-  displayCommand: string
-  command: string[]
-  accent: string
+  /** Explicitly close the backing persistent session; stop only detaches clients. */
+  close?: () => Promise<void>
+  /** Retire a launch that never became current without closing reused persistent state. */
+  cancelLaunch?: () => Promise<void>
+  /** Keep `close` reachable after a disposable attachment exits. */
+  retainCloseAfterExit?: boolean
 }
 
 type BunTerminalLike = {
@@ -64,13 +78,10 @@ type BunRuntimeLike = {
 }
 
 const bunRuntime = (globalThis as typeof globalThis & { Bun?: BunRuntimeLike }).Bun
-const activeProcesses = new Set<FreeTerminalProcessHandle>()
 
-export const FREE_TERMINAL_WORKING_DIRECTORY = resolve(
-  process.env.TUIMINAL_WORKDIR ?? process.cwd(),
-)
+export const TERM_AGENTS_WORKING_DIRECTORY = resolve(process.env.TUIMINAL_WORKDIR ?? process.cwd())
 
-export function createShellTerminalCommand(): FreeTerminalCommand {
+export function createShellTerminalCommand(): TermAgentsCommand {
   const shell =
     process.platform === "win32"
       ? process.env.COMSPEC?.trim() || "cmd.exe"
@@ -82,11 +93,12 @@ export function createShellTerminalCommand(): FreeTerminalCommand {
     shortLabel: "TTY",
     displayCommand: [shell, ...args].join(" "),
     command: [shell, ...args],
-    accent: "#64d8ff",
+    accent: COLORS.terminal,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
   }
 }
 
-export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
+export function createTermAgentsCommand(value: string): TermAgentsCommand {
   const command = value.trim()
   const shell = createShellTerminalCommand().command[0]!
   const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command]
@@ -99,30 +111,126 @@ export function createFreeTerminalCommand(value: string): FreeTerminalCommand {
     shortLabel: label.slice(0, 3).toUpperCase(),
     displayCommand: command,
     command: [shell, ...args],
-    accent: "#f7c873",
+    accent: COLORS.warning,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
   }
 }
 
-function processEnvironment() {
+/** Opens or resumes the official Codex TUI backed by a Tuiminal-owned local app-server. */
+export function createCodexAgentCommand(
+  resumeThreadId?: string,
+  workingDirectory = TERM_AGENTS_WORKING_DIRECTORY,
+): TermAgentsCommand {
+  return {
+    kind: "custom",
+    label: "Codex",
+    shortLabel: "Codex",
+    displayCommand: resumeThreadId ? `codex resume ${resumeThreadId} --remote` : "codex --remote",
+    command: ["codex"],
+    accent: COLORS.terminal,
+    workingDirectory,
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
+      ...(resumeThreadId ? { resumeThreadId } : {}),
+    },
+  }
+}
+
+export function createRemoteCodexAgentCommand(
+  remote: RemoteCodexTarget,
+  resumeThreadId?: string,
+): TermAgentsCommand {
+  return {
+    kind: "custom",
+    label: `Codex · ${remote.profile.name}`,
+    shortLabel: "Codex",
+    displayCommand: resumeThreadId
+      ? `codex resume ${resumeThreadId} --remote · ${remote.profile.name}`
+      : `codex --remote · ${remote.profile.name}`,
+    command: ["codex"],
+    accent: COLORS.terminal,
+    workingDirectory: remote.workingDirectory,
+    agentLaunch: {
+      providerId: "codex",
+      transport: "app-server",
+      remote,
+      ...(resumeThreadId ? { resumeThreadId } : {}),
+    },
+  }
+}
+
+export function createRemoteServerSetupCommand(
+  profile: TerminalRemoteCodexProfile,
+): TermAgentsCommand {
+  return {
+    kind: "custom",
+    label: profile.name,
+    shortLabel: "SSH",
+    displayCommand: `ssh ${profile.host}`,
+    command: remoteInteractiveSshCommand(profile),
+    accent: COLORS.terminal,
+    workingDirectory: TERM_AGENTS_WORKING_DIRECTORY,
+    remoteSetup: { profile },
+  }
+}
+
+export function createRemoteAgentUpdateCommands(
+  flowId: number,
+  profile: TerminalRemoteCodexProfile | undefined,
+  report: RemoteCodexCompatibilityReport,
+  providerId: AgentProviderId,
+): TermAgentsCommand[] {
+  const local = createShellTerminalCommand()
+  const provider =
+    providerId === "opencode" ? "OpenCode" : providerId === "claude" ? "Claude Code" : "Codex"
+  const guide = { flowId, report: { ...report, providerId }, checking: false, error: "" }
+  const commands: TermAgentsCommand[] = [
+    {
+      ...local,
+      label: `${provider} · Local`,
+      workingDirectory: homedir(),
+      remoteCodexUpdate: { ...guide, side: "local" },
+    },
+  ]
+  if (profile)
+    commands.push({
+      kind: "custom",
+      label: `${provider} · ${profile.name}`,
+      shortLabel: "SSH",
+      displayCommand: `ssh ${profile.host}`,
+      command: remoteInteractiveSshCommand(profile),
+      accent: COLORS.warning,
+      workingDirectory: homedir(),
+      remoteCodexUpdate: { ...guide, side: "remote" },
+    })
+  return commands
+}
+
+function processEnvironment(overrides: Record<string, string | undefined> = {}) {
   return Object.fromEntries(
-    Object.entries(process.env).filter(
+    Object.entries({ ...process.env, ...overrides }).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   )
 }
 
-export function startFreeTerminalProcess(
+export function startTermAgentsProcess(
   command: string[],
   options: {
     cwd?: string
     columns?: number
     rows?: number
     onData: (data: Uint8Array) => void
-    onExit: (result: FreeTerminalExit) => void
+    onExit: (result: TermAgentsExit) => void
+    /** Attached clients must detach without sending Ctrl+C to a borrowed session. */
+    interruptOnStop?: boolean
+    /** An explicit undefined removes an inherited variable from the child. */
+    env?: Record<string, string | undefined>
   },
-): FreeTerminalProcessHandle {
+): TermAgentsProcessHandle {
   if (!bunRuntime) {
-    throw new Error("O Free Terminal precisa ser executado com o Bun.")
+    throw new Error("O Term Agents precisa ser executado com o Bun.")
   }
 
   let stopped = false
@@ -136,9 +244,9 @@ export function startFreeTerminalProcess(
   const terminalEnded = Promise.withResolvers<void>()
   const retired = Promise.withResolvers<void>()
   const subprocess = bunRuntime.spawn(command, {
-    cwd: options.cwd ?? FREE_TERMINAL_WORKING_DIRECTORY,
+    cwd: options.cwd ?? TERM_AGENTS_WORKING_DIRECTORY,
     env: {
-      ...processEnvironment(),
+      ...processEnvironment(options.env),
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
     },
@@ -171,8 +279,9 @@ export function startFreeTerminalProcess(
     }
   }
 
-  const handle: FreeTerminalProcessHandle = {
+  const handle: TermAgentsProcessHandle = {
     pid: subprocess.pid,
+    readWorkingDirectory: (signal) => readProcessWorkingDirectory(subprocess.pid, signal),
     write(data) {
       if (closed) return
       terminal.write(data)
@@ -190,7 +299,7 @@ export function startFreeTerminalProcess(
         rejectStop = reject
       })
       try {
-        terminal.write("\u0003")
+        if (options.interruptOnStop !== false) terminal.write("\u0003")
       } catch {
         // A process that already exited no longer accepts input.
       }
@@ -224,7 +333,7 @@ export function startFreeTerminalProcess(
     },
   }
 
-  activeProcesses.add(handle)
+  const release = registerTerminalResource(handle)
   void subprocess.exited.then(async (code) => {
     exited = true
     if (forceStopTimer) clearTimeout(forceStopTimer)
@@ -239,7 +348,7 @@ export function startFreeTerminalProcess(
         drainTimer = setTimeout(resolveDrain, OWNED_PROCESS_STOP_GRACE_MS)
       }),
     ]).finally(() => clearTimeout(drainTimer))
-    activeProcesses.delete(handle)
+    release()
     closeTerminal()
     try {
       options.onExit({
@@ -256,12 +365,4 @@ export function startFreeTerminalProcess(
   })
 
   return handle
-}
-
-export async function stopAllFreeTerminalProcesses() {
-  const results = await Promise.allSettled([...activeProcesses].map((process) => process.stop()))
-  const failures = results.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  )
-  if (failures.length) throw new AggregateError(failures, "Falha ao encerrar terminais próprios.")
 }

@@ -14,7 +14,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./cli/run": "./src/cli/run.ts",
-    "./cli/import": "./src/cli/import.ts"
+    "./cli/import": "./src/cli/import.ts",
+    "./cli/postman": "./src/cli/postman.ts"
   },
   "peerDependencies": {
     "@opentui/core": "^0.5.9",
@@ -24,6 +25,7 @@
   },
   "dependencies": {
     "@tuiparts/core": "^0.0.6",
+    "@tuiparts/react": "^0.0.6",
     "tldts": "7.4.12",
     "yaml": "^2.9.0"
   },

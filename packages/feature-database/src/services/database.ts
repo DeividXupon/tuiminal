@@ -1,48 +1,57 @@
 import { randomUUID } from "node:crypto"
+import { affectedRowCount, queryResultColumns } from "../model/query-result-metadata"
+
+export { affectedRowCount, queryResultColumns } from "../model/query-result-metadata"
+
 import {
   databaseQueryHistoryParameterPreview,
   databaseQueryHistorySessionParameterPreview,
   normalizeQueryHistoryParameterPreview,
 } from "../model/history-parameters"
+
 export {
   DATABASE_QUERY_HISTORY_PARAMETER_LIMIT,
   DATABASE_QUERY_HISTORY_PARAMETER_NAME_LIMIT,
   DATABASE_QUERY_HISTORY_PARAMETER_VALUE_LIMIT,
   DATABASE_QUERY_HISTORY_SENSITIVE_TERMS,
-  limitQueryHistoryParameterText,
-  queryHistoryParameterValue,
-  queryHistoryParameterIsSensitive,
   databaseQueryHistoryParameterPreview,
   databaseQueryHistorySessionParameterPreview,
+  limitQueryHistoryParameterText,
   normalizeQueryHistoryParameterPreview,
+  queryHistoryParameterIsSensitive,
+  queryHistoryParameterValue,
 } from "../model/history-parameters"
+
+import { existsSync, readFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { isAbsolute, join, resolve } from "node:path"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { definedProperties } from "@xupon/tuiminal-core/data/defined-properties"
 import { historyEntryIsRead, metadataOnlyHistoryEntry } from "../model/history-privacy"
+import { isReadOnlySql } from "../model/sql-read-policy"
 import {
   clearHistoryContent,
   rememberHistoryContent,
   restoreHistoryContent,
   retainHistoryContent,
 } from "./history-content"
-import { accessSync, constants, existsSync, readFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { isAbsolute, join, resolve } from "node:path"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { definedProperties } from "@xupon/tuiminal-core/data/defined-properties"
-import { isReadOnlySql } from "../model/sql-read-policy"
 import {
-  nativeReadOnlyQuery,
-  readOnlyClientIsInvalid,
   type CancelableDatabaseQuery,
+  nativeReadOnlyQuery,
   type RuntimeSqlClient,
+  readOnlyClientIsInvalid,
 } from "./read-only-query"
+
 export type {
   CancelableDatabaseQuery,
   RuntimeSqlClient,
   RuntimeSqlExecutor,
 } from "./read-only-query"
+
 import { isSensitiveColumnName } from "@xupon/tuiminal-core/security/sensitive-data"
 import { atomicWriteFileSync, fileContentHash } from "@xupon/tuiminal-core/storage/atomic-file"
+import { DATABASE_QUERY_RESULT_WINDOW_SIZE } from "../model/query-window"
 import type {
   DatabaseCatalog,
   DatabaseColumn,
@@ -67,12 +76,25 @@ import type {
   DatabaseTableStructure,
   TablePage,
 } from "../model/types"
-import { sqliteQueryProcessCommand } from "./sqlite-query-runtime"
 import {
   databaseMutationConnectionFailureMayBeUncertain,
   emptyDatabaseMutationExecutionState,
   executeDatabaseMutationTransaction,
 } from "./database-mutations"
+import { sqliteQueryProcessCommand } from "./sqlite-query-runtime"
+import {
+  clearExternalDatabaseConnections,
+  externalDatabasePassword,
+  listExternalDatabaseProfiles,
+  resolvePgpassPassword,
+} from "./external-database-connections"
+import {
+  canExecute,
+  discoveredEnvironmentProfile as environmentProfile,
+  discoveredMcpProfile,
+} from "./database-environment-connections"
+
+export { canExecute, discoveredMcpProfile } from "./database-environment-connections"
 
 export { coerceDatabaseCellValue } from "../model/cell-value"
 
@@ -342,8 +364,7 @@ export const sessionPasswords = new Map<string, string>()
 export const schemaCache = new Map<string, DatabaseColumn[]>()
 const schemaLoads = new Map<string, Promise<DatabaseColumn[]>>()
 export const DATABASE_SCHEMA_CACHE_LIMIT = 256
-export const QUERY_RESULT_LIMIT = 500
-export const QUERY_RESULT_FETCH_LIMIT = QUERY_RESULT_LIMIT + 1
+export const QUERY_RESULT_LIMIT = DATABASE_QUERY_RESULT_WINDOW_SIZE
 export const QUERY_RESULT_CELL_LIMIT_BYTES = 256_000
 export const QUERY_TEXT_LIMIT = 100_000
 export const DATABASE_QUERY_HISTORY_READ_LIMIT = 100
@@ -417,9 +438,12 @@ export function normalizeSavedProfile(value: unknown): DatabaseConnectionProfile
     port: typeof candidate.port === "number" ? candidate.port : undefined,
     database: typeof candidate.database === "string" ? candidate.database : undefined,
     username: typeof candidate.username === "string" ? candidate.username : undefined,
+    socket: typeof candidate.socket === "string" ? candidate.socket : undefined,
     filename: typeof candidate.filename === "string" ? candidate.filename : undefined,
     command: typeof candidate.command === "string" ? candidate.command : undefined,
     ssl: candidate.ssl === true,
+    credentialSource:
+      candidate.credentialSource === "pgpass" ? ("pgpass" as const) : ("tuiminal" as const),
     writeEnabled: candidate.writeEnabled === true,
   })
 }
@@ -622,68 +646,8 @@ export function databaseSettingsStorageError() {
   return storedSettingsReadError
 }
 
-export function canExecute(command: string) {
-  try {
-    accessSync(command, constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function discoveredMcpProfile(): DatabaseConnectionProfile | null {
-  const command = process.env.TUIMINAL_MYSQL_MCP_COMMAND?.trim()
-  // MCP is an explicit integration. A private Codex executable on the machine
-  // must not silently become the product's default database connection.
-  if (!command) return null
-  if (!canExecute(command)) return null
-  return {
-    id: "discovered-mysql-mcp",
-    name: "Banco via MCP",
-    driver: "mcp-mysql",
-    source: "mcp",
-    command,
-    ssl: false,
-    writeEnabled: false,
-  }
-}
-
 export function discoveredEnvironmentProfile(): DatabaseConnectionProfile | null {
-  sessionPasswords.delete("environment-database-url")
-  const connectionUrl =
-    process.env.DATABASE_URL?.trim() ||
-    process.env.MYSQL_URL?.trim() ||
-    process.env.POSTGRES_URL?.trim()
-  if (!connectionUrl) return null
-
-  try {
-    const url = new URL(connectionUrl)
-    const driver: DatabaseDriver = url.protocol.startsWith("mysql")
-      ? "mysql"
-      : url.protocol.startsWith("postgres")
-        ? "postgres"
-        : url.protocol.startsWith("sqlite") || url.protocol.startsWith("file")
-          ? "sqlite"
-          : "postgres"
-    const profile = definedProperties({
-      id: "environment-database-url",
-      name: "DATABASE_URL",
-      driver,
-      source: "environment" as const,
-      host: url.hostname || undefined,
-      port: url.port ? Number(url.port) : defaultPort(driver),
-      database:
-        driver === "sqlite" ? undefined : decodeURIComponent(url.pathname.replace(/^\//, "")),
-      username: url.username ? decodeURIComponent(url.username) : undefined,
-      filename: driver === "sqlite" ? decodeURIComponent(url.pathname) : undefined,
-      ssl: url.searchParams.has("ssl") || url.searchParams.has("sslmode"),
-      writeEnabled: false,
-    })
-    sessionPasswords.set("environment-database-url", decodeURIComponent(url.password))
-    return profile
-  } catch {
-    return null
-  }
+  return environmentProfile(sessionPasswords)
 }
 
 export function databaseDriverLabel(driver: DatabaseDriver) {
@@ -702,6 +666,7 @@ export function listDatabaseConnections(): DatabaseConnectionProfile[] {
   const mcp = discoveredMcpProfile()
   return [
     ...saved,
+    ...listExternalDatabaseProfiles(),
     ...(environment && !saved.some((profile) => profile.id === environment.id)
       ? [environment]
       : []),
@@ -881,6 +846,30 @@ export function clearLegacyDatabaseQueryHistoryContent() {
   return listDatabaseQueryHistory()
 }
 
+function normalizedNetworkDraft(draft: DatabaseConnectionDraft, name: string) {
+  const socket = draft.socket?.trim()
+  const host = draft.host?.trim()
+  const database = draft.database?.trim()
+  const username = draft.username?.trim()
+  const port = Math.floor(draft.port ?? defaultPort(draft.driver) ?? 0)
+  if (!host && !(draft.driver === "mysql" && socket)) throw new Error("Informe o host do banco.")
+  if (!database) throw new Error("Informe o nome do banco.")
+  if (!username) throw new Error("Informe o usuário.")
+  if (port < 1 || port > 65_535) throw new Error("Informe uma porta válida.")
+  return {
+    ...draft,
+    name,
+    host,
+    socket: draft.driver === "mysql" ? socket : undefined,
+    port,
+    database,
+    username,
+    filename: undefined,
+    command: undefined,
+    tlsMode: draft.ssl ? draft.tlsMode : "disable",
+  }
+}
+
 export function normalizedDraft(draft: DatabaseConnectionDraft): DatabaseConnectionDraft {
   const name = draft.name.trim()
   if (!name) throw new Error("Informe um nome para a conexão.")
@@ -925,24 +914,7 @@ export function normalizedDraft(draft: DatabaseConnectionDraft): DatabaseConnect
     }
   }
 
-  const host = draft.host?.trim()
-  const database = draft.database?.trim()
-  const username = draft.username?.trim()
-  const port = Math.floor(draft.port ?? defaultPort(draft.driver) ?? 0)
-  if (!host) throw new Error("Informe o host do banco.")
-  if (!database) throw new Error("Informe o nome do banco.")
-  if (!username) throw new Error("Informe o usuário.")
-  if (port < 1 || port > 65_535) throw new Error("Informe uma porta válida.")
-  return {
-    ...draft,
-    name,
-    host,
-    port,
-    database,
-    username,
-    filename: undefined,
-    command: undefined,
-  }
+  return normalizedNetworkDraft(draft, name)
 }
 
 export async function savePassword(connectionId: string, password: string) {
@@ -952,7 +924,9 @@ export async function savePassword(connectionId: string, password: string) {
   await secrets.set({ service: SECRET_SERVICE, name: connectionId, value: password })
 }
 
-export async function getPassword(connectionId: string) {
+export async function getPassword(connectionId: string, profile?: DatabaseConnectionProfile) {
+  if (profile?.source === "external") return externalDatabasePassword(connectionId) ?? ""
+  if (profile?.credentialSource === "pgpass") return resolvePgpassPassword(profile)
   const sessionPassword = sessionPasswords.get(connectionId)
   if (sessionPassword !== undefined) return sessionPassword
   try {
@@ -1015,7 +989,18 @@ export async function testSavedDatabaseConnection(
   draft: DatabaseConnectionDraft,
   password: string,
 ) {
-  const savedPassword = password || (await getPassword(connectionId))
+  const savedProfile = readSettings().connections.find((profile) => profile.id === connectionId)
+  if (
+    !password &&
+    savedProfile?.credentialSource === "pgpass" &&
+    draft.credentialSource !== "pgpass"
+  ) {
+    throw new Error("Informe uma senha para deixar de usar pgpass.")
+  }
+  const savedPassword =
+    draft.credentialSource === "pgpass"
+      ? ""
+      : password || (await getPassword(connectionId, savedProfile))
   await testDatabaseConnection(draft, savedPassword)
 }
 
@@ -1056,7 +1041,17 @@ export async function updateDatabaseConnection(
   if (profileIndex < 0) throw new Error("Apenas conexões salvas podem ser editadas.")
 
   const profile = profileFromDraft(draft, connectionId)
-  const passwordForTest = password || (await getPassword(connectionId))
+  if (
+    !password &&
+    settings.connections[profileIndex]?.credentialSource === "pgpass" &&
+    draft.credentialSource !== "pgpass"
+  ) {
+    throw new Error("Informe uma senha para deixar de usar pgpass.")
+  }
+  const passwordForTest =
+    draft.credentialSource === "pgpass"
+      ? ""
+      : password || (await getPassword(connectionId, settings.connections[profileIndex]))
   await testDatabaseConnection(draft, passwordForTest)
   await closeConnection(connectionId)
 
@@ -1065,7 +1060,14 @@ export async function updateDatabaseConnection(
   if (password) sessionPasswords.set(connectionId, password)
 
   let warning: string | null = null
-  if (password && persistPassword) {
+  if (draft.credentialSource === "pgpass") {
+    sessionPasswords.delete(connectionId)
+    try {
+      await runtimeBun().secrets?.delete({ service: SECRET_SERVICE, name: connectionId })
+    } catch {
+      warning = "Conexão atualizada, mas a senha antiga pode continuar no keychain."
+    }
+  } else if (password && persistPassword) {
     try {
       await savePassword(connectionId, password)
     } catch {
@@ -1342,12 +1344,13 @@ export async function createNativeClient(profile: DatabaseConnectionProfile) {
   }
   return new BunRuntime.SQL({
     adapter: profile.driver,
-    hostname: profile.host,
+    hostname: profile.socket ? undefined : profile.host,
+    path: profile.socket,
     port: profile.port,
     database: profile.database,
     username: profile.username,
-    password: await getPassword(profile.id),
-    tls: profile.ssl,
+    password: await getPassword(profile.id, profile),
+    tls: profile.socket ? false : (profile.tlsMode ?? profile.ssl),
     max: 3,
     idleTimeout: 30,
     connectionTimeout: 8,
@@ -1404,47 +1407,13 @@ export async function readQuery(connectionId: string, sql: string) {
     : nativeQuery(await getNativeClient(profile), sql, profile.driver)
 }
 
-export function queryResultColumns(result: unknown, rows: Array<Record<string, unknown>>) {
-  if (rows[0]) return Object.keys(rows[0])
-  if (!result || typeof result !== "object") return []
-  const columns = (result as { columns?: unknown }).columns
-  if (!Array.isArray(columns)) return []
-  return columns.flatMap((column) => {
-    if (typeof column === "string") return [column]
-    if (
-      column &&
-      typeof column === "object" &&
-      typeof (column as { name?: unknown }).name === "string"
-    ) {
-      return [(column as { name: string }).name]
-    }
-    return []
-  })
-}
-
-export function affectedRowCount(result: unknown) {
-  if (!result || typeof result !== "object") return null
-  const metadata = result as {
-    affectedRows?: unknown
-    changes?: unknown
-    count?: unknown
-    rowCount?: unknown
-  }
-  for (const value of [
-    metadata.affectedRows,
-    metadata.changes,
-    metadata.count,
-    metadata.rowCount,
-  ]) {
-    if (typeof value === "number" && Number.isFinite(value)) return value
-    if (typeof value === "bigint") return Number(value)
-  }
-  return null
-}
-
-function visibleQueryRows(rows: Array<Record<string, unknown>>, revealSensitive: boolean) {
+function visibleQueryRows(
+  rows: Array<Record<string, unknown>>,
+  revealSensitive: boolean,
+  resultLimit: number,
+) {
   return rows
-    .slice(0, QUERY_RESULT_LIMIT)
+    .slice(0, resultLimit)
     .map((row) =>
       Object.fromEntries(
         Object.entries(row).map(([column, value]) => [
@@ -1464,18 +1433,21 @@ function visibleQueryRows(rows: Array<Record<string, unknown>>, revealSensitive:
     )
 }
 
-function boundedEditorQuery(plan: DatabaseQueryPlan) {
+function boundedEditorQuery(plan: DatabaseQueryPlan, resultOffset: number, resultLimit: number) {
   if (plan.mutating || plan.command !== "SELECT") return plan.sql
   const source = plan.sql.replace(/;\s*$/u, "")
-  return `SELECT * FROM (${source}) AS __tuiminal_bounded_result LIMIT ${QUERY_RESULT_FETCH_LIMIT}`
+  const offset = resultOffset > 0 ? ` OFFSET ${resultOffset}` : ""
+  return `SELECT * FROM (${source}) AS __tuiminal_bounded_result LIMIT ${resultLimit + 1}${offset}`
 }
 
 async function editorQueryRows(
   profile: DatabaseConnectionProfile,
   plan: DatabaseQueryPlan,
+  resultOffset: number,
+  resultLimit: number,
   signal?: AbortSignal,
 ) {
-  const querySql = boundedEditorQuery(plan)
+  const querySql = boundedEditorQuery(plan, resultOffset, resultLimit)
   if (profile.driver === "mcp-mysql") {
     const rows = await mcpQuery(await getMcpClient(profile), querySql, signal)
     return { rawResult: rows, rows }
@@ -1498,6 +1470,54 @@ async function editorQueryRows(
   return { rawResult, rows: rowsFromResult(rawResult) }
 }
 
+function recordEditorQuerySuccess(
+  connectionId: string,
+  plan: DatabaseQueryPlan,
+  result: DatabaseQueryResult,
+) {
+  try {
+    appendDatabaseQueryHistory(connectionId, {
+      sql: plan.sql,
+      command: result.command,
+      status: "success",
+      executedAt: new Date().toISOString(),
+      durationMs: result.durationMs,
+      rowCount: result.mutating ? null : result.rowCount,
+      affectedRows: result.affectedRows,
+      error: null,
+      rerunnable: true,
+      parameterPreview: [],
+    })
+  } catch {
+    // A falha ao persistir histórico não deve transformar uma consulta bem-sucedida em erro.
+  }
+}
+
+function recordEditorQueryFailure(
+  connectionId: string,
+  sql: string,
+  plan: DatabaseQueryPlan | null,
+  startedAt: number,
+  error: unknown,
+) {
+  try {
+    appendDatabaseQueryHistory(connectionId, {
+      sql: plan?.sql ?? sql.trim(),
+      command: plan?.command ?? "SQL",
+      status: "error",
+      executedAt: new Date().toISOString(),
+      durationMs: performance.now() - startedAt,
+      rowCount: null,
+      affectedRows: null,
+      error: error instanceof Error ? error.message : "Falha desconhecida",
+      rerunnable: true,
+      parameterPreview: [],
+    })
+  } catch {
+    // Preserva o erro original da consulta se o histórico não puder ser salvo.
+  }
+}
+
 export async function executeDatabaseQuery(
   connectionId: string,
   sql: string,
@@ -1505,60 +1525,50 @@ export async function executeDatabaseQuery(
   options: DatabaseQueryExecutionOptions = {},
 ): Promise<DatabaseQueryResult> {
   const startedAt = performance.now()
+  const requestedOffset = Number.isFinite(options.resultOffset)
+    ? Math.max(0, Math.floor(options.resultOffset ?? 0))
+    : 0
+  const resultLimit = Number.isFinite(options.resultLimit)
+    ? Math.max(1, Math.min(QUERY_RESULT_LIMIT, Math.floor(options.resultLimit ?? 0)))
+    : QUERY_RESULT_LIMIT
   let plan: DatabaseQueryPlan | null = null
   try {
     plan = previewDatabaseQuery(connectionId, sql)
     const profile = connectionProfile(connectionId)
-    const { rawResult, rows } = await editorQueryRows(profile, plan, options.signal)
+    const windowOffset = !plan.mutating && plan.command === "SELECT" ? requestedOffset : 0
+    const { rawResult, rows } = await editorQueryRows(
+      profile,
+      plan,
+      windowOffset,
+      resultLimit,
+      options.signal,
+    )
 
     if (plan.mutating) {
       invalidateSchemaCache(connectionId)
     }
 
-    const visibleRows = visibleQueryRows(rows, revealSensitive)
+    const visibleRows = visibleQueryRows(rows, revealSensitive, resultLimit)
+    const hasRowsBefore = windowOffset > 0
+    const hasRowsAfter = rows.length > resultLimit
     const result: DatabaseQueryResult = {
       command: plan.command,
       mutating: plan.mutating,
       columns: queryResultColumns(rawResult, rows),
       rows: visibleRows,
       rowCount: visibleRows.length,
+      windowOffset,
+      hasRowsBefore,
+      hasRowsAfter,
       affectedRows: plan.mutating ? affectedRowCount(rawResult) : null,
       durationMs: performance.now() - startedAt,
-      truncated: rows.length > QUERY_RESULT_LIMIT,
+      truncated: hasRowsBefore || hasRowsAfter,
     }
-    try {
-      appendDatabaseQueryHistory(connectionId, {
-        sql: plan.sql,
-        command: result.command,
-        status: "success",
-        executedAt: new Date().toISOString(),
-        durationMs: result.durationMs,
-        rowCount: result.mutating ? null : result.rowCount,
-        affectedRows: result.affectedRows,
-        error: null,
-        rerunnable: true,
-        parameterPreview: [],
-      })
-    } catch {
-      // A falha ao persistir histórico não deve transformar uma consulta bem-sucedida em erro.
-    }
+    if (options.recordHistory !== false) recordEditorQuerySuccess(connectionId, plan, result)
     return result
   } catch (error) {
-    try {
-      appendDatabaseQueryHistory(connectionId, {
-        sql: plan?.sql ?? sql.trim(),
-        command: plan?.command ?? "SQL",
-        status: "error",
-        executedAt: new Date().toISOString(),
-        durationMs: performance.now() - startedAt,
-        rowCount: null,
-        affectedRows: null,
-        error: error instanceof Error ? error.message : "Falha desconhecida",
-        rerunnable: true,
-        parameterPreview: [],
-      })
-    } catch {
-      // Preserva o erro original da consulta se o histórico não puder ser salvo.
+    if (options.recordHistory !== false) {
+      recordEditorQueryFailure(connectionId, sql, plan, startedAt, error)
     }
     throw error
   }
@@ -1577,7 +1587,11 @@ export function previewDatabaseQuery(connectionId: string, sql: string): Databas
 }
 
 export function databaseConnectionCanWrite(profile: DatabaseConnectionProfile) {
-  return profile.source === "saved" && profile.writeEnabled && profile.driver !== "mcp-mysql"
+  return (
+    (profile.source === "saved" || profile.source === "external") &&
+    profile.writeEnabled &&
+    profile.driver !== "mcp-mysql"
+  )
 }
 
 export function parameterMarker(profile: DatabaseConnectionProfile, index: number) {
@@ -2005,6 +2019,11 @@ export async function loadTablePage(
   const startedAt = performance.now()
   let rows: Array<Record<string, unknown>>
   try {
+    try {
+      options.onQueryStart?.(sql)
+    } catch {
+      // A visualização da consulta não pode impedir a leitura dos registros.
+    }
     rows = await readQuery(connectionId, sql)
   } catch (error) {
     if (options.recordHistory) {
@@ -2613,4 +2632,5 @@ export async function closeDatabaseConnection() {
   ])
   invalidateSchemaCache()
   clearHistoryContent()
+  clearExternalDatabaseConnections()
 }

@@ -1,11 +1,15 @@
-import { FEATURE_MESSAGES } from "./features-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
+import { CONFIGURATION_MESSAGES } from "./configuration-catalog"
+import { DATABASE_CONNECTION_MESSAGES } from "./database-connections-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
+import { FEATURE_MESSAGES } from "./features-catalog"
+import { GIT_BROWSER_MESSAGES } from "./git-browser-catalog"
 import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
+import { GIT_CREATE_MESSAGES } from "./git-create-catalog"
 import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
 import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
@@ -19,6 +23,12 @@ import { HTTP_IMPORT_MESSAGES, HTTP_IMPORT_PATTERNS } from "./http-import-catalo
 import { HTTP_NAVIGATION_MESSAGES } from "./http-navigation-catalog"
 import { HTTP_OVERLAY_MESSAGES } from "./http-overlays"
 import { HTTP_PATTERNS } from "./http-patterns"
+import { HTTP_POSTMAN_MESSAGES, HTTP_POSTMAN_PATTERNS } from "./http-postman-catalog"
+import {
+  HTTP_POSTMAN_ERROR_MESSAGES,
+  HTTP_POSTMAN_ERROR_PATTERNS,
+} from "./http-postman-errors-catalog"
+import { HTTP_POSTMAN_SOURCE_MESSAGES } from "./http-postman-source-catalog"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
@@ -32,7 +42,14 @@ import {
   HTTP_WORKSPACE_SETTINGS_PATTERNS,
 } from "./http-workspace-settings-catalog"
 import { NOTIFICATION_MESSAGES, NOTIFICATION_PATTERNS } from "./notification-catalog"
+import { RUNNER_EDITOR_MESSAGES } from "./runner-editor-catalog"
+import { RUNNER_HELP_MESSAGES } from "./runner-help-catalog"
 import { RUNNER_TRUST_MESSAGES } from "./runner-trust-catalog"
+import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner-validation-catalog"
+import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
+import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
+import { TERMINAL_MESSAGES } from "./terminal-catalog"
+import { TERMINAL_TUTORIAL_MESSAGES } from "./terminal-tutorial-catalog"
 
 export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko"
 
@@ -98,8 +115,16 @@ type Message = readonly [
 
 const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
+  ...CONFIGURATION_MESSAGES,
+  ...TERMINAL_MESSAGES,
+  ...DATABASE_CONNECTION_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
+  ...RUNNER_HELP_MESSAGES,
+  ...RUNNER_YAML_MESSAGES,
+  ...RUNNER_YAML_COMPLETION_MESSAGES,
+  ...RUNNER_VALIDATION_MESSAGES,
+  ...RUNNER_EDITOR_MESSAGES,
   ...GIT_CLI_INSTALLER_MESSAGES,
   ...GIT_CLI_GUIDANCE_MESSAGES,
   ...GIT_DISCUSSION_MESSAGES,
@@ -320,14 +345,7 @@ const MESSAGES: readonly Message[] = [
   ["BANCO", "DATABASE", "BASE DE DATOS", "データベース", "数据库", "데이터베이스"],
   ["Banco", "Database", "Base de datos", "データベース", "数据库", "데이터베이스"],
   ["Terminal", "Terminal", "Terminal", "ターミナル", "终端", "터미널"],
-  [
-    "FREE TERMINAL",
-    "FREE TERMINAL",
-    "TERMINAL LIBRE",
-    "フリーターミナル",
-    "自由终端",
-    "자유 터미널",
-  ],
+  ["TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS", "TERM AGENTS"],
   ["[,] Config", "[,] Settings", "[,] Config", "[,] 設定", "[,] 设置", "[,] 설정"],
   ["[Q] Sair", "[Q] Quit", "[Q] Salir", "[Q] 終了", "[Q] 退出", "[Q] 종료"],
   ["[Esc] Sair", "[Esc] Exit", "[Esc] Salir", "[Esc] 終了", "[Esc] 退出", "[Esc] 종료"],
@@ -721,12 +739,12 @@ const MESSAGES: readonly Message[] = [
   ],
   ["Registros", "Records", "Registros", "レコード", "记录", "레코드"],
   [
-    "Exibe as linhas da tabela e habilita navegação, edição e paginação.",
-    "Shows table rows and enables navigation, editing, and pagination.",
-    "Muestra las filas de la tabla y habilita navegación, edición y paginación.",
-    "テーブルの行を表示し、移動・編集・ページ切替を有効にします。",
-    "显示表行并启用导航、编辑和分页。",
-    "테이블 행을 표시하고 탐색, 편집 및 페이지 이동을 활성화합니다.",
+    "Exibe as linhas da tabela e habilita navegação, edição e carregamento incremental.",
+    "Shows table rows and enables navigation, editing, and incremental loading.",
+    "Muestra las filas de la tabla y habilita navegación, edición y carga incremental.",
+    "テーブルの行を表示し、移動・編集・追加読み込みを有効にします。",
+    "显示表行并启用导航、编辑和增量加载。",
+    "테이블 행을 표시하고 탐색, 편집 및 추가 로드를 활성화합니다.",
   ],
   [
     "Atalho: [1]",
@@ -996,28 +1014,28 @@ const MESSAGES: readonly Message[] = [
     "[↑↓] 또는 [J/K]로 이동합니다. [Enter] 또는 [E]로 그리드와 같은 안전한 흐름을 사용해 선택한 필드를 편집합니다.",
   ],
   [
-    "Paginação e foco",
-    "Pagination and focus",
-    "Paginación y foco",
-    "ページ切替とフォーカス",
-    "分页和焦点",
-    "페이지 이동 및 포커스",
+    "Janela de linhas e foco",
+    "Row window and focus",
+    "Ventana de filas y foco",
+    "行ウィンドウとフォーカス",
+    "行窗口和焦点",
+    "행 창 및 포커스",
   ],
   [
-    "Avance páginas, mova a célula ativa e confira qual dos três blocos está recebendo o teclado.",
-    "Move through pages and cells, and see which of the three panels has keyboard focus.",
-    "Avanza páginas, mueve la celda activa y comprueba cuál de los tres paneles recibe el teclado.",
-    "ページとセルを移動し、3つのパネルのどれにキーボードフォーカスがあるか確認します。",
-    "翻页、移动活动单元格，并查看三个面板中的哪个接收键盘输入。",
-    "페이지와 셀을 이동하고 세 패널 중 어느 곳에 키보드 포커스가 있는지 확인합니다.",
+    "Ao passar da última ou primeira linha, carregue mais 40 e mantenha até 50 na grade. Confira qual bloco recebe o teclado.",
+    "Move past the last or first row to load 40 more while keeping up to 50 in the grid. Check which panel has keyboard focus.",
+    "Pasa de la última o primera fila para cargar 40 más y mantener hasta 50 en la cuadrícula. Comprueba qué panel recibe el teclado.",
+    "最後または最初の行を越えると40行を追加し、グリッドには最大50行を保持します。フォーカス中のパネルを確認してください。",
+    "越过最后或第一行时加载另外 40 行，网格中最多保留 50 行。查看哪个面板接收键盘输入。",
+    "마지막 또는 첫 행을 넘으면 40행을 더 불러오고 그리드에는 최대 50행을 유지합니다. 키보드 포커스가 있는 패널을 확인하세요.",
   ],
   [
-    "[P/N] muda a página · [H/←] [L/→] navega célula ou bloco",
-    "[P/N] changes page · [H/←] [L/→] navigates cell or panel",
-    "[P/N] cambia la página · [H/←] [L/→] navega por celda o panel",
-    "[P/N] ページ変更・[H/←] [L/→] セルまたはパネル移動",
-    "[P/N] 切换页面 · [H/←] [L/→] 导航单元格或面板",
-    "[P/N] 페이지 변경 · [H/←] [L/→] 셀 또는 패널 탐색",
+    "[↑/↓] carrega nas extremidades · [H/←] [L/→] navega célula ou bloco",
+    "[↑/↓] loads at the edges · [H/←] [L/→] navigates cell or panel",
+    "[↑/↓] carga en los extremos · [H/←] [L/→] navega por celda o panel",
+    "[↑/↓] 端で追加読み込み・[H/←] [L/→] セルまたはパネル移動",
+    "[↑/↓] 在边缘加载 · [H/←] [L/→] 导航单元格或面板",
+    "[↑/↓] 끝에서 추가 로드 · [H/←] [L/→] 셀 또는 패널 탐색",
   ],
   [
     "Ferramenta atual",
@@ -1532,6 +1550,9 @@ const MESSAGES: readonly Message[] = [
     "[Ctrl+↓] 편집기 −",
   ],
   ["[4] Schema", "[4] Schema", "[4] Esquema", "[4] スキーマ", "[4] 架构", "[4] 스키마"],
+  ["[G] Diagrama", "[G] Diagram", "[G] Diagrama", "[G] 図", "[G] 关系图", "[G] 다이어그램"],
+  ["[G] Detalhes", "[G] Details", "[G] Detalles", "[G] 詳細", "[G] 详情", "[G] 상세"],
+  ["auto-relação", "self-reference", "autorreferencia", "自己参照", "自引用", "자기 참조"],
   ["RELACIONAMENTOS", "RELATIONSHIPS", "RELACIONES", "リレーション", "关系", "관계"],
   ["CONSTRAINTS", "CONSTRAINTS", "RESTRICCIONES", "制約", "约束", "제약 조건"],
   [
@@ -2298,14 +2319,21 @@ const MESSAGES: readonly Message[] = [
     "영향받은 행",
   ],
   ["linhas", "rows", "filas", "行", "行", "행"],
-  ["500 máx.", "500 max", "500 máx.", "最大500件", "最多 500 条", "최대 500개"],
   [
-    "exibindo as primeiras 500",
-    "showing the first 500",
-    "mostrando las primeras 500",
-    "最初の500件を表示",
-    "显示前 500 条",
-    "처음 500개 표시",
+    "Carregando 40 linhas acima…",
+    "Loading 40 rows above…",
+    "Cargando 40 filas anteriores…",
+    "前の40行を読み込み中…",
+    "正在加载上方 40 行…",
+    "이전 40개 행 불러오는 중…",
+  ],
+  [
+    "Carregando 40 linhas abaixo…",
+    "Loading 40 rows below…",
+    "Cargando 40 filas siguientes…",
+    "次の40行を読み込み中…",
+    "正在加载下方 40 行…",
+    "다음 40개 행 불러오는 중…",
   ],
   ["ERRO", "ERROR", "ERROR", "エラー", "错误", "오류"],
   ["Erro", "Error", "Error", "エラー", "错误", "오류"],
@@ -2961,12 +2989,12 @@ const MESSAGES: readonly Message[] = [
 
   // Validação e erros apresentados pela interface.
   [
-    "O Free Terminal precisa ser executado com o Bun.",
-    "Free Terminal must be run with Bun.",
-    "Terminal Libre debe ejecutarse con Bun.",
-    "フリーターミナルはBunで実行する必要があります。",
-    "自由终端必须使用 Bun 运行。",
-    "자유 터미널은 Bun으로 실행해야 합니다.",
+    "O Term Agents precisa ser executado com o Bun.",
+    "Term Agents must be run with Bun.",
+    "Term Agents debe ejecutarse con Bun.",
+    "Term Agents はBunで実行する必要があります。",
+    "Term Agents 必须使用 Bun 运行。",
+    "Term Agents는 Bun으로 실행해야 합니다.",
   ],
   [
     "O Bun não conseguiu criar o terminal PTY.",
@@ -3148,12 +3176,12 @@ const MESSAGES: readonly Message[] = [
     "◇ 파랑: 새 행 · 주황: 편집됨 · 빨강: 삭제",
   ],
   [
-    "[P] ‹  página 1/4  › [N]",
-    "[P] ‹  page 1/4  › [N]",
-    "[P] ‹  página 1/4  › [N]",
-    "[P] ‹  ページ 1/4  › [N]",
-    "[P] ‹  第 1/4 页  › [N]",
-    "[P] ‹  페이지 1/4  › [N]",
+    "[↑/↓] até 50 · +40",
+    "[↑/↓] up to 50 · +40",
+    "[↑/↓] hasta 50 · +40",
+    "[↑/↓] 最大50 · +40",
+    "[↑/↓] 最多50 · +40",
+    "[↑/↓] 최대50 · +40",
   ],
   [
     "[/] foco: GRADE",
@@ -3502,7 +3530,7 @@ const MESSAGES: readonly Message[] = [
     "스테이지를 비울 수 없습니다.",
   ],
 
-  // Estados, ações e mensagens do Runner e Terminal livre.
+  // Estados, ações e mensagens do Runner e Term Agents.
   ["RODANDO", "RUNNING", "EJECUTANDO", "実行中", "运行中", "실행 중"],
   ["ENCERRANDO", "STOPPING", "DETENIENDO", "停止中", "正在停止", "중지 중"],
   ["CONCLUÍDO", "COMPLETED", "COMPLETADO", "完了", "已完成", "완료됨"],
@@ -4964,11 +4992,15 @@ const MESSAGES: readonly Message[] = [
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,
   ...HTTP_IMPORT_MESSAGES,
+  ...HTTP_POSTMAN_MESSAGES,
+  ...HTTP_POSTMAN_SOURCE_MESSAGES,
+  ...HTTP_POSTMAN_ERROR_MESSAGES,
   ...HTTP_OVERLAY_MESSAGES,
   ...HTTP_PROJECT_MESSAGES,
   ...HTTP_REQUEST_MESSAGES,
   ...HTTP_TRANSPORT_MESSAGES,
   ...HTTP_TUTORIAL_MESSAGES,
+  ...TERMINAL_TUTORIAL_MESSAGES,
   ...HTTP_PREVIEW_MESSAGES,
   ...HTTP_RESPONSE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,
@@ -4976,28 +5008,30 @@ const MESSAGES: readonly Message[] = [
   ...APPEARANCE_MESSAGES,
   // Git / Pull Requests / Issues.
   ...GIT_PR_MESSAGES,
+  ...GIT_CREATE_MESSAGES,
   ...GIT_ISSUE_MESSAGES,
   ...GIT_INBOX_MESSAGES,
   ...GIT_CONFIGURATION_MESSAGES,
+  ...GIT_BROWSER_MESSAGES,
   ...GIT_COMPARE_MESSAGES,
   // Notificações globais.
   ...NOTIFICATION_MESSAGES,
-  // Terminal livre.
+  // Term Agents.
   [
-    "❯ FREE TERMINAL",
-    "❯ FREE TERMINAL",
-    "❯ TERMINAL LIBRE",
-    "❯ フリーターミナル",
-    "❯ 自由终端",
-    "❯ 자유 터미널",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
+    "❯ TERM AGENTS",
   ],
   [
-    "TERMINAIS LIVRES EM SEÇÕES 2 × 2",
-    "FREE TERMINALS IN 2 × 2 SECTIONS",
-    "TERMINALES LIBRES EN SECCIONES 2 × 2",
-    "2 × 2 セクションのフリーターミナル",
-    "2 × 2 分区自由终端",
-    "2 × 2 섹션의 자유 터미널",
+    "TERM AGENTS EM SEÇÕES 2 × 2",
+    "TERM AGENTS IN 2 × 2 SECTIONS",
+    "TERM AGENTS EN SECCIONES 2 × 2",
+    "2 × 2 セクションの TERM AGENTS",
+    "2 × 2 分区 TERM AGENTS",
+    "2 × 2 섹션의 TERM AGENTS",
   ],
   [
     "+ Nova seção · │+ split ao lado · ─+ split abaixo",
@@ -5081,6 +5115,7 @@ for (const message of MESSAGES) {
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
 const PATTERNS: readonly Pattern[] = [
+  ...RUNNER_VALIDATION_PATTERNS,
   ...NOTIFICATION_PATTERNS,
   ...HTTP_WORKSPACE_SETTINGS_PATTERNS,
   [
@@ -5427,36 +5462,36 @@ const PATTERNS: readonly Pattern[] = [
     "[H/←] [L/→] 레코드",
   ],
   [
-    /^CÉLULA (\d+),(\d+) {2}• {2}(\d+) REGISTROS {2}• {2}(\d+) ALTERAÇÕES PENDENTES {2}• {2}p\.(\d+) (\d+)–(\d+)$/,
-    "CELL $1,$2  •  $3 RECORDS  •  $4 PENDING CHANGES  •  p.$5 $6–$7",
-    "CELDA $1,$2  •  $3 REGISTROS  •  $4 CAMBIOS PENDIENTES  •  p.$5 $6–$7",
-    "セル $1,$2・$3レコード・保留中の変更$4件・$5ページ $6–$7",
-    "单元格 $1,$2  •  $3 条记录  •  $4 项待处理更改  •  第 $5 页 $6–$7",
-    "셀 $1,$2  •  레코드 $3개  •  대기 중인 변경 $4개  •  $5페이지 $6–$7",
+    /^CÉLULA (\d+),(\d+) {2}• {2}(\d+) REGISTROS {2}• {2}(\d+) ALTERAÇÕES PENDENTES {2}• {2}(\d+)–(\d+)(\s?[↑↓]*)$/,
+    "CELL $1,$2  •  $3 RECORDS  •  $4 PENDING CHANGES  •  $5–$6$7",
+    "CELDA $1,$2  •  $3 REGISTROS  •  $4 CAMBIOS PENDIENTES  •  $5–$6$7",
+    "セル $1,$2・$3レコード・保留中の変更$4件・$5–$6$7",
+    "单元格 $1,$2  •  $3 条记录  •  $4 项待处理更改  •  $5–$6$7",
+    "셀 $1,$2  •  레코드 $3개  •  대기 중인 변경 $4개  •  $5–$6$7",
   ],
   [
-    /^(\d+)–(\d+) · p\.(\d+) · cél (\d+),(\d+) · (\d+) pend\.$/,
-    "$1–$2 · p.$3 · cell $4,$5 · $6 pending",
-    "$1–$2 · p.$3 · celda $4,$5 · $6 pend.",
-    "$1–$2・p.$3・セル $4,$5・保留 $6",
-    "$1–$2 · 第 $3 页 · 单元格 $4,$5 · $6 项待处理",
-    "$1–$2 · p.$3 · 셀 $4,$5 · $6개 대기",
+    /^(\d+)–(\d+)(\s?[↑↓]*) · cél (\d+),(\d+) · (\d+) pend\.$/,
+    "$1–$2$3 · cell $4,$5 · $6 pending",
+    "$1–$2$3 · celda $4,$5 · $6 pend.",
+    "$1–$2$3 · セル $4,$5 · 保留 $6",
+    "$1–$2$3 · 单元格 $4,$5 · $6 项待处理",
+    "$1–$2$3 · 셀 $4,$5 · $6개 대기",
   ],
   [
-    /^(\d+)–(\d+) · p\.(\d+) · cél (\d+),(\d+) · (\d+) itens · (\d+) pend\.$/,
-    "$1–$2 · p.$3 · cell $4,$5 · $6 items · $7 pending",
-    "$1–$2 · p.$3 · celda $4,$5 · $6 elementos · $7 pend.",
-    "$1–$2・p.$3・セル $4,$5・$6件・保留 $7",
-    "$1–$2 · 第 $3 页 · 单元格 $4,$5 · $6 项 · $7 项待处理",
-    "$1–$2 · p.$3 · 셀 $4,$5 · 항목 $6개 · 대기 $7개",
+    /^(\d+)–(\d+)(\s?[↑↓]*) · cél (\d+),(\d+) · (\d+) itens · (\d+) pend\.$/,
+    "$1–$2$3 · cell $4,$5 · $6 items · $7 pending",
+    "$1–$2$3 · celda $4,$5 · $6 elementos · $7 pend.",
+    "$1–$2$3 · セル $4,$5 · $6件 · 保留 $7",
+    "$1–$2$3 · 单元格 $4,$5 · $6 项 · $7 项待处理",
+    "$1–$2$3 · 셀 $4,$5 · 항목 $6개 · 대기 $7개",
   ],
   [
-    /^p\.(\d+) · cél (\d+),(\d+) · (\d+) itens$/,
-    "p.$1 · cell $2,$3 · $4 items",
-    "p.$1 · celda $2,$3 · $4 elementos",
-    "$1ページ・セル $2,$3・$4件",
-    "第 $1 页 · 单元格 $2,$3 · $4 项",
-    "$1페이지 · 셀 $2,$3 · 항목 $4개",
+    /^(\d+)–(\d+)(\s?[↑↓]*) · cél (\d+),(\d+) · (\d+) itens$/,
+    "$1–$2$3 · cell $4,$5 · $6 items",
+    "$1–$2$3 · celda $4,$5 · $6 elementos",
+    "$1–$2$3 · セル $4,$5 · $6件",
+    "$1–$2$3 · 单元格 $4,$5 · $6 项",
+    "$1–$2$3 · 셀 $4,$5 · 항목 $6개",
   ],
   [
     /^⚠ \[V\] confirmar {2}·$/,
@@ -5809,6 +5844,8 @@ const PATTERNS: readonly Pattern[] = [
   ...HTTP_PATTERNS,
   ...HTTP_ENVIRONMENT_PATTERNS,
   ...HTTP_IMPORT_PATTERNS,
+  ...HTTP_POSTMAN_PATTERNS,
+  ...HTTP_POSTMAN_ERROR_PATTERNS,
   ...HTTP_PROJECT_PATTERNS,
   ...HTTP_RESPONSE_PATTERNS,
   ...HTTP_RUNNER_PATTERNS,

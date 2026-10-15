@@ -2,8 +2,6 @@ import type { BoxRenderable, ScrollBoxRenderable, TextareaRenderable } from "@op
 import { RenderableEvents, RGBA } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { COLORS, databaseSelectionColors } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import {
   DEFAULT_SENSITIVE_VISIBILITY,
@@ -11,9 +9,12 @@ import {
   type SensitiveVisibility,
   sensitiveDataIsMasked,
 } from "@xupon/tuiminal-core/security/sensitive-data"
+import { COLORS, databaseSelectionColors } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDatabaseQueryNotifications } from "../hooks/use-database-notifications"
+import { useDatabaseQueryWindow } from "../hooks/use-database-query-window"
 import { useDatabaseSelectionSweep } from "../hooks/use-database-selection-sweep"
 import { useIdentifiedQueryRows } from "../hooks/use-identified-query-rows"
 import { useQueryResultHorizontalNavigation } from "../hooks/use-query-result-horizontal-navigation"
@@ -27,8 +28,8 @@ import { databaseResultScrollTop } from "../model/layout"
 import {
   databaseEditableQueryTable,
   databaseQueryResultColumns,
-  databaseQueryTableWriteBlockReason,
   databaseQueryResultRowKey,
+  databaseQueryTableWriteBlockReason,
 } from "../model/query-edit"
 import { getSqlCompletionContext, sqlAutocompleteTableKey } from "../model/sql-autocomplete"
 import { sqlStatementAtOffset } from "../model/sql-statements"
@@ -66,12 +67,12 @@ import {
   SQL_SYNTAX_STYLE,
   SQL_TAB_LIMIT,
 } from "../rendering/constants"
-import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
-  queryCellForeground,
   queryCompletionPresentation,
-  queryRowColors,
+  queryResultSummary,
+  queryWindowLoadingLabel,
 } from "../rendering/query-presentation"
+import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
   fitCell,
   queryPlaceholder,
@@ -92,11 +93,13 @@ import {
 } from "../services/database"
 import { DatabaseBatchExportModal } from "../ui/DatabaseBatchExportModal"
 import { DatabaseCellEditor } from "../ui/DatabaseCellEditor"
+import { DatabaseGridRowView } from "../ui/DatabaseGridRowView"
 import {
   DatabaseQueryFavoritesModal,
   type DatabaseQueryFavoritesMode,
 } from "../ui/DatabaseQueryFavoritesModal"
 import { RowInspector } from "../ui/RowInspector"
+
 export function DatabaseQueryWorkspace({
   active,
   tabId,
@@ -213,6 +216,21 @@ export function DatabaseQueryWorkspace({
     index: number
     total: number
   } | null>(null)
+  const queryWindow = useDatabaseQueryWindow({
+    connectionId,
+    result,
+    sqlRef: lastExecutedSqlRef,
+    revealSensitive: querySensitiveVisibility === "visible",
+    requestRef: queryAbortRef,
+    scrollRef: resultScrollRef,
+    setBusy,
+    setNotice: setResultNotice,
+    setResult,
+    selectRow: (index) => {
+      selectedResultRowIndexRef.current = index
+      setSelectedResultRowIndex(index)
+    },
+  })
   const identifiedRows = useIdentifiedQueryRows(result?.rows ?? [])
   const splitEditorHeight = sqlSplitEditorHeight(terminal.height, editorRatio)
   const editorHeight =
@@ -236,8 +254,10 @@ export function DatabaseQueryWorkspace({
     ),
   )
   const maxColumnOffset = Math.max(0, (result?.columns.length ?? 0) - visibleColumnCount)
-  const visibleColumns =
-    result?.columns.slice(columnOffset, columnOffset + visibleColumnCount) ?? []
+  const visibleColumns = useMemo(
+    () => result?.columns.slice(columnOffset, columnOffset + visibleColumnCount) ?? [],
+    [columnOffset, result?.columns, visibleColumnCount],
+  )
   const resultColumnMetadata = useMemo(
     () => databaseQueryResultColumns(result?.columns ?? [], resultTableColumns ?? []),
     [result?.columns, resultTableColumns],
@@ -899,13 +919,17 @@ export function DatabaseQueryWorkspace({
 
   const moveResultRow = useCallback(
     (delta: number) => {
-      setSelectedResultRowIndex((current) => {
-        const next = Math.max(0, Math.min(queryGridRows.length - 1, current + delta))
-        selectedResultRowIndexRef.current = next
-        return next
-      })
+      const current = selectedResultRowIndexRef.current
+      const next = Math.max(0, Math.min(queryGridRows.length - 1, current + delta))
+      const atBoundary = delta < 0 ? current === 0 : current === queryGridRows.length - 1
+      if (next === current && atBoundary) {
+        void queryWindow.load(delta < 0 ? -1 : 1)
+        return
+      }
+      selectedResultRowIndexRef.current = next
+      setSelectedResultRowIndex(next)
     },
-    [queryGridRows.length],
+    [queryGridRows.length, queryWindow],
   )
 
   const moveResultColumn = useCallback(
@@ -973,6 +997,26 @@ export function DatabaseQueryWorkspace({
     const row = batchRow(gridRow)
     setResultBatchRows((current) => toggleDatabaseBatchRow(current, row))
   }, [])
+
+  const selectResultBatchRow = useCallback(
+    (rowIndex: number, gridRow: DatabaseGridRow) => {
+      selectedResultRowIndexRef.current = rowIndex
+      setSelectedResultRowIndex(rowIndex)
+      focusResultPane("grid")
+      toggleResultBatchRow(gridRow)
+    },
+    [focusResultPane, toggleResultBatchRow],
+  )
+
+  const selectResultGridCell = useCallback(
+    (rowIndex: number, columnIndex: number) => {
+      selectedResultRowIndexRef.current = rowIndex
+      setSelectedResultRowIndex(rowIndex)
+      selectResultGridColumn(columnIndex)
+      focusResultPane("grid")
+    },
+    [focusResultPane, selectResultGridColumn],
+  )
 
   const selectionSweep = useDatabaseSelectionSweep({
     rows: queryGridRows,
@@ -1683,13 +1727,10 @@ export function DatabaseQueryWorkspace({
     ? `◆ SQL${favoriteHeader}`
     : `${translateUi("◆ EDITOR SQL")} · ${databaseDriverLabel(connection.driver)}${favoriteHeader}`
 
-  const resultSummary = result
-    ? result.mutating
-      ? `${result.command} · ${result.affectedRows ?? "?"} ${translateUi("linha(s) afetada(s)")} · ${result.durationMs.toFixed(1)} ms`
-      : compactActions
-        ? `${result.rowCount} ${translateUi("linhas")} · ${result.durationMs.toFixed(1)} ms${result.truncated ? ` · ${translateUi("500 máx.")}` : ""}${queryHasMaskedValues ? " · 🔒" : ""}`
-        : `${result.rowCount} ${translateUi("linha(s)")} · ${result.durationMs.toFixed(1)} ms${result.truncated ? ` · ${translateUi("exibindo as primeiras 500")}` : ""}${queryHasMaskedValues ? ` · ${translateUi("sensíveis mascarados")}` : ""}`
-    : translateUi("O resultado aparecerá aqui")
+  const resultSummary = queryResultSummary(result, compactActions, queryHasMaskedValues)
+  const windowLoadingStatus = queryWindow.loadingDirection
+    ? `${queryWindow.loadingFrame} ${queryWindowLoadingLabel(queryWindow.loadingDirection)}`
+    : ""
 
   return (
     <box
@@ -2080,11 +2121,16 @@ export function DatabaseQueryWorkspace({
         </box>
       ) : (
         <text
-          content={translateUi(resultNotice || resultSummary)}
+          content={windowLoadingStatus || translateUi(resultNotice || resultSummary)}
           style={{
             height: 1,
             flexShrink: 0,
-            fg: resultNotice ? COLORS.warning : result ? COLORS.database : COLORS.muted,
+            fg:
+              resultNotice && !windowLoadingStatus
+                ? COLORS.warning
+                : result
+                  ? COLORS.database
+                  : COLORS.muted,
           }}
         />
       )}
@@ -2251,98 +2297,31 @@ export function DatabaseQueryWorkspace({
                       },
                     }}
                   >
-                    {queryGridRows.map((gridRow, rowIndex) => {
-                      const mutationKind = gridRow.change?.mutation.kind
-                      const { background: rowBackground, accent: rowAccent } = queryRowColors(
-                        mutationKind,
-                        rowIndex,
-                      )
-                      return (
-                        <box
-                          key={gridRow.id}
-                          id={queryElementId(`result-row-${rowIndex}`)}
-                          style={{
-                            height: 1,
-                            flexShrink: 0,
-                            flexDirection: "row",
-                            backgroundColor: rowBackground,
-                          }}
-                        >
-                          <Button
-                            id={queryElementId(`select-row-${rowIndex}`)}
-                            onPress={() => {
-                              selectedResultRowIndexRef.current = rowIndex
-                              setSelectedResultRowIndex(rowIndex)
-                              focusResultPane("grid")
-                              toggleResultBatchRow(gridRow)
-                            }}
-                            height={1}
-                            width={BATCH_SELECTOR_WIDTH}
-                            flexShrink={0}
-                          >
-                            <text
-                              content={
-                                resultBatchRowIds.has(
-                                  databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                )
-                                  ? "● "
-                                  : "○ "
-                              }
-                              style={{
-                                fg: resultBatchRowIds.has(
-                                  databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
-                                )
-                                  ? COLORS.database
-                                  : COLORS.muted,
-                                bg: rowBackground,
-                              }}
-                            />
-                          </Button>
-                          <text content="│" style={{ fg: COLORS.border, bg: rowBackground }} />
-                          {visibleColumns.map((column, visibleIndex) => {
-                            const absoluteIndex = columnOffset + visibleIndex
-                            const selectedCell =
-                              rowIndex === selectedResultRowIndex &&
-                              absoluteIndex === selectedResultGridColumnIndex &&
-                              resultPane === "grid"
-                            const changedCell =
-                              gridRow.change?.mutation.kind === "update" &&
-                              Object.hasOwn(gridRow.change.mutation.values, column)
-                            return (
-                              <Button
-                                key={`${column}-${absoluteIndex}`}
-                                id={queryElementId(`cell-${rowIndex}-${absoluteIndex}`)}
-                                onPress={() => {
-                                  selectedResultRowIndexRef.current = rowIndex
-                                  setSelectedResultRowIndex(rowIndex)
-                                  selectResultGridColumn(absoluteIndex)
-                                  focusResultPane("grid")
-                                }}
-                                height={1}
-                                width={queryCellWidth}
-                                flexShrink={0}
-                              >
-                                {(state) => (
-                                  <text
-                                    content={fitCell(gridRow.data[column], queryCellWidth)}
-                                    style={{
-                                      fg: queryCellForeground(
-                                        selectedCell,
-                                        Boolean(changedCell || mutationKind),
-                                        state.focused,
-                                        rowAccent,
-                                        selectionColors.foreground,
-                                      ),
-                                      bg: selectedCell ? selectionColors.background : rowBackground,
-                                    }}
-                                  />
-                                )}
-                              </Button>
-                            )
-                          })}
-                        </box>
-                      )
-                    })}
+                    {queryGridRows.map((gridRow, rowIndex) => (
+                      <DatabaseGridRowView
+                        key={gridRow.id}
+                        gridRow={gridRow}
+                        rowIndex={rowIndex}
+                        idPrefix={`database-query-${tabId}`}
+                        rowIdSegment="result-row"
+                        columns={visibleColumns}
+                        columnOffset={columnOffset}
+                        cellWidth={queryCellWidth}
+                        separateCells={false}
+                        selectedColumnIndex={
+                          resultPane === "grid" && rowIndex === selectedResultRowIndex
+                            ? selectedResultGridColumnIndex
+                            : -1
+                        }
+                        batchSelected={resultBatchRowIds.has(
+                          databaseBatchRowIdentity(gridRow.rowKey, gridRow.id),
+                        )}
+                        selectionForeground={selectionColors.foreground}
+                        selectionBackground={selectionColors.background}
+                        onToggleBatch={selectResultBatchRow}
+                        onSelectCell={selectResultGridCell}
+                      />
+                    ))}
                   </scrollbox>
                 </box>
               ) : null}

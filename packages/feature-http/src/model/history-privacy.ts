@@ -59,8 +59,22 @@ export function redactHttpHistoryEntry(
     entry.response?.privacy,
     httpHeadersPrivacy(entry.response?.headers ?? []),
   )
-  const text = (value: string) => redactHttpDiagnostic(privacy.redactText(value))
-  const url = (value: string) => redactHttpHistoryUrl(privacy.redactUrl(value))
+  const textCache = new Map<string, string>()
+  const urlCache = new Map<string, string>()
+  const text = (value: string) => {
+    const cached = textCache.get(value)
+    if (cached !== undefined) return cached
+    const redacted = redactHttpDiagnostic(privacy.redactText(value))
+    textCache.set(value, redacted)
+    return redacted
+  }
+  const url = (value: string) => {
+    const cached = urlCache.get(value)
+    if (cached !== undefined) return cached
+    const redacted = redactHttpHistoryUrl(privacy.redactUrl(value))
+    urlCache.set(value, redacted)
+    return redacted
+  }
   const response = entry.response
   return {
     ...entry,

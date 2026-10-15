@@ -2,6 +2,8 @@ import type { InputRenderable } from "@opentui/core"
 import { useCallback, useState, type RefObject } from "react"
 import type { HttpDocumentRefs } from "../runtime"
 import type { HttpDocumentState } from "../model/types"
+import type { HttpProjectRequestItem } from "../model/types"
+import { isOpaqueHttpRequest } from "../model/request-capabilities"
 import {
   createScratchRequest,
   HTTP_DOCUMENT_LIMIT,
@@ -15,6 +17,7 @@ export function useHttpDocuments({
   abortControllers,
   documentCounter,
   urlRef,
+  refsFor,
   blurDocumentControls,
   dispatch,
 }: {
@@ -23,6 +26,7 @@ export function useHttpDocuments({
   abortControllers: RefObject<Map<string, AbortController>>
   documentCounter: RefObject<number>
   urlRef: RefObject<InputRenderable | null>
+  refsFor: (documentId: string) => HttpDocumentRefs
   blurDocumentControls: () => void
   dispatch: (action: HttpWorkspaceAction) => void
 }) {
@@ -35,6 +39,22 @@ export function useHttpDocuments({
       setTimeout(() => urlRef.current?.focus(), 0)
     },
     [blurDocumentControls, dispatch, urlRef],
+  )
+  const openProjectRequest = useCallback(
+    (item: HttpProjectRequestItem) => {
+      blurDocumentControls()
+      dispatch({ type: "add-document", request: item.request })
+      setTimeout(() => {
+        if (isOpaqueHttpRequest(item.request)) {
+          dispatch({ type: "select-pane", pane: "request" })
+          refsFor(item.request.id).raw?.focus()
+        } else {
+          dispatch({ type: "select-pane", pane: "url" })
+          urlRef.current?.focus()
+        }
+      }, 0)
+    },
+    [blurDocumentControls, dispatch, refsFor, urlRef],
   )
   const addDocument = useCallback(() => {
     if (documents.length >= HTTP_DOCUMENT_LIMIT) return
@@ -84,6 +104,7 @@ export function useHttpDocuments({
   const cancelPendingClose = useCallback(() => setPendingCloseId(null), [])
   return {
     selectDocument,
+    openProjectRequest,
     addDocument,
     cancelDocument,
     closeDocument,

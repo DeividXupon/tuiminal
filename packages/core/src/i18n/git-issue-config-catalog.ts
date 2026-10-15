@@ -59,14 +59,6 @@ export const GIT_ISSUE_CONFIG_MESSAGES = [
     "[E/Enter] 편집",
   ],
   [
-    "[Alt+↑/↓] Mover",
-    "[Alt+↑/↓] Move",
-    "[Alt+↑/↓] Mover",
-    "[Alt+↑/↓] 移動",
-    "[Alt+↑/↓] 移动",
-    "[Alt+↑/↓] 이동",
-  ],
-  [
     "[J/K] Navegar  [1/2] Seção  [Esc] Voltar",
     "[J/K] Navigate  [1/2] Section  [Esc] Back",
     "[J/K] Navegar  [1/2] Sección  [Esc] Volver",

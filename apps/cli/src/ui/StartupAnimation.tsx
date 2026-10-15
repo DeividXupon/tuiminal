@@ -1,6 +1,6 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { type ComponentType, createElement, useCallback, useEffect, useState } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import {
   createStartupAnimationFrame,
@@ -56,7 +56,7 @@ export function StartupAnimationFrame({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        backgroundColor: COLORS.canvas,
+        backgroundColor: LAYOUT.workspaceBackground,
         opacity: frame.opacity,
       }}
     >
@@ -81,7 +81,7 @@ export function StartupAnimationFrame({
             text={frame.word}
             font="tiny"
             color={COLORS.text}
-            backgroundColor={COLORS.canvas}
+            backgroundColor={LAYOUT.workspaceBackground}
             selectable={false}
             style={{ position: "absolute", left: frame.wordLeft, top: frame.wordTop }}
           />

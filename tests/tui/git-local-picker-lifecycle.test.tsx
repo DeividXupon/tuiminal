@@ -43,6 +43,7 @@ function fixture(kind: "project" | "branch") {
     return open ? (
       <GitLocalTargetPicker
         key={instance}
+        width={92}
         kind={kind}
         target={target}
         projects={[target]}

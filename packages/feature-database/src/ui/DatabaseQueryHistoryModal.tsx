@@ -2,6 +2,7 @@ import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { DatabaseQueryHistoryEntry } from "../model/types"
 import {
@@ -176,306 +177,274 @@ export function DatabaseQueryHistoryModal({
   if (!open) return null
 
   return (
-    <>
-      <Button
-        onPress={onClose}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={950}
-        backgroundColor="#030509"
-        opacity={0.9}
-      />
+    <ModalSurface
+      id="database-query-history-modal"
+      dialogRef={modalRef}
+      width={width}
+      height={height}
+      zIndex={950}
+      borderColor={COLORS.database}
+      backdropOpacity={0.9}
+      horizontalPadding={compact ? 1 : 2}
+      onBackdropPress={onClose}
+    >
       <box
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 951,
-          alignItems: "center",
-          justifyContent: "center",
+          height: headerHeight,
+          flexShrink: 0,
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
       >
         <box
-          ref={modalRef}
-          id="database-query-history-modal"
-          focusable
           style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.database,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: compact ? 1 : 2,
-            paddingRight: compact ? 1 : 2,
+            height: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
           }}
         >
-          <box
-            style={{
-              height: headerHeight,
-              flexShrink: 0,
-              border: ["bottom"],
-              borderColor: COLORS.border,
+          <text content={`◆ ${translateUi("HISTÓRICO SQL")}`} style={{ fg: COLORS.database }} />
+          <text
+            content={`${translateUi("Total")}: ${entries.length}`}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+        <text
+          content={truncateDisplay(retentionSummary, Math.max(8, width - 6))}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+        <DatabaseHistoryPrivacyBar privacy={privacy} width={Math.max(1, width - 6)} />
+      </box>
+
+      {visibleEntries.length ? (
+        <>
+          <scrollbox
+            ref={listRef}
+            scrollY
+            viewportCulling
+            style={{ height: listHeight, flexShrink: 0, width: "100%" }}
+            verticalScrollbarOptions={{
+              trackOptions: {
+                backgroundColor: COLORS.panel,
+                foregroundColor: COLORS.border,
+              },
             }}
           >
-            <box
-              style={{
-                height: 1,
-                flexShrink: 0,
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <text content={`◆ ${translateUi("HISTÓRICO SQL")}`} style={{ fg: COLORS.database }} />
-              <text
-                content={`${translateUi("Total")}: ${entries.length}`}
-                style={{ fg: COLORS.muted }}
-              />
-            </box>
-            <text
-              content={truncateDisplay(retentionSummary, Math.max(8, width - 6))}
-              style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-            />
-            <DatabaseHistoryPrivacyBar privacy={privacy} width={Math.max(1, width - 6)} />
-          </box>
-
-          {visibleEntries.length ? (
-            <>
-              <scrollbox
-                ref={listRef}
-                scrollY
-                viewportCulling
-                style={{ height: listHeight, flexShrink: 0, width: "100%" }}
-                verticalScrollbarOptions={{
-                  trackOptions: {
-                    backgroundColor: COLORS.panel,
-                    foregroundColor: COLORS.border,
-                  },
-                }}
-              >
-                {visibleEntries.map((entry, index) => {
-                  const selected = index === selectedIndex
-                  const successful = entry.status === "success"
-                  return (
-                    <Button
-                      key={entry.id}
-                      id={`database-query-history-entry-${index}`}
-                      onPress={() => setSelectedIndex(index)}
-                      height={2}
-                      width="100%"
-                      flexShrink={0}
-                    >
-                      {(state) => (
-                        <box
-                          style={{
-                            height: 2,
-                            width: "100%",
-                            flexShrink: 0,
-                            backgroundColor:
-                              selected || state.focused
-                                ? COLORS.panelRaised
-                                : index % 2 === 0
-                                  ? COLORS.panel
-                                  : COLORS.panelAlt,
-                            paddingLeft: 1,
-                            paddingRight: 1,
-                          }}
-                        >
-                          <box
-                            style={{
-                              height: 1,
-                              flexShrink: 0,
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <text
-                              content={`${selected ? "›" : " "} ${successful ? "✓" : "✕"} ${entry.command} · ${entry.connectionName}`}
-                              style={{ fg: successful ? COLORS.success : COLORS.danger }}
-                            />
-                            <text
-                              content={`${historyAmount(entry)} · ${historyDuration(entry.durationMs)}`}
-                              style={{ fg: COLORS.muted }}
-                            />
-                          </box>
-                          <text
-                            content={`  ${historySqlPreview(historySqlText(entry), rowWidth)}`}
-                            style={{ fg: selected ? COLORS.text : COLORS.muted }}
-                          />
-                        </box>
-                      )}
-                    </Button>
-                  )
-                })}
-              </scrollbox>
-
-              <box
-                style={{
-                  flexGrow: 1,
-                  border: ["top"],
-                  borderColor: COLORS.border,
-                  backgroundColor: COLORS.panel,
-                  paddingLeft: 1,
-                  paddingRight: 1,
-                }}
-              >
-                {selectedEntry ? (
-                  <>
+            {visibleEntries.map((entry, index) => {
+              const selected = index === selectedIndex
+              const successful = entry.status === "success"
+              return (
+                <Button
+                  key={entry.id}
+                  id={`database-query-history-entry-${index}`}
+                  onPress={() => setSelectedIndex(index)}
+                  height={2}
+                  width="100%"
+                  flexShrink={0}
+                >
+                  {(state) => (
                     <box
                       style={{
-                        height: 1,
+                        height: 2,
+                        width: "100%",
                         flexShrink: 0,
-                        flexDirection: "row",
-                        justifyContent: "space-between",
+                        backgroundColor:
+                          selected || state.focused
+                            ? COLORS.panelRaised
+                            : index % 2 === 0
+                              ? COLORS.panel
+                              : COLORS.panelAlt,
+                        paddingLeft: 1,
+                        paddingRight: 1,
                       }}
                     >
-                      <text
-                        content={`${selectedEntry.status === "success" ? "✓" : "✕"} ${selectedEntry.command} · ${historyAmount(selectedEntry)}`}
+                      <box
                         style={{
-                          fg: selectedEntry.status === "success" ? COLORS.success : COLORS.danger,
+                          height: 1,
+                          flexShrink: 0,
+                          flexDirection: "row",
+                          justifyContent: "space-between",
                         }}
-                      />
+                      >
+                        <text
+                          content={`${selected ? "›" : " "} ${successful ? "✓" : "✕"} ${entry.command} · ${entry.connectionName}`}
+                          style={{ fg: successful ? COLORS.success : COLORS.danger }}
+                        />
+                        <text
+                          content={`${historyAmount(entry)} · ${historyDuration(entry.durationMs)}`}
+                          style={{ fg: COLORS.muted }}
+                        />
+                      </box>
                       <text
-                        content={`${formatUiDateTime(selectedEntry.executedAt, {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })} · ${historyDuration(selectedEntry.durationMs)}`}
-                        style={{ fg: COLORS.muted }}
+                        content={`  ${historySqlPreview(historySqlText(entry), rowWidth)}`}
+                        style={{ fg: selected ? COLORS.text : COLORS.muted }}
                       />
                     </box>
+                  )}
+                </Button>
+              )
+            })}
+          </scrollbox>
+
+          <box
+            style={{
+              flexGrow: 1,
+              border: ["top"],
+              borderColor: COLORS.border,
+              backgroundColor: COLORS.panel,
+              paddingLeft: 1,
+              paddingRight: 1,
+            }}
+          >
+            {selectedEntry ? (
+              <>
+                <box
+                  style={{
+                    height: 1,
+                    flexShrink: 0,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <text
+                    content={`${selectedEntry.status === "success" ? "✓" : "✕"} ${selectedEntry.command} · ${historyAmount(selectedEntry)}`}
+                    style={{
+                      fg: selectedEntry.status === "success" ? COLORS.success : COLORS.danger,
+                    }}
+                  />
+                  <text
+                    content={`${formatUiDateTime(selectedEntry.executedAt, {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })} · ${historyDuration(selectedEntry.durationMs)}`}
+                    style={{ fg: COLORS.muted }}
+                  />
+                </box>
+                <text
+                  content={`${selectedEntry.connectionName} · ${databaseDriverLabel(selectedEntry.driver)}`}
+                  style={{ height: 1, flexShrink: 0, fg: COLORS.database }}
+                />
+                <text
+                  content={sqlLines
+                    .map((line) => truncateDisplay(line || " ", Math.max(8, width - 8)))
+                    .join("\n")}
+                  style={{ height: sqlLines.length, flexShrink: 0, fg: COLORS.text }}
+                />
+                {visibleParameters.length ? (
+                  <>
                     <text
-                      content={`${selectedEntry.connectionName} · ${databaseDriverLabel(selectedEntry.driver)}`}
+                      content={`${translateUi("PARÂMETROS")} · ${selectedEntry.parameterPreview.length}`}
                       style={{ height: 1, flexShrink: 0, fg: COLORS.database }}
                     />
-                    <text
-                      content={sqlLines
-                        .map((line) => truncateDisplay(line || " ", Math.max(8, width - 8)))
-                        .join("\n")}
-                      style={{ height: sqlLines.length, flexShrink: 0, fg: COLORS.text }}
-                    />
-                    {visibleParameters.length ? (
-                      <>
-                        <text
-                          content={`${translateUi("PARÂMETROS")} · ${selectedEntry.parameterPreview.length}`}
-                          style={{ height: 1, flexShrink: 0, fg: COLORS.database }}
-                        />
-                        {visibleParameters.map((parameter) => (
-                          <text
-                            key={`${parameter.position}-${parameter.name}`}
-                            content={truncateDisplay(
-                              historyParameterText(parameter, sensitiveVisibility),
-                              Math.max(8, width - 8),
-                            )}
-                            style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
-                          />
-                        ))}
-                        {hiddenParameterCount ? (
-                          <text
-                            content={translateUi(`… +${hiddenParameterCount} parâmetro(s)`)}
-                            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-                          />
-                        ) : null}
-                      </>
-                    ) : null}
-                    {selectedEntry.error ? (
+                    {visibleParameters.map((parameter) => (
                       <text
+                        key={`${parameter.position}-${parameter.name}`}
                         content={truncateDisplay(
-                          `${translateUi("Erro")}: ${selectedEntry.error}`,
+                          historyParameterText(parameter, sensitiveVisibility),
                           Math.max(8, width - 8),
                         )}
-                        style={{ height: 1, flexShrink: 0, fg: COLORS.danger }}
+                        style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
                       />
-                    ) : null}
-                    {!selectedCanRerun ? (
+                    ))}
+                    {hiddenParameterCount ? (
                       <text
-                        content={translateUi(historyRerunUnavailableReason(selectedEntry))}
-                        style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
+                        content={translateUi(`… +${hiddenParameterCount} parâmetro(s)`)}
+                        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
                       />
                     ) : null}
                   </>
                 ) : null}
-              </box>
-            </>
-          ) : (
-            <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
-              <text
-                content={translateUi(
-                  entries.length
-                    ? "SELECT ocultos · nenhuma alteração disponível."
-                    : "Nenhuma consulta foi executada ainda.",
-                )}
-                style={{ fg: COLORS.muted }}
-              />
-            </box>
-          )}
-
-          <box
-            style={{
-              height: 2,
-              flexShrink: 0,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              border: ["top"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <ShortcutText content="[↑/↓/J/K]" style={{ fg: COLORS.muted }} />
-            <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-              <InlineButton
-                label={
-                  compact
-                    ? "[S]"
-                    : translateUi(showReads ? "[S] Ocultar SELECT" : "[S] Mostrar SELECT")
-                }
-                accent={COLORS.database}
-                active={!showReads}
-                onPress={toggleReads}
-              />
-              {hasRevealableSensitive ? (
-                <InlineButton
-                  label={
-                    compact
-                      ? sensitiveVisibility === "confirm"
-                        ? "[V]!"
-                        : "[V]"
-                      : translateUi(
-                          sensitiveVisibility === "confirm"
-                            ? "[V] Confirmar exibição"
-                            : sensitiveVisibility === "visible"
-                              ? "[V] Ocultar sensíveis"
-                              : "[V] Revelar sensíveis",
-                        )
-                  }
-                  accent={sensitiveVisibility === "visible" ? COLORS.database : COLORS.danger}
-                  active={sensitiveVisibility !== "visible"}
-                  onPress={toggleSensitiveData}
-                />
-              ) : null}
-              <InlineButton
-                label={compact ? "[Enter]" : translateUi("[Enter] Reexecutar")}
-                accent={COLORS.success}
-                disabled={privacy.confirming || !selectedCanRerun}
-                onPress={() => {
-                  if (selectedEntry && selectedCanRerun) onRerun(selectedEntry)
-                }}
-              />
-              <InlineButton
-                label={compact ? "[Esc]" : translateUi("[Esc] Voltar")}
-                accent={COLORS.muted}
-                onPress={onClose}
-              />
-            </box>
+                {selectedEntry.error ? (
+                  <text
+                    content={truncateDisplay(
+                      `${translateUi("Erro")}: ${selectedEntry.error}`,
+                      Math.max(8, width - 8),
+                    )}
+                    style={{ height: 1, flexShrink: 0, fg: COLORS.danger }}
+                  />
+                ) : null}
+                {!selectedCanRerun ? (
+                  <text
+                    content={translateUi(historyRerunUnavailableReason(selectedEntry))}
+                    style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
+                  />
+                ) : null}
+              </>
+            ) : null}
           </box>
+        </>
+      ) : (
+        <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
+          <text
+            content={translateUi(
+              entries.length
+                ? "SELECT ocultos · nenhuma alteração disponível."
+                : "Nenhuma consulta foi executada ainda.",
+            )}
+            style={{ fg: COLORS.muted }}
+          />
+        </box>
+      )}
+
+      <box
+        style={{
+          height: 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          border: ["top"],
+          borderColor: COLORS.border,
+        }}
+      >
+        <ShortcutText content="[↑/↓/J/K]" style={{ fg: COLORS.muted }} />
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          <InlineButton
+            label={
+              compact ? "[S]" : translateUi(showReads ? "[S] Ocultar SELECT" : "[S] Mostrar SELECT")
+            }
+            accent={COLORS.database}
+            active={!showReads}
+            onPress={toggleReads}
+          />
+          {hasRevealableSensitive ? (
+            <InlineButton
+              label={
+                compact
+                  ? sensitiveVisibility === "confirm"
+                    ? "[V]!"
+                    : "[V]"
+                  : translateUi(
+                      sensitiveVisibility === "confirm"
+                        ? "[V] Confirmar exibição"
+                        : sensitiveVisibility === "visible"
+                          ? "[V] Ocultar sensíveis"
+                          : "[V] Revelar sensíveis",
+                    )
+              }
+              accent={sensitiveVisibility === "visible" ? COLORS.database : COLORS.danger}
+              active={sensitiveVisibility !== "visible"}
+              onPress={toggleSensitiveData}
+            />
+          ) : null}
+          <InlineButton
+            label={compact ? "[Enter]" : translateUi("[Enter] Reexecutar")}
+            accent={COLORS.success}
+            disabled={privacy.confirming || !selectedCanRerun}
+            onPress={() => {
+              if (selectedEntry && selectedCanRerun) onRerun(selectedEntry)
+            }}
+          />
+          <InlineButton
+            label={compact ? "[Esc]" : translateUi("[Esc] Voltar")}
+            accent={COLORS.muted}
+            onPress={onClose}
+          />
         </box>
       </box>
-    </>
+    </ModalSurface>
   )
 }

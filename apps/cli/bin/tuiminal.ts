@@ -16,6 +16,17 @@ if (!helpRequested && (args.includes("--version") || args.includes("-v"))) {
 if (args[0] === "--internal-sqlite-worker") {
   await (await import("../src/features/loader")).runInstalledSqliteWorker()
   // The worker stays alive through its IPC message listener.
+} else if (args[0] === "--internal-terminal-project-sync-worker") {
+  await (await import("../src/features/loader")).runInstalledTerminalProjectSyncWorker(
+    args.slice(1),
+  )
+  // The worker stays alive through its IPC message listener.
+} else if (args[0] === "--internal-terminal-sidebar") {
+  const { initializeUiSettings } = await import("@xupon/tuiminal-core/settings/theme")
+  initializeUiSettings()
+  process.exit(
+    await (await import("../src/features/loader")).runInstalledTerminalSidebar(args.slice(1)),
+  )
 } else {
   const { initializeUiSettings } = await import("@xupon/tuiminal-core/settings/theme")
   const { translateUi } = await import("@xupon/tuiminal-core/i18n/index")
@@ -31,6 +42,8 @@ ${translateUi("Uso:")}
   tuiminal <${tool}> [${directory}]
   tuiminal features [install <database|git|runner|http|terminal>...]
   tuiminal http run <file.http>[#request] [--env <name>] [--report text|json|junit]
+  tuiminal postman login [--region us|eu] [--api-key-stdin]
+  tuiminal postman workspaces|collections|environments|pull
 
 ${translateUi("Exemplos:")}
   tuiminal
@@ -55,7 +68,7 @@ HTTP run:
   --allow-insecure-tls                 ${translateUi("Autorizar TLS sem verificação neste comando")}`)
   }
 
-  if (helpRequested) {
+  if (helpRequested && args[0] !== "postman") {
     printHelp()
     process.exit(0)
   }
@@ -63,6 +76,11 @@ HTTP run:
   if (args[0] === "features" && args[1] === "install") {
     const { installFeaturesCli } = await import("../src/features/cli")
     process.exit(await installFeaturesCli(args.slice(2)))
+  }
+  if (args[0] === "postman") {
+    process.exit(
+      await (await import("../src/features/cli")).httpFeatureCli("postman", args.slice(1)),
+    )
   }
   if (args[0] === "features") {
     if (args.length > 1) {

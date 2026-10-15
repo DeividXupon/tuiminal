@@ -15,8 +15,16 @@ export async function loadSourceFeature(id: FeatureId) {
       return registerFeature(id, await import("@xupon/tuiminal-feature-terminal"))
   }
 }
-export async function sourceHttpCommand(command: "run" | "import", args: string[]) {
-  return command === "run"
-    ? (await import("@xupon/tuiminal-feature-http/cli/run")).runHttpHeadless(args)
-    : (await import("@xupon/tuiminal-feature-http/cli/import")).importHttpCollectionCli(args)
+export async function sourceHttpCommand(command: "run" | "import" | "postman", args: string[]) {
+  if (command === "run")
+    return (await import("@xupon/tuiminal-feature-http/cli/run")).runHttpHeadless(args)
+  if (command === "import")
+    return (await import("@xupon/tuiminal-feature-http/cli/import")).importHttpCollectionCli(args)
+  return (await import("@xupon/tuiminal-feature-http/cli/postman")).postmanCli(args)
+}
+export async function sourceTerminalSidebar(args: string[]) {
+  return (await import("@xupon/tuiminal-feature-terminal/cli/sidebar")).runTerminalSidebarCli(args)
+}
+export async function sourceTerminalProjectSyncWorker() {
+  await import("@xupon/tuiminal-feature-terminal/cli/project-sync-worker")
 }

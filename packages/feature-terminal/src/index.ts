@@ -1,3 +1,27 @@
-export { FreeTerminal } from "./TerminalWorkspace"
+export { TermAgents } from "./TerminalWorkspace"
+export type { RemoteServerSetupRequest } from "./model/sessions"
+export { PinnedTerminalSidebar } from "./ui/PinnedTerminalSidebar"
 export { terminalKeyboardScope } from "./keyboard"
-export { stopAllFreeTerminalProcesses } from "./services/terminal"
+export { TERMINAL_TUTORIAL_STEPS } from "./tutorial/steps"
+export { createRemoteServerSetupCommand, stopAllTermAgentsProcesses } from "./services/terminal"
+export {
+  listSshConfigProfiles,
+  type SshConfigDiscoveryOptions,
+} from "./services/ssh-config"
+export {
+  remoteCodexSshTestCommand,
+  testRemoteCodexConnection,
+  type RemoteCodexConnectionTestCode,
+  type RemoteCodexConnectionTestResult,
+} from "./services/remote-codex-connection"
+export {
+  checkRemoteServerBarrier,
+  checkRemoteServerReadiness,
+  nextRemoteServerBarrier,
+  REMOTE_SERVER_BARRIER_ORDER,
+  remoteServerBarrierCheckCommand,
+  type RemoteServerBarrierCode,
+  type RemoteServerBarrierId,
+  type RemoteServerBarrierResult,
+  type RemoteServerReadinessReport,
+} from "./services/remote-server-readiness"

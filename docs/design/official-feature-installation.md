@@ -7,11 +7,14 @@ are maintained in this repository and use exactly the CLI version.
 ## User flow
 
 An empty installation opens **Install official features** after the startup animation.
-Select Database, Git, Runner, HTTP, or Free Terminal with `[↑/↓]`, `[J/K]`, or the
+Select Database, Git, Runner, HTTP, or Term Agents with `[↑/↓]`, `[J/K]`, or the
 mouse. `[Enter]` installs the selected tool, then opens it after installation.
 `[Space]` selects several tools and `[I]` installs that selection sequentially.
 `[C]` cancels the active download; already completed installations are retained.
 A failed installation stays on screen with an explicit retry action.
+Unexpected loading failures ask the user to restart Tuiminal and retry; they do not
+assume a missing development build. Integrity, catalog, download and storage errors
+retain their specific guidance.
 
 Installed rows expose **[D] Uninstall** beside Open. The focused row accepts `[D]`;
 mouse activation targets that exact row. A confirmation names the tool and explains
@@ -34,7 +37,7 @@ keyboard selection updates a single recognizable animated icon: a storage cylind
 for Database fills from the bottom, holds its data, then empties for the next cycle.
 Runner shows a play icon while a progress line advances, then a completion check.
 HTTP sends a rightward request from a client to a server, then a leftward response
-and a client acknowledgement. Git retains its branch and Free Terminal its window
+and a client acknowledgement. Git retains its branch and Term Agents its window
 with a blinking cursor. Motions express each tool’s purpose rather than generic
 highlights traveling around an outline. Compact icons preserve these same phases.
 These illustrations use deterministic geometry without commands or sample records,
@@ -100,6 +103,14 @@ fail closed before installation. HTTPS redirects are bounded; credentials and
 non-loopback HTTP destinations are rejected. The operation has a two-minute deadline
 and owns cancellation. No automatic retries or install scripts run.
 
+The HTTP artifact includes `index.mjs`, `http-run.mjs`, `http-import.mjs`, and
+`http-postman.mjs`. The Postman command uses the same verified HTTP installation as
+the other headless HTTP commands.
+
+The Terminal artifact includes `index.mjs` and `terminal-sidebar.mjs`. The latter
+is a hidden UI helper launched only for tmux sidebar replicas through the same
+version-matched executable and private feature host; it is not a public CLI command.
+
 Files are written with mode `0600` into private staging directories, then renamed
 into a complete installation. Storage validates directories and rejects symlinked
 entries; concurrent successful publications converge on the same content. Failed or
@@ -118,8 +129,9 @@ and code execution. A private host binding supplies the actual shared React,
 OpenTUI, Tuiparts and core module instances; payloads cannot bundle another React
 runtime. Only the active/explicitly opened tool is imported. Imports are deduplicated.
 
-SQLite's downloaded worker runs through the same executable using an internal IPC-only
-entrypoint. The minimal npm package contains no separate full Bun SQLite executable.
+SQLite's downloaded worker and Terminal's project-sync worker run through the same
+executable using internal IPC-only entrypoints. The minimal npm package contains no
+separate full Bun helper executable.
 The emitted source packages retain their JavaScript helper fallback.
 
 ## Development and release
@@ -156,6 +168,10 @@ existing version. See [release process](../release-process.md).
   installed-only navigation, settings access, retained Runner tree and small terminals;
   uninstall confirmation, shortcut isolation, real Runner process shutdown before file
   removal, last-tool removal, isolated mode, fallback navigation and reinstallation.
+- `tests/tui/feature-payloads.test.tsx`: build all five real payloads in temporary
+  storage, verify and import them using the actual host bindings, import Terminal's
+  sidebar helper entrypoint, then open the installed Runner's configuration and
+  command editor through native input.
 - `tests/feature-uninstallation.test.ts`: exact payload removal, retained settings and
   other versions, symlink boundaries, serialized retirement/removal, failure recovery,
   partial filesystem failures and disposal during retirement.

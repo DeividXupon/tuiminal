@@ -39,6 +39,9 @@ export async function readLimitedResponseBody(
     reader.releaseLock()
   }
 
+  const onlyChunk = chunks.length === 1 ? chunks[0] : undefined
+  if (onlyChunk && onlyChunk.length === capturedBytes) return { body: onlyChunk, truncated }
+
   const body = new Uint8Array(capturedBytes)
   let offset = 0
   for (const chunk of chunks) {

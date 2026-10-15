@@ -1,0 +1,194 @@
+import type { AgentProviderId } from "./agent-provider"
+import type { AgentResumePaginationState, AgentResumeThread } from "./agent-resume-thread"
+import type { TerminalFocusTargetKey } from "./focus-selection"
+import type { TerminalFolder, TerminalSession } from "./sessions"
+
+type PinnedTerminalMasterKey =
+  | "Ctrl+B"
+  | "Ctrl+A"
+  | "Ctrl+Space"
+  | "Ctrl+F"
+  | "Ctrl+G"
+  | "Ctrl+N"
+  | "Ctrl+P"
+  | "Ctrl+T"
+
+export type PinnedTerminalTarget = {
+  socket: string
+  paneId: string
+}
+
+export type PinnedTerminalSelection =
+  | PinnedTerminalTarget
+  | { sessionId: string }
+  | { resumeThreadId: string; providerId?: AgentProviderId; remoteProfileId?: string }
+  | { loadMoreResumeProvider: AgentProviderId }
+  | { folderId: string }
+  | { focusTarget: TerminalFocusTargetKey }
+  | { action: string }
+
+export type PinnedTerminalSidebarView = {
+  sessions: TerminalSession[]
+  folders: TerminalFolder[]
+  collapsedFolderIds: string[]
+  selectedFolder: string
+  activeSessionId: string | null
+  width: number
+  height: number
+  masterKey: PinnedTerminalMasterKey
+  recentThreads: readonly AgentResumeThread[]
+  activeRemoteProfileId?: string | undefined
+  resumePagination?: AgentResumePaginationState | undefined
+  masterKeyActive?: boolean
+  focusSelection?:
+    | {
+        selectedTarget: TerminalFocusTargetKey
+        onFocus: (target: TerminalFocusTargetKey) => void
+      }
+    | undefined
+  onSelectFolder: (id: string) => void
+  onToggleFolder: (id: string) => void
+  onActivate: (id: string) => void
+  onActions: () => void
+  onNew: () => void
+  onCommand: () => void
+  onLoadMoreResume?: ((providerId: AgentProviderId) => void) | undefined
+}
+
+export type PinnedTerminalSidebarReplica = Pick<
+  PinnedTerminalSidebarView,
+  | "sessions"
+  | "folders"
+  | "collapsedFolderIds"
+  | "selectedFolder"
+  | "activeSessionId"
+  | "masterKey"
+  | "recentThreads"
+  | "activeRemoteProfileId"
+  | "resumePagination"
+> & {
+  theme: Record<string, string>
+  language: string
+  focusSelectionTarget: TerminalFocusTargetKey | null
+}
+
+export type PinnedTerminalSidebarSnapshot = {
+  pinned: boolean
+  view: PinnedTerminalSidebarView | null
+  requestedTarget: PinnedTerminalSelection | null
+  requestRevision: number
+  focusRevision: number
+  tmuxHostSidebar: boolean
+}
+
+let snapshot: PinnedTerminalSidebarSnapshot = {
+  pinned: false,
+  view: null,
+  requestedTarget: null,
+  requestRevision: 0,
+  focusRevision: 0,
+  tmuxHostSidebar: false,
+}
+let viewOwner: object | null = null
+const listeners = new Set<() => void>()
+
+function publish(next: PinnedTerminalSidebarSnapshot) {
+  if (Object.is(next, snapshot)) return
+  snapshot = next
+  for (const listener of listeners) listener()
+}
+
+export function terminalSidebarSnapshot() {
+  return snapshot
+}
+
+export function terminalSidebarPinnedSnapshot() {
+  return snapshot.pinned
+}
+
+export function terminalSidebarTmuxHostSnapshot() {
+  return snapshot.tmuxHostSidebar
+}
+
+export function terminalSidebarRequestRevision() {
+  return snapshot.requestRevision
+}
+
+export function terminalSidebarFocusRevision() {
+  return snapshot.focusRevision
+}
+
+export function subscribeTerminalSidebar(listener: () => void) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function setTerminalSidebarPinned(pinned: boolean) {
+  if (snapshot.pinned !== pinned) publish({ ...snapshot, pinned })
+}
+
+export function toggleTerminalSidebarPinned() {
+  setTerminalSidebarPinned(!snapshot.pinned)
+}
+
+export function setTmuxHostSidebar(active: boolean) {
+  if (snapshot.tmuxHostSidebar !== active) publish({ ...snapshot, tmuxHostSidebar: active })
+}
+
+export function publishTerminalSidebar(owner: object, view: PinnedTerminalSidebarView) {
+  if (viewOwner === owner && snapshot.view === view) return
+  viewOwner = owner
+  publish({ ...snapshot, view })
+}
+
+export function clearTerminalSidebar(owner: object) {
+  if (viewOwner !== owner) return
+  viewOwner = null
+  publish({ ...snapshot, view: null })
+}
+
+export function requestPinnedTerminalTarget(target: PinnedTerminalSelection) {
+  publish({
+    ...snapshot,
+    requestedTarget: target,
+    requestRevision: snapshot.requestRevision + 1,
+  })
+}
+
+export function requestTerminalSidebarFocus() {
+  publish({ ...snapshot, focusRevision: snapshot.focusRevision + 1 })
+}
+
+export function terminalSidebarReplica(
+  theme: Record<string, string> = {},
+  language = "pt-BR",
+): PinnedTerminalSidebarReplica | null {
+  const view = snapshot.view
+  if (!view) return null
+  return {
+    sessions: view.sessions,
+    folders: view.folders,
+    collapsedFolderIds: view.collapsedFolderIds,
+    selectedFolder: view.selectedFolder,
+    activeSessionId: view.activeSessionId,
+    masterKey: view.masterKey,
+    recentThreads: view.recentThreads,
+    activeRemoteProfileId: view.activeRemoteProfileId,
+    resumePagination: view.resumePagination,
+    focusSelectionTarget: view.focusSelection?.selectedTarget ?? null,
+    theme,
+    language,
+  }
+}
+
+export function resetPinnedTerminalSidebarForTests() {
+  viewOwner = null
+  publish({
+    pinned: false,
+    view: null,
+    requestedTarget: null,
+    requestRevision: 0,
+    focusRevision: 0,
+    tmuxHostSidebar: false,
+  })
+}

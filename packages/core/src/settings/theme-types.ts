@@ -19,6 +19,7 @@ export type ColorPalette = {
   graphAccent: string
   database: string
   git: string
+  gitMerged: string
   runner: string
   http: string
   terminal: string
@@ -28,6 +29,7 @@ export type ColorPalette = {
   diffAddedBg: string
   diffRemovedBg: string
   diffModifiedBg: string
+  diffRecentBg: string
   diffChangedBg: string
   diffRemovedChangedBg: string
   diffHunkBg: string

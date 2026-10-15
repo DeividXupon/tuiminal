@@ -4,6 +4,7 @@ import type {
   PullRequestPreviewTab,
   PullRequestSummary,
 } from "../../model/pr/types"
+import { pullRequestIdentityKey } from "../../model/pr/query"
 import { PullRequestDetailsSession } from "../../services/pr-details-session"
 import { useGitRemoteDetails, type GitRemoteDetailsState } from "../shared/useGitRemoteDetails"
 
@@ -16,6 +17,8 @@ export function usePullRequestDetails(active: boolean, item: PullRequestSummary 
     item,
     demo: process.env.TUIMINAL_GIT_PR_DEMO === "1",
     demoDetails: demoPullRequestDetails,
+    itemKey: (selected) =>
+      `${pullRequestIdentityKey(selected.identity)}:${selected.headSha}:${selected.updatedAt}`,
     createSession: () => new PullRequestDetailsSession(executable ? { executable } : {}),
   })
 }

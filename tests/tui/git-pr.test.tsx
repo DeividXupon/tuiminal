@@ -213,7 +213,7 @@ test("Git tutorial renders the local Diffs screen and essential workflows", asyn
     expect(target?.height ?? 0).toBeGreaterThan(0)
   }
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("GIT · DIFFS")
+  expect(frame).toContain("[C] DIFFS")
   expect(frame).toContain("ARQUIVOS 3")
   expect(frame).toContain("ÁRVORE GIT")
   expect(frame).toContain("[G] Abrir")
@@ -280,7 +280,7 @@ test("Git tutorial enters Compare and presents its complete simulated selector f
   await tui.renderOnce()
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("[C] GIT · COMPARAR")
+  expect(frame).toContain("[C] COMPARAR")
   expect(frame).toContain("PROJETO")
   expect(frame).toContain("BRANCH BASE")
   expect(tui.renderer.root.findDescendantById("tutorial-git-compare-compared")).toBeDefined()
@@ -299,9 +299,10 @@ test("Git Compare tutorial opens the simulated local project configuration", asy
   await tui.renderOnce()
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("CONFIGURAÇÕES DO GIT")
-  expect(frame).toContain("PROJETO LOCA")
-  expect(frame).toContain("BRANCH LOCAL")
+  expect(frame).toContain("CONFIGURAÇÕES · GIT")
+  expect(frame).toContain("GITHUB")
+  expect(tui.renderer.root.findDescendantById("tutorial-git-compare-project")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-branch-row")).toBeDefined()
   expect(frame).toContain("Trocar projeto ou branch")
 })
 
@@ -416,11 +417,12 @@ test("Git tutorial opens local project and branch configuration while explaining
   await waitForRenderable("tutorial-git-local-configuration-rows")
 
   const frame = tui.captureCharFrame()
-  expect(frame).toContain("CONFIGURAÇÕES DO GIT")
-  expect(frame).toContain("PROJETO LOCAL")
-  expect(frame).toContain("BRANCH LOCAL")
-  expect(frame).toContain("[P]")
-  expect(frame).toContain("[B]")
+  expect(frame).toContain("CONFIGURAÇÕES · GIT")
+  expect(frame).toContain("GITHUB")
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-project-row")).toBeDefined()
+  expect(tui.renderer.root.findDescendantById("tutorial-git-local-branch-row")).toBeDefined()
+  expect(frame).not.toContain("[P] Projeto")
+  expect(frame).not.toContain("[B] Branch")
 })
 
 test("Git tutorial renders the two-column diff while explaining [V]", async () => {
@@ -461,7 +463,7 @@ test("Git opens on Diffs, lazy mounts PR and preserves both tab states", async (
   tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
   await tui.renderOnce()
 
-  expect(tui.captureCharFrame()).toContain("[C] GIT · DIFFS")
+  expect(tui.captureCharFrame()).toContain("[C] DIFFS")
   expect(tui.captureCharFrame()).not.toContain("PULL REQUESTS · DEMO")
 
   await key("2")
@@ -1194,7 +1196,7 @@ test("Diffs toggles into the local branch comparison selector", async () => {
   tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
   await tui.renderOnce()
 
-  expect(tui.captureCharFrame()).toContain("[1]  [C] GIT · DIFFS")
+  expect(tui.captureCharFrame()).toContain("[1]  [C] DIFFS")
   await key("c")
   for (let attempt = 0; attempt < 50; attempt += 1) {
     await act(async () => Bun.sleep(10))
@@ -1202,7 +1204,7 @@ test("Diffs toggles into the local branch comparison selector", async () => {
     if (tui.captureCharFrame().includes("BRANCH COMPARADA")) break
   }
   const compareFrame = tui.captureCharFrame()
-  expect(compareFrame).toContain("[C] GIT · COMPARAR")
+  expect(compareFrame).toContain("[C] COMPARAR")
   expect(compareFrame).toContain("PROJETO")
   expect(compareFrame).toContain("BRANCH BASE")
   expect(compareFrame).toContain("BRANCH COMPARADA")
@@ -1211,10 +1213,10 @@ test("Diffs toggles into the local branch comparison selector", async () => {
   act(() => tui?.mockInput.pressEscape())
   await act(async () => Bun.sleep(60))
   await tui.renderOnce()
-  expect(tui.captureCharFrame()).toContain("[C] GIT · DIFFS")
+  expect(tui.captureCharFrame()).toContain("[C] DIFFS")
 
   await click("git-mode-compare")
-  expect(tui.captureCharFrame()).toContain("[C] GIT · COMPARAR")
+  expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
   await click("git-compare-base")
   expect(tui.captureCharFrame()).toContain("ESCOLHER BRANCH BASE")
   await act(async () => {
@@ -1223,7 +1225,7 @@ test("Diffs toggles into the local branch comparison selector", async () => {
   })
   await tui.renderOnce()
   expect(tui.captureCharFrame()).not.toContain("ESCOLHER BRANCH BASE")
-  expect(tui.captureCharFrame()).toContain("[C] GIT · COMPARAR")
+  expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
 })
 
 test("branch comparison selects two refs and renders their diff without checkout", async () => {
@@ -1554,7 +1556,7 @@ test("action input owns number keys and Escape unwinds one focus layer at a time
   await tui.renderOnce()
   expect(tui.captureCharFrame()).toContain("COMENTAR")
   expect(tui.captureCharFrame()).toContain("2 comentário")
-  expect(tui.captureCharFrame()).not.toContain("GIT · DIFFS\n")
+  expect(tui.captureCharFrame()).not.toContain("[C] DIFFS\n")
 
   await key("ESCAPE")
   expect(tui.renderer.currentFocusedRenderable?.id).toBe("git-pr-action-modal")

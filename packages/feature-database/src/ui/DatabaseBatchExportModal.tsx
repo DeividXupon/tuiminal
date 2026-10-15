@@ -1,6 +1,5 @@
 import { StyledText, type BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   serializeDatabaseBatchRows,
@@ -12,6 +11,7 @@ import { saveDatabaseBatchExport } from "../storage/batch-export"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 
 const FORMAT_LABEL: Record<DatabaseBatchExportFormat, string> = {
@@ -139,134 +139,98 @@ export function DatabaseBatchExportModal({
   })
 
   return (
-    <>
-      <Button
-        onPress={close}
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        zIndex={970}
-        backgroundColor="#030509"
-        opacity={0.92}
-      />
+    <ModalSurface
+      id="database-batch-export-modal"
+      dialogRef={dialogRef}
+      width={width}
+      height={height}
+      zIndex={970}
+      borderColor={COLORS.database}
+      onBackdropPress={close}
+    >
       <box
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 971,
-          alignItems: "center",
-          justifyContent: "center",
+          height: 3,
+          flexShrink: 0,
+          border: ["bottom"],
+          borderColor: COLORS.border,
         }}
       >
         <box
-          ref={dialogRef}
-          id="database-batch-export-modal"
-          focusable
           style={{
-            width,
-            height,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: COLORS.database,
-            backgroundColor: COLORS.canvas,
-            paddingLeft: 1,
-            paddingRight: 1,
+            height: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
           }}
         >
-          <box
-            style={{
-              height: 3,
-              flexShrink: 0,
-              border: ["bottom"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <box
-              style={{
-                height: 1,
-                flexShrink: 0,
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <text content="◆ EXPORTAR SELEÇÃO" style={{ fg: COLORS.database }} />
-              <text content={`${rows.length} linha(s)`} style={{ fg: COLORS.text }} />
-            </box>
-            <text content={truncateDisplay(tableName, previewWidth)} style={{ fg: COLORS.muted }} />
-          </box>
+          <text content="◆ EXPORTAR SELEÇÃO" style={{ fg: COLORS.database }} />
+          <text content={`${rows.length} linha(s)`} style={{ fg: COLORS.text }} />
+        </box>
+        <text content={truncateDisplay(tableName, previewWidth)} style={{ fg: COLORS.muted }} />
+      </box>
 
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+        {(["csv", "tsv", "json"] as const).map((option, index) => (
+          <InlineButton
+            key={option}
+            label={`[${index + 1}] ${FORMAT_LABEL[option]}`}
+            accent={COLORS.database}
+            active={format === option}
+            onPress={() => {
+              selectFormat(option)
+            }}
+          />
+        ))}
+      </box>
+
+      <box style={{ flexGrow: 1, backgroundColor: COLORS.panel, paddingLeft: 1 }}>
+        {previewLines.map((previewLine) => (
+          <text
+            key={previewLine.key}
+            content={new StyledText([{ __isChunk: true, text: previewLine.line }])}
+            style={{
+              height: 1,
+              flexShrink: 0,
+              fg: previewLine.header ? COLORS.database : COLORS.muted,
+            }}
+          />
+        ))}
+      </box>
+
+      <box
+        style={{
+          height: 3,
+          flexShrink: 0,
+          border: ["top"],
+          borderColor: COLORS.border,
+        }}
+      >
+        <text
+          content={translateUi(
+            notice || "Exporte somente as linhas marcadas e as colunas do resultado atual.",
+          )}
+          style={{
+            height: 1,
+            flexShrink: 0,
+            fg: notice.startsWith("Erro") ? COLORS.danger : notice ? COLORS.success : COLORS.muted,
+          }}
+        />
+        <box
+          style={{
+            height: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            justifyContent: "space-between",
+          }}
+        >
+          <InlineButton label="[Esc] Fechar" accent={COLORS.muted} onPress={close} />
           <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            {(["csv", "tsv", "json"] as const).map((option, index) => (
-              <InlineButton
-                key={option}
-                label={`[${index + 1}] ${FORMAT_LABEL[option]}`}
-                accent={COLORS.database}
-                active={format === option}
-                onPress={() => {
-                  selectFormat(option)
-                }}
-              />
-            ))}
-          </box>
-
-          <box style={{ flexGrow: 1, backgroundColor: COLORS.panel, paddingLeft: 1 }}>
-            {previewLines.map((previewLine) => (
-              <text
-                key={previewLine.key}
-                content={new StyledText([{ __isChunk: true, text: previewLine.line }])}
-                style={{
-                  height: 1,
-                  flexShrink: 0,
-                  fg: previewLine.header ? COLORS.database : COLORS.muted,
-                }}
-              />
-            ))}
-          </box>
-
-          <box
-            style={{
-              height: 3,
-              flexShrink: 0,
-              border: ["top"],
-              borderColor: COLORS.border,
-            }}
-          >
-            <text
-              content={translateUi(
-                notice || "Exporte somente as linhas marcadas e as colunas do resultado atual.",
-              )}
-              style={{
-                height: 1,
-                flexShrink: 0,
-                fg: notice.startsWith("Erro")
-                  ? COLORS.danger
-                  : notice
-                    ? COLORS.success
-                    : COLORS.muted,
-              }}
-            />
-            <box
-              style={{
-                height: 1,
-                flexShrink: 0,
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <InlineButton label="[Esc] Fechar" accent={COLORS.muted} onPress={close} />
-              <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                <InlineButton label="[C/Enter] Copiar" accent={COLORS.database} onPress={copy} />
-                <InlineButton label="[S] Salvar arquivo" accent={COLORS.success} onPress={save} />
-              </box>
-            </box>
+            <InlineButton label="[C/Enter] Copiar" accent={COLORS.database} onPress={copy} />
+            <InlineButton label="[S] Salvar arquivo" accent={COLORS.success} onPress={save} />
           </box>
         </box>
       </box>
-    </>
+    </ModalSurface>
   )
 }

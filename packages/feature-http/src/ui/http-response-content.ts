@@ -1,11 +1,12 @@
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { getLanguage, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { evaluateHttpJsonPath, foldHttpJson, withHttpLineNumbers } from "../model/response"
-import type { HttpDocumentState } from "../model/types"
+import type { HttpDocumentState, HttpResponseSnapshot } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
 import { responseBodyText } from "../services/response-reader"
 import { formatHttpBytes, formatHttpDuration } from "./format"
 
 const MAX_HTTP_DISPLAY_CHARACTERS = 50_000
+const bodyContentCache = new WeakMap<HttpResponseSnapshot, Map<string, string>>()
 
 function limitedBodyContent(content: string) {
   if (content.length <= MAX_HTTP_DISPLAY_CHARACTERS) return content
@@ -23,7 +24,7 @@ function jsonPathContent(source: string, path: string) {
   }
 }
 
-function bodyContent(document: HttpDocumentState) {
+function buildBodyContent(document: HttpDocumentState) {
   if (document.execution.status !== "success") return ""
   const response = document.execution.response
   const presentation = document.responsePresentation
@@ -44,6 +45,30 @@ function bodyContent(document: HttpDocumentState) {
   }
   content = limitedBodyContent(content)
   return presentation.lineNumbers ? withHttpLineNumbers(content) : content
+}
+
+function bodyContent(document: HttpDocumentState) {
+  if (document.execution.status !== "success") return ""
+  const response = document.execution.response
+  const presentation = document.responsePresentation
+  const key = JSON.stringify([
+    getLanguage(),
+    document.responseView,
+    presentation.lineNumbers,
+    presentation.jsonPath,
+    presentation.foldDepth,
+  ])
+  let entries = bodyContentCache.get(response)
+  if (!entries) {
+    entries = new Map()
+    bodyContentCache.set(response, entries)
+  }
+  const cached = entries.get(key)
+  if (cached !== undefined) return cached
+  const content = buildBodyContent(document)
+  if (entries.size >= 16) entries.delete(entries.keys().next().value ?? "")
+  entries.set(key, content)
+  return content
 }
 
 function maskedCookieLine(cookie: HttpCookie) {

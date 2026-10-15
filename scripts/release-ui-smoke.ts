@@ -108,6 +108,11 @@ export async function verifyPackagedUi(
     GITHUB_TOKEN: undefined,
     SHELL: undefined,
     TUIMINAL_TEST_SKIP_STARTUP: "1",
+    TUIMINAL_TERMINAL_AUTO_MIRROR: "0",
+    TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY: "0",
+    TUIMINAL_TERMINAL_RESTORE: "0",
+    TUIMINAL_TERMINAL_PINNED_TMUX: "0",
+    TUIMINAL_TERMINAL_WORKSPACE_STATE: "0",
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
   }
@@ -116,7 +121,7 @@ export async function verifyPackagedUi(
     ["database", "Save and connect"],
     ["git", "No Git repository found"],
     ["http", "READY TO SEND"],
-    ["terminal", "FREE TERMINALS IN 2"],
+    ["terminal", "TERM AGENTS IN 2"],
   ] as const)
     await verifyToolUi([node, launcher, tool, project], project, env, tool, expected)
 }

@@ -1,5 +1,8 @@
+import { HTTP_COLLECTION_MANAGEMENT_MESSAGES } from "./http-collection-management-catalog"
+
 export const HTTP_PROJECT_MESSAGES = [
   ["PROJETO", "PROJECT", "PROYECTO", "プロジェクト", "项目", "프로젝트"],
+  ...HTTP_COLLECTION_MANAGEMENT_MESSAGES,
   [
     "Nenhum arquivo .http ou .rest no projeto.",
     "No .http or .rest files in the project.",

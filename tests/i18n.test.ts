@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { DATABASE_PRIVACY_MESSAGES } from "../packages/core/src/i18n/database-privacy-catalog"
+import { GIT_BROWSER_MESSAGES } from "../packages/core/src/i18n/git-browser-catalog"
+import { GIT_COMPARE_MESSAGES } from "../packages/core/src/i18n/git-compare-catalog"
 import { GIT_COMPARE_TUTORIAL_MESSAGES } from "../packages/core/src/i18n/git-compare-tutorial-catalog"
+import { GIT_CONFIGURATION_MESSAGES } from "../packages/core/src/i18n/git-configuration-catalog"
 import { GIT_DIFFS_MESSAGES } from "../packages/core/src/i18n/git-diffs-catalog"
 import { GIT_PR_MESSAGES } from "../packages/core/src/i18n/git-pr-catalog"
 import { HTTP_WORKSPACE_SETTINGS_MESSAGES } from "../packages/core/src/i18n/http-workspace-settings-catalog"
@@ -14,10 +17,57 @@ import {
   translateUi,
   truncateDisplay,
 } from "../packages/core/src/i18n/index"
+import { TERMINAL_REMOTE_DAEMON_MESSAGES } from "../packages/core/src/i18n/terminal-remote-daemon-catalog"
+import { TERMINAL_REMOTE_HANDSHAKE_MESSAGES } from "../packages/core/src/i18n/terminal-remote-handshake-catalog"
+import { TERMINAL_REMOTE_SETUP_MESSAGES } from "../packages/core/src/i18n/terminal-remote-setup-catalog"
 
 afterEach(() => setLanguage("pt-BR"))
 
 describe("internationalization", () => {
+  test("translates sliding table-window summaries without pagination", () => {
+    expect(
+      translateUi("CÉLULA 11,2  •  50 REGISTROS  •  3 ALTERAÇÕES PENDENTES  •  41–90 ↑↓", "en"),
+    ).toBe("CELL 11,2  •  50 RECORDS  •  3 PENDING CHANGES  •  41–90 ↑↓")
+    expect(translateUi("41–90 ↑↓ · cél 11,2 · 50 itens · 3 pend.", "en")).toBe(
+      "41–90 ↑↓ · cell 11,2 · 50 items · 3 pending",
+    )
+    expect(translateUi("1–50 ↓ · cél 1,1 · 3 pend.", "en")).toBe("1–50 ↓ · cell 1,1 · 3 pending")
+    expect(translateUi("1–4 · cél 1,1 · 4 itens", "en")).toBe("1–4 · cell 1,1 · 4 items")
+  })
+
+  test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates grouped Git navigation in %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const message of GIT_COMPARE_MESSAGES.filter(([key]) =>
+        ["LOCAL", "[C] DIFFS", "[C] COMPARAR"].includes(key),
+      )) {
+        const expected = message[index]
+        if (!expected) throw new Error(`Missing Git navigation translation for ${language}`)
+        expect(translateUi(message[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each([
+    ["pt-BR", "Texto selecionado copiado."],
+    ["en", "Selected text copied."],
+    ["es", "Texto seleccionado copiado."],
+    ["ja", "選択したテキストをコピーしました。"],
+    ["zh-CN", "已复制所选文本。"],
+    ["ko", "선택한 텍스트를 복사했습니다."],
+  ] as const)("translates mouse selection copy feedback into %s", (language, expected) => {
+    expect(translateUi("Texto selecionado copiado.", language)).toBe(expected)
+  })
+  test("translates the Postman source chooser and save destination", () => {
+    expect(translateUi("ESCOLHA A ORIGEM HTTP", "en")).toBe("CHOOSE HTTP SOURCE")
+    expect(translateUi("[L] Abrir local", "ja")).toBe("[L] ローカルを開く")
+    expect(translateUi("SALVAR NO POSTMAN", "es")).toBe("GUARDAR EN POSTMAN")
+    expect(translateUi("WORKSPACES POSTMAN", "en")).toBe("POSTMAN WORKSPACES")
+    expect(translateUi("Coleções 2/5…", "en")).toBe("Collections 2/5…")
+    expect(translateUi("2 coleções não puderam ser carregadas.", "en")).toBe(
+      "2 collections could not be loaded.",
+    )
+  })
   test.each([
     ["pt-BR", "Não foi possível gravar o download completo."],
     ["en", "Could not write the complete download."],
@@ -67,6 +117,19 @@ describe("internationalization", () => {
     },
   )
   test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every Git configuration message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of [...GIT_CONFIGURATION_MESSAGES, ...GIT_BROWSER_MESSAGES]) {
+        const source = catalog[0]
+        const expected = catalog[index]
+        if (!source || !expected)
+          throw new Error(`Missing Git configuration translation for ${language}`)
+        expect(translateUi(source, language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
     "translates every database privacy message into %s",
     (language) => {
       for (const [message] of DATABASE_PRIVACY_MESSAGES)
@@ -96,6 +159,21 @@ describe("internationalization", () => {
     },
   )
   test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
+    "translates every remote server setup message into %s",
+    (language) => {
+      const index = ["pt-BR", "en", "es", "ja", "zh-CN", "ko"].indexOf(language)
+      for (const catalog of [
+        ...TERMINAL_REMOTE_SETUP_MESSAGES,
+        ...TERMINAL_REMOTE_DAEMON_MESSAGES,
+        ...TERMINAL_REMOTE_HANDSHAKE_MESSAGES,
+      ]) {
+        const expected = catalog[index]
+        if (!expected) throw new Error(`Missing remote setup translation for ${language}`)
+        expect(translateUi(catalog[0], language)).toBe(expected)
+      }
+    },
+  )
+  test.each(["en", "es", "ja", "zh-CN", "ko"] as const)(
     "translates the conservative SQL safety explanation into %s",
     (language) => {
       const message =
@@ -118,6 +196,12 @@ describe("internationalization", () => {
     expect(translateUi("CONFIGURAÇÕES DO BANCO", "en")).toBe("DATABASE SETTINGS")
     expect(translateUi("CONFIGURAÇÕES GLOBAIS", "zh-CN")).toBe("全局设置")
     expect(translateUi("CONFIGURAÇÕES DO GIT", "en")).toBe("GIT SETTINGS")
+    expect(translateUi("APARÊNCIA", "en")).toBe("APPEARANCE")
+    expect(translateUi("SALVAMENTO AUTOMÁTICO", "es")).toBe("GUARDADO AUTOMÁTICO")
+    expect(translateUi("[H/L/←/→] alterar", "en")).toBe("[H/L/←/→] change")
+    expect(translateUi("[J/K/↑/↓] categoria · [H/L/←/→] opção · [Enter] abrir", "en")).toBe(
+      "[J/K/↑/↓] category · [H/L/←/→] option · [Enter] open",
+    )
     expect(translateUi("[1] Diffs", "ja")).toBe("[1] Diff")
     expect(translateUi("[4] Repositórios", "ja")).toBe("[4] リポジトリ")
     expect(translateUi("[Ctrl+P] Alterar projeto/branch", "en")).toBe(
@@ -192,6 +276,9 @@ describe("internationalization", () => {
     expect(translateUi("3 execuções", "zh-CN")).toBe("3 次执行")
     expect(translateUi("● RODANDO · api", "en")).toBe("● RUNNING · api")
     expect(translateUi("Schema completo", "zh-CN")).toBe("完整架构")
+    expect(translateUi("[G] Diagrama", "en")).toBe("[G] Diagram")
+    expect(translateUi("[G] Detalhes", "ja")).toBe("[G] 詳細")
+    expect(translateUi("auto-relação", "ko")).toBe("자기 참조")
     expect(translateUi("Nenhum relacionamento encontrado.", "ja")).toBe(
       "リレーションがありません。",
     )
@@ -237,7 +324,7 @@ describe("internationalization", () => {
       translateUi("O arquivo api.http mudou fora do Tuiminal; revise antes de salvar.", "ko"),
     ).toBe("api.http 파일이 Tuiminal 외부에서 변경되었습니다. 저장하기 전에 검토하세요.")
     expect(translateUi("IMPORTAR COLEÇÃO", "en")).toBe("IMPORT COLLECTION")
-    expect(translateUi("[F] Formato: OPENAPI", "ja")).toBe("[F] 形式: OPENAPI")
+    expect(translateUi("FORMATO DETECTADO", "ja")).toBe("検出した形式")
     expect(translateUi("IMPORTADOS 4 · IGNORADOS 1 · AVISOS 2 · CONFLITOS 0", "zh-CN")).toBe(
       "已导入 4 · 已忽略 1 · 警告 2 · 冲突 0",
     )

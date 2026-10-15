@@ -1,0 +1,370 @@
+import {
+  type DiscoveredRows,
+  readSidebarContent,
+  applyReplicaAppearance,
+  sessionForPane,
+} from "./sidebar-content"
+import { createCliRenderer } from "@opentui/core"
+import { createRoot, useFocus, useTerminalDimensions } from "@opentui/react"
+import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { PinnedTerminalSidebarReplica } from "../model/pinned-sidebar"
+import {
+  agentSessionHasCapability,
+  DEFAULT_FOLDER,
+  DEFAULT_FOLDER_NAME,
+  EXTERNAL_FOLDER,
+  EXTERNAL_FOLDER_NAME,
+  MAX_SESSIONS,
+  MAX_TERMINALS_PER_SECTION,
+  numberedTerminalSections,
+  orderedRunningAgents,
+  terminalSections,
+  visibleTerminalShortcutTargets,
+} from "../model/sessions"
+import { type TmuxPaneInfo, TUIMINAL_TMUX_FOLDER } from "../model/tmux"
+import { sendPinnedSidebarTarget } from "../services/pinned-sidebar-control"
+import { waitForPinnedTmuxSidebarFocus } from "../services/pinned-sidebar-focus"
+import {
+  activatePinnedTmuxHostAction,
+  routePinnedTerminalToTuiminal,
+  selectPinnedTmuxHost,
+} from "../services/pinned-sidebar-navigation"
+import { waitForPinnedSidebarTerminalReady } from "../services/pinned-sidebar-terminal"
+import { TERMINAL_ACTIONS, TerminalActions } from "../ui/TerminalActions"
+import { TerminalSidebar } from "../ui/TerminalSidebar"
+import { useSidebarKeyboard } from "./sidebar-keyboard"
+
+type SidebarMode = "app" | "tmux"
+function SidebarApp({
+  sourceSocket,
+  hostPane,
+  mode,
+  endpoint,
+  onExit,
+}: {
+  sourceSocket: string
+  hostPane: string
+  mode: SidebarMode
+  endpoint: string
+  onExit: () => void
+}) {
+  const dimensions = useTerminalDimensions()
+  const [rows, setRows] = useState<DiscoveredRows>([])
+  const [replica, setReplica] = useState<PinnedTerminalSidebarReplica | null>(null)
+  const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(null)
+  const [localFolder, setLocalFolder] = useState<string | null>(null)
+  const [localCollapsedFolderIds, setLocalCollapsedFolderIds] = useState<string[]>([])
+  const [leaderActive, setLeaderActive] = useState(false)
+  const masterTargetDigits = useRef("")
+  const [focusRequest, setFocusRequest] = useState(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const scan = async () => {
+      let delay = 1000
+      try {
+        const content = await readSidebarContent(
+          endpoint,
+          sourceSocket,
+          hostPane,
+          controller.signal,
+        )
+        if (controller.signal.aborted) return
+        setReplica(content.replica)
+        if (content.replica) {
+          delay = 250
+          applyReplicaAppearance(content.replica)
+        } else setRows(content.rows)
+      } catch {
+        // A transient server or process snapshot failure keeps the previous rows.
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(() => void scan(), delay)
+      }
+    }
+    void scan()
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [endpoint, hostPane, sourceSocket])
+  const discoveredSessions = useMemo(
+    () => rows.map(({ pane, agent }) => sessionForPane(pane, agent)),
+    [rows],
+  )
+  const sessions = replica?.sessions ?? discoveredSessions
+  const folders = replica?.folders ?? [
+    { id: DEFAULT_FOLDER, name: DEFAULT_FOLDER_NAME },
+    { id: TUIMINAL_TMUX_FOLDER, name: "tmux" },
+    { id: EXTERNAL_FOLDER, name: EXTERNAL_FOLDER_NAME },
+  ]
+  const activeSessionId = localActiveSessionId ?? replica?.activeSessionId ?? null
+  const selectedFolder = localFolder ?? replica?.selectedFolder ?? DEFAULT_FOLDER
+  const collapsedFolderIds = replica?.collapsedFolderIds ?? localCollapsedFolderIds
+  const masterKey = replica?.masterKey ?? getUiSettings().terminalMasterKey
+  const managedSessions = useMemo(() => sessions.filter((session) => !session.external), [sessions])
+  const sections = useMemo(() => terminalSections(managedSessions), [managedSessions])
+  const numberedSections = useMemo(() => numberedTerminalSections(sessions), [sessions])
+  const masterKeyTargets = useMemo(
+    () => visibleTerminalShortcutTargets(sessions, folders, collapsedFolderIds),
+    [collapsedFolderIds, folders, sessions],
+  )
+  const recentThreads = replica?.recentThreads ?? []
+  const activeSession = sessions.find((session) => session.id === activeSessionId)
+  const activeSection = sections.find((section) => section.id === activeSession?.sectionId)
+  const hasMovableAgent = orderedRunningAgents(managedSessions).some(
+    (session) => session.id !== activeSession?.id && session.sectionId !== activeSession?.sectionId,
+  )
+  const canSplit = Boolean(
+    activeSection &&
+      activeSection.panes.length < MAX_TERMINALS_PER_SECTION &&
+      (managedSessions.length < MAX_SESSIONS || hasMovableAgent),
+  )
+  const disabled = useCallback(
+    (key: string) => {
+      if (["c", "shift+h"].includes(key)) return !canSplit
+      if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
+      if (["n", "a"].includes(key)) return managedSessions.length >= MAX_SESSIONS
+      if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
+      if ([",", "q"].includes(key)) return !replica
+      return ["x", "e", "m"].includes(key) && !activeSession
+    },
+    [activeSession, canSplit, managedSessions.length, numberedSections, replica],
+  )
+  const activate = useCallback(
+    async (id: string) => {
+      const session = sessions.find((candidate) => candidate.id === id)
+      if (!session) return
+      const target = session.tmux as TmuxPaneInfo | undefined
+      const selection = replica
+        ? { sessionId: id }
+        : target
+          ? { socket: target.socket, paneId: target.paneId }
+          : null
+      if (!selection) return
+      const delivered = await routePinnedTerminalToTuiminal(
+        selection,
+        (next) => sendPinnedSidebarTarget(endpoint, next),
+        () => selectPinnedTmuxHost(sourceSocket, hostPane),
+      )
+      if (delivered) {
+        setLocalActiveSessionId(id)
+        setLocalFolder(session.folderId)
+      }
+    },
+    [endpoint, hostPane, replica, sessions, sourceSocket],
+  )
+  const selectFolder = useCallback(
+    async (id: string) => {
+      setLocalFolder(id)
+      if (!replica) {
+        setLocalCollapsedFolderIds((current) =>
+          current.includes(id) ? current.filter((folderId) => folderId !== id) : [...current, id],
+        )
+        return
+      }
+      setReplica((current) =>
+        current
+          ? {
+              ...current,
+              collapsedFolderIds: current.collapsedFolderIds.includes(id)
+                ? current.collapsedFolderIds.filter((folderId) => folderId !== id)
+                : [...current.collapsedFolderIds, id],
+            }
+          : current,
+      )
+      // Folding is local sidebar navigation. Keep the helper pane selected;
+      // only activating content or an app-only action returns to the host pane.
+      await sendPinnedSidebarTarget(endpoint, { folderId: id })
+    },
+    [endpoint, replica],
+  )
+  const focusSidebar = useCallback(() => {
+    masterTargetDigits.current = ""
+    setLeaderActive(false)
+    setFocusRequest((current) => current + 1)
+  }, [])
+  useFocus(focusSidebar)
+  useEffect(() => {
+    const paneId = process.env.TMUX_PANE
+    if (!paneId || !/^%\d+$/.test(paneId)) return
+    const controller = new AbortController()
+    const listen = async () => {
+      while (!controller.signal.aborted) {
+        try {
+          await waitForPinnedTmuxSidebarFocus(sourceSocket, paneId, controller.signal)
+          if (!controller.signal.aborted) focusSidebar()
+        } catch {
+          if (controller.signal.aborted) return
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+      }
+    }
+    void listen()
+    return () => controller.abort()
+  }, [focusSidebar, sourceSocket])
+  const activateNumberedSection = useCallback(
+    async (key: string) => {
+      const target = numberedSections[Number(key.at(-1)) - 1]?.panes[0]
+      if (target) await activate(target.id)
+    },
+    [numberedSections, activate],
+  )
+  const runAction = useCallback(
+    async (key: string) => {
+      if (key === "escape" || key === "shift+l") {
+        focusSidebar()
+        return
+      }
+      if (disabled(key) || !TERMINAL_ACTIONS.some((action) => action.key === key)) return
+      setLeaderActive(false)
+      if (key.startsWith("alt+")) {
+        await activateNumberedSection(key)
+        return
+      }
+      if (key === "m") {
+        const delivered = await activatePinnedTmuxHostAction(sourceSocket, hostPane, masterKey, key)
+        if (!delivered) setFocusRequest((current) => current + 1)
+        return
+      }
+      const delivered = await sendPinnedSidebarTarget(endpoint, { action: key })
+      if (!delivered) {
+        setFocusRequest((current) => current + 1)
+        return
+      }
+      if (mode === "app" || ["c", "shift+h", "e", "s", ",", "q"].includes(key))
+        await selectPinnedTmuxHost(sourceSocket, hostPane)
+      else setFocusRequest((current) => current + 1)
+    },
+    [
+      activateNumberedSection,
+      disabled,
+      endpoint,
+      focusSidebar,
+      hostPane,
+      masterKey,
+      mode,
+      sourceSocket,
+    ],
+  )
+  useSidebarKeyboard({
+    masterKey,
+    leaderActive,
+    masterTargetDigits,
+    masterKeyTargets,
+    focusSidebar,
+    setLeaderActive,
+    runAction,
+    activate,
+    onExit,
+  })
+  return (
+    <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
+      <TerminalSidebar
+        active={!leaderActive}
+        navigationOnly
+        autoFocus
+        focusRequest={focusRequest}
+        sessions={sessions}
+        folders={folders}
+        collapsedFolderIds={collapsedFolderIds}
+        selectedFolder={selectedFolder}
+        activeSessionId={activeSessionId}
+        width={Math.max(16, dimensions.width)}
+        height={Math.max(1, dimensions.height)}
+        borderRight={false}
+        masterKey={masterKey}
+        masterKeyActive={leaderActive}
+        focusSelection={
+          replica?.focusSelectionTarget
+            ? {
+                selectedTarget: replica.focusSelectionTarget,
+                onFocus: (focusTarget) => void sendPinnedSidebarTarget(endpoint, { focusTarget }),
+              }
+            : undefined
+        }
+        onSelectFolder={(id) => void selectFolder(id)}
+        onToggleFolder={() => undefined}
+        onActivate={(id) => void activate(id)}
+        onActions={() => setLeaderActive(true)}
+        onMasterKey={() => setLeaderActive(true)}
+        onEscape={focusSidebar}
+        onNew={() => undefined}
+      />
+      {leaderActive && (
+        <TerminalActions
+          compact
+          width={dimensions.width}
+          height={dimensions.height}
+          recentThreads={recentThreads}
+          activeRemoteProfileId={replica?.activeRemoteProfileId}
+          resumePagination={replica?.resumePagination}
+          onLoadMoreThreads={(providerId) => {
+            void sendPinnedSidebarTarget(endpoint, { loadMoreResumeProvider: providerId })
+          }}
+          onAction={(key) => void runAction(key)}
+          onSelectThread={(thread) => {
+            setLeaderActive(false)
+            void (async () => {
+              const delivered = await sendPinnedSidebarTarget(endpoint, {
+                resumeThreadId: thread.id,
+                providerId: thread.providerId ?? "codex",
+                ...(thread.remoteProfileId ? { remoteProfileId: thread.remoteProfileId } : {}),
+              })
+              if (delivered) await selectPinnedTmuxHost(sourceSocket, hostPane)
+            })()
+          }}
+          disabled={disabled}
+        />
+      )}
+    </box>
+  )
+}
+
+export async function runTerminalSidebarCli(args: string[]) {
+  const [sourceSocket, hostPane, rawMode, endpoint] = args
+  if (
+    !sourceSocket?.startsWith("/") ||
+    !/^%\d+$/.test(hostPane ?? "") ||
+    (rawMode !== "app" && rawMode !== "tmux") ||
+    !endpoint?.startsWith("/")
+  )
+    return 2
+  const validSourceSocket = sourceSocket!
+  const validHostPane = hostPane!
+  const validEndpoint = endpoint!
+  const mode: SidebarMode = rawMode
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: false,
+    useMouse: true,
+    enableMouseMovement: true,
+    useKittyKeyboard: { allKeysAsEscapes: true },
+  })
+  await waitForPinnedSidebarTerminalReady(renderer)
+  const result = Promise.withResolvers<number>()
+  let finished = false
+  const finish = () => {
+    if (finished) return
+    finished = true
+    try {
+      renderer.destroy()
+    } finally {
+      result.resolve(0)
+    }
+  }
+  process.once("SIGTERM", finish)
+  process.once("SIGHUP", finish)
+  createRoot(renderer).render(
+    <SidebarApp
+      sourceSocket={validSourceSocket}
+      hostPane={validHostPane}
+      mode={mode}
+      endpoint={validEndpoint}
+      onExit={finish}
+    />,
+  )
+  return result.promise.finally(() => {
+    process.off("SIGTERM", finish)
+    process.off("SIGHUP", finish)
+  })
+}

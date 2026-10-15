@@ -15,7 +15,7 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   git: "GIT",
   runner: "RUNNER",
   http: "HTTP",
-  terminal: "FREE TERMINAL",
+  terminal: "TERM AGENTS",
 }
 
 export const TOOL_COMMANDS = {

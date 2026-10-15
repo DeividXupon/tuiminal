@@ -14,6 +14,7 @@ import { resolveHttpPathParameters } from "../model/path-parameters"
 import { isValidHttpMethod } from "../model/request-validation"
 import { httpSensitiveHeaderNames, requestHttpPrivacy } from "../model/secrets"
 import { httpUrlWithProtocol } from "../model/url-input"
+import { urlQueryEntryPrefix } from "../model/url-query"
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~\dA-Z-]+$/i
 export const HTTP_REQUEST_LIMITS = {
@@ -322,7 +323,9 @@ export function prepareHttpRequest(
   }
 
   const url = normalizeHttpUrl(resolveHttpPathParameters(request.url, request.path, variables))
-  const queryEntries = enabledValues(request.query)
+  const queryEntries = enabledValues(request.query).filter(
+    (entry) => !entry.id.startsWith(urlQueryEntryPrefix(request.id)),
+  )
   if (queryEntries.length > HTTP_REQUEST_LIMITS.fields) {
     throw new HttpRequestValidationError("A query excede 500 parâmetros.", "url")
   }
