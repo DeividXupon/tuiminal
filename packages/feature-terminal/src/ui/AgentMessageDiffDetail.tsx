@@ -1,4 +1,5 @@
-import { pathToFiletype, type ScrollBoxRenderable } from "@opentui/core"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { NativeDiff } from "@xupon/tuiminal-core/ui/NativeDiff"
@@ -122,7 +123,7 @@ function FileDiffBlock({
         <NativeDiff
           id={`agent-message-turn-diff-${entryId}-${index}`}
           patch={file.diff}
-          filetype={pathToFiletype(file.path) ?? "text"}
+          filetype={syntaxFiletype(file.path)}
           height={codeHeight}
           wrapMode="none"
         />

@@ -21,6 +21,15 @@ export async function buildWorkspacePackages() {
     cpSync(join(emitted, basename(directory), "src"), join(destination, "dist"), {
       recursive: true,
     })
+    if (directory === "packages/core") {
+      cpSync(
+        join(workspaceRoot, directory, "src/syntax/assets"),
+        join(destination, "dist/syntax/assets"),
+        {
+          recursive: true,
+        },
+      )
+    }
     for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md"])
       cpSync(join(workspaceRoot, file), join(destination, file))
     writeFileSync(

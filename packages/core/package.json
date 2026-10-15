@@ -24,6 +24,7 @@
     "./settings/theme": "./src/settings/theme.ts",
     "./storage/atomic-file": "./src/storage/atomic-file.ts",
     "./storage/project-files": "./src/storage/project-files.ts",
+    "./syntax/index": "./src/syntax/index.ts",
     "./ui/DirectionalButton": "./src/ui/DirectionalButton.tsx",
     "./ui/InlineButton": "./src/ui/InlineButton.tsx",
     "./ui/ModalSurface": "./src/ui/ModalSurface.tsx",

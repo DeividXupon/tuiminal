@@ -1,9 +1,5 @@
-import {
-  type BoxRenderable,
-  type DiffRenderable,
-  pathToFiletype,
-  type ScrollBoxRenderable,
-} from "@opentui/core"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
+import type { BoxRenderable, DiffRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
@@ -285,7 +281,7 @@ export function LiveDiffPanel({
               id={`live-diff-code-${sessionId}`}
               diffRef={diff}
               patch={patch}
-              filetype={pathToFiletype(selected.path) ?? "text"}
+              filetype={syntaxFiletype(selected.path)}
               height={diffHeight}
               wrapMode={codeFocused ? "char" : "none"}
               lineColors={lineColors}

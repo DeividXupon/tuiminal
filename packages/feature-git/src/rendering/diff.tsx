@@ -1,4 +1,5 @@
-import { pathToFiletype, type RGBA, type TextChunk } from "@opentui/core"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
+import type { RGBA, TextChunk } from "@opentui/core"
 import { padDisplayEnd, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import {
   type CharacterRange,
@@ -365,7 +366,7 @@ function createDiffDocument(source: string, section: string, selectedPath?: stri
     key: `${section}:${path}`,
     source,
     path,
-    filetype: pathToFiletype(path) ?? "text",
+    filetype: syntaxFiletype(path),
     section,
     unifiedLineCount,
     splitLineCount,
