@@ -15,7 +15,7 @@ export const TERMINAL_TMUX_MESSAGES = [
     "镜像已连接。",
     "미러가 연결되었습니다.",
   ],
-  ["[R] Atualizar", "[R] Refresh", "[R] Actualizar", "[R] 更新", "[R] 刷新", "[R] 새로 고침"],
+  ["[R] Atualizar", "[R] Refresh", "[R] Actualizar", "[R] 更新", "[R] 刷新", "[R] 새로고침"],
   [
     "[T] Espelhar painel tmux",
     "[T] Mirror tmux pane",

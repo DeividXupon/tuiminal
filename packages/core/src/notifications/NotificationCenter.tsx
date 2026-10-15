@@ -1,31 +1,32 @@
 import {
+  type ComponentType,
   createContext,
   createElement,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ComponentType,
-  type ReactNode,
 } from "react"
 import { LAYOUT } from "../settings/theme"
-import { NotificationViewport } from "./NotificationViewport"
 import {
+  type AppNotification,
   appendNotification,
   inferNotificationKind,
   NOTIFICATION_ANIMATION_TIMING,
-  resolveNotificationDuration,
-  type AppNotification,
   type NotificationInput,
   type NotificationKind,
+  resolveNotificationDuration,
 } from "./model"
+import { type NotificationPlacement, NotificationViewport } from "./NotificationViewport"
 
 type NotificationApi = {
   notify: (input: NotificationInput) => string
   dismiss: (id: string) => void
   clear: () => void
+  setPlacement: (placement: NotificationPlacement) => void
 }
 
 type NotificationTimer = {
@@ -38,6 +39,7 @@ const NOOP_API: NotificationApi = {
   notify: () => "notification-unmounted",
   dismiss: () => undefined,
   clear: () => undefined,
+  setPlacement: () => undefined,
 }
 
 const NotificationContext = createContext<NotificationApi>(NOOP_API)
@@ -146,6 +148,7 @@ function startRetainedTimers({
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const [placement, setPlacement] = useState<NotificationPlacement>("top")
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [departures, setDepartures] = useState<Record<string, number>>({})
   const [paused, setPaused] = useState(false)
@@ -291,7 +294,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   )
 
   const api = useMemo(
-    () => ({ notify, dismiss: beginDismiss, clear }),
+    () => ({ notify, dismiss: beginDismiss, clear, setPlacement }),
     [beginDismiss, clear, notify],
   )
   const presented = notifications.map((notification) => {
@@ -315,6 +318,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         {children}
         <NotificationViewport
           notifications={presented}
+          placement={placement}
           now={frameNow}
           onDismiss={beginDismiss}
           onActivate={activate}
@@ -336,6 +340,15 @@ export function withNotifications<Props extends object>(Component: ComponentType
 
 export function useNotifications() {
   return useContext(NotificationContext)
+}
+
+/** The application chooses the stack position for its active workspace. */
+export function useNotificationPlacement(placement: NotificationPlacement) {
+  const { setPlacement } = useNotifications()
+  useEffect(() => {
+    setPlacement(placement)
+    return () => setPlacement("top")
+  }, [placement, setPlacement])
 }
 
 export function useNotificationFromValue(

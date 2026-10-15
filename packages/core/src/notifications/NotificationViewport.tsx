@@ -4,10 +4,10 @@ import { translateUi } from "../i18n/index"
 import { COLORS } from "../settings/theme"
 import { BRAND_COLOR } from "../ui/brand"
 import {
-  notificationAnimationFrame,
-  notificationProgress,
   type AppNotification,
   type NotificationKind,
+  notificationAnimationFrame,
+  notificationProgress,
 } from "./model"
 
 type VisibleNotification = {
@@ -15,6 +15,8 @@ type VisibleNotification = {
   remainingMs: number
   dismissStartedAt: number | null
 }
+
+export type NotificationPlacement = "top" | "bottom"
 
 const PRESENTATION: Record<NotificationKind, { icon: string; title: string; color: () => string }> =
   {
@@ -38,6 +40,7 @@ function notificationMessageContent(notification: AppNotification) {
 
 export function NotificationViewport({
   notifications,
+  placement,
   now,
   onDismiss,
   onActivate,
@@ -45,6 +48,7 @@ export function NotificationViewport({
   onResume,
 }: {
   notifications: VisibleNotification[]
+  placement: NotificationPlacement
   now: number
   onDismiss: (id: string) => void
   onActivate: (notification: AppNotification) => void
@@ -69,7 +73,7 @@ export function NotificationViewport({
       style={{
         position: "absolute",
         left,
-        top: 1,
+        ...(placement === "bottom" ? { bottom: 1 } : { top: 1 }),
         width,
         height: visible.length * CARD_HEIGHT,
         zIndex: 995,

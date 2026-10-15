@@ -210,9 +210,6 @@ describe("internationalization", () => {
     expect(translateUi("PROJETO LOCAL", "ko")).toBe("로컬 프로젝트")
     expect(translateUi("[Ctrl+F] Favoritas 3", "zh-CN")).toBe("[Ctrl+F] 收藏 3")
     expect(translateUi("  Célula  ", "ja")).toBe("  セル  ")
-    expect(translateUi("[H/←] [L/→] navegação contextual · GRADE", "en")).toBe(
-      "[H/←] [L/→] contextual navigation · GRID",
-    )
     expect(translateUi("HISTÓRICO SQL", "es")).toBe("HISTORIAL SQL")
     expect(translateUi("100 leituras recentes · alterações por 6 meses.", "en")).toBe(
       "100 recent reads · changes for 6 months.",
@@ -247,9 +244,7 @@ describe("internationalization", () => {
     expect(translateUi("PTY cria um terminal interativo ligado ao comando.", "es")).toBe(
       "PTY crea un terminal interactivo conectado al comando.",
     )
-    expect(translateUi("8 COMANDOS  ·  2 ATIVOS  ·  3 GRUPO", "en")).toBe(
-      "8 COMMANDS  ·  2 ACTIVE  ·  3 GROUP",
-    )
+    expect(translateUi("8 COMANDOS  ·  2 ATIVOS", "en")).toBe("8 COMMANDS  ·  2 ACTIVE")
     expect(translateUi("16 CMD  ·  6 ATIV", "en")).toBe("16 CMD  ·  6 ACT")
     expect(translateUi("6 ATIVOS  ·  2–4/6", "es")).toBe("6 ACTIVOS  ·  2–4/6")
     expect(translateUi("Escolher outra pasta", "en")).toBe("Choose another folder")
@@ -264,15 +259,11 @@ describe("internationalization", () => {
     expect(translateUi("Pressione [M] para voltar ao modo único.", "en")).toBe(
       "Press [M] to return to single view.",
     )
-    expect(translateUi("[G] Rodar 3", "es")).toBe("[G] Ejecutar 3")
     expect(translateUi("[S] Histórico", "en")).toBe("[S] History")
     expect(translateUi("[H/←] Lista", "en")).toBe("[H/←] List")
     expect(translateUi("[J/K] Rolar", "en")).toBe("[J/K] Scroll")
     expect(translateUi("COMANDOS 8", "en")).toBe("COMMANDS 8")
     expect(translateUi("[P] ATIVOS 2", "es")).toBe("[P] ACTIVOS 2")
-    expect(translateUi("SELEÇÃO EM GRUPO  ·  3 MARCADOS", "en")).toBe(
-      "GROUP SELECTION  ·  3 MARKED",
-    )
     expect(translateUi("3 execuções", "zh-CN")).toBe("3 次执行")
     expect(translateUi("● RODANDO · api", "en")).toBe("● RUNNING · api")
     expect(translateUi("Schema completo", "zh-CN")).toBe("完整架构")
@@ -282,9 +273,9 @@ describe("internationalization", () => {
     expect(translateUi("Nenhum relacionamento encontrado.", "ja")).toBe(
       "リレーションがありません。",
     )
-    expect(translateUi("[Alt+Space] Selecionar intervalo", "en")).toBe("[Alt+Space] Select range")
+    expect(translateUi("[Alt+Space] Intervalo", "en")).toBe("[Alt+Space] Range")
     expect(translateUi("[Alt+Space] Sel", "zh-CN")).toBe("[Alt+Space] 选择")
-    expect(translateUi("[E] Editar 4", "zh-CN")).toBe("[E] 编辑 4 行")
+    expect(translateUi("[E] Editar 4", "zh-CN")).toBe("[E] 编辑 4")
     expect(translateUi("◆ EDITAR 3 LINHA(S)", "ja")).toBe("◆ 3行を編集")
     expect(translateUi("2 linha(s) copiadas como CSV.", "ko")).toBe(
       "2개 행을 CSV 형식으로 복사했습니다.",

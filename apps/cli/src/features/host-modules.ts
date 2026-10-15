@@ -1,3 +1,4 @@
+import * as sharedActionPaletteLifecycle from "@xupon/tuiminal-core/ui/use-action-palette"
 // Shared instances used by the private official-feature payload format.
 import { registerFeatureHost } from "@xupon/tuiminal-core/runtime/feature-host"
 import * as shared0 from "react"
@@ -33,6 +34,10 @@ import * as shared29 from "@xupon/tuiminal-core/runtime/feature-host"
 import * as shared30 from "@xupon/tuiminal-core/ui/ModalSurface"
 import * as shared31 from "@xupon/tuiminal-core/ui/NativeDiff"
 import * as shared32 from "@xupon/tuiminal-core/ui/text-shimmer"
+import * as shared33 from "@xupon/tuiminal-core/ui/ActionPalette"
+import * as shared34 from "@xupon/tuiminal-core/ui/FocusSelectionOverlay"
+import * as shared35 from "@xupon/tuiminal-core/ui/action-palette"
+import * as shared36 from "@xupon/tuiminal-core/ui/focus-navigation"
 import * as sharedSyntax from "@xupon/tuiminal-core/syntax/index"
 
 export function prepareFeatureHost(
@@ -80,6 +85,11 @@ export function prepareFeatureHost(
       "@xupon/tuiminal-core/ui/ModalSurface": shared30,
       "@xupon/tuiminal-core/ui/NativeDiff": shared31,
       "@xupon/tuiminal-core/ui/text-shimmer": shared32,
+      "@xupon/tuiminal-core/ui/use-action-palette": sharedActionPaletteLifecycle,
+      "@xupon/tuiminal-core/ui/ActionPalette": shared33,
+      "@xupon/tuiminal-core/ui/FocusSelectionOverlay": shared34,
+      "@xupon/tuiminal-core/ui/action-palette": shared35,
+      "@xupon/tuiminal-core/ui/focus-navigation": shared36,
       "@xupon/tuiminal-core/syntax/index": sharedSyntax,
     },
   })

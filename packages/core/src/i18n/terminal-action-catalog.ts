@@ -295,14 +295,6 @@ export const TERMINAL_ACTION_MESSAGES = [
     "에이전트를 더 불러오는 중…",
   ],
   [
-    "[←/→ H/L] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar",
-    "[←/→ H/L] panel · [↑/↓] navigate · [Enter] open · [Esc] close",
-    "[←/→ H/L] panel · [↑/↓] navegar · [Enter] abrir · [Esc] cerrar",
-    "[←/→ H/L] パネル · [↑/↓] 移動 · [Enter] 開く · [Esc] 閉じる",
-    "[←/→ H/L] 面板 · [↑/↓] 导航 · [Enter] 打开 · [Esc] 关闭",
-    "[←/→ H/L] 패널 · [↑/↓] 이동 · [Enter] 열기 · [Esc] 닫기",
-  ],
-  [
     "[←/→] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar",
     "[←/→] panel · [↑/↓] navigate · [Enter] open · [Esc] close",
     "[←/→] panel · [↑/↓] navegar · [Enter] abrir · [Esc] cerrar",
