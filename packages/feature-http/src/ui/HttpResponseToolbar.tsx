@@ -138,6 +138,7 @@ function ResponseActions({
         />
       ) : null}
       <InlineButton
+        id={`http-response-copy-${document.request.id}`}
         label="Copiar"
         accent={COLORS.http}
         disabled={

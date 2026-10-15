@@ -18,7 +18,7 @@ import { HttpResponseHeader } from "./HttpResponseHeader"
 import { HttpResponseState } from "./HttpResponseState"
 import { HttpResponseToolbar } from "./HttpResponseToolbar"
 import { buildHttpJsonDocument } from "./http-json-document"
-import { httpResponseContent } from "./http-response-content"
+import { httpResponseContent, httpResponseCopyContent } from "./http-response-content"
 
 const RESPONSE_SYNTAX = createUiSyntaxStyle()
 const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
@@ -37,21 +37,25 @@ function matchedTextLine(content: string, match: { start: number; end: number; c
   return content.slice(start, nextBreak < 0 ? content.length : nextBreak)
 }
 
-function responseContentForCopy(
-  document: HttpDocumentState,
-  cookies: HttpCookie[],
-  renderedContent: string,
-  structured: boolean,
-) {
-  return structured ? httpResponseContent(document, cookies) : renderedContent
-}
-
 function renderedResponseContent(
   document: HttpDocumentState,
   cookies: HttpCookie[],
   structured: boolean,
 ) {
   return structured ? "" : httpResponseContent(document, cookies)
+}
+
+function responseCopyLabel(document: HttpDocumentState) {
+  if (document.responseView === "headers") return "HEADERS"
+  if (
+    document.responseView === "pretty" &&
+    document.execution.status === "success" &&
+    document.execution.response.bodyKind === "json" &&
+    document.responsePresentation.jsonPath.trim()
+  ) {
+    return "VALOR JSONPATH"
+  }
+  return "BODY DA RESPOSTA"
 }
 
 function HttpResponseDocument({
@@ -208,12 +212,6 @@ export function HttpResponsePane({
     ? matches[presentation.searchMatchIndex % matches.length]
     : undefined
   const matchedLine = activeMatch ? matchedTextLine(content, activeMatch) : undefined
-  const copyLabel =
-    document.responseView === "headers"
-      ? "HEADERS"
-      : presentation.jsonPath.trim()
-        ? "VALOR JSONPATH"
-        : "BODY DA RESPOSTA"
 
   useEffect(() => {
     if (!presentation.searchOpen || !matches.length) return
@@ -284,7 +282,7 @@ export function HttpResponsePane({
         onSearchNext={cycleSearch}
         onFocus={onFocus}
         onCopy={() =>
-          onCopy(responseContentForCopy(document, cookies, content, jsonTree !== null), copyLabel)
+          onCopy(httpResponseCopyContent(document, cookies), responseCopyLabel(document))
         }
         onCopyLine={matchedLine ? () => onCopy(matchedLine, "LINHA") : null}
         onSave={onSave}

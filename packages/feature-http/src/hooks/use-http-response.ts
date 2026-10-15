@@ -12,7 +12,6 @@ import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 type HttpClipboard = {
   copyToClipboardOSC52: (content: string) => boolean
-  getSelection?: () => { getSelectedText: () => string } | null
 }
 
 type HttpDownload = { documentId: string; controller: AbortController }
@@ -22,8 +21,7 @@ function downloadFailureNotice(signal: AbortSignal, error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function copiedResponseNotice(selected: boolean, label: string) {
-  if (selected) return "SELEÇÃO COPIADA"
+function copiedResponseNotice(label: string) {
   if (label === "BODY DA RESPOSTA") return "BODY DA RESPOSTA COPIADO"
   if (label === "HEADERS") return "HEADERS COPIADOS"
   if (label === "VALOR JSONPATH") return "VALOR JSONPATH COPIADO"
@@ -92,21 +90,16 @@ export function useHttpResponse({
   }, [])
 
   const copyResponse = useCallback(
-    (documentId: string, displayedContent: string, label = "CONTEÚDO") => {
+    (documentId: string, content: string, label = "CONTEÚDO") => {
       const document = documents.find((candidate) => candidate.request.id === documentId)
       if (document?.execution.status !== "success") return
-      const selected = clipboard.getSelection?.()?.getSelectedText() ?? ""
       const bodyView = document.responseView === "pretty" || document.responseView === "raw"
-      if (!selected && bodyView && document.execution.response.bodyKind === "binary") {
+      if (bodyView && document.execution.response.bodyKind === "binary") {
         setNotice("RESPOSTA BINÁRIA NÃO FOI COPIADA · USE SALVAR")
         return
       }
-      const copied = clipboard.copyToClipboardOSC52(selected || displayedContent)
-      setNotice(
-        copied
-          ? copiedResponseNotice(Boolean(selected), label)
-          : "O terminal não aceitou a cópia OSC52.",
-      )
+      const copied = clipboard.copyToClipboardOSC52(content)
+      setNotice(copied ? copiedResponseNotice(label) : "O terminal não aceitou a cópia OSC52.")
     },
     [clipboard, documents, setNotice],
   )
