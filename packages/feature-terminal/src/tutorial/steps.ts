@@ -21,7 +21,7 @@ export const TERMINAL_TUTORIAL_STEPS = [
     group: "1 · O BÁSICO",
     title: "Onde eu estou mesmo?",
     description:
-      "Esta faixa mostra a pasta, a branch e se o repositório está Limpo ou Alterado. Ela acompanha cada cd e não rouba espaço da saída do terminal.",
+      "Esta faixa mostra a pasta, a branch e as linhas adicionadas em verde e removidas em vermelho, ou Limpo quando não há mudanças. Ela acompanha cada cd.",
     hint: "Passe o mouse em cada etiqueta para ver a explicação.",
     kind: "control",
   },
@@ -39,26 +39,24 @@ export const TERMINAL_TUTORIAL_STEPS = [
     group: "1 · O BÁSICO",
     title: "Novo terminal",
     description:
-      "Abre um shell novinho em uma seção própria, dentro da pasta Tuiminais. Cabem até 12 terminais por workspace, o que já é bastante aba para esquecer aberta.",
+      "Abre um shell novinho em uma seção própria, dentro da pasta Tuiminais. Abra quantos terminais precisar; a lista tem rolagem quando fica cheia.",
     hint: "Atalho: Master Key + [N]",
     kind: "action",
   },
   {
-    targetId: "terminal-dialog",
+    targetId: "tutorial-terminal-new-agent",
     group: "1 · O BÁSICO",
-    title: "Rodar um comando",
+    title: "Novo agente",
     description:
-      "O botão Comando roda qualquer linha no shell do sistema, do jeitinho que você escreveu. Quando o processo termina, a saída fica guardada para conferir depois, como o bun test da lista.",
-    hint: "[Enter] roda · [Esc] cancela",
+      "O botão Novo agente abre a escolha do provedor. Depois, escolha o projeto e o ambiente para iniciar uma sessão integrada.",
     kind: "action",
-    stateful: true,
   },
   {
     targetId: "tutorial-terminal-folders",
     group: "1 · O BÁSICO",
-    title: "Pastas tmux e Outros",
+    title: "Pasta tmux",
     description:
-      "Além de Tuiminais, a pasta tmux reúne painéis de servidores tmux que já existiam e Outros mostra terminais de outros apps. Clique numa pasta para recolher; o estado fica salvo por projeto.",
+      "Além de Tuiminais, a pasta tmux reúne painéis de servidores tmux que já existiam. Clique numa pasta para recolher; o estado fica salvo por projeto.",
     kind: "control",
   },
   {

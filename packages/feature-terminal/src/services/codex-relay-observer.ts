@@ -3,15 +3,19 @@ import {
   updateCodexResumeThreadResponse,
 } from "../model/codex-resume-threads"
 import type { CodexHydratedThread } from "../model/remote-codex"
+import {
+  CodexActivityObserver,
+  type CodexActivity,
+  type CodexState,
+} from "./codex-activity-observer"
 import type { CodexObservedUserMessage } from "./codex-message-history"
 import { CodexMessageHistoryObserver } from "./codex-message-history-observer"
 import { codexResumeThreads, resumeListFrame } from "./codex-resume"
 
 type RecordValue = Record<string, unknown>
-type CodexActivity = "thinking" | "writing" | "running" | "updating" | "coding" | "tooling"
-type CodexState = "working" | "blocked" | "done" | "unknown" | "idle"
 
 export type { CodexHydratedThread } from "../model/remote-codex"
+export { codexAppServerActivity, codexAppServerState } from "./codex-activity-observer"
 
 export type CodexAppServerEvents = {
   onActivity: (activity: CodexActivity) => void
@@ -28,6 +32,7 @@ export type CodexRelay = {
   sendUpstream: ((value: string) => void) | null
   pending: string[]
   history: CodexMessageHistoryObserver
+  activity: CodexActivityObserver
   resumeRequestIds: Set<string>
   resumeRequestSequence: number
   closing: boolean
@@ -45,68 +50,12 @@ export function createCodexRelay(remote?: { id: string; name: string }): CodexRe
     sendUpstream: null,
     pending: [],
     history: new CodexMessageHistoryObserver(),
+    activity: new CodexActivityObserver(),
     resumeRequestIds: new Set(),
     resumeRequestSequence: 0,
     closing: false,
     ...(remote ? { remoteProfileId: remote.id, remoteProfileName: remote.name } : {}),
   }
-}
-
-export function codexAppServerActivity(message: unknown): CodexActivity | null {
-  const event = object(message)
-  const method = event?.method
-  if (method === "item/agentMessage/delta") return "writing"
-  if (method === "item/plan/delta" || method === "turn/plan/updated") return "updating"
-  if (method === "item/fileChange/patchUpdated") return "coding"
-  if (method !== "item/started") return null
-  const item = object(object(event?.params)?.item)
-  switch (item?.type) {
-    case "reasoning":
-      return "thinking"
-    case "agentMessage":
-      return "writing"
-    case "commandExecution":
-      return "running"
-    case "fileChange":
-      return "coding"
-    case "plan":
-      return "updating"
-    case "mcpToolCall":
-    case "dynamicToolCall":
-    case "webSearch":
-    case "imageView":
-      return "tooling"
-    default:
-      return null
-  }
-}
-
-export function codexAppServerState(message: unknown): CodexState | null {
-  const event = object(message)
-  const method = event?.method
-  const params = object(event?.params)
-  if (method === "turn/started") return "working"
-  if (method === "turn/completed")
-    return object(params?.turn)?.status === "completed" ? "done" : "unknown"
-  if (method === "thread/status/changed") {
-    const status = object(params?.status)
-    if (status?.type === "active")
-      return Array.isArray(status.activeFlags) && status.activeFlags.includes("waitingOnApproval")
-        ? "blocked"
-        : "working"
-  }
-  if (typeof method === "string" && method.endsWith("requestApproval")) return "blocked"
-  return codexAppServerActivity(message) ? "working" : null
-}
-
-function publishObserverEvent(message: RecordValue, events: CodexAppServerEvents) {
-  const params = object(message.params)
-  if (message.method === "thread/name/updated" && typeof params?.threadName === "string")
-    events.onTitle(params.threadName)
-  const state = codexAppServerState(message)
-  if (state) events.onState(state)
-  const activity = codexAppServerActivity(message)
-  if (activity) events.onActivity(activity)
 }
 
 function requestResumeThreads(relay: CodexRelay, relayId: number) {
@@ -143,10 +92,20 @@ export function inspectUpstreamFrame(
       )
         updateCodexResumeThreadResponse(params.threadId, item.text, relay.remoteProfileId)
     }
-    if (typeof message.method === "string") publishObserverEvent(message, events)
+    if (typeof message.method === "string") relay.activity.observeServer(message, events)
     const historyResponse =
       !resumeResponse &&
-      relay.history.observeServer(message, events, (frame) => relay.sendUpstream?.(frame))
+      relay.history.observeServer(
+        message,
+        {
+          ...events,
+          onHydrated(thread) {
+            relay.activity.hydrate(thread)
+            events.onHydrated?.(thread)
+          },
+        },
+        (frame) => relay.sendUpstream?.(frame),
+      )
     if (message.method === "turn/completed" || message.method === "thread/name/updated")
       requestResumeThreads(relay, relayId)
     return resumeResponse || historyResponse
@@ -165,6 +124,7 @@ export function inspectClientFrame(
   try {
     const request = object(JSON.parse(value))
     if (!request) return
+    relay.activity.observeClient(request, events)
     relay.history.observeClient(request, events)
     if (request.method === "initialized") queueMicrotask(() => requestResumeThreads(relay, relayId))
   } catch {

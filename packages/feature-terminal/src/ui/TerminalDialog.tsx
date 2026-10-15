@@ -6,9 +6,8 @@ import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef, useState } from "react"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
-export type TerminalDialogKind = "command" | "rename"
+export type TerminalDialogKind = "rename"
 const TITLES = {
-  command: "Novo comando",
   rename: "Renomear terminal",
 }
 export function TerminalDialog({

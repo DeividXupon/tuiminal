@@ -100,7 +100,6 @@ export type TerminalSession = TermAgentsCommand & {
 }
 export type TerminalFolder = { id: string; name: string }
 export type TerminalPlacement = Pick<TerminalSession, "sectionId" | "folderId" | "row" | "column">
-export const MAX_SESSIONS = 12
 export const MAX_TERMINALS_PER_SECTION = 2
 export const DEFAULT_FOLDER = "terminal"
 export const DEFAULT_FOLDER_NAME = "Tuiminais"
@@ -183,16 +182,21 @@ export function numberedTerminalSections(sessions: readonly TerminalSession[]) {
   return terminalSections(sessions.filter((session) => !isRunningAgent(session)))
 }
 
+export function sidebarTerminalSessions(sessions: readonly TerminalSession[]) {
+  return sessions.filter((session) => session.folderId !== EXTERNAL_FOLDER)
+}
+
 /**
  * Rows reachable through the Master Key, in exactly the order the sidebar paints
  * them. Collapsed folders do not expose their terminal rows, while running agents
  * remain visible in their dedicated terminal-then-localhost list.
  */
 export function visibleTerminalShortcutTargets(
-  sessions: readonly TerminalSession[],
+  allSessions: readonly TerminalSession[],
   folders: readonly TerminalFolder[],
   collapsedFolderIds: readonly string[],
 ) {
+  const sessions = sidebarTerminalSessions(allSessions)
   const collapsedFolders = new Set(collapsedFolderIds)
   const sections = numberedTerminalSections(sessions)
   return [

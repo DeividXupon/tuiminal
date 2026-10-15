@@ -209,16 +209,16 @@ test("new agents preserve local terminal focus and remain hidden behind Git", as
   expect(tui?.captureCharFrame()).not.toContain("EXISTING_AGENT")
 }, 15_000)
 
-test("automatic arrivals cannot steal a command dialog's focus", async () => {
+test("automatic arrivals cannot steal the agent picker's focus", async () => {
   const { start, setAgents } = await mount()
-  const command = tui?.renderer.root.findDescendantById("terminal-sidebar-command")
+  const command = tui?.renderer.root.findDescendantById("terminal-sidebar-new-agent")
   if (!command) throw new Error("Missing command control")
   await act(async () => tui?.mockMouse.click(command.screenX + 1, command.screenY))
   const focused = tui?.renderer.currentFocusedRenderable
   setAgents([agent(1)])
   await waitFor(() => start.mock.calls.length === 1)
   expect(tui?.renderer.currentFocusedRenderable).toBe(focused)
-  expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
 })
 
 test("closing an automatic mirror suppresses rediscovery for this run", async () => {
@@ -232,12 +232,12 @@ test("closing an automatic mirror suppresses rediscovery for this run", async ()
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-tmux")).toBeUndefined()
 })
 
-test("automatic discovery deduplicates panes and respects the workspace limit", async () => {
+test("automatic discovery deduplicates panes without limiting the workspace", async () => {
   const { start, setAgents } = await mount()
   setAgents(Array.from({ length: 14 }, (_, index) => agent(index + 1)))
-  await waitFor(() => start.mock.calls.length === 12)
+  await waitFor(() => start.mock.calls.length === 14)
   const targets = start.mock.calls.map(([command]) => command.tmux?.paneId)
-  expect(new Set(targets).size).toBe(12)
+  expect(new Set(targets).size).toBe(14)
   expect(targets.filter((pane) => pane === "%1")).toHaveLength(1)
 })
 

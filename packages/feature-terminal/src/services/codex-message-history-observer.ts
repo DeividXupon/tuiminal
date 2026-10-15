@@ -17,6 +17,7 @@ import {
   userInputDetails,
 } from "./codex-message-history"
 import { CodexMessagePublisher } from "./codex-message-publisher"
+import { CodexTaskTitleObserver } from "./codex-task-title-observer"
 import { hydratedCodexThread } from "./codex-thread-hydration"
 
 export type CodexMessageHistoryEvents = {
@@ -49,6 +50,7 @@ export class CodexMessageHistoryObserver {
   private readonly historyCursors = new Set<string>()
   private readonly turnTimes = new Map<string, number>()
   private readonly publisher = new CodexMessagePublisher()
+  private readonly taskTitle = new CodexTaskTitleObserver()
   private readonly observerId = randomUUID()
   private currentThreadId: string | null = null
   private currentModel: string | null = null
@@ -72,6 +74,7 @@ export class CodexMessageHistoryObserver {
     replace: boolean,
     events: CodexMessageHistoryEvents,
   ) {
+    this.taskTitle.observeMessages(messages, events)
     this.publisher.publish(
       messages,
       replace,
@@ -166,7 +169,7 @@ export class CodexMessageHistoryObserver {
     if (!["thread/start", "thread/resume", "thread/fork"].includes(request.method)) return false
     const thread = object(result.thread)
     if (typeof thread?.id !== "string") return true
-    if (typeof thread.name === "string") events.onTitle(thread.name)
+    this.taskTitle.select(thread.id, thread.name, events)
     this.currentThreadId = thread.id
     this.currentModel =
       typeof result.model === "string"
@@ -334,7 +337,19 @@ export class CodexMessageHistoryObserver {
     if (threadId) this.currentThreadId = threadId
     this.rememberTurnConfiguration(method, params, userMessage)
     if (key && this.requests.has(key)) this.requests.set(key, { method, threadId, userMessage })
+    this.taskTitle.observeMessages([userMessage], events, threadId)
     events.onUserMessage(userMessage)
+  }
+
+  private failRequest(request: ObservedRequest, events: CodexMessageHistoryEvents) {
+    const message = request.userMessage
+    if (!message || (request.threadId && request.threadId !== this.currentThreadId)) return
+    const failed = {
+      ...message,
+      durationMs: Math.max(0, Date.now() - message.sentAt),
+      status: "failed" as const,
+    }
+    this.publish([failed], false, events)
   }
 
   observeServer(
@@ -342,6 +357,7 @@ export class CodexMessageHistoryObserver {
     events: CodexMessageHistoryEvents,
     send: (frame: string) => void,
   ) {
+    this.taskTitle.observeServer(message, events)
     this.observePublicDetailNotification(message, events)
     if (this.observeTurnNotification(message, events)) return false
     const key = requestKey(message.id)
@@ -352,18 +368,7 @@ export class CodexMessageHistoryObserver {
     this.requests.delete(key)
     const result = object(message.result)
     if (!result) {
-      if (request.userMessage && object(message.error))
-        this.publish(
-          [
-            {
-              ...request.userMessage,
-              durationMs: Math.max(0, Date.now() - request.userMessage.sentAt),
-              status: "failed",
-            },
-          ],
-          false,
-          events,
-        )
+      if (object(message.error)) this.failRequest(request, events)
       return false
     }
 

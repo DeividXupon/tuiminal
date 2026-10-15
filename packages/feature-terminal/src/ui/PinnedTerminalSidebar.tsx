@@ -1,6 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { subscribeTerminalSidebar, terminalSidebarSnapshot } from "../model/pinned-sidebar"
-import { MAX_SESSIONS } from "../model/sessions"
 import { TerminalSidebar } from "./TerminalSidebar"
 
 export function PinnedTerminalSidebar({
@@ -50,11 +49,7 @@ export function PinnedTerminalSidebar({
       onActions={() => open(view.onActions)}
       onMasterKey={() => open(view.onActions)}
       onNew={() => open(view.onNew)}
-      onCommand={
-        view.sessions.filter((session) => !session.external).length < MAX_SESSIONS
-          ? () => open(view.onCommand)
-          : undefined
-      }
+      onNewAgent={() => open(view.onNewAgent)}
     />
   )
 }

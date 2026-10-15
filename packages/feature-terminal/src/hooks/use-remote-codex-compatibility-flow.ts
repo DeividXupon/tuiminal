@@ -3,7 +3,6 @@ import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import {
   DEFAULT_FOLDER,
   type TermAgentsCommand,
-  MAX_SESSIONS,
   type TerminalPlacement,
   type TerminalSession,
 } from "../model/sessions"
@@ -126,15 +125,6 @@ export function useRemoteCodexCompatibilityFlow({
   const openGuide = useCallback(() => {
     if (!prompt) return
     const remote = prompt.command.agentLaunch?.remote
-    const requiredSessions = remote ? 2 : 1
-    if (sessions.length > MAX_SESSIONS - requiredSessions) {
-      setNotice(
-        remote
-          ? "São necessários dois terminais livres para o guia de atualização."
-          : "É necessário um terminal livre para o guia de atualização.",
-      )
-      return
-    }
     sequence.current += 1
     const id = sequence.current
     const sectionId = `remote-codex-update-${Date.now()}-${id}`
@@ -163,7 +153,7 @@ export function useRemoteCodexCompatibilityFlow({
     setUpdateFlow({ ...prompt, id, sessionIds })
     setPrompt(null)
     onGuideOpened()
-  }, [closeSession, launchCommand, onGuideOpened, prompt, sessions.length, setNotice])
+  }, [closeSession, launchCommand, onGuideOpened, prompt, setNotice])
 
   const updateGuides = useCallback(
     (flow: UpdateFlow, report: RemoteCodexCompatibilityReport, checking: boolean, error = "") => {

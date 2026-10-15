@@ -29,7 +29,12 @@ function fits(tags: readonly TerminalContextTag[], availableWidth: number) {
 
 function stateLabel(context: TerminalRepositoryContext) {
   if (context.state === "clean") return translateUi("Limpo")
-  if (context.state === "dirty") return translateUi("Alterado")
+  if (context.state === "dirty") {
+    const changes = context.changes
+    return changes
+      ? `+${changes.additions} -${changes.deletions}${changes.partial ? " …" : ""}`
+      : translateUi("Alterado")
+  }
   if (context.state === "no-git") return translateUi("Sem Git")
   return null
 }

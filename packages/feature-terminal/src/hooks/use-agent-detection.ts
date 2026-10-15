@@ -11,7 +11,7 @@ import {
 } from "../model/agent-state"
 import { AgentTaskTitle } from "../model/agent-task-title"
 import { terminalProcessPresentation } from "../model/process-title"
-import type { TerminalSession } from "../model/sessions"
+import { integratedAgentProvider, type TerminalSession } from "../model/sessions"
 import type { AgentMonitor } from "../services/agent-monitor"
 import { readTerminalProcesses } from "../services/agent-processes"
 import type { TermAgentsProcessHandle } from "../services/terminal"
@@ -48,6 +48,11 @@ function scanTrackedScreen(id: string, entry: TrackedAgent, state: DetectionStat
   const session = state.sessions.current.find((candidate) => candidate.id === id)
   if (session?.status !== "running" || state.outputs.current.get(id) !== entry.output) {
     state.tracked.delete(id)
+    return
+  }
+  if (integratedAgentProvider(session)) {
+    state.tracked.delete(id)
+    entry.output.suspendScreen()
     return
   }
   try {
@@ -93,10 +98,7 @@ function scanAgentScreens(state: DetectionState) {
 function runningCandidates(state: DetectionState): RunningCandidate[] {
   return state.sessions.current
     .filter(
-      (session) =>
-        session.status === "running" &&
-        session.pid &&
-        (!session.agentIntegration || session.agentIntegration.transport === "screen"),
+      (session) => session.status === "running" && session.pid && !integratedAgentProvider(session),
     )
     .map((session) => ({
       session,
@@ -115,6 +117,7 @@ function currentCandidate(
   if (root.status !== "fulfilled") return null
   if (state.handles.current.get(candidate.session.id) !== candidate.handle) return null
   if (current?.pid !== candidate.session.pid || current.status !== "running") return null
+  if (integratedAgentProvider(current)) return null
   return { current, rootPid: root.value }
 }
 

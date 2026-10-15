@@ -46,6 +46,9 @@ export class RemoteLiveDiffProtocol {
     if (!executable) throw new Error("Comando SSH do Live Diff remoto ausente.")
     this.timeoutMs = timeoutMs
     this.child = spawn(executable, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
+    // Bun may emit a buffered write failure after cancellation destroys stdin.
+    // Keep this listener through teardown; the request callback cannot consume it.
+    this.child.stdin.on("error", (error) => this.stop(error))
     this.child.stdout.setEncoding("utf8")
     this.child.stderr.setEncoding("utf8")
     this.child.stdout.on("data", (chunk: string) => this.receive(chunk))
@@ -89,14 +92,13 @@ export class RemoteLiveDiffProtocol {
       this.pending.set(id, request)
       signal.addEventListener("abort", abort, { once: true })
       const line = `${[id, operation, ...fields.map(encodeField)].join("|")}\n`
-      this.child.stdin.write(line, (error) => {
-        if (!error) return
-        const active = this.pending.get(id)
-        if (!active) return
-        this.release(id, active)
-        reject(error)
-        this.stop(error)
-      })
+      try {
+        this.child.stdin.write(line, (error) => {
+          if (error) this.stop(error)
+        })
+      } catch (error) {
+        this.stop(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 

@@ -64,6 +64,8 @@ test("sidebar separates numbered terminals from independently clickable agent st
   updateUiSettings({ language: "pt-BR" })
   const selections: string[] = []
   const sessions: TerminalSession[] = [
+    { ...session("External shell", "idle"), folderId: "others", agent: null },
+    { ...session("External agent", "working"), folderId: "others" },
     session("Codex", "working"),
     session("Claude", "blocked"),
     session("Gemini", "done"),
@@ -74,7 +76,10 @@ test("sidebar separates numbered terminals from independently clickable agent st
   tui = await testRender(
     <TerminalSidebar
       sessions={sessions}
-      folders={[{ id: "terminal", name: "Terminal" }]}
+      folders={[
+        { id: "terminal", name: "Terminal" },
+        { id: "others", name: "Outros" },
+      ]}
       selectedFolder="terminal"
       activeSessionId="Shell"
       width={32}
@@ -89,6 +94,9 @@ test("sidebar separates numbered terminals from independently clickable agent st
   )
   await tui.renderOnce()
   const frame = tui.captureCharFrame()
+  expect(frame).not.toContain("External")
+  expect(frame).not.toContain("Outros")
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-folder-others")).toBeUndefined()
   for (const label of ["Terminais", "Agentes", "Lendo", "Aguardando", "Concluído"])
     expect(frame).toContain(label)
   const lines = frame.split("\n")
@@ -123,7 +131,7 @@ test("sidebar separates numbered terminals from independently clickable agent st
   await act(async () => tui?.mockMouse.click(agent.screenX + 2, agent.screenY))
   expect(selections).toEqual(["Claude"])
   // Listing an unseen result never acknowledges it; only the workspace owns that transition.
-  expect(sessions[2]?.agent?.state).toBe("done")
+  expect(sessions.find((item) => item.id === "Gemini")?.agent?.state).toBe("done")
 })
 
 test("integrated Codex rows show a third activity line", async () => {
@@ -539,7 +547,7 @@ test("sidebar focus keeps its heading while the background sweep covers its heig
   }
 })
 
-test("sidebar shows read-only external terminal references in Others", async () => {
+test("sidebar hides Others and skips its terminals during keyboard navigation", async () => {
   updateUiSettings({ language: "pt-BR" })
   const selections: string[] = []
   const external: TerminalSession = {
@@ -575,13 +583,18 @@ test("sidebar shows read-only external terminal references in Others", async () 
   )
   await tui.renderOnce()
 
-  const row = tui.renderer.root.findDescendantById("terminal-sidebar-pane-external-pts-7-500")!
-  const lines = tui.captureCharFrame().split("\n")
-  expect(tui.captureCharFrame()).toContain("Outros")
-  expect(lines[row.screenY]).toContain("lazygit")
-  expect(lines[row.screenY + 1]).toContain("other · pts/7")
-  await act(async () => tui?.mockMouse.click(row.screenX + 2, row.screenY))
-  expect(selections).toEqual(["external-pts-7-500"])
+  expect(
+    tui.renderer.root.findDescendantById("terminal-sidebar-pane-external-pts-7-500"),
+  ).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("terminal-sidebar-folder-others")).toBeUndefined()
+  expect(tui.captureCharFrame()).not.toContain("Outros")
+  expect(tui.captureCharFrame()).not.toContain("lazygit")
+  await act(async () => tui!.renderer.root.findDescendantById("terminal-sidebar")!.focus())
+  // From the shell, Down wraps to the visible folder; the next Down returns to the shell.
+  await act(async () => tui!.mockInput.pressArrow("down"))
+  await act(async () => tui!.mockInput.pressArrow("down"))
+  await act(async () => tui!.mockInput.pressEnter())
+  expect(selections).toEqual(["Shell"])
 })
 
 test.each([3, 5, 8])("%i-row sidebars keep agents in a clickable compact list", async (height) => {

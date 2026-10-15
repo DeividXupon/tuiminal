@@ -1,10 +1,11 @@
-import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
+import type { BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS, type TerminalMasterKey } from "@xupon/tuiminal-core/settings/theme"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useRenderableFocus } from "../hooks/use-renderable-focus"
+import { useTerminalSidebarScroll } from "../hooks/use-terminal-sidebar-scroll"
 import {
   TERMINAL_SIDEBAR_FOCUS_TARGET,
   type TerminalFocusTargetKey,
@@ -14,6 +15,7 @@ import {
   masterKeyShortcutLabel,
   numberedTerminalSections,
   orderedRunningAgents,
+  sidebarTerminalSessions,
   type TerminalFolder,
   type TerminalSession,
   visibleTerminalShortcutTargets,
@@ -38,10 +40,9 @@ import { handleSidebarKey } from "./terminal-sidebar-keyboard"
 export { terminalSidebarFocusSweep } from "./TerminalSidebarFocusSweep"
 
 const FOLDER_CURSOR_PREFIX = "terminal-folder:"
+const NO_COLLAPSED_FOLDERS: readonly string[] = []
 
-function folderCursorId(id: string) {
-  return `${FOLDER_CURSOR_PREFIX}${id}`
-}
+const folderCursorId = (id: string) => `${FOLDER_CURSOR_PREFIX}${id}`
 
 function cursorFolderId(id: string | null) {
   return id?.startsWith(FOLDER_CURSOR_PREFIX) ? id.slice(FOLDER_CURSOR_PREFIX.length) : null
@@ -71,7 +72,7 @@ function TerminalSidebarFocusSelection({
 
 export const TerminalSidebar = memo(function TerminalSidebar({
   active = true,
-  sessions,
+  sessions: allSessions,
   folders,
   selectedFolder,
   activeSessionId,
@@ -79,12 +80,12 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   height,
   masterKey,
   onSelectFolder,
-  collapsedFolderIds = [],
+  collapsedFolderIds = NO_COLLAPSED_FOLDERS,
   onToggleFolder = () => undefined,
   onActivate,
   onActions,
   onNew,
-  onCommand,
+  onNewAgent,
   navigationOnly = false,
   autoFocus = false,
   focusRequest = 0,
@@ -108,7 +109,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
-  onCommand?: (() => void) | undefined
+  onNewAgent?: (() => void) | undefined
   navigationOnly?: boolean
   autoFocus?: boolean
   focusRequest?: number
@@ -120,6 +121,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   focusSelection?: SidebarFocusSelection
 }) {
   const renderer = useRenderer()
+  const sessions = useMemo(() => sidebarTerminalSessions(allSessions), [allSessions])
   const sections = useMemo(() => numberedTerminalSections(sessions), [sessions])
   const visibleFolders = useMemo(
     () => folders.filter((folder) => sections.some((section) => section.folderId === folder.id)),
@@ -154,16 +156,13 @@ export const TerminalSidebar = memo(function TerminalSidebar({
     ],
     [collapsedFolders, visibleFolders, sections, sessions],
   )
-  const selectedSession = sessions.find((session) => session.id === activeSessionId)
-  const activeFolder = selectedSession?.folderId
-  const activeAgent = Boolean(selectedSession && isRunningAgent(selectedSession))
   const agentCount = sessions.filter(isRunningAgent).length
   const compactAgents = height < 10
   const showSessionHeading = !agentCount || height >= 6
   const showCreationActions = !navigationOnly && (!agentCount || height >= 8)
   const fixedHeight =
     Number(showSessionHeading) +
-    Number(showCreationActions) * (onCommand ? 2 : 1) +
+    Number(showCreationActions) * (onNewAgent ? 2 : 1) +
     (navigationOnly ? 2 : 1)
   const agentHeight = agentCount
     ? Math.min(
@@ -195,7 +194,6 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   }, [active, animatingAgents])
   const sidebarRef = useRef<BoxRenderable | null>(null)
   const sidebarFocused = useRenderableFocus(sidebarRef)
-  const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const { frame: focusSweepFrame, start: startFocusSweep } = useTerminalSidebarFocusSweep()
   const [cursorId, setCursorId] = useState<string | null>(
     activeSessionId && navigationIds.includes(activeSessionId)
@@ -204,6 +202,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
   )
   const cursorRef = useRef(cursorId)
   const previousFocusRequest = useRef(focusRequest)
+  const previousActiveSession = useRef(activeSessionId)
   const selectFolder = (id: string) => {
     const cursor = folderCursorId(id)
     cursorRef.current = cursor
@@ -212,9 +211,11 @@ export const TerminalSidebar = memo(function TerminalSidebar({
     queueMicrotask(() => sidebarRef.current?.focus())
   }
   useEffect(() => {
+    const activeChanged = previousActiveSession.current !== activeSessionId
+    previousActiveSession.current = activeSessionId
     setCursorId((current) => {
       const next =
-        current && navigationIds.includes(current)
+        !activeChanged && current && navigationIds.includes(current)
           ? current
           : activeSessionId && navigationIds.includes(activeSessionId)
             ? activeSessionId
@@ -262,18 +263,15 @@ export const TerminalSidebar = memo(function TerminalSidebar({
       blur: () => renderer.currentFocusedRenderable?.blur(),
     })
   })
-  useEffect(() => {
-    const folderId = cursorFolderId(cursorId)
-    if (folderId) {
-      scrollRef.current?.scrollChildIntoView(`terminal-sidebar-folder-${folderId}`)
-      return
-    }
-    const cursor = sessions.find((session) => session.id === cursorId)
-    if (cursor && !isRunningAgent(cursor))
-      scrollRef.current?.scrollChildIntoView(`terminal-sidebar-pane-${cursor.id}`)
-    else if (!cursor && !activeAgent && activeFolder === selectedFolder)
-      scrollRef.current?.scrollChildIntoView(`terminal-sidebar-pane-${activeSessionId}`)
-  }, [activeSessionId, activeFolder, activeAgent, cursorId, selectedFolder, sessions])
+  const scrollRef = useTerminalSidebarScroll({
+    sessions,
+    cursorId,
+    folderId: cursorFolderId(cursorId),
+    activeSessionId,
+    selectedFolder,
+    height,
+    collapsedFolderIds,
+  })
   return (
     <TerminalShortcutAnimation active={active}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes own native terminal focus and do not expose ARIA roles. */}
@@ -337,6 +335,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
           </box>
         )}
         <scrollbox
+          id="terminal-sidebar-scroll"
           ref={scrollRef}
           scrollY
           style={{ flexGrow: 1, minHeight: agentCount ? 0 : 1, width: "100%" }}
@@ -369,13 +368,13 @@ export const TerminalSidebar = memo(function TerminalSidebar({
             onPress={onNew}
           />
         )}
-        {showCreationActions && onCommand && (
+        {showCreationActions && onNewAgent && (
           <TerminalInlineButton
             compact
-            id="terminal-sidebar-command"
-            label="Comando"
+            id="terminal-sidebar-new-agent"
+            label="Novo agente"
             accent={COLORS.terminal}
-            onPress={onCommand}
+            onPress={onNewAgent}
           />
         )}
         {navigationOnly && (
@@ -389,6 +388,7 @@ export const TerminalSidebar = memo(function TerminalSidebar({
           compact
           id="terminal-sidebar-actions"
           label={`[${masterKey}]`}
+          actionKeys={[`[${masterKey}]`]}
           accent={COLORS.terminal}
           onPress={onActions}
         />

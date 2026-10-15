@@ -436,7 +436,7 @@ export async function terminalBenchmarks(root: string): Promise<BenchmarkCase[]>
           onActivate: () => undefined,
           onActions: () => undefined,
           onNew: () => undefined,
-          onCommand: () => undefined,
+          onNewAgent: () => undefined,
         })
         requestPinnedTerminalTarget({ sessionId: "terminal-4" })
         requestTerminalSidebarFocus()

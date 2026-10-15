@@ -126,7 +126,7 @@ test("publishing the same sidebar view does not notify subscribers twice", () =>
     onActivate: () => undefined,
     onActions: () => undefined,
     onNew: () => undefined,
-    onCommand: () => undefined,
+    onNewAgent: () => undefined,
   }
   let changes = 0
   const unsubscribe = subscribeTerminalSidebar(() => changes++)

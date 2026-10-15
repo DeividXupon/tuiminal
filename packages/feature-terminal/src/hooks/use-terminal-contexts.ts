@@ -1,13 +1,13 @@
 import { basename } from "node:path"
 import { type RefObject, useEffect, useRef, useState } from "react"
-import type { TerminalRepositoryContext } from "../model/terminal-context"
 import type { TerminalSession } from "../model/sessions"
+import type { TerminalRepositoryContext } from "../model/terminal-context"
 import {
   createRemoteTerminalContextSource,
   type RemoteTerminalContextSource,
 } from "../services/remote-terminal-context"
-import { readTerminalRepositoryContext } from "../services/terminal-repository-context"
 import type { TermAgentsProcessHandle } from "../services/terminal"
+import { readTerminalRepositoryContext } from "../services/terminal-repository-context"
 
 const CONTEXT_POLL_INTERVAL_MS = 2_000
 
@@ -32,7 +32,10 @@ function sameContext(
     previous?.directory === next.directory &&
     previous.projectName === next.projectName &&
     previous.branch === next.branch &&
-    previous.state === next.state
+    previous.state === next.state &&
+    previous.changes?.additions === next.changes?.additions &&
+    previous.changes?.deletions === next.changes?.deletions &&
+    previous.changes?.partial === next.changes?.partial
   )
 }
 

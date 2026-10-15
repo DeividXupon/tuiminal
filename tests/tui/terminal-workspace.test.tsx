@@ -49,6 +49,11 @@ import * as projectDirectories from "../../packages/feature-terminal/src/service
 import * as claudeCompatibility from "../../packages/feature-terminal/src/services/claude-compatibility"
 import * as claudeTerminal from "../../packages/feature-terminal/src/services/claude-terminal"
 import * as codexServer from "../../packages/feature-terminal/src/services/codex-app-server"
+import {
+  createCodexRelay,
+  inspectClientFrame,
+  inspectUpstreamFrame,
+} from "../../packages/feature-terminal/src/services/codex-relay-observer"
 import * as liveDiff from "../../packages/feature-terminal/src/services/live-diff"
 import * as liveDiffProjects from "../../packages/feature-terminal/src/services/live-diff-projects"
 import type { OpenCodeObserverEvents } from "../../packages/feature-terminal/src/services/opencode-api"
@@ -579,6 +584,39 @@ test("agent picker enables Codex, Claude Code and OpenCode with branded contrast
   await key("escape")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeUndefined()
 })
+
+test("local Claude title updates preserve screen activity before hooks take ownership", async () => {
+  await mount(false, 140, 36)
+  await leader("a")
+  await click("terminal-dialog-agent-provider-claude")
+  await click("terminal-dialog-project-launch")
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("term-agents-", "")
+  const rowText = () => {
+    const row = tui?.renderer.root.findDescendantById(`terminal-agent-${sessionId}`)
+    return row ? (tui?.captureCharFrame().split("\n")[row.screenY] ?? "") : ""
+  }
+  snapshot = [{ pid: 502, parentPid: 1, executable: "claude", command: "claude" }]
+  await act(async () => starts[0]?.onData(new TextEncoder().encode("✳ Reading…\r\n")))
+  for (let attempt = 0; attempt < 100 && !rowText().includes("Lendo"); attempt++) {
+    await act(async () => Bun.sleep(50))
+    await tui?.renderOnce()
+  }
+  expect(rowText()).toContain("Lendo")
+  await act(async () => claudeEvents?.onTitle("Inspect the fixture"))
+  await tui?.renderOnce()
+  expect(rowText()).toContain("Lendo")
+  await act(async () => {
+    claudeEvents?.onObserved?.()
+    claudeEvents?.onState("working")
+    claudeEvents?.onActivity("coding")
+  })
+  await tui?.renderOnce()
+  expect(rowText()).toContain("Codificando")
+  expect(tui?.captureCharFrame()).toContain("Inspect the fixture")
+  expect(focusedTerminal()).toBe(terminal)
+  expect(starts).toHaveLength(1)
+}, 10_000)
 
 test("Master Key opens the official OpenCode TUI attached to its public server", async () => {
   await mount()
@@ -1358,6 +1396,59 @@ test("Master Key idle time uses the light palette's primary text color", async (
   )
 })
 
+test.each([false, true])(
+  "Codex prompt titles update the sidebar before generated titles without replacing the pane (remote=%s)",
+  async (remote) => {
+    updateUiSettings({
+      terminalRemoteCodexProfiles: [{ id: "work", name: "Work", host: "work" }],
+      terminalRemoteCodexActiveProfileId: "work",
+    })
+    await mount(false, 140, 36)
+    await launchAgent(remote)
+    const events = codexEvents
+    if (!events) throw new Error("Expected Codex events")
+    const terminal = focusedTerminal()
+    const sessionId = terminal.id.replace("term-agents-", "")
+    const row = renderable(`terminal-agent-${sessionId}`)
+    const titleId = `terminal-agent-context-${sessionId}`
+    const relay = createCodexRelay()
+    await act(async () => {
+      inspectClientFrame(
+        JSON.stringify({
+          id: 1,
+          method: "turn/start",
+          params: {
+            threadId: "thread-one",
+            input: [{ type: "text", text: "Corrigir\nlogin" }],
+          },
+        }),
+        relay,
+        events,
+        1,
+      )
+    })
+    await tui?.renderOnce()
+    const titleText = () => tui?.captureCharFrame().split("\n")[renderable(titleId).screenY]
+    expect(titleText()).toContain("Corrigir login")
+    await act(async () => {
+      inspectUpstreamFrame(
+        JSON.stringify({
+          method: "thread/name/updated",
+          params: { threadId: "thread-one", threadName: "Autenticação" },
+        }),
+        relay,
+        events,
+        1,
+      )
+    })
+    await tui?.renderOnce()
+    expect(titleText()).toContain("Autenticação")
+    expect(renderable(`terminal-agent-${sessionId}`) === row).toBe(true)
+    expect(focusedTerminal() === terminal).toBe(true)
+    expect(starts).toHaveLength(1)
+  },
+)
+
 test("Master Key S opens a navigable sent-message history below the agent terminal", async () => {
   await mount(false, 140, 36)
   await launchAgent()
@@ -1890,13 +1981,20 @@ test("Master Key M selects the pinned tmux helper outside the app renderer", asy
   expect(terminalSidebarReplica()?.focusSelectionTarget).toBeNull()
 })
 
-test("pinned sidebar keeps the custom command dialog accessible", async () => {
-  await mount(true)
-  await leader("b")
-  await click("terminal-sidebar-command")
-  expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
+test.each([false, true])("sidebar opens the agent picker (pinned: %s)", async (pinned) => {
+  await mount(pinned)
+  if (pinned) await leader("b")
+  expect(tui?.captureCharFrame()).toContain("Novo agente")
+  expect(tui?.renderer.root.findDescendantById("terminal-sidebar-command")).toBeUndefined()
+  await click("terminal-sidebar-new-agent")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  expect(commands).toHaveLength(0)
+  await click("terminal-dialog-agent-provider-codex")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-picker")).toBeDefined()
   await key("escape")
-  expect(tui?.renderer.root.findDescendantById("terminal-dialog")).toBeUndefined()
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeUndefined()
+  expect(commands).toHaveLength(0)
 })
 
 test("Master Key can move keyboard focus from a terminal into the sidebar", async () => {
@@ -2973,7 +3071,7 @@ test("narrow workspaces retain the sidebar, modal Escape and native input", asyn
   await mount(true, 58, 18)
   await leader("n")
   const terminal = focusedTerminal()
-  await click("terminal-sidebar-command")
+  await click("terminal-sidebar-new-agent")
   await key("escape")
   expect(focusedTerminal()).toBe(terminal)
   await act(async () => tui?.mockInput.typeText("echo fixture"))
@@ -2981,8 +3079,9 @@ test("narrow workspaces retain the sidebar, modal Escape and native input", asyn
   expect(tui?.renderer.root.findDescendantById("terminal-sidebar")?.width).toBeGreaterThan(0)
 })
 
-test("new sections return to Tuiminais and keep the workspace session limit", async () => {
-  await mount()
+test.each([false, true])("new sections return to Tuiminais (pinned: %s)", async (pinned) => {
+  await mount(pinned)
+  if (pinned) await leader("b")
   await leader("n")
   await click("terminal-sidebar-new")
   const owned = tui!.renderer.root.findDescendantById("terminal-sidebar-folder-terminal")!
@@ -2990,11 +3089,32 @@ test("new sections return to Tuiminais and keep the workspace session limit", as
   expect(section.parent).toBe(owned.parent)
   const panes = tui?.renderer.root.findDescendantById("terminal-panes")
   expect(focusedTerminal().width).toBe(panes!.width)
-  for (let i = 2; i < 12; i++) await leader("n")
-  expect(starts).toHaveLength(12)
-  await leader("n")
-  expect(starts).toHaveLength(12)
+  expect(starts).toHaveLength(2)
+  await click("terminal-sidebar-new-agent")
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-agent-provider")).toBeDefined()
+  expect(starts).toHaveLength(2)
 })
+
+test("terminal creation and splits remain available beyond twelve sessions", async () => {
+  await mount()
+  for (let index = 0; index < 15; index++) await leader("n")
+  expect(starts).toHaveLength(15)
+  await click("terminal-sidebar-new")
+  expect(starts).toHaveLength(16)
+  const sessionId = focusedTerminal().id.replace("term-agents-", "")
+  const pane = renderable(`terminal-sidebar-pane-${sessionId}`)
+  const scroll = renderable("terminal-sidebar-scroll") as ScrollBoxRenderable
+  expect(pane).toBeDefined()
+  expect(pane.screenY).toBeGreaterThanOrEqual(scroll.viewport.screenY)
+  expect(pane.screenY + pane.height).toBeLessThanOrEqual(
+    scroll.viewport.screenY + scroll.viewport.height,
+  )
+  await leader("c")
+  await key("n")
+  expect(starts).toHaveLength(17)
+  await click("terminal-sidebar-new-agent")
+  expect(renderable("terminal-dialog-agent-provider")).toBeDefined()
+}, 20_000)
 
 test("settings agent-command input consumes typing and its own Escape", async () => {
   await mount(true)
@@ -3246,6 +3366,38 @@ test("terminals fill every available edge at all sizes without replacing the nat
   expect(starts).toHaveLength(1)
 })
 
+test("terminal context counts use green and red and refresh while the repository stays dirty", async () => {
+  await mount(false, 120, 30)
+  let additions = 1654
+  repositoryContextSpy?.mockImplementation(async (directory) => ({
+    directory,
+    projectName: "project",
+    branch: "main",
+    state: "dirty",
+    changes: { additions, deletions: 54, partial: false },
+  }))
+  await leader("n")
+  const terminal = focusedTerminal()
+  const sessionId = terminal.id.replace("term-agents-", "")
+  await waitForRenderable(`terminal-context-state-${sessionId}`)
+  expect(tui?.captureCharFrame()).toContain("+1654 -54")
+  expect(spanColor("+1654")).toEqual(RGBA.fromHex(COLORS.success).toInts())
+  expect(spanColor("-54")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
+  additions = 1655
+  for (
+    let attempt = 0;
+    attempt < 120 && !tui?.captureCharFrame().includes("+1655 -54");
+    attempt++
+  ) {
+    await act(async () => {
+      await Bun.sleep(25)
+      await tui?.renderOnce()
+    })
+  }
+  expect(tui?.captureCharFrame()).toContain("+1655 -54")
+  expect(focusedTerminal()).toBe(terminal)
+})
+
 test("terminal context tags reserve a row above the PTY and keep state when width becomes narrow", async () => {
   await mount(false, 120, 30)
   repositoryContextSpy?.mockImplementation(async (directory) => ({
@@ -3306,7 +3458,7 @@ test("terminal context tags reserve a row above the PTY and keep state when widt
   ).toBeUndefined()
 
   await act(async () => {
-    await tui?.resize(38, 18)
+    await tui?.resize(30, 18)
     await Bun.sleep(120)
     await tui?.renderOnce()
   })
@@ -3328,6 +3480,7 @@ test("terminal context tags reserve a row above the PTY and keep state when widt
   expect(
     tui?.renderer.root.findDescendantById(`terminal-context-branch-${sessionId}`),
   ).toBeUndefined()
+  await waitForRenderable(`terminal-context-state-${sessionId}`)
   expect(tui?.renderer.root.findDescendantById(`terminal-context-state-${sessionId}`)).toBeDefined()
   expect(terminal.width).toBe(tui!.renderer.root.findDescendantById("terminal-panes")!.width)
 })

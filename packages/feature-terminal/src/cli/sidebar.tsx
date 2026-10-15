@@ -15,10 +15,8 @@ import {
   DEFAULT_FOLDER_NAME,
   EXTERNAL_FOLDER,
   EXTERNAL_FOLDER_NAME,
-  MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   numberedTerminalSections,
-  orderedRunningAgents,
   terminalSections,
   visibleTerminalShortcutTargets,
 } from "../model/sessions"
@@ -112,24 +110,16 @@ function SidebarApp({
   const recentThreads = replica?.recentThreads ?? []
   const activeSession = sessions.find((session) => session.id === activeSessionId)
   const activeSection = sections.find((section) => section.id === activeSession?.sectionId)
-  const hasMovableAgent = orderedRunningAgents(managedSessions).some(
-    (session) => session.id !== activeSession?.id && session.sectionId !== activeSession?.sectionId,
-  )
-  const canSplit = Boolean(
-    activeSection &&
-      activeSection.panes.length < MAX_TERMINALS_PER_SECTION &&
-      (managedSessions.length < MAX_SESSIONS || hasMovableAgent),
-  )
+  const canSplit = Boolean(activeSection && activeSection.panes.length < MAX_TERMINALS_PER_SECTION)
   const disabled = useCallback(
     (key: string) => {
       if (["c", "shift+h"].includes(key)) return !canSplit
       if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
-      if (["n", "a"].includes(key)) return managedSessions.length >= MAX_SESSIONS
       if (key.startsWith("alt+")) return !numberedSections[Number(key.at(-1)) - 1]
       if ([",", "q"].includes(key)) return !replica
       return ["x", "e", "m"].includes(key) && !activeSession
     },
-    [activeSession, canSplit, managedSessions.length, numberedSections, replica],
+    [activeSession, canSplit, numberedSections, replica],
   )
   const activate = useCallback(
     async (id: string) => {

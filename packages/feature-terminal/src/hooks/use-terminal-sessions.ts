@@ -1,5 +1,4 @@
 import type { EmbeddedTerminalRenderable } from "@opentui/core"
-import { useTerminalDimensions } from "@opentui/react"
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { mergeAgentMessageHistory, sanitizeAgentMessages } from "../model/agent-message-store"
@@ -9,7 +8,6 @@ import {
   type TermAgentsCommand,
   type TermAgentsKind,
   integratedAgentLaunch,
-  MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   normalizeSectionLayout,
   type TerminalPlacement,
@@ -91,8 +89,10 @@ function createTerminalSession(
   }
 }
 
-export function useTerminalSessions(active: boolean) {
-  const dimensions = useTerminalDimensions()
+export function useTerminalSessions(
+  active: boolean,
+  dimensions: { width: number; height: number },
+) {
   const dimensionsRef = useRef(dimensions)
   dimensionsRef.current = dimensions
   const terminalRefs = useRef(new Map<string, EmbeddedTerminalRenderable>())
@@ -256,10 +256,6 @@ export function useTerminalSessions(active: boolean) {
         reopenMirroredSession(command, existing, dismissedTmuxPanes, activateSession, startSession)
       )
         return
-      if (currentSessions.length >= MAX_SESSIONS) {
-        setNotice(`Limite de ${MAX_SESSIONS} terminais nesta execução.`)
-        return
-      }
       const sectionSize = currentSessions.filter(
         (session) => session.sectionId === placement.sectionId,
       ).length

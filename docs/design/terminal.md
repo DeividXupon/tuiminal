@@ -4,8 +4,13 @@ Term Agents is a generic PTY multiplexer for shells and arbitrary CLIs. Its
 workspace always uses compact geometry, regardless of the global framed/compact
 preference. There is no tool header, command strip, per-pane title bar, running
 counter, pager, or permanent footer. A compact one-line metadata strip above each
-visible PTY shows its project folder, Git branch and localized Clean/Changed state;
-outside a repository it shows the current folder and No Git. The strip has its own
+visible PTY shows its project folder, Git branch and localized Clean state or
+net line counts against HEAD (green `+additions`, red `-deletions`). Counts include
+staged, unstaged and new text files; binaries contribute no textual lines. New-file
+inspection is bounded to 1,000 entries and 1 MiB per file (8 MiB per local scan);
+an ellipsis marks partial counts. A failed read retains the previous context;
+contexts without counts retain the localized Changed fallback.
+Outside a repository it shows the current folder and No Git. The strip has its own
 layout row and never covers permanent terminal content. A recognized agent also shows
 a left-aligned Local or Remote tag, using distinct semantic colors and the same
 traveling text shimmer as Terminal shortcut hints; only integrated remote agents are
@@ -31,13 +36,13 @@ is hidden or retired.
 
 A section contains one or two terminal panes, horizontally or vertically split.
 Two panes are the limit, not two additional panes beside an original. Closing one
-expands its sibling. There are at most 12 terminals in a workspace. New terminal
+expands its sibling. There is no fixed limit on the number of terminals in a workspace. New terminal
 always opens a new section in the reserved Tuiminais folder, including when the current
 section has room for a second pane. New section does the same. Only the explicit
 Split right / below actions open a confirmation that can either start a new shell
 or move an already-running agent terminal into the second pane. Moving an agent
 preserves its PTY and process, and its former section expands any remaining sibling.
-Custom commands create a new section and are passed unchanged to the native shell.
+Run arbitrary commands directly in a terminal shell. The sidebar has no custom-command dialog.
 
 The left sidebar has a Terminals heading and a count of its visible sections,
 followed by non-empty folders and zero-padded numbered sections. Clicking a folder
@@ -62,8 +67,12 @@ are stored per project in Tuiminal's user data directory, outside the opened pro
 Legacy custom folders are ignored. Native sessions end at shutdown. Tuiminais is the default folder for
 new terminals and restored panes without a saved assignment;
 the reserved tmux folder contains ordinary panes discovered on external servers.
-Users can rename terminals; the only folders are Tuiminais, tmux and Others.
-The New terminal action sits below navigation; the Master Key stays at the bottom.
+Users can rename terminals; the visible folders are Tuiminais and tmux.
+The reserved Others group and all its sessions are hidden from both sidebar lists,
+counts, keyboard navigation and Master Key shortcuts.
+The New terminal and New agent actions sit below navigation; the Master Key stays at the bottom.
+New agent opens the same provider, project and environment flow as Master Key `[A]`,
+including from the pinned sidebar.
 In a shell/agent split, Terminals shows only the shell and Agents shows the agent;
 the actual split, section and folder assignment remain intact. When the agent
 returns to its shell, its terminal reappears in Terminals; if the shell itself
@@ -89,8 +98,9 @@ focus, section placement and the original command used for restart.
 A separate Agents list comes first and targets 40% of the sidebar, with at
 least four rows when space allows.
 Each clickable agent row shows a colored state marker, agent name, right-aligned
-activity/status, and the agent's published task/session title beneath, falling
-back to the terminal name when unavailable. Published task titles use the palette's
+activity/status, and the agent's task/session title beneath. Integrated agents use
+the first available user message until a provider title arrives; without either,
+the row omits the title line. Task titles use the palette's
 focus accent so they remain legible across every light/dark palette and distinct
 from state colors. All running agents are listed,
 including agents in other sections. The list scrolls independently and selecting a
@@ -101,8 +111,11 @@ name) and status. With
 agents present, the creation buttons are hidden below eight rows and the Sessions
 heading below six; their actions remain available through the Master Key. Empty
 agent lists are omitted in compact layouts. Sidebar widths range from 16 to 32 columns.
-Status changes do not reset either list's scroll position.
-Task titles come from the agent's own terminal title, including tmux pane titles;
+Both lists scroll independently when their contents exceed the available height.
+Mouse-wheel scrolling and keyboard navigation keep every terminal accessible; selecting
+a terminal reveals its row. Status changes do not reset either list's scroll position.
+Task titles come from the agent's own terminal title, including tmux pane titles,
+or its integrated public protocol, with a temporary user-message fallback;
 they do not change automatic/manual terminal names. Supported formats and limits
 are documented in [agent task titles](terminal-agents.md#task-titles).
 
@@ -345,8 +358,8 @@ title uses the low-contrast raised-panel background, and a
 border-colored horizontal rule fills the space between it and the right-aligned state.
 Three `▌` cells form a rail beside the item: unselected rows alternate subdued border
 and raised-panel colors, while the selected row uses the brighter Terminal accent.
-The modal footer provides the single `[Enter]` hint instead of repeating it in every
-item. Project and branch also participate in filtering. A
+The modal has no instructional footer; its panels use the available height.
+Project and branch also participate in filtering. A
 short-lived owned provider connection loads each local list and bounded public history
 when Terminal becomes active, even before an integrated pane exists; integrated panes
 keep it current afterward. An agent row shows `[Enter]`, its
@@ -382,8 +395,8 @@ navigation role: Database, Git, Runner, HTTP, and Term Agents. `[,]` opens
 settings, and `[Q]` requests application exit. In the Terminal header these global
 shortcut tokens remain muted until the Master Key is active, when they use the fixed
 blue brand accent. The temporary `[1]`–`[9]` sidebar labels use that same blue without
-changing the sidebar's geometry. The custom-command dialog remains
-available from a sidebar button.
+changing the sidebar's geometry. The sidebar's New agent button opens the agent
+creation flow directly.
 
 Master Key then `[M]` closes the action modal and enters box-selection mode for
 the visible sidebar, terminal panes, remote setup guides, sent-message history, and Live Diff panels. The box
@@ -466,6 +479,10 @@ binding. Tuiminal never overwrites a customized `C-b` root binding.
 | `[,]` | Open settings |
 | `[Q]` | Quit Tuiminal |
 | `[Esc]` | Cancel without changing terminal focus |
+
+The Master Key menu also accepts the macOS Option symbols `¡`, `™`, `£`, `¢` and
+`∞` for tool switching. Its focused search field and active PTYs retain these
+characters as text, following the [global navigation contract](ui-controls.md#global-tool-navigation).
 
 An integrated remote agent pane also carries a project synchronization tag. Before
 the first copy it says **Not synced** and exposes the configured Master Key followed
@@ -593,6 +610,11 @@ the terminal column. In the narrow stacked Live Diff layout, history divides the
 terminal region above the diff.
 
 ## Live Diff companion
+
+The code preview uses the same offline syntax grammar registry and filename
+detection as Git Diffs. Bundled parsers load on demand in OpenTUI's worker; recent-line
+backgrounds, gutters, and shimmer retain their existing meaning. Unsupported file
+types remain plain text with diff backgrounds. Agent-message diffs share this path.
 
 Master Key then `[D]` opens a read-only Live Diff beside the selected recognized
 agent's existing PTY and focuses it immediately. Repeating `[D]` focuses the open Live Diff; its close control or `[X]` removes it. The companion does not consume a terminal slot or create a
@@ -762,8 +784,7 @@ or shell is launched. The first mirror becomes visible in an empty workspace;
 later discoveries preserve the selected terminal, keyboard focus, menus and dialogs.
 Recognized running mirrors appear only in Agents; an owned pane returns to Terminal
 when its agent ends, while an external pane returns to tmux. Linked windows
-are deduplicated by socket and pane ID. The 12-terminal limit
-still applies; remaining candidates can be added after space becomes available.
+are deduplicated by socket and pane ID, with no fixed terminal-count limit.
 Closing a mirror dismisses that pane for the current execution, so the next scan
 does not reopen it. Failed/disconnected mirrors remain visible instead of being retried repeatedly.
 Set `TUIMINAL_TERMINAL_AUTO_MIRROR=0` before launching to disable external automatic
@@ -772,12 +793,11 @@ backend for newly created terminals. Tests, documentation
 captures and release smoke fixtures disable it unless using isolated discovery data.
 
 On POSIX, a separate read-only scan groups foreign processes by controlling TTY and
-lists them in the reserved Others folder. It excludes the TTY hosting Tuiminal,
+assigns them to the reserved Others group, which is hidden from the sidebar. It excludes the TTY hosting Tuiminal,
 Tuiminal-owned descendants and PTYs whose ancestry belongs to tmux, so Terminal and
 tmux rows are not duplicated. Each row shows the foreground executable, idle/running
 state, directory when `/proc` exposes it, and TTY identifier. These references do not
-count toward the 12-session limit. Recognized agents move to Agents with unknown
-activity because their external screen is unavailable. Since Tuiminal does not own their PTYs or screen
+create managed terminal sessions. Recognized external agents also remain hidden; their external screen is unavailable. Since Tuiminal does not own their PTYs or screen
 buffers, activating one reports its original TTY without replacing the active pane,
 sending input or closing the external process. Windows returns an empty read-only
 set until a console API can provide stable terminal identity. Set
@@ -845,8 +865,7 @@ Different panes in one session can have separate mirrors. Restart is disabled fo
 borrowed panes; agent identity follows the mirrored pane's shell PID.
 
 Terminals already open outside tmux cannot yet be mirrored. The read-only references
-in **Others** expose their metadata and original
-TTY without changing that limitation. Without tmux, new native terminals, splits,
+in **Others** remain hidden from the sidebar without changing that limitation. Without tmux, new native terminals, splits,
 agent observation and background execution remain available inside Tuiminal.
 Arbitrary custom sockets and screen/input integration for unrelated terminals need
 a separate integration; opening an empty shell is never presented as mirroring an

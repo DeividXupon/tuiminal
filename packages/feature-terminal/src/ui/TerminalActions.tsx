@@ -386,10 +386,6 @@ export function TerminalActions({
           />
         )}
       </box>
-      <TerminalShortcutText
-        content="[←/→ H/L] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
     </ModalSurface>
   )
 }

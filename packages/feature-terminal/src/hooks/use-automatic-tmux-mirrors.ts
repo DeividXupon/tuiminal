@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react"
-import { DEFAULT_FOLDER, MAX_SESSIONS, type TerminalSession } from "../model/sessions"
+import { DEFAULT_FOLDER, type TerminalSession } from "../model/sessions"
 import { TUIMINAL_TMUX_FOLDER, tmuxPaneKey, type TmuxPaneInfo } from "../model/tmux"
 import { discoverTmuxWorkspace } from "../services/tmux-agents"
 import { createTmuxMirrorCommand } from "../services/tmux-mirror-command"
@@ -31,7 +31,6 @@ function mirrorDiscoveredPanes(
   },
 ) {
   for (const { pane, agent } of panes) {
-    if (options.sessions.current.length >= MAX_SESSIONS) return
     if (
       !shouldMirrorPane(
         pane,

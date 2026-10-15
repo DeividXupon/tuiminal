@@ -1,7 +1,7 @@
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import type { AgentProviderDefinition } from "../model/agent-provider"
-import { cleanTerminalName } from "../model/sessions"
 import type { OpenCodeHydration } from "./opencode-api"
+import { openCodeTaskTitle } from "./opencode-task-title"
 
 type ProjectedOpenCodeSession = {
   id: string
@@ -31,7 +31,7 @@ export class OpenCodeSessionProjection {
   }
 
   upsert(hydration: OpenCodeHydration) {
-    const title = cleanTerminalName(hydration.session.title)
+    const title = openCodeTaskTitle(hydration.session.title, hydration.messages)
     this.sessions.set(hydration.session.id, {
       id: hydration.session.id,
       agent: {

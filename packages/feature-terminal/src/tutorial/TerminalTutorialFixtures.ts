@@ -46,8 +46,20 @@ export const TUTORIAL_SESSION_IDS = {
 
 export function tutorialRepositoryContext(remote = false): TerminalRepositoryContext {
   return remote
-    ? { directory: "/srv/lojinha", projectName: "lojinha", branch: "main", state: "dirty" }
-    : { directory: TUTORIAL_PROJECT, projectName: "lojinha", branch: "feat/cupom", state: "dirty" }
+    ? {
+        directory: "/srv/lojinha",
+        projectName: "lojinha",
+        branch: "main",
+        state: "dirty",
+        changes: { additions: 1654, deletions: 54, partial: false },
+      }
+    : {
+        directory: TUTORIAL_PROJECT,
+        projectName: "lojinha",
+        branch: "feat/cupom",
+        state: "dirty",
+        changes: { additions: 1654, deletions: 54, partial: false },
+      }
 }
 
 function terminal(

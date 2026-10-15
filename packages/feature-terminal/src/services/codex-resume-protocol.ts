@@ -5,6 +5,7 @@ import {
   compareAgentResumeThreads,
 } from "../model/agent-resume-thread"
 import type { CodexResumeThread } from "../model/codex-resume-threads"
+import { codexThreadWaiting } from "./codex-activity-observer"
 
 type RecordValue = Record<string, unknown>
 
@@ -34,9 +35,7 @@ function threadState(value: unknown): CodexResumeThread["state"] {
   const status = object(value)
   if (status?.type === "systemError") return "failed"
   if (status?.type !== "active") return "idle"
-  return Array.isArray(status.activeFlags) && status.activeFlags.includes("waitingOnApproval")
-    ? "blocked"
-    : "working"
+  return codexThreadWaiting(status) ? "blocked" : "working"
 }
 
 function responseFromItems(value: unknown) {

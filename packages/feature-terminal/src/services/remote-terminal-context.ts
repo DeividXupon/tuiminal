@@ -1,8 +1,9 @@
 import { posix } from "node:path"
-import type { TerminalRepositoryContext } from "../model/terminal-context"
 import type { RemoteCodexTarget } from "../model/sessions"
+import type { TerminalRepositoryContext } from "../model/terminal-context"
 import { remoteLiveDiffSshCommand } from "./remote-live-diff-helper"
 import { RemoteLiveDiffProtocol } from "./remote-live-diff-protocol"
+import { readRemoteTerminalChanges } from "./remote-terminal-changes"
 
 export type RemoteTerminalContextSource = {
   read: (signal: AbortSignal) => Promise<TerminalRepositoryContext>
@@ -53,6 +54,13 @@ export function createRemoteTerminalContextSource(
         projectName: posix.basename(root) || root,
         branch,
         state,
+        ...(state === "dirty"
+          ? {
+              changes: await readRemoteTerminalChanges(root, (operation, fields) =>
+                protocol!.request(operation, fields, signal),
+              ),
+            }
+          : {}),
       }
     },
     close() {
