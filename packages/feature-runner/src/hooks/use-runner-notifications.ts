@@ -5,16 +5,17 @@ import {
   useNotifications,
 } from "@xupon/tuiminal-core/notifications/index"
 import type { RunnerProcessExit } from "../model/types"
+import type { RunnerNotice } from "../model/notice"
 
 type Notify = (input: NotificationInput) => string
 
 export function useRunnerNotifications(
-  notice: string,
+  notice: RunnerNotice | null,
   discoveryError: string | null,
   projectPickerError: string | null,
 ) {
   const { notify } = useNotifications()
-  useNotificationFromValue(notice, { source: "Runner" })
+  useNotificationFromValue(notice?.message, { source: "Runner", kind: notice?.kind ?? "info" })
   useNotificationFromValue(discoveryError, { source: "Runner", kind: "error" })
   useNotificationFromValue(projectPickerError, { source: "Runner", kind: "error" })
   return notify

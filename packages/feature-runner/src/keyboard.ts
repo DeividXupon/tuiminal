@@ -2,6 +2,7 @@ import type { KeyboardScope } from "@xupon/tuiminal-core/keyboard/scope"
 
 export const runnerKeyboardScope = {
   ids: [
+    "runner-box-selection",
     "runner-command-input",
     "runner-project-search",
     "runner-log-filter",
@@ -9,5 +10,10 @@ export const runnerKeyboardScope = {
     "runner-project-list",
     "runner-directory-list",
   ],
-  prefixes: ["runner-config-", "runner-save-command-", "runner-autostart-trust-"],
+  prefixes: [
+    "runner-action-palette",
+    "runner-config-",
+    "runner-save-command-",
+    "runner-autostart-trust-",
+  ],
 } as const satisfies KeyboardScope

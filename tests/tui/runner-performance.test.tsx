@@ -37,7 +37,7 @@ async function mountRunner(pid: number | null = null) {
     },
   )
   restores.push(() => spawn.mockRestore())
-  tui = await testRender(<Runner active />, { width: 140, height: 32 })
+  tui = await testRender(<Runner active />, { kittyKeyboard: true, width: 140, height: 32 })
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await act(async () => Bun.sleep(5))
     await tui.renderOnce()
@@ -92,7 +92,7 @@ test("single and multi Runner logs preserve original output in another UI langua
     act(() => callbacks?.onLine("Nenhum processo ativo.", "stdout"))
     await flush()
     expect(tui?.captureCharFrame()).toContain("Nenhum processo ativo.")
-    act(() => tui?.mockInput.pressKey("m"))
+    act(() => tui?.mockInput.pressKey("m", { ctrl: true }))
     await tui?.renderOnce()
     expect(tui?.captureCharFrame()).toContain("MULTI")
     expect(tui?.captureCharFrame()).toContain("Nenhum processo ativo.")

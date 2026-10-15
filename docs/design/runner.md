@@ -5,6 +5,71 @@ project configuration; editing through the TUI never writes configuration into t
 opened project. See [agent notes](../ai/runner.md) for discovery, logs, keyboard
 scope and process shutdown constraints.
 
+## Action palette
+
+`[?]` opens the shared searchable action palette from the workspace. The footer's
+`[?]` button works with the mouse; `[A]` in Single and `[Shift+A]` in Multi remain
+aliases. The palette replaces the expanded More panel and groups command, process,
+log and navigation actions. Unavailable actions explain their requirements.
+Opening or searching does not run a command. Selecting an action restores workspace
+focus before invoking the existing handler, including configuration and trust guards.
+Text inputs, project pickers and other modals retain their keyboard input. `[Esc]`
+leaves the palette search first, then closes the palette and restores focus.
+
+The command list selects one command at a time. `[Enter]`, `[Space]` or a click starts an idle command or stops its active
+execution. Activating it while stopping does nothing. `[Shift+K]` is no longer bound;
+process stop buttons and the palette action remain available. `[Space]` only activates commands while their list is focused;
+inputs and modals retain their keys.
+Use saved flows for coordinated execution of multiple commands.
+
+`[M]` opens box selection for visible command/process lists, logs, expanded history
+and individual Multi process panes. The selected box is tinted; arrows or `[H/J/K/L]`
+move spatially, `[Enter]` or a click focuses it, and `[Esc]` or `[M]` cancels.
+Selection consumes workspace keys and never starts or stops a command. Inputs,
+project pickers and modals retain their keys. `[Shift+M]` toggles Single/Multi outside
+those input scopes. `[Ctrl+M]` remains an alias only when the terminal reports it
+distinctly from Enter; legacy terminals send the same byte for both keys.
+
+The command footer also exposes Multi, history, environment, saved-command removal,
+and log copy, export and clearing. The log footer exposes list focus, scrolling,
+filtering, stream selection, timestamps, copy, export, clearing, Multi and history.
+Actions without a valid target stay disabled.
+Both footers wrap using translated display widths, and the workspace reserves each footer's
+full height so every action, including `[?]`, remains visible on narrow terminals.
+The header places `[N] New tab` between the opened project tabs and command summary.
+Clicking it opens the same project picker as `[N]` to add another project tab.
+The `[/]` button sits beside the command input and focuses it, matching the keyboard
+shortcut. `[P]` switches command/process lists and `[D]` refreshes discovery through
+the command-panel header or keyboard. These controls stay outside the footer.
+
+## Execution status colors
+
+Project tabs show status through the project name's color, without a state symbol
+beside the name. Command rows keep names white in every state, with a colored
+indicator and no status text; the command line stays on the second row. Process/history
+rows and log headers use semantic theme colors alongside state symbols and
+localized text. Running uses the Runner
+accent; success is green, failures or unhealthy services red, checking/stopping
+yellow, and idle or interrupted states muted. Selection backgrounds and focus
+borders remain independent of execution status. User command and project names
+are plain data, never shortcut hints.
+
+Command rows show an active execution if one exists, otherwise the latest retained
+result. Starting a new execution replaces that command's previous outcome in the
+summary; older attempts remain available in history. Nonzero exit codes accompany
+failed execution labels. Existing history retention limits are unchanged.
+
+The header summary belongs to the selected project. It counts running/stopping
+instances and the latest failed/unhealthy or successful result per command.
+Inactive project tabs retain their status color, with failures taking precedence
+over shutdown, health checks, running processes and completed results. Labels
+compact to symbols when space is limited.
+
+Single and Multi log headers distinguish process state from health: a running
+process can still be checking or unhealthy. Flow steps use green for success,
+red for failure and yellow for pending/starting/blocked steps. Runner notices use
+their info, success, warning or error color, including the shared notifications.
+
 ## YAML configuration editor
 
 `[Ctrl+Y]` opens the project's complete YAML document directly inside the Runner.
@@ -91,8 +156,7 @@ Already started independent branches can continue.
 Before spawning, Runner resolves the entire reachable plan, rejects missing or
 ambiguous references and cycles, and snapshots the commands. A prerequisite shared
 by multiple targets is launched once within that plan. Independent roots launch
-in parallel. Ordinary multi-selection groups remain parallel when no dependencies
-are configured. Separate runs own separate process instances.
+in parallel. Separate runs own separate process instances.
 
 ## Saved flows
 
@@ -158,6 +222,9 @@ the existing Runner contract.
 ## Verification
 
 `tests/runner-yaml-syntax.test.ts` covers syntax tokens;
+`tests/runner-status.test.ts` covers retained outcomes and project summaries;
+`tests/tui/runner-status.test.tsx` covers native status colors, project switching,
+history, scrolling, mouse selection, theme/language changes and health/flow states.
 `tests/tui/runner-yaml-highlighting.test.tsx` covers native colors, cursor, undo and theme changes.
 `tests/runner-plan.test.ts` covers graph validation and scheduling;
 `tests/runner-yaml.test.ts` covers structured YAML, comments, canonical paths, conflicts,

@@ -65,17 +65,6 @@ export function useRunnerPlans({ projectRoot, commands, launchCommand, notify }:
     },
     [start],
   )
-  const stopTargets = useCallback(
-    async (targets: RunnerCommand[]) => {
-      const ids = targets.map((command) => command.id)
-      await Promise.all(
-        [...runs.current]
-          .filter((run) => run.root === projectRoot)
-          .map((run) => run.stopCommands(ids)),
-      )
-    },
-    [projectRoot],
-  )
   const runFlow = useCallback(
     (flow: RunnerFlow) => {
       const key = `${projectRoot}\n${flow.id}`
@@ -109,5 +98,5 @@ export function useRunnerPlans({ projectRoot, commands, launchCommand, notify }:
       .filter(([key]) => key.startsWith(`${projectRoot}\n`))
       .map(([key, run]) => [key.slice(projectRoot.length + 1), [...run.states.entries()]]),
   )
-  return { runCommand, runTargets, stopTargets, runFlow, stopFlow, restartFlow, flowStates }
+  return { runCommand, runTargets, runFlow, stopFlow, restartFlow, flowStates }
 }
