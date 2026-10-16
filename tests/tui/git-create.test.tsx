@@ -64,13 +64,18 @@ async function chooseRepository(repository: string) {
   expect(Boolean(tui.renderer.root.findDescendantById("git-create-repository-picker"))).toBe(false)
 }
 
-async function waitForModalClosed() {
+async function waitForCreationNotice() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await act(async () => Bun.sleep(10))
     await render()
-    if (!tui?.renderer.root.findDescendantById("git-create-modal")) return
+    // The notice is forwarded through an effect after the modal closes.
+    if (
+      !tui?.renderer.root.findDescendantById("git-create-modal") &&
+      tui?.captureCharFrame().includes("DEMO · criação simulada")
+    )
+      return
   }
-  throw new Error("Creation modal stayed open")
+  throw new Error(`Creation did not show its success notice:\n${tui?.captureCharFrame()}`)
 }
 
 afterEach(() => {
@@ -141,7 +146,7 @@ test("Issue creation is available without selecting an item and has a mouse cont
   await act(async () => tui?.mockInput.typeText("Issue de teste"))
   await render()
   await key("s", { ctrl: true })
-  await waitForModalClosed()
+  await waitForCreationNotice()
   expect(Boolean(tui.renderer.root.findDescendantById("git-create-modal"))).toBe(false)
   expect(tui.captureCharFrame()).toContain("DEMO · criação simulada")
 })
