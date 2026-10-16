@@ -47,11 +47,16 @@ describe("publication gates", () => {
       ).toThrow()
     }
   })
-  test("never publishes a stable or different prerelease channel", () => {
+  test("selects the matching alpha or beta channel and rejects other versions", () => {
     expect(publicationChannel("0.2.0-alpha.0")).toBe("alpha")
+    expect(publicationChannel("0.2.0-beta.0")).toBe("beta")
+    expect(publicationChannel("1.2.3-beta.12")).toBe("beta")
     for (const version of [
       "0.2.0",
-      "0.2.0-beta.0",
+      "0.2.0-rc.0",
+      "0.2.0-beta",
+      "0.2.0-beta.0+build",
+      "0.2.0-beta.0;echo",
       "latest",
       "0.2.0-alpha.0;echo",
       "0.2.0-pre-alpha.0",

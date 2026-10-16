@@ -31,7 +31,7 @@
     },
     "apps/cli": {
       "name": "@xupon/tuiminal-cli",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "bin": {
         "tuiminal": "./bin/tuiminal.ts",
       },
@@ -51,7 +51,7 @@
     },
     "packages/core": {
       "name": "@xupon/tuiminal-core",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@tuiparts/core": "^0.0.6",
         "@tuiparts/react": "^0.0.6",
@@ -65,7 +65,7 @@
     },
     "packages/feature-database": {
       "name": "@xupon/tuiminal-feature-database",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.31.0",
         "@tuiparts/core": "^0.0.6",
@@ -78,13 +78,13 @@
       "peerDependencies": {
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
-        "@xupon/tuiminal-core": "0.2.0-alpha.0",
+        "@xupon/tuiminal-core": "0.2.0-beta.0",
         "react": "^19.2.8",
       },
     },
     "packages/feature-git": {
       "name": "@xupon/tuiminal-feature-git",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@tuiparts/react": "^0.0.6",
         "yaml": "^2.9.0",
@@ -95,13 +95,13 @@
       "peerDependencies": {
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
-        "@xupon/tuiminal-core": "0.2.0-alpha.0",
+        "@xupon/tuiminal-core": "0.2.0-beta.0",
         "react": "^19.2.8",
       },
     },
     "packages/feature-http": {
       "name": "@xupon/tuiminal-feature-http",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@tuiparts/core": "^0.0.6",
         "@tuiparts/react": "^0.0.6",
@@ -114,13 +114,13 @@
       "peerDependencies": {
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
-        "@xupon/tuiminal-core": "0.2.0-alpha.0",
+        "@xupon/tuiminal-core": "0.2.0-beta.0",
         "react": "^19.2.8",
       },
     },
     "packages/feature-runner": {
       "name": "@xupon/tuiminal-feature-runner",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@tuiparts/react": "^0.0.6",
         "yaml": "^2.9.0",
@@ -131,13 +131,13 @@
       "peerDependencies": {
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
-        "@xupon/tuiminal-core": "0.2.0-alpha.0",
+        "@xupon/tuiminal-core": "0.2.0-beta.0",
         "react": "^19.2.8",
       },
     },
     "packages/feature-terminal": {
       "name": "@xupon/tuiminal-feature-terminal",
-      "version": "0.2.0-alpha.0",
+      "version": "0.2.0-beta.0",
       "dependencies": {
         "@tuiparts/react": "^0.0.6",
       },
@@ -147,7 +147,7 @@
       "peerDependencies": {
         "@opentui/core": "^0.5.9",
         "@opentui/react": "^0.5.9",
-        "@xupon/tuiminal-core": "0.2.0-alpha.0",
+        "@xupon/tuiminal-core": "0.2.0-beta.0",
         "react": "^19.2.8",
       },
     },

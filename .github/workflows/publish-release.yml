@@ -1,4 +1,4 @@
-name: Publish alpha
+name: Publish prerelease
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: publish-alpha
+  group: publish-prerelease
   cancel-in-progress: false
 
 jobs:

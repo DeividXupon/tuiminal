@@ -179,11 +179,11 @@ for (const entry of plan.packages) {
       "--ignore-scripts",
     ])
   const manifest = await registry(entry.name, version)
-  const alpha = await registry(entry.name, channel)
+  const tagged = await registry(entry.name, channel)
   const latest = await registry(entry.name, "latest")
   if (
     manifest?.dist?.integrity !== entry.integrity ||
-    alpha?.version !== version ||
+    tagged?.version !== version ||
     latest?.version !== latestTags.get(entry.name)
   )
     throw new Error(`Registry confirmation failed for ${entry.name}; inspect before continuing`)

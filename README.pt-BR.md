@@ -9,7 +9,7 @@
 Banco de dados, GitHub, processos, APIs e terminais reais em uma única interface rápida e responsiva.
 
 [![npm](https://img.shields.io/npm/v/tuiminal?label=npm&color=4B75FF)](https://www.npmjs.com/package/tuiminal)
-[![status](https://img.shields.io/badge/status-pre--alpha-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
+[![status](https://img.shields.io/badge/status-beta-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#instalação)
 
@@ -18,7 +18,7 @@ Banco de dados, GitHub, processos, APIs e terminais reais em uma única interfac
 </div>
 
 > [!WARNING]
-> O Tuiminal está em **alfa**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
+> O Tuiminal está em **beta**. Já pode ser instalado e testado, mas atalhos, formatos e APIs ainda podem mudar entre versões.
 
 O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de alternar entre um cliente de banco, uma interface Git, vários terminais e um cliente HTTP, você abre o projeto uma vez e troca de ferramenta com `[Alt+1–5]`.
 
@@ -35,10 +35,10 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 
 ## Instalação
 
-Instale a alfa pelo npm:
+Instale a beta pelo npm:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 tuiminal
 ```
 
@@ -72,7 +72,7 @@ da esquerda para a direita conforme o progresso real.
 Para atualizar ou remover:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 npm uninstall --global tuiminal
 ```
 
