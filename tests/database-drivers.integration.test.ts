@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { randomUUID } from "node:crypto"
+import { execFileSync } from "node:child_process"
 import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -108,6 +109,27 @@ suite("database driver integration", () => {
   beforeAll(async () => {
     configRoot = mkdtempSync(join(tmpdir(), "tuiminal-driver-integration-"))
     process.env.XDG_CONFIG_HOME = configRoot
+    // Bun 1.4.2 times out when PostgreSQL rejects TLS in `prefer` mode.
+    // Exercise pgpass over TLS while the explicit sslmode=disable profile stays plaintext.
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        join(configRoot, "server.key"),
+        "-out",
+        join(configRoot, "server.crt"),
+        "-subj",
+        "/CN=localhost",
+        "-days",
+        "1",
+      ],
+      { stdio: "ignore" },
+    )
 
     await Promise.all([
       docker(
@@ -149,7 +171,26 @@ suite("database driver integration", () => {
         "POSTGRES_DB=tuiminal_test",
         "-p",
         "127.0.0.1::5432",
+        "--mount",
+        `type=bind,source=${configRoot},target=/tuiminal-fixture,readonly`,
+        "--entrypoint",
+        "/bin/sh",
         "postgres:17-alpine",
+        "-ec",
+        "cp /tuiminal-fixture/server.key /tmp/tuiminal-server.key; " +
+          "cp /tuiminal-fixture/server.crt /tmp/tuiminal-server.crt; " +
+          "chown postgres:postgres /tmp/tuiminal-server.key; " +
+          "chmod 600 /tmp/tuiminal-server.key; " +
+          "chmod 644 /tmp/tuiminal-server.crt; " +
+          'exec /usr/local/bin/docker-entrypoint.sh "$@"',
+        "tuiminal-postgres",
+        "postgres",
+        "-c",
+        "ssl=on",
+        "-c",
+        "ssl_cert_file=/tmp/tuiminal-server.crt",
+        "-c",
+        "ssl_key_file=/tmp/tuiminal-server.key",
       ),
     ])
 
@@ -289,6 +330,14 @@ suite("database driver integration", () => {
         true,
       )
       expect(Number(result.rows[0]?.total)).toBe(3)
+      if (fixture.driver === "postgres") {
+        const transport = await api.executeDatabaseQuery(
+          fixture.connectionId,
+          "SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
+          true,
+        )
+        expect(transport.rows[0]?.ssl).toBe(fixture.externalSource === "postgres-passfile")
+      }
     }
   })
 

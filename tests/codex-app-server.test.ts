@@ -646,6 +646,7 @@ test("Codex TUI frames and approvals pass through while public activity is obser
       (states.at(-1) !== "done" ||
         internalResumeRequests.length === 0 ||
         internalHistoryRequests.length !== 2 ||
+        !historicalMessages.some((messages) => messages.includes("Fetched oldest task")) ||
         !historicalMessageDetails.some(
           (message) =>
             message.id === "request:number:4" &&
