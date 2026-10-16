@@ -44,7 +44,7 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Verify exact candidate and quality runs
         run: bun scripts/verify-candidate.ts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
@@ -86,13 +86,13 @@ jobs:
           package-manager-cache: false
       - name: Use the publication npm CLI
         run: npm install --global npm@12.0.2 --ignore-scripts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
           name: npm-${{ matrix.target }}
           path: candidate
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
