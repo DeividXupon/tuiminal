@@ -3,7 +3,7 @@ import { afterEach, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import {
   type BoxRenderable,
   CodeRenderable,
@@ -30,6 +30,12 @@ import { GitCompareWorkspace } from "../../packages/feature-git/src/GitCompareWo
 import { GitBaseWorkspace } from "../../packages/feature-git/src/GitWorkspace"
 import { PullRequestsWorkspace } from "../../packages/feature-git/src/PullRequestsWorkspace"
 import { loadLocalGitTarget } from "../../packages/feature-git/src/services/local-target"
+import { GIT_LAUNCH_DIRECTORY } from "../../packages/feature-git/src/services/git"
+import {
+  loadGitDiffsConfig,
+  saveGitDiffsConfig,
+  updateGitDiffsTarget,
+} from "../../packages/feature-git/src/storage/local/config"
 import { SectionEditorModal } from "../../packages/feature-git/src/ui/pr/SectionEditorModal"
 
 function diffCodeCells(root: Renderable): CodeRenderable[] {
@@ -1252,40 +1258,63 @@ test("Diffs renders a single-child folder chain as separate lines and one naviga
 })
 
 test("Diffs toggles into the local branch comparison selector", async () => {
-  updateUiSettings({ layout: "compact", language: "pt-BR" })
-  tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
-  await tui.renderOnce()
+  const repository = mkdtempSync(join(tmpdir(), "tuiminal-compare-toggle-tui-"))
+  const previousConfig = loadGitDiffsConfig().config
+  try {
+    execFileSync("git", ["init", "--quiet", "--initial-branch=compare-fixture", repository])
+    execFileSync("git", [
+      "-C",
+      repository,
+      "-c",
+      "user.name=Tuiminal Test",
+      "-c",
+      "user.email=tuiminal@example.test",
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "-m",
+      "comparison fixture",
+    ])
+    updateGitDiffsTarget({ scope: GIT_LAUNCH_DIRECTORY, repositoryRoot: repository })
+    updateUiSettings({ layout: "compact", language: "pt-BR" })
+    tui = await testRender(<GitViewer active />, { width: 140, height: 32 })
+    await waitForText("compare-fixture")
 
-  expect(tui.captureCharFrame()).toContain("[1]  [C] DIFFS")
-  await key("c")
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    await act(async () => Bun.sleep(10))
+    expect(tui.captureCharFrame()).toContain("[1]  [C] DIFFS")
+    await key("c")
+    await waitForText("BRANCH COMPARADA")
+    await waitForText(basename(repository))
+    const compareFrame = tui.captureCharFrame()
+    expect(compareFrame).toContain("[C] COMPARAR")
+    expect(compareFrame).toContain("PROJETO")
+    expect(compareFrame).toContain("BRANCH BASE")
+    expect(compareFrame).toContain("BRANCH COMPARADA")
+    expect(compareFrame).toContain("Nenhum checkout será realizado")
+
+    act(() => tui?.mockInput.pressEscape())
+    await act(async () => Bun.sleep(60))
     await tui.renderOnce()
-    if (tui.captureCharFrame().includes("BRANCH COMPARADA")) break
+    expect(tui.captureCharFrame()).toContain("[C] DIFFS")
+
+    await click("git-mode-compare")
+    expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
+    await waitForRenderable("git-compare-base")
+    await click("git-compare-base")
+    await waitForText("ESCOLHER BRANCH BASE")
+    expect(tui.captureCharFrame()).toContain("ESCOLHER BRANCH BASE")
+    await act(async () => {
+      tui?.mockInput.pressEscape()
+      await Bun.sleep(60)
+    })
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).not.toContain("ESCOLHER BRANCH BASE")
+    expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
+  } finally {
+    act(() => tui?.renderer.destroy())
+    tui = undefined
+    saveGitDiffsConfig(previousConfig)
+    rmSync(repository, { recursive: true, force: true })
   }
-  const compareFrame = tui.captureCharFrame()
-  expect(compareFrame).toContain("[C] COMPARAR")
-  expect(compareFrame).toContain("PROJETO")
-  expect(compareFrame).toContain("BRANCH BASE")
-  expect(compareFrame).toContain("BRANCH COMPARADA")
-  expect(compareFrame).toContain("Nenhum checkout será realizado")
-
-  act(() => tui?.mockInput.pressEscape())
-  await act(async () => Bun.sleep(60))
-  await tui.renderOnce()
-  expect(tui.captureCharFrame()).toContain("[C] DIFFS")
-
-  await click("git-mode-compare")
-  expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
-  await click("git-compare-base")
-  expect(tui.captureCharFrame()).toContain("ESCOLHER BRANCH BASE")
-  await act(async () => {
-    tui?.mockInput.pressEscape()
-    await Bun.sleep(60)
-  })
-  await tui.renderOnce()
-  expect(tui.captureCharFrame()).not.toContain("ESCOLHER BRANCH BASE")
-  expect(tui.captureCharFrame()).toContain("[C] COMPARAR")
 })
 
 test("branch comparison selects two refs and renders their diff without checkout", async () => {
