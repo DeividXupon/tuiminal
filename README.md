@@ -27,6 +27,9 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 - Dense interface built with Bun, OpenTUI, React, and tuiparts.
 - Works in any directory; Git, Runner, and terminals use the project passed to the CLI.
 - Full keyboard and mouse support.
+- A solid block follows the mouse with a bright ASCII particle trail. Text stays
+  readable; the effect works over notifications and embedded terminals, survives
+  clicks and selection, and clears when you type.
 - Framed layout with one continuous panel surface, or compact layout with its denser
   canvas; seven palettes and six languages.
 - Processes and PTYs stay alive when you switch tabs.

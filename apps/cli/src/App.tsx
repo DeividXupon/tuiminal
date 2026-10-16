@@ -50,6 +50,7 @@ import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } f
 import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
 import { applicationExitLayer } from "./ui/application-exit-layer"
 import type { ConfigurationSection } from "./ui/ConfigurationModal"
+import { withMouseTrail } from "./ui/MouseTrailSurface"
 import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { withStartupAnimation } from "./ui/StartupAnimation"
 import { ToolPanel } from "./ui/ToolPanel"
@@ -578,6 +579,5 @@ export function AppContent() {
     </Tabs.Root>
   )
 }
-export const App = withNotifications(
-  withSelectionClipboard(withStartupAnimation(withFeatures(AppContent))),
-)
+const Workspace = withStartupAnimation(withFeatures(AppContent))
+export const App = withNotifications(withMouseTrail(withSelectionClipboard(Workspace)))

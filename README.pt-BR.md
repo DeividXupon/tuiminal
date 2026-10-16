@@ -25,6 +25,9 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 - Interface densa construída com Bun, OpenTUI, React e tuiparts.
 - Funciona em qualquer diretório; Git, Runner e terminais usam o projeto informado ao CLI.
 - Teclado e mouse são cidadãos de primeira classe.
+- Um bloco sólido acompanha o mouse com um rastro de partículas ASCII mais intenso.
+  O texto continua legível; o efeito aparece sobre notificações e terminais
+  integrados, continua após cliques e seleções e some ao digitar.
 - Layout moldurado com uma superfície contínua entre os painéis, ou layout compacto
   com seu canvas mais denso; sete paletas e seis idiomas.
 - Processos e PTYs permanecem vivos enquanto você troca de tab.

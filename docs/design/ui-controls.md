@@ -61,6 +61,24 @@ separate full-download action.
 
 ## Workspace surfaces
 
+The CLI composes `MouseTrailSurface` around the full and isolated application.
+Mouse movement displays a solid block and leaves at most twenty-four ASCII
+particles (`+`, `:`, `.`), fading over 650 ms with at most one cell of drift.
+A native post-process paints particles only in blank, unstyled cells. The block
+uses the theme text color with contrasting ink, preserving the covered glyph and
+its full display width. It stays visible when stationary without requesting live
+frames; the operating system's pointer remains visible too. Text and wide glyphs
+stay intact.
+The trail passively observes the native input stream with OpenTUI's streaming
+parser, including fragmented reports and bracketed-paste framing. It has no hit
+targets and never consumes mouse or keyboard events. Its final compositing covers
+notifications and embedded terminals even when children stop event propagation.
+Clicks, scrolling and selection keep the effect active; selection and embedded
+program input retain their native behavior. Typing, paste, resize and terminal
+blur clear it; the next mouse event restores it without a focus-changing click.
+It requests live frames only while particles remain and releases its renderer and
+input subscriptions on unmount. Theme colors are read without remounting children.
+
 Top-level application, feature, installer, loading, and tutorial workspaces use
 `LAYOUT.workspaceBackground`. It resolves to `COLORS.panel` in framed mode so outer
 padding and gaps match the bordered panels, and to `COLORS.canvas` in compact mode.
