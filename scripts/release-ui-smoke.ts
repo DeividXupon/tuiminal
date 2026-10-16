@@ -64,6 +64,10 @@ async function verifyToolUi(
         terminal.write("\x1b")
         await Bun.sleep(150)
       }
+      if (tool === "terminal") {
+        terminal.write("\x02")
+        await waitFor(() => screen.screen().text.includes("Master Key"), "quit menu")
+      }
       terminal.write("q")
       await waitFor(() => child.exitCode !== null, "shutdown")
       if ((await child.exited) !== 0) throw new Error(`Packaged ${tool} exited unsuccessfully`)
@@ -121,7 +125,7 @@ export async function verifyPackagedUi(
     ["database", "Save and connect"],
     ["git", "No Git repository found"],
     ["http", "READY TO SEND"],
-    ["terminal", "TERM AGENTS IN 2"],
+    ["terminal", "No active agents"],
   ] as const)
     await verifyToolUi([node, launcher, tool, project], project, env, tool, expected)
 }
