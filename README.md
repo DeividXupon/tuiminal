@@ -11,7 +11,7 @@
 Databases, GitHub, processes, APIs, and real terminals in one fast, responsive interface.
 
 [![npm](https://img.shields.io/npm/v/tuiminal?label=npm&color=4B75FF)](https://www.npmjs.com/package/tuiminal)
-[![status](https://img.shields.io/badge/status-pre--alpha-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
+[![status](https://img.shields.io/badge/status-beta-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#installation)
 
@@ -20,7 +20,7 @@ Databases, GitHub, processes, APIs, and real terminals in one fast, responsive i
 </div>
 
 > [!WARNING]
-> Tuiminal is in **alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
+> Tuiminal is in **beta**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
 
 Tuiminal keeps your workflow in one place. Open a project once and switch between its database client, Git interface, processes, HTTP client, and terminals with `[Alt+1–5]`.
 
@@ -39,10 +39,10 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 
 ## Installation
 
-Install the alpha from npm:
+Install the beta from npm:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 tuiminal
 ```
 
@@ -75,7 +75,7 @@ During a download, the tool's row fills from left to right with its actual progr
 To update or uninstall:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 npm uninstall --global tuiminal
 ```
 

@@ -72,7 +72,7 @@ Read [workspaces](../design/internal-workspaces.md) for package contracts and
 - CI runs full Unix suites and the maintained portable Windows suite on
   windows-2025 with LF checkout. Native platform/driver evidence is separate
   from source-only checks; report exact SHA, covered/skipped targets and risks.
-- Alpha publication uses protected main/npm environment, Trusted Publishing and
+- Prerelease publication uses protected main/npm environment, Trusted Publishing and
   immutable successful candidate/quality artifacts. Feature assets precede
   platform packages and launcher. Reconcile uncertain writes; never overwrite
   accepted versions/assets or infer publication authority from green checks.

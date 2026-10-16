@@ -78,9 +78,9 @@ export function assertPublishableCandidate(
 }
 
 export function publicationChannel(version: string) {
-  if (!/^\d+\.\d+\.\d+-alpha\.\d+$/.test(version))
-    throw new Error("This workflow publishes alpha versions only")
-  return "alpha"
+  const match = version.match(/^\d+\.\d+\.\d+-(alpha|beta)\.\d+$/)
+  if (!match) throw new Error("This workflow publishes alpha and beta versions only")
+  return match[1]!
 }
 
 export function parseReleaseChecksums(source: string, expectedPaths: readonly string[]) {

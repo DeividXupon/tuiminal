@@ -18,7 +18,7 @@ import { assertArchivePaths, parseReleaseChecksums, publicationChannel } from ".
 import { version } from "../package.json"
 import { parseNpmPackResult } from "./npm-pack-model"
 
-publicationChannel(version)
+const channel = publicationChannel(version)
 const input = resolve(process.argv[2] ?? "candidate-artifacts")
 const output = resolve("dist/publication")
 // Never merge a new publication with stale output from a previous candidate.
@@ -125,7 +125,7 @@ try {
   packages.push(await pack(launcher, "tuiminal"))
   writeFileSync(
     join(output, "publication.json"),
-    `${JSON.stringify({ version, channel: "alpha", sha: process.env.GITHUB_SHA, packages }, null, 2)}\n`,
+    `${JSON.stringify({ version, channel, sha: process.env.GITHUB_SHA, packages }, null, 2)}\n`,
   )
   const checksums = []
   for (const name of readdirSync(output).sort())

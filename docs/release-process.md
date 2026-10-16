@@ -1,6 +1,6 @@
 # Release process
 
-The current candidate is `0.2.0-alpha.0`, targeting the npm `alpha` channel. Building a candidate does not authorize publication.
+The current candidate is `0.2.0-beta.0`, targeting the npm `beta` channel. Building a candidate does not authorize publication.
 Publishing requires an immutable commit approved by the maintainer, a green gate on
 that exact SHA, and native validation of all six advertised platform packages.
 
@@ -65,7 +65,7 @@ blocked.
 
 ## 3. Authorized publication
 
-Publication remains separate from the read-only candidate workflow. `Publish alpha`
+Publication remains separate from the read-only candidate workflow. `Publish prerelease`
 (`publish-release.yml`) runs only from protected `main`, in the GitHub environment
 `npm`. Its input is a successful candidate run ID for the exact current main SHA;
 it also requires a successful normal quality workflow on that SHA. The candidate
@@ -91,7 +91,8 @@ The publication workflow:
    assets are never overwritten.
 4. Verifies the public feature URLs against the catalog embedded in the native binaries.
 5. Publishes the six platform packages first and the launcher last with npm provenance
-   and the `alpha` tag. Confirms integrity, channel, and preservation of `latest`.
+   and the matching `alpha` or `beta` tag derived from the version. Confirms integrity,
+   channel, and preservation of `latest`.
 6. Uses six native jobs to install from the public npm registry, compare the installed
    executable to the qualified bytes, download all five public features into temporary
    data directories, and repeat HTTP/SQLite/version/help smoke tests without Bun in PATH.

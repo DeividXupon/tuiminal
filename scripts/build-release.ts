@@ -148,10 +148,10 @@ writeFileSync(
   [
     "# Tuiminal",
     "",
-    "Install the alpha without installing Bun:",
+    "Install Tuiminal without installing Bun:",
     "",
     "```sh",
-    "npm install --global tuiminal@alpha",
+    `npm install --global tuiminal@${packageMetadata.version}`,
     "tuiminal",
     "```",
     "",
