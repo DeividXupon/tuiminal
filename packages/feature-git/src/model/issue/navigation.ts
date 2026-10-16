@@ -1,7 +1,6 @@
-import type { IssueActionKind } from "./actions"
-import type { IssuePreviewConfig } from "./config"
-import type { IssuePreviewTab } from "./types"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
+import type { IssueActionKind } from "./actions"
+import type { IssuePreviewTab } from "./types"
 
 export type IssueLayoutMode = "side-by-side" | "stacked" | "single"
 export type IssueFocus = "list" | "preview"
@@ -13,31 +12,18 @@ export type IssueWorkspaceAction =
   | { type: "focus"; target: IssueFocus }
   | { type: "move-preview-tab"; delta: -1 | 1 }
   | { type: "scroll-preview"; delta: number }
-  | { type: "edit-query" | "refresh" | "load-more" }
+  | { type: "edit-query" | "refresh" }
   | { type: "create-issue" }
-  | { type: "load-preview-more" | "open-action-menu" | "toggle-description" }
-  | { type: "toggle-preview" | "cycle-preview-position" }
+  | { type: "open-action-menu" | "toggle-description" }
   | { type: "open-browser" | "copy-url" | "copy-number" }
   | { type: "prepare-action"; kind: IssueActionKind }
 
 export const ISSUE_PREVIEW_TABS: readonly IssuePreviewTab[] = ["overview", "activity"]
 
-export function resolveIssueLayout(
-  width: number,
-  height: number,
-  position: IssuePreviewConfig["position"] = "auto",
-): IssueLayoutMode {
-  if (position === "right") return width >= 90 && height >= 20 ? "side-by-side" : "single"
-  if (position === "bottom") return width >= 60 && height >= 20 ? "stacked" : "single"
+export function resolveIssueLayout(width: number, height: number): IssueLayoutMode {
   if (width >= 118 && height >= 22) return "side-by-side"
   if (width >= 76 && height >= 20) return "stacked"
   return "single"
-}
-
-export function nextIssuePreviewPosition(position: IssuePreviewConfig["position"]) {
-  if (position === "auto") return "right" as const
-  if (position === "right") return "bottom" as const
-  return "auto" as const
 }
 
 export function moveIssueIndex(current: number, count: number, delta: -1 | 1) {
@@ -51,7 +37,6 @@ export function adjacentIssuePreviewTab(current: IssuePreviewTab, delta: -1 | 1)
 }
 
 function configurationAction(key: IssueKey): IssueWorkspaceAction | null {
-  if (key.name === "p") return { type: key.shift ? "cycle-preview-position" : "toggle-preview" }
   if (key.name === "/") return { type: "edit-query" }
   return null
 }
@@ -79,30 +64,14 @@ function selectedAction(key: IssueKey, focus: IssueFocus): IssueWorkspaceAction 
   return null
 }
 
-function loadingAction(
-  key: IssueKey,
-  focus: IssueFocus,
-  canLoadMore: boolean,
-  canLoadPreview: boolean,
-): IssueWorkspaceAction | null {
-  if (key.name === "r") return { type: "refresh" }
-  if (key.name !== "n") return null
-  if (focus === "preview" && canLoadPreview) return { type: "load-preview-more" }
-  return canLoadMore ? { type: "load-more" } : null
-}
-
 function sectionAction(key: IssueKey): IssueWorkspaceAction | null {
   const direction = directionalShortcutDirection(key)
   return direction ? { type: "move-section", delta: direction } : null
 }
 
 function listNavigationAction(key: IssueKey, hasSelection: boolean): IssueWorkspaceAction | null {
-  if (key.name === "home" || (key.name === "g" && !key.shift)) {
-    return { type: "select-edge", target: "first" }
-  }
-  if (key.name === "end" || (key.name === "g" && key.shift)) {
-    return { type: "select-edge", target: "last" }
-  }
+  if (key.name === "home") return { type: "select-edge", target: "first" }
+  if (key.name === "end") return { type: "select-edge", target: "last" }
   if (key.name === "j" || key.name === "down") return { type: "move-row", delta: 1 }
   if (key.name === "k" || key.name === "up") return { type: "move-row", delta: -1 }
   if (
@@ -144,20 +113,15 @@ export function issueWorkspaceAction({
   key,
   focus,
   hasSelection,
-  canLoadMore,
-  canLoadPreview,
 }: {
   key: IssueKey
   focus: IssueFocus
   hasSelection: boolean
-  canLoadMore: boolean
-  canLoadPreview: boolean
 }): IssueWorkspaceAction | null {
   if (key.ctrl && key.name === "n") return { type: "create-issue" }
   const configuration = configurationAction(key)
   if (configuration) return configuration
-  const loading = loadingAction(key, focus, canLoadMore, canLoadPreview)
-  if (loading) return loading
+  if (key.name === "r") return { type: "refresh" }
   const section = sectionAction(key)
   if (section) return section
   const navigation = paneAction(key, focus, hasSelection)

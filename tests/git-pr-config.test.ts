@@ -211,7 +211,7 @@ describe("Pull request configuration", () => {
     ).toThrow("owner/repo")
   })
 
-  test("stores preview placement independently for each project profile", () => {
+  test("preserves legacy preview placement fields independently for each project profile", () => {
     const isolatedPath = join(temporaryDirectory, "layouts", "git-pr.yaml")
     updatePullRequestProfile({
       root: "/project/a",

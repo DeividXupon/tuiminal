@@ -11,7 +11,8 @@ initialization and dependency boundaries.
   ownership matches; features retain keyboard scopes, focus stacks and write guards.
 - Use `InlineButton`, `DirectionalButton`, `ShortcutText` and `ModalSurface` for
   their documented roles. Selectable rows may use native buttons. Bracketed hints
-  use the fixed brand accent; data branches disable hint highlighting.
+  use the fixed brand accent; `[?]` and the Master Key use the action-key purple;
+  data branches disable hint highlighting.
 - Contextual creation uses `[N]` unless the local editor requires a modifier.
   Primary horizontal strips use `[A←]`/`[F→]`; nested strips use
   `[Z←]`/`[V→]`. Show and handle actions only in their owning focus scope.

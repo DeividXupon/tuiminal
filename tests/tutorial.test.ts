@@ -5,9 +5,13 @@ import {
 } from "../apps/cli/src/tutorial/TutorialOverlay"
 import { translateUi } from "../packages/core/src/i18n/index"
 
-const DATABASE_TUTORIAL_SOURCE = await Bun.file(
-  new URL("../packages/feature-database/src/tutorial/DatabaseTutorialDemo.tsx", import.meta.url),
-).text()
+const DATABASE_TUTORIAL_SOURCE = (
+  await Promise.all(
+    ["tutorial/DatabaseTutorialDemo.tsx", "ui/DatabaseTableHeader.tsx"].map((filename) =>
+      Bun.file(new URL(`../packages/feature-database/src/${filename}`, import.meta.url)).text(),
+    ),
+  )
+).join("\n")
 const GIT_TUTORIAL_SOURCE = (
   await Promise.all(
     [

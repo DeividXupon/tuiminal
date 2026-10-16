@@ -27,6 +27,7 @@ import {
 } from "./opencode-hydration"
 import { applyOpenCodeLiveEvent } from "./opencode-live-event"
 import type { OpenCodeServerProtocol } from "./opencode-protocol"
+import { openCodeTaskTitle } from "./opencode-task-title"
 
 export { fetchOpenCodeJson, listOpenCodeSessions } from "./opencode-hydration"
 
@@ -222,7 +223,7 @@ export class OpenCodeObserver {
     }
     if (this.protocol === "v2") this.events.onSessionUpdated?.(snapshot)
     if (observed.session.id === this.activeSessionId) {
-      this.events.onTitle(observed.session.title)
+      this.events.onTitle(openCodeTaskTitle(observed.session.title, observed.messages))
       this.events.onState(observed.state)
       if (observed.state === "working" && observed.activity)
         this.events.onActivity(observed.activity)

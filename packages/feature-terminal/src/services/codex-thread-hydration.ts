@@ -1,4 +1,5 @@
 import type { CodexHydratedThread } from "../model/remote-codex"
+import { codexThreadWaiting } from "./codex-activity-observer"
 
 type RecordValue = Record<string, unknown>
 
@@ -11,11 +12,7 @@ export function hydratedCodexThread(
   initialTurns: unknown,
 ): CodexHydratedThread {
   const status = object(thread.status)
-  const waitingOnApproval = Boolean(
-    status?.type === "active" &&
-      Array.isArray(status.activeFlags) &&
-      status.activeFlags.includes("waitingOnApproval"),
-  )
+  const waitingOnApproval = codexThreadWaiting(status)
   const turns = [
     ...(Array.isArray(thread.turns) ? thread.turns : []),
     ...(Array.isArray(initialTurns) ? initialTurns : []),

@@ -51,7 +51,7 @@ export type PinnedTerminalSidebarView = {
   onActivate: (id: string) => void
   onActions: () => void
   onNew: () => void
-  onCommand: () => void
+  onNewAgent: () => void
   onLoadMoreResume?: ((providerId: AgentProviderId) => void) | undefined
 }
 

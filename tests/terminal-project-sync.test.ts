@@ -173,6 +173,37 @@ test("fallback manifests detect equal-size edits with preserved modification tim
   expect(after.fingerprint).not.toBe(before.fingerprint)
 })
 
+test("fallback manifests retain the stat diagnostic and reject incomplete trees", async () => {
+  const root = temporaryRoot()
+  const source = join(root, "source")
+  const bin = join(root, "bin")
+  await mkdir(source)
+  await mkdir(bin)
+  writeFileSync(join(source, "entry.txt"), "fixture\n")
+  const systemFind = Bun.which("find")
+  if (!systemFind) throw new Error("Missing find utility for the manifest fixture")
+  writeFileSync(
+    join(bin, "find"),
+    '#!/bin/sh\nfor argument do\n  if [ "$argument" = "-printf" ]; then exit 1; fi\ndone\nexec "$TUIMINAL_TEST_SYSTEM_FIND" "$@"\n',
+    { mode: 0o700 },
+  )
+  writeFileSync(
+    join(bin, "stat"),
+    '#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\nprintf "fixture: metadata unavailable\\n" >&2\nexit 1\n',
+    { mode: 0o700 },
+  )
+  await expect(
+    readRemoteProjectFingerprint(remote(source), new AbortController().signal, {
+      command: [
+        "env",
+        `PATH=${bin}${delimiter}${process.env.PATH ?? ""}`,
+        `TUIMINAL_TEST_SYSTEM_FIND=${systemFind}`,
+        ...localRemoteProjectManifestCommand(source),
+      ],
+    }),
+  ).rejects.toThrow("fixture: metadata unavailable")
+})
+
 test("always synchronizes the complete tree at a Git repository root", async () => {
   const root = temporaryRoot()
   const source = join(root, "source")

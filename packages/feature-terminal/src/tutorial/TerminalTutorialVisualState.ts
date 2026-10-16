@@ -2,7 +2,6 @@ import { TERMINAL_TUTORIAL_STEPS } from "./steps"
 
 export type TerminalTutorialVisualState =
   | "workspace"
-  | "command-dialog"
   | "actions"
   | "rename-dialog"
   | "focus-select"
@@ -28,7 +27,6 @@ export type TerminalTutorialVisualState =
 export type TerminalTutorialScene = "shell" | "agent" | "pinned" | "remote" | "remote-setup"
 
 const TARGET_STATES: Readonly<Record<string, TerminalTutorialVisualState>> = {
-  "terminal-dialog": "command-dialog",
   "terminal-actions": "actions",
   "tutorial-terminal-sidebar": "actions",
   "terminal-command-input": "rename-dialog",
@@ -61,7 +59,6 @@ const TARGET_STATES: Readonly<Record<string, TerminalTutorialVisualState>> = {
 
 const STATE_SCENES: Readonly<Record<TerminalTutorialVisualState, TerminalTutorialScene>> = {
   workspace: "shell",
-  "command-dialog": "shell",
   actions: "shell",
   "rename-dialog": "shell",
   "focus-select": "shell",

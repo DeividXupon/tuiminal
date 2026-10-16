@@ -1,3 +1,6 @@
+import { useRunnerBoxSelection } from "./hooks/use-runner-box-selection"
+import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
+import { paletteAction, useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { homedir } from "node:os"
 import { basename, dirname } from "node:path"
@@ -10,7 +13,7 @@ import type {
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { INITIAL_LOG_PREFERENCES, logPreferencesReducer } from "./model/log-preferences"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
   createShellRunnerCommand,
   discoverRunnerListeningPorts,
@@ -72,7 +75,6 @@ import {
   type RunnerListMode,
   RUNNER_PROJECT_TAB_SHORTCUTS,
   RUNNER_USE_DIRECTORY_OPTION,
-  runnerLogFilterLabel,
   type RunnerViewMode,
   type RunnerWorkspaceProps,
 } from "./model/workspace"
@@ -83,18 +85,31 @@ import { handleSelectMouseDown, handleSelectMouseScroll } from "@xupon/tuiminal-
 import type { ExecutionLog, RunnerExecution } from "./model/execution"
 import { useRunnerNotifications } from "./hooks/use-runner-notifications"
 import { restoredRunnerExecution } from "./state/restored-execution"
-
 import {
-  fitLine,
-  formatDuration,
-  statusMarker,
-  statusLabel,
-  statusColor,
-  healthLabel,
-  commandKey,
-  portAddress,
-} from "./rendering/presentation"
+  EMPTY_RUNNER_SUMMARY,
+  latestRunnerExecutions,
+  runnerProjectStatus,
+  runnerProjectSummaries,
+  runnerVisualStatus,
+} from "./model/status"
+import type { RunnerNotice } from "./model/notice"
+import {
+  runnerColoredText,
+  runnerExecutionLabel,
+  runnerNoticeColor,
+  runnerStatusColor,
+  runnerStatusMarker,
+  runnerSummaryParts,
+} from "./rendering/status"
+import { paintRunnerStatusRows, type RunnerStatusOption } from "./rendering/status-select"
+import { RunnerProjectTab } from "./ui/RunnerProjectTab"
+import { RunnerExecutionStatus } from "./ui/RunnerExecutionStatus"
+
+import { fitLine, formatDuration, commandKey, portAddress } from "./rendering/presentation"
 import { MultiProcessPanel } from "./ui/MultiProcessPanel"
+import { RunnerCommandFooter, runnerCommandFooterHeight } from "./ui/RunnerCommandFooter"
+
+import { runnerFooterActions } from "./ui/runner-footer-actions"
 
 export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const renderer = useRenderer()
@@ -156,21 +171,28 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const [viewMode, setViewMode] = useState<RunnerViewMode>("single")
   const [listMode, setListMode] = useState<RunnerListMode>("commands")
   const [focusPane, setFocusPane] = useState<RunnerFocusPane>("commands")
-  const [groupSelectionMode, setGroupSelectionMode] = useState(false)
-  const [moreActionsOpen, setMoreActionsOpen] = useState(false)
+  const actionPalette = useActionPalette({
+    id: "runner-action-palette",
+    active: Boolean(active) && !configurationOpen && !saveCommandModalOpen,
+    restoreFocus: () => {
+      if (focusPane === "log") focusLogPane()
+      else if (focusPane === "history") focusHistoryPane()
+      else focusCommandPane()
+    },
+  })
+  focusSuspendedRef.current ||= actionPalette.isOpen
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [environmentProfiles, setEnvironmentProfiles] = useState<RunnerEnvironmentProfile[]>([])
   const [profileSelections, setProfileSelections] = useState<Record<string, string>>(
     initialSession.environmentProfiles,
   )
-  const [selectedCommandKeys, setSelectedCommandKeys] = useState<Set<string>>(() => new Set())
   const [
     { filter: logFilter, stream: logStream, timestamps: showTimestamps },
     dispatchLogPreferences,
   ] = useReducer(logPreferencesReducer, INITIAL_LOG_PREFERENCES)
   const [logFilterOpen, setLogFilterOpen] = useState(false)
   const [processInput, setProcessInput] = useState("")
-  const [runnerNotice, setRunnerNotice] = useState("")
+  const [runnerNotice, setRunnerNotice] = useState<RunnerNotice | null>(null)
   const [multiOffset, setMultiOffset] = useState(0)
   const [listeningPorts, setListeningPorts] = useState<RunnerListeningPort[]>([])
   const [pickerMode, setPickerMode] = useState<ProjectPickerMode>("closed")
@@ -362,13 +384,12 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     notify,
     onStarted: onExecutionStarted,
   })
-  const { runCommand, runTargets, stopTargets, runFlow, stopFlow, restartFlow, flowStates } =
-    useRunnerPlans({
-      projectRoot,
-      commands,
-      launchCommand,
-      notify,
-    })
+  const { runCommand, runTargets, runFlow, stopFlow, restartFlow, flowStates } = useRunnerPlans({
+    projectRoot,
+    commands,
+    launchCommand,
+    notify,
+  })
 
   const runManualCommand = useCallback(
     (value = manualCommand) => {
@@ -384,7 +405,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
 
   const openSaveCommandModal = useCallback(() => {
     if (!manualCommand.trim()) return
-    setRunnerNotice("")
+    setRunnerNotice(null)
     setSaveCommandModalOpen(true)
   }, [manualCommand])
 
@@ -394,7 +415,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       setSaveCommandModalOpen(false)
       setManualCommand("")
       if (manualInputRef.current) manualInputRef.current.value = ""
-      setRunnerNotice(`Comando salvo: ${saved.label}`)
+      setRunnerNotice({ message: `Comando salvo: ${saved.label}`, kind: "success" })
       setSelectedCommandId(saved.id)
       void refreshCommands()
       setTimeout(() => commandListRef.current?.focus(), 0)
@@ -409,7 +430,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     approve: approveAutostart,
     dismiss: dismissAutostart,
   } = useRunnerAutostart({
-    active: active && !configurationOpen && !saveCommandModalOpen,
+    active: active && !configurationOpen && !saveCommandModalOpen && !actionPalette.isOpen,
     loading,
     projectRoot,
     discoveredProjectRoot: discoveredProjectRootRef.current,
@@ -472,9 +493,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       setPickerMode("closed")
       setViewMode("single")
       setListMode("commands")
-      setGroupSelectionMode(false)
-      setSelectedCommandKeys(new Set())
-      setMoreActionsOpen(false)
       setHistoryExpanded(false)
       setFocusPane("commands")
       setNarrowPane("commands")
@@ -553,88 +571,43 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       else delete updated[projectRoot]
       return updated
     })
-    setRunnerNotice(
-      next
+    setRunnerNotice({
+      message: next
         ? `Perfil ativo: ${environmentProfiles.find((profile) => profile.id === next)?.label ?? next}`
         : "Perfil de ambiente: padrão",
-    )
+      kind: "info",
+    })
   }, [environmentProfiles, profileSelections, projectRoot])
-
-  const toggleCommandGroup = useCallback(
-    (commandId: string) => {
-      setGroupSelectionMode(true)
-      setMoreActionsOpen(false)
-      const key = commandKey(projectRoot, commandId)
-      setSelectedCommandKeys((current) => {
-        const next = new Set(current)
-        if (next.has(key)) next.delete(key)
-        else next.add(key)
-        return next
-      })
-    },
-    [projectRoot],
-  )
-
-  const toggleSelectedCommandGroup = useCallback(() => {
-    if (!selectedCommand) return
-    toggleCommandGroup(selectedCommand.id)
-  }, [selectedCommand, toggleCommandGroup])
-
-  const exitGroupSelection = useCallback(() => {
-    setGroupSelectionMode(false)
-    setSelectedCommandKeys(new Set())
-  }, [])
-
-  const groupCommands = useMemo(
-    () =>
-      commands.filter((command) => selectedCommandKeys.has(commandKey(projectRoot, command.id))),
-    [commands, projectRoot, selectedCommandKeys],
-  )
-
-  const runCommandGroup = useCallback(() => {
-    const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
-    runTargets(targets)
-  }, [groupCommands, runTargets, selectedCommand])
-
-  const stopCommandGroup = useCallback(() => {
-    const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
-    void stopTargets(targets).catch((error) =>
-      notify({ source: "Runner", kind: "error", message: String(error) }),
-    )
-  }, [groupCommands, notify, selectedCommand, stopTargets])
-
-  const restartCommandGroup = useCallback(() => {
-    const targets = groupCommands.length ? groupCommands : selectedCommand ? [selectedCommand] : []
-    void stopTargets(targets)
-      .then(() => {
-        if (mountedRef.current) runTargets(targets)
-      })
-      .catch((error) => notify({ source: "Runner", kind: "error", message: String(error) }))
-  }, [groupCommands, notify, runTargets, selectedCommand, stopTargets])
 
   const deleteSelectedSavedCommand = useCallback(() => {
     if (selectedCommand?.source !== "saved") return
     removeSavedRunnerCommand(projectRoot, selectedCommand.id)
-    setRunnerNotice(`Comando removido: ${selectedCommand.label}`)
+    setRunnerNotice({ message: `Comando removido: ${selectedCommand.label}`, kind: "success" })
     void refreshCommands()
   }, [projectRoot, refreshCommands, selectedCommand])
 
+  const stopExecution = useCallback(
+    (executionId: string) => {
+      const handle = handlesRef.current.get(executionId)
+      if (!handle) return
+      appendLog(executionId, "encerrando processo…", "system")
+      setExecutions((current) =>
+        current.map((execution) =>
+          execution.id === executionId ? { ...execution, status: "stopping" } : execution,
+        ),
+      )
+      void handle.stop().catch((error) => {
+        const message = error instanceof Error ? error.message : "O processo não encerrou."
+        appendLog(executionId, message, "system")
+        notify({ source: "Runner", kind: "error", message })
+      })
+    },
+    [appendLog, handlesRef, notify],
+  )
+
   const stopSelectedExecution = useCallback(() => {
-    if (!selectedExecution) return
-    const handle = handlesRef.current.get(selectedExecution.id)
-    if (!handle) return
-    void handle.stop().catch((error) => {
-      const message = error instanceof Error ? error.message : "O processo não encerrou."
-      appendLog(selectedExecution.id, message, "system")
-      notify({ source: "Runner", kind: "error", message })
-    })
-    appendLog(selectedExecution.id, "encerrando processo…", "system")
-    setExecutions((current) =>
-      current.map((execution) =>
-        execution.id === selectedExecution.id ? { ...execution, status: "stopping" } : execution,
-      ),
-    )
-  }, [appendLog, handlesRef, notify, selectedExecution])
+    if (selectedExecution?.status === "running") stopExecution(selectedExecution.id)
+  }, [selectedExecution, stopExecution])
 
   const clearSelectedLogs = useCallback(() => {
     if (!selectedExecution) return
@@ -659,7 +632,10 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     const selectedLogText = serializeRunnerLogs(selectedExecution?.logs ?? [])
     if (!selectedLogText) return
     const copied = renderer.copyToClipboardOSC52(selectedLogText)
-    setRunnerNotice(copied ? "Log copiado." : "O terminal não aceitou a cópia OSC52.")
+    setRunnerNotice({
+      message: copied ? "Log copiado." : "O terminal não aceitou a cópia OSC52.",
+      kind: copied ? "success" : "warning",
+    })
   }, [renderer, selectedExecution?.logs])
 
   const exportSelectedLogs = useCallback(() => {
@@ -671,7 +647,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       selectedExecution.label,
       selectedLogText,
     )
-    setRunnerNotice(`Log exportado: ${path}`)
+    setRunnerNotice({ message: `Log exportado: ${path}`, kind: "success" })
   }, [selectedExecution])
 
   const selectedPort = listeningPorts.find((port) => port.groupId === selectedExecution?.pid)
@@ -679,14 +655,15 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const openSelectedPort = useCallback(() => {
     if (!selectedPortUrl) return
     openRunnerUrl(selectedPortUrl)
-    setRunnerNotice(`Abrindo ${selectedPortUrl}`)
+    setRunnerNotice({ message: `Abrindo ${selectedPortUrl}`, kind: "info" })
   }, [selectedPortUrl])
   const copySelectedPort = useCallback(() => {
     if (!selectedPortUrl) return
     const copied = renderer.copyToClipboardOSC52(selectedPortUrl)
-    setRunnerNotice(
-      copied ? `URL copiada: ${selectedPortUrl}` : "O terminal não aceitou a cópia OSC52.",
-    )
+    setRunnerNotice({
+      message: copied ? `URL copiada: ${selectedPortUrl}` : "O terminal não aceitou a cópia OSC52.",
+      kind: copied ? "success" : "warning",
+    })
   }, [renderer, selectedPortUrl])
   const sendSelectedPortToHttp = useCallback(() => {
     if (!selectedPortUrl || !onOpenHttp) return
@@ -723,7 +700,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     [executions, projectRoot],
   )
 
-  const openOrRunCommand = useCallback(
+  const toggleCommand = useCallback(
     (command?: RunnerCommand) => {
       if (!command) return
       const selectedCommandKey = commandKey(projectRoot, command.id)
@@ -734,12 +711,12 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       )
       if (activeExecution) {
         setSelectedExecutionId(activeExecution.id)
-        if (narrowRunner) setNarrowPane("log")
+        if (activeExecution.status === "running") stopExecution(activeExecution.id)
         return
       }
       runCommand(command)
     },
-    [executions, narrowRunner, projectRoot, runCommand],
+    [executions, projectRoot, runCommand, stopExecution],
   )
 
   const activeExecutions = useMemo(
@@ -772,10 +749,23 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
 
   const focusHistoryPane = useCallback(() => {
     setFocusPane("history")
+    if (narrowRunner) setNarrowPane("log")
     setTimeout(() => {
       ;(historyListRef.current ?? historyPanelRef.current)?.focus()
     }, 0)
-  }, [])
+  }, [narrowRunner])
+
+  const toggleProcessList = useCallback(() => {
+    const nextMode = listMode === "active" ? "commands" : "active"
+    if (nextMode === "active") setSelectedExecutionId(activeExecutions[0]?.id ?? null)
+    setListMode(nextMode)
+    setFocusPane("commands")
+    if (narrowRunner) setNarrowPane("commands")
+    setTimeout(() => {
+      if (nextMode === "active") processListRef.current?.focus()
+      else commandListRef.current?.focus()
+    }, 0)
+  }, [activeExecutions, listMode, narrowRunner])
 
   const toggleHistoryPane = useCallback(() => {
     if (viewMode !== "single" || shortRunner) return
@@ -855,8 +845,40 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     [activeExecutions, maxMultiOffset, multiOffset, multiPaneCapacity],
   )
 
+  const boxSelection = useRunnerBoxSelection({
+    active:
+      active &&
+      !actionPalette.isOpen &&
+      pickerMode === "closed" &&
+      !configurationOpen &&
+      !saveCommandModalOpen &&
+      !pendingAutostartReview,
+    current:
+      viewMode === "multi" && focusPane === "log" && selectedExecution
+        ? `runner-multi-${selectedExecution.id}`
+        : `runner-${focusPane === "commands" ? "command" : focusPane}-panel`,
+    targets: [
+      { id: "runner-command-panel", onFocus: focusCommandPane },
+      ...(viewMode === "single"
+        ? [
+            { id: "runner-log-panel", onFocus: focusLogPane },
+            ...(historyExpanded && !shortRunner
+              ? [{ id: "runner-history-panel", onFocus: focusHistoryPane }]
+              : []),
+          ]
+        : visibleMultiExecutions.map((execution) => ({
+            id: `runner-multi-${execution.id}`,
+            onFocus: () => {
+              setSelectedExecutionId(execution.id)
+              setFocusPane("log")
+              renderer.root.findDescendantById(`runner-multi-${execution.id}`)?.focus()
+            },
+          }))),
+    ],
+  })
+
   useKeyboard((key) => {
-    if (!active) return
+    if (!active || key.defaultPrevented || actionPalette.isOpen || boxSelection.open) return
     if ([configurationOpen, saveCommandModalOpen, Boolean(pendingAutostartReview)].includes(true))
       return
     const focusedId = renderer.currentFocusedRenderable?.id
@@ -900,6 +922,19 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         key.preventDefault()
         projectSearchRef.current?.focus()
       }
+      return
+    }
+    if (key.name === "m" && !key.meta && !key.option && !key.super) {
+      key.preventDefault()
+      key.stopPropagation()
+      if (key.ctrl || key.shift) toggleViewMode()
+      else boxSelection.openSelection()
+      return
+    }
+    if (isActionPaletteKey(key)) {
+      key.preventDefault()
+      key.stopPropagation()
+      actionPalette.open()
       return
     }
     if (key.ctrl && key.name === "y") {
@@ -955,14 +990,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       else focusLogPane()
       return
     }
-    if (key.name === "escape" && moreActionsOpen) {
-      setMoreActionsOpen(false)
-      return
-    }
-    if (key.name === "escape" && groupSelectionMode) {
-      exitGroupSelection()
-      return
-    }
     if (key.name === "p" && projectAvailable === false) {
       void openProjectPicker()
       return
@@ -975,34 +1002,16 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     }
     if (
       key.name === "a" &&
-      !groupSelectionMode &&
       !key.ctrl &&
       !key.option &&
       !key.meta &&
       (viewMode !== "multi" || key.shift)
     ) {
-      setMoreActionsOpen((current) => !current)
+      actionPalette.open()
       return
     }
     if (key.name === "s") {
       toggleHistoryPane()
-      return
-    }
-    if (key.name === "space" && listMode === "commands") {
-      key.preventDefault()
-      toggleSelectedCommandGroup()
-      return
-    }
-    if (groupSelectionMode && key.name === "g" && !key.shift) {
-      runCommandGroup()
-      return
-    }
-    if (groupSelectionMode && key.name === "g" && key.shift) {
-      stopCommandGroup()
-      return
-    }
-    if (groupSelectionMode && key.name === "r" && key.shift) {
-      restartCommandGroup()
       return
     }
     if (key.name === "e") {
@@ -1057,10 +1066,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       return
     }
     if (viewMode === "multi") {
-      if (key.name === "m") {
-        toggleViewMode()
-        return
-      }
       if (key.name === "left") {
         cycleActiveExecution(-1)
         return
@@ -1071,7 +1076,9 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       }
     }
     const projectShortcutIndex = RUNNER_PROJECT_TAB_SHORTCUTS.findIndex(
-      (shortcut) => !key.shift && key.name === shortcut,
+      (shortcut) =>
+        ![key.ctrl, key.meta, key.option, key.shift, key.super].some(Boolean) &&
+        key.name === shortcut,
     )
     const shortcutProject = openedProjects[projectShortcutIndex]
     if (shortcutProject) {
@@ -1085,21 +1092,8 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       setListMode("commands")
       manualInputRef.current?.focus()
     } else if (key.name === "p" && (activeExecutions.length || listMode === "active")) {
-      const nextMode = listMode === "active" ? "commands" : "active"
-      if (nextMode === "active") {
-        exitGroupSelection()
-        setSelectedExecutionId(activeExecutions[0]?.id ?? null)
-      }
-      setListMode(nextMode)
-      if (narrowRunner) setNarrowPane("commands")
-      setTimeout(() => {
-        if (nextMode === "active") processListRef.current?.focus()
-        else commandListRef.current?.focus()
-      }, 0)
-    } else if (key.name === "m") toggleViewMode()
-    else if (key.name === "r") runCommand(selectedCommand)
-    else if (key.name === "k" && key.shift) stopSelectedExecution()
-    else if (key.name === "c") clearSelectedLogs()
+      toggleProcessList()
+    } else if (key.name === "c") clearSelectedLogs()
     else if (key.name === "d") void refreshCommands()
     else if (key.name === "tab" && narrowRunner) {
       key.preventDefault()
@@ -1109,31 +1103,30 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     else if (key.name === "]") cycleExecution(1)
   })
 
-  const activeExecutionByCommandId = useMemo(() => {
-    const activeByCommand = new Map<string, RunnerExecution>()
-    for (const execution of executions) {
-      const active = execution.status === "running" || execution.status === "stopping"
-      if (active && !activeByCommand.has(execution.commandKey)) {
-        activeByCommand.set(execution.commandKey, execution)
-      }
-    }
-    return activeByCommand
-  }, [executions])
-  const commandOptions = useMemo(
+  const latestByCommand = useMemo(() => latestRunnerExecutions(executions), [executions])
+  const projectSummaries = useMemo(
+    () => runnerProjectSummaries(executions, latestByCommand),
+    [executions, latestByCommand],
+  )
+  const currentSummary = projectSummaries.get(projectRoot) ?? EMPTY_RUNNER_SUMMARY
+  const commandOptions = useMemo<RunnerStatusOption[]>(
     () =>
       commands.map((command) => {
         const key = commandKey(projectRoot, command.id)
-        const commandIsActive = activeExecutionByCommandId.has(key)
-        const selection = selectedCommandKeys.has(key)
+        const execution = latestByCommand.get(key)
+        const status = runnerVisualStatus(execution)
+        const marker = execution
+          ? runnerStatusMarker(status)
+          : RUNNER_CATEGORY_ICONS[command.category]
         return {
-          name: groupSelectionMode
-            ? `${selection ? "☑" : "☐"} ${commandIsActive ? "● RODANDO ·" : ""} ${command.label}`
-            : `${commandIsActive ? "● RODANDO ·" : RUNNER_CATEGORY_ICONS[command.category]} ${command.label}`,
+          name: `${marker} ${command.label}`,
+          marker,
           description: command.displayCommand,
           value: command.id,
+          status,
         }
       }),
-    [activeExecutionByCommandId, commands, groupSelectionMode, projectRoot, selectedCommandKeys],
+    [latestByCommand, commands, projectRoot],
   )
   const normalizedProjectSearch = projectSearch.trim().toLocaleLowerCase()
   const filteredProjects = projects.filter(
@@ -1188,11 +1181,65 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     ? Math.max(1, terminal.width - 2)
     : Math.min(42, Math.max(30, Math.floor(terminal.width * 0.31)))
   const compactCommandHeader = commandPanelWidth < 42
-  const actionMenuHeight =
-    moreActionsOpen && pickerMode === "closed" && projectAvailable !== false ? 4 : 0
+  const selectedCommandState = selectedCommand
+    ? latestByCommand.get(commandKey(projectRoot, selectedCommand.id))?.status
+    : undefined
+  const footerActions = runnerFooterActions({
+    selectedCommandState,
+    hasCommand: Boolean(selectedCommand),
+    savedCommand: selectedCommand?.source === "saved",
+    hasProfiles: environmentProfiles.length > 0,
+    hasExecution: Boolean(selectedExecution),
+    hasLogs: Boolean(selectedExecution?.logs.length),
+    historyExpanded,
+    shortRunner,
+    paletteOpen: actionPalette.isOpen,
+    filterActive: logFilterOpen || Boolean(logFilter),
+    streamActive: logStream !== "all",
+    showTimestamps,
+    focusLogPane,
+    focusCommandPane,
+    toggleCommand: () => toggleCommand(selectedCommand),
+    toggleViewMode,
+    chooseBox: boxSelection.openSelection,
+    toggleHistoryPane,
+    cycleEnvironmentProfile,
+    deleteSelectedSavedCommand,
+    openConfiguration: () => setConfigurationOpen(true),
+    openPalette: actionPalette.open,
+    openFilter: () => {
+      setLogFilterOpen(true)
+      setTimeout(() => logFilterRef.current?.focus(), 0)
+    },
+    cycleLogStream,
+    toggleTimestamps: () => dispatchLogPreferences({ type: "toggle-timestamps" }),
+    copySelectedLogs,
+    exportSelectedLogs,
+    clearSelectedLogs,
+  })
+  const showCommandFooter =
+    pickerMode === "closed" &&
+    projectAvailable !== false &&
+    viewMode === "single" &&
+    listMode === "commands" &&
+    focusPane !== "log" &&
+    !(focusPane === "history" && historyExpanded)
+  const showLogFooter =
+    pickerMode === "closed" &&
+    projectAvailable !== false &&
+    viewMode === "single" &&
+    focusPane === "log"
+  const footerHeight =
+    showCommandFooter || showLogFooter
+      ? runnerCommandFooterHeight(
+          showLogFooter ? footerActions.log : footerActions.commands,
+          terminal.width - LAYOUT.outerPadding * 2,
+        )
+      : 1
   const appHeaderHeight = LAYOUT.compact ? 1 : 2
-  const runnerChromeHeight = appHeaderHeight + LAYOUT.outerPadding + 3 + LAYOUT.headerSpacing + 1
-  const runnerMainHeight = Math.max(6, terminal.height - runnerChromeHeight - actionMenuHeight)
+  const runnerChromeHeight =
+    appHeaderHeight + LAYOUT.outerPadding + 3 + LAYOUT.headerSpacing + footerHeight
+  const runnerMainHeight = Math.max(6, terminal.height - runnerChromeHeight)
   const runnerPanelHeight = Math.max(
     4,
     runnerMainHeight - (narrowRunner ? 1 + LAYOUT.headerSpacing : 0),
@@ -1253,16 +1300,17 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
       palette: COLORS,
     })
   }, [selectedLogs, logWidth, showTimestamps, runnerLogPaletteKey])
-  const historyOptions = historyExpanded
+  const historyOptions: RunnerStatusOption[] = historyExpanded
     ? projectExecutions.map((execution) => {
         const duration = (execution.endedAt ?? now) - execution.startedAt
         return {
           name: fitLine(
-            `${statusMarker(execution.status)} ${statusLabel(execution.status)} · ${execution.label}  ${formatDuration(duration)}`,
+            `${runnerExecutionLabel(execution)} · ${execution.label}  ${formatDuration(duration)}`,
             logWidth,
           ),
           description: "",
           value: execution.id,
+          status: runnerVisualStatus(execution),
         }
       })
     : []
@@ -1270,35 +1318,33 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     0,
     projectExecutions.findIndex((execution) => execution.id === selectedExecution?.id),
   )
-  const elapsed = selectedExecution
-    ? (selectedExecution.endedAt ?? now) - selectedExecution.startedAt
-    : 0
-  const runningCount = executions.filter((execution) => execution.status === "running").length
   const selectedCommandExecution = selectedCommand
-    ? activeExecutionByCommandId.get(commandKey(projectRoot, selectedCommand.id))
+    ? latestByCommand.get(commandKey(projectRoot, selectedCommand.id))
     : undefined
-  const runnerSummary =
+  const summaryParts =
     projectAvailable === false
-      ? "SEM PROJETO · ESCOLHA UMA PASTA"
-      : groupSelectionMode
-        ? `SELEÇÃO EM GRUPO  ·  ${groupCommands.length} MARCADO${groupCommands.length === 1 ? "" : "S"}`
-        : `${commands.length} COMANDOS  ·  ${runningCount} ATIVO${runningCount === 1 ? "" : "S"}`
-  const processOptions = activeExecutions.map((execution) => {
+      ? [{ text: translateUi("SEM PROJETO"), color: COLORS.muted }]
+      : runnerSummaryParts(
+          commands.length,
+          currentSummary,
+          narrowRunner ? 0 : Math.floor(terminal.width / 2),
+        )
+  const displayedRunnerSummary = summaryParts.map((part) => part.text).join("")
+  const processOptions: RunnerStatusOption[] = activeExecutions.map((execution) => {
     const ports = listeningPorts.filter((port) => port.groupId === execution.pid)
     return {
-      name: `● RODANDO · ${execution.projectName}/${execution.label}${ports.length ? `  ·  ◉ ${ports.map(portAddress).join(" ")}` : ""}`,
+      name: `${runnerExecutionLabel(execution)} · ${execution.projectName}/${execution.label}${ports.length ? `  ·  ◉ ${ports.map(portAddress).join(" ")}` : ""}`,
       description: "",
       value: execution.id,
+      status: runnerVisualStatus(execution),
     }
   })
-  const compactRunnerSummary =
-    projectAvailable === false ? "SEM PROJETO" : `${commands.length} CMD  ·  ${runningCount} ATIV`
-  const displayedRunnerSummary = narrowRunner
-    ? ""
-    : terminal.width < 90
-      ? compactRunnerSummary
-      : runnerSummary
-  const projectTabAreaWidth = Math.max(10, terminal.width - displayedRunnerSummary.length - 18)
+  const newProjectLabel = "[N] Nova aba"
+  const newProjectWidth = displayWidth(translateUi(newProjectLabel)) + 2
+  const projectTabAreaWidth = Math.max(
+    11,
+    terminal.width - displayWidth(translateUi(displayedRunnerSummary)) - newProjectWidth - 18,
+  )
   const projectTabWidth = Math.max(
     11,
     Math.min(30, Math.floor(projectTabAreaWidth / Math.max(1, openedProjects.length))),
@@ -1306,7 +1352,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const compactProjectClose = projectTabWidth < 18
   const projectCloseLabel = compactProjectClose ? "[⌃X]" : "[Ctrl+X]"
   const projectCloseControlWidth = compactProjectClose ? 6 : 10
-  const compactActions = terminal.width < 110
 
   return (
     <box
@@ -1322,6 +1367,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
     >
       <box
         key={LAYOUT.compact ? "runner-header-compact" : "runner-header-framed"}
+        id="runner-header"
         style={{
           height: 3,
           flexShrink: 0,
@@ -1335,43 +1381,54 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
           marginBottom: LAYOUT.headerSpacing,
         }}
       >
-        <box style={{ flexGrow: 1, flexDirection: "row", alignItems: "center" }}>
+        <box
+          id="runner-project-tabs"
+          style={{
+            maxWidth: projectTabAreaWidth + 11,
+            flexShrink: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            overflow: "hidden",
+          }}
+        >
           <text content="▶ RUNNER / " style={{ fg: COLORS.runner }} />
           {openedProjects.map((project, index) => {
             const shortcut = RUNNER_PROJECT_TAB_SHORTCUTS[index]
             if (!shortcut) return null
             const selected = project.path === projectRoot
             return (
-              <box
+              <RunnerProjectTab
                 key={project.path}
-                style={{
-                  width: projectTabWidth,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                }}
-              >
-                <InlineButton
-                  label={fitLine(
-                    `[${shortcut}] ${project.name}`,
-                    Math.max(3, projectTabWidth - projectCloseControlWidth - 2),
-                  )}
-                  accent={COLORS.runner}
-                  active={selected}
-                  onPress={() => switchProject(project.path)}
-                />
-                <InlineButton
-                  label={projectCloseLabel}
-                  accent={COLORS.danger}
-                  onPress={() => closeProject(project.path)}
-                />
-              </box>
+                project={project}
+                index={index}
+                shortcut={shortcut}
+                selected={selected}
+                status={runnerProjectStatus(
+                  projectSummaries.get(project.path) ?? EMPTY_RUNNER_SUMMARY,
+                )}
+                width={projectTabWidth}
+                closeLabel={projectCloseLabel}
+                closeWidth={projectCloseControlWidth}
+                onSelect={() => switchProject(project.path)}
+                onClose={() => closeProject(project.path)}
+              />
             )
           })}
         </box>
+        <box style={{ flexGrow: 1, minWidth: newProjectWidth, alignItems: "center" }}>
+          <InlineButton
+            id="runner-project-new"
+            label={newProjectLabel}
+            accent={COLORS.runner}
+            onPress={() => void openProjectPicker()}
+          />
+        </box>
         <text
-          content={displayedRunnerSummary}
+          id="runner-project-summary"
+          content={runnerColoredText(summaryParts)}
           style={{
-            fg: runningCount ? COLORS.success : COLORS.muted,
+            fg: COLORS.muted,
+            flexShrink: 0,
           }}
         />
       </box>
@@ -1622,7 +1679,6 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                     accent={COLORS.success}
                     active={listMode === "active"}
                     onPress={() => {
-                      exitGroupSelection()
                       setListMode("active")
                       setSelectedExecutionId(activeExecutions[0]?.id ?? null)
                       setTimeout(() => processListRef.current?.focus(), 0)
@@ -1640,26 +1696,49 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                 </box>
                 {listMode === "commands" ? (
                   <>
-                    <input
-                      ref={manualInputRef}
-                      id="runner-command-input"
-                      value={manualCommand}
-                      placeholder="❯ Digite qualquer comando…"
-                      onInput={setManualCommand}
-                      onMouseDown={() => {
-                        setFocusPane("commands")
-                        manualInputRef.current?.focus()
-                      }}
-                      onSubmit={() => runManualCommand()}
-                      width={commandPanelWidth - 4}
+                    <box
+                      id="runner-command-input-row"
                       style={{
+                        height: 1,
+                        width: commandPanelWidth - 4,
+                        flexDirection: "row",
+                        flexShrink: 0,
                         backgroundColor: COLORS.panelRaised,
-                        focusedBackgroundColor: COLORS.panelRaised,
-                        textColor: COLORS.text,
-                        focusedTextColor: COLORS.text,
-                        cursorColor: COLORS.runner,
                       }}
-                    />
+                    >
+                      <InlineButton
+                        id="runner-command-input-shortcut"
+                        label="[/]"
+                        accent={COLORS.runner}
+                        backgroundColor={COLORS.panelRaised}
+                        onPress={() => {
+                          setFocusPane("commands")
+                          manualInputRef.current?.focus()
+                        }}
+                      />
+                      <input
+                        ref={manualInputRef}
+                        id="runner-command-input"
+                        value={manualCommand}
+                        placeholder="❯ Digite qualquer comando…"
+                        onInput={setManualCommand}
+                        onMouseDown={() => {
+                          setFocusPane("commands")
+                          manualInputRef.current?.focus()
+                        }}
+                        onSubmit={() => runManualCommand()}
+                        style={{
+                          flexGrow: 1,
+                          flexShrink: 1,
+                          minWidth: 1,
+                          backgroundColor: COLORS.panelRaised,
+                          focusedBackgroundColor: COLORS.panelRaised,
+                          textColor: COLORS.text,
+                          focusedTextColor: COLORS.text,
+                          cursorColor: COLORS.runner,
+                        }}
+                      />
+                    </box>
                     {manualCommand.trim() ? (
                       <box
                         style={{
@@ -1685,6 +1764,8 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                       ref={processListRef}
                       id="runner-process-list"
                       options={processOptions}
+                      renderAfter={paintRunnerStatusRows}
+                      keyBindings={[]}
                       selectedIndex={Math.max(
                         0,
                         activeExecutions.findIndex(
@@ -1741,7 +1822,9 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                     ref={commandListRef}
                     id="runner-command-list"
                     options={commandOptions}
+                    renderAfter={paintRunnerStatusRows}
                     selectedIndex={selectedCommandIndex}
+                    keyBindings={[{ name: "space", action: "select-current" }]}
                     onChange={(_index, option) => {
                       if (typeof option?.value === "string") {
                         selectCommand(option.value)
@@ -1749,18 +1832,14 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                     }}
                     onSelect={(_index, option) => {
                       if (typeof option?.value !== "string") return
-                      if (groupSelectionMode) {
-                        selectCommand(option.value)
-                        toggleCommandGroup(option.value)
-                        return
-                      }
-                      openOrRunCommand(commands.find((command) => command.id === option.value))
+                      toggleCommand(commands.find((command) => command.id === option.value))
                     }}
                     onMouseDown={(event) => {
                       setFocusPane("commands")
                       handleSelectMouseDown(event, commandListRef.current, {
                         optionCount: commandOptions.length,
                         showDescription: true,
+                        activateOnClick: true,
                       })
                     }}
                     onMouseScroll={(event) =>
@@ -1825,17 +1904,18 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                       highlight={Boolean(selectedCommandExecution)}
                       content={fitLine(
                         selectedCommandExecution
-                          ? `● processo ativo${selectedCommandExecution.pid ? ` #${selectedCommandExecution.pid}` : ""} · [Enter] abre · [R] inicia outro`
+                          ? `${runnerExecutionLabel(selectedCommandExecution)}${selectedCommandExecution.pid ? ` #${selectedCommandExecution.pid}` : ""}`
                           : `${selectedCommand.description} · ${selectedCommand.source ?? "detectado"}${selectedCommand.interactive ? " · PTY" : ""}`,
                         commandPanelWidth - 4,
                       )}
                       style={{
-                        fg: selectedCommandExecution ? COLORS.success : COLORS.muted,
+                        fg: runnerStatusColor(runnerVisualStatus(selectedCommandExecution)),
                       }}
                     />
                   </box>
                 ) : null}
                 <RunnerLoadingOverlay active={listMode === "commands" && loading} kind="commands" />
+                {boxSelection.overlay("runner-command-panel")}
               </box>
             </box>
           ) : null}
@@ -1843,6 +1923,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
           {!narrowRunner || narrowPane === "log" ? (
             viewMode === "multi" ? (
               <MultiProcessPanel
+                boxOverlay={boxSelection.overlay}
                 activeExecutions={activeExecutions}
                 multiOffset={multiOffset}
                 visibleMultiExecutions={visibleMultiExecutions}
@@ -1875,42 +1956,40 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                   style={{
                     height: shortRunner ? 1 : 2,
                     flexShrink: 0,
-                    flexDirection: "row",
-                    justifyContent: "space-between",
+                    flexDirection: "column",
                     backgroundColor: COLORS.panelRaised,
                     paddingLeft: 1,
                     paddingRight: 1,
                   }}
                 >
-                  <text
-                    content={
-                      runnerNotice
-                        ? fitLine(runnerNotice, logWidth - 24)
-                        : selectedExecution
-                          ? fitLine(
-                              `LOG  /  ${selectedExecution.projectName}  /  ${selectedExecution.label}`,
-                              logWidth - 24,
-                            )
-                          : shortRunner
-                            ? "LOG"
+                  {!shortRunner ? (
+                    <text
+                      content={
+                        runnerNotice
+                          ? fitLine(runnerNotice.message, logWidth)
+                          : selectedExecution
+                            ? fitLine(
+                                `LOG  /  ${selectedExecution.projectName}  /  ${selectedExecution.label}`,
+                                logWidth,
+                              )
                             : "LOG DO PROCESSO"
-                    }
-                    style={{ fg: COLORS.runner }}
-                  />
-                  <text
-                    content={
-                      selectedExecution
-                        ? shortRunner
-                          ? statusMarker(selectedExecution.status)
-                          : `${statusMarker(selectedExecution.status)} ${statusLabel(selectedExecution.status)}${healthLabel(selectedExecution.health)}  ${formatDuration(elapsed)}${selectedExecution.pid ? `  #${selectedExecution.pid}` : ""}`
-                        : shortRunner
-                          ? "◇"
-                          : "◇ AGUARDANDO"
-                    }
-                    style={{
-                      fg: selectedExecution ? statusColor(selectedExecution.status) : COLORS.muted,
-                    }}
-                  />
+                      }
+                      style={{
+                        height: 1,
+                        fg: runnerNotice ? runnerNoticeColor(runnerNotice.kind) : COLORS.runner,
+                      }}
+                    />
+                  ) : null}
+                  {selectedExecution ? (
+                    <RunnerExecutionStatus
+                      execution={selectedExecution}
+                      now={now}
+                      compact={shortRunner}
+                      width={logWidth}
+                    />
+                  ) : (
+                    <text content="◇ AGUARDANDO" style={{ fg: COLORS.muted }} />
+                  )}
                 </box>
 
                 {logFilterOpen ? (
@@ -1933,59 +2012,65 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                   />
                 ) : null}
 
-                <scrollbox
-                  key={`${selectedExecution?.id ?? "empty"}:${logStream}:${logFilter}`}
-                  ref={logScrollRef}
-                  id="runner-log-scroll"
-                  focusable
-                  scrollY
-                  stickyScroll
-                  stickyStart="bottom"
-                  viewportCulling
-                  style={{
-                    flexGrow: 1,
-                    flexShrink: 1,
-                    backgroundColor: COLORS.canvas,
-                    paddingLeft: 1,
-                    paddingRight: 1,
-                  }}
-                  verticalScrollbarOptions={{
-                    trackOptions: {
-                      backgroundColor: COLORS.canvas,
-                      foregroundColor: COLORS.border,
-                    },
-                  }}
+                <box
+                  id="runner-log-panel"
+                  style={{ position: "relative", flexGrow: 1, flexShrink: 1 }}
                 >
-                  {selectedLogs.length ? (
-                    <text
-                      content={selectedLogDocument}
-                      wrapMode="none"
-                      style={{
-                        width: "100%",
-                        height: selectedLogs.length,
-                        flexShrink: 0,
-                        bg: COLORS.canvas,
-                      }}
-                    />
-                  ) : (
-                    <box
-                      style={{
-                        height: logHeight,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <ShortcutText
-                        content="Selecione um comando e pressione [Enter]."
-                        style={{ fg: COLORS.text }}
-                      />
+                  <scrollbox
+                    key={`${selectedExecution?.id ?? "empty"}:${logStream}:${logFilter}`}
+                    ref={logScrollRef}
+                    id="runner-log-scroll"
+                    focusable
+                    scrollY
+                    stickyScroll
+                    stickyStart="bottom"
+                    viewportCulling
+                    style={{
+                      flexGrow: 1,
+                      flexShrink: 1,
+                      backgroundColor: COLORS.canvas,
+                      paddingLeft: 1,
+                      paddingRight: 1,
+                    }}
+                    verticalScrollbarOptions={{
+                      trackOptions: {
+                        backgroundColor: COLORS.canvas,
+                        foregroundColor: COLORS.border,
+                      },
+                    }}
+                  >
+                    {selectedLogs.length ? (
                       <text
-                        content="A saída aparecerá aqui em tempo real."
-                        style={{ fg: COLORS.muted }}
+                        content={selectedLogDocument}
+                        wrapMode="none"
+                        style={{
+                          width: "100%",
+                          height: selectedLogs.length,
+                          flexShrink: 0,
+                          bg: COLORS.canvas,
+                        }}
                       />
-                    </box>
-                  )}
-                </scrollbox>
+                    ) : (
+                      <box
+                        style={{
+                          height: logHeight,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <ShortcutText
+                          content="Selecione um comando e pressione [Enter]."
+                          style={{ fg: COLORS.text }}
+                        />
+                        <text
+                          content="A saída aparecerá aqui em tempo real."
+                          style={{ fg: COLORS.muted }}
+                        />
+                      </box>
+                    )}
+                  </scrollbox>
+                  {boxSelection.overlay("runner-log-panel")}
+                </box>
 
                 {selectedProcessHandle ? (
                   <input
@@ -2018,6 +2103,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                     id="runner-history-panel"
                     focusable
                     style={{
+                      position: "relative",
                       height: historyPanelHeight,
                       flexShrink: 0,
                       border: ["top"],
@@ -2044,6 +2130,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                         ref={historyListRef}
                         id="runner-history-list"
                         options={historyOptions}
+                        renderAfter={paintRunnerStatusRows}
                         selectedIndex={selectedHistoryIndex}
                         onChange={(_index, option) => {
                           if (typeof option?.value === "string") {
@@ -2084,6 +2171,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                         style={{ fg: COLORS.muted }}
                       />
                     )}
+                    {boxSelection.overlay("runner-history-panel")}
                   </box>
                 ) : (
                   <box
@@ -2112,123 +2200,22 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
         </box>
       )}
 
-      {actionMenuHeight ? (
-        <box
-          style={{
-            height: actionMenuHeight,
-            flexShrink: 0,
-            ...panelBorder(COLORS.runner),
-            backgroundColor: COLORS.panel,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <text content="MAIS  " style={{ fg: COLORS.runner }} />
-            <InlineButton
-              label={compactActions ? "[Del]" : "[Del] Remover salvo"}
-              accent={COLORS.danger}
-              disabled={selectedCommand?.source !== "saved"}
-              onPress={deleteSelectedSavedCommand}
-            />
-            <InlineButton
-              label={
-                compactActions
-                  ? `[E] ${selectedProfile?.label ?? "env"}`
-                  : `[E] Ambiente: ${selectedProfile?.label ?? "padrão"}`
-              }
-              accent={COLORS.runner}
-              disabled={!environmentProfiles.length}
-              onPress={cycleEnvironmentProfile}
-            />
-            <InlineButton label="[M] Multi" accent={COLORS.runner} onPress={toggleViewMode} />
-          </box>
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <text content="LOG   " style={{ fg: COLORS.muted }} />
-            <InlineButton
-              label={runnerLogFilterLabel({
-                viewMode,
-                narrow: narrowRunner,
-                compact: compactActions,
-                filter: logFilter,
-              })}
-              accent={COLORS.runner}
-              active={logFilterOpen || Boolean(logFilter)}
-              onPress={() => {
-                setLogFilterOpen(true)
-                setTimeout(() => logFilterRef.current?.focus(), 0)
-              }}
-            />
-            <InlineButton
-              label={`[V] ${logStream}`}
-              accent={COLORS.runner}
-              active={logStream !== "all"}
-              onPress={cycleLogStream}
-            />
-            <InlineButton
-              label={narrowRunner ? "[T]" : compactActions ? "[T] Hora" : "[T] Horários"}
-              accent={COLORS.runner}
-              active={showTimestamps}
-              onPress={() => dispatchLogPreferences({ type: "toggle-timestamps" })}
-            />
-            <InlineButton
-              label={narrowRunner ? "[Y] Copiar" : compactActions ? "[Y] Copiar" : "[Y] Copiar log"}
-              accent={COLORS.runner}
-              disabled={!selectedExecution?.logs.length}
-              onPress={copySelectedLogs}
-            />
-            <InlineButton
-              label={
-                narrowRunner ? "[X] Export." : compactActions ? "[X] Export." : "[X] Exportar log"
-              }
-              accent={COLORS.runner}
-              disabled={!selectedExecution?.logs.length}
-              onPress={exportSelectedLogs}
-            />
-          </box>
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <text content="PROC. " style={{ fg: COLORS.muted }} />
-            <InlineButton
-              label={compactActions ? "[I] stdin" : "[I] Entrada do processo"}
-              accent={COLORS.runner}
-              disabled={!selectedProcessHandle}
-              onPress={() => processInputRef.current?.focus()}
-            />
-            <InlineButton
-              label="[C] Limpar"
-              accent={COLORS.runner}
-              disabled={!selectedExecution}
-              onPress={clearSelectedLogs}
-            />
-            {selectedPortUrl ? (
-              <>
-                <InlineButton
-                  label="[O] Abrir"
-                  accent={COLORS.success}
-                  onPress={openSelectedPort}
-                />
-                <InlineButton label="[U] URL" accent={COLORS.runner} onPress={copySelectedPort} />
-                <InlineButton
-                  label="[H] HTTP"
-                  accent={COLORS.runner}
-                  disabled={!onOpenHttp}
-                  onPress={sendSelectedPortToHttp}
-                />
-              </>
-            ) : (
-              <text content="sem porta detectada" style={{ fg: COLORS.muted }} />
-            )}
-          </box>
-        </box>
-      ) : null}
-
       <box
+        id="runner-footer"
         style={{
-          height: 1,
+          height: footerHeight,
           flexShrink: 0,
           flexDirection: "row",
         }}
       >
+        {pickerMode === "closed" && (projectAvailable === false || focusPane === "history") ? (
+          <InlineButton
+            id="runner-action-palette-open"
+            label="[?] Ações"
+            accent={COLORS.runner}
+            onPress={actionPalette.open}
+          />
+        ) : null}
         {pickerMode !== "closed" ? (
           <>
             <InlineButton
@@ -2262,70 +2249,19 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
             <InlineButton label="[S] Recolher" accent={COLORS.runner} onPress={toggleHistoryPane} />
           </>
         ) : focusPane === "log" && viewMode === "single" ? (
-          <>
-            <InlineButton label="[H/←] Lista" accent={COLORS.runner} onPress={focusCommandPane} />
-            <ShortcutText
-              content={` ${translateUi("[J/K] Rolar")} `}
-              style={{ fg: COLORS.muted }}
-            />
-            {shortRunner ? null : (
-              <InlineButton
-                label={historyExpanded ? "[S] Recolher" : "[S] Histórico"}
-                accent={COLORS.runner}
-                onPress={toggleHistoryPane}
-              />
-            )}
-            <InlineButton
-              label="[A] Mais…"
-              accent={COLORS.runner}
-              active={moreActionsOpen}
-              onPress={() => setMoreActionsOpen((current) => !current)}
-            />
-          </>
-        ) : groupSelectionMode ? (
-          <>
-            <text
-              content={`${groupCommands.length} selecionado${groupCommands.length === 1 ? "" : "s"}  `}
-              style={{ fg: COLORS.runner }}
-            />
-            <InlineButton
-              label={narrowRunner ? "[Spc]" : "[Espaço] Marcar"}
-              accent={COLORS.runner}
-              active={
-                selectedCommand
-                  ? selectedCommandKeys.has(commandKey(projectRoot, selectedCommand.id))
-                  : false
-              }
-              disabled={!selectedCommand}
-              onPress={toggleSelectedCommandGroup}
-            />
-            <InlineButton
-              label="[G] Rodar"
-              accent={COLORS.success}
-              disabled={!groupCommands.length}
-              onPress={runCommandGroup}
-            />
-            <InlineButton
-              label="[⇧G] Parar"
-              accent={COLORS.danger}
-              disabled={!groupCommands.length}
-              onPress={stopCommandGroup}
-            />
-            <InlineButton
-              label={narrowRunner ? "[⇧R] Rein." : "[⇧R] Reiniciar"}
-              accent={COLORS.warning}
-              disabled={!groupCommands.length}
-              onPress={restartCommandGroup}
-            />
-            <InlineButton
-              label={narrowRunner ? "[Esc]" : "[Esc] Sair"}
-              accent={COLORS.runner}
-              onPress={exitGroupSelection}
-            />
-          </>
+          <RunnerCommandFooter
+            id="runner-log-footer"
+            actions={footerActions.log}
+            height={footerHeight}
+          />
         ) : viewMode === "multi" ? (
           <>
-            <InlineButton label="[M] Único" accent={COLORS.runner} onPress={toggleViewMode} />
+            <InlineButton
+              label="[M] Escolher box"
+              accent={COLORS.runner}
+              onPress={boxSelection.openSelection}
+            />
+            <InlineButton label="[Shift+M] Único" accent={COLORS.runner} onPress={toggleViewMode} />
             {activeExecutions.length ? (
               <>
                 <InlineButton
@@ -2339,7 +2275,7 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
                   onPress={() => cycleActiveExecution(1)}
                 />
                 <InlineButton
-                  label="[⇧K] Parar"
+                  label="Parar"
                   accent={COLORS.danger}
                   disabled={selectedExecution?.status !== "running"}
                   onPress={stopSelectedExecution}
@@ -2347,10 +2283,11 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
               </>
             ) : null}
             <InlineButton
-              label="[Shift+A] Mais…"
+              id="runner-action-palette-open"
+              label="[?] Ações"
               accent={COLORS.runner}
-              active={moreActionsOpen}
-              onPress={() => setMoreActionsOpen((current) => !current)}
+              active={actionPalette.isOpen}
+              onPress={() => actionPalette.open()}
             />
           </>
         ) : listMode === "active" ? (
@@ -2365,74 +2302,222 @@ export function Runner({ active, onOpenHttp }: RunnerWorkspaceProps) {
               }}
             />
             <InlineButton
-              label="[⇧K] Parar"
+              label="Parar"
               accent={COLORS.danger}
               disabled={selectedExecution?.status !== "running"}
               onPress={stopSelectedExecution}
             />
-            <InlineButton label="[M] Multi" accent={COLORS.runner} onPress={toggleViewMode} />
+            <InlineButton label="[Shift+M] Multi" accent={COLORS.runner} onPress={toggleViewMode} />
             <InlineButton
-              label="[A] Mais…"
+              id="runner-action-palette-open"
+              label="[?] Ações"
               accent={COLORS.runner}
-              active={moreActionsOpen}
-              onPress={() => setMoreActionsOpen((current) => !current)}
+              active={actionPalette.isOpen}
+              onPress={() => actionPalette.open()}
             />
           </>
         ) : (
-          <>
-            <InlineButton label="[L/→] Log" accent={COLORS.runner} onPress={focusLogPane} />
-            {narrowRunner ? null : (
-              <InlineButton
-                label={compactActions ? "[/] Cmd" : "[/] Comando"}
-                accent={COLORS.runner}
-                onPress={() => manualInputRef.current?.focus()}
-              />
-            )}
-            <InlineButton
-              label={narrowRunner ? "[↵] Rodar" : "[↵] Abrir"}
-              accent={COLORS.runner}
-              disabled={!selectedCommand}
-              onPress={() => openOrRunCommand(selectedCommand)}
-            />
-            <InlineButton
-              label="[R] Nova"
-              accent={COLORS.runner}
-              disabled={!selectedCommand}
-              onPress={() => runCommand(selectedCommand)}
-            />
-            <InlineButton
-              label="[⇧K] Parar"
-              accent={COLORS.danger}
-              disabled={selectedExecution?.status !== "running"}
-              onPress={stopSelectedExecution}
-            />
-            <InlineButton
-              label={
-                narrowRunner
-                  ? "[Spc] Grupo"
-                  : compactActions
-                    ? "[Espaço] Sel."
-                    : "[Espaço] Selecionar grupo"
-              }
-              accent={COLORS.runner}
-              disabled={!selectedCommand}
-              onPress={toggleSelectedCommandGroup}
-            />
-            <InlineButton
-              id="runner-configuration"
-              label="[Ctrl+Y] Config"
-              accent={COLORS.runner}
-              onPress={() => setConfigurationOpen(true)}
-            />
-            <InlineButton
-              label={narrowRunner ? "[A] Mais" : "[A] Mais…"}
-              accent={COLORS.runner}
-              active={moreActionsOpen}
-              onPress={() => setMoreActionsOpen((current) => !current)}
-            />
-          </>
+          <RunnerCommandFooter actions={footerActions.commands} height={footerHeight} />
         )}
       </box>
+      {boxSelection.focusNode}
+      {actionPalette.isOpen
+        ? actionPalette.render({
+            title: "AÇÕES DO RUNNER",
+            accent: COLORS.runner,
+            actions: [
+              paletteAction(
+                "choose-box",
+                "[M]",
+                "Escolher box",
+                "Pressione [Enter] para focar",
+                "NAVEGAÇÃO",
+                boxSelection.openSelection,
+              ),
+              paletteAction(
+                "open",
+                "[Enter/Space]",
+                "Iniciar ou parar comando",
+                "Inicia o comando selecionado ou para sua execução ativa.",
+                "COMANDOS",
+                () => toggleCommand(selectedCommand),
+                !selectedCommand && "Selecione um comando",
+              ),
+              paletteAction(
+                "stop",
+                "",
+                "Parar processo",
+                "Para a execução selecionada e cancela seus reinícios.",
+                "PROCESSOS",
+                stopSelectedExecution,
+                selectedExecution?.status !== "running" && "Nenhum processo em execução",
+              ),
+              paletteAction(
+                "manual",
+                "[/]",
+                "Comando manual",
+                "Digite um comando sem executá-lo automaticamente.",
+                "COMANDOS",
+                () => {
+                  setListMode("commands")
+                  setNarrowPane("commands")
+                  setTimeout(() => manualInputRef.current?.focus(), 0)
+                },
+              ),
+              paletteAction(
+                "configuration",
+                "[Ctrl+Y]",
+                "Configuração",
+                "Edite comandos, fluxos e perfis no YAML local.",
+                "COMANDOS",
+                () => setConfigurationOpen(true),
+                projectAvailable === false && "Escolha um projeto",
+              ),
+              paletteAction(
+                "project",
+                "[N]",
+                "Escolher projeto",
+                "Abre o seletor de projetos.",
+                "NAVEGAÇÃO",
+                () => void openProjectPicker(),
+              ),
+              paletteAction(
+                "refresh",
+                "[D]",
+                "Atualizar",
+                "Detecta novamente os comandos do projeto.",
+                "COMANDOS",
+                () => void refreshCommands(),
+                loading && "Carregando…",
+              ),
+              paletteAction(
+                "environment",
+                "[E]",
+                "Ambiente",
+                "Alterna o perfil de ambiente para novas execuções.",
+                "COMANDOS",
+                cycleEnvironmentProfile,
+                !environmentProfiles.length && "Nenhum perfil disponível",
+              ),
+              paletteAction(
+                "remove",
+                "[Delete]",
+                "Remover salvo",
+                "Remove a definição local do comando salvo.",
+                "COMANDOS",
+                deleteSelectedSavedCommand,
+                selectedCommand?.source !== "saved" && "Selecione um comando salvo",
+              ),
+              paletteAction(
+                "multi",
+                "[Shift+M]",
+                "Multi",
+                "Alterna entre um log e vários processos.",
+                "NAVEGAÇÃO",
+                toggleViewMode,
+              ),
+              paletteAction(
+                "history",
+                "[S]",
+                "Histórico",
+                "Expande ou recolhe o histórico de execuções.",
+                "NAVEGAÇÃO",
+                toggleHistoryPane,
+              ),
+              paletteAction(
+                "filter",
+                viewMode === "multi" ? "[Shift+F]" : "[F]",
+                "Filtrar logs",
+                "Filtra o texto do log selecionado.",
+                "LOG",
+                () => {
+                  setLogFilterOpen(true)
+                  setTimeout(() => logFilterRef.current?.focus(), 0)
+                },
+                !selectedExecution && "Selecione uma execução",
+              ),
+              paletteAction(
+                "stream",
+                "[V]",
+                "Stream",
+                "Alterna entre stdout, stderr e todos os eventos.",
+                "LOG",
+                cycleLogStream,
+              ),
+              paletteAction(
+                "timestamps",
+                "[T]",
+                "Horários",
+                "Mostra ou oculta os horários no log.",
+                "LOG",
+                () => dispatchLogPreferences({ type: "toggle-timestamps" }),
+              ),
+              paletteAction(
+                "copy",
+                "[Y]",
+                "Copiar log",
+                "Copia o log filtrado da execução selecionada.",
+                "LOG",
+                copySelectedLogs,
+                !selectedExecution?.logs.length && "Nenhum log disponível",
+              ),
+              paletteAction(
+                "export",
+                "[X]",
+                "Exportar log",
+                "Salva o log selecionado em tuiminal-logs/.",
+                "LOG",
+                exportSelectedLogs,
+                !selectedExecution?.logs.length && "Nenhum log disponível",
+              ),
+              paletteAction(
+                "clear",
+                "[C]",
+                "Limpar",
+                "Limpa os logs da execução selecionada.",
+                "LOG",
+                clearSelectedLogs,
+                !selectedExecution && "Selecione uma execução",
+              ),
+              paletteAction(
+                "input",
+                "[I]",
+                "Entrada do processo",
+                "Foca a entrada do processo selecionado.",
+                "PROCESSOS",
+                () => processInputRef.current?.focus(),
+                !selectedProcessHandle && "Nenhum processo em execução",
+              ),
+              paletteAction(
+                "port-open",
+                "[O]",
+                "Abrir URL",
+                "Abre a porta detectada no navegador.",
+                "PROCESSOS",
+                openSelectedPort,
+                !selectedPortUrl && "sem porta detectada",
+              ),
+              paletteAction(
+                "port-copy",
+                "[U]",
+                "Copiar URL",
+                "Copia a URL da porta detectada.",
+                "PROCESSOS",
+                copySelectedPort,
+                !selectedPortUrl && "sem porta detectada",
+              ),
+              paletteAction(
+                "port-http",
+                "[H]",
+                "HTTP",
+                "Abre a porta detectada na ferramenta HTTP.",
+                "PROCESSOS",
+                sendSelectedPortToHttp,
+                !selectedPortUrl ? "sem porta detectada" : !onOpenHttp && "HTTP indisponível",
+              ),
+            ],
+          })
+        : null}
       {configurationOpen ? (
         <RunnerConfiguration
           root={projectRoot}

@@ -1,6 +1,6 @@
+import { configObject, parseRemoteConfigBase } from "../remote-config"
 import { validateRepositoryName } from "./query"
 import type { PullRequestColumn, PullRequestSection, PullRequestSort } from "./types"
-import { configObject, parseRemoteConfigBase } from "../remote-config"
 
 export const PULL_REQUEST_COLUMNS: readonly PullRequestColumn[] = [
   "repository",
@@ -34,6 +34,7 @@ export type PullRequestProfile = {
   host: string
   repositories: string[]
   sections: PullRequestSection[]
+  /** Legacy setting retained on read/write; dashboard layout is automatic. */
   previewPosition?: PullRequestPreviewConfig["position"]
 }
 

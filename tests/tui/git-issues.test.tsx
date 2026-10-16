@@ -106,8 +106,11 @@ test("mouse reaches Issue tabs, sections, rows, preview tabs and action menu", a
   await click("git-issue-preview-tab-activity")
   expect(tui.captureCharFrame()).toContain("Vou preparar a correção")
   await click("git-issue-open-actions")
-  expect(tui.captureCharFrame()).toContain("AÇÕES DA ISSUE")
-  expect(tui.captureCharFrame()).toContain("[Shift+C] Criar branch")
+  expect(tui.captureCharFrame()).toContain("AÇÕES DO GIT · ISSUES")
+  expect(
+    tui.renderer.root.findDescendantById("git-action-palette-row-mutation:checkout"),
+  ).toBeTruthy()
+  // Write shortcuts still work directly inside the palette.
   await key("l", { shift: true })
   expect(tui.captureCharFrame()).toContain("EDITAR LABELS DA ISSUE")
 })

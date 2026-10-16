@@ -45,7 +45,6 @@ import {
   DEFAULT_FOLDER,
   EXTERNAL_FOLDER,
   type TermAgentsCommand,
-  MAX_SESSIONS,
   MAX_TERMINALS_PER_SECTION,
   orderedRunningAgents,
   type RemoteServerSetupRequest,
@@ -57,11 +56,7 @@ import { tmuxAgentNotice } from "./rendering/tmux-agent-notice"
 import { resolveAgentResumeCommand } from "./services/agent-resume-command"
 import { focusPinnedTmuxSidebar } from "./services/pinned-sidebar-tmux"
 import { listSshConfigProfiles } from "./services/ssh-config"
-import {
-  createTermAgentsCommand,
-  createRemoteServerSetupCommand,
-  createShellTerminalCommand,
-} from "./services/terminal"
+import { createRemoteServerSetupCommand, createShellTerminalCommand } from "./services/terminal"
 import { TerminalTutorialDemo } from "./tutorial/TerminalTutorialDemo"
 import { isTerminalTutorialTarget } from "./tutorial/TerminalTutorialVisualState"
 import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
@@ -102,7 +97,7 @@ export function TermAgents({
   const dimensions = useTerminalDimensions()
   const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
   const workspaceRef = useRef<BoxRenderable | null>(null)
-  const terminal = useTerminalSessions(active)
+  const terminal = useTerminalSessions(active, dimensions)
   const {
     sessions,
     agentMessages,
@@ -275,9 +270,7 @@ export function TermAgents({
     }
   }, [leaderActive, onMasterKeyActiveChange])
   const section = sections.find((section) => section.id === activeSession?.sectionId)
-  const hasSplitRoom = Boolean(section && section.panes.length < MAX_TERMINALS_PER_SECTION)
-  const canCreateSplitTerminal = sessions.length < MAX_SESSIONS
-  const canSplit = hasSplitRoom && (canCreateSplitTerminal || splitAgents.length > 0)
+  const canSplit = Boolean(section && section.panes.length < MAX_TERMINALS_PER_SECTION)
   const sidebarHeight = dimensions.height - 1
   const {
     recentThreads,
@@ -436,10 +429,6 @@ export function TermAgents({
     onRemoteSetupRequestHandled?.(remoteSetupRequest.id)
   }, [launchSection, onRemoteSetupRequestHandled, remoteSetupRequest, selectSession, sessionsRef])
   const resumeAgentThread = async (thread: AgentResumeThread) => {
-    if (sessions.length >= MAX_SESSIONS) {
-      setNotice("O limite de terminais foi atingido.")
-      return
-    }
     setLeader(false)
     const configured = getUiSettings().terminalRemoteCodexProfiles
     const remoteId = thread.remoteProfileId
@@ -492,7 +481,7 @@ export function TermAgents({
   }
   const createSplitTerminal = () => {
     const request = currentSplitRequest()
-    if (!request || sessionsRef.current.length >= MAX_SESSIONS) return
+    if (!request) return
     closeSplitDialog(false)
     launchCommand(createShellTerminalCommand(), splitPlacement(request))
   }
@@ -526,7 +515,6 @@ export function TermAgents({
     if (["c", "shift+h"].includes(key)) return !canSplit
     if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
     if (key === "r") return projectSyncDisabled()
-    if (["n", "a"].includes(key)) return sessions.length >= MAX_SESSIONS
     if (key.startsWith("alt+")) return !onSelectTool
     if (key === ",") return !onOpenSettings
     if (key === "q") return !onQuit
@@ -630,17 +618,8 @@ export function TermAgents({
   }
   runActionRef.current = runAction
   const openSidebarTerminal = useCallback(() => launchSection(), [launchSection])
-  const openSidebarCommand = useCallback(() => {
-    dialogRef.current = "command"
-    setDialog("command")
-  }, [])
-  const openCodexTerminal = useCallback(() => runActionRef.current("a"), [])
+  const openSidebarAgent = useCallback(() => runActionRef.current("a"), [])
   const saveDialog = (value: string) => {
-    if (dialog === "command") {
-      launchSection(createTermAgentsCommand(value))
-      closeDialog()
-      return
-    }
     const name = cleanTerminalName(value)
     if (!name) return
     if (dialog === "rename" && activeSessionId) {
@@ -718,7 +697,7 @@ export function TermAgents({
       onActivate: selectSession,
       onActions: toggleSidebarActions,
       onNew: openSidebarTerminal,
-      onCommand: openSidebarCommand,
+      onNewAgent: openSidebarAgent,
       onLoadMoreResume: (providerId: AgentProviderId) => void loadMoreThreads(providerId),
     }),
     [
@@ -731,7 +710,7 @@ export function TermAgents({
       recentThreads,
       resumePagination,
       openSidebarTerminal,
-      openSidebarCommand,
+      openSidebarAgent,
       focusBox,
       selectFolderInSidebar,
       selectSession,
@@ -817,7 +796,7 @@ export function TermAgents({
               onActivate={selectSession}
               onActions={toggleSidebarActions}
               onNew={openSidebarTerminal}
-              onCommand={sessions.length < MAX_SESSIONS ? openSidebarCommand : undefined}
+              onNewAgent={openSidebarAgent}
             />
           )}
           <TerminalPanes
@@ -838,7 +817,7 @@ export function TermAgents({
             agentMessages={agentMessages}
             selectedFocusTarget={selectedBoxFocusTarget}
             onNewTerminal={launchSection}
-            onNewCodex={openCodexTerminal}
+            onNewCodex={openSidebarAgent}
             onActivate={selectSession}
             onReady={terminalReady}
             onGone={terminalGone}
@@ -877,7 +856,7 @@ export function TermAgents({
           <TerminalSplitDialog
             down={splitRequest.down}
             agents={splitAgents}
-            canCreateTerminal={canCreateSplitTerminal}
+            canCreateTerminal
             onCreateTerminal={createSplitTerminal}
             onSelectAgent={placeSplitAgent}
             onClose={closeSplitDialog}

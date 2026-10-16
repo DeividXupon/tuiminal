@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { directionalShortcutLabel } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import { Button } from "@tuiparts/react/button"
@@ -10,14 +11,10 @@ import {
   panelBorder,
 } from "@xupon/tuiminal-core/settings/theme"
 import { buildRunnerLogDocument, filterRunnerLogs } from "../rendering/log-document"
-import {
-  fitLine,
-  portAddress,
-  statusMarker,
-  formatDuration,
-  statusColor,
-} from "../rendering/presentation"
+import { fitLine, portAddress } from "../rendering/presentation"
+import { RunnerExecutionStatus } from "./RunnerExecutionStatus"
 type MultiProcessPanelProps = {
+  boxOverlay: (id: string) => ReactNode
   activeExecutions: RunnerExecution[]
   visibleMultiExecutions: RunnerExecution[]
   selectedExecution: RunnerExecution | undefined
@@ -37,6 +34,7 @@ type MultiProcessPanelProps = {
 }
 
 export function MultiProcessPanel({
+  boxOverlay,
   activeExecutions,
   multiOffset,
   visibleMultiExecutions,
@@ -107,9 +105,9 @@ export function MultiProcessPanel({
           ) : null}
           {visibleMultiExecutions.map((execution, index) => {
             const selected = execution.id === selectedExecution?.id
-            const duration = (execution.endedAt ?? now) - execution.startedAt
             const executionPorts = listeningPorts.filter((port) => port.groupId === execution.pid)
             const paneLogWidth = Math.max(12, multiPaneWidth - 4)
+            const statusWidth = Math.min(14, paneLogWidth - 2)
             const paneLogs = filterRunnerLogs(execution.logs, logStream, logFilter).slice(
               -multiLogHeight,
             )
@@ -117,6 +115,7 @@ export function MultiProcessPanel({
             return (
               <Button
                 key={execution.id}
+                id={`runner-multi-${execution.id}`}
                 onPress={() => setSelectedExecutionId(execution.id)}
                 width={multiPaneWidth}
                 flexGrow={1}
@@ -124,6 +123,7 @@ export function MultiProcessPanel({
                 <box
                   key={LAYOUT.compact ? "multi-compact" : "multi-framed"}
                   style={{
+                    position: "relative",
                     width: multiPaneWidth,
                     flexGrow: 1,
                     flexShrink: 1,
@@ -148,12 +148,17 @@ export function MultiProcessPanel({
                       }}
                     >
                       <text
-                        content={fitLine(`${paneNumber}  ${execution.label}`, paneLogWidth - 12)}
+                        content={fitLine(
+                          `${paneNumber}  ${execution.label}`,
+                          paneLogWidth - statusWidth,
+                        )}
                         style={{ fg: selected ? COLORS.runner : COLORS.text }}
                       />
-                      <text
-                        content={`${statusMarker(execution.status)} ${formatDuration(duration)}`}
-                        style={{ fg: statusColor(execution.status) }}
+                      <RunnerExecutionStatus
+                        execution={execution}
+                        now={now}
+                        compact
+                        width={statusWidth}
                       />
                     </box>
                     <text
@@ -183,6 +188,7 @@ export function MultiProcessPanel({
                       style={{ height: paneLogs.length, flexShrink: 0, bg: COLORS.canvas }}
                     />
                   </box>
+                  {boxOverlay(`runner-multi-${execution.id}`)}
                 </box>
               </Button>
             )

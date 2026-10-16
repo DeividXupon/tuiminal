@@ -1,21 +1,30 @@
+import { DATABASE_PALETTE_ACTIONS_MESSAGES } from "./database-palette-actions-catalog"
+import { DATABASE_PALETTE_LABELS_MESSAGES } from "./database-palette-labels-catalog"
+import { RUNNER_PALETTE_ACTIONS_MESSAGES } from "./runner-palette-actions-catalog"
+import { RUNNER_PALETTE_LABELS_MESSAGES } from "./runner-palette-labels-catalog"
+import { RUNNER_STATUS_MESSAGES } from "./runner-status-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { CONFIGURATION_MESSAGES } from "./configuration-catalog"
 import { DATABASE_CONNECTION_MESSAGES } from "./database-connections-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
+import { GIT_ACTION_PALETTE_MESSAGES } from "./git-action-palette-catalog"
 import { GIT_BROWSER_MESSAGES } from "./git-browser-catalog"
 import { GIT_CLI_GUIDANCE_MESSAGES } from "./git-cli-guidance-catalog"
 import { GIT_CLI_INSTALLER_MESSAGES } from "./git-cli-installer-catalog"
 import { GIT_COMPARE_MESSAGES } from "./git-compare-catalog"
 import { GIT_CONFIGURATION_MESSAGES } from "./git-configuration-catalog"
 import { GIT_CREATE_MESSAGES } from "./git-create-catalog"
+import { GIT_DIFFS_ACTION_MESSAGES } from "./git-diffs-action-catalog"
 import { GIT_DIFFS_MESSAGES } from "./git-diffs-catalog"
 import { GIT_DISCUSSION_MESSAGES } from "./git-discussion-catalog"
 import { GIT_INBOX_MESSAGES } from "./git-inbox-catalog"
 import { GIT_ISSUE_MESSAGES } from "./git-issue-catalog"
 import { GIT_PARTIAL_STAGE_MESSAGES } from "./git-partial-stage-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
+import { GIT_REMOTE_PALETTE_ACTION_MESSAGES } from "./git-remote-palette-actions-catalog"
+import { GIT_REMOTE_PALETTE_MESSAGES } from "./git-remote-palette-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
@@ -117,9 +126,14 @@ const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...CONFIGURATION_MESSAGES,
   ...TERMINAL_MESSAGES,
+  ...DATABASE_PALETTE_LABELS_MESSAGES,
+  ...DATABASE_PALETTE_ACTIONS_MESSAGES,
   ...DATABASE_CONNECTION_MESSAGES,
   ...DATABASE_PRIVACY_MESSAGES,
   ...RUNNER_TRUST_MESSAGES,
+  ...RUNNER_PALETTE_LABELS_MESSAGES,
+  ...RUNNER_PALETTE_ACTIONS_MESSAGES,
+  ...RUNNER_STATUS_MESSAGES,
   ...RUNNER_HELP_MESSAGES,
   ...RUNNER_YAML_MESSAGES,
   ...RUNNER_YAML_COMPLETION_MESSAGES,
@@ -130,6 +144,10 @@ const MESSAGES: readonly Message[] = [
   ...GIT_DISCUSSION_MESSAGES,
   ...GIT_DIFFS_MESSAGES,
   ...GIT_PARTIAL_STAGE_MESSAGES,
+  ...GIT_ACTION_PALETTE_MESSAGES,
+  ...GIT_DIFFS_ACTION_MESSAGES,
+  ...GIT_REMOTE_PALETTE_MESSAGES,
+  ...GIT_REMOTE_PALETTE_ACTION_MESSAGES,
   // Configurações e navegação global.
   ["◆ CONFIGURAÇÕES", "◆ SETTINGS", "◆ CONFIGURACIÓN", "◆ 設定", "◆ 设置", "◆ 설정"],
   [
@@ -1484,14 +1502,6 @@ const MESSAGES: readonly Message[] = [
     "[Ctrl+A] SQL 실행",
   ],
   [
-    "[Ctrl+A] Executar atual",
-    "[Ctrl+A] Run current",
-    "[Ctrl+A] Ejecutar actual",
-    "[Ctrl+A] 現在の文を実行",
-    "[Ctrl+A] 执行当前语句",
-    "[Ctrl+A] 현재 문 실행",
-  ],
-  [
     "[Ctrl+X] Cancelar",
     "[Ctrl+X] Cancel",
     "[Ctrl+X] Cancelar",
@@ -1833,44 +1843,22 @@ const MESSAGES: readonly Message[] = [
   ["[2] Colunas", "[2] Columns", "[2] Columnas", "[2] 列", "[2] 列", "[2] 열"],
   ["[3] Índices", "[3] Indexes", "[3] Índices", "[3] インデックス", "[3] 索引", "[3] 인덱스"],
   [
-    "[Ctrl+A] Nova linha",
-    "[Ctrl+A] New row",
-    "[Ctrl+A] Nueva fila",
-    "[Ctrl+A] 新しい行",
-    "[Ctrl+A] 新行",
-    "[Ctrl+A] 새 행",
+    "[Ctrl+A] Criar",
+    "[Ctrl+A] Create",
+    "[Ctrl+A] Crear",
+    "[Ctrl+A] 作成",
+    "[Ctrl+A] 创建",
+    "[Ctrl+A] 생성",
   ],
+  ["[dd] Deletar", "[dd] Delete", "[dd] Eliminar", "[dd] 削除", "[dd] 删除", "[dd] 삭제"],
+  ["[U] Desfazer", "[U] Undo", "[U] Deshacer", "[U] 元に戻す", "[U] 撤销", "[U] 실행 취소"],
   [
-    "[Enter] Editar célula",
-    "[Enter] Edit cell",
-    "[Enter] Editar celda",
-    "[Enter] セルを編集",
-    "[Enter] 编辑单元格",
-    "[Enter] 셀 편집",
-  ],
-  [
-    "[dd] Preparar exclusão",
-    "[dd] Prepare deletion",
-    "[dd] Preparar eliminación",
-    "[dd] 削除を準備",
-    "[dd] 准备删除",
-    "[dd] 삭제 준비",
-  ],
-  [
-    "[U] Desfazer linha",
-    "[U] Undo row",
-    "[U] Deshacer fila",
-    "[U] 行を元に戻す",
-    "[U] 撤销行",
-    "[U] 행 실행 취소",
-  ],
-  [
-    "[Alt+Space] Selecionar intervalo",
-    "[Alt+Space] Select range",
-    "[Alt+Space] Seleccionar intervalo",
-    "[Alt+Space] 範囲を選択",
-    "[Alt+Space] 选择范围",
-    "[Alt+Space] 범위 선택",
+    "[Alt+Space] Intervalo",
+    "[Alt+Space] Range",
+    "[Alt+Space] Rango",
+    "[Alt+Space] 範囲",
+    "[Alt+Space] 范围",
+    "[Alt+Space] 범위",
   ],
   [
     "[Alt+Space] Sel",
@@ -1879,14 +1867,6 @@ const MESSAGES: readonly Message[] = [
     "[Alt+Space] 選択",
     "[Alt+Space] 选择",
     "[Alt+Space] 선택",
-  ],
-  [
-    "[U] Desfazer selecionadas",
-    "[U] Undo selected",
-    "[U] Deshacer seleccionadas",
-    "[U] 選択行を元に戻す",
-    "[U] 撤销所选行",
-    "[U] 선택 항목 실행 취소",
   ],
   [
     "◆ EXPORTAR SELEÇÃO",
@@ -2017,14 +1997,6 @@ const MESSAGES: readonly Message[] = [
     "[P] 이전 페이지",
   ],
   [
-    "[R] Atualizar catálogo",
-    "[R] Refresh catalog",
-    "[R] Actualizar catálogo",
-    "[R] カタログを更新",
-    "[R] 刷新目录",
-    "[R] 카탈로그 새로고침",
-  ],
-  [
     "[V] Confirmar exibição",
     "[V] Confirm reveal",
     "[V] Confirmar visualización",
@@ -2032,33 +2004,12 @@ const MESSAGES: readonly Message[] = [
     "[V] 确认显示",
     "[V] 표시 확인",
   ],
-  [
-    "[V] Ocultar sensíveis",
-    "[V] Hide sensitive",
-    "[V] Ocultar sensibles",
-    "[V] 機密データを隠す",
-    "[V] 隐藏敏感数据",
-    "[V] 민감 정보 숨기기",
-  ],
-  [
-    "[V] Revelar sensíveis",
-    "[V] Reveal sensitive",
-    "[V] Mostrar sensibles",
-    "[V] 機密データを表示",
-    "[V] 显示敏感数据",
-    "[V] 민감 정보 표시",
-  ],
+  ["[V] Mascarar", "[V] Mask", "[V] Enmascarar", "[V] マスク", "[V] 脱敏", "[V] 마스킹"],
+  ["[V] Revelar", "[V] Reveal", "[V] Mostrar", "[V] 表示", "[V] 显示", "[V] 표시"],
   ["Ordem", "Order", "Orden", "順序", "顺序", "순서"],
   ["Ordem normal", "Normal order", "Orden normal", "通常の順序", "正常顺序", "기본 순서"],
   ["Buscar", "Search", "Buscar", "検索", "搜索", "검색"],
-  [
-    "[O] Ordem normal",
-    "[O] Normal order",
-    "[O] Orden normal",
-    "[O] 通常の順序",
-    "[O] 正常顺序",
-    "[O] 기본 순서",
-  ],
+  ["[O] Ordenar", "[O] Sort", "[O] Ordenar", "[O] 並べ替え", "[O] 排序", "[O] 정렬"],
   ["[S] Buscar", "[S] Search", "[S] Buscar", "[S] 検索", "[S] 搜索", "[S] 검색"],
   ["[S] Busca", "[S] Search", "[S] Buscar", "[S] 検索", "[S] 搜索", "[S] 검색"],
   [
@@ -2166,22 +2117,6 @@ const MESSAGES: readonly Message[] = [
     "[C] 接続を追加",
     "[C] 添加连接",
     "[C] 연결 추가",
-  ],
-  [
-    "[C] Criar nova / conexões",
-    "[C] New / connections",
-    "[C] Crear / conexiones",
-    "[C] 新規作成 / 接続",
-    "[C] 新建 / 连接",
-    "[C] 새 연결 / 연결 관리",
-  ],
-  [
-    "[W] Criar query",
-    "[W] New query",
-    "[W] Crear consulta",
-    "[W] クエリを作成",
-    "[W] 新建查询",
-    "[W] 쿼리 만들기",
   ],
   [
     "[Ctrl+A] Executar",
@@ -3134,22 +3069,6 @@ const MESSAGES: readonly Message[] = [
     "[/] テーブルを検索…",
     "[/] 搜索表…",
     "[/] 테이블 검색…",
-  ],
-  [
-    "[Ctrl+A] Nova",
-    "[Ctrl+A] New",
-    "[Ctrl+A] Nueva",
-    "[Ctrl+A] 新規",
-    "[Ctrl+A] 新建",
-    "[Ctrl+A] 새로 만들기",
-  ],
-  [
-    "[Ctrl+S] Revisar 3",
-    "[Ctrl+S] Review 3",
-    "[Ctrl+S] Revisar 3",
-    "[Ctrl+S] 3件を確認",
-    "[Ctrl+S] 审查 3 项",
-    "[Ctrl+S] 3개 검토",
   ],
   [
     "RESULTADO · 6 registros · 3 alterações locais",
@@ -4589,14 +4508,27 @@ const MESSAGES: readonly Message[] = [
     "프로세스 로그",
   ],
   ["[/] ALTERNAR", "[/] SWITCH", "[/] CAMBIAR", "[/] 切替", "[/] 切换", "[/] 전환"],
-  ["[M] Único", "[M] Single", "[M] Único", "[M] 単一", "[M] 单个", "[M] 단일"],
-  ["[M] Multi", "[M] Multi", "[M] Múltiple", "[M] 複数", "[M] 多终端", "[M] 다중"],
-  ["[R] Nova", "[R] New", "[R] Nueva", "[R] 新規", "[R] 新建", "[R] 새로 실행"],
+  [
+    "[Shift+M] Único",
+    "[Shift+M] Single",
+    "[Shift+M] Único",
+    "[Shift+M] 単一",
+    "[Shift+M] 单个",
+    "[Shift+M] 단일",
+  ],
+  [
+    "[Shift+M] Multi",
+    "[Shift+M] Multi",
+    "[Shift+M] Múltiple",
+    "[Shift+M] 複数",
+    "[Shift+M] 多终端",
+    "[Shift+M] 다중",
+  ],
   ["[←] Foco", "[←] Focus", "[←] Foco", "[←] フォーカス", "[←] 焦点", "[←] 포커스"],
   ["[→] Foco", "[→] Focus", "[→] Foco", "[→] フォーカス", "[→] 焦点", "[→] 포커스"],
   ["‹ Grupo", "‹ Group", "‹ Grupo", "‹ グループ", "‹ 组", "‹ 그룹"],
   ["Grupo ›", "Group ›", "Grupo ›", "グループ ›", "组 ›", "그룹 ›"],
-  ["[⇧K] Parar", "[⇧K] Stop", "[⇧K] Detener", "[⇧K] 停止", "[⇧K] 停止", "[⇧K] 중지"],
+  ["Parar", "Stop", "Detener", "停止", "停止", "중지"],
   [
     "[Ctrl+S] Salvar comando",
     "[Ctrl+S] Save command",
@@ -4727,33 +4659,6 @@ const MESSAGES: readonly Message[] = [
     "[Del] 删除已保存",
     "[Del] 저장 항목 삭제",
   ],
-  [
-    "[Espaço] Selecionar",
-    "[Space] Select",
-    "[Espacio] Seleccionar",
-    "[Space] 選択",
-    "[空格] 选择",
-    "[Space] 선택",
-  ],
-  ["[Spc] Sel.", "[Spc] Sel.", "[Spc] Sel.", "[Spc] 選択", "[Spc] 选择", "[Spc] 선택"],
-  [
-    "[Shift+G] Parar grupo",
-    "[Shift+G] Stop group",
-    "[Shift+G] Detener grupo",
-    "[Shift+G] グループ停止",
-    "[Shift+G] 停止组",
-    "[Shift+G] 그룹 중지",
-  ],
-  ["[⇧G] Parar", "[⇧G] Stop", "[⇧G] Detener", "[⇧G] 停止", "[⇧G] 停止", "[⇧G] 중지"],
-  [
-    "[Shift+R] Reiniciar grupo",
-    "[Shift+R] Restart group",
-    "[Shift+R] Reiniciar grupo",
-    "[Shift+R] グループ再起動",
-    "[Shift+R] 重启组",
-    "[Shift+R] 그룹 재시작",
-  ],
-  ["[⇧R] Rein.", "[⇧R] Restart", "[⇧R] Rein.", "[⇧R] 再起動", "[⇧R] 重启", "[⇧R] 재시작"],
   ["[F] Filtro", "[F] Filter", "[F] Filtro", "[F] フィルター", "[F] 筛选", "[F] 필터"],
   ["[T] Hora", "[T] Time", "[T] Hora", "[T] 時刻", "[T] 时间", "[T] 시간"],
   [
@@ -4962,26 +4867,8 @@ const MESSAGES: readonly Message[] = [
     "未检测到端口",
     "감지된 포트 없음",
   ],
-  [
-    "[Espaço] Marcar",
-    "[Space] Mark",
-    "[Espacio] Marcar",
-    "[Space] 選択",
-    "[空格] 标记",
-    "[Space] 선택",
-  ],
-  ["[⇧R] Reiniciar", "[⇧R] Restart", "[⇧R] Reiniciar", "[⇧R] 再起動", "[⇧R] 重启", "[⇧R] 재시작"],
   ["[↵] Ver log", "[↵] View log", "[↵] Ver log", "[↵] ログを表示", "[↵] 查看日志", "[↵] 로그 보기"],
   ["[↵] Rodar", "[↵] Run", "[↵] Ejecutar", "[↵] 実行", "[↵] 运行", "[↵] 실행"],
-  [
-    "[Espaço] Selecionar grupo",
-    "[Space] Select group",
-    "[Espacio] Seleccionar grupo",
-    "[Space] グループ選択",
-    "[空格] 选择组",
-    "[Space] 그룹 선택",
-  ],
-  ["[Spc] Grupo", "[Spc] Group", "[Spc] Grupo", "[Spc] グループ", "[Spc] 组", "[Spc] 그룹"],
   ["[A] Mais…", "[A] More…", "[A] Más…", "[A] その他…", "[A] 更多…", "[A] 더 보기…"],
   ["[A] Mais", "[A] More", "[A] Más", "[A] その他", "[A] 更多", "[A] 더 보기"],
 
@@ -5294,33 +5181,33 @@ const PATTERNS: readonly Pattern[] = [
     /^\[Ctrl\+S\] Revisar (\d+)$/,
     "[Ctrl+S] Review $1",
     "[Ctrl+S] Revisar $1",
-    "[Ctrl+S] $1件を確認",
-    "[Ctrl+S] 审查 $1 项",
-    "[Ctrl+S] $1개 검토",
+    "[Ctrl+S] 確認 $1",
+    "[Ctrl+S] 审阅 $1",
+    "[Ctrl+S] 검토 $1",
   ],
   [
     /^\[E\] Editar (\d+)$/,
     "[E] Edit $1",
     "[E] Editar $1",
-    "[E] $1行を編集",
-    "[E] 编辑 $1 行",
-    "[E] $1개 편집",
+    "[E] 編集 $1",
+    "[E] 编辑 $1",
+    "[E] 편집 $1",
   ],
   [
-    /^\[dd\] Excluir (\d+)$/,
+    /^\[dd\] Deletar (\d+)$/,
     "[dd] Delete $1",
     "[dd] Eliminar $1",
-    "[dd] $1行を削除",
-    "[dd] 删除 $1 行",
-    "[dd] $1개 삭제",
+    "[dd] 削除 $1",
+    "[dd] 删除 $1",
+    "[dd] 삭제 $1",
   ],
   [
     /^\[X\] Exportar (\d+)$/,
     "[X] Export $1",
     "[X] Exportar $1",
-    "[X] $1行をエクスポート",
-    "[X] 导出 $1 行",
-    "[X] $1개 내보내기",
+    "[X] エクスポート $1",
+    "[X] 导出 $1",
+    "[X] 내보내기 $1",
   ],
   [
     /^◆ EDITAR (\d+) LINHA\(S\)$/,
@@ -5412,54 +5299,6 @@ const PATTERNS: readonly Pattern[] = [
     "$2スキーマ・$1オブジェクト",
     "$2 个架构中有 $1 个对象",
     "$2개 스키마에 객체 $1개",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] navegação contextual · TABELAS$/,
-    "[H/←] [L/→] contextual navigation · TABLES",
-    "[H/←] [L/→] navegación contextual · TABLAS",
-    "[H/←] [L/→] コンテキスト移動・テーブル",
-    "[H/←] [L/→] 上下文导航 · 表",
-    "[H/←] [L/→] 상황별 탐색 · 테이블",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] navegação contextual · GRADE$/,
-    "[H/←] [L/→] contextual navigation · GRID",
-    "[H/←] [L/→] navegación contextual · CUADRÍCULA",
-    "[H/←] [L/→] コンテキスト移動・グリッド",
-    "[H/←] [L/→] 上下文导航 · 网格",
-    "[H/←] [L/→] 상황별 탐색 · 그리드",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] navegação contextual · REGISTRO$/,
-    "[H/←] [L/→] contextual navigation · RECORD",
-    "[H/←] [L/→] navegación contextual · REGISTRO",
-    "[H/←] [L/→] コンテキスト移動・レコード",
-    "[H/←] [L/→] 上下文导航 · 记录",
-    "[H/←] [L/→] 상황별 탐색 · 레코드",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] TABELAS$/,
-    "[H/←] [L/→] TABLES",
-    "[H/←] [L/→] TABLAS",
-    "[H/←] [L/→] テーブル",
-    "[H/←] [L/→] 表",
-    "[H/←] [L/→] 테이블",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] GRADE$/,
-    "[H/←] [L/→] GRID",
-    "[H/←] [L/→] CUADRÍCULA",
-    "[H/←] [L/→] グリッド",
-    "[H/←] [L/→] 网格",
-    "[H/←] [L/→] 그리드",
-  ],
-  [
-    /^\[H\/←\] \[L\/→\] REGISTRO$/,
-    "[H/←] [L/→] RECORD",
-    "[H/←] [L/→] REGISTRO",
-    "[H/←] [L/→] レコード",
-    "[H/←] [L/→] 记录",
-    "[H/←] [L/→] 레코드",
   ],
   [
     /^CÉLULA (\d+),(\d+) {2}• {2}(\d+) REGISTROS {2}• {2}(\d+) ALTERAÇÕES PENDENTES {2}• {2}(\d+)–(\d+)(\s?[↑↓]*)$/,
@@ -5604,14 +5443,6 @@ const PATTERNS: readonly Pattern[] = [
     "명령 $1개 · 활성 $2개",
   ],
   [
-    /^SELEÇÃO EM GRUPO {2}· {2}(\d+) MARCADOS?$/,
-    "GROUP SELECTION  ·  $1 MARKED",
-    "SELECCIÓN DE GRUPO  ·  $1 MARCADOS",
-    "グループ選択・$1件",
-    "组选 · 已标记 $1 项",
-    "그룹 선택 · $1개 선택",
-  ],
-  [
     /^(\d+) selecionados?$/,
     "$1 selected",
     "$1 seleccionados",
@@ -5620,15 +5451,6 @@ const PATTERNS: readonly Pattern[] = [
     "$1개 선택",
   ],
   [/^(\d+) execuç(?:ão|ões)$/, "$1 runs", "$1 ejecuciones", "$1件の実行", "$1 次执行", "실행 $1개"],
-  [
-    /^(\d+) COMANDOS {2}· {2}(\d+) ATIVOS? {2}· {2}(\d+) GRUPO$/,
-    "$1 COMMANDS  ·  $2 ACTIVE  ·  $3 GROUP",
-    "$1 COMANDOS  ·  $2 ACTIVOS  ·  $3 GRUPO",
-    "$1コマンド・$2件実行中・グループ$3件",
-    "$1 个命令 · $2 个活动 · $3 个分组",
-    "명령 $1개 · 활성 $2개 · 그룹 $3개",
-  ],
-  [/^\[G\] Rodar( \d+)?$/, "[G] Run$1", "[G] Ejecutar$1", "[G] 実行$1", "[G] 运行$1", "[G] 실행$1"],
   [
     /^\[E\] Ambiente: (.+)$/,
     "[E] Environment: $1",
@@ -5785,12 +5607,12 @@ const PATTERNS: readonly Pattern[] = [
   ],
   [/^(\d+) PASTAS$/, "$1 FOLDERS", "$1 CARPETAS", "$1フォルダ", "$1 个文件夹", "폴더 $1개"],
   [
-    /^● processo ativo( #\d+)? · \[Enter\] abre · \[R\] inicia outro$/,
-    "● active process$1 · [Enter] opens · [R] starts another",
-    "● proceso activo$1 · [Enter] abre · [R] inicia otro",
-    "● 実行中のプロセス$1・[Enter] 開く・[R] 別の実行",
-    "● 活动进程$1 · [Enter] 打开 · [R] 启动另一个",
-    "● 활성 프로세스$1 · [Enter] 열기 · [R] 새로 실행",
+    /^● processo ativo( #\d+)? · \[Enter\] abre$/,
+    "● active process$1 · [Enter] opens",
+    "● proceso activo$1 · [Enter] abre",
+    "● 実行中のプロセス$1・[Enter] 開く",
+    "● 活动进程$1 · [Enter] 打开",
+    "● 활성 프로세스$1 · [Enter] 열기",
   ],
   [
     /^Limite de (\d+) terminais nesta execução\.$/,

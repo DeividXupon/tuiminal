@@ -6,7 +6,10 @@ import {
   ownsInterrupt,
   ownsKeyboardFocus,
 } from "@xupon/tuiminal-core/keyboard/scope"
-import { withNotifications } from "@xupon/tuiminal-core/notifications/index"
+import {
+  useNotificationPlacement,
+  withNotifications,
+} from "@xupon/tuiminal-core/notifications/index"
 import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -23,12 +26,12 @@ import {
   DatabaseQueryHistoryModal,
   DatabaseViewer,
   databaseQueryHistoryCanRerun,
-  TermAgents,
   GitViewer,
   HttpClient,
   listDatabaseQueryHistory,
   PinnedTerminalSidebar,
   Runner,
+  TermAgents,
 } from "./features/components"
 import { loadedFeature } from "./features/registry"
 import { useFeatureRetirement } from "./features/use-feature-retirement"
@@ -38,6 +41,7 @@ import { useApplicationExit } from "./hooks/use-application-exit"
 import { useConfigurationLayer } from "./hooks/use-configuration-layer"
 import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
 import { useRemoteServerSetup } from "./hooks/use-remote-server-setup"
+import { useWorkspaceRepaint } from "./hooks/use-workspace-repaint"
 import {
   activateConfigurationSection,
   configurationContextForTool,
@@ -46,11 +50,13 @@ import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } f
 import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
 import { applicationExitLayer } from "./ui/application-exit-layer"
 import type { ConfigurationSection } from "./ui/ConfigurationModal"
+import { withMouseTrail } from "./ui/MouseTrailSurface"
 import { SensitiveTermsModal } from "./ui/SensitiveTermsModal"
 import { withStartupAnimation } from "./ui/StartupAnimation"
+import { ToolPanel } from "./ui/ToolPanel"
+import { contextualRemoteSettingsOwnKey } from "./ui/terminal-remote-settings"
 import { WorkspaceConfigurationOverlay } from "./ui/WorkspaceConfigurationOverlay"
 import { WorkspaceHeader } from "./ui/WorkspaceHeader"
-import { contextualRemoteSettingsOwnKey } from "./ui/terminal-remote-settings"
 
 function syncVisitedTools(
   visited: Set<AppTab>,
@@ -78,6 +84,7 @@ export function AppContent() {
     resolveToolLaunch(process.env.TUIMINAL_INITIAL_TAB, process.env.TUIMINAL_ONLY_TAB),
   )
   const [activeTab, setActiveTab] = useState<AppTab>(features.initial ?? INITIAL_TAB)
+  useNotificationPlacement((ONLY_TAB ?? activeTab) === "database" ? "bottom" : "top")
   const visitedTabsRef = useRef(new Set<AppTab>())
   const { closed, retire, resume } = useFeatureRetirement()
   syncVisitedTools(visitedTabsRef.current, features.state.installed, closed, activeTab)
@@ -148,6 +155,11 @@ export function AppContent() {
   const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
   const modalBlocked = settingsOpen || tutorialOpen || exit.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
+  useWorkspaceRepaint(
+    [tutorialScreen, settings.layout, terminal.width, terminal.height, interactionBlocked].join(
+      ":",
+    ),
+  )
   const backgroundToolActive = !interactionBlocked && !terminalSidebarFocused
   const openSettings = useCallback(() => {
     openConfiguration()
@@ -448,7 +460,6 @@ export function AppContent() {
       </box>
     )
   }
-
   return (
     <Tabs.Root
       value={activeTab}
@@ -479,7 +490,7 @@ export function AppContent() {
           onOpenTerminal={() => void selectTab("terminal")}
         />
         <box style={{ flexGrow: 1, minWidth: 1 }}>
-          <Tabs.Panel value="database" flexGrow={1} keepMounted>
+          <ToolPanel value="database" active={activeTab === "database"}>
             {visitedTabsRef.current.has("database") ? (
               <box
                 {...(activeTab === "database" ? { id: "tutorial-current-tool" } : {})}
@@ -493,8 +504,8 @@ export function AppContent() {
                 />
               </box>
             ) : null}
-          </Tabs.Panel>
-          <Tabs.Panel value="git" flexGrow={1} keepMounted>
+          </ToolPanel>
+          <ToolPanel value="git" active={activeTab === "git"}>
             {visitedTabsRef.current.has("git") ? (
               <box
                 {...(activeTab === "git" ? { id: "tutorial-current-tool" } : {})}
@@ -510,8 +521,8 @@ export function AppContent() {
                 />
               </box>
             ) : null}
-          </Tabs.Panel>
-          <Tabs.Panel value="runner" flexGrow={1} keepMounted>
+          </ToolPanel>
+          <ToolPanel value="runner" active={activeTab === "runner"}>
             {visitedTabsRef.current.has("runner") ? (
               <box
                 {...(activeTab === "runner" ? { id: "tutorial-current-tool" } : {})}
@@ -523,8 +534,8 @@ export function AppContent() {
                 />
               </box>
             ) : null}
-          </Tabs.Panel>
-          <Tabs.Panel value="http" flexGrow={1} keepMounted>
+          </ToolPanel>
+          <ToolPanel value="http" active={activeTab === "http"}>
             {visitedTabsRef.current.has("http") ? (
               <box
                 {...(activeTab === "http" ? { id: "tutorial-current-tool" } : {})}
@@ -538,8 +549,8 @@ export function AppContent() {
                 />
               </box>
             ) : null}
-          </Tabs.Panel>
-          <Tabs.Panel value="terminal" flexGrow={1} keepMounted>
+          </ToolPanel>
+          <ToolPanel value="terminal" active={activeTab === "terminal"}>
             {visitedTabsRef.current.has("terminal") ? (
               <box
                 {...(activeTab === "terminal" ? { id: "tutorial-current-tool" } : {})}
@@ -561,14 +572,12 @@ export function AppContent() {
                 />
               </box>
             ) : null}
-          </Tabs.Panel>
+          </ToolPanel>
         </box>
       </box>
       {overlays}
     </Tabs.Root>
   )
 }
-
-export const App = withNotifications(
-  withSelectionClipboard(withStartupAnimation(withFeatures(AppContent))),
-)
+const Workspace = withStartupAnimation(withFeatures(AppContent))
+export const App = withNotifications(withMouseTrail(withSelectionClipboard(Workspace)))

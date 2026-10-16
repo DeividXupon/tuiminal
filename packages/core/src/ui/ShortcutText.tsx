@@ -8,6 +8,8 @@ type ShortcutTextProps = Omit<TextProps, "content" | "children"> & {
   highlight?: boolean
   shortcutColor?: string | undefined
   shortcutAnimation?: ShortcutAnimation | undefined
+  /** Exact bracket tokens drawn in the action-key purple, such as the Master Key. */
+  actionKeys?: readonly string[] | undefined
 }
 
 /** One native text node: keeps hit areas, wrapping and inherited label colors. */
@@ -16,17 +18,19 @@ export function ShortcutText({
   highlight = true,
   shortcutColor,
   shortcutAnimation,
+  actionKeys,
   ...props
 }: ShortcutTextProps) {
   const translated = translateUi(content)
-  const styled = useMemo(
-    () =>
-      shortcutColor !== undefined
-        ? shortcutContent(translated, shortcutColor, shortcutAnimation)
-        : highlight
-          ? shortcutContent(translated, undefined, shortcutAnimation)
-          : translated,
-    [translated, highlight, shortcutColor, shortcutAnimation],
-  )
+  // Keyed by content so a new array literal for the same keys does not restyle the text.
+  const actionKeyList = actionKeys?.join("\0") ?? ""
+  const styled = useMemo(() => {
+    const keys = actionKeyList ? actionKeyList.split("\0") : []
+    return shortcutColor !== undefined
+      ? shortcutContent(translated, shortcutColor, shortcutAnimation, keys)
+      : highlight
+        ? shortcutContent(translated, undefined, shortcutAnimation, keys)
+        : translated
+  }, [translated, highlight, shortcutColor, shortcutAnimation, actionKeyList])
   return <text {...props} content={styled} />
 }

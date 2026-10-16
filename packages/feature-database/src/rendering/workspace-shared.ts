@@ -1,8 +1,7 @@
-import type { DatabaseConnectionProfile, DatabaseTable } from "../model/types"
 import { padDisplayEnd, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-
-import { CELL_WIDTH, TABLE_HISTORY_LIMIT } from "./constants"
+import type { DatabaseConnectionProfile, DatabaseTable } from "../model/types"
 import { tableKey } from "../model/workspace"
+import { CELL_WIDTH, TABLE_HISTORY_LIMIT } from "./constants"
 
 export function fitCell(value: unknown, width = CELL_WIDTH) {
   let text: string
@@ -29,11 +28,12 @@ export function tableHistoryPresentation(
   history: DatabaseTable[],
   selected: DatabaseTable | null,
   areaWidth: number,
+  navigationWidth = 12,
 ) {
-  const itemWidth = areaWidth < 72 ? 14 : 18
+  const itemWidth = Math.max(3, Math.min(areaWidth < 72 ? 14 : 18, areaWidth - navigationWidth))
   const visibleCount = Math.max(
     1,
-    Math.min(TABLE_HISTORY_LIMIT, Math.floor(Math.max(1, areaWidth - 8) / itemWidth)),
+    Math.min(TABLE_HISTORY_LIMIT, Math.floor(Math.max(1, areaWidth - navigationWidth) / itemWidth)),
   )
   const currentIndex = selected
     ? history.findIndex((table) => tableKey(table) === tableKey(selected))

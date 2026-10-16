@@ -1,5 +1,5 @@
-import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { DIFF_SYNTAX_STYLE } from "../rendering/constants"
 
@@ -195,7 +195,6 @@ function TutorialSplitPane({ side, added }: { side: "−" | "+"; added: boolean 
 export function TutorialSplitDiff() {
   return (
     <box
-      id="tutorial-git-diff-layout"
       style={{
         flexGrow: 1,
         flexShrink: 1,

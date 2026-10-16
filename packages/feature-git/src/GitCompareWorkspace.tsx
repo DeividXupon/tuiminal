@@ -1,9 +1,9 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useState } from "react"
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
+import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useState } from "react"
 import { useLocalConfigurationShortcut } from "./hooks/use-local-configuration-shortcut"
 import {
   comparisonRefByName,
@@ -160,8 +160,7 @@ export function GitCompareWorkspace({
       style={{
         flexGrow: 1,
         backgroundColor: LAYOUT.workspaceBackground,
-        padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        paddingX: LAYOUT.outerPadding,
       }}
     >
       <GitComparisonSelector

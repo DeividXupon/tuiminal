@@ -1,4 +1,4 @@
-import { pathToFiletype } from "@opentui/core"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
@@ -284,7 +284,7 @@ export function TutorialLiveDiff({
         >
           <NativeDiff
             patch={patch}
-            filetype={pathToFiletype(selected?.path ?? "") ?? "text"}
+            filetype={syntaxFiletype(selected?.path ?? "")}
             height={
               codeFocused
                 ? liveDiffWrappedHeight(patch, previewWidth)

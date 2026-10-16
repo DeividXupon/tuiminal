@@ -115,7 +115,13 @@ LRU insertion. Each session checks the active request before caching a result;
 stale callbacks cannot release a replacement controller.
 The generic native unified/split diff surface and code-cell gutter sizing live in
 core so Git and Term Agents's optional Live Diff share presentation without
-one feature importing the other. Git retains its file/tree and staging behavior;
+one feature importing the other. Core also registers the bundled syntax grammars
+before code views mount. Parser WASM files, capture queries, and upstream licenses
+live in `packages/core/src/syntax/assets`; `scripts/syntax-sources.json` pins their
+source archives and integrity hashes. `bun scripts/update-syntax-assets.ts` refreshes
+only those declared assets. The host embeds them and internal core tarballs copy
+them, so highlighting needs neither network access nor project-local dependencies.
+Git retains its file/tree and staging behavior;
 Terminal owns its separate read-only local snapshot lifecycle.
 
 The code-consistency audit compared exact ten-line source windows across the CLI

@@ -23,7 +23,7 @@ describe("database responsive layout", () => {
     expect(databaseActionRowCount(64, true)).toBe(2)
     expect(databaseActionRowCount(49, true)).toBe(3)
     expect(databaseActionRowCount(33, true)).toBe(3)
-    expect(databaseActionRowCount(33, false)).toBe(1)
+    expect(databaseActionRowCount(33, false)).toBe(0)
   })
 
   test("cycles the selected column through ascending, descending, and normal order", () => {
@@ -38,23 +38,27 @@ describe("database responsive layout", () => {
     })
   })
 
-  test("keeps loading overlays between table controls and the navigation footer", () => {
+  test("keeps loading overlays between the table header and action footer", () => {
     expect(
       databaseLoadingInsets({
-        hasTableHistory: true,
         hasSelectedTable: true,
         actionRowCount: 2,
-        compactActions: false,
       }),
-    ).toEqual({ top: 4, bottom: 2 })
+    ).toEqual({ top: 1, bottom: 3 })
     expect(
       databaseLoadingInsets({
-        hasTableHistory: false,
         hasSelectedTable: true,
         actionRowCount: 3,
-        compactActions: true,
       }),
-    ).toEqual({ top: 3, bottom: 3 })
+    ).toEqual({ top: 1, bottom: 4 })
+    expect(databaseLoadingInsets({ hasSelectedTable: true, actionRowCount: 0 })).toEqual({
+      top: 1,
+      bottom: 2,
+    })
+    expect(databaseLoadingInsets({ hasSelectedTable: false, actionRowCount: 2 })).toEqual({
+      top: 0,
+      bottom: 2,
+    })
   })
 
   test("maps H/L and horizontal arrows to the same directions", () => {

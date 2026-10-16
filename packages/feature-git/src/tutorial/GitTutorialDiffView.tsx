@@ -1,5 +1,5 @@
-import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { TutorialSplitDiff } from "./GitTutorialStateViews"
 
@@ -12,6 +12,7 @@ export function TutorialDiffPanel({
 }) {
   return (
     <box
+      {...(layoutDemo ? { id: "tutorial-git-diff-layout" } : {})}
       style={{
         flexGrow: 1,
         flexShrink: 1,

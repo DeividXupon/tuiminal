@@ -89,7 +89,7 @@ describe("application boundaries", () => {
     expect(Object.hasOwn(TOOL_COMMANDS, "pomodoro")).toBe(false)
   })
 
-  test("global tool shortcuts require Alt and preserve local number and symbol keys", () => {
+  test("global numeric tool shortcuts require Alt and preserve local keys", () => {
     expect(globalApplicationShortcut({ name: "1", meta: true }, true, false)).toBe("database")
     expect(globalApplicationShortcut({ name: "2", option: true }, true, false)).toBe("git")
     expect(globalApplicationShortcut({ name: "3", meta: true }, true, false)).toBe("runner")
@@ -100,6 +100,34 @@ describe("application boundaries", () => {
     expect(globalApplicationShortcut({ name: "@", shift: true }, true, false)).toBeNull()
     expect(globalApplicationShortcut({ name: "1", meta: true }, false, false)).toBeNull()
     expect(globalApplicationShortcut({ name: "1", meta: true }, true, true)).toBeNull()
+  })
+
+  test("macOS Option number symbols select tools only when global navigation owns input", () => {
+    const shortcuts = [
+      ["¡", "database"],
+      ["™", "git"],
+      ["£", "runner"],
+      ["¢", "http"],
+      ["∞", "terminal"],
+    ] as const
+    for (const [symbol, tool] of shortcuts) {
+      for (const key of [
+        { name: symbol },
+        { name: "", sequence: symbol },
+        { name: "", raw: symbol },
+        { name: symbol, meta: true },
+        { name: symbol, option: true },
+      ]) {
+        expect(globalApplicationShortcut(key, true, false)).toBe(tool)
+        expect(globalApplicationShortcut(key, false, false)).toBeNull()
+        expect(globalApplicationShortcut(key, true, true)).toBeNull()
+        expect(globalApplicationShortcut({ ...key, ctrl: true }, true, false)).toBeNull()
+        expect(globalApplicationShortcut({ ...key, shift: true }, true, false)).toBeNull()
+        expect(globalApplicationShortcut({ ...key, super: true }, true, false)).toBeNull()
+      }
+    }
+    for (const name of ["1", "2", "3", "4", "5", "§", "¶", "•", "ª", "º", "€", "¡™"])
+      expect(globalApplicationShortcut({ name }, true, false)).toBeNull()
   })
 
   test("launches Runner by default and safely ignores obsolete tool IDs", () => {

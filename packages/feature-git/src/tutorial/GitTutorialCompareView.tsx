@@ -1,6 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react"
-import { COLORS, LAYOUT, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS, LAYOUT, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { TutorialCompareBranchPicker } from "./GitTutorialComparePicker"
@@ -191,8 +191,7 @@ export function GitTutorialCompareView({
         position: "relative",
         flexGrow: 1,
         backgroundColor: LAYOUT.workspaceBackground,
-        padding: LAYOUT.outerPadding,
-        gap: LAYOUT.gap,
+        paddingX: LAYOUT.outerPadding,
       }}
     >
       <TutorialCompareSelectors state={state} width={terminal.width} onPress={onPress} />

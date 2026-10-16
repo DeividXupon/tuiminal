@@ -1,4 +1,6 @@
 import { useKeyboard } from "@opentui/react"
+import { pullRequestActivity } from "../../model/pr/activity"
+import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import type { PullRequestFocus, PullRequestWorkspaceAction } from "../../model/pr/navigation"
 import { pullRequestWorkspaceAction } from "../../model/pr/navigation"
 import type { PullRequestDetails, PullRequestPreviewTab } from "../../model/pr/types"
@@ -64,7 +66,7 @@ function previewCollectionAction({
 }): PreviewCollectionAction | null {
   if (focus !== "preview" || !details) return null
   if (tab === "activity") {
-    return activityCollectionAction(keyName, details.comments.length, shift)
+    return activityCollectionAction(keyName, pullRequestActivity(details).length, shift)
   }
   return detailCollectionAction(keyName, tab, details, selectedIndex)
 }
@@ -74,8 +76,6 @@ export function usePullRequestWorkspaceKeyboard({
   blocked,
   focus,
   hasSelection,
-  canLoadMore,
-  canLoadPreview,
   previewTab,
   details,
   previewItemIndex,
@@ -89,8 +89,6 @@ export function usePullRequestWorkspaceKeyboard({
   blocked: boolean
   focus: PullRequestFocus
   hasSelection: boolean
-  canLoadMore: boolean
-  canLoadPreview: boolean
   previewTab: PullRequestPreviewTab
   details: PullRequestDetails | null
   previewItemIndex: number
@@ -102,6 +100,12 @@ export function usePullRequestWorkspaceKeyboard({
 }) {
   useKeyboard((key) => {
     if (!active || blocked) return
+    // `[?]` opens the action palette with or without a selected pull request.
+    if (isActionPaletteKey(key)) {
+      key.preventDefault()
+      onWorkspaceAction({ type: "open-action-menu" })
+      return
+    }
     const collectionAction = previewCollectionAction({
       keyName: key.name,
       focus,
@@ -124,8 +128,6 @@ export function usePullRequestWorkspaceKeyboard({
       shift: key.shift,
       focus,
       hasSelection,
-      canLoadMore,
-      canLoadPreview,
       ctrl: key.ctrl,
       option: key.option,
       meta: key.meta,

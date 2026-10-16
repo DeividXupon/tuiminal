@@ -87,15 +87,22 @@ writeFileSync(
       private: true,
       scripts: {
         "dev:api":
-          "node -e \"console.log('API ready · http://127.0.0.1:43117'); setInterval(()=>console.log('GET /health 200 · 12ms'),2000)\"",
+          "bun -e \"console.log('API ready · http://127.0.0.1:43117'); setInterval(()=>console.log('GET /health 200 · 12ms'),2000)\"",
         "dev:web":
-          "node -e \"console.log('Web ready · http://127.0.0.1:43118'); setInterval(()=>console.log('GET / 200 · 8ms'),2000)\"",
-        test: "node -e \"console.log('42 tests passed')\"",
+          "bun -e \"console.log('Web ready · http://127.0.0.1:43118'); setInterval(()=>console.log('GET / 200 · 8ms'),2000)\"",
+        test: "bun -e \"console.log('42 tests passed')\"",
+        verify:
+          "bun -e \"console.error('Validation failed: missing demo option'); process.exit(2)\"",
       },
     },
     null,
     2,
   )}\n`,
+)
+// Keep the demo's owned processes on the same Bun runtime required by the workspace.
+writeFileSync(
+  join(PROJECT_ROOT, "bun.lock"),
+  '{"lockfileVersion":1,"workspaces":{"":{"name":"tuiminal-demo-workspace"}},"packages":{}}\n',
 )
 writeFileSync(join(PROJECT_ROOT, "README.md"), "# Acme API\n\nPrimeira versão.\n")
 writeFileSync(join(PROJECT_ROOT, "src", "server.ts"), "export const port = 43117\n")
@@ -411,8 +418,11 @@ async function gitFrames() {
 
     await pressRenderable(tui, "git-tab-inbox")
     await settle(tui, () => tui.captureCharFrame().includes("Evitar corrida"))
+    await pressKey(tui, "l")
+    await pressKey(tui, "v")
+    await settle(tui, () => tui.captureCharFrame().includes("[Enter] Responder"))
     frames.push(
-      snapshot(tui, "[4] Inbox · notificações, revisão e itens salvos", "git-inbox-row-0", 170),
+      snapshot(tui, "[4] Inbox · conversa, reações e respostas", "git-inbox-preview-panel", 170),
     )
     return frames
   } finally {
@@ -423,6 +433,7 @@ async function gitFrames() {
 async function runnerFrames() {
   updateUiSettings({ layout: "framed" })
   const tui = await testRender(createElement(Runner, { active: true }), {
+    kittyKeyboard: true,
     width: TERMINAL_COLUMNS,
     height: TERMINAL_ROWS,
   })
@@ -437,19 +448,56 @@ async function runnerFrames() {
       snapshot(tui, "[Alt+3] Runner · comandos detectados no projeto", "runner-command-panel", 160),
     ]
 
+    await pressKey(tui, "?")
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("runner-action-palette")))
+    frames.push(snapshot(tui, "[?] busca ações por nome e categoria", "runner-action-palette", 170))
+    await pressKey(tui, "escape")
+    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "runner-command-list")
+
+    await pressKey(tui, "space")
+    await settle(tui, () => tui.captureCharFrame().includes("CONCLUÍDO"))
+    frames.push(snapshot(tui, "Verde identifica o comando concluído", "runner-command-panel"))
+
     await pressKey(tui, "down")
-    await pressKey(tui, "enter")
+    await pressKey(tui, "space")
     await settle(tui, () => tui.captureCharFrame().includes("API ready"))
-    frames.push(snapshot(tui, "[Enter] inicia e acompanha logs em tempo real", "runner-log-scroll"))
+    frames.push(snapshot(tui, "[Space] inicia e acompanha logs em tempo real", "runner-log-scroll"))
 
     await pressKey(tui, "down")
     await pressKey(tui, "enter")
     await settle(tui, () => tui.captureCharFrame().includes("Web ready"))
+    await pressKey(tui, "down")
+    await pressKey(tui, "space")
+    await settle(tui, () => tui.captureCharFrame().includes("SAÍDA 2"))
+    frames.push(
+      snapshot(
+        tui,
+        "Falhas ficam em vermelho no comando, na aba e no resumo",
+        "runner-header",
+        180,
+      ),
+    )
+    await pressKey(tui, "s")
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("runner-history-list")))
+    frames.push(
+      snapshot(
+        tui,
+        "O histórico mantém o resultado e o código de saída",
+        "runner-history-panel",
+        160,
+      ),
+    )
+    await pressKey(tui, "s")
+    await pressKey(tui, "h")
     await pressKey(tui, "m")
+    await pressKey(tui, "l")
+    frames.push(snapshot(tui, "[M] escolhe o painel; [Enter] confirma o foco", "runner-log-panel"))
+    await pressKey(tui, "escape")
+    await pressRenderable(tui, "runner-footer-multi")
     await settle(tui, () => tui.captureCharFrame().includes("MULTI"))
-    frames.push(snapshot(tui, "[M] acompanha vários processos lado a lado"))
+    frames.push(snapshot(tui, "[Ctrl+M] acompanha vários processos lado a lado"))
 
-    await pressKey(tui, "m")
+    await pressKey(tui, "m", { ctrl: true })
     await pressKey(tui, "p")
     await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("runner-process-list")))
     frames.push(
@@ -634,10 +682,10 @@ async function nativeTerminalFrames() {
     await pressKey(tui, "escape")
     await pressKey(tui, "escape")
     await pressKey(tui, "escape")
-    await clickRenderable(tui, "terminal-sidebar-command")
+    await clickRenderable(tui, "terminal-sidebar-new")
     await typeInto(
       tui,
-      "terminal-command-input",
+      tui.renderer.currentFocusedRenderable!.id,
       `node -e "console.log('API shell ready'); setTimeout(()=>{},30000)"`,
     )
     await pressKey(tui, "enter")
@@ -686,8 +734,8 @@ async function nativeTerminalFrames() {
     await pressKey(tui, "b", { ctrl: true })
     frames.push(snapshot(tui, "Master Key · ações e chats em um modal pesquisável", undefined, 220))
     await pressKey(tui, "escape")
-    await clickRenderable(tui, "terminal-sidebar-command")
-    await typeInto(tui, "terminal-command-input", `node "${agentPath}"`)
+    await clickRenderable(tui, "terminal-sidebar-new")
+    await typeInto(tui, tui.renderer.currentFocusedRenderable!.id, `node "${agentPath}"`)
     await pressKey(tui, "enter")
     await prefix("e")
     await typeInto(tui, "terminal-command-input", "API review", true)
@@ -738,8 +786,8 @@ async function nativeTerminalFrames() {
     process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
     await prefix("v")
     await pressKey(tui, "n")
-    await clickRenderable(tui, "terminal-sidebar-command")
-    await typeInto(tui, "terminal-command-input", `node "${reviewerPath}"`)
+    await clickRenderable(tui, "terminal-sidebar-new")
+    await typeInto(tui, tui.renderer.currentFocusedRenderable!.id, `node "${reviewerPath}"`)
     await pressKey(tui, "enter")
     await prefix("e")
     await typeInto(tui, "terminal-command-input", "Tests review", true)

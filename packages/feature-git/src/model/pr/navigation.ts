@@ -1,7 +1,6 @@
-import type { PullRequestActionKind } from "./actions"
-import type { PullRequestPreviewConfig } from "./config"
-import type { PullRequestPreviewTab } from "./types"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
+import type { PullRequestActionKind } from "./actions"
+import type { PullRequestPreviewTab } from "./types"
 
 export type PullRequestLayoutMode = "side-by-side" | "stacked" | "single"
 export type PullRequestFocus = "list" | "preview"
@@ -18,14 +17,10 @@ export type PullRequestWorkspaceAction =
   | { type: "edit-query" }
   | { type: "create-pr" }
   | { type: "refresh" }
-  | { type: "load-more" }
-  | { type: "load-preview-more" }
   | { type: "open-diff" }
   | { type: "open-action-menu" }
   | { type: "prepare-action"; kind: PullRequestActionKind }
   | { type: "toggle-watch" }
-  | { type: "toggle-preview" }
-  | { type: "cycle-preview-position" }
   | { type: "open-browser" | "copy-url" | "copy-number" | "copy-sha" | "toggle-description" }
 
 export const PULL_REQUEST_PREVIEW_TABS: readonly PullRequestPreviewTab[] = [
@@ -36,24 +31,10 @@ export const PULL_REQUEST_PREVIEW_TABS: readonly PullRequestPreviewTab[] = [
   "files",
 ]
 
-export function resolvePullRequestLayout(
-  width: number,
-  height: number,
-  position: PullRequestPreviewConfig["position"] = "auto",
-): PullRequestLayoutMode {
-  if (position === "right") return width >= 90 && height >= 20 ? "side-by-side" : "single"
-  if (position === "bottom") return width >= 60 && height >= 20 ? "stacked" : "single"
+export function resolvePullRequestLayout(width: number, height: number): PullRequestLayoutMode {
   if (width >= 118 && height >= 22) return "side-by-side"
   if (width >= 76 && height >= 20) return "stacked"
   return "single"
-}
-
-export function nextPullRequestPreviewPosition(
-  position: PullRequestPreviewConfig["position"],
-): PullRequestPreviewConfig["position"] {
-  if (position === "auto") return "right"
-  if (position === "right") return "bottom"
-  return "auto"
 }
 
 export function movePullRequestIndex(current: number, count: number, delta: -1 | 1) {
@@ -86,12 +67,9 @@ function sectionNavigationAction({
   return direction ? { type: "move-section", delta: direction } : null
 }
 
-function listNavigationAction(keyName: string, shift: boolean | undefined, hasSelection: boolean) {
-  if (keyName === "home" || (keyName === "g" && !shift))
-    return { type: "select-edge", target: "first" } as const
-  if (keyName === "end" || (keyName === "g" && shift)) {
-    return { type: "select-edge", target: "last" } as const
-  }
+function listNavigationAction(keyName: string, hasSelection: boolean) {
+  if (keyName === "home") return { type: "select-edge", target: "first" } as const
+  if (keyName === "end") return { type: "select-edge", target: "last" } as const
   if (keyName === "j" || keyName === "down") return { type: "move-row", delta: 1 } as const
   if (keyName === "k" || keyName === "up") return { type: "move-row", delta: -1 } as const
   if (
@@ -149,7 +127,7 @@ export function pullRequestNavigationAction({
   const sectionAction = sectionNavigationAction({ keyName, ctrl, shift, option, meta })
   if (sectionAction) return sectionAction
   return focus === "list"
-    ? listNavigationAction(keyName, shift, hasSelection)
+    ? listNavigationAction(keyName, hasSelection)
     : previewNavigationAction({ keyName, ctrl, shift, option, meta })
 }
 
@@ -158,8 +136,6 @@ export function pullRequestWorkspaceAction({
   shift,
   focus,
   hasSelection,
-  canLoadMore,
-  canLoadPreview,
   ctrl,
   option,
   meta,
@@ -168,23 +144,13 @@ export function pullRequestWorkspaceAction({
   shift?: boolean
   focus: PullRequestFocus
   hasSelection: boolean
-  canLoadMore?: boolean
-  canLoadPreview?: boolean
   ctrl?: boolean
   option?: boolean
   meta?: boolean
 }): PullRequestWorkspaceAction | null {
   if (ctrl && keyName === "n") return { type: "create-pr" }
-  const configuration = pullRequestConfigurationAction({
-    keyName,
-    shift,
-  })
-  if (configuration) return configuration
+  if (keyName === "/") return { type: "edit-query" }
   if (keyName === "r") return { type: "refresh" }
-  if (keyName === "n" && focus === "preview" && canLoadPreview) {
-    return { type: "load-preview-more" }
-  }
-  if (keyName === "n" && canLoadMore) return { type: "load-more" }
   if (focus === "preview" && ctrl && (keyName === "d" || keyName === "u")) {
     return { type: "scroll-preview", delta: keyName === "d" ? 10 : -10 }
   }
@@ -211,18 +177,6 @@ export function pullRequestWorkspaceAction({
     focus,
     hasSelection,
   })
-}
-
-function pullRequestConfigurationAction({
-  keyName,
-  shift,
-}: {
-  keyName: string
-  shift?: boolean | undefined
-}): PullRequestWorkspaceAction | null {
-  if (keyName === "p") return { type: shift ? "cycle-preview-position" : "toggle-preview" }
-  if (keyName === "/") return { type: "edit-query" }
-  return null
 }
 
 function selectedPullRequestAction({
@@ -274,6 +228,7 @@ export function pullRequestActionKindForShortcut(key: {
   if (name === "w" && key.shift) return "ready"
   if (name === "x") return key.shift ? "reopen" : "close"
   if (name === "u") return "update-branch"
-  if (name === "m") return "merge"
+  // Plain [M] chooses a box; merge needs the deliberate [Shift+M].
+  if (name === "m" && key.shift) return "merge"
   return null
 }

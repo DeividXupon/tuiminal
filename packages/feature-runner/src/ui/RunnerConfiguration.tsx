@@ -10,17 +10,8 @@ import type { RunnerCommand } from "../model/types"
 import type { RunnerEnvironmentProfile } from "../model/config"
 import type { RunnerFlow, RunnerNodeStatus } from "../model/plan"
 import { RunnerConfigurationEditor, type RunnerEditorTarget } from "./RunnerConfigurationEditor"
+import { RunnerFlowStatus } from "./RunnerFlowStatus"
 
-const stateLabels: Record<RunnerNodeStatus, string> = {
-  pending: "aguardando",
-  starting: "iniciando",
-  started: "iniciado",
-  healthy: "saudável",
-  success: "sucesso",
-  failed: "falhou",
-  stopped: "parado",
-  blocked: "bloqueado",
-}
 type Props = {
   root: string
   commands: RunnerCommand[]
@@ -179,18 +170,7 @@ export function RunnerConfiguration({
       />
       {selectedFlow ? (
         <box height={5} flexShrink={0}>
-          <text
-            content={
-              (flowStates.get(selectedFlow.id) ?? [])
-                .map(
-                  ([id, state]) =>
-                    `${commands.find((command) => command.id === id)?.label ?? id}: ${translateUi(stateLabels[state])}`,
-                )
-                .join(" · ") || translateUi("aguardando")
-            }
-            fg={COLORS.text}
-            height={3}
-          />
+          <RunnerFlowStatus states={flowStates.get(selectedFlow.id) ?? []} commands={commands} />
           <box height={1} flexDirection="row">
             <InlineButton
               id="runner-config-run"

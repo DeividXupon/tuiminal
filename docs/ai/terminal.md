@@ -26,7 +26,7 @@ Code: [feature](../../packages/feature-terminal/src/).
 - On POSIX, a local integrated OpenCode server is supervised through an owner pipe;
   owner death must retire the server even when normal application cleanup cannot run.
 - Terminal stays compact with no outer chrome; preserve two panes per section,
-  the 12-session limit and session-local Live Diff/history state.
+  unlimited workspace sessions, scrollable lists and session-local Live Diff/history state.
 - tmux auto mode requires POSIX tmux 3.2+; native Windows uses ConPTY. Never install
   tmux automatically or replay a potentially executed command on fallback.
 - Owned tmux windows persist on the named server; shutdown detaches temporary
@@ -42,7 +42,7 @@ Code: [feature](../../packages/feature-terminal/src/).
 - Pinned helpers use marked panes and the private control channel. Restore altered
   mouse/prefix settings without overwriting custom bindings; focus handoff uses
   pane-scoped wait-for, never process signals. External non-tmux TTYs are metadata
-  only and do not consume the session limit.
+  only and do not create managed sessions.
 
 ## Observation and presentation
 

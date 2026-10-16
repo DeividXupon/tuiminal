@@ -13,6 +13,7 @@ const env = {
   XDG_CONFIG_HOME: join(temporaryRoot, "config"),
   TUIMINAL_WORKDIR: temporaryRoot,
   TUIMINAL_PROJECT_ROOTS: temporaryRoot,
+  XDG_DATA_HOME: join(temporaryRoot, "data"),
 }
 for (const name of ["DATABASE_URL", "MYSQL_URL", "POSTGRES_URL", "TUIMINAL_MYSQL_MCP_COMMAND"])
   delete env[name as keyof typeof env]
@@ -117,6 +118,16 @@ try {
   assert(test.captureCharFrame().includes("Tuiminal packages"));
 } finally { act(() => test.renderer.destroy()); }
 console.log("Installed packages resolve compiled JS, share React/OpenTUI, and render localized JSX");
+const { TreeSitterClient } = await import("@opentui/core");
+const { syntaxFiletype } = await import("@xupon/tuiminal-core/syntax/index");
+const syntaxClient = new TreeSitterClient({ dataPath: process.env.XDG_DATA_HOME + "/syntax" });
+try {
+  const result = await syntaxClient.highlightOnce('return "packed"', syntaxFiletype("example.py"));
+  assert.equal(result.error, undefined);
+  assert.equal(result.warning, undefined);
+  assert(result.highlights.some(([, , group]) => group === "keyword"));
+} finally { await syntaxClient.destroy(); }
+console.log("Installed core package resolves bundled syntax assets from the consumer project");
 const { Database } = await import("bun:sqlite");
 const { sqliteQueryProcessCommand } = await import(new URL("./services/sqlite-query-runtime.js", import.meta.resolve("@xupon/tuiminal-feature-database")));
 const command = sqliteQueryProcessCommand();

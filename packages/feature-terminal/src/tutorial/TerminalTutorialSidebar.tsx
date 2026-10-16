@@ -5,6 +5,7 @@ import {
   isRunningAgent,
   masterKeyShortcutLabel,
   numberedTerminalSections,
+  sidebarTerminalSessions,
   type TerminalSession,
   visibleTerminalShortcutTargets,
 } from "../model/sessions"
@@ -23,7 +24,7 @@ const COLLAPSED_FOLDER_SET = new Set(COLLAPSED_FOLDERS)
  * but owns no keyboard handler, focus or persisted fold state.
  */
 export function TerminalTutorialSidebar({
-  sessions,
+  sessions: allSessions,
   activeSessionId,
   width,
   height,
@@ -39,6 +40,7 @@ export function TerminalTutorialSidebar({
   borderRight?: boolean
   id?: string
 }) {
+  const sessions = useMemo(() => sidebarTerminalSessions(allSessions), [allSessions])
   const masterKey = getUiSettings().terminalMasterKey
   const sections = useMemo(() => numberedTerminalSections(sessions), [sessions])
   const agentCount = sessions.filter(isRunningAgent).length
@@ -130,7 +132,6 @@ export function TerminalTutorialSidebar({
           <box id="tutorial-terminal-tmux" style={{ flexShrink: 0 }}>
             {groups(1)}
           </box>
-          {groups(2)}
         </box>
       </box>
       <TerminalInlineButton
@@ -142,8 +143,8 @@ export function TerminalTutorialSidebar({
       />
       <TerminalInlineButton
         compact
-        id="tutorial-terminal-command"
-        label="Comando"
+        id="tutorial-terminal-new-agent"
+        label="Novo agente"
         accent={COLORS.terminal}
         onPress={noop}
       />
@@ -151,6 +152,7 @@ export function TerminalTutorialSidebar({
         compact
         id="tutorial-terminal-master-key"
         label={`[${masterKey}]`}
+        actionKeys={[`[${masterKey}]`]}
         accent={COLORS.terminal}
         onPress={noop}
       />

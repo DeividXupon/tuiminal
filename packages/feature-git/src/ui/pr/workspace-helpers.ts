@@ -1,13 +1,13 @@
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { nextPullRequestDetailConnection } from "../../model/pr/detail-pagination"
 import type { Dispatch, SetStateAction } from "react"
+import type { PullRequestActionKind } from "../../model/pr/actions"
+import type { PullRequestDiffTarget } from "../../model/pr/diff"
 import {
   adjacentPreviewTab,
   movePullRequestIndex,
   type PullRequestFocus,
   type PullRequestWorkspaceAction,
 } from "../../model/pr/navigation"
-import type { PullRequestDiffTarget } from "../../model/pr/diff"
 import type {
   PullRequestDetails,
   PullRequestIdentity,
@@ -18,8 +18,8 @@ import {
   openPullRequestInBrowser,
   openWorkflowRunInBrowser,
 } from "../../services/github/read-actions"
-import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 import type { GitBrowserOpener } from "../browser/useGitBrowser"
+import type { PullRequestDashboardState } from "./usePullRequestDashboard"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
 
 const DEMO_AUTH = {
@@ -65,7 +65,8 @@ export function executePullRequestReadAction(
   if (action.type === "scroll-preview") {
     setPreviewOffsets((current) => ({
       ...current,
-      [previewTab]: Math.max(0, current[previewTab] + action.delta),
+      // This is a relative keyboard counter; the viewport clamps the actual position.
+      [previewTab]: current[previewTab] + action.delta,
     }))
     return true
   }
@@ -92,7 +93,6 @@ export function executePullRequestNavigation(
     itemCount: number
     selectSection: (index: number) => void
     selectRow: (index: number) => void
-    setPreviewVisible: Dispatch<SetStateAction<boolean>>
     setFocus: Dispatch<SetStateAction<PullRequestFocus>>
     setPreviewTab: Dispatch<SetStateAction<PullRequestPreviewTab>>
   },
@@ -107,7 +107,6 @@ export function executePullRequestNavigation(
   } else if (action.type === "select-edge") {
     context.selectRow(action.target === "first" ? 0 : Math.max(0, context.itemCount - 1))
   } else if (action.type === "focus") {
-    if (action.target === "preview") context.setPreviewVisible(true)
     context.setFocus(action.target)
   } else if (action.type === "move-preview-tab") {
     context.setPreviewTab((current) => adjacentPreviewTab(current, action.delta))
@@ -119,7 +118,6 @@ export function pullRequestKeyboardGuards(
   diffOpen: boolean,
   dashboard: PullRequestDashboardState,
   details: PullRequestDetailsState,
-  previewTab: PullRequestPreviewTab,
 ) {
   return {
     blocked:
@@ -127,10 +125,6 @@ export function pullRequestKeyboardGuards(
       diffOpen ||
       dashboard.status === "requirements" ||
       dashboard.status === "authentication",
-    canLoadMore: dashboard.status === "ready" && dashboard.hasNextPage,
-    canLoadPreview:
-      details.status === "ready" &&
-      Boolean(nextPullRequestDetailConnection(details.details, previewTab)),
     details: details.status === "ready" ? details.details : null,
   }
 }
@@ -186,4 +180,21 @@ export function openWorkflowWithNotice(
     })
     .then(() => setNotice(translateUi("Execução aberta no navegador.")))
     .catch((error) => setNotice(pullRequestMutationError(error)))
+}
+
+/** Runs a workspace-owned command; returns false so read and navigation handlers can try next. */
+export function runPullRequestCommand(
+  action: PullRequestWorkspaceAction | null,
+  handlers: Partial<Record<PullRequestWorkspaceAction["type"], () => unknown>>,
+  prepare: (kind: PullRequestActionKind) => void,
+) {
+  if (!action) return false
+  if (action.type === "prepare-action") {
+    prepare(action.kind)
+    return true
+  }
+  const handler = handlers[action.type]
+  if (!handler) return false
+  void handler()
+  return true
 }

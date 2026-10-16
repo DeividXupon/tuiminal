@@ -1,6 +1,7 @@
 import type { BoxRenderable, InputRenderable, KeyEvent } from "@opentui/core"
 import { useKeyboard } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { altNumberShortcut } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -33,11 +34,9 @@ export function terminalActionKey(key: {
   shift?: boolean
   super?: boolean
 }) {
-  if (key.meta || key.option) {
-    if (key.ctrl || key.shift || key.super) return null
-    const number = [key.name, key.sequence, key.raw].find((value) => /^[1-5]$/.test(value ?? ""))
-    return number ? `alt+${number}` : null
-  }
+  const number = altNumberShortcut(key)
+  if (number !== null) return /^[1-5]$/.test(number) ? `alt+${number}` : null
+  if (key.meta || key.option) return null
   if (key.ctrl || key.super) return null
   if (key.shift) {
     const name = key.name.toLowerCase()
@@ -387,10 +386,6 @@ export function TerminalActions({
           />
         )}
       </box>
-      <TerminalShortcutText
-        content="[←/→ H/L] painel · [↑/↓] navegar · [Enter] abrir · [Esc] fechar"
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
     </ModalSurface>
   )
 }

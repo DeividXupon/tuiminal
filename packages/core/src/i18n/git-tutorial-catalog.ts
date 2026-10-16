@@ -369,12 +369,12 @@ export const GIT_TUTORIAL_MESSAGES = [
     "사용 가능한 단축키",
   ],
   [
-    "A última linha resume os atalhos válidos no estado atual, para que você não precise memorizar toda a navegação.",
-    "The last line summarizes the shortcuts valid in the current state, so you do not need to memorize all navigation controls.",
-    "La última línea resume los atajos válidos en el estado actual, para que no tengas que memorizar toda la navegación.",
-    "最後の行には現在の状態で有効なショートカットがまとまり、すべての操作を覚える必要がありません。",
-    "最后一行汇总当前状态下有效的快捷键，无需记住所有导航操作。",
-    "마지막 줄은 현재 상태에서 유효한 단축키를 요약하므로 모든 탐색 방법을 외울 필요가 없습니다.",
+    "[?] Ações no cabeçalho abre o menu de comandos do Git, com atalhos e busca para encontrar cada ação.",
+    "[?] Actions in the header opens the Git command menu, with shortcuts and search to find each action.",
+    "[?] Acciones en la cabecera abre el menú de comandos de Git, con atajos y búsqueda para encontrar cada acción.",
+    "ヘッダーの [?] アクションで Git コマンドメニューが開き、ショートカットや検索で各操作を見つけられます。",
+    "标题栏中的 [?] 操作会打开 Git 命令菜单，可通过快捷键和搜索找到各项操作。",
+    "헤더의 [?] 작업을 누르면 Git 명령 메뉴가 열리며, 단축키와 검색으로 각 작업을 찾을 수 있습니다.",
   ],
   [
     "[Enter] Abrir commit",

@@ -1,4 +1,4 @@
-import { pathToFiletype } from "@opentui/core"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
 import { Button } from "@tuiparts/react/button"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { GitPartialStagePane } from "../../hooks/use-git-partial-stage"
@@ -131,7 +131,7 @@ export function GitPartialStageRows({
   onTransfer: (targetId: string) => void
   onFocus: () => void
 }) {
-  const filetype = pathToFiletype(document.header[2]?.slice(6) ?? "") ?? "text"
+  const filetype = syntaxFiletype(document.header[2]?.slice(6) ?? "")
   const visibleTargetIds = new Set(targets.map((target) => target.id))
   return document.hunks.map((hunk) => {
     const hunkVisible = visibleTargetIds.has(hunk.id)

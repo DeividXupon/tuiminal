@@ -62,22 +62,6 @@ export function gitHistoryNavigationDelta(keyName: string) {
   return 0
 }
 
-export function gitBaseShortcutHint(width: number, historyView: boolean, partialStage = false) {
-  if (partialStage) {
-    return width < 86
-      ? "[S] Hunk/linha  [Tab/H/L] Painel  [J/K] Navegar  [Espaço] Mover  [Enter/Esc] Aplicar"
-      : "[S] Alternar hunk/linha  [Tab/H/L/←/→] Painéis  [J/K/↑/↓] Navegar  [Espaço] Mover  [Enter/Esc] Aplicar stage"
-  }
-  if (historyView) {
-    return width < 86
-      ? "[Tab/H/L] Painel  [T] Terminal  [J/K/↑/↓] Navegar  [D] Diff"
-      : "[Tab/H/L/←/→] Árvore/histórico/terminal  [T] Terminal  [J/K/↑/↓] Navegar  [↵] Abrir  [D] Diff  [R] Atualizar"
-  }
-  return width < 86
-    ? "[Tab/H/L] Painel  [Shift+H/L] Lateral  [T] Terminal  [V] Visual"
-    : "[Tab/H/L/←/→] Árvore/diff/terminal  [Shift+H/L/←/→] Lateral  [T] Terminal  [V] Visualização  [O] Log"
-}
-
 export function gitFileTreeIsActive(active: boolean, narrow: boolean, pane: NarrowGitPane) {
   return active && (!narrow || pane === "files")
 }

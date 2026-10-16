@@ -84,7 +84,7 @@ function issueState(value: string): IssueState {
   return value === "CLOSED" ? "closed" : "open"
 }
 
-function normalizeIssueNode(node: unknown, host: string): IssueSummary | null {
+export function normalizeIssueSummary(node: unknown, host: string): IssueSummary | null {
   if (!node || typeof node !== "object") return null
   const raw = node as Record<string, unknown>
   const repository = raw.repository as { name?: unknown; owner?: { login?: unknown } } | undefined
@@ -116,7 +116,7 @@ export function normalizeIssueSearchPage(raw: RawIssueSearchPage, host: string):
   const search = raw.data?.search
   const nodes = Array.isArray(search?.nodes) ? search.nodes : []
   const items = nodes.flatMap((node) => {
-    const item = normalizeIssueNode(node, host)
+    const item = normalizeIssueSummary(node, host)
     return item ? [item] : []
   })
   return {

@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { dirname, join, resolve } from "node:path"
+import syntaxSources from "./syntax-sources.json"
 
 type PackageManifest = {
   name?: string
@@ -175,6 +176,19 @@ export function thirdPartyNotices() {
       }
     }
   }
+  for (const source of syntaxSources) {
+    for (const filename of Object.keys(source.files).filter((name) => /license/i.test(name))) {
+      const text = readFileSync(
+        join(projectRoot, "packages/core/src/syntax/assets", filename),
+        "utf8",
+      ).trim()
+      const hash = createHash("sha256").update(text).digest("hex")
+      const name = `${source.name}@${source.version} (syntax assets)`
+      const current = documents.get(hash)
+      if (current) current.packages.push(name)
+      else documents.set(hash, { packages: [name], name: filename, text })
+    }
+  }
   const lines = [
     "# Third-party notices",
     "",
@@ -194,6 +208,16 @@ export function thirdPartyNotices() {
           "",
         ]
       : []),
+    "## Bundled syntax assets",
+    "",
+    "Parsers and highlight queries are bundled for offline use. Pinned source archives and their SHA-512 integrity values are recorded in scripts/syntax-sources.json. Upstream license texts are included below.",
+    "",
+    "| Source | Version | Artifact |",
+    "| --- | --- | --- |",
+    ...syntaxSources.map(
+      (source) => `| ${safeCell(source.name)} | ${safeCell(source.version)} | ${source.url} |`,
+    ),
+    "",
     `## Bun ${bunVersion} runtime notice`,
     "",
     readFileSync(bunLicensePath, "utf8").trim(),

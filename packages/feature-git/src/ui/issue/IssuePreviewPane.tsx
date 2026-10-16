@@ -1,22 +1,25 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
-import { Button } from "@tuiparts/react/button"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { formatUiDateTime, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
-import { pullRequestMarkdownLines } from "../../model/pr/content"
+import { useRef } from "react"
 import { issueCommentThread } from "../../model/issue/activity"
 import { adjacentIssuePreviewTab, ISSUE_PREVIEW_TABS } from "../../model/issue/navigation"
-import { githubReactionSummary, hasAnyGitHubReaction } from "../../model/reactions"
 import type {
   IssueComment,
   IssueDetails,
   IssuePreviewTab,
   IssueSummary,
 } from "../../model/issue/types"
+import { pullRequestMarkdownLines } from "../../model/pr/content"
+import { githubReactionSummary } from "../../model/reactions"
 import { PullRequestMarkdown } from "../../rendering/pr-markdown"
+import { GitHubActivityComment } from "../shared/GitHubActivityItem"
+import { useActivitySelection } from "../shared/useActivitySelection"
+import { usePreviewPagination } from "../shared/usePreviewPagination"
+import { usePreviewScroll } from "../shared/usePreviewScroll"
 import type { IssueDetailsState } from "./useIssueDetails"
 
 const TAB_LABELS: Record<IssuePreviewTab, string> = {
@@ -82,61 +85,35 @@ function Overview({
   )
 }
 
-function Activity({
+export function IssueActivityContent({
   details,
   selectedIndex,
   onSelect,
   onReact,
   onReply,
+  idPrefix = "git-issue-activity",
 }: {
   details: IssueDetails
   selectedIndex: number
   onSelect: (index: number) => void
   onReact: (comment: IssueComment) => void
   onReply: (comment: IssueComment) => void
+  idPrefix?: string
 }) {
   const comments = issueCommentThread(details.comments, details.identity)
   return (
     <box style={{ width: "100%" }}>
       {comments.length ? (
         comments.map((entry, index) => (
-          <box
+          <GitHubActivityComment
             key={entry.comment.id}
-            style={{
-              width: "100%",
-              marginBottom: 1,
-              paddingLeft: Math.min(entry.depth, 3) * 2,
-            }}
-          >
-            <Button height={1} onPress={() => onSelect(index)}>
-              <text
-                content={`${index === selectedIndex ? "▶" : " "} ${entry.isReply ? "↳ " : ""}@${entry.comment.author.login} · ${formatUiDateTime(entry.comment.createdAt, { dateStyle: "short", timeStyle: "short" })} · ${githubReactionSummary(entry.comment.reactionGroups) || `♥ ${entry.comment.reactionCount}`}`}
-                style={{
-                  fg: index === selectedIndex ? COLORS.text : COLORS.git,
-                  bg: index === selectedIndex ? COLORS.panelRaised : COLORS.panel,
-                }}
-              />
-            </Button>
-            <PullRequestMarkdown lines={pullRequestMarkdownLines(entry.body)} />
-            {index === selectedIndex ? (
-              <box style={{ flexDirection: "row" }}>
-                <InlineButton
-                  label={translateUi(
-                    hasAnyGitHubReaction(entry.comment.reactionGroups, entry.comment.reactionCount)
-                      ? "[E] Nova reação"
-                      : "[E] Reagir",
-                  )}
-                  accent={COLORS.git}
-                  onPress={() => onReact(entry.comment)}
-                />
-                <InlineButton
-                  label={translateUi("[Enter] Responder")}
-                  accent={COLORS.git}
-                  onPress={() => onReply(entry.comment)}
-                />
-              </box>
-            ) : null}
-          </box>
+            id={`${idPrefix}-${index}`}
+            entry={entry}
+            selected={index === selectedIndex}
+            onSelect={() => onSelect(index)}
+            onReact={onReact}
+            onReply={onReply}
+          />
         ))
       ) : (
         <text
@@ -187,7 +164,7 @@ function DetailsState({
   return tab === "overview" ? (
     <Overview details={state.details} expanded={expanded} onToggle={onToggle} />
   ) : (
-    <Activity
+    <IssueActivityContent
       details={state.details}
       selectedIndex={selectedCommentIndex}
       onSelect={onSelectComment}
@@ -212,7 +189,6 @@ export function IssuePreviewPane({
   onOpenBrowser,
   onCopyUrl,
   onCopyNumber,
-  onOpenActions,
   onLoadMore,
   onSelectComment,
   onReactComment,
@@ -232,20 +208,38 @@ export function IssuePreviewPane({
   onOpenBrowser: () => void
   onCopyUrl: () => void
   onCopyNumber: () => void
-  onOpenActions: () => void
   onLoadMore: () => void
   onSelectComment: (index: number) => void
   onReactComment: (comment: IssueComment) => void
   onReplyComment: (comment: IssueComment) => void
 }) {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ x: 0, y: scrollOffset })
-  }, [scrollOffset])
+  useActivitySelection(
+    scrollRef,
+    activeTab === "activity" && details.status === "ready"
+      ? `git-issue-activity-${selectedCommentIndex}`
+      : null,
+    item?.identity.nodeId,
+  )
+  usePreviewScroll(scrollRef, scrollOffset, `${item?.identity.nodeId}:${activeTab}`)
+  const pageKey =
+    details.status === "ready" &&
+    activeTab === "activity" &&
+    details.details.commentPage.hasNextPage
+      ? JSON.stringify([item?.identity.nodeId, activeTab, details.details.commentPage.endCursor])
+      : null
+  usePreviewPagination({
+    scroll: scrollRef,
+    pageKey,
+    enabled: focused,
+    loading: loadingMore,
+    selectedIndex: selectedCommentIndex,
+    itemCount: details.status === "ready" ? details.details.comments.length : 0,
+    onLoadMore,
+  })
   if (!item)
     return <text content={translateUi("Nenhuma issue nesta seção.")} style={{ fg: COLORS.muted }} />
   const identity = `${item.identity.owner}/${item.identity.repository} #${item.identity.number}`
-  const canLoadMore = details.status === "ready" && details.details.commentPage.hasNextPage
   return (
     <box
       style={{
@@ -316,14 +310,9 @@ export function IssuePreviewPane({
           accent={COLORS.git}
           onPress={onCopyUrl}
         />
-        <InlineButton
-          id="git-issue-open-actions"
-          label={translateUi("[?] Ações")}
-          accent={COLORS.git}
-          onPress={onOpenActions}
-        />
       </box>
       <scrollbox
+        id="git-issue-preview-scroll"
         key={`${item.identity.nodeId}:${activeTab}`}
         ref={scrollRef}
         scrollY
@@ -340,13 +329,8 @@ export function IssuePreviewPane({
           onReactComment={onReactComment}
           onReplyComment={onReplyComment}
         />
-        {canLoadMore ? (
-          <InlineButton
-            label={translateUi(loadingMore ? "[N] Carregando…" : "[N] Carregar mais")}
-            accent={COLORS.git}
-            disabled={loadingMore}
-            onPress={onLoadMore}
-          />
+        {loadingMore ? (
+          <text content={translateUi("CARREGANDO DETALHES…")} style={{ fg: COLORS.muted }} />
         ) : null}
       </scrollbox>
       <PlasmaLoadingOverlay

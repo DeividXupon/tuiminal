@@ -25,6 +25,9 @@ O Tuiminal foi feito para manter o fluxo de trabalho no mesmo lugar. Em vez de a
 - Interface densa construída com Bun, OpenTUI, React e tuiparts.
 - Funciona em qualquer diretório; Git, Runner e terminais usam o projeto informado ao CLI.
 - Teclado e mouse são cidadãos de primeira classe.
+- Um bloco sólido acompanha o mouse com um rastro de partículas ASCII mais intenso.
+  O texto continua legível; o efeito aparece sobre notificações e terminais
+  integrados, continua após cliques e seleções e some ao digitar.
 - Layout moldurado com uma superfície contínua entre os painéis, ou layout compacto
   com seu canvas mais denso; sete paletas e seis idiomas.
 - Processos e PTYs permanecem vivos enquanto você troca de tab.
@@ -106,9 +109,9 @@ Somente esses comandos e aliases são tratados como ferramentas; outros nomes s�
 | Abrir configurações | `[,]` |
 | Sair | `[Q]`, `[Esc]` ou `[Ctrl+C]` |
 
-No macOS, `Alt` corresponde a `Option`. Se o terminal não enviar essas combinações, ative **Use Option as Meta key** ou a opção equivalente. Os números sem modificador continuam livres para ações locais das ferramentas.
+No macOS, `Alt` corresponde a `Option`. Se o terminal enviar `¡`, `™`, `£`, `¢` ou `∞` para `Option+1–5`, o Tuiminal também os reconhece como atalhos de ferramenta fora de campos, editores, terminais e diálogos com foco. Os números sem modificador continuam livres para ações locais das ferramentas. Para outros layouts de teclado, ative **Use Option as Meta key** ou a opção equivalente; no [Ghostty](https://ghostty.org/docs/config/reference#macos-option-as-alt), use `macos-option-as-alt = true` (ou `left` para manter o Option direito disponível para símbolos).
 
-As ferramentas compartilham notificações compactas no canto superior direito: no máximo três ficam visíveis, sem tirar o foco do teclado. Cada cartão tem uma linha fina e colorida de tempo e uma animação curta para entrar e sair. Informações são azuis, sucessos são verdes e erros são vermelhos e permanecem um pouco mais. Passar o mouse sobre qualquer cartão pausa todas as notificações visíveis; os tempos continuam quando o ponteiro sai.
+As ferramentas compartilham notificações compactas à direita: no canto inferior enquanto o Banco está ativo e no canto superior nas demais ferramentas. No máximo três ficam visíveis, sem tirar o foco do teclado. Cada cartão tem uma linha fina e colorida de tempo e uma animação curta para entrar e sair. Informações são azuis, sucessos são verdes e erros são vermelhos e permanecem um pouco mais. Passar o mouse sobre qualquer cartão pausa todas as notificações visíveis; os tempos continuam quando o ponteiro sai.
 
 Para copiar texto, selecione arrastando com o botão esquerdo e clique com o botão
 direito sobre a seleção. Isso também funciona nas ferramentas isoladas e nos modais.
@@ -133,14 +136,16 @@ disponível para tentar novamente. Campos de senha mascarados copiam apenas a m�
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/database.gif" alt="Demonstração da tab Banco do Tuiminal" width="100%">
 </p>
 
-Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL. Nenhuma conexão é criada automaticamente: a primeira abertura leva ao gerenciador de conexões.
+Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL. Nenhuma conexão é criada automaticamente: a primeira abertura leva ao gerenciador de conexões. No layout com bordas, os painéis ocupam toda a altura disponível, com espaçamento externo apenas nas laterais.
+
+O cabeçalho mantém `[1]` Dados, `[2]` Colunas, `[3]` Índices e `[4]` Schema à esquerda, com as tabelas recentes e `[A←]` / `[F→]` à direita na mesma linha. Em terminais estreitos, os rótulos ficam compactos e menos tabelas recentes aparecem, mantendo a ativa visível. Uma linha horizontal separa o rodapé da grade. O rodapé reúne ordenação, busca, mascaramento e atualização na primeira linha, com seleção, edição e revisão distribuídas uniformemente pela largura da linha abaixo; terminais estreitos usam uma terceira linha de ações. `[H/L]` e `[←/→]` navegam entre células e painéis vizinhos sem uma dica permanente de navegação.
 
 ### O que você pode fazer
 
 - **Conectar:** MySQL/MariaDB, PostgreSQL, SQLite e servidores MySQL MCP opcionais. MCP é sempre explícito e somente leitura.
 - **Explorar:** navegar por schemas, tabelas e views; inspecionar registros, colunas, índices, DDL, constraints e relacionamentos. `[/]` filtra o catálogo; `[Enter]` leva do filtro à lista de tabelas encontradas, e outro `[Enter]` abre a tabela selecionada. Em `[4]` Schema, `[G]` alterna um diagrama ASCII das relações diretas da tabela aberta; em terminais estreitos, cada chave estrangeira aparece empilhada verticalmente.
 - **Encontrar dados:** ordenar a coluna ativa, buscar em todas as colunas e navegar horizontalmente sem perder a linha selecionada. A grade mantém até 50 linhas carregadas e busca mais 40 em qualquer extremidade ao pressionar novamente a tecla de direção. Cada leitura da tabela mostra uma prévia colorida do SELECT em uma notificação, com a tabela e `LIMIT`/`OFFSET`; colunas projetadas e textos de busca são abreviados.
-- **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha.
+- **Selecionar em lote:** `[Space]` marca linhas; `[Alt+Space]` fixa uma âncora e `[↑/↓]` aumenta ou reduz um intervalo como em uma planilha. As linhas marcadas recebem um fundo suave nas tabelas e nos resultados SQL, mantendo a célula ativa com um destaque mais forte.
 - **Editar com segurança:** `INSERT`, `UPDATE` e `DELETE` ficam preparados localmente. `[Ctrl+S]` abre uma revisão e executa o conjunto aprovado em uma única transação.
 - **Editar grandes seleções:** preparação em lote com busca indexada das alterações existentes, preservando snapshots e chaves `BigInt` exatas antes da revisão.
 - **Preservar decimais:** valores de `DECIMAL`, `NUMERIC` e `MONEY` mantêm os dígitos digitados até o envio ao banco, inclusive em notação científica. A precisão e a escala definidas no banco continuam valendo.
@@ -151,9 +156,9 @@ Um explorador de banco responsivo com catálogo, grade, inspetor e workspace SQL
 ### Fluxo de escrita
 
 1. Abra uma tabela ou execute um `SELECT` simples editável.
-2. Use `[Enter]`/`[E]` para editar, `[Ctrl+A]` para preparar uma linha ou `[dd]` para preparar exclusão.
+2. Use **Editar** (`[Enter]`/`[E]`), **Criar** (`[Ctrl+A]`) ou **Deletar** (`[dd]`) para preparar alterações; **Desfazer** (`[U]`) descarta as alterações pendentes selecionadas.
 3. Confira os indicadores de alterações locais na grade.
-4. Pressione `[Ctrl+S]`, revise cada comando e confirme novamente.
+4. Abra **Revisar** com `[Ctrl+S]`, revise cada comando e confirme novamente.
 5. O Tuiminal executa tudo em uma transação; se um comando falhar, o lote inteiro é revertido.
 
 Confirmações rápidas repetidas não duplicam uma execução em andamento. Durante a transação, os comandos aprovados ficam bloqueados para alteração.
@@ -182,6 +187,8 @@ A prévia de exportação processa só as primeiras linhas visíveis e mantém o
 
 | Ação | Atalho |
 | --- | --- |
+| Buscar ações do Banco / SQL | `[?]` fora dos campos de texto, ou botão `[?]` |
+| Escolher um box do Banco / SQL | `[M]` fora dos campos de texto (ou pela paleta `[?]`), setas ou `[H/J/K/L]`, depois `[Enter]`; `[Esc]` cancela |
 | Gerenciar conexões | `[C]` |
 | Dados, colunas, índices e schema | `[1]`, `[2]`, `[3]`, `[4]` |
 | Detalhes do schema / diagrama de relações | `[G]` no Schema |
@@ -201,6 +208,14 @@ A prévia de exportação processa só as primeiras linhas visíveis e mantém o
 | Ajustar divisão / maximizar painel | `[Ctrl+↑/↓]` / `[F10]` |
 | Revisar escritas preparadas | `[Ctrl+S]` |
 | Atualizar dados e catálogo | `[R]` |
+
+No macOS, foque uma célula da grade, pressione `[Option+Space]` uma vez e use `[↑/↓]` para ampliar o intervalo. Pressione o atalho novamente para parar de ampliá-lo; `[Esc]` limpa a seleção. `[Ctrl+Space]` abre o autocomplete SQL no editor e não é um atalho de seleção de intervalo. Se o Ghostty não encaminhar `[Option+Space]`, adicione este [mapeamento](https://ghostty.org/docs/config/keybind/reference#text) à configuração dele:
+
+```ini
+keybind = alt+space=text:\x1b\x20
+```
+
+Recarregue a configuração do Ghostty com `[Cmd+Shift+,]`. Se a combinação abrir outro aplicativo, libere o atalho nele primeiro; o Ghostty não consegue sobrescrever atalhos interceptados pelo macOS ou por outro app.
 
 Configurações de conexões e metadados do histórico ficam em `~/.config/tuiminal/databases.json`, com até 100 leituras recentes e 184 dias de escritas. Novas entradas não persistem SQL, parâmetros ou diagnósticos; termos sensíveis ficam nas configurações globais.
 
@@ -230,22 +245,27 @@ do outro. `[C]` alterna a área local entre Diffs e Comparar.
 
 - Agrupa arquivos modificados em uma árvore real. Cadeias sem ramificações mostram cada pasta em sua própria linha, sem recuo artificial entre elas, mas `[J/K]` trata toda a cadeia como um único bloco navegável.
 - Distingue staged, unstaged e untracked com o status de dois caracteres do Git.
-- Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos. A comparação por caractere só é calculada ao usar a visualização intralinha e é reutilizada enquanto o documento não muda.
+- Exibe preview unificado, lado a lado ou intralinha com syntax highlight e números antigos/novos. A comparação por caractere só é calculada ao usar a visualização intralinha e é reutilizada enquanto o documento não muda. As prévias do Git e o Live Diff do Term Agents compartilham realce offline para Python, Go, Rust, C/C++, C#, Java, PHP, Ruby, Bash, JSON, YAML, TOML, SQL, Lua, Kotlin, Swift, Elixir, HTML, CSS, XML/SVG, Svelte, Dockerfile e TSX, além do suporte existente a JavaScript, TypeScript, Markdown e Zig. Os parsers carregam sob demanda; tipos desconhecidos continuam legíveis como texto simples.
 - Mantém um pequeno grafo de commits sob a árvore; `[G]` expande o grafo e `[O]` abre um histórico no formato do `git log`, com o grafo colorido atravessando todo o bloco do commit. Cada bloco mostra hash, branches/tags, pais de merge, autor e e-mail, data relativa, quantidade de arquivos, estatísticas `+/-`, assunto e corpo da mensagem.
 - `[Space]` aplica ou remove stage do arquivo selecionado ou de todos os descendentes da pasta selecionada, inclusive nomes com `*`, `?`, colchetes ou `:`. `[A]` adiciona em cadeia os arquivos da pasta selecionada ou alterna todos quando um arquivo está selecionado; a cor muda imediatamente, novas ações de stage podem ser feitas em sequência e a confirmação consulta somente o status. O preview permanece montado e é reconciliado silenciosamente, sem loader nem reiniciar a rolagem; o grafo é atualizado em segundo plano apenas quando as refs mudam.
 - `[Enter]` em um arquivo da árvore abre e foca seu diff. Com um arquivo rastreado e textual em foco, `[S]` abre o stage parcial e força a visualização unificada. “FORA DO STAGE” e “NO STAGE” ficam lado a lado e incluem também os hunks já adicionados ao index, permitindo retirá-los. `[S]` alterna hunk/linha sem perder transferências pendentes nem o syntax highlight, `[H/L/←/→]` atravessa os painéis, `[J/K]` navega e `[Space]` transfere o item; a rolagem mantém o alvo inteiro acima das ações mesmo quando os hunks têm alturas diferentes. Enquanto esse modo está aberto, o terminal Git fica oculto para ceder espaço ao código, `[Tab]` alterna apenas entre os dois painéis e os atalhos não levam à árvore ou ao terminal; `[Enter]` e `[Esc]` aplicam o estado exibido e saem. O hunk ativo recebe uma linha azul em toda a lateral esquerda, e uma alteração do arquivo durante a seleção faz a operação ser recusada com segurança.
 - No diff focado, `[Shift+H/L]` ou `[Shift+←/→]` rolam lateralmente até o último caractere, com controles clicáveis no canto inferior direito. Números, sinais e fundos das alterações permanecem fixos; em duas colunas, o código antigo e o novo rolam juntos sem esconder nenhum painel. A navegação vertical preserva a posição horizontal; sair do diff volta à esquerda.
-- O cabeçalho de projeto/branch mantém seu espaço ao percorrer a árvore com as setas, sem ser encoberto quando um diff maior termina de carregar.
+- O cabeçalho centraliza `[Ctrl+P]`, com projeto/branch à esquerda e os contadores de commits à frente/atrás mais `[?] Ações` à direita, sem os contadores de alterações ou staged/unstaged. Ele mantém seu espaço ao percorrer a árvore com as setas, sem ser encoberto quando um diff maior termina de carregar. Diffs e Comparar mantêm espaçamento externo apenas nas laterais, sem linhas vazias ao redor dos painéis. O rodapé permanente de navegação de Diffs foi removido para dar mais espaço ao conteúdo.
 - `[D]` descarta o arquivo ou toda a pasta selecionada depois de uma confirmação explícita; alterações rastreadas são restauradas e arquivos novos são removidos.
 - Um terminal Git sob o diff mantém sete linhas visíveis e até 2.000 linhas de histórico, preservando a saída real dos comandos em vez de resumi-la. `[T]` leva o foco a ele para executar comandos manuais, `[↑/↓]` e o mouse rolam a saída, e `[F10]` maximiza/restaura o terminal dentro do painel de preview; o prefixo `git` é fixo e não há composição de comando por shell. Enquanto você digita, o autocomplete sugere comandos, opções, branches locais/remotas já conhecidas, tags, remotes e arquivos alterados; use `[Ctrl+N/P]` para navegar, `[Ctrl+Y]` para aplicar e `[Esc]` para fechar as sugestões.
 - `[C]` alterna para **Comparar**, onde duas refs conhecidas são comparadas por `base...comparada` sem checkout e sem incluir mudanças locais.
 - `[Ctrl+P]` escolhe outro repositório e branch local sem alterar o escopo de PR, Issues ou Inbox. No terminal, a tecla pertence ao autocomplete; em modais ou no stage parcial, ela não abre a configuração por cima do contexto atual.
 - O tutorial do Git percorre os dois modos locais da aba `[1]` com dados inteiramente simulados. Primeiro ensina Diffs — cabeçalho, árvore de alterações, mini árvore de commits, diff, ações, terminal, navegação, `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]` e `[D]`. Depois entra visualmente em `[C] Comparar`, abre a configuração local e os seletores fictícios de branch base e comparada, explica o intervalo `base...comparada`, mostra o resumo somente de commits, a árvore agrupada, o diff selecionado, as três visualizações e a volta por `[C]` ou `[Esc]`. Cada etapa que muda a tela mostra o próprio resultado; o tutorial não procura projetos, não executa Git, não busca refs e não acessa GitHub.
-- O tutorial do Term Agents vai do básico ao avançado com um projeto de loja online inteiramente simulado: painéis PTY, faixa de metadados, sessões e pastas, comandos personalizados, menu da Master Key e `[1]`–`[9]`, renomear, seleção de caixas, divisões, lista de Agentes, seletores de provedor, projeto, pasta e ambiente, conversas para retomar, histórico de mensagens enviadas e detalhes do turno, todas as áreas do Live Diff e seu seletor de projetos, lateral fixada, espelhos tmux, agentes remotos, revisão, progresso e sincronização automática do projeto e o guia de preparação do servidor. Cada etapa abre a tela que está explicando. O tour é desenhado por cima do workspace real, então os terminais continuam rodando no mesmo tamanho e não recebem entrada; ele nunca inicia processos, lê Git, procura projetos nem conecta por SSH.
+- O tutorial do Term Agents vai do básico ao avançado com um projeto de loja online inteiramente simulado: painéis PTY, faixa de metadados, sessões e pastas, botão Novo agente, menu da Master Key e `[1]`–`[9]`, renomear, seleção de caixas, divisões, lista de Agentes, seletores de provedor, projeto, pasta e ambiente, conversas para retomar, histórico de mensagens enviadas e detalhes do turno, todas as áreas do Live Diff e seu seletor de projetos, lateral fixada, espelhos tmux, agentes remotos, revisão, progresso e sincronização automática do projeto e o guia de preparação do servidor. Cada etapa abre a tela que está explicando. O tour é desenhado por cima do workspace real, então os terminais continuam rodando no mesmo tamanho e não recebem entrada; ele nunca inicia processos, lê Git, procura projetos nem conecta por SSH.
 
-Os três dashboards remotos removem linhas vazias no modo moldurado. Em telas largas,
-PR e Issues colocam seções e ações na mesma linha; telas menores empilham esses
-controles. O modo compacto mantém sua geometria atual.
+PR, Issues e Inbox colocam `[?] Ações` ao lado do título, sem rodapé de navegação
+nem linhas vazias nas bordas externas. Uma linha horizontal separa o título das abas
+do Git acima dele. Em telas largas, PR e Issues colocam seções
+e criação na mesma linha; telas menores empilham esses controles. As abas das seções
+alternam fundos suaves do tema, mantendo o destaque da aba ativa. A posição da prévia
+é automática, sem comandos para ocultar ou reposicionar. As listas e os detalhes da
+prévia em foco carregam a próxima página ao chegar ao fim pela navegação ou rolagem,
+sem comando manual para carregar mais.
 
 ### `[2] PR`
 
@@ -255,7 +275,7 @@ controles. O modo compacto mantém sua geometria atual.
 - O símbolo do estado fica verde para aberto, roxo para mesclado, cinza para draft e vermelho para fechado.
 - A prévia alterna entre visão geral, checks, atividade, commits e arquivos.
 - Parar o acompanhamento de CI ou fechar sua tela cancela a consulta ativa; respostas antigas não notificam nem interrompem um novo acompanhamento.
-- Na Atividade, `[J/K]` seleciona comentários, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
+- A Atividade usa o mesmo layout de comentários de Issues: autor, data e reações no cabeçalho, respostas agrupadas e seleção visível durante a rolagem. `[J/K]` percorre comentários, revisões e eventos na ordem da tela; em um comentário, `[E]` abre as cinco reações rápidas (👍 ❤️ 🎉 😄 👀) e `[Enter]` responde com referência ao comentário original; respostas aparecem agrupadas sob o comentário-pai, e um comentário que já possui reação mostra `[E] Nova reação`. `[Shift+E]` reage ao próprio PR.
 - O diff remoto abre dentro do Tuiminal e mantém a fila preservada ao voltar.
 - Busca e seções usam qualifiers do GitHub com autocomplete para `repo:`, `author:`, `review-requested:` e outros filtros.
 - Comentários, review, merge e demais escritas usam preparação, reautenticação, releitura do estado remoto e confirmação antes da execução.
@@ -273,6 +293,8 @@ controles. O modo compacto mantém sua geometria atual.
 ### `[4] Inbox`
 
 - Reúne Inbox, revisões solicitadas, itens atribuídos, menções e itens salvos localmente.
+- Notificações de issues e PRs mostram a conversa na própria prévia, com Visão geral e Atividade (`[Z/V]`). A atividade usa o layout de Issues, incluindo reações (`[E]`), respostas (`[Enter]`) e paginação automática. As ações da notificação ficam acima da conversa.
+- `[J/K]` navega no painel focado. Em terminais estreitos, a prévia substitui a lista; `[H/Esc]` volta à mesma notificação. Outros tipos de notificação mantêm a prévia dos seus dados.
 - As bolinhas preenchida e vazia continuam indicando não lida e lida. Em PRs e issues, elas também recebem a cor do estado, mostrado em texto; outros assuntos ou estados indisponíveis ficam neutros.
 - Marcar como lida é explícito; concluir e cancelar inscrição sempre pedem confirmação.
 - A atualização automática preserva os dados visíveis quando a rede falha.
@@ -335,7 +357,8 @@ no próprio painel de contexto, mantendo o texto e o foco para você corrigir.
 | Mudar seção | `[A←]` / `[F→]` |
 | Mudar aba interna do preview | `[Z←]` / `[V→]` |
 | Abrir diff remoto | `[D]` |
-| Abrir ações remotas | `[?]` |
+| Abrir a paleta de ações em qualquer aba do Git: buscar todas as ações por tag de bloco, com as indisponíveis explicadas; no Diffs, a coluna à direita troca o projeto versionado ou a branch local observada. O campo de busca vazio mostra `[/] Buscar` quando está sem foco | `[?]` |
+| Escolher um box em qualquer aba do Git (Diffs: árvore, preview, terminal Git; abas do GitHub: lista, prévia) | `[M]`, depois `[H/J/K/L]` e `[Enter]` |
 | Abrir PR, Issue ou notificação selecionada | `[O]` |
 | Criar PR ou issue na respectiva aba | `[Ctrl+N]`, depois `[Ctrl+S]` |
 | Stage do arquivo / pasta ou todos | `[Space]` / `[A]` |
@@ -363,10 +386,10 @@ O Runner é a tela inicial do Tuiminal. Ele detecta comandos do projeto, inicia 
 
 - **Detectar automaticamente:** scripts JavaScript, Composer/PHP, Laravel, Symfony, Python/Django, Go, Rust, Ruby/Rails, Maven, Gradle, .NET, Deno, Taskfile, Makefile, justfile e Docker Compose.
 - **Executar qualquer coisa:** o campo manual aceita o comando literal; `[Ctrl+S]` salva o comando com nome e opção explícita de PTY.
-- **Manter processos vivos:** selecionar um comando já ativo abre a sessão existente. `[R]` é a ação separada para iniciar outra instância.
+- **Iniciar ou parar comandos:** `[Enter]`, `[Espaço]` ou um clique inicia um comando parado ou para sua execução ativa. Use `[L/→]` para ver os logs sem interrompê-lo.
+- **Identificar o estado:** abas, comandos, histórico e cabeçalhos dos logs usam a cor de execução do tema, verde para sucesso, vermelho para falha e amarelo para verificações ou encerramento. As abas indicam o estado pela cor do nome, sem símbolo ao lado. Os nomes dos comandos ficam sempre brancos; apenas os indicadores mudam de cor, sem texto de estado na lista de comandos. Os comandos mantêm o último resultado, e os contadores do topo pertencem ao projeto selecionado. A saúde do serviço tem um indicador separado do estado do processo.
 - **Acompanhar logs:** alternar stdout/stderr, filtrar, copiar, exportar, mostrar horários e enviar dados para `stdin` ou PTY.
 - **Ver vários serviços:** o modo Multi mostra até três logs lado a lado e navega por grupos adicionais.
-- **Agir em grupo:** marcar comandos e iniciar, parar ou reiniciar todos juntos; grupos simples executam em paralelo.
 - **Ordenar comandos e serviços:** dependências aguardam conclusão com sucesso ou início com health check. Ciclos e referências inexistentes são rejeitados antes de executar; falha ou cancelamento bloqueia dependentes pendentes.
 - **Salvar fluxos por projeto:** `[Ctrl+Y]` abre o arquivo YAML de configuração dentro do terminal. Crie fluxos nomeados com etapas sequenciais e paralelas e execute, pare ou reinicie pela TUI.
 - **Editar comandos localmente:** configure comando literal, diretório, ambiente/perfil, PTY, reinício e health check, inclusive para comandos detectados. O editor mostra documentação, validação e sugestões por teclado e mouse sem alterar arquivos do projeto.
@@ -407,10 +430,13 @@ Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe e ajuda con
 
 ### Atalhos essenciais do Runner
 
+O rodapé de comandos inclui Multi, histórico, ambiente, remoção de comandos salvos e ações para copiar, exportar e limpar logs. Com o foco no log, o rodapé também mostra filtro, seleção de stream e horários. Os dois rodapés distribuem os atalhos em linhas conforme a largura do terminal. No cabeçalho, `[N] Nova aba` fica entre as abas existentes e o resumo de comandos e abre o seletor de projetos. O botão `[/]` ao lado do campo de comando foca esse campo, assim como a tecla `[/]`. `[P]` alterna entre comandos e processos ativos, e `[D]` refaz a descoberta, pelos botões no cabeçalho do painel de comandos ou pelos atalhos.
+
+A paleta de ações reúne os comandos disponíveis, com categorias e motivos para ações desabilitadas. Use `[/]` para buscar, `[↑/↓]` ou `[J/K]` para navegar e `[Enter]` ou clique para escolher. `[Esc]` sai da busca antes de fechar a paleta e devolver o foco. Os atalhos existentes continuam disponíveis.
+
 | Ação | Atalho |
 | --- | --- |
-| Executar ou abrir processo existente | `[Enter]` |
-| Iniciar outra instância | `[R]` |
+| Iniciar ou parar o comando selecionado | `[Enter]` / `[Espaço]` |
 | Focar comando manual / salvar | `[/]` / `[Ctrl+S]` |
 | Editor YAML | `[Ctrl+Y]` |
 | Novo comando / fluxo (lista de gerenciamento) | `[Ctrl+N]` / `[Ctrl+F]` |
@@ -418,14 +444,12 @@ Edite `commands`, `flows` e `profiles` em YAML, com cores de sintaxe e ajuda con
 | Nova linha e recuo YAML / sugestões / salvar | `[Enter]` e `[Tab]` / `[Ctrl+Space]` / `[Ctrl+S]` |
 | Consultar recomendações YAML | `[Ctrl+J/K]` |
 | Comandos / processos ativos | `[P]` |
-| Visualização única / múltipla | `[M]` |
+| Escolher painel | `[M]`, setas ou `[H/J/K/L]`, depois `[Enter]`; `[Esc]` cancela |
+| Visualização única / múltipla | `[Shift+M]` |
 | Grupo anterior / seguinte no modo múltiplo | `[A←]` / `[F→]` |
-| Selecionar grupo | `[Space]` |
-| Iniciar / parar / reiniciar grupo | `[G]` / `[Shift+G]` / `[Shift+R]` |
 | Lista → log / log → lista | `[L/→]` / `[H/←]` |
 | Abrir ou recolher histórico | `[S]` |
-| Parar processo atual | `[Shift+K]` |
-| Abrir menu de ações | `[A]` (único) / `[Shift+A]` (múltiplo) |
+| Buscar ações | `[?]` (também `[A]` no modo único / `[Shift+A]` no múltiplo) |
 | Abrir outro projeto | `[N]` |
 | Alternar projetos do Runner | `[1]`–`[4]` |
 | Fechar tab de projeto sem parar processos | `[Ctrl+X]` |
@@ -527,6 +551,8 @@ requests. TLS inseguro na interface mantém `[I]`, por destino, ambiente e sess�
 
 Respostas são capturadas até cerca de 1,5 MB e renderizadas de forma limitada para manter a interface responsiva. A captura libera o leitor ao terminar ou falhar e só marca truncamento quando encontra bytes além do limite. A busca acompanha linhas e colunas sem reprocessar todo o texto anterior a cada ocorrência. Valores identificados como secretos são mascarados em preview, cURL, conflitos, relatórios e erros; variáveis extraídas como secretas ficam somente em memória.
 
+O botão **Copiar** da resposta inclui todo o texto capturado além do limite de exibição de 50 mil caracteres, sem textos da interface, números de linha ou resumos de blocos recolhidos. Pretty copia o JSON formatado ou o resultado completo do JSONPath; Raw copia o texto capturado. Para copiar um trecho selecionado, use a seleção e o botão direito do mouse. Respostas que excedem o limite de captura ainda exigem **Baixar completo**.
+
 O histórico HTTP fica somente na sessão atual e não persiste corpos de requests ou responses. A resposta original continua disponível na memória para inspeção e exportação explícita. Preview, cURL, relatórios e erros mascaram segredos conhecidos; arquivos exportados explicitamente e arquivos antigos de versões anteriores ficam separados do histórico da sessão.
 
 Redirects que mudam o host, a porta ou o protocolo removem headers de autenticação e outros headers sensíveis, incluindo API keys com nomes personalizados e valores privados resolvidos. Esses headers são preservados em redirects dentro da mesma origem.
@@ -545,7 +571,7 @@ Valores de Path marcados como sensíveis seguem essa proteção, inclusive em UR
 
 Um multiplexador genérico, não um terminal restrito a uma ferramenta. Novos terminais usam PTYs reais e podem executar shells, REPLs, bancos interativos, Codex, Claude ou qualquer CLI disponível no `PATH`.
 
-Comandos personalizados aceitam expressões completas do shell, incluindo `&&`, `||`, `;`, pipes, variáveis e laços. Por exemplo, `npm install && npm run dev` executa a segunda etapa se a primeira terminar com sucesso.
+Os terminais aceitam expressões completas do shell, incluindo `&&`, `||`, `;`, pipes, variáveis e laços. Por exemplo, `npm install && npm run dev` executa a segunda etapa se a primeira terminar com sucesso.
 
 O tmux é opcional. Novos terminais usam tmux 3.2+ automaticamente quando disponível
 no Linux, macOS ou WSL; caso contrário, usam o terminal nativo, inclusive no Windows.
@@ -559,7 +585,7 @@ Ao abrir o Terminal, as janelas da sessão tmux persistente `tuiminal` voltam pa
 na pasta **tmux**. Agentes reconhecidos de qualquer origem aparecem
 exclusivamente em **Agentes**, inclusive quando estão em painéis da mesma sessão.
 Novos painéis são encontrados sem mudar o foco atual. Fechar um espelho externo mantém
-seu processo executando e dispensa o painel durante esta execução. A descoberta respeita o limite de 12 terminais.
+seu processo executando e dispensa o painel durante esta execução.
 Defina `TUIMINAL_TERMINAL_AUTO_MIRROR=0` antes de iniciar para desativá-la; os
 painéis persistentes do Tuiminal ainda são restaurados.
 
@@ -583,28 +609,27 @@ Janelas que contêm o próprio Tuiminal mantêm o tamanho e usam recorte para ev
 ciclo de redimensionamento.
 O espelhamento atualiza
 a tela atual do aplicativo; não importa o histórico de rolagem, a interface do modo
-de cópia do tmux ou a entrada do mouse. Terminais já abertos fora do tmux aparecem
-como metadados somente para leitura em **Outros**, mas ainda não podem ser espelhados;
-ao selecionar um deles, o Tuiminal informa o TTY original sem substituir o painel ativo.
+de cópia do tmux ou a entrada do mouse. Terminais já abertos fora do tmux ficam ocultos
+na lateral, junto com o grupo **Outros**, e ainda não podem ser espelhados.
 Sem tmux, crie terminais
 dentro do Tuiminal para usar divisões, estados dos agentes e execução em segundo
 plano com o backend nativo.
 
 ### O que você pode fazer
 
-- Manter até 12 terminais, com no máximo dois por seção, lado a lado ou um acima do outro.
-- Ver no canto superior direito de cada painel a pasta do projeto, a branch e o estado Git **Limpo** ou **Alterado**. Passe o mouse sobre uma tag para ver uma explicação curta. As tags acompanham `cd` em terminais locais e tmux sem reduzir o PTY; fora de um repositório mostram **Sem Git**, e sessões remotas de agentes integrados consultam o projeto selecionado por SSH.
+- Abrir terminais sem limite fixo de quantidade, com no máximo dois por seção, lado a lado ou um acima do outro. As listas da barra lateral têm rolagem quando ficam cheias, com navegação pela roda do mouse e pelo teclado.
+- Ver no canto superior direito de cada painel a pasta do projeto, a branch e o estado Git **Limpo** ou a contagem de linhas, como **+1654 -54** (adições em verde, remoções em vermelho). Passe o mouse sobre uma tag para ver uma explicação curta. As tags acompanham `cd` em terminais locais e tmux sem reduzir o PTY; fora de um repositório mostram **Sem Git**, e sessões remotas de agentes integrados consultam o projeto selecionado por SSH.
 - **Novo terminal** sempre abre uma seção separada. Para dividir a seção atual, use a Master Key seguida de `[C]` (lado) ou `[Shift+H]` (abaixo).
 - A lista de ações da Master Key usa títulos na cor primária adequada ao tema e tags coloridas alinhadas à direita para recursos, capacidades exclusivas de agentes, operações de terminal, controles da sidebar, navegação e ações do app. `[C]` e `[G]` não fazem parte desse menu; `[R]` fica disponível para o projeto remoto do agente integrado ativo.
 - Use a Master Key `[M]` para escolher entre a sidebar e os boxes visíveis de terminal, histórico de mensagens enviadas e Live Diff. O box que tinha foco fica destacado em azul, as outras opções ficam levemente escurecidas e a instrução central usa um fundo próprio adaptado ao tema; navegue com as setas ou `[H/J/K/L]` e pressione `[Enter]` para focá-lo.
-- Use o botão **Comando** da sidebar para iniciar um comando personalizado em uma nova seção.
+- Use o botão **Novo agente** da sidebar para escolher o provedor, o projeto e o ambiente de uma sessão integrada de agente.
 - Use a Master Key `[A]` ou **Novo agente** para escolher Codex, Claude Code ou OpenCode. Escolher um provedor abre **Projetos recentes** e **Projetos Git** encontrados automaticamente. `[E]` seleciona Local ou qualquer alias SSH de `~/.ssh/config` sem mudar o alias ativo nas configurações. As listas ficam separadas por provedor e máquina/servidor; a descoberta Git é limitada e ocorre em segundo plano. Clique em um projeto ou pressione `[Enter]` para iniciar o agente. `[P]` abre uma tela de busca de pasta com `~/` já focado. As sugestões atualizam enquanto você digita; as setas selecionam uma sugestão, `[Tab]` completa o caminho e entra na pasta. `[Enter]` escolhe a pasta digitada e volta à lista de projetos. `[Esc]` volta de projetos para provedores e depois cancela. O loader compartilhado aparece apenas enquanto o agente inicia, a pasta escolhida é validada, os aliases SSH ainda estão carregando ou o catálogo de projetos do Live Diff não está disponível; a descoberta de projetos e o autocomplete em segundo plano continuam interativos. Falhas ao iniciar mantêm o destino disponível para tentar novamente. Se o CLI selecionado do Codex, Claude Code ou OpenCode estiver ausente ou incompatível, um terminal local guiado mostra comandos manuais de atualização e instalação oficial; lançamentos remotos adicionam um terminal SSH quando necessário. O Tuiminal nunca digita nem executa esses comandos, e uma revalidação bem-sucedida repete exatamente a abertura original. Tarefas e aprovações continuam na interface oficial do provedor selecionado.
 - Em `[,]` → **Conexão remota**, pressione `[Enter]` para escolher um alias `Host` explícito descoberto de `~/.ssh/config` (inclusive em arquivos `Include` limitados), ative-o com `[Enter]` ou `[A]` e teste o acesso. Configure usuário, endpoint, porta, identidade, agente, proxy e jump hosts somente no OpenSSH; o Tuiminal não solicita nem armazena esses valores e chama `ssh` com o alias escolhido. Aberturas automatizadas neutralizam comandos remotos, masters de conexão e forwards definidos pelo alias; aliases usados por túneis não podem definir seus próprios forwards dinâmicos, locais ou remotos. **Verificar servidor** confere o GitHub via SSH e se o Codex CLI está instalado, autenticado e oferece o app-server. **Configurar servidor** abre um terminal SSH interativo com um tutorial passo a passo embaixo; você executa cada comando, e **Confirmar configuração** testa novamente a barreira atual antes de avançar. Antes de abrir uma interface Codex remota, o Tuiminal valida os CLIs local e remoto, o SSH, a pasta escolhida, a conta remota do Codex, versões compatíveis, os recursos de daemon/proxy, a inicialização do daemon persistente e a resposta `initialize` do proxy. As versões do CLI local, CLI remoto, app-server do daemon e app-server inicializado devem ser exatamente iguais. Recurso ausente ou incompatível abre um modal localizado: `[Esc]` preserva a seleção da abertura, enquanto `[Enter]` abre terminais local e remoto divididos que mostram as versões detectadas, `codex update` e a alternativa do instalador POSIX oficial. O Tuiminal nunca preenche nem executa esses comandos; uma revalidação bem-sucedida fecha somente os terminais do guia e repete a sessão nova ou retomada original. A instalação remota é dona do daemon compartilhado, enquanto o Tuiminal fecha somente sua TUI local, relay e proxy SSH descartável — nunca o daemon. O Tuiminal combina os agentes recentes das duas máquinas no painel Agentes da Master Key, identificando as linhas remotas pelo perfil; selecione uma conversa remota ali para retomá-la com o histórico público e o estado atual reidratados. A Master Key `[N]` sempre abre um terminal local. Nenhuma porta do servidor é exposta. A navegação e a inicialização não copiam projetos, e o Tuiminal não instala ferramentas nem conecta contas por você. O [protocolo app-server é experimental e depende da versão](https://learn.chatgpt.com/docs/app-server); consulte o comando oficial [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update).
 - O OpenCode usa seu próprio caminho remoto first-party: o Tuiminal inicia ou reutiliza um `opencode serve` por versão e diretório em uma porta de loopback escolhida no remoto, recupera registros obsoletos e o transporta por um encaminhamento SSH descartável, negocia o protocolo público v2/v1 e abre a TUI oficial local. HTTP e SSE públicos fornecem estado, título, atividade, histórico, alterações por mensagem e metadados de retomada. A TUI v2 pertencente ao Tuiminal oculta sua barra de abas sem alterar configurações globais. Cada terminal físico tem uma única linha em Agentes para a sessão raiz visível; sessões filhas/subagentes não aparecem. Fechar o Tuiminal desconecta TUI, observador e encaminhamento enquanto servidor e turno remotos continuam; fechar o painel explicitamente interrompe apenas o turno raiz selecionado. Nenhuma porta é exposta publicamente.
 - O Claude Code 2.1.63+ roda localmente em sua TUI oficial com hooks HTTP por execução enviados por `--settings`; o Tuiminal não lê nem altera `~/.claude`. A persistência remota é habilitada no Claude Code 2.1.285+: o Tuiminal cria ou anexa uma sessão oficial em segundo plano com configurações de processo sem hooks e observa o estado público por um único poller compartilhado de `claude agents --json --all` a cada cinco segundos por projeto. Fechar o Tuiminal desconecta anexo e observador enquanto o turno pertencente ao supervisor continua; fechar o painel explicitamente executa `claude stop`. Versões anteriores ainda suportadas mantêm o ciclo de vida foreground anexado anterior. Sessões persistentes em segundo plano expõem estado público e metadados limitados de retomada sem ler arquivos internos do Claude; o histórico detalhado de hooks não fica disponível nessas sessões.
 - Na sessão remota de agente integrado ativa, use a Master Key `[R]` para criar ou atualizar um espelho local completo. A tag do painel mostra o último estado conhecido; a comparação e a sincronização também mantêm um diálogo de progresso focado para que `[Esc]` possa cancelar com segurança. No primeiro uso, escolha uma pasta local; o projeto remoto `/tui` será salvo como `tui-sync` dentro dela. Um destino preexistente desconhecido nunca é substituído. Toda comparação explícita inclui arquivos ocultos e ignorados, dependências, caches e `.git`, reaproveita hashes de conteúdo salvos e calcula novamente apenas candidatos cujos metadados mudaram. Alterações restritas a metadados do controle de versão, árvores de dependências/cache ou saídas geradas não acionam o indicador de dessincronização do painel, mas continuam aparecendo na revisão e sendo sincronizadas normalmente. Uma revisão paginada mostra caminhos novos, alterados, removidos e em conflito, e uma confirmação explícita permite que o remoto substitua mudanças locais. Durante a verificação, a revisão ou a transferência, `[A]` alterna a sincronização automática para esse projeto remoto. Quando ativada, cada prompt concluído com sucesso executa uma sincronização remota para local em segundo plano, considera a configuração como autorização para substituir alterações locais, mostra o progresso na tag do painel e notifica somente em caso de falha. Retomar uma thread concluída enquanto estava fechada agenda um único catch-up coalescido depois da reidratação; threads ativas, com falha, interrompidas ou aguardando aprovação não sincronizam. Somente bytes de arquivos novos ou com conteúdo alterado trafegam pelo SSH; um delta com journal atualiza o destino e faz rollback em cancelamento ou falha. Varredura, hashes e snapshots pesados rodam fora do renderer do terminal, e nenhuma árvore de projeto é consultada periodicamente.
 - Usar um layout compacto inspirado no Herdr: a lista de agentes aparece primeiro na sidebar, seguida pelos terminais numerados em duas linhas. Um shell aguardando mostra `○ Ocioso`; `● Executando` aparece apenas enquanto há uma ferramenta ou comando em primeiro plano. A segunda linha mostra diretório, comando ou código de saída e o backend `native`/`tmux`; referências externas somente para leitura mostram seu TTY. A seção ativa recebe uma barra de destaque. Os terminais ocupam toda a área restante até os cantos, e divisões usam apenas um separador.
-- Novos terminais e comandos personalizados abrem em **Tuiminais**. `[C]` / `[Shift+H]` pergunta se a divisão deve iniciar um novo shell ou usar o terminal de um agente em execução; mover o agente mantém seu processo ativo. Renomeie terminais quando precisar. Clique no cabeçalho de uma pasta, ou destaque-o com `[↑/↓]` / `[J/K]` e pressione `[Enter]`, para recolher ou expandir seus terminais. Esse estado e a posição reservada das sessões tmux são salvos por projeto fora da pasta do projeto e restaurados na próxima abertura. Somente pastas reservadas não vazias aparecem. A pasta **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Terminais divididos mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
+- Novos terminais abrem em **Tuiminais**. `[C]` / `[Shift+H]` pergunta se a divisão deve iniciar um novo shell ou usar o terminal de um agente em execução; mover o agente mantém seu processo ativo. Renomeie terminais quando precisar. Clique no cabeçalho de uma pasta, ou destaque-o com `[↑/↓]` / `[J/K]` e pressione `[Enter]`, para recolher ou expandir seus terminais. Esse estado e a posição reservada das sessões tmux são salvos por projeto fora da pasta do projeto e restaurados na próxima abertura. Somente pastas reservadas não vazias aparecem. A pasta **tmux** contém painéis externos que podem ser espelhados; **Outros** lista terminais POSIX fora do tmux com comando em primeiro plano, estado, diretório e TTY como referências somente para leitura. Agentes externos reconhecidos aparecem em **Agentes** com atividade desconhecida, pois o Tuiminal não consegue inspecionar sua tela. Terminais divididos mantêm os dois itens de terminal em duas linhas, cada um clicável ao lado de um separador vertical.
 - Os nomes dos terminais acompanham a ferramenta em execução automaticamente: `zsh` → `lazygit` → `zsh`. Agentes reconhecidos mostram o nome do CLI, como `codex`, mesmo quando o runtime informa `MainThread` ou `node`. Isso também funciona nos espelhos tmux. Nomes definidos manualmente pela ação `[E]` da Master Key permanecem fixos, inclusive após reiniciar.
 - Acompanhar agentes reconhecidos exclusivamente em **Agentes**, separados entre **Local • term** para agentes observados por terminais nativos, tmux ou externos, **Local • localhost** para sessões integradas locais e **Remoto • perfil** para sessões integradas via SSH. Os agentes de terminal aparecem primeiro, com um loader animado enquanto trabalham. As linhas integradas de Codex, Claude Code e OpenCode ganham uma linha adicional para atividade de código, comando, plano e ferramenta; o ícone atual pulsa conforme os eventos públicos correspondentes. Os ícones compatíveis `{}`, `>_`, `txt` e `●` são sempre usados, sem exigir uma fonte modificada. Quando um agente integrado está parado, o estado da primeira linha o representa e todos os ícones de atividade permanecem inativos. **Terminais** mostra os demais terminais. As pastas e divisões originais são preservadas, e o terminal volta para Terminais quando o agente encerra. Com a Master Key aberta, os primeiros nove agentes e terminais visíveis mostram teclas sequenciais `[1]`, `[2]`, … `[9]` na ordem da sidebar; digite uma delas para ativá-lo.
 - Abra abaixo do terminal o histórico de mensagens enviadas de uma sessão integrada do Codex, Claude Code ou OpenCode com a Master Key seguida de `[S]`. As colunas seguem a ordem tempo decorrido, status, mensagem, imagem, áudio, skill e modelo. O status combina a duração do turno com `✓` para conclusão, `×` para falha ou interrupção e `…` durante a execução, como `18m ✓`. Imagem, áudio e skill mostram `✓` somente quando aquela entrada foi enviada. A configuração do modelo aparece quando o provedor a publica e, caso contrário, mostra `—`. Use `[J/K]`, `[↑/↓]` ou o mouse para selecionar uma linha e `[Enter]` para abrir os detalhes. O detalhe expandido usa metade da coluna do terminal e preenche essa área com cards de mensagem, resposta, atividade e alterações adaptados ao tema. Ele oferece `[M]` mensagem, `[R]` resposta final e outros textos públicos do agente, `[A]` atividade pública completa e `[D]` alterações daquele turno. A tela de alterações separa o patch específico do prompt em blocos por arquivo, cada um com caminho visível, tipo da mudança, estatísticas, syntax highlighting, gutter com números de linha e fundos para adições e remoções; patches antigos incompletos usam linhas coloridas em vez de uma prévia vazia. `[Esc]` volta sucessivamente de seção, detalhe, lista e terminal; `[X]` fecha o painel. No Codex, o histórico vem das entradas e eventos públicos do app-server; no Claude local e foreground, vem dos hooks públicos configurados por execução, enquanto sessões remotas persistentes não preenchem o histórico detalhado; no OpenCode, vem das APIs públicas de mensagens e diffs. O histórico de hooks do Claude cobre os prompts observados na execução atual do Tuiminal; Codex e OpenCode podem reidratar turnos públicos anteriores. Conteúdo de raciocínio privado nunca é mostrado. A visualização em memória é limpa ao reiniciar ou fechar até que o provedor possa carregá-la novamente. Com o Live Diff aberto, ele continua ocupando toda a altura à direita.
@@ -630,7 +655,8 @@ branch Git; os itens remotos mantêm o nome do perfil ao lado da tag. O título 
 tem um fundo elevado discreto, com uma reta horizontal até o estado alinhado à direita.
 Um `└` diretamente abaixo do marcador de estado introduz o resumo. Três células `▌`
 discretas marcam cada item, alternam entre duas cores e usam o destaque mais vivo do
-Terminal na seleção. Pressione uma
+Terminal na seleção. Os menus de ações da Master Key e do Git `[?]` não exibem rodapés
+de instruções, deixando mais espaço para as listas. Pressione uma
 tecla de ação ou clique no controle; selecione uma conversa para retomá-la na interface
 oficial do respectivo provedor em uma nova seção. Pressione `[/]` para focar o filtro de ações e
 conversas. Ao digitar, a busca inclui conversas além das recentes exibidas inicialmente e
@@ -684,8 +710,12 @@ espelhos tmux já existentes. Os formatos abrangem Codex, Claude Code, OpenCode,
 Qwen, Pi e o resumo dinâmico de atividade do Gemini, além de qualquer outro agente
 reconhecido ou cadastrado que publique um título útil. Alguns títulos descrevem a
 sessão inteira, em vez de cada prompt. Não são necessários hooks, chamadas extras
-de modelo ou alterações na configuração dos agentes; quando o título não é
-exposto, o item não mostra a linha de título da tarefa.
+de modelo ou alterações na configuração dos agentes; nos agentes observados pela
+tela, quando o título não é exposto, o item não mostra a linha de título da tarefa.
+Nas sessões integradas de Codex, Claude Code e OpenCode, a primeira mensagem do
+usuário disponível serve como título provisório na sidebar até o agente publicar
+o próprio. O texto é sanitizado e limitado a 160 grafemas; mensagens posteriores
+preservam o título gerado.
 Ao abrir uma conversa em Agentes recentes, a sidebar reutiliza imediatamente o título
 conhecido; atualizações posteriores do agente substituem esse título.
 

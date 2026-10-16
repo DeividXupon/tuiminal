@@ -23,6 +23,7 @@ export function RowInspector({
   onActivate,
   onSelectColumn,
   idPrefix,
+  overlay,
 }: {
   columns: DatabaseColumn[]
   row: Record<string, unknown> | null
@@ -34,6 +35,7 @@ export function RowInspector({
   selectedColumnIndex: number
   onActivate: () => void
   onSelectColumn: (index: number) => void
+  overlay?: React.ReactNode
   idPrefix?: string
 }) {
   const selectionColors = databaseSelectionColors()
@@ -41,6 +43,7 @@ export function RowInspector({
     <box
       id={idPrefix ?? "tutorial-db-inspector"}
       style={{
+        position: "relative",
         width,
         height: "100%",
         flexShrink: 0,
@@ -167,6 +170,7 @@ export function RowInspector({
           />
         </box>
       )}
+      {overlay}
     </box>
   )
 }

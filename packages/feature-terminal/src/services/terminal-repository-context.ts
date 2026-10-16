@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process"
 import { basename } from "node:path"
 import type { TerminalRepositoryContext } from "../model/terminal-context"
+import { terminalNewFileLines } from "./terminal-new-file-lines"
+import { readTerminalRepositoryChanges } from "./terminal-repository-changes"
 
 type GitResult = { exitCode: number; stdout: string; stderr: string }
 
@@ -64,13 +66,30 @@ export async function readTerminalRepositoryContext(
   if (!root) throw new Error("O Git não informou a raiz do repositório.")
   const [branch, status] = await Promise.all([
     readBranch(root, signal),
-    runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], signal),
+    runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], signal),
   ])
   if (status.exitCode !== 0) throw new Error(status.stderr.trim() || "Git indisponível.")
+  const changes = status.stdout
+    ? await readTerminalRepositoryChanges(status.stdout, {
+        headExists: async () =>
+          (await runGit(root, ["rev-parse", "--verify", "HEAD"], signal)).exitCode === 0,
+        numstat: async () => {
+          const result = await runGit(
+            root,
+            ["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "HEAD", "--"],
+            signal,
+          )
+          if (result.exitCode !== 0) throw new Error(result.stderr.trim() || "Git indisponível.")
+          return result.stdout
+        },
+        newLines: (paths) => terminalNewFileLines(root, paths, signal),
+      })
+    : undefined
   return {
     directory,
     projectName: basename(root) || root,
     branch,
     state: status.stdout ? "dirty" : "clean",
+    ...(changes ? { changes } : {}),
   }
 }

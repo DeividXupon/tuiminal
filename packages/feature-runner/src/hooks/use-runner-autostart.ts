@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { RunnerFlow } from "../model/plan"
+import type { RunnerNotice } from "../model/notice"
 import type { RunnerCommand } from "../services/runner"
 import type { RunnerEnvironmentProfile } from "../storage/runner-config"
 import {
@@ -38,7 +39,7 @@ export function useRunnerAutostart({
   runFlow: (flow: RunnerFlow) => void
   runTargets: (commands: RunnerCommand[]) => void
   notify: RunnerNotifier
-  setRunnerNotice: (notice: string) => void
+  setRunnerNotice: (notice: RunnerNotice) => void
   focusCommands: () => void
 }) {
   const autostartedRef = useRef(new Set<string>())
@@ -65,7 +66,7 @@ export function useRunnerAutostart({
     }
   }, [commands, projectRoot, selectedProfile, flows, profiles])
   useEffect(() => {
-    if (error && active && !loading) setRunnerNotice(translateUi(error))
+    if (error && active && !loading) setRunnerNotice({ message: translateUi(error), kind: "error" })
   }, [active, error, loading, setRunnerNotice])
   const trusted = review ? isRunnerAutostartTrusted(review) : false
 
@@ -108,7 +109,10 @@ ${review.fingerprint}`
       approveRunnerAutostart(pendingReview)
       setPendingReview(null)
       setTrustRevision((current) => current + 1)
-      setRunnerNotice(translateUi("Autostart autorizado para esta configuração."))
+      setRunnerNotice({
+        message: translateUi("Autostart autorizado para esta configuração."),
+        kind: "success",
+      })
       setTimeout(focusCommands, 0)
     } catch (error) {
       notify({
@@ -126,7 +130,7 @@ ${review.fingerprint}`
     if (!pendingReview) return
     dismissedRef.current.add(`${pendingReview.root}\n${pendingReview.fingerprint}`)
     setPendingReview(null)
-    setRunnerNotice(translateUi("Autostart não executado."))
+    setRunnerNotice({ message: translateUi("Autostart não executado."), kind: "warning" })
     setTimeout(focusCommands, 0)
   }, [focusCommands, pendingReview, setRunnerNotice])
 

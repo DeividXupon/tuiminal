@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import type { PullRequestPreviewConfig, PullRequestProfile } from "../../model/pr/config"
-import { nextPullRequestPreviewPosition } from "../../model/pr/navigation"
+import { useState } from "react"
+import type { PullRequestProfile } from "../../model/pr/config"
 import { updatePullRequestSection } from "../../model/pr/sections"
 import type { PullRequestSection } from "../../model/pr/types"
 import { updatePullRequestProfile } from "../../storage/pr/config"
@@ -45,13 +44,6 @@ export function usePullRequestConfiguration({
   setNotice: (notice: string) => void
 }) {
   const [editor, setEditor] = useState<EditorState | null>(null)
-  const [previewPosition, setPreviewPositionState] =
-    useState<PullRequestPreviewConfig["position"]>("auto")
-
-  useEffect(() => {
-    setPreviewPositionState(target?.profile.previewPosition ?? "auto")
-  }, [target?.profile.previewPosition])
-
   const persist = (update: Parameters<typeof updatePullRequestProfile>[0]["update"]) => {
     if (!target) return false
     try {
@@ -90,26 +82,6 @@ export function usePullRequestConfiguration({
     })
   }
 
-  const savePreviewPosition = (position: PullRequestPreviewConfig["position"]) => {
-    if (!target) {
-      setPreviewPositionState(position)
-      return true
-    }
-    try {
-      updatePullRequestProfile({
-        root: target.root,
-        fallbackProfile: target.profile,
-        update: (profile) => ({ ...profile, previewPosition: position }),
-      })
-      setPreviewPositionState(position)
-      setNotice(translateUi("Posição da prévia salva para este projeto."))
-      return true
-    } catch (error) {
-      setNotice(mutationError(error))
-      return false
-    }
-  }
-
   const modals = target ? (
     editor ? (
       <SectionEditorModal
@@ -134,9 +106,6 @@ export function usePullRequestConfiguration({
   return {
     modalOpen: Boolean(editor),
     openQuery,
-    previewPosition,
-    cyclePreviewPosition: () =>
-      savePreviewPosition(nextPullRequestPreviewPosition(previewPosition)),
     modals,
   }
 }

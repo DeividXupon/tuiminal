@@ -2,10 +2,8 @@ import type { KeyboardScope } from "@xupon/tuiminal-core/keyboard/scope"
 
 export const gitKeyboardScope = {
   ids: [
-    "git-pr-action-menu",
     "git-pr-action-modal",
     "git-pr-action-input",
-    "git-issue-action-menu",
     "git-issue-action-modal",
     "git-issue-action-input",
     "git-create-modal",
@@ -27,6 +25,9 @@ export const gitKeyboardScope = {
     "git-compare-branch-picker",
     "git-compare-branch-list",
     "git-compare-branch-search",
+    "git-action-palette",
+    "git-action-palette-search",
+    "git-box-selection",
   ],
   prefixes: [
     "git-pr-section-editor-",

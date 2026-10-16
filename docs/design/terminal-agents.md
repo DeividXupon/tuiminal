@@ -114,8 +114,9 @@ Sessions lists ordinary terminals with their process states; running recognized
 agents appear only in Agents, including idle and unknown agents. In a mixed split,
 only the ordinary terminal appears in Sessions, without changing the actual split.
 A dedicated Agents list shows every running agent with its marker, name and localized
-status. A separate line appears only when a published task title is available; otherwise
-the row has no title line or placeholder. The list groups screen-observed native, tmux and external-terminal
+status. A separate line appears when a published task title or integrated prompt
+fallback is available; otherwise the row has no title line or placeholder.
+The list groups screen-observed native, tmux and external-terminal
 agents under `Local • term`, then integrated structured sessions under
 `Local • localhost`. These names describe the current transports without claiming a
 real remote runtime. Keyboard navigation and Master Key numbering follow that visual
@@ -229,6 +230,9 @@ decision. Existing user and managed settings remain authoritative; a policy may 
 the added loopback hook URL rather than being bypassed. The official TUI remains usable
 when policy filters the hook; local launches fall back to bounded screen observation
 until a valid hook event proves that structured observation is active.
+Once hooks take ownership, the screen observer is retired and outstanding process
+scans cannot replace hook state. Before that handoff, OSC title updates remain
+display metadata and do not reset screen-observed activity.
 
 For local and remote foreground launches, the owned hook receiver binds to a random
 localhost port and uses an unguessable path.
@@ -383,12 +387,19 @@ on restart or close until the thread is hydrated again. Screen-observed native,
 tmux, and external agents do not offer this structured history.
 
 For integrated Codex sessions, `turn/completed` determines completion and public
-item events determine visible activity. Claude uses its public `Stop` hook and never
+item events determine visible activity. State is scoped to the selected thread and
+turn; late item events cannot reopen a completed turn. Approval requests, blocking
+user-input requests and MCP elicitations stay blocked until resolved, with concurrent
+requests tracked independently. Nonblocking questions do not pause activity. Both
+approval and user-input waiting flags are restored on resume. Explicit thread idle
+clears stale working state without claiming success or acknowledging unseen completion.
+Claude uses its public `Stop` hook and never
 treats silence or a permission event as completion. For OpenCode, public session,
 message, tool, permission, question, and status events provide the corresponding state,
 followed by bounded hydration. Silence does not complete a task for any provider.
 Starting, resuming, or forking a thread hydrates its task title from the returned
-public thread name; later `thread/name/updated` events replace it. Resume also
+public thread name, using the earliest available user message while unnamed;
+later `thread/name/updated` events replace it. Resume also
 rehydrates the public message history plus active/completed/failed and
 waiting-for-approval state before live events continue. When automatic project sync is
 enabled, a successfully completed turn found during that hydration schedules one
@@ -414,6 +425,15 @@ Depending on the CLI, the title describes a conversation, a named session, the
 current prompt, or the current public activity summary, rather than always a new
 title for each prompt.
 
+Integrated Codex, Claude Code and OpenCode sessions use the first nonempty user
+message as a temporary sidebar task title until the provider publishes a name.
+Codex and OpenCode also use their public message history for unnamed resumed
+conversations; older history pages can supply an earlier prompt. Generated or
+manually assigned provider titles take precedence over later messages. Fallbacks
+use the same sanitization and 160-grapheme limit as published titles, remain
+display-only, and stay scoped to the selected conversation. Screen-only agents
+do not infer prompts from keystrokes or terminal output.
+
 Resuming from Recent agents seeds the sidebar task title from the selected conversation's
 sanitized title for every provider and origin, without waiting for a new title event.
 State/activity updates retain it; subsequent provider title events replace or clear it.
@@ -433,9 +453,9 @@ is display-only launch metadata and is never inserted into the command or sent a
 Pi and Kimi executable/module identities are recognized alongside the existing
 agent commands. Generic support includes tools such as Aider and Goose
 **when they publish a useful title**; it does not imply every
-version or configuration does so. Missing or disabled titles omit the task-title
-line. Arbitrary title components cannot be reliably separated into a
-task and project without a typed provider protocol.
+version or configuration does so. Without a published title or an integrated
+prompt fallback, the task-title line is omitted. Arbitrary title components cannot
+be reliably separated into a task and project without a typed provider protocol.
 
 Title observation shares the existing sampler and does not create another timer.
 Titles observed while the terminal was still classified as a shell are ignored

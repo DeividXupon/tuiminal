@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type {
   DatabaseConnectionDraft,
+  DatabaseConnectionProfile,
   DatabaseTable,
 } from "../packages/feature-database/src/model/types"
 import { nativeReadOnlyQuery } from "../packages/feature-database/src/services/read-only-query"
@@ -30,7 +31,9 @@ type DriverFixture = {
 let api: DatabaseApi
 let configRoot = ""
 let fixtures: DriverFixture[] = []
-let externalFixtures: DriverFixture[] = []
+let externalFixtures: (DriverFixture & {
+  externalSource: DatabaseConnectionProfile["externalSource"]
+})[] = []
 
 async function docker(...args: string[]) {
   const subprocess = Bun.spawn(["docker", ...args], {
@@ -231,6 +234,7 @@ suite("database driver integration", () => {
     externalFixtures = discovered.profiles.map((profile) => ({
       connectionId: profile.id,
       driver: profile.driver as "mysql" | "postgres",
+      externalSource: profile.externalSource,
       usersTable: {
         schema: profile.driver === "mysql" ? "tuiminal_test" : "public",
         name: "users",
@@ -269,7 +273,13 @@ suite("database driver integration", () => {
   })
 
   test("uses discovered MySQL option-file and PostgreSQL service/pgpass profiles", async () => {
-    expect(externalFixtures.map((fixture) => fixture.driver).sort()).toEqual(["mysql", "postgres"])
+    expect(
+      externalFixtures.map(({ driver, externalSource }) => ({ driver, externalSource })),
+    ).toEqual([
+      { driver: "mysql", externalSource: "mysql-option-file" },
+      { driver: "postgres", externalSource: "postgres-service" },
+      { driver: "postgres", externalSource: "postgres-passfile" },
+    ])
     for (const fixture of externalFixtures) {
       const catalog = await api.listDatabaseTables(fixture.connectionId)
       expect(catalog.tables).toContainEqual(fixture.usersTable)

@@ -284,7 +284,8 @@ async function launchTerminal(
       },
       onTitle(title: string) {
         agentTitle = cleanAgentTaskTitle(title)
-        updateIntegratedAgent()
+        // While hooks are unavailable, the screen observer owns state and title.
+        if (agentTransport !== "screen") updateIntegratedAgent()
       },
       onUserMessage(message: AgentMessageHistoryEntry) {
         if (!launch.isCurrent()) return

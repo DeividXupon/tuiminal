@@ -1,11 +1,18 @@
 import { useTerminalDimensions } from "@opentui/react"
-import { COLORS, LAYOUT, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import {
+  COLORS,
+  databaseSelectionColors,
+  LAYOUT,
+  panelBorder,
+} from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import type { DatabaseTable } from "../model/types"
 import { SIDEBAR_WIDTH } from "../rendering/constants"
+import { queryBatchSelectionBackground, queryRowColors } from "../rendering/query-presentation"
 import { fitCell, shorten } from "../rendering/workspace-shared"
+import { DatabaseTableHeader } from "../ui/DatabaseTableHeader"
 
 export const TUTORIAL_DEMO_ROWS = [
   {
@@ -74,8 +81,16 @@ export const TUTORIAL_DEMO_FIELDS = [
   ["created_at", "2026-08-21 14:32:08"],
 ] as const
 
+const DEMO_SELECTED_TABLE: DatabaseTable = { schema: "public", name: "users", type: "table" }
+const DEMO_TABLES: DatabaseTable[] = ["orders", "users", "products"].map((name) => ({
+  schema: "public",
+  name,
+  type: "table",
+}))
+
 export function DatabaseTutorialDemo() {
   const terminal = useTerminalDimensions()
+  const selectionColors = databaseSelectionColors()
   const narrow = terminal.width < 140
   const veryNarrow = terminal.width < 110
   const sidebarWidth = veryNarrow ? 26 : SIDEBAR_WIDTH
@@ -93,7 +108,7 @@ export function DatabaseTutorialDemo() {
       style={{
         flexGrow: 1,
         flexDirection: "row",
-        padding: LAYOUT.outerPadding,
+        paddingX: LAYOUT.outerPadding,
         gap: LAYOUT.gap,
         backgroundColor: LAYOUT.workspaceBackground,
       }}
@@ -141,20 +156,21 @@ export function DatabaseTutorialDemo() {
           <text content="  ▦ audit_logs" style={{ fg: COLORS.muted }} />
           <text content="  ◇ active_customers" style={{ fg: COLORS.muted }} />
         </box>
+        <InlineButton label="[?] Ações" accent={COLORS.database} onPress={noop} />
+        <InlineButton label="[M] Escolher box" accent={COLORS.database} onPress={noop} />
         <InlineButton
           id="tutorial-db-new-connection"
-          label={veryNarrow ? "[C] Conexões" : "[C] Criar nova / conexões"}
+          label="[C] Conexões"
           accent={COLORS.database}
           onPress={noop}
         />
         <InlineButton
           id="tutorial-db-new-query"
-          label={veryNarrow ? "[W] Query" : "[W] Criar query"}
+          label="[W] Query"
           accent={COLORS.success}
           onPress={noop}
         />
       </box>
-
       <box
         id="tutorial-db-grid"
         style={{
@@ -188,136 +204,15 @@ export function DatabaseTutorialDemo() {
           />
         </box>
 
-        <box
-          id="tutorial-db-table-history"
-          style={{
-            height: 2,
-            flexShrink: 0,
-            flexDirection: "column",
-            border: ["bottom"],
-            borderColor: COLORS.border,
-          }}
-        >
-          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-            <DirectionalButton direction={-1} accent={COLORS.database} onPress={noop} />
-            <InlineButton label="orders" accent={COLORS.database} onPress={noop} />
-            <InlineButton label="users" accent={COLORS.database} active onPress={noop} />
-            <InlineButton label="products" accent={COLORS.database} onPress={noop} />
-            <DirectionalButton direction={1} accent={COLORS.database} onPress={noop} />
-          </box>
-        </box>
-
-        <box style={{ height: 1, flexShrink: 0, flexDirection: "row", flexWrap: "wrap" }}>
-          <InlineButton
-            id="tutorial-db-view-data"
-            label={narrow ? "[1]" : "[1] Dados"}
-            accent={COLORS.database}
-            active
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-view-columns"
-            label={narrow ? "[2]" : "[2] Colunas"}
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-view-indexes"
-            label={narrow ? "[3]" : "[3] Índices"}
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-view-schema"
-            label={narrow ? "[4]" : "[4] Schema"}
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <box
-            id="tutorial-db-table-tools"
-            style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-          >
-            <InlineButton
-              label={narrow ? "[O]↕" : "[O] Ordem normal"}
-              accent={COLORS.database}
-              onPress={noop}
-            />
-            <InlineButton
-              label={narrow ? "[S]◇" : "[S] Buscar"}
-              accent={COLORS.database}
-              onPress={noop}
-            />
-          </box>
-          <InlineButton
-            id="tutorial-db-sensitive"
-            label={narrow ? "[V] ◇" : "[V] Ocultar sensíveis"}
-            accent={COLORS.database}
-            onPress={noop}
-          />
-        </box>
-        <box
-          style={{
-            height: veryNarrow ? 3 : 2,
-            flexShrink: 0,
-            flexDirection: "row",
-            flexWrap: "wrap",
-          }}
-        >
-          <InlineButton
-            id="tutorial-db-inspector-toggle"
-            label="[I]"
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <box
-            id="tutorial-db-selection"
-            style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-          >
-            <InlineButton label="[Space] ●" accent={COLORS.database} active onPress={noop} />
-            <InlineButton
-              label={narrow ? "[Alt+Space] Sel" : "[Alt+Space] Selecionar intervalo"}
-              accent={COLORS.database}
-              onPress={noop}
-            />
-          </box>
-          <InlineButton
-            id="tutorial-db-new-row"
-            label={narrow ? "[Ctrl+A]+" : "[Ctrl+A] Nova"}
-            accent={COLORS.runner}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-edit-cell"
-            label={narrow ? "[E]2" : "[E] Editar 2"}
-            accent={COLORS.warning}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-delete-row"
-            label={narrow ? "[dd]2" : "[dd] Excluir 2"}
-            accent={COLORS.danger}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-export"
-            label={narrow ? "[X]2" : "[X] Exportar 2"}
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-undo-row"
-            label="[U]"
-            accent={COLORS.database}
-            onPress={noop}
-          />
-          <InlineButton
-            id="tutorial-db-review"
-            label={narrow ? "[Ctrl+S]3" : "[Ctrl+S] Revisar 3"}
-            accent={COLORS.success}
-            active
-            onPress={noop}
-          />
-        </box>
+        <DatabaseTableHeader
+          width={Math.max(16, terminal.width - sidebarWidth - inspectorWidth - 12)}
+          view="data"
+          history={DEMO_TABLES}
+          selectedTable={DEMO_SELECTED_TABLE}
+          onView={noop}
+          onTable={noop}
+          onNavigate={noop}
+        />
 
         <box id="tutorial-db-table-grid" style={{ flexGrow: 1 }}>
           <text
@@ -341,29 +236,24 @@ export function DatabaseTutorialDemo() {
               />
             ))}
           </box>
-          {TUTORIAL_DEMO_ROWS.map((row) => {
-            const backgroundColor =
+          {TUTORIAL_DEMO_ROWS.map((row, index) => {
+            const mutationKind =
               row.state === "edited"
-                ? COLORS.databaseEditedBg
+                ? "update"
                 : row.state === "inserted"
-                  ? COLORS.databaseInsertedBg
+                  ? "insert"
                   : row.state === "deleted"
-                    ? COLORS.databaseDeletedBg
-                    : row.state === "selected"
-                      ? COLORS.database
-                      : COLORS.panel
-            const foregroundColor =
-              row.state === "selected"
-                ? COLORS.canvas
-                : row.state === "edited"
-                  ? COLORS.warning
-                  : row.state === "inserted"
-                    ? COLORS.runner
-                    : row.state === "deleted"
-                      ? COLORS.danger
-                      : COLORS.text
+                    ? "delete"
+                    : undefined
+            const { background, accent } = queryRowColors(mutationKind, index)
+            const backgroundColor = row.marked
+              ? queryBatchSelectionBackground(background)
+              : background
             return (
-              <box key={row.id} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+              <box
+                key={row.id}
+                style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor }}
+              >
                 <text
                   content={`${row.marked ? "●" : "○"} │`}
                   style={{
@@ -373,13 +263,19 @@ export function DatabaseTutorialDemo() {
                     bg: backgroundColor,
                   }}
                 />
-                {visibleDemoColumns.map((column) => (
-                  <text
-                    key={column}
-                    content={fitCell(row[column], demoColumnWidth)}
-                    style={{ fg: foregroundColor, bg: backgroundColor }}
-                  />
-                ))}
+                {visibleDemoColumns.map((column) => {
+                  const selected = row.state === "selected" && column === "id"
+                  return (
+                    <text
+                      key={column}
+                      content={fitCell(row[column], demoColumnWidth)}
+                      style={{
+                        fg: selected ? selectionColors.foreground : accent,
+                        bg: selected ? selectionColors.background : backgroundColor,
+                      }}
+                    />
+                  )
+                })}
               </box>
             )
           })}
@@ -390,6 +286,110 @@ export function DatabaseTutorialDemo() {
                 : "◇ azul: nova · laranja: editada · vermelho: exclusão"
             }
             style={{ fg: COLORS.muted }}
+          />
+        </box>
+
+        <box
+          style={{
+            height: 2,
+            flexShrink: 0,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            border: ["top"],
+            borderColor: COLORS.border,
+          }}
+        >
+          <box
+            id="tutorial-db-table-tools"
+            style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
+          >
+            <InlineButton
+              label={narrow ? "[O]↕" : "[O] Ordenar"}
+              accent={COLORS.database}
+              onPress={noop}
+            />
+            <InlineButton
+              label={narrow ? "[S]◇" : "[S] Buscar"}
+              accent={COLORS.database}
+              onPress={noop}
+            />
+          </box>
+          <InlineButton
+            id="tutorial-db-sensitive"
+            label={narrow ? "[V] ◇" : "[V] Mascarar"}
+            accent={COLORS.database}
+            onPress={noop}
+          />
+          <box style={{ flexGrow: 1 }} />
+          <InlineButton
+            id="database-refresh-catalog"
+            label={narrow ? "[R]" : "[R] Atualizar"}
+            accent={COLORS.database}
+            onPress={noop}
+          />
+        </box>
+        <box
+          style={{
+            minHeight: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          <InlineButton
+            id="tutorial-db-inspector-toggle"
+            label="[I]"
+            accent={COLORS.database}
+            onPress={noop}
+          />
+          <box
+            id="tutorial-db-selection"
+            style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
+          >
+            <InlineButton label="[Space] ●" accent={COLORS.database} active onPress={noop} />
+            <InlineButton
+              label={narrow ? "[Alt+Space] Sel" : "[Alt+Space] Intervalo"}
+              accent={COLORS.database}
+              onPress={noop}
+            />
+          </box>
+          <InlineButton
+            id="tutorial-db-new-row"
+            label={narrow ? "[Ctrl+A]+" : "[Ctrl+A] Criar"}
+            accent={COLORS.runner}
+            onPress={noop}
+          />
+          <InlineButton
+            id="tutorial-db-edit-cell"
+            label={narrow ? "[E]2" : "[E] Editar 2"}
+            accent={COLORS.warning}
+            onPress={noop}
+          />
+          <InlineButton
+            id="tutorial-db-delete-row"
+            label={narrow ? "[dd]2" : "[dd] Deletar 2"}
+            accent={COLORS.danger}
+            onPress={noop}
+          />
+          <InlineButton
+            id="tutorial-db-export"
+            label={narrow ? "[X]2" : "[X] Exportar 2"}
+            accent={COLORS.database}
+            onPress={noop}
+          />
+          <InlineButton
+            id="tutorial-db-undo-row"
+            label="[U]"
+            accent={COLORS.database}
+            onPress={noop}
+          />
+          <InlineButton
+            id="tutorial-db-review"
+            label={narrow ? "[Ctrl+S]3" : "[Ctrl+S] Revisar 3"}
+            accent={COLORS.success}
+            active
+            onPress={noop}
           />
         </box>
 

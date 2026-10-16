@@ -15,8 +15,12 @@ export type InlineButtonProps = {
   selected?: boolean
   compact?: boolean
   disabled?: boolean
+  /** Resting background; active, focused and pressed states keep their own highlight. */
+  backgroundColor?: string | undefined
   shortcutColor?: string | undefined
   shortcutAnimation?: ShortcutAnimation | undefined
+  /** Exact bracket tokens drawn in the action-key purple, such as the Master Key. */
+  actionKeys?: readonly string[] | undefined
   buttonRef?: Ref<ButtonRenderable>
 }
 
@@ -28,6 +32,7 @@ function buttonColors({
   disabled,
   accent,
   compact,
+  backgroundColor,
 }: {
   pressed: boolean
   selected: boolean
@@ -36,6 +41,7 @@ function buttonColors({
   disabled: boolean
   accent: string
   compact: boolean
+  backgroundColor?: string | undefined
 }) {
   if (pressed || selected) return { fg: disabled ? COLORS.border : COLORS.canvas, bg: accent }
   const highlighted = focused || active
@@ -45,9 +51,7 @@ function buttonColors({
       ? compact
         ? COLORS.diffModifiedBg
         : COLORS.panelRaised
-      : compact
-        ? "transparent"
-        : COLORS.panel,
+      : (backgroundColor ?? (compact ? "transparent" : COLORS.panel)),
   }
 }
 
@@ -60,8 +64,10 @@ export function InlineButton({
   selected = false,
   disabled = false,
   compact = LAYOUT.compact,
+  backgroundColor,
   shortcutColor,
   shortcutAnimation,
+  actionKeys,
   buttonRef,
 }: InlineButtonProps) {
   return (
@@ -79,6 +85,7 @@ export function InlineButton({
           highlight={!selected}
           shortcutColor={shortcutColor}
           shortcutAnimation={shortcutAnimation}
+          actionKeys={actionKeys}
           style={buttonColors({
             pressed: state.pressed,
             selected,
@@ -87,6 +94,7 @@ export function InlineButton({
             disabled,
             accent,
             compact,
+            backgroundColor,
           })}
         />
       )}

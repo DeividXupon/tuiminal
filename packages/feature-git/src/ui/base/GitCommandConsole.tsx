@@ -5,7 +5,7 @@ import {
   type ScrollBoxRenderable,
   StyledText,
 } from "@opentui/core"
-import { useMemo, useRef } from "react"
+import { type ReactNode, useMemo, useRef } from "react"
 import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -84,6 +84,7 @@ export function GitCommandConsole({
   onFocus,
   onNavigate,
   onToggleExpanded,
+  overlay,
 }: {
   width: number
   focused: boolean
@@ -105,6 +106,8 @@ export function GitCommandConsole({
   onFocus: () => void
   onNavigate: (pane: "files" | "preview") => void
   onToggleExpanded: () => void
+  /** Paint layer drawn above the console, such as box selection. */
+  overlay?: ReactNode
 }) {
   const inputRef = useRef<InputRenderable | null>(null)
   const outputRef = useRef<ScrollBoxRenderable | null>(null)
@@ -299,6 +302,7 @@ export function GitCommandConsole({
           }}
         />
       ) : null}
+      {overlay}
     </box>
   )
 }

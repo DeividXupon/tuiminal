@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import type { IssuePreviewConfig, IssueProfile } from "../../model/issue/config"
-import { nextIssuePreviewPosition } from "../../model/issue/navigation"
+import { useState } from "react"
+import type { IssueProfile } from "../../model/issue/config"
 import { updateIssueSection } from "../../model/issue/sections"
 import type { IssueSection } from "../../model/issue/types"
 import { updateIssueProfile } from "../../storage/issue/config"
@@ -39,13 +38,6 @@ export function useIssueConfiguration({
   setNotice: (notice: string) => void
 }) {
   const [editor, setEditor] = useState<EditorState | null>(null)
-  const [previewPosition, setPreviewPosition] = useState<IssuePreviewConfig["position"]>("auto")
-
-  useEffect(
-    () => setPreviewPosition(target?.profile.previewPosition ?? "auto"),
-    [target?.profile.previewPosition],
-  )
-
   const persist = (update: Parameters<typeof updateIssueProfile>[0]["update"]) => {
     if (!target) return false
     try {
@@ -86,15 +78,6 @@ export function useIssueConfiguration({
       sort: currentSection.sort,
       limit: currentSection.limit,
     })
-  const cyclePosition = () => {
-    const next = nextIssuePreviewPosition(previewPosition)
-    if (!target) return setPreviewPosition(next)
-    if (persist((profile) => ({ ...profile, previewPosition: next }))) {
-      setPreviewPosition(next)
-      setNotice(translateUi("Posição da prévia salva para este projeto."))
-    }
-  }
-
   const modals = target ? (
     editor ? (
       <IssueSectionEditorModal
@@ -117,8 +100,6 @@ export function useIssueConfiguration({
 
   return {
     modalOpen: Boolean(editor),
-    previewPosition,
-    cyclePreviewPosition: cyclePosition,
     openQuery,
     modals,
   }

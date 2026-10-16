@@ -1,10 +1,11 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
+import { useRef } from "react"
+import { pullRequestActivity } from "../../model/pr/activity"
 import { nextPullRequestDetailConnection } from "../../model/pr/detail-pagination"
 import { adjacentPreviewTab, PULL_REQUEST_PREVIEW_TABS } from "../../model/pr/navigation"
 import type {
@@ -13,6 +14,9 @@ import type {
   PullRequestSummary,
 } from "../../model/pr/types"
 import type { PullRequestWorkflowRun } from "../../model/pr/workflows"
+import { useActivitySelection } from "../shared/useActivitySelection"
+import { usePreviewPagination } from "../shared/usePreviewPagination"
+import { usePreviewScroll } from "../shared/usePreviewScroll"
 import { PreviewTabContent } from "./PreviewTabContent"
 import type { PullRequestDetailsState } from "./usePullRequestDetails"
 
@@ -108,7 +112,6 @@ export function PreviewPane({
   onCopyUrl,
   onCopyNumber,
   onOpenDiff,
-  onOpenActions,
   watching,
   onToggleWatch,
   loadingMore,
@@ -135,7 +138,6 @@ export function PreviewPane({
   onCopyUrl: () => void
   onCopyNumber: () => void
   onOpenDiff: () => void
-  onOpenActions: () => void
   watching: boolean
   onToggleWatch: () => void
   loadingMore: boolean
@@ -147,16 +149,46 @@ export function PreviewPane({
   onReplyComment: (comment: PullRequestComment) => void
 }) {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ x: 0, y: scrollOffset })
-  }, [scrollOffset])
+  useActivitySelection(
+    scrollRef,
+    activeTab === "activity" && details.status === "ready"
+      ? `git-pr-activity-${selectedItemIndex}`
+      : null,
+    item?.identity.nodeId,
+  )
+  usePreviewScroll(scrollRef, scrollOffset, `${item?.identity.nodeId}:${activeTab}`)
+  const connection =
+    details.status === "ready" ? nextPullRequestDetailConnection(details.details, activeTab) : null
+  const pageKey =
+    details.status === "ready" && connection
+      ? JSON.stringify([
+          item?.identity.nodeId,
+          activeTab,
+          connection,
+          details.details.pages[connection].endCursor,
+        ])
+      : null
+  const itemCount =
+    details.status === "ready"
+      ? activeTab === "activity"
+        ? pullRequestActivity(details.details).length
+        : activeTab === "commits" || activeTab === "files"
+          ? details.details[activeTab].length
+          : 0
+      : 0
+  usePreviewPagination({
+    scroll: scrollRef,
+    pageKey,
+    enabled: focused,
+    loading: loadingMore,
+    selectedIndex: selectedItemIndex,
+    itemCount,
+    onLoadMore,
+  })
   if (!item) {
     return <text content={translateUi("Nenhum PR nesta seção.")} style={{ fg: COLORS.muted }} />
   }
   const identity = `${item.identity.owner}/${item.identity.repository} #${item.identity.number}`
-  const canLoadMore =
-    details.status === "ready" &&
-    Boolean(nextPullRequestDetailConnection(details.details, activeTab))
   return (
     <box
       style={{
@@ -235,12 +267,6 @@ export function PreviewPane({
           onPress={onOpenDiff}
         />
         <InlineButton
-          id="git-pr-open-actions"
-          label={translateUi("[?] Ações")}
-          accent={COLORS.git}
-          onPress={onOpenActions}
-        />
-        <InlineButton
           id="git-pr-toggle-watch"
           label={translateUi(watching ? "[W] Parar CI" : "[W] Acompanhar CI")}
           accent={COLORS.git}
@@ -249,6 +275,7 @@ export function PreviewPane({
         />
       </box>
       <scrollbox
+        id="git-pr-preview-scroll"
         key={`${item.identity.nodeId}:${activeTab}`}
         ref={scrollRef}
         scrollY
@@ -270,13 +297,8 @@ export function PreviewPane({
           onReactComment={onReactComment}
           onReplyComment={onReplyComment}
         />
-        {canLoadMore ? (
-          <InlineButton
-            label={translateUi(loadingMore ? "[N] Carregando…" : "[N] Carregar mais")}
-            accent={COLORS.git}
-            disabled={loadingMore}
-            onPress={onLoadMore}
-          />
+        {loadingMore ? (
+          <text content={translateUi("CARREGANDO DETALHES…")} style={{ fg: COLORS.muted }} />
         ) : null}
       </scrollbox>
       <PlasmaLoadingOverlay

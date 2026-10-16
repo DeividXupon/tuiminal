@@ -150,3 +150,25 @@ export function httpResponseContent(document: HttpDocumentState, cookies: HttpCo
   }
   return moreContent(document, cookies)
 }
+
+// Copy from the captured response only when requested, independently of the
+// bounded preview, line numbers, folded nodes and renderer selection.
+export function httpResponseCopyContent(document: HttpDocumentState, cookies: HttpCookie[]) {
+  if (document.execution.status !== "success") return ""
+  const response = document.execution.response
+  if (document.responseView === "headers") {
+    return response.headers.map(([name, value]) => `${name}: ${value}`).join("\n")
+  }
+  if (document.responseView !== "pretty" && document.responseView !== "raw") {
+    return httpResponseContent(document, cookies)
+  }
+  if (response.bodyKind === "binary") return ""
+  const pretty = document.responseView === "pretty"
+  if (pretty && response.bodyKind === "json" && document.responsePresentation.jsonPath.trim()) {
+    return jsonPathContent(
+      responseBodyText(response, false),
+      document.responsePresentation.jsonPath,
+    )
+  }
+  return responseBodyText(response, pretty)
+}

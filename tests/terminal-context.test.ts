@@ -8,13 +8,13 @@ import {
   terminalContextTags,
   terminalContextTooltip,
 } from "../packages/feature-terminal/src/rendering/terminal-context"
-import { terminalSyncTagProgress } from "../packages/feature-terminal/src/ui/TerminalContextTags"
 import { localRemoteLiveDiffHelperCommand } from "../packages/feature-terminal/src/services/remote-live-diff"
 import { createRemoteTerminalContextSource } from "../packages/feature-terminal/src/services/remote-terminal-context"
 import { readTerminalRepositoryContext } from "../packages/feature-terminal/src/services/terminal-repository-context"
 import { readProcessWorkingDirectory } from "../packages/feature-terminal/src/services/terminal-working-directory"
 import * as tmuxCommand from "../packages/feature-terminal/src/services/tmux-command"
 import { readTmuxPaneWorkingDirectory } from "../packages/feature-terminal/src/services/tmux-pane-context"
+import { terminalSyncTagProgress } from "../packages/feature-terminal/src/ui/TerminalContextTags"
 
 const temporaryDirectories: string[] = []
 
@@ -98,11 +98,12 @@ test("terminal context tags retain state, then branch, then folder as width shri
     projectName: "project\u001b[31m",
     branch: "feature/context",
     state: "dirty" as const,
+    changes: { additions: 1654, deletions: 54, partial: false },
   }
   expect(terminalContextTags(context, 80).map((tag) => tag.label)).toEqual([
     "project[31m",
     "feature/context",
-    "Alterado",
+    "+1654 -54",
   ])
   expect(terminalContextTags(context, 30).map((tag) => tag.kind)).toEqual(["branch", "state"])
   expect(terminalContextTags(context, 12).map((tag) => tag.kind)).toEqual(["state"])
@@ -192,6 +193,69 @@ test("remote terminal context uses the bounded helper for branch and cleanliness
     source.close()
   }
 })
+
+for (const remote of [false, true]) {
+  test(`terminal line counts include net edits and new files (${remote ? "remote" : "local"})`, async () => {
+    const directory = repository()
+    const source = remote
+      ? createRemoteTerminalContextSource(
+          {
+            profile: { id: "fixture", name: "Fixture", host: "fixture" },
+            workingDirectory: directory,
+          },
+          { command: localRemoteLiveDiffHelperCommand(directory) },
+        )
+      : null
+    const read = () =>
+      source
+        ? source.read(new AbortController().signal)
+        : readTerminalRepositoryContext(directory, new AbortController().signal)
+    try {
+      writeFileSync(join(directory, "tracked.txt"), "changed\nsecond\n")
+      git(directory, "add", "tracked.txt")
+      writeFileSync(join(directory, "tracked.txt"), "changed\nsecond\nthird")
+      writeFileSync(join(directory, "new file.txt"), "new\nlast")
+      writeFileSync(join(directory, "binary.bin"), Buffer.from([0, 10, 10]))
+      expect((await read()).changes).toEqual({ additions: 5, deletions: 1, partial: false })
+      // Reverting the worktree cancels staged changes in the net count.
+      writeFileSync(join(directory, "tracked.txt"), "initial\n")
+      expect((await read()).changes).toEqual({ additions: 2, deletions: 0, partial: false })
+      git(directory, "add", ".")
+      git(directory, "commit", "-qm", "new files")
+      git(directory, "mv", "new file.txt", "renamed.txt")
+      expect((await read()).changes).toEqual({ additions: 0, deletions: 0, partial: false })
+      git(directory, "rm", "tracked.txt")
+      expect((await read()).changes).toEqual({ additions: 0, deletions: 1, partial: false })
+    } finally {
+      source?.close()
+    }
+  })
+
+  test(`terminal line counts support an unborn branch (${remote ? "remote" : "local"})`, async () => {
+    const directory = fixture()
+    git(directory, "init", "-q")
+    writeFileSync(join(directory, "staged.txt"), "one\ntwo\n")
+    git(directory, "add", ".")
+    writeFileSync(join(directory, "new.txt"), "three")
+    const source = remote
+      ? createRemoteTerminalContextSource(
+          {
+            profile: { id: "fixture", name: "Fixture", host: "fixture" },
+            workingDirectory: directory,
+          },
+          { command: localRemoteLiveDiffHelperCommand(directory) },
+        )
+      : null
+    try {
+      const context = source
+        ? await source.read(new AbortController().signal)
+        : await readTerminalRepositoryContext(directory, new AbortController().signal)
+      expect(context.changes).toEqual({ additions: 3, deletions: 0, partial: false })
+    } finally {
+      source?.close()
+    }
+  })
+}
 
 test("terminal cwd readers follow the owned process and immutable tmux pane", async () => {
   if (process.platform === "linux" || process.platform === "darwin") {

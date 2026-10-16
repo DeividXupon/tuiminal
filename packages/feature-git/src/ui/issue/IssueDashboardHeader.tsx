@@ -1,7 +1,6 @@
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type { IssuePreviewConfig } from "../../model/issue/config"
 import { remoteHeaderControlsFit } from "../shared/remote-dashboard-layout"
 import { IssueSectionStrip } from "./IssueSectionStrip"
 import type { IssueDashboardPresentation } from "./presentation"
@@ -12,36 +11,30 @@ export function IssueDashboardHeader({
   refreshing,
   demo,
   canCreate,
-  previewVisible,
-  previewPosition,
   onCreate,
   onSelectSection,
   onEditQuery,
-  onTogglePreview,
-  onCyclePreviewPosition,
+  onOpenActions,
 }: {
   presentation: IssueDashboardPresentation
   terminalWidth: number
   refreshing: boolean
   demo: boolean
   canCreate: boolean
-  previewVisible: boolean
-  previewPosition: IssuePreviewConfig["position"]
   onCreate: () => void
   onSelectSection: (index: number) => void
   onEditQuery: () => void
-  onTogglePreview: () => void
-  onCyclePreviewPosition: () => void
+  onOpenActions: () => void
 }) {
-  const previewLabel = `[P] ${translateUi("Prévia")}: ${translateUi(previewVisible ? "visível" : "oculta")}`
-  const positionLabel = `[Shift+P] ${translateUi("Posição")}: ${translateUi(previewPosition)}`
   const createLabel = translateUi("[Ctrl+N] Criar issue")
-  const packControls = remoteHeaderControlsFit({
-    terminalWidth,
-    sections: presentation.sections,
-    counts: presentation.counts,
-    actionLabels: [...(canCreate ? [createLabel] : []), previewLabel, positionLabel],
-  })
+  const packControls =
+    !canCreate ||
+    remoteHeaderControlsFit({
+      terminalWidth,
+      sections: presentation.sections,
+      counts: presentation.counts,
+      actionLabels: canCreate ? [createLabel] : [],
+    })
   const sections = (
     <IssueSectionStrip
       sections={presentation.sections}
@@ -63,18 +56,6 @@ export function IssueDashboardHeader({
           onPress={onCreate}
         />
       ) : null}
-      <InlineButton
-        id="git-issue-toggle-preview"
-        label={previewLabel}
-        accent={COLORS.git}
-        onPress={onTogglePreview}
-      />
-      <InlineButton
-        id="git-issue-preview-position"
-        label={positionLabel}
-        accent={COLORS.git}
-        onPress={onCyclePreviewPosition}
-      />
     </box>
   )
   return (
@@ -82,7 +63,6 @@ export function IssueDashboardHeader({
       <box
         id="git-issue-title"
         style={{
-          ...panelBorder(),
           backgroundColor: COLORS.panel,
           height: 1,
           flexShrink: 0,
@@ -92,10 +72,26 @@ export function IssueDashboardHeader({
           paddingRight: 1,
         }}
       >
-        <text content={translateUi(presentation.title)} style={{ fg: COLORS.git }} />
+        <box style={{ flexDirection: "row", height: 1, gap: 1, minWidth: 0 }}>
+          <text
+            id="git-issue-title-label"
+            content={translateUi(presentation.title)}
+            wrapMode="none"
+            truncate
+            style={{ fg: COLORS.git, minWidth: 0 }}
+          />
+          <InlineButton
+            id="git-issue-open-actions"
+            label="[?] Ações"
+            accent={COLORS.git}
+            onPress={onOpenActions}
+          />
+        </box>
         <text
           content={`${translateUi(presentation.meta)}${refreshing ? ` · ${translateUi("ATUALIZANDO TODAS AS SEÇÕES…")}` : ""}`}
-          style={{ fg: demo ? COLORS.warning : COLORS.muted }}
+          wrapMode="none"
+          truncate
+          style={{ fg: demo ? COLORS.warning : COLORS.muted, minWidth: 0, flexShrink: 1 }}
         />
       </box>
       {packControls ? (

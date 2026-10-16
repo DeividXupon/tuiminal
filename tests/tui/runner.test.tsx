@@ -1,5 +1,5 @@
 import "./setup"
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { RGBA } from "@opentui/core"
@@ -7,6 +7,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act } from "react"
 import { Runner } from "../../packages/feature-runner/src/RunnerWorkspace"
+import * as runnerService from "../../packages/feature-runner/src/services/runner"
 import { RunnerSaveCommandModal } from "../../packages/feature-runner/src/ui/RunnerSaveCommandModal"
 import { App } from "../../apps/cli/src/App"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
@@ -27,8 +28,8 @@ async function settle(until: () => boolean) {
   throw new Error(`TUI did not settle:\n${tui.captureCharFrame()}`)
 }
 
-async function key(name: string, ctrl = false, meta = false) {
-  act(() => tui?.mockInput.pressKey(name, { ctrl, meta }))
+async function key(name: string, ctrl = false, meta = false, shift = false) {
+  act(() => tui?.mockInput.pressKey(name, { ctrl, meta, shift }))
   // A lone Escape waits for the terminal's escape-sequence disambiguation timer.
   await act(async () => {
     await Bun.sleep(60)
@@ -87,7 +88,7 @@ describe("Runner TUI behavior", () => {
   })
 
   test("application shortcuts cannot escape a focused input or save modal", async () => {
-    tui = await testRender(<App />, { width: 140, height: 36 })
+    tui = await testRender(<App />, { width: 140, height: 36, kittyKeyboard: true })
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
     await key("/")
     await act(async () => {
@@ -128,7 +129,7 @@ describe("Runner TUI behavior", () => {
   })
 
   test("N opens projects, plus remains text in inputs, and multi view preserves commands", async () => {
-    tui = await testRender(<Runner active />, { width: 140, height: 36 })
+    tui = await testRender(<Runner active />, { width: 140, height: 36, kittyKeyboard: true })
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
     expect(tui.captureCharFrame()).toContain("LOG DO PROCESSO")
     expect(tui.captureCharFrame()).not.toContain("▣ MULTI")
@@ -145,13 +146,114 @@ describe("Runner TUI behavior", () => {
     expect(tui.captureCharFrame()).toContain("echo 1+1")
     expect(tui.renderer.currentFocusedRenderable?.id).toBe("runner-command-input")
     await key("ESCAPE")
-    await key("m")
+    await key("m", true)
     expect(tui.captureCharFrame()).toContain("MULTI")
     expect(tui.captureCharFrame()).toContain("COMANDOS")
     await key("n")
     await settle(() => tui?.captureCharFrame().includes("PROCURAR NOS ARQUIVOS") ?? false)
     expect(tui.captureCharFrame()).toContain("PROJETOS")
   })
+
+  test.each([60, 140])(
+    "Enter and Space toggle commands while removed shortcuts do nothing at %i columns",
+    async (width) => {
+      let stops = 0
+      const spawn = spyOn(runnerService, "startRunnerProcess").mockImplementation(
+        (_root, _command, callbacks) => ({
+          pid: null,
+          interactive: false,
+          write: () => {},
+          stop: async () => {
+            stops += 1
+            callbacks.onExit({ code: null, signal: "SIGTERM", stopped: true })
+          },
+        }),
+      )
+      try {
+        tui = await testRender(<Runner active />, { width, height: 36 })
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+        expect(tui.captureCharFrame()).toContain("[↵/Spc]")
+        expect(tui.captureCharFrame()).not.toMatch(/grupo/i)
+        expect(tui.captureCharFrame()).not.toContain("⇧K")
+        expect(tui.renderer.root.findDescendantById("runner-footer-new")).toBeUndefined()
+
+        await key(" ", true)
+        await key("g")
+        await key("g", false, false, true)
+        await key("r")
+        await key("r", false, false, true)
+        expect(spawn).not.toHaveBeenCalled()
+        expect(tui.captureCharFrame()).not.toMatch(/SELEÇÃO EM GRUPO|☑|☐/)
+
+        await key("?")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-action-palette")
+        expect(tui.captureCharFrame()).toContain("[Enter/Space]")
+        expect(tui.captureCharFrame()).not.toContain("[R]")
+        expect(tui.captureCharFrame()).not.toContain("[Shift+K]")
+        expect(
+          tui.renderer.root.findDescendantById("runner-action-palette-row-new-instance"),
+        ).toBeUndefined()
+        await key(" ")
+        expect(spawn).not.toHaveBeenCalled()
+        await key("/")
+        await act(async () => tui?.mockInput.typeText("grupo"))
+        await settle(() => tui?.captureCharFrame().includes("Nenhum resultado.") ?? false)
+        await key("ESCAPE")
+        await key("ESCAPE")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+
+        await key("l")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-log-scroll")
+        await key(" ")
+        expect(spawn).not.toHaveBeenCalled()
+        await key("h")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+
+        await key("/")
+        await act(async () => tui?.mockInput.typeText("echo"))
+        await key(" ")
+        await act(async () => tui?.mockInput.typeText("fixture"))
+        await settle(() => tui?.captureCharFrame().includes("echo fixture") ?? false)
+        expect(spawn).not.toHaveBeenCalled()
+        await key("ESCAPE")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+
+        await key(" ")
+        await settle(() => spawn.mock.calls.length === 1)
+        expect(spawn.mock.calls[0]?.[1].id).toBe("package:test")
+        if (width < 100) await key("TAB")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+        await key("p")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-process-list")
+        await key(" ")
+        expect(spawn).toHaveBeenCalledTimes(1)
+        await key("p")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+        await key("k", false, false, true)
+        expect(stops).toBe(0)
+        expect(tui.captureCharFrame()).toContain("[↵/Spc] Parar")
+        await key(" ")
+        await settle(() => stops === 1)
+        expect(spawn).toHaveBeenCalledTimes(1)
+        expect(tui.captureCharFrame()).toContain("[↵/Spc] Rodar")
+
+        await key("RETURN")
+        await settle(() => spawn.mock.calls.length === 2)
+        if (width < 100) await key("TAB")
+        await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+        await key("RETURN")
+        await settle(() => stops === 2)
+        await key("r")
+        await key("r", false, false, true)
+        expect(spawn).toHaveBeenCalledTimes(2)
+        expect(stops).toBe(2)
+      } finally {
+        act(() => tui?.renderer.destroy())
+        tui = undefined
+        spawn.mockRestore()
+      }
+    },
+  )
 
   test("keeps the command header and details inside a 120-column framed panel", async () => {
     updateUiSettings({ layout: "framed", language: "pt-BR" })
@@ -188,7 +290,7 @@ describe("Runner TUI behavior", () => {
     )
 
     try {
-      tui = await testRender(<Runner active />, { width: 140, height: 36 })
+      tui = await testRender(<Runner active />, { width: 140, height: 36, kittyKeyboard: true })
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "runner-autostart-trust-modal",
       )
@@ -217,4 +319,44 @@ describe("Runner TUI behavior", () => {
       rmSync(secondSentinel, { force: true })
     }
   })
+})
+
+test("Runner action palette contains keys, restores focus and opens configuration", async () => {
+  tui = await testRender(<App />, { width: 140, height: 36, kittyKeyboard: true })
+  await settle(() => tui?.renderer.currentFocusedRenderable?.id === "runner-command-list")
+  const find = (id: string) => tui?.renderer.root.findDescendantById(id)
+  const focus = () => tui?.renderer.currentFocusedRenderable?.id
+  const listenerCount = tui.renderer.keyInput.listenerCount("keypress")
+  await key("?")
+  await settle(() => focus() === "runner-action-palette")
+  expect(tui.captureCharFrame()).toContain("AÇÕES DO RUNNER")
+  expect(find("runner-action-palette-row-new-instance")).toBeUndefined()
+  for (const name of ["r", "s", "c", ","]) await key(name)
+  await key("1", false, true)
+  expect(focus()).toBe("runner-action-palette")
+  expect(find("configuration-modal")).toBeUndefined()
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("configuração"))
+  await settle(() => Boolean(find("runner-action-palette-row-configuration")))
+  await key("ESCAPE")
+  expect(focus()).toBe("runner-action-palette")
+  await key("RETURN")
+  await settle(() => focus()?.startsWith("runner-config-") ?? false)
+  expect(find("runner-action-palette")).toBeUndefined()
+  await key("ESCAPE")
+  await key("ESCAPE")
+  await settle(() => focus() === "runner-config-list")
+  await key("ESCAPE")
+  await settle(() => focus() === "runner-command-list")
+  const opener = find("runner-action-palette-open")
+  if (!opener) throw new Error("Missing actions button")
+  await act(async () => tui?.mockMouse.click(opener.screenX + 1, opener.screenY))
+  await settle(() => focus() === "runner-action-palette")
+  await key("ESCAPE")
+  await settle(() => focus() === "runner-command-list")
+  expect(tui.renderer.keyInput.listenerCount("keypress")).toBe(listenerCount)
+  await key("/")
+  await act(async () => tui?.mockInput.typeText("echo ?"))
+  expect(focus()).toBe("runner-command-input")
+  expect(find("runner-action-palette")).toBeUndefined()
 })

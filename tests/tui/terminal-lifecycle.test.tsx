@@ -12,12 +12,16 @@ type TerminalOptions = Parameters<typeof terminalService.startTermAgentsProcess>
 const starts: TerminalOptions[] = []
 const inputs: string[][] = []
 let inspectionSpy: ReturnType<typeof spyOn<typeof inspection, "readTerminalProcesses">> | undefined
+let commandSpy:
+  | ReturnType<typeof spyOn<typeof terminalService, "createShellTerminalCommand">>
+  | undefined
 let spawnSpy: ReturnType<typeof spyOn<typeof terminalService, "startTermAgentsProcess">> | undefined
 
 afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined
   spawnSpy?.mockRestore()
+  commandSpy?.mockRestore()
   inspectionSpy?.mockRestore()
   starts.length = 0
   inputs.length = 0
@@ -40,21 +44,14 @@ async function startFixture(shell = false) {
       }
     },
   )
+  if (!shell) {
+    commandSpy = spyOn(terminalService, "createShellTerminalCommand").mockReturnValue(
+      terminalService.createTermAgentsCommand("fixture-command"),
+    )
+  }
   tui = await testRender(<TermAgents active />, { width: 100, height: 28 })
   await tui.renderOnce()
-  if (shell) await leader("n")
-  else {
-    const command = tui?.renderer.root.findDescendantById("terminal-sidebar-command")
-    if (!command) throw new Error("Missing command control")
-    await act(async () => tui?.mockMouse.click(command.screenX + 1, command.screenY))
-    await tui?.renderOnce()
-    expect(tui?.renderer.root.findDescendantById("terminal-command-input")).toBeDefined()
-    await act(async () => {
-      tui?.renderer.root.findDescendantById("terminal-command-input")?.focus()
-      await tui?.mockInput.typeText("fixture-command")
-    })
-    await act(async () => tui?.mockInput.pressEnter())
-  }
+  await leader("n")
   await tui.renderOnce()
   expect(starts).toHaveLength(1)
 }

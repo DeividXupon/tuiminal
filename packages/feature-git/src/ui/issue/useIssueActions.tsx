@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { discussionActionTargetPayload } from "../../model/discussion-actions"
 import {
+  type IssueActionAvailability,
   type IssueActionKind,
   issueActionAvailability,
   prepareIssueAction,
 } from "../../model/issue/actions"
+import { ISSUE_MUTATIONS } from "../../model/issue/palette"
 import { issueIdentityKey } from "../../model/issue/query"
 import type {
   IssueAuthContext,
@@ -17,19 +18,7 @@ import type {
 import { IssueActionCoordinator } from "../../services/issue-actions"
 import { inspectCheckoutClone } from "../../services/pr-checkout"
 import { addIssueClonePath, loadIssueConfig } from "../../storage/issue/config"
-import { IssueActionMenuModal, type IssueActionMenuItem } from "./IssueActionMenuModal"
 import { IssueActionModal } from "./IssueActionModal"
-
-const ACTIONS: ReadonlyArray<Pick<IssueActionMenuItem, "kind" | "label" | "shortcut">> = [
-  { kind: "comment", label: "Comentar", shortcut: "[C]" },
-  { kind: "reaction", label: "Reagir", shortcut: "[Shift+E]" },
-  { kind: "assign", label: "Adicionar responsáveis", shortcut: "[A]" },
-  { kind: "unassign", label: "Remover responsáveis", shortcut: "[Shift+A]" },
-  { kind: "labels", label: "Editar labels", shortcut: "[Shift+L]" },
-  { kind: "checkout", label: "Criar branch e checkout", shortcut: "[Shift+C]" },
-  { kind: "close", label: "Fechar issue", shortcut: "[X]" },
-  { kind: "reopen", label: "Reabrir issue", shortcut: "[Shift+X]" },
-]
 
 type UiActionResult =
   | { status: "confirmed" }
@@ -59,14 +48,16 @@ async function executeSelectedAction({
   item,
   auth,
   coordinator,
+  demo,
 }: {
   kind: IssueActionKind
   payload: Readonly<Record<string, unknown>>
   item: IssueSummary
   auth: IssueAuthContext
   coordinator: IssueActionCoordinator
+  demo: boolean
 }): Promise<UiActionResult> {
-  if (process.env.TUIMINAL_GIT_ISSUES_DEMO === "1") return { status: "confirmed" }
+  if (demo) return { status: "confirmed" }
   const checkoutError = await validateCheckout(kind, payload, item)
   if (checkoutError) return { status: "rejected", reason: checkoutError }
   const prepared = prepareIssueAction({
@@ -101,6 +92,7 @@ export function useIssueActions({
   details,
   auth,
   profileRoot,
+  demo = process.env.TUIMINAL_GIT_ISSUES_DEMO === "1",
   onNotice,
   onRefresh,
   onLocalCheckout,
@@ -109,13 +101,13 @@ export function useIssueActions({
   details: IssueDetails | null
   auth: IssueAuthContext | null
   profileRoot: string | null
+  demo?: boolean
   onNotice: (message: string) => void
   onRefresh: () => void
   onLocalCheckout: () => void
 }) {
   const executable = process.env.TUIMINAL_GH_EXECUTABLE?.trim()
   const [coordinator] = useState(() => new IssueActionCoordinator(executable ? { executable } : {}))
-  const [menuOpen, setMenuOpen] = useState(false)
   const [kind, setKind] = useState<IssueActionKind | null>(null)
   const [targetComment, setTargetComment] = useState<IssueComment | null>(null)
   const [value, setValue] = useState("")
@@ -124,17 +116,19 @@ export function useIssueActions({
   const drafts = useRef(new Map<string, string>())
   const clonePaths = useMemo(() => (item ? mappedClonePaths(item) : []), [item])
 
-  const actions = useMemo(() => {
-    if (!item || !details || !auth) return []
-    return ACTIONS.map((action) => ({
-      ...action,
-      availability: issueActionAvailability({
-        kind: action.kind,
-        summary: item,
-        details,
-        hasCheckout: clonePaths.length > 0,
-      }),
-    }))
+  const availability = useMemo(() => {
+    if (!item || !details || !auth) return new Map<IssueActionKind, IssueActionAvailability>()
+    return new Map(
+      ISSUE_MUTATIONS.map((mutation) => [
+        mutation.kind,
+        issueActionAvailability({
+          kind: mutation.kind,
+          summary: item,
+          details,
+          hasCheckout: clonePaths.length > 0,
+        }),
+      ]),
+    )
   }, [auth, clonePaths.length, details, item])
 
   const draftKey = (action: IssueActionKind, comment: IssueComment | null = targetComment) =>
@@ -152,19 +146,17 @@ export function useIssueActions({
     return ""
   }
   const openAction = (action: IssueActionKind) => {
-    const available = actions.find((candidate) => candidate.kind === action)?.availability
+    const available = availability.get(action)
     if (!available?.enabled) {
       onNotice(translateUi(available?.reason ?? "Ação indisponível."))
       return
     }
-    setMenuOpen(false)
     setTargetComment(null)
     setKind(action)
     setValue(defaultValue(action, null))
     setError("")
   }
   const openCommentAction = (action: "reaction" | "reply", comment: IssueComment) => {
-    setMenuOpen(false)
     setTargetComment(comment)
     setKind(action)
     setValue(drafts.current.get(draftKey(action, comment)) ?? "")
@@ -186,6 +178,7 @@ export function useIssueActions({
         item,
         auth,
         coordinator,
+        demo,
       })
       if (result.status === "confirmed") {
         if (kind === "checkout") onLocalCheckout()
@@ -193,7 +186,7 @@ export function useIssueActions({
         setKind(null)
         setTargetComment(null)
         onNotice(
-          process.env.TUIMINAL_GIT_ISSUES_DEMO === "1"
+          demo
             ? translateUi("DEMO · ação confirmada sem alterar o GitHub.")
             : translateUi("Ação confirmada pelo GitHub."),
         )
@@ -212,43 +205,32 @@ export function useIssueActions({
     }
   }
 
-  const modals = item ? (
-    <>
-      <MountWhen when={menuOpen}>
-        <IssueActionMenuModal
-          item={item}
-          actions={actions}
-          onClose={() => setMenuOpen(false)}
-          onSelect={openAction}
-        />
-      </MountWhen>
-      {kind ? (
-        <IssueActionModal
-          kind={kind}
-          item={item}
-          currentAssignees={details?.assignees.map((actor) => actor.login) ?? []}
-          currentLabels={details?.labels.map((label) => label.name) ?? []}
-          targetComment={targetComment}
-          reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
-          initialValue={value}
-          checkoutPaths={[...new Set([...clonePaths, ...(profileRoot ? [profileRoot] : [])])]}
-          busy={busy}
-          error={error}
-          onValueChange={updateValue}
-          onClose={() => {
-            setKind(null)
-            setTargetComment(null)
-          }}
-          onSubmit={(payload) => void submit(payload)}
-        />
-      ) : null}
-    </>
-  ) : null
+  const modals =
+    item && kind ? (
+      <IssueActionModal
+        kind={kind}
+        item={item}
+        currentAssignees={details?.assignees.map((actor) => actor.login) ?? []}
+        currentLabels={details?.labels.map((label) => label.name) ?? []}
+        targetComment={targetComment}
+        reactionGroups={targetComment?.reactionGroups ?? details?.reactionGroups}
+        initialValue={value}
+        checkoutPaths={[...new Set([...clonePaths, ...(profileRoot ? [profileRoot] : [])])]}
+        busy={busy}
+        error={error}
+        onValueChange={updateValue}
+        onClose={() => {
+          setKind(null)
+          setTargetComment(null)
+        }}
+        onSubmit={(payload) => void submit(payload)}
+      />
+    ) : null
 
   return {
-    modalOpen: menuOpen || kind !== null,
+    modalOpen: kind !== null,
     modals,
-    openMenu: () => setMenuOpen(true),
+    availability,
     openAction,
     openCommentAction,
   }

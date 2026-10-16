@@ -172,16 +172,6 @@ export function TerminalTutorialDialog({
   now: number
 }) {
   switch (state) {
-    case "command-dialog":
-      return (
-        <TerminalDialog
-          kind="command"
-          initialValue="bun test --watch"
-          inactive
-          onSave={noop}
-          onClose={noop}
-        />
-      )
     case "rename-dialog":
       return (
         <TerminalDialog

@@ -8,20 +8,20 @@ Tuiminal's focus, safety, and responsive layout rules.
 ```text
 LOCAL · …/project           │ GITHUB · @viewer
 [1] [C] DIFFS               │ [2] PR  [3] ISSUES  [4] INBOX
-│ ISSUES                                      github.com · @viewer         │
+│ ISSUES [?] Actions                          github.com · @viewer         │
 │ [A←] My Issues 12 [F→]                                                   │
 │ [/] is:open author:@me       ALL PROJECTS · 20/42 · UPDATED              │
 ├───────────────────────────────┬──────────────────────────────────────────┤
 │ ▶ ◆ owner/api #318 Title 6 ♥4 │ owner/api #318 · Title                   │
 │     @author · → @ana · bug    │ [OVERVIEW] [ACTIVITY]                    │
-│   ◆ owner/web #204 Other 3 ♥8 │ [O] Open [Y] # [Shift+Y] URL [?] Actions │
+│   ◆ owner/web #204 Other 3 ♥8 │ [O] Open [Y] # [Shift+Y] URL             │
 │     @rui · → @viewer · a11y   │ description, metadata, or comments       │
 └───────────────────────────────┴──────────────────────────────────────────┘
- [J/K] Navigate  [H/L] Focus  [A←] [F→] Section  [Z←] [V→] Tab  [P] Preview  [?] Actions
 ```
 
 Sections are horizontal, without a permanent repository sidebar. The query stays
 visible. Two-line rows preserve density while showing authors, assignees, and labels.
+Section tabs alternate subtle theme backgrounds; the active tab keeps its stronger highlight.
 New profiles start with `My Issues`, `All`, `Open`, and `Closed`. The three state
 filters select all non-archived, open, or closed issues within the current scope.
 Preset titles stay in English across UI languages; users may name custom selectors.
@@ -35,7 +35,8 @@ Selection and palette changes do not repeat date conversion and truncation for t
 whole list; colors and click handlers remain current.
 
 In framed mode, title, controls, query, and panels are adjacent on one continuous
-panel-colored surface. Section navigation and actions share one row when all
+panel-colored surface. The single-row title strip has no surrounding border.
+Section navigation and creation share one row when all
 translated labels fit; narrower framed screens stack them without spacer rows.
 Compact mode retains its existing four-row header and canvas background.
 
@@ -44,13 +45,19 @@ Compact mode retains its existing four-row header and canvas background.
 - Wide (`≥118 × 22`): list on the left, preview on the right.
 - Medium (`≥76 × 20`): list above, preview below.
 - Narrow: one pane; `[L/→/Enter]` opens preview, `[H/←/Esc]` returns.
-- Forced placement applies only if minimum content fits; otherwise use one pane.
-- `[P]` hides preview and returns list focus; `[Shift+P]` cycles the per-project
-  persisted placement preference.
+- Placement follows terminal dimensions automatically. Legacy saved placement
+  fields remain readable but have no effect. `[P]` and `[Shift+P]` are unbound.
 
 ## Focus, layers, and states
 
-- List: `[J/K]`, arrows, `[G/Home]`, and `[Shift+G/End]`.
+A one-row horizontal rule separates the title from Git navigation in both layouts.
+The `[?] Actions` button is immediately beside the screen title. There is no
+navigation footer or vertical outer padding. Manual load-more commands, including
+`[N]` and palette entries, are removed. List pagination remains automatic; the
+focused Activity preview loads more comments at its final comment or scroll end,
+once per cursor while at the end. Leaving and returning to the end permits a retry.
+
+- List: `[J/K]`, arrows, `[Home]`, and `[End]`. `[M]` chooses the list or preview box.
 - Sections: `[A←]`/`[F→]`; `[/]` edits the active query. Creation, editing, ordering,
   and repository selection belong to Git configuration opened through `[,]`.
 - `[O]` opens the selected Issue using the Git-wide browser choice in
@@ -58,11 +65,15 @@ Compact mode retains its existing four-row header and canvas background.
   browser, Browsh, Carbonyl, or terminal-browser.
 - Preview: `[Z←]`/`[V→]` switches tabs. In Overview, `[J/K]` scrolls and `[E]`
   expands/collapses the description. In Activity, `[J/K]` selects comments,
-  `[E]` reacts, and `[Enter]` replies to the selection.
+  `[E]` reacts, and `[Enter]` replies to the selection. Selection stays visible as it
+  moves beyond the viewport. PR and Inbox reuse this comment layout and reply grouping.
 - `[Shift+E]` reacts to the issue. The picker maps `[1]`–`[5]` to 👍 ❤️ 🎉 😄 👀,
   shows counts and existing reactions. A comment with any reaction uses the
   contextual new-reaction label (`[E] Nova reação` in Portuguese).
-- `[?]` shows all actions, their availability, and reasons for disabled states.
+- `[?]` opens the shared Git action palette with or without a selected issue: every
+  action tagged by block, GitHub writes first while the list is focused, reasons for
+  disabled rows, no pure navigation rows (`[J/K]`, `[A←]`/`[F→]`, `[Z←]`/`[V→]`), write
+  keys such as `[Shift+L]` running directly, and rows that switch Git tabs.
 - Inputs own letters, numbers, and global shortcuts. `[Esc]` first unfocuses,
   then closes the modal; one event never crosses two layers.
 - Open/closed state uses symbols and text; color is supplementary.

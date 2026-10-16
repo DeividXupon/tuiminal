@@ -102,6 +102,12 @@ existing target IDs. `[1–4]` and local `[C]` keep their existing behavior.
 `tests/tui/git-navigation-header.test.tsx` covers sources, identity lifecycle,
 resizing, six languages, both layout modes, and mouse controls.
 
+Diffs, Compare, PR, Issues and Inbox retain their mounted native trees when changing
+tabs. Inactive workspaces use native visibility so they neither paint nor participate
+in layout or hit testing; zero-height clipping is not a hiding mechanism. Returning
+to a workspace preserves its query buffers, selection and scroll state. These local
+transitions do not require continuous full-screen repainting.
+
 These diagrams use fictional data and are not pixel-for-pixel copies of the official
 images. Final dimensions must be checked in the native renderer.
 
@@ -111,6 +117,7 @@ images. Final dimensions must be checked in the native renderer.
 ◆ TUIMINAL [Alt+1] Database [Alt+2] Git [Alt+3] Runner [Alt+4] HTTP [Alt+5] Terminal [,] Settings
 LOCAL · …/project           │ GITHUB · @viewer
 [1] [C] DIFFS               │ [2] PR [3] Issues [4] Inbox
+PULL REQUESTS [?] Actions
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me             Scope: all account projects
 ───────────────────────────────────────────┬──────────────────────────────────
@@ -127,13 +134,18 @@ LOCAL · …/project           │ GITHUB · @viewer
                                            │ Code owners: @team/api pending
                                            │ Checks: 1 failed · 2 passed
 ───────────────────────────────────────────┴──────────────────────────────────
-[J/K] Navigate [Enter] Preview [O] Browser [D] Diff [?] Actions    1/4 · 30s ago
 ```
 
 Blank list space represents a short result set, not reserved footer height. Longer
 lists fill all usable rows. Search, titles, and tabs must not reserve empty lines.
-In framed mode, title, controls, query, and panels are adjacent. When every translated
-label fits, section navigation and PR actions share one row; narrower framed screens
+The `[?] Actions` button sits immediately beside the screen title in every layout.
+A one-row horizontal rule separates each remote dashboard title from the Git navigation.
+PR, Issues and Inbox section tabs alternate subtle `panel`/`panelAlt` backgrounds.
+Active and focused tabs keep their stronger highlight in both layout and color modes.
+There is no workspace navigation footer, manual load-more control, or vertical outer
+padding. In framed mode, title, controls, query, and panels are adjacent. The single-row title
+strip has no surrounding border, so border cells cannot overwrite its text. When every translated
+label fits, section navigation and PR creation share one row; narrower framed screens
 stack those controls without spacer rows. Compact mode retains its existing dense
 four-row header. The framed dashboard surface uses the panel background so padding
 and any space between bordered panels do not introduce a second background color.
@@ -149,6 +161,7 @@ leaving the diff or changing the file/layout resets it to the left.
 ```text
 LOCAL · …/project       │ GITHUB · @viewer
 [1] [C] DIFFS           │ [2] PR [3] Issues [4] Inbox
+PULL REQUESTS [?] Actions
 [A←] My PRs 12 │ Review requested 4 [F→]
 [/] is:open review-requested:@me
    Repo      PR / Title                          Rev CI
@@ -159,7 +172,6 @@ team/api #142 · OPEN · main ← fix/cache
 Overview │ Checks │ Activity │ Commits │ Files
 Description…                     Reviewers and code owners…
 ───────────────────────────────────────────────────────────────
-[Enter] Preview [P] Hide [Shift+P] Position [?] Actions
 ```
 
 ### 4.3. Narrow/short terminal — one pane at a time
@@ -169,13 +181,13 @@ LOCAL · …/project
 [1] [C] DIFFS
 GITHUB · @viewer
 [2] PR [3] Issues [4] Inbox
+PULL REQUESTS [?] Actions
 [A←] Review requested · 4 [F→]
 [/] review-requested:@me
 ▶ #142 Fix cache
   team/api · @ana · CI failed
   #87 Adjust navigation
   team/web · @rui · approved
-[Enter] Open [?] Actions
 ```
 
 Opening preview replaces only list content; `[Esc]`/`[H/←]` returns to the same row
@@ -188,9 +200,16 @@ text while retaining the search action and filter state.
 | --- | --- |
 | Overview | Full title, URL, collapsed/expanded description, author, assignees, branches, labels, change summary, reviews, and requested code owners. |
 | Checks | Name, provider, run/attempt, state, duration, URL; watch, stop watching, and review eligible authorizations. |
-| Activity | Ordered comments, reviews, requests, and events; explicit pagination, comment selection, reactions, and replies. |
+| Activity | Ordered comments, reviews, requests, and events; automatic pagination, selection in display order, reactions, and replies. |
 | Commits | Short SHA, message, author, date; select a commit, copy its full SHA, and open its diff. |
 | Files | Path, additions/deletions, change type; select a file and open its diff. |
+
+Activity shares the Issues comment component: author, date, and reaction summary form
+one selectable header, followed by Markdown and the selected comment's reaction/reply
+controls. Replies retain their nesting. Reviews and timeline events use the same block
+shape and remain selectable, but never expose comment-only writes. Duplicated timeline
+copies do not replace review state or Markdown. Keyboard selection scrolls the selected
+block into view; manual scrolling remains independent until selection changes.
 
 Only PR identity stays fixed; other content scrolls in the remaining area. Overflowing
 tabs use horizontal controls rather than clipped labels. `[Z←]`/`[V→]` cycles internal
@@ -326,13 +345,12 @@ points**, not screenshot measurements or verified performance promises.
 | List ≥80 columns, separator, and preview ≥48 fit | Right preview, initially about 45%, constrained by minimums. |
 | Side-by-side does not fit, but list ≥6 rows and preview ≥8 fit | Bottom preview, initially half the available height. |
 | Neither split satisfies minimums | Single pane with contextual return. |
-| Preview hidden | Table takes all usable width and height. |
 | Below 40×10 | Readable minimum state, without partly visible dangerous actions. |
 
-Subtract actual global chrome, framed borders, query, and footer; do not rely only
-on `terminal.width < N`. Recalculate after language changes. Honor preferred right/bottom
-placement when it fits, temporarily use a viable mode otherwise, and restore the
-preference when enlarged.
+Subtract actual global chrome, framed borders and query; do not rely only
+on `terminal.width < N`. Recalculate after language changes. Placement follows terminal
+dimensions automatically. Legacy saved placement fields are retained for compatibility
+but do not affect the layout.
 
 Column priority: identity/title → state and CI/review → repository → author → changes
 → update/comments → assignees/base/labels. Multi-repository lists never omit the
@@ -353,33 +371,33 @@ responses reach the PTY; `[Enter]` reopens an exited shell without stale callbac
 | Git without editor/modal | `[1]` / `[2]` / `[3]` / `[4]` | Diffs / PR / Issues / Inbox, preserving state. |
 | PR without editor/modal | `[A←]` / `[F→]` | Previous / next section. |
 | List | `[J/↓]` / `[K/↑]` | Next / previous PR. |
-| List | `[G/Home]` / `[Shift+G/End]` | First / last loaded PR; indicate pagination. |
+| List | `[Home]` / `[End]` | First / last loaded PR; indicate pagination. `[G]`/`[Shift+G]` are not bound. |
 | List | `[L/→]` / `[Enter]` | Open and focus preview. |
 | Preview | `[H/←]` | Return to list; leave focused diff first. |
 | Preview | `[J/↓]` / `[K/↑]` | Scroll or navigate commits/files/checks. |
 | Panes | `[Tab]` / `[Shift+Tab]` | Cycle focus regions; inputs retain their own navigation. |
 | Preview outside editor | `[Ctrl+D]` / `[Ctrl+U]` | Page content; never submit forms. |
-| PR outside editor | `[P]` / `[Shift+P]` | Toggle preview / placement. |
 | Preview | `[Z←]` / `[V→]` | Previous / next internal tab. |
 | Overview | `[E]` | Expand/collapse full description. |
 | PR | `[/]` | Edit query; `[Enter]` applies, `[Esc]` unfocuses. |
 | PR | `[R]` | Refresh configured sections at their loaded depth, preserving identity. |
 | PR | `[O]` | Open PR in browser. |
 | List/overview | `[Y]` / `[Shift+Y]` | Copy number / URL. |
-| Commits | `[Y]` | Copy the selected commit's full SHA; update footer label. |
+| Commits | `[Y]` | Copy the selected commit's full SHA. |
 | PR/file/commit | `[D]` | Open the context's diff. |
 | PR | `[Shift+C]` | Prepare local checkout. |
-| `[?]` menu | `[A]` / `[Shift+A]` | Add / remove assignees without conflicting with sections. |
+| `[?]` palette | `[A]` / `[Shift+A]` | Add / remove assignees without conflicting with sections. |
 | PR | `[C]` / `[V]` | Comment / approve with editable comment. |
 | PR | `[Shift+E]` | React to PR with one of `[1]`–`[5]`. |
-| Activity | `[J/↓]` / `[K/↑]` | Select comments. |
+| Activity | `[J/↓]` / `[K/↑]` | Select comments, reviews, and events in display order. |
 | Selected comment | `[E]` / `[Enter]` | React / reply. |
 | PR | `[W]` | Toggle CI watch. |
 | Checks | `[Ctrl+A]` | Review eligible workflow authorizations. |
 | PR | `[U]` / `[Shift+W]` | Update from base / mark ready for review. |
-| PR | `[M]` / `[X]` / `[Shift+X]` | Prepare merge / close / reopen. |
+| PR | `[Shift+M]` / `[X]` / `[Shift+X]` | Prepare merge / close / reopen. |
+| PR | `[M]` | Choose the list or preview box, as in Diffs; `[H/J/K/L]` move, `[Enter]` focuses, `[Esc]`/`[M]` cancel. |
 | Git | `[,]` → GitHub | Manage PR/Issue selectors and shared repository scope. |
-| PR | `[?]` | Help and all actions with availability/reasons. |
+| PR | `[?]` | Searchable action palette: every action with block tags and availability/reasons. |
 | Form | `[Ctrl+S]` | Confirm only the displayed operation. |
 | Local layer | `[Esc]` | Unfocus, close one layer, and restore focus. |
 
@@ -388,6 +406,13 @@ for sections. PR actions target only the active PR, never a batch. See
 [Issues](./git-issues-interface.md) for its separate workspace.
 
 Mouse supports sections, tabs, rows, actions, and scrolling under the pointer.
+`[?]` opens with or without a selected PR. It tags rows by block (list, preview,
+GitHub writes, view, navigation, app). With list focus GitHub writes come first, then
+list rows; with preview focus preview rows come first, then writes. Available rows
+precede unavailable ones, and each unavailable row explains its reason,
+such as the pane to focus or a write's eligibility. Write keys and read keys such as
+`[C]`, `[Shift+M]` or `[O]` run directly inside the palette; `[M]` chooses a box; `[1]`–`[4]` rows switch Git tabs.
+Pure navigation (`[J/K]`, `[A←]`/`[F→]`, `[Z←]`/`[V→]`) keeps working but is not listed.
 Clicking a comment/assignee does not mutate anything. Expose all operations in `[?]`;
 unavailable shortcuts do nothing and explain why. Inputs retain numbers, letters,
 punctuation, `[Q]`, `[Ctrl+A]`, and `[Alt+1]`–`[Alt+5]` rather than forwarding them
@@ -413,7 +438,12 @@ a write uncertain, without replay. CI watches cancel reads on stop/unmount and i
 responses/timers from older instances, even when watching the same identity/SHA again.
 Notification failure cannot restart a completed watch.
 
-Detail pagination releases its indicator on PR changes. Repeated actions in one
+`[P]`, `[Shift+P]`, and `[N]` have no dashboard or palette command. Lists keep their
+automatic last-row pagination. In a focused preview, reaching the last selectable
+item or the scroll end loads the next connection page. Each cursor is attempted once
+while at the end, preventing repeated requests after errors. Leaving and returning
+to the end permits a retry; changing tabs/items retires the observer. Inactive or
+unfocused previews do not page. Detail pagination releases its indicator on PR changes. Repeated actions in one
 batch issue one request; explicit refresh supersedes pending pages and initial
 debounce. Responses, failures, and callbacks from another selection cannot replace
 current details. Cache identity includes update time so discussion changes reload
@@ -446,10 +476,10 @@ invalidate it without freezing colors or mouse handlers.
 ## 8. Visual acceptance criteria
 
 - [x] Recognizable gh-dash composition without an extra permanent sidebar.
-- [x] List/preview fill usable space without overlapping footer, final row, or input.
+- [x] List/preview fill usable space without overlapping the final row or input.
 - [x] Test 40×12, 60×18, 80×24, 120×30, 160×45, and 220×60 in both layouts.
 - [x] Repeat extremes in Brazilian Portuguese, English, Spanish, Japanese, Chinese, and Korean.
-- [x] Contextual footer fits without showing every action simultaneously.
+- [x] Actions remain discoverable beside the title without a navigation footer.
 - [x] Distinguish focus, selection, drafts, failures, pending, and unavailable states beyond color.
 - [x] Fast navigation cannot retarget preview through a late response.
 - [x] Resize preserves PR, internal tab, reading position, and edited text.
@@ -468,10 +498,24 @@ admin bypass and automatic branch deletion are absent.
 
 ### Local Diffs and Compare
 
+Git previews and Term Agents Live Diff share core's bundled Tree-sitter grammars.
+Language detection handles file extensions and conventional filenames, including
+Dockerfile variants, `.env` variants, XML project files, and SVG. Parsers and queries
+are local installation assets, loaded on demand without downloads or writes to the
+opened project. Unified, split, inline, and partial-staging previews use the same
+registry and theme capture styles; unknown types retain plain text and diff colors.
+
 `[1] [C] Diffs` uses only an available local repository. The header shows
 project/branch and `[Ctrl+P]` selection; the shortcut opens the first tab of the same
 Git context shown by `[,]`. Changing this target does not change remote scope,
 which may include repositories without a local clone.
+The same row contains ahead/behind counts and `[?] Ações`, without the total-change
+or staged/unstaged counters. `[Ctrl+P]` stays centered in the row, with equal flexible
+areas for the truncated project/branch on the left and status/actions on the right.
+Diffs omits the permanent navigation footer so its
+panes can use that space; navigation shortcuts remain available.
+Local Diffs, Compare and their tutorials keep only horizontal outer padding, with
+no blank spacer rows above, below or between their header and content panels.
 
 `[C]` toggles that tab to Compare. Before results, three centered cards select the
 project, base branch, and compared branch. Once complete, wide layouts show
@@ -505,6 +549,30 @@ Literal path handling preserves names containing Git pathspec syntax.
 `[Ctrl+P]` respects keyboard ownership: in the terminal it selects the previous
 suggestion, and it never crosses modals or partial staging. Consumed events, repeats,
 and extra modifiers cannot open local configuration.
+
+`[?]` (or the header `[?] Ações` control) opens the Diffs action palette outside
+inputs and modals. It lists every Diffs action with block tags (files, diff, history,
+terminal, box, partial stage, navigation, app): the focused block first, then other
+available actions, then unavailable ones with their reason, such as the block that
+must be focused. `[/]` searches labels, descriptions, shortcuts and tags; `[J/K]`/
+`[↑/↓]` navigate, `[Enter]` runs only an available action, and `[?]`/`[Esc]` close
+and restore the previous focus. The right third stacks two equal-height blocks that
+share one selection: versioned projects above observed branches. `[Tab]`/`[H/L]`/
+`[←/→]` switch columns and the shared search also filters both blocks. Projects use the
+same discovery as the `[Ctrl+P]` local-project picker, rerun on each opening while
+earlier results stay visible; choosing one validates the repository, saves it as the
+launch scope's Diffs target and reloads Diffs. Choosing a branch runs
+`git switch --no-guess` for an existing local branch after the palette closes,
+recording it in the Git terminal. Current items, partial staging and in-flight Git
+operations make rows unavailable. Narrow dialogs hide the column; `[Ctrl+P]` remains
+available. During partial staging only its own
+actions are available. Navigation to PR, Issues, Inbox and Compare appears only when the Git
+workspace supplies it.
+
+`[M]` (also in the palette) chooses a box like Term Agents: the selected tree, preview
+or Git terminal is tinted, the others dim, `[H/J/K/L]`/arrows move spatially, `[Enter]`
+or a click focuses the box, and `[Esc]`/`[M]` return to the origin. The preview and
+terminal form one vertical stack. Box selection is unavailable during partial staging.
 
 ### Partial staging
 

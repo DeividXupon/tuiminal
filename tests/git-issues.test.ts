@@ -12,7 +12,6 @@ import {
   type IssueFocus,
   issueWorkspaceAction,
   moveIssueIndex,
-  nextIssuePreviewPosition,
   resolveIssueLayout,
 } from "../packages/feature-git/src/model/issue/navigation"
 import {
@@ -57,11 +56,6 @@ describe("Git Issues workspace model", () => {
     expect(resolveIssueLayout(140, 30)).toBe("side-by-side")
     expect(resolveIssueLayout(90, 24)).toBe("stacked")
     expect(resolveIssueLayout(60, 18)).toBe("single")
-    expect(resolveIssueLayout(100, 24, "right")).toBe("side-by-side")
-    expect(resolveIssueLayout(100, 24, "bottom")).toBe("stacked")
-    expect(nextIssuePreviewPosition("auto")).toBe("right")
-    expect(nextIssuePreviewPosition("right")).toBe("bottom")
-    expect(nextIssuePreviewPosition("bottom")).toBe("auto")
   })
 
   test("maps section, list, preview and Issue actions without UI state", () => {
@@ -73,8 +67,6 @@ describe("Git Issues workspace model", () => {
         key,
         focus,
         hasSelection: true,
-        canLoadMore: true,
-        canLoadPreview: true,
       })
     expect(action({ name: "j" })).toEqual({ type: "move-row", delta: 1 })
     expect(action({ name: "a" })).toEqual({ type: "move-section", delta: -1 })
@@ -94,7 +86,7 @@ describe("Git Issues workspace model", () => {
       type: "prepare-action",
       kind: "reopen",
     })
-    expect(action({ name: "n" }, "preview")).toEqual({ type: "load-preview-more" })
+    expect(action({ name: "n" }, "preview")).toBeNull()
     expect(action({ name: "v" }, "preview")).toEqual({ type: "move-preview-tab", delta: 1 })
     expect(action({ name: "z" }, "preview")).toEqual({ type: "move-preview-tab", delta: -1 })
     expect(action({ name: "escape" }, "preview")).toEqual({ type: "focus", target: "list" })

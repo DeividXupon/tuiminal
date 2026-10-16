@@ -9,7 +9,8 @@ import {
   terminalContextTags,
   terminalContextTooltip,
 } from "../rendering/terminal-context"
-import { TerminalShimmerText, TerminalShortcutText } from "./TerminalShortcut"
+import { TerminalContextTagText } from "./TerminalContextTagText"
+import { TerminalShimmerText } from "./TerminalShortcut"
 
 export type TerminalAgentOrigin = "local" | "remote"
 
@@ -233,9 +234,11 @@ export function TerminalContextTags({
                   }}
                 />
               )}
-              <TerminalShortcutText
+              <TerminalContextTagText
                 id={`terminal-context-${tag.kind}-${sessionId}`}
-                content={` ${tag.label} `}
+                tag={tag}
+                context={context}
+                masterKey={masterKey}
                 wrapMode="none"
                 onMouseOver={() => setHovered(tag.kind)}
                 onMouseOut={() => setHovered((current) => (current === tag.kind ? null : current))}

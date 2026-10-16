@@ -1,3 +1,4 @@
+import { inboxSubject } from "../../model/inbox/subject"
 import type { InboxNotification, InboxSubjectState } from "../../model/inbox/types"
 import { mapWithConcurrency } from "../map-concurrently"
 import { type GhTransportOptions, runGhJson } from "./transport"
@@ -25,29 +26,6 @@ function isSubjectPayload(value: unknown): value is SubjectPayload {
   )
 }
 
-function subjectRequest(item: InboxNotification, host: string) {
-  if (!item.subjectApiUrl || !["PullRequest", "Issue"].includes(item.subjectType)) return null
-  try {
-    const url = new URL(item.subjectApiUrl)
-    const apiHost = host === "github.com" ? "api.github.com" : host
-    if (url.protocol !== "https:" || url.hostname !== apiHost || url.port || url.search || url.hash)
-      return null
-    const match = url.pathname.match(
-      /^\/(?:api\/v3\/)?repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(pulls|issues)\/([1-9]\d*)$/,
-    )
-    if (!match) return null
-    const [, owner, repository, resource, number] = match
-    if (`${owner}/${repository}` !== item.repository) return null
-    if (resource !== (item.subjectType === "PullRequest" ? "pulls" : "issues")) return null
-    return {
-      path: `repos/${owner}/${repository}/${resource}/${number}`,
-      key: `${item.subjectType}:${url.href}:${item.updatedAt}`,
-    }
-  } catch {
-    return null
-  }
-}
-
 function subjectState(item: InboxNotification, payload: SubjectPayload): InboxSubjectState | null {
   if (item.subjectType === "PullRequest") {
     if (typeof payload.draft !== "boolean" || payload.merged_at === undefined) return null
@@ -65,7 +43,7 @@ export async function loadInboxSubjectStates(
 ) {
   const entries = await mapWithConcurrency(items, 4, async (item) => {
     if (options.signal?.aborted) return null
-    const request = subjectRequest(item, host)
+    const request = inboxSubject(item, host)
     if (!request) return null
     const cached = cache.get(request.key)
     if (cached && cached.expiresAt > Date.now()) {

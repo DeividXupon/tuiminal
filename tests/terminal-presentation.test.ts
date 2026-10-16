@@ -257,10 +257,17 @@ describe("Term Agents presentation", () => {
     const hidden = session("hidden", { folderId: "tmux", sectionId: "two" })
     expect(
       visibleTerminalShortcutTargets(
-        [shell, agent, hidden],
+        [
+          shell,
+          agent,
+          hidden,
+          { ...shell, id: "external-shell", folderId: "others" },
+          { ...agent, id: "external-agent", folderId: "others" },
+        ],
         [
           { id: DEFAULT_FOLDER, name: "Tuiminais" },
           { id: "tmux", name: "tmux" },
+          { id: "others", name: "Outros" },
         ],
         ["tmux"],
       ).map(({ id }) => id),

@@ -1,28 +1,28 @@
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
-import { RGBA, type BoxRenderable } from "@opentui/core"
-import type { TestRendererSetup } from "@opentui/core/testing"
-import { testRender } from "@opentui/react/test-utils"
+import { unlink } from "node:fs/promises"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
-import { unlink } from "node:fs/promises"
+import { type BoxRenderable, RGBA } from "@opentui/core"
+import type { TestRendererSetup } from "@opentui/core/testing"
+import { testRender } from "@opentui/react/test-utils"
 import { act, useEffect, useRef, useState } from "react"
+import { App } from "../../apps/cli/src/App"
 import {
+  type NotificationInput,
   NotificationProvider,
   useNotifications,
-  type NotificationInput,
 } from "../../packages/core/src/notifications/index"
 import { NOTIFICATION_ANIMATION_TIMING } from "../../packages/core/src/notifications/model"
 import { COLORS, getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
 import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
-import { App } from "../../apps/cli/src/App"
 import { HttpClient } from "../../packages/feature-http/src"
-import { DatabaseConnectionModal } from "../../packages/feature-database/src/ui/DatabaseConnectionModal"
 import { useRunnerNotifications } from "../../packages/feature-runner/src/hooks/use-runner-notifications"
 
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
 const initialOnlyTab = process.env.TUIMINAL_ONLY_TAB
+const initialTab = process.env.TUIMINAL_INITIAL_TAB
 const initialGitHubExecutable = process.env.TUIMINAL_GH_EXECUTABLE
 const initialGitDemo = process.env.TUIMINAL_GIT_PR_DEMO
 
@@ -46,7 +46,7 @@ function NotificationHarness({
 
 function RunnerNotificationHarness() {
   const [notice, setNotice] = useState("")
-  useRunnerNotifications(notice, null, null)
+  useRunnerNotifications({ message: notice, kind: "success" }, null, null)
   useEffect(() => setNotice("Comando salvo: teste"), [])
   return <text content="Runner adapter" />
 }
@@ -104,6 +104,8 @@ afterEach(() => {
   updateUiSettings(initialSettings)
   if (initialOnlyTab === undefined) delete process.env.TUIMINAL_ONLY_TAB
   else process.env.TUIMINAL_ONLY_TAB = initialOnlyTab
+  if (initialTab === undefined) delete process.env.TUIMINAL_INITIAL_TAB
+  else process.env.TUIMINAL_INITIAL_TAB = initialTab
   if (initialGitHubExecutable === undefined) delete process.env.TUIMINAL_GH_EXECUTABLE
   else process.env.TUIMINAL_GH_EXECUTABLE = initialGitHubExecutable
   if (initialGitDemo === undefined) delete process.env.TUIMINAL_GIT_PR_DEMO
@@ -386,33 +388,55 @@ test("compact narrow viewport shows only the newest card within terminal bounds"
   expect((card?.screenX ?? -1) + (card?.width ?? 0)).toBeLessThanOrEqual(40)
 })
 
-test("Database connection events reach the global center", async () => {
-  const databasePath = `${process.env.TUIMINAL_WORKDIR}/database.sqlite`
-  try {
-    tui = await testRender(
-      <NotificationProvider>
-        <DatabaseConnectionModal
-          open
-          connections={[]}
-          selectedConnectionId={null}
-          startInForm
-          onClose={() => undefined}
-          onSelect={() => undefined}
-          onCreated={() => undefined}
-          onDeleted={() => undefined}
-        />
-      </NotificationProvider>,
-      { width: 120, height: 32 },
-    )
-    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "db-connection-name")
-    await press("db-connection-driver-sqlite")
-    await press("db-connection-test")
-    await settle(() => tui?.captureCharFrame().includes("Banco · Conexão") ?? false)
-    expect(tui.captureCharFrame()).toContain("ERRO · Banco · Conexão")
-  } finally {
-    await unlink(databasePath).catch(() => undefined)
-  }
-})
+test.each([
+  ["framed", false],
+  ["compact", false],
+  ["framed", true],
+  ["compact", true],
+] as const)(
+  "Database notifications stay at the bottom in %s (isolated: %s)",
+  async (layout, isolated) => {
+    updateUiSettings({ layout, language: "pt-BR" })
+    if (isolated) process.env.TUIMINAL_ONLY_TAB = "database"
+    else delete process.env.TUIMINAL_ONLY_TAB
+    process.env.TUIMINAL_INITIAL_TAB = "database"
+    const databasePath = `${process.env.TUIMINAL_WORKDIR}/database.sqlite`
+    try {
+      tui = await testRender(<App />, { width: 120, height: 32 })
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "db-connection-name")
+      await press("db-connection-driver-sqlite")
+      await press("db-connection-test")
+      await settle(() => tui?.captureCharFrame().includes("ERRO · Banco · Conexão") ?? false)
+      expect(tui.captureCharFrame()).toContain("ERRO · Banco · Conexão")
+      const stack = tui.renderer.root.findDescendantById("app-notification-stack")
+      if (!stack) throw new Error("Missing notification stack")
+      expect(stack.screenY + stack.height).toBe(31)
+      await act(async () => tui?.resize(95, 20))
+      await tui.renderOnce()
+      expect(stack.screenY + stack.height).toBe(19)
+      expect(stack.height).toBe(4)
+
+      if (!isolated) {
+        for (let count = 0; count < 2; count += 1) {
+          await act(async () => {
+            tui?.mockInput.pressKey("ESCAPE")
+            await Bun.sleep(60)
+          })
+        }
+        await act(async () => tui?.mockInput.pressKey("3", { meta: true }))
+        await settle(() => stack.screenY === 1)
+        expect(tui.renderer.root.findDescendantById("app-notification-stack")).toBe(stack)
+        expect(tui.renderer.root.findDescendantById("runner-command-list")?.visible).toBe(true)
+      }
+      const focused = tui.renderer.currentFocusedRenderable
+      await click("app-notification-dismiss-0")
+      await settle(() => !(tui?.captureCharFrame().includes("ERRO · Banco · Conexão") ?? true))
+      expect(tui.renderer.currentFocusedRenderable).toBe(focused)
+    } finally {
+      await unlink(databasePath).catch(() => undefined)
+    }
+  },
+)
 
 test("Git PR failures reach the global center", async () => {
   process.env.TUIMINAL_ONLY_TAB = "git"
@@ -465,14 +489,17 @@ test("HTTP response completion reaches the global center", async () => {
   }
 })
 
-test("Term Agents completion reaches the global center", async () => {
+test.each([
+  [0, "SUCESSO"],
+  [7, "ERRO"],
+])("Term Agents completion with code %i reaches the global center", async (code, severity) => {
   process.env.TUIMINAL_ONLY_TAB = "terminal"
   tui = await testRender(<App />, { width: 120, height: 30 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-workspace")))
-  await click("terminal-sidebar-command")
-  await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-command-input")))
-  act(() => tui?.renderer.root.findDescendantById("terminal-command-input")?.focus())
-  await act(async () => tui?.mockInput.typeText("true"))
+  await click("terminal-sidebar-new")
+  await settle(() => tui?.renderer.currentFocusedRenderable?.id.startsWith("term-agents-") ?? false)
+  // A bare exit inherits the last startup command's status on the runner's shell.
+  await act(async () => tui?.mockInput.typeText(`exit ${code}`))
   act(() => tui?.mockInput.pressEnter())
-  await settle(() => tui?.captureCharFrame().includes("SUCESSO · Terminal") ?? false)
+  await settle(() => tui?.captureCharFrame().includes(`${severity} · Terminal`) ?? false)
 })

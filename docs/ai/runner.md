@@ -17,8 +17,9 @@ orchestration to `use-runner-plans`.
 - Read startup settings/config once for sibling consumers. Detector output must
   target the selected project; test exact argv, including wrappers, Go `./...`,
   Python fallback and quoted Deno JSONC tasks.
-- Selecting a running command reopens it; only explicit restart/new-instance
-  actions spawn again. Closing/switching project tabs leaves processes alive;
+- Activating a command with `[Enter]`, `[Space]` or a click starts it when idle
+  and stops its active execution. Repeated activation while stopping does nothing.
+  Closing/switching project tabs leaves processes alive;
   session restoration never reattaches orphan processes.
 - Autostart is only explicit Tuiminal `autostart: true` plus approved material
   fingerprint. Review expanded commands, roots, directories, profiles, environment

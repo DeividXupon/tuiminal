@@ -425,60 +425,32 @@ export function tuiTerminalActionBenchmarks({
       },
     }),
   )
-  let customSessionId = ""
   cases.push(
     defineBenchmark({
-      id: "ui.terminal_custom_command",
+      id: "ui.terminal_new_agent",
       tool: "terminal",
-      description: "Submit a custom command and render its new Terminal section",
+      description: "Open the agent provider picker from the Terminal sidebar",
       beforeEach: async () => {
         await terminalSessions()
-        const existing = terminalSidebarSnapshot().view?.sessions.find(
-          (session) => session.id === customSessionId,
-        )
-        if (existing) {
-          await click(`terminal-sidebar-pane-${existing.id}`)
-          await masterAction("x")
+        if (tui.renderer.root.findDescendantById("terminal-dialog-agent-provider")) {
+          await act(async () => tui.mockInput.pressEscape())
           await waitForUi(
-            () =>
-              !terminalSidebarSnapshot().view?.sessions.some(
-                (session) => session.id === existing.id,
-              ),
-            "Previous custom Terminal close",
+            () => !tui.renderer.root.findDescendantById("terminal-dialog-agent-provider"),
+            "Agent provider picker close",
           )
         }
-        customSessionId = ""
       },
       run: async () => {
-        const previousIds = new Set(
-          (terminalSidebarSnapshot().view?.sessions ?? []).map((session) => session.id),
+        await click("terminal-sidebar-new-agent")
+        return waitForUi(
+          () => Boolean(tui.renderer.root.findDescendantById("terminal-dialog-agent-provider")),
+          "Agent provider picker",
         )
-        await click("terminal-sidebar-command")
-        await waitForUi(
-          () => tui.renderer.currentFocusedRenderable?.id === "terminal-command-input",
-          "Terminal custom command input",
-        )
-        await act(async () => tui.mockInput.typeText("bun --version"))
-        await act(async () => tui.mockInput.pressEnter())
-        return waitForUi(() => {
-          const created = terminalSidebarSnapshot().view?.sessions.find(
-            (session) => !previousIds.has(session.id),
-          )
-          if (created?.displayCommand !== "bun --version" || created?.status !== "running")
-            return false
-          customSessionId = created.id
-          return Boolean(tui.renderer.root.findDescendantById(`term-agents-${created.id}`))
-        }, "Custom Terminal section")
       },
-      verify: () => {
-        if (
-          !terminalSidebarSnapshot().view?.sessions.some(
-            (session) =>
-              session.id === customSessionId && session.displayCommand === "bun --version",
-          )
-        ) {
-          throw new Error("Custom Terminal command was not preserved")
-        }
+      verify: async () => {
+        if (!tui.renderer.root.findDescendantById("terminal-dialog-agent-provider"))
+          throw new Error("Agent provider picker did not open")
+        await act(async () => tui.mockInput.pressEscape())
       },
     }),
   )

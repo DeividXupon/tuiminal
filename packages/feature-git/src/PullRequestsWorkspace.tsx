@@ -1,17 +1,20 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { useCallback, useEffect, useState } from "react"
 import { defaultCreateRepository } from "./model/create-item"
+import { pullRequestActivity } from "./model/pr/activity"
 import type { PullRequestDiffTarget } from "./model/pr/diff"
-import { sortedPullRequestComments } from "./model/pr/activity"
 import {
   type PullRequestFocus,
+  type PullRequestWorkspaceAction,
   type pullRequestWorkspaceAction,
   resolvePullRequestLayout,
 } from "./model/pr/navigation"
 import { pullRequestIdentityKey } from "./model/pr/query"
 import type { PullRequestPreviewTab } from "./model/pr/types"
 import { remoteDashboardHasNextPage } from "./model/remote-pagination"
+import type { GitWorkspaceTab } from "./model/workspace"
+import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
 import { PrDiffView } from "./ui/pr/PrDiffView"
 import { PullRequestDashboardView } from "./ui/pr/PullRequestDashboardView"
 import { pullRequestDashboardPresentation } from "./ui/pr/presentation"
@@ -19,34 +22,37 @@ import { usePullRequestActions } from "./ui/pr/usePullRequestActions"
 import { usePullRequestConfiguration } from "./ui/pr/usePullRequestConfiguration"
 import { usePullRequestDashboard } from "./ui/pr/usePullRequestDashboard"
 import { usePullRequestDetails } from "./ui/pr/usePullRequestDetails"
+import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
+import { usePullRequestPalette } from "./ui/pr/usePullRequestPalette"
 import { usePullRequestWatch } from "./ui/pr/usePullRequestWatch"
 import { usePullRequestWorkflows } from "./ui/pr/usePullRequestWorkflows"
 import { usePullRequestWorkspaceKeyboard } from "./ui/pr/usePullRequestWorkspaceKeyboard"
-import { usePullRequestNotifications } from "./ui/pr/usePullRequestNotifications"
-import { useAutoPage } from "./ui/useAutoPagination"
-import { defaultGitBrowserOpener, type GitBrowserOpener } from "./ui/browser/useGitBrowser"
-import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
-import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import {
   dashboardAuth,
   dashboardProfileTarget,
   diffTargetForPreview,
   emptyPullRequestPreviewPositions,
-  executePullRequestReadAction,
   executePullRequestNavigation,
-  pullRequestKeyboardGuards,
+  executePullRequestReadAction,
   openWorkflowWithNotice,
+  pullRequestKeyboardGuards,
+  runPullRequestCommand,
 } from "./ui/pr/workspace-helpers"
+import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
+import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
+import { useAutoPage } from "./ui/useAutoPagination"
 export function PullRequestsWorkspace({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
   onOpenBrowser = defaultGitBrowserOpener,
+  onSelectTab,
 }: {
   active: boolean
   configurationRevision?: number
   onLocalCheckout?: () => void
   onOpenBrowser?: GitBrowserOpener
+  onSelectTab?: ((tab: GitWorkspaceTab) => void) | undefined
 }) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -56,7 +62,6 @@ export function PullRequestsWorkspace({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [selectedIdentity, setSelectedIdentity] = useState<string | null>(null)
   const [focus, setFocus] = useState<PullRequestFocus>("list")
-  const [previewVisible, setPreviewVisible] = useState(true)
   const [previewTab, setPreviewTab] = useState<PullRequestPreviewTab>("overview")
   const [previewOffsets, setPreviewOffsets] = useState(emptyPullRequestPreviewPositions)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
@@ -141,19 +146,11 @@ export function PullRequestsWorkspace({
     clearQuery: () => setQueryOverride(null),
     setNotice,
   })
-  const responsiveLayout = resolvePullRequestLayout(
-    terminal.width,
-    terminal.height,
-    configuration.previewPosition,
-  )
-  const layout = previewVisible ? responsiveLayout : "single"
+  const layout = resolvePullRequestLayout(terminal.width, terminal.height)
   const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen || creation.open
   const previewItemIndex = previewItemIndices[previewTab]
-  const activityComments =
-    details.status === "ready"
-      ? sortedPullRequestComments(details.details.comments, details.details.identity)
-      : []
-  const selectedActivityComment = activityComments[previewItemIndex] ?? null
+  const activityEntries = details.status === "ready" ? pullRequestActivity(details.details) : []
+  const selectedActivityComment = activityEntries[previewItemIndex]?.comment ?? null
   usePullRequestNotifications(notice, dashboard, details, workflowError)
   const selectSection = useCallback(
     (index: number) => {
@@ -170,10 +167,6 @@ export function PullRequestsWorkspace({
   const copy = (value: string, success: string) => {
     const copied = renderer.copyToClipboardOSC52(value)
     setNotice(copied ? success : translateUi("O terminal não aceitou a cópia OSC52."))
-  }
-  const togglePreview = () => {
-    setFocus("list")
-    setPreviewVisible((current) => !current)
   }
   const handleReadAction = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
     return executePullRequestReadAction(
@@ -232,66 +225,53 @@ export function PullRequestsWorkspace({
       itemCount: presentation.items.length,
       selectSection,
       selectRow,
-      setPreviewVisible,
       setFocus,
       setPreviewTab,
     })
   }
-  const handleWorkspaceCommand = (action: ReturnType<typeof pullRequestWorkspaceAction>) => {
-    if (!action) return false
-    switch (action.type) {
-      case "edit-query":
-        configuration.openQuery()
-        return true
-      case "create-pr":
-        creation.openModal()
-        return true
-      case "refresh":
-        void refresh()
-        void refreshDetailsQuietly()
-        return true
-      case "load-more":
-        void loadMore()
-        return true
-      case "load-preview-more":
-        void loadMoreDetails(previewTab)
-        return true
-      case "open-diff":
-        if (details.status !== "ready") return false
-        setDiffTarget(diffTargetForPreview(previewTab, details.details, previewItemIndex))
-        return true
-      case "open-action-menu":
-        pullRequestActions.openMenu()
-        return true
-      case "prepare-action":
-        pullRequestActions.openAction(action.kind)
-        return true
-      case "toggle-watch":
-        if (!selected) return false
-        watch.toggle(selected)
-        return true
-      case "toggle-preview":
-        togglePreview()
-        return true
-      case "cycle-preview-position":
-        configuration.cyclePreviewPosition()
-        return true
-      default:
-        return false
-    }
+  const commandHandlers: Partial<Record<PullRequestWorkspaceAction["type"], () => unknown>> = {
+    "edit-query": configuration.openQuery,
+    "create-pr": creation.openModal,
+    refresh: () => Promise.all([refresh(), refreshDetailsQuietly()]),
+    "open-diff": () =>
+      details.status === "ready" &&
+      setDiffTarget(diffTargetForPreview(previewTab, details.details, previewItemIndex)),
+    "open-action-menu": () => palette.openPalette(),
+    "toggle-watch": () => selected && watch.toggle(selected),
   }
+  const handleWorkspaceCommand = (action: ReturnType<typeof pullRequestWorkspaceAction>) =>
+    runPullRequestCommand(action, commandHandlers, pullRequestActions.openAction)
+  const dispatchWorkspaceAction = (action: PullRequestWorkspaceAction) => {
+    if (handleWorkspaceCommand(action)) return
+    if (handleReadAction(action)) return
+    handleNavigation(action)
+  }
+  const guards = pullRequestKeyboardGuards(modalOpen, Boolean(diffTarget), dashboard, details)
+  const palette = usePullRequestPalette({
+    active,
+    blocked: guards.blocked,
+    focus,
+    selected,
+    previewTab,
+    previewItemIndex,
+    details,
+    selectedComment: selectedActivityComment,
+    creation,
+    watching: watch.isWatching(selected),
+    actions: pullRequestActions,
+    copy,
+    onSelectTab,
+    dispatch: dispatchWorkspaceAction,
+  })
   usePullRequestWorkspaceKeyboard({
     active,
-    ...pullRequestKeyboardGuards(modalOpen, Boolean(diffTarget), dashboard, details, previewTab),
+    ...guards,
+    blocked: guards.blocked || palette.open,
     focus,
     hasSelection: Boolean(selected),
     previewTab,
     previewItemIndex,
-    onWorkspaceAction: (action) => {
-      if (handleWorkspaceCommand(action)) return
-      if (handleReadAction(action)) return
-      handleNavigation(action)
-    },
+    onWorkspaceAction: dispatchWorkspaceAction,
     onPreviewMove: (delta, count) => {
       setPreviewItemIndices((current) => ({
         ...current,
@@ -299,15 +279,8 @@ export function PullRequestsWorkspace({
       }))
     },
     onCopySha: (sha) => copy(sha, translateUi("SHA copiado.")),
-    onCommentReact: () => {
-      if (selectedActivityComment) {
-        pullRequestActions.openCommentAction("reaction", selectedActivityComment)
-      }
-    },
-    onCommentReply: () => {
-      if (selectedActivityComment)
-        pullRequestActions.openCommentAction("reply", selectedActivityComment)
-    },
+    onCommentReact: palette.reactToComment,
+    onCommentReply: palette.replyToComment,
   })
   const listWidth =
     layout === "side-by-side" ? Math.max(48, Math.floor(terminal.width * 0.56)) : terminal.width
@@ -328,18 +301,16 @@ export function PullRequestsWorkspace({
     <>
       <PullRequestDashboardView
         active={active}
+        paginationActive={active && !modalOpen && !palette.open}
         dashboard={dashboard}
         presentation={presentation}
         layout={layout}
-        previewPosition={configuration.previewPosition}
-        previewVisible={previewVisible}
         focus={focus}
         selectedIndex={resolvedSelectedIndex}
         previewTab={previewTab}
         listWidth={listWidth}
         previewWidth={previewWidth}
         terminalWidth={terminal.width}
-        notice={notice}
         details={details}
         previewScrollOffset={previewOffsets[previewTab]}
         descriptionExpanded={descriptionExpanded}
@@ -349,8 +320,6 @@ export function PullRequestsWorkspace({
         refreshing={refreshing}
         onSelectSection={selectSection}
         onEditQuery={configuration.openQuery}
-        onCyclePreviewPosition={configuration.cyclePreviewPosition}
-        onTogglePreview={togglePreview}
         workflows={workflows}
         workflowError={workflowError}
         onOpenWorkflow={(runId) =>
@@ -367,7 +336,6 @@ export function PullRequestsWorkspace({
           setFocus("preview")
         }}
         onRetry={() => void refresh()}
-        onLoadMore={() => void loadMore()}
         onLoadMoreDetails={() => void loadMoreDetails(previewTab)}
         onToggleDescription={() => setDescriptionExpanded((current) => !current)}
         onCopySha={(sha) => copy(sha, translateUi("SHA copiado."))}
@@ -383,7 +351,8 @@ export function PullRequestsWorkspace({
             setDiffTarget(diffTargetForPreview(previewTab, details.details, previewItemIndex))
           }
         }}
-        onOpenActions={pullRequestActions.openMenu}
+        onOpenActions={palette.openPalette}
+        boxOverlay={palette.boxOverlay}
         onCreate={creation.openModal}
         canCreate={creation.available}
         watching={watch.isWatching(selected)}
@@ -391,6 +360,8 @@ export function PullRequestsWorkspace({
       />
       {configuration.modals}
       {pullRequestActions.modals}
+      {palette.palette}
+      {palette.boxFocusNode}
       {creation.modal}
     </>
   )

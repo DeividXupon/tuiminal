@@ -58,9 +58,11 @@ reuse shared infrastructure/minimal app contracts, not prior feature internals.
   Ignoring the jar suppresses both reads and Set-Cookie writes. Proxy credentials
   remain private/redacted; every new insecure HTTPS target needs approval.
 - Bound capture to 1.5 MB and live rendering to 50,000 characters, retaining all
-  captured bytes for explicit save. Release reader locks and retire the fetch
-  controller on completion/failure/truncation. Downloads finish short writes and
-  check cancellation before exclusive protected publication.
+  captured bytes for explicit copy/save. Copy uses response data, not renderer
+  selection, display truncation, line numbers or folded summaries. Release reader
+  locks and retire the fetch controller on completion/failure/truncation.
+  Downloads finish short writes and check cancellation before exclusive protected
+  publication.
 - Desktop opening accepts only allowlisted raster MIME plus matching magic bytes;
   SVG/PDF/generic binary remain blocked. Inert save is separate.
 
