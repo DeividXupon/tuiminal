@@ -3105,6 +3105,14 @@ test("terminal creation and splits remain available beyond twelve sessions", asy
   const pane = renderable(`terminal-sidebar-pane-${sessionId}`)
   const scroll = renderable("terminal-sidebar-scroll") as ScrollBoxRenderable
   expect(pane).toBeDefined()
+  // Selection reveals the row after layout; wait for the resulting native frame.
+  await act(async () => {
+    await tui!.waitFor(
+      () =>
+        pane.screenY >= scroll.viewport.screenY &&
+        pane.screenY + pane.height <= scroll.viewport.screenY + scroll.viewport.height,
+    )
+  })
   expect(pane.screenY).toBeGreaterThanOrEqual(scroll.viewport.screenY)
   expect(pane.screenY + pane.height).toBeLessThanOrEqual(
     scroll.viewport.screenY + scroll.viewport.height,

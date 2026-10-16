@@ -489,13 +489,17 @@ test("HTTP response completion reaches the global center", async () => {
   }
 })
 
-test("Term Agents completion reaches the global center", async () => {
+test.each([
+  [0, "SUCESSO"],
+  [7, "ERRO"],
+])("Term Agents completion with code %i reaches the global center", async (code, severity) => {
   process.env.TUIMINAL_ONLY_TAB = "terminal"
   tui = await testRender(<App />, { width: 120, height: 30 })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("terminal-workspace")))
   await click("terminal-sidebar-new")
   await settle(() => tui?.renderer.currentFocusedRenderable?.id.startsWith("term-agents-") ?? false)
-  await act(async () => tui?.mockInput.typeText("exit"))
+  // A bare exit inherits the last startup command's status on the runner's shell.
+  await act(async () => tui?.mockInput.typeText(`exit ${code}`))
   act(() => tui?.mockInput.pressEnter())
-  await settle(() => tui?.captureCharFrame().includes("SUCESSO · Terminal") ?? false)
+  await settle(() => tui?.captureCharFrame().includes(`${severity} · Terminal`) ?? false)
 })
