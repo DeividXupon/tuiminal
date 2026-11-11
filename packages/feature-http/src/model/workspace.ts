@@ -1,4 +1,14 @@
 import {
+  isCollectionSettingsAction,
+  reduceCollectionSettings,
+  type HttpCollectionSettingsAction,
+} from "./collection-settings"
+import {
+  reduceEnvironmentDocument,
+  type HttpEnvironmentDocumentAction,
+} from "./environment-documents"
+import { commitHttpSavedDocument, type HttpSavedRequestAction } from "./saved-request"
+import {
   budgetHttpHistory,
   createHttpErrorHistoryEntry,
   createHttpSuccessHistoryEntry,
@@ -8,7 +18,6 @@ import {
 } from "./history"
 import { requestPatchIsUnchanged } from "./request-patch"
 import {
-  HTTP_METHODS,
   type HttpDocumentState,
   type HttpHistoryEntry,
   type HttpPane,
@@ -28,26 +37,18 @@ export function httpDocumentNeedsDiscardConfirmation(
   documents: HttpDocumentState[],
   documentId: string,
 ) {
-  if (documents.length <= 1) return false
   const document = documents.find((candidate) => candidate.request.id === documentId)
   return Boolean(document && document.revision !== document.savedRevision)
 }
-export function nextHttpMethod(method: string, direction: -1 | 1): (typeof HTTP_METHODS)[number] {
-  const current = HTTP_METHODS.indexOf(method.toUpperCase() as (typeof HTTP_METHODS)[number])
-  if (current < 0) return direction > 0 ? "GET" : "OPTIONS"
-  return HTTP_METHODS[(current + direction + HTTP_METHODS.length) % HTTP_METHODS.length] ?? "GET"
-}
-
+export { nextHttpMethod } from "./http-methods"
 export type HttpWorkspaceAction =
+  | HttpCollectionSettingsAction
+  | HttpEnvironmentDocumentAction
   | HttpHistoryAction
   | { type: "add-document"; request: HttpRequestDefinition }
   | { type: "select-document"; documentId: string }
   | { type: "close-document"; documentId: string }
-  | {
-      type: "commit-saved-document"
-      documentId: string
-      request: HttpRequestDefinition
-    }
+  | HttpSavedRequestAction
   | {
       type: "update-request"
       documentId: string
@@ -64,8 +65,8 @@ export type HttpWorkspaceAction =
   | { type: "select-pane"; pane: HttpPane }
   | { type: "set-split-ratio"; documentId: string; ratio: number }
   | { type: "toggle-maximize"; documentId: string; pane: "request" | "response" }
-  | { type: "select-navigation-view"; view: "collection" | "history" }
-  | { type: "toggle-navigation"; view?: "collection" | "history" }
+  | { type: "select-navigation-view"; view: "collection" | "environments" }
+  | { type: "toggle-navigation"; view?: "collection" | "environments" }
   | { type: "close-navigation" }
   | { type: "open-overlay"; overlay: Exclude<HttpWorkspaceOverlay, null> }
   | { type: "close-overlay" }
@@ -153,15 +154,15 @@ function createDocument(request: HttpRequestDefinition): HttpDocumentState {
   }
 }
 
-export function createHttpWorkspaceState(
-  request = createScratchRequest("http-scratch-1"),
-): HttpWorkspaceState {
+export function createHttpWorkspaceState(request?: HttpRequestDefinition): HttpWorkspaceState {
   return {
-    documents: [createDocument(request)],
-    activeDocumentId: request.id,
-    activePane: "url",
+    environmentDocuments: [],
+    collectionDocuments: [],
+    documents: request ? [createDocument(request)] : [],
+    activeDocumentId: request?.id ?? "",
+    activePane: request ? "url" : "navigation",
     navigationView: "collection",
-    navigationOpen: false,
+    navigationOpen: !request,
     overlay: null,
     history: [],
     historySelection: [],
@@ -267,30 +268,45 @@ function reduceHttpExecution(state: HttpWorkspaceState, action: HttpExecutionAct
     action.historyEntry ?? createHttpErrorHistoryEntry(document, executionId, action.message, null),
   )
 }
-
 export function httpWorkspaceReducer(
   state: HttpWorkspaceState,
   action: HttpWorkspaceAction,
 ): HttpWorkspaceState {
+  if (isCollectionSettingsAction(action)) return reduceCollectionSettings(state, action)
   if (isHttpHistoryAction(action)) return reduceHttpHistoryAction(state, action)
+  if (
+    action.type === "open-environment-document" ||
+    action.type === "update-environment-document" ||
+    action.type === "close-environment-document" ||
+    action.type === "clear-environment-documents"
+  )
+    return reduceEnvironmentDocument(state, action)
   switch (action.type) {
     case "add-document":
-      if (state.documents.length >= HTTP_DOCUMENT_LIMIT) return state
       if (state.documents.some((document) => document.request.id === action.request.id)) {
         return { ...state, activeDocumentId: action.request.id }
       }
+      if (
+        state.documents.length >= HTTP_DOCUMENT_LIMIT &&
+        state.documents.at(-1)?.revision !== state.documents.at(-1)?.savedRevision
+      )
+        return state
       return {
         ...state,
-        documents: [...state.documents, createDocument(action.request)],
+        documents: [
+          ...state.documents.slice(0, HTTP_DOCUMENT_LIMIT - 1),
+          createDocument(action.request),
+        ],
         activeDocumentId: action.request.id,
         activePane: "url",
       }
     case "select-document":
-      return state.documents.some((document) => document.request.id === action.documentId)
+      return state.collectionDocuments.some((document) => document.id === action.documentId) ||
+        state.environmentDocuments.some((document) => document.id === action.documentId) ||
+        state.documents.some((document) => document.request.id === action.documentId)
         ? { ...state, activeDocumentId: action.documentId }
         : state
     case "close-document": {
-      if (state.documents.length === 1) return state
       const index = state.documents.findIndex(
         (document) => document.request.id === action.documentId,
       )
@@ -304,36 +320,26 @@ export function httpWorkspaceReducer(
         documents,
         activeDocumentId:
           state.activeDocumentId === action.documentId
-            ? (fallback?.request.id ?? state.activeDocumentId)
+            ? (fallback?.request.id ??
+              state.environmentDocuments.at(-1)?.id ??
+              state.collectionDocuments.at(-1)?.id ??
+              "")
             : state.activeDocumentId,
       }
     }
+    case "rebase-collection-variable":
     case "commit-saved-document":
-      return {
-        ...state,
-        activeDocumentId:
-          state.activeDocumentId === action.documentId ? action.request.id : state.activeDocumentId,
-        documents: state.documents.map((document) =>
-          document.request.id === action.documentId
-            ? {
-                ...document,
-                request: action.request,
-                savedRevision: document.revision,
-              }
-            : document,
-        ),
-      }
+      return commitHttpSavedDocument(state, action)
     case "update-request":
       return updateDocument(state, action.documentId, (document) =>
-        document.request.source.kind === "file" && document.request.source.supported === false
+        (document.request.source.kind === "file" && document.request.source.supported === false) ||
+        requestPatchIsUnchanged(document.request, action.patch)
           ? document
-          : requestPatchIsUnchanged(document.request, action.patch)
-            ? document
-            : {
-                ...document,
-                request: { ...document.request, ...action.patch },
-                revision: document.revision + 1,
-              },
+          : {
+              ...document,
+              request: { ...document.request, ...action.patch },
+              revision: document.revision + 1,
+            },
       )
     case "select-request-view":
       return updateDocument(state, action.documentId, (document) => ({

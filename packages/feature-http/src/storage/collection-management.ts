@@ -1,4 +1,14 @@
-import { link, lstat, readFile, readdir, realpath, rename, rmdir, unlink } from "node:fs/promises"
+import {
+  link,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rmdir,
+  unlink,
+} from "node:fs/promises"
 import { basename, dirname, extname, join, relative } from "node:path"
 import {
   atomicWriteProjectFile,
@@ -216,4 +226,66 @@ export async function renameHttpRequest(
     throw new HttpCollectionConflictError("Já existe um request com esse nome na coleção.")
   }
   return saveHttpRequest(root, { ...request, name: nextName })
+}
+
+export async function duplicateHttpCollection(
+  root: string,
+  path: string,
+  name: string,
+  expectedHash: string,
+) {
+  const source = await checkedCollection(root, path, expectedHash)
+  const target = join(dirname(path), collectionName(name))
+  await atomicWriteProjectFile(root, target, source.source, { expectedHash: null, exclusive: true })
+  return target
+}
+
+export async function duplicateHttpFolder(
+  root: string,
+  path: string,
+  name: string,
+  expectedFiles: readonly { path: string; sourceHash: string }[],
+) {
+  const contents = await folderContents(root, path)
+  const expected = new Map(
+    expectedFiles
+      .filter((file) => file.path.startsWith(`${path}/`))
+      .map((file) => [file.path, file.sourceHash]),
+  )
+  if (
+    contents.files.length !== expected.size ||
+    contents.files.some((file) => file.hash !== expected.get(file.path))
+  ) {
+    throw new HttpCollectionConflictError(
+      "A coleção mudou fora do Tuiminal; atualize antes de continuar.",
+    )
+  }
+  const target = join(dirname(path), checkedName(name))
+  const absolute = join(await safeFolder(root, dirname(path)), basename(target))
+  await mkdir(absolute, { mode: 0o700 })
+  const createdDirectories = [absolute]
+  const createdFiles: Array<{ path: string; hash: string }> = []
+  try {
+    const canonicalRoot = await realpath(root)
+    for (const directory of [...contents.directories].sort((a, b) => a.length - b.length)) {
+      const child = join(absolute, relative(join(canonicalRoot, path), directory))
+      await mkdir(child, { mode: 0o700 })
+      createdDirectories.push(child)
+    }
+    for (const file of contents.files) {
+      const source = await checkedCollection(root, file.path, file.hash)
+      const destination = join(target, relative(path, file.path))
+      await atomicWriteProjectFile(root, destination, source.source, {
+        expectedHash: null,
+        exclusive: true,
+      })
+      createdFiles.push({ path: destination, hash: file.hash })
+    }
+    return target
+  } catch (error) {
+    for (const file of createdFiles.reverse())
+      await removeSafeProjectFile(root, file.path, file.hash).catch(() => {})
+    for (const directory of createdDirectories.reverse()) await rmdir(directory).catch(() => {})
+    throw error
+  }
 }

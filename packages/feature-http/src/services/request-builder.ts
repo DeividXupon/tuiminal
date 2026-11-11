@@ -1,5 +1,6 @@
-import { realpathSync, statSync } from "node:fs"
-import { basename, resolve, sep } from "node:path"
+import { statSync } from "node:fs"
+import { basename } from "node:path"
+import { HTTP_BODY_FILE_MAX_BYTES, resolveHttpBodyFile } from "./body-file"
 import type {
   HttpAuth,
   HttpKeyValue,
@@ -23,7 +24,7 @@ export const HTTP_REQUEST_LIMITS = {
   headerBytes: 128 * 1024,
   fields: 500,
   bodyBytes: 8 * 1024 * 1024,
-  fileBytes: 256 * 1024 * 1024,
+  fileBytes: HTTP_BODY_FILE_MAX_BYTES,
 } as const
 
 export class HttpRequestValidationError extends Error {
@@ -100,6 +101,8 @@ function applyAuth(
   variables?: HttpVariableContext,
 ) {
   switch (auth.kind) {
+    case "oauth2":
+      throw new HttpRequestValidationError("OAuth2: autorize esta requisição na aba Autenticação.")
     case "none":
       return
     case "bearer":
@@ -118,44 +121,30 @@ function applyAuth(
         ).toString("base64")}`,
       )
       return
-    case "api-key":
-      if (!auth.name.trim()) {
+    case "api-key": {
+      const name = resolveHttpTemplate(auth.name, variables).trim()
+      const value = resolveHttpTemplate(auth.value, variables)
+      if (!name) {
         throw new HttpRequestValidationError("Informe o nome da API key.")
       }
-      if (auth.placement === "query")
-        url.searchParams.append(auth.name, resolveHttpTemplate(auth.value, variables))
-      else setSingletonHeader(headers, auth.name, resolveHttpTemplate(auth.value, variables))
+      if (auth.placement === "query") url.searchParams.append(name, value)
+      else {
+        validateHeader(name, value)
+        setSingletonHeader(headers, name, value)
+      }
+    }
   }
 }
 
-function safeProjectFile(projectRoot: string | undefined, path: string) {
-  if (!projectRoot) {
-    throw new HttpRequestValidationError(
-      "Selecione um projeto antes de usar um body por arquivo.",
-      "body",
-    )
-  }
-  let root: string
-  let candidate: string
+function bodyFile(projectRoot: string | undefined, path: string) {
   try {
-    root = realpathSync(projectRoot)
-    candidate = realpathSync(resolve(root, path))
-  } catch {
+    return resolveHttpBodyFile(path, projectRoot)
+  } catch (error) {
     throw new HttpRequestValidationError(
-      `O arquivo de body não foi encontrado: ${path || "(vazio)"}.`,
+      error instanceof Error ? error.message : String(error),
       "body",
     )
   }
-  if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {
-    throw new HttpRequestValidationError(
-      "O arquivo de body precisa permanecer dentro do projeto.",
-      "body",
-    )
-  }
-  if (!statSync(candidate).isFile()) {
-    throw new HttpRequestValidationError("O caminho do body não aponta para um arquivo.", "body")
-  }
-  return candidate
 }
 
 function hasContentType(headers: Array<[string, string]>) {
@@ -202,7 +191,10 @@ function prepareFormBody(
     throw new HttpRequestValidationError("O formulário excede 500 campos.", "body")
   }
   for (const entry of entries) {
-    body.append(entry.name, resolveHttpTemplate(entry.value, variables))
+    body.append(
+      resolveHttpTemplate(entry.name, variables),
+      resolveHttpTemplate(entry.value, variables),
+    )
   }
   const serialized = body.toString()
   if (Buffer.byteLength(serialized) > HTTP_REQUEST_LIMITS.bodyBytes) {
@@ -217,13 +209,7 @@ function prepareFileBody(
   variables?: HttpVariableContext,
   projectRoot?: string,
 ) {
-  const path = safeProjectFile(
-    projectRoot,
-    resolveHttpTemplate(request.body.filePath ?? "", variables),
-  )
-  if (statSync(path).size > HTTP_REQUEST_LIMITS.fileBytes) {
-    throw new HttpRequestValidationError("O arquivo de body excede 256 MB.", "body")
-  }
+  const path = bodyFile(projectRoot, resolveHttpTemplate(request.body.filePath ?? "", variables))
   const file = Bun.file(path)
   if (!hasContentType(headers) && file.type) headers.push(["Content-Type", file.type])
   return { body: file, bodyDescriptor: { kind: "file" as const, path } }
@@ -231,9 +217,19 @@ function prepareFileBody(
 
 function prepareMultipartBody(
   request: HttpRequestDefinition,
+  headers: Array<[string, string]>,
   variables?: HttpVariableContext,
   projectRoot?: string,
 ) {
+  // FormData generates a new boundary, including for a multipart body reopened from .http.
+  for (let index = headers.length - 1; index >= 0; index--) {
+    const header = headers[index]
+    if (
+      header?.[0].toLowerCase() === "content-type" &&
+      /^multipart\/form-data(?:;|$)/i.test(header[1])
+    )
+      headers.splice(index, 1)
+  }
   const form = new FormData()
   const parts: Array<{
     name: string
@@ -250,8 +246,9 @@ function prepareMultipartBody(
   let totalBytes = 0
   let textBytes = 0
   for (const part of enabledParts) {
+    const name = resolveHttpTemplate(part.name, variables)
     if (part.kind === "file") {
-      const path = safeProjectFile(projectRoot, resolveHttpTemplate(part.value, variables))
+      const path = bodyFile(projectRoot, resolveHttpTemplate(part.value, variables))
       const size = statSync(path).size
       if (
         size > HTTP_REQUEST_LIMITS.fileBytes ||
@@ -260,23 +257,23 @@ function prepareMultipartBody(
         throw new HttpRequestValidationError("Os arquivos multipart excedem 256 MB.", "body")
       }
       totalBytes += size
-      form.append(part.name, Bun.file(path), basename(path))
+      form.append(name, Bun.file(path), basename(path))
       parts.push({
-        name: part.name,
+        name,
         value: path,
         kind: "file",
         sensitivity: part.sensitivity,
       })
     } else {
       const value = resolveHttpTemplate(part.value, variables)
-      const size = Buffer.byteLength(part.name) + Buffer.byteLength(value)
+      const size = Buffer.byteLength(name) + Buffer.byteLength(value)
       textBytes += size
       totalBytes += size
       if (textBytes > HTTP_REQUEST_LIMITS.bodyBytes || totalBytes > HTTP_REQUEST_LIMITS.fileBytes) {
         throw new HttpRequestValidationError("O texto multipart excede 8 MB.", "body")
       }
-      form.append(part.name, value)
-      parts.push({ name: part.name, value, kind: "text", sensitivity: part.sensitivity })
+      form.append(name, value)
+      parts.push({ name, value, kind: "text", sensitivity: part.sensitivity })
     }
   }
   return { body: form, bodyDescriptor: { kind: "multipart" as const, parts } }
@@ -297,7 +294,7 @@ function prepareBody(
     case "file":
       return prepareFileBody(request, headers, variables, projectRoot)
     case "multipart":
-      return prepareMultipartBody(request, variables, projectRoot)
+      return prepareMultipartBody(request, headers, variables, projectRoot)
     default:
       return { body: prepareTextBody(request, headers, variables) }
   }
@@ -330,7 +327,10 @@ export function prepareHttpRequest(
     throw new HttpRequestValidationError("A query excede 500 parâmetros.", "url")
   }
   for (const entry of queryEntries) {
-    url.searchParams.append(entry.name, resolveHttpTemplate(entry.value, variables))
+    url.searchParams.append(
+      resolveHttpTemplate(entry.name, variables),
+      resolveHttpTemplate(entry.value, variables),
+    )
   }
   if (Buffer.byteLength(url.toString()) > HTTP_REQUEST_LIMITS.urlBytes) {
     throw new HttpRequestValidationError("A URL excede o limite de 16 KB.", "url")
@@ -341,9 +341,10 @@ export function prepareHttpRequest(
     throw new HttpRequestValidationError("A requisição excede 200 headers.")
   }
   const headers = headerEntries.map((entry): [string, string] => {
-    const name = entry.name.trim()
-    validateHeader(name, entry.value)
-    return [name, resolveHttpTemplate(entry.value, variables)]
+    const name = resolveHttpTemplate(entry.name, variables).trim()
+    const value = resolveHttpTemplate(entry.value, variables)
+    validateHeader(name, value)
+    return [name, value]
   })
   applyAuth(url, headers, request.auth, variables)
   if (Buffer.byteLength(url.toString()) > HTTP_REQUEST_LIMITS.urlBytes) {

@@ -1,26 +1,27 @@
 import { describe, expect, test } from "bun:test"
-import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
+import {
+  parseHttpFile,
+  requestFromHttpFile,
+  serializeHttpRequestBlock,
+} from "../packages/feature-http/src/model/http-file"
 import {
   applyHttpUrlQueryEdit,
   applyUrlVariableCompletion,
   syncHttpUrlQuery,
   urlVariableCompletion,
 } from "../packages/feature-http/src/model/url-query"
+import { createScratchRequest } from "../packages/feature-http/src/model/workspace"
 import { prepareHttpRequest } from "../packages/feature-http/src/services/request-builder"
-import {
-  parseHttpFile,
-  requestFromHttpFile,
-  serializeHttpRequestBlock,
-} from "../packages/feature-http/src/model/http-file"
 
 describe("HTTP URL variables and query parameters", () => {
-  test("suggests available names after one or two braces and completes at the cursor", () => {
+  test("suggests available names only after two braces and completes at the cursor", () => {
     const names = ["manga", "mangaka", "token"]
-    expect(urlVariableCompletion("https://example.test/{", 22, names)?.suggestions).toEqual([
-      "manga",
-      "mangaka",
-      "token",
-    ])
+    for (const source of ["", "{", "{man", "https://example.test/{", '{\n  "name": "']) {
+      expect(urlVariableCompletion(source, source.length, names)).toBeNull()
+    }
+    const opening = "https://example.test/{{"
+    expect(urlVariableCompletion(opening, opening.length - 1, names)).toBeNull()
+    expect(urlVariableCompletion(opening, opening.length, names)?.suggestions).toEqual(names)
     const source = "https://example.test/{{man}/chapters"
     const completion = urlVariableCompletion(source, source.indexOf("}/chapters"), names)
     expect(completion?.suggestions).toEqual(["manga", "mangaka"])

@@ -18,6 +18,7 @@ type ResolveHttpLayoutOptions = {
   contentHeight?: number
   splitRatio?: number
   navigationWidth?: number
+  navigationFocused?: boolean
   requestWidth?: number
 }
 
@@ -25,16 +26,31 @@ type ResolveHttpWorkspaceLayoutOptions = {
   terminalWidth: number
   terminalHeight: number
   appHeaderRows: number
+  hasDocument?: boolean
   outerPadding: number
   spacing: number
   splitRatio?: number
+  navigationFocused?: boolean
 }
 
 const GAP = 1
+const MIN_EDITOR_WIDTH = 42
 export const DEFAULT_HTTP_SPLIT_RATIO = 0.5
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))
+}
+
+function fixedNavigationWidth(
+  width: number,
+  focused: boolean,
+  requested: number | undefined,
+  panorama: boolean,
+) {
+  if (!focused)
+    return clamp(requested ?? Math.floor(width * (panorama ? 0.2 : 0.23)), 22, panorama ? 32 : 30)
+  const reserved = panorama ? MIN_EDITOR_WIDTH * 2 + GAP * 2 : MIN_EDITOR_WIDTH + GAP
+  return clamp(requested ?? Math.floor(width * 0.4), 22, Math.min(56, width - reserved))
 }
 
 function verticalSplit(
@@ -57,6 +73,7 @@ export function resolveHttpLayout({
   contentHeight,
   splitRatio = DEFAULT_HTTP_SPLIT_RATIO,
   navigationWidth,
+  navigationFocused = false,
   requestWidth,
 }: ResolveHttpLayoutOptions): HttpLayout {
   const safeWidth = Math.max(1, Math.floor(width))
@@ -64,12 +81,12 @@ export function resolveHttpLayout({
   const canvasHeight = Math.max(1, Math.floor(contentHeight ?? safeHeight))
 
   if (safeWidth >= 132 && safeHeight >= 24) {
-    const navWidth = clamp(navigationWidth ?? Math.floor(safeWidth * 0.2), 22, 32)
+    const navWidth = fixedNavigationWidth(safeWidth, navigationFocused, navigationWidth, true)
     const available = safeWidth - navWidth - GAP * 2
     const builderWidth = clamp(
       requestWidth ?? Math.floor(available * splitRatio),
-      42,
-      Math.max(42, available - 42),
+      MIN_EDITOR_WIDTH,
+      Math.max(MIN_EDITOR_WIDTH, available - MIN_EDITOR_WIDTH),
     )
     return {
       mode: "panorama",
@@ -88,7 +105,7 @@ export function resolveHttpLayout({
   }
 
   if (safeWidth >= 96 && safeHeight >= 22) {
-    const navWidth = clamp(navigationWidth ?? Math.floor(safeWidth * 0.23), 22, 30)
+    const navWidth = fixedNavigationWidth(safeWidth, navigationFocused, navigationWidth, false)
     const contentLeft = navWidth + GAP
     const contentWidth = safeWidth - contentLeft
     const [request, response] = verticalSplit(contentWidth, canvasHeight, splitRatio, contentLeft)
@@ -111,7 +128,11 @@ export function resolveHttpLayout({
       navigation: {
         left: 0,
         top: 0,
-        width: clamp(Math.floor(safeWidth * 0.55), 24, Math.max(24, safeWidth - 4)),
+        width: clamp(
+          Math.floor(safeWidth * (navigationFocused ? 0.75 : 0.55)),
+          24,
+          Math.max(24, safeWidth - 4),
+        ),
         height: canvasHeight,
       },
       request,
@@ -137,16 +158,19 @@ export function resolveHttpWorkspaceLayout({
   terminalWidth,
   terminalHeight,
   appHeaderRows,
+  hasDocument = true,
   outerPadding,
   spacing,
   splitRatio,
+  navigationFocused = false,
 }: ResolveHttpWorkspaceLayoutOptions) {
   const width = Math.max(1, terminalWidth - outerPadding * 2)
   const availableHeight = Math.max(8, terminalHeight - appHeaderRows - outerPadding * 2)
   const initial = resolveHttpLayout({ width, height: availableHeight })
-  const selectorRows = initial.mode === "panorama" || initial.mode === "workbench" ? 0 : 1
+  const selectorRows = initial.mode === "minimum" ? 2 : initial.mode === "focus" ? 1 : 0
   const layoutSpacing = initial.mode === "minimum" ? 0 : spacing
-  const chromeRows = 1 + initial.omnibarRows + selectorRows + 1 + layoutSpacing * 2
+  const chromeRows =
+    1 + (hasDocument ? initial.omnibarRows + selectorRows : 1) + 1 + layoutSpacing * 2
   const bodyHeight = Math.max(4, availableHeight - chromeRows)
   return {
     bodyHeight,
@@ -154,6 +178,7 @@ export function resolveHttpWorkspaceLayout({
       width,
       height: availableHeight,
       contentHeight: bodyHeight,
+      navigationFocused,
       ...(splitRatio === undefined ? {} : { splitRatio }),
     }),
   }

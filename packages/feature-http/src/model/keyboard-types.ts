@@ -22,6 +22,7 @@ export type HttpKeyboardCommand =
     }
   | {
       kind:
+        | "choose-box"
         | "add-document"
         | "close-document"
         | "close-navigation"
@@ -31,6 +32,7 @@ export type HttpKeyboardCommand =
         | "open-response-search"
         | "open-response"
         | "focus-collection-search"
+        | "focus-request-form"
         | "blur-navigation-control"
         | "duplicate-document"
         | "back-import-preview"
@@ -57,10 +59,11 @@ export type HttpKeyboardCommand =
   | { kind: "resize-split"; direction: -1 | 1 }
   | { kind: "cycle-document" | "cycle-method"; direction: -1 | 1 }
   | { kind: "focus-url" }
+  | { kind: "select-document"; index: number }
   | { kind: "request-view"; view: HttpRequestView }
   | { kind: "request-more-view"; view: HttpRequestMoreView }
   | { kind: "response-more-view"; view: HttpResponseMoreView }
-  | { kind: "navigation"; view: "collection" | "history" }
+  | { kind: "navigation"; view: "collection" | "environments" }
   | { kind: "pane"; pane: HttpPane }
   | { kind: "cycle-pane"; direction: -1 | 1 }
   | { kind: "cycle-body-kind"; direction: -1 | 1 }

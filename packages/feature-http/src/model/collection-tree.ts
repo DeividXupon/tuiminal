@@ -2,6 +2,8 @@ import { basename } from "node:path"
 import type { HttpProjectRequestItem } from "./types"
 import type { PostmanCollectionFolder } from "../postman/sync"
 
+export type HttpCollectionFile = { path: string; name?: string }
+
 export type HttpCollectionTreeRow =
   | {
       id: string
@@ -46,17 +48,25 @@ function normalizedSearch(value: string) {
   return value.normalize("NFKC").toLocaleLowerCase()
 }
 
-function requestMatches(item: HttpProjectRequestItem, search: string) {
-  if (!search) return true
-  const haystack = normalizedSearch(
-    `${item.filePath}\n${item.request.method}\n${item.request.name}`,
-  )
+function matchesSearch(value: string, search: string) {
+  const haystack = normalizedSearch(value)
   return search.split(/\s+/).every((term) => haystack.includes(term))
 }
 
-function filteredRequests(items: HttpProjectRequestItem[], query: string) {
+function filteredRequests(
+  items: HttpProjectRequestItem[],
+  query: string,
+  fileNames: ReadonlyMap<string, string>,
+) {
   const search = normalizedSearch(query.trim())
-  return search ? items.filter((item) => requestMatches(item, search)) : items
+  return search
+    ? items.filter((item) =>
+        matchesSearch(
+          `${fileNames.get(item.filePath) ?? ""}\n${item.filePath}\n${item.request.method}\n${item.request.name}`,
+          search,
+        ),
+      )
+    : items
 }
 
 function createDirectory(path: string): CollectionDirectory {
@@ -165,6 +175,7 @@ function flattenDirectory(
   collapsed: ReadonlySet<string>,
   searching: boolean,
   folders: readonly PostmanCollectionFolder[],
+  fileNames: ReadonlyMap<string, string>,
 ): HttpCollectionTreeRow[] {
   const rows: HttpCollectionTreeRow[] = []
   for (const child of [...directory.directories.values()].sort((left, right) =>
@@ -181,7 +192,8 @@ function flattenDirectory(
       expanded,
       requestCount: requestCount(child),
     })
-    if (expanded) rows.push(...flattenDirectory(child, depth + 1, collapsed, searching, folders))
+    if (expanded)
+      rows.push(...flattenDirectory(child, depth + 1, collapsed, searching, folders, fileNames))
   }
   for (const [filePath, requests] of [...directory.files].sort(([left], [right]) =>
     left.localeCompare(right),
@@ -192,7 +204,7 @@ function flattenDirectory(
       id,
       kind: "file",
       path: filePath,
-      name: basename(filePath),
+      name: fileNames.get(filePath) ?? basename(filePath),
       depth,
       expanded,
       requestCount: requests.length,
@@ -209,11 +221,17 @@ export function buildHttpCollectionTree(
   collapsed: ReadonlySet<string> = new Set(),
   query = "",
   directories: readonly string[] = [],
-  files: readonly string[] = [],
+  files: readonly (string | HttpCollectionFile)[] = [],
   postmanFolders: readonly PostmanCollectionFolder[] = [],
   hidePostmanRoot = false,
 ) {
-  const requests = filteredRequests(items, query)
+  const fileNames = new Map(
+    files.map((file) => {
+      const path = typeof file === "string" ? file : file.path
+      return [path, typeof file === "string" ? basename(path) : (file.name ?? basename(path))]
+    }),
+  )
+  const requests = filteredRequests(items, query, fileNames)
   const byFile = new Map<string, HttpProjectRequestItem[]>()
   for (const item of requests) {
     const group = byFile.get(item.filePath) ?? []
@@ -223,8 +241,11 @@ export function buildHttpCollectionTree(
   const root = createDirectory("")
   if (!query.trim()) {
     for (const path of directories) addDirectory(root, path)
-    for (const path of files) byFile.set(path, byFile.get(path) ?? [])
   }
+  const search = normalizedSearch(query.trim())
+  for (const [path, name] of fileNames)
+    if (!search || matchesSearch(`${name}\n${path}`, search))
+      byFile.set(path, byFile.get(path) ?? [])
   for (const [filePath, fileRequests] of byFile) addFile(root, filePath, fileRequests)
   return flattenDirectory(
     hidePostmanRoot ? (root.directories.get("postman") ?? createDirectory("postman")) : root,
@@ -232,5 +253,6 @@ export function buildHttpCollectionTree(
     collapsed,
     Boolean(query.trim()),
     postmanFolders,
+    fileNames,
   )
 }

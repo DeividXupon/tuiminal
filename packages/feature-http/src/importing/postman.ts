@@ -1,3 +1,5 @@
+import { postmanOAuth2 } from "../model/oauth2-postman"
+import { postmanScripts } from "./postman-scripts"
 import type {
   HttpAuth,
   HttpKeyValue,
@@ -6,6 +8,7 @@ import type {
 } from "../model/types"
 import { httpHeaderSensitivity } from "../model/key-value"
 import { importId, importedHttpRequest, record, text, type HttpImportReport } from "./shared"
+import { postmanRequestDescription } from "./postman-description"
 
 function postmanEntries(value: unknown, id: string, kind: "query" | "path") {
   if (!Array.isArray(value)) return []
@@ -42,7 +45,7 @@ function postmanUrl(value: unknown, id: string) {
     ? url.path.map((part) => text(record(part)?.value, text(part))).join("/")
     : text(url?.path)
   return {
-    url: `${protocol}://${host}${port ? `:${port}` : ""}/${path}`,
+    url: host || port || path ? `${protocol}://${host}${port ? `:${port}` : ""}/${path}` : "",
     query,
     path: pathVariables,
   }
@@ -53,10 +56,14 @@ function authValue(source: Record<string, unknown>, kind: string, key: string) {
   return values.map(record).find((entry) => entry?.key === key)?.value
 }
 
-function postmanAuth(value: unknown, warnings: string[], name: string): HttpAuth {
+export function postmanAuth(value: unknown, warnings: string[], name: string): HttpAuth {
   const auth = record(value)
   const kind = text(auth?.type).toLowerCase()
   if (!auth || !kind || kind === "noauth") return { kind: "none" }
+  if (kind === "oauth2") {
+    const oauth = postmanOAuth2(auth.oauth2)
+    if (oauth) return oauth
+  }
   if (kind === "bearer") return { kind: "bearer", token: text(authValue(auth, kind, "token")) }
   if (kind === "basic") {
     return {
@@ -158,17 +165,15 @@ function postmanBody(value: unknown, id: string, name: string, warnings: string[
       const name = text(part?.key)
       if (!name) return []
       const file = part?.type === "file"
-      const source = Array.isArray(part?.src) ? part.src[0] : part?.src
-      return [
-        {
-          id: `${id}-multipart-${index}`,
-          enabled: part?.disabled !== true,
-          name,
-          value: file ? text(source) : text(part?.value),
-          kind: file ? "file" : "text",
-          sensitivity: "normal",
-        },
-      ]
+      const sources = file ? postmanMultipartSources(part?.src) : [undefined]
+      return sources.map((source, fileIndex) => ({
+        id: `${id}-multipart-${index}${fileIndex ? `-${fileIndex}` : ""}`,
+        enabled: part?.disabled !== true,
+        name,
+        value: file ? text(source) : text(part?.value),
+        kind: file ? "file" : "text",
+        sensitivity: "normal" as const,
+      }))
     })
     return { kind: "multipart" as const, text: "", form: [], multipart }
   }
@@ -223,7 +228,16 @@ function sanitizeImportedSecrets(
       sensitivity: "secret-ref",
     }
   })
-  if (request.auth.kind === "bearer" && !SECRET_REFERENCE.test(request.auth.token)) {
+  if (
+    request.auth.kind === "oauth2" &&
+    request.auth.clientSecret &&
+    !SECRET_REFERENCE.test(request.auth.clientSecret)
+  ) {
+    request.auth = {
+      ...request.auth,
+      clientSecret: replace(request.auth.clientSecret, "oauth_client_secret"),
+    }
+  } else if (request.auth.kind === "bearer" && !SECRET_REFERENCE.test(request.auth.token)) {
     request.auth = { kind: "bearer", token: replace(request.auth.token, "bearer_token") }
     warnings.push(`${request.name}: bearer token substituído por variável privada.`)
   } else if (request.auth.kind === "basic" && !SECRET_REFERENCE.test(request.auth.password)) {
@@ -240,6 +254,7 @@ function sanitizeImportedSecrets(
 
 type PostmanImportContext = Pick<HttpImportReport, "requests" | "ignored" | "warnings"> & {
   privateValues?: Map<string, string>
+  remoteIds?: boolean
 }
 
 function convertPostmanRequest(
@@ -251,9 +266,14 @@ function convertPostmanRequest(
 ) {
   const name = text(item.name, "Request")
   const fullName = [...path, name].join(" / ")
-  const id = importId("postman", context.requests.length, fullName)
+  const id =
+    context.remoteIds && typeof item.id === "string"
+      ? `http-import-postman-${item.id}`
+      : importId("postman", context.requests.length, fullName)
   const url = postmanUrl(source.url, id)
   const request = importedHttpRequest(id, fullName, text(source.method, "GET"), url.url)
+  request.description = postmanRequestDescription(item)
+  request.scripts = postmanScripts(item, source)
   request.query = url.query
   request.path = url.path
   request.headers = postmanHeaders(source.header, id)
@@ -264,9 +284,7 @@ function convertPostmanRequest(
   )
   sanitizeImportedSecrets(request, context.warnings, context.privateValues)
   request.body = postmanBody(source.body, id, request.name, context.warnings)
-  if (Array.isArray(item.event) || Array.isArray(source.event)) {
-    context.warnings.push(`${request.name}: scripts ignorados.`)
-  }
+
   if (Array.isArray(item.response) && item.response.length) {
     context.ignored.push(`${request.name}: respostas salvas`)
   }
@@ -301,6 +319,7 @@ function convertPostmanCollection(
   value: unknown,
   privateValues?: Map<string, string>,
   allowEmpty = false,
+  remoteIds = false,
 ): HttpImportReport {
   const collection = record(value)
   if (!collection || !Array.isArray(collection.item)) throw new Error("Coleção Postman inválida.")
@@ -322,6 +341,7 @@ function convertPostmanCollection(
     ignored,
     warnings,
     ...(privateValues ? { privateValues } : {}),
+    remoteIds,
   })
   if (!requests.length && !allowEmpty)
     throw new Error("A coleção Postman não contém requests suportados.")
@@ -332,8 +352,12 @@ export function importPostmanCollection(value: unknown): HttpImportReport {
   return convertPostmanCollection(value)
 }
 
-export function importPostmanAccountCollection(value: unknown) {
+function postmanMultipartSources(value: unknown) {
+  return Array.isArray(value) && value.length ? value : [value]
+}
+
+export function importPostmanAccountCollection(value: unknown, remoteIds = false) {
   const privateValues = new Map<string, string>()
-  const report = convertPostmanCollection(value, privateValues, true)
+  const report = convertPostmanCollection(value, privateValues, true, remoteIds)
   return { report, privateValues }
 }

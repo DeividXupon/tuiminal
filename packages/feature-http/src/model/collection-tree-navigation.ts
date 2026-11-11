@@ -7,9 +7,8 @@ export type HttpCollectionTreeCommand =
   | { kind: "select"; id: string }
   | { kind: "toggle"; id: string }
   | { kind: "open"; row: Extract<HttpCollectionTreeRow, { kind: "request" }> }
-  | { kind: "create-folder" | "create-collection" | "create-request" | "rename" | "delete" }
   | { kind: "confirm-delete" | "cancel-delete" }
-  | { kind: "open-postman" }
+  | { kind: "workspace-menu" }
 
 function cursorCommand(
   key: HttpKey,
@@ -76,20 +75,12 @@ function branchCommand(
   return null
 }
 
-function editCommand(key: HttpKey, selected: boolean): HttpCollectionTreeCommand | null {
-  if (key.name === "n") return { kind: key.shift ? "create-collection" : "create-request" }
-  if (key.name === "p") return { kind: "create-folder" }
-  if (key.name === "o") return { kind: "open-postman" }
-  if (key.name === "e" && selected) return { kind: "rename" }
-  if (key.name === "d" && selected) return { kind: "delete" }
-  return null
-}
-
 export function resolveHttpCollectionTreeCommand(
   key: HttpKey,
   rows: HttpCollectionTreeRow[],
   selection: string | null,
   deleting: boolean,
+  workspaceId?: string,
 ): HttpCollectionTreeCommand | null {
   if (key.ctrl || key.meta || key.option) return null
   if (deleting) {
@@ -99,10 +90,37 @@ export function resolveHttpCollectionTreeCommand(
   }
   const index = rows.findIndex((row) => row.id === selection)
   return (
+    workspaceCommand(key, rows, selection, workspaceId) ??
     cursorCommand(key, rows, index) ??
-    branchCommand(key, rows, index) ??
-    editCommand(key, index >= 0)
+    branchCommand(key, rows, index)
   )
+}
+
+function workspaceCommand(
+  key: HttpKey,
+  rows: HttpCollectionTreeRow[],
+  selection: string | null,
+  workspaceId?: string,
+): HttpCollectionTreeCommand | null {
+  if (!workspaceId) return null
+  const first = rows[0]
+  const current = rows.find((row) => row.id === selection)
+  if (key.name === "home" || (!selection && ["down", "j", "up", "k"].includes(key.name)))
+    return { kind: "select", id: workspaceId }
+  if (selection === first?.id && ["up", "k"].includes(key.name))
+    return { kind: "select", id: workspaceId }
+  if (
+    key.name === "left" &&
+    current?.depth === 0 &&
+    (current.kind === "request" || !current.expanded)
+  )
+    return { kind: "select", id: workspaceId }
+  if (selection !== workspaceId) return null
+  if (["enter", "return", "space"].includes(key.name)) return { kind: "workspace-menu" }
+  if (["down", "j", "right", "end"].includes(key.name))
+    return { kind: "select", id: (key.name === "end" ? rows.at(-1)?.id : first?.id) ?? workspaceId }
+  if (["up", "k", "left"].includes(key.name)) return { kind: "noop" }
+  return null
 }
 
 function fileId(path: string) {
@@ -132,18 +150,26 @@ function selectionAfterDelete(row: HttpCollectionTreeRow | null) {
 }
 
 export function httpCollectionSelectionAfterAction(
-  action: "create-folder" | "create-collection" | "create-request" | "rename" | "delete",
+  action:
+    | "create-folder"
+    | "create-collection"
+    | "create-request"
+    | "rename"
+    | "delete"
+    | "duplicate",
   row: HttpCollectionTreeRow | null,
   name: string,
+  root = "",
 ): string | null {
   if (action === "delete") return selectionAfterDelete(row)
   if (action === "create-request" && row?.kind !== "directory" && row) {
     return row.kind === "folder" ? row.id : `file:${row.path}`
   }
+  if (action === "duplicate") return row?.id ?? null
   if (action === "rename") return renamedSelection(row, name)
   if (action === "create-folder" && row?.kind === "folder") return row.id
   if (action === "create-folder" && row?.kind === "file") return row.id
-  const parent = row?.kind === "directory" ? row.path : row ? dirname(row.path) : ""
+  const parent = row?.kind === "directory" ? row.path : row ? dirname(row.path) : root
   const path = join(parent, name.trim())
   if (action === "create-folder") return `directory:${path}`
   return fileId(path)

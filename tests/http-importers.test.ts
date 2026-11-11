@@ -181,7 +181,8 @@ describe("HTTP collection importers", () => {
       auth: { kind: "bearer", token: "{{token}}" },
       body: { kind: "json", text: '{"name":"Ada"}' },
     })
-    expect(report.warnings).toEqual(["Users / Create: scripts ignorados."])
+    expect(report.warnings).toEqual([])
+    expect(report.requests[0]?.scripts?.postResponse).toBe("pm.test('ok')")
   })
 
   test.each(["v2.0.0", "v2.1.0"])("imports Postman %s collections", (version) => {

@@ -76,6 +76,15 @@ function chainDirectives(request: HttpRequestDefinition) {
   const lines: string[] = []
   if (request.chain?.dependsOn) lines.push(`# @depends ${request.chain.dependsOn}`)
   for (const extraction of request.chain?.extract ?? []) {
+    if (
+      extraction.source !== undefined ||
+      extraction.enabled !== undefined ||
+      /\s/.test(extraction.jsonPath)
+    ) {
+      const { id: _id, ...value } = extraction
+      lines.push(`# @extract-value ${JSON.stringify(value)}`)
+      continue
+    }
     lines.push(
       `# @extract${extraction.secret ? "-secret" : ""} ${extraction.name} = ${extraction.jsonPath}`,
     )
@@ -90,6 +99,10 @@ function requestDirectives(request: HttpRequestDefinition) {
   )
   const chain = chainDirectives(request)
   return [
+    ...(request.scripts ? [`# @tuiminal-scripts ${JSON.stringify(request.scripts)}`] : []),
+    ...(request.description !== undefined
+      ? [`# @description ${JSON.stringify(request.description)}`]
+      : []),
     ...chain.slice(0, request.chain?.dependsOn ? 1 : 0),
     ...auth,
     ...keyValueDirectives("query", request.query),

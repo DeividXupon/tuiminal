@@ -1,6 +1,10 @@
+import { parseHttpExtractionValue } from "./chain-extractions"
+import { parseHttpScripts } from "./request-scripts"
+import { parseHttpDescription } from "./request-description"
 const METHOD_TOKEN = "[!#$%&'*+.^_`|~\\dA-Z-]+"
 const REQUEST_LINE = new RegExp(`^(${METHOD_TOKEN})\\s+(\\S+)(?:\\s+(HTTP\\/\\S+))?\\s*$`, "i")
 const REQUEST_PREFIX = new RegExp(`^(${METHOD_TOKEN})\\s+(\\S+)\\s+(.+)$`, "i")
+const EMPTY_REQUEST_LINE = new RegExp(`^${METHOD_TOKEN}$`, "i")
 const SHORT_GET_LINE = /^((?:https?:\/\/|\{\{)\S+)(?:\s+(HTTP\/\S+))?\s*$/i
 const INLINE_PRE_REQUEST = new RegExp(
   `^<\\s*(?:\\{%.*%\\}|\\S+)\\s+(${METHOD_TOKEN})\\s+(\\S+)(?:\\s+.*)?$`,
@@ -53,7 +57,7 @@ export type HttpRequestStart = {
   opaque: boolean
 }
 
-function requestLine(text: string) {
+function requestLine(text: string, allowEmptyUrl: boolean) {
   const explicit = text.match(REQUEST_LINE)
   if (explicit?.[1] && explicit[2]) {
     const method = explicit[1].toUpperCase()
@@ -74,6 +78,10 @@ function requestLine(text: string) {
   if (inlinePreRequest?.[1] && inlinePreRequest[2]) {
     return { method: inlinePreRequest[1].toUpperCase(), url: inlinePreRequest[2], opaque: true }
   }
+  if (allowEmptyUrl && EMPTY_REQUEST_LINE.test(text)) {
+    const method = text.toUpperCase()
+    return { method, url: "", opaque: OPAQUE_PROTOCOL_METHODS.has(method) }
+  }
   return null
 }
 
@@ -91,10 +99,12 @@ function continuedRequestUrl(lines: string[], index: number, initialUrl: string)
 }
 
 export function findHttpRequestStart(lines: string[]): HttpRequestStart | null {
+  let allowEmptyUrl = hasHttpDirective(lines, "name")
   for (let index = 0; index < lines.length; index += 1) {
     const text = lines[index]?.trim() ?? ""
     if (!text || text.startsWith("#") || text.startsWith("//") || text.startsWith("@")) continue
-    const request = requestLine(text)
+    const request = requestLine(text, allowEmptyUrl)
+    allowEmptyUrl = false
     if (!request) continue
     return { index, ...request, ...continuedRequestUrl(lines, index, request.url) }
   }
@@ -105,8 +115,11 @@ const SUPPORTED_DIRECTIVES = new Set([
   "assert",
   "auth",
   "depends",
+  "description",
+  "tuiminal-scripts",
   "extract",
   "extract-secret",
+  "extract-value",
   "follow-redirects",
   "insecure-tls",
   "name",
@@ -122,15 +135,33 @@ const SUPPORTED_DIRECTIVES = new Set([
 export function usesOpaqueHttpSyntax(lines: string[], requestStart: HttpRequestStart) {
   if (requestStart.opaque) return true
   return lines.some((line, index) => {
-    if (/^\s*(?:<\s*\{%|>)/u.test(line)) return true
-    if (index < requestStart.index && /^\s*<\s*\S+/u.test(line)) return true
+    if (unsupportedScriptLine(line, index, requestStart.index)) return true
     const directive = line.match(/^\s*(?:#|\/\/)\s*@([\w-]+)/u)?.[1]?.toLowerCase()
     if (!directive) return false
     if (!SUPPORTED_DIRECTIVES.has(directive)) return true
+    if (directive === "tuiminal-scripts")
+      return invalidScriptDirective(line, index, requestStart.index)
+    if (directive === "description")
+      return (
+        index >= requestStart.index ||
+        parseHttpDescription(httpDirectiveValue(line, directive) ?? "") === null
+      )
+    if (directive === "extract-value")
+      return !parseHttpExtractionValue(httpDirectiveValue(line, directive) ?? "")
     if (directive === "timeout") {
       const value = httpDirectiveValue(line, directive)
       return value === null || timeoutMilliseconds(value) === null
     }
     return false
   })
+}
+
+function invalidScriptDirective(line: string, index: number, requestIndex: number) {
+  return (
+    index >= requestIndex || !parseHttpScripts(httpDirectiveValue(line, "tuiminal-scripts") ?? "")
+  )
+}
+
+function unsupportedScriptLine(line: string, index: number, start: number) {
+  return /^\s*(?:<\s*\{%|>)/u.test(line) || (index < start && /^\s*<\s*\S+/u.test(line))
 }

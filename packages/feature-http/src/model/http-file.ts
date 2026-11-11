@@ -1,3 +1,7 @@
+import { parseHttpOAuth2 } from "./oauth2"
+import { parseHttpScripts } from "./request-scripts"
+import { parseHttpExtractionValue } from "./chain-extractions"
+import { httpRequestDescription } from "./request-description"
 import { createHash } from "node:crypto"
 import type {
   HttpAssertionDefinition,
@@ -23,6 +27,8 @@ export { serializeHttpRequestBlock } from "./http-file-serialization"
 export type HttpFileRequestBlock = {
   blockId: string
   name: string
+  scripts?: HttpRequestDefinition["scripts"]
+  description?: string
   method: string
   url: string
   headers: Array<[string, string]>
@@ -95,6 +101,7 @@ function parsedAuth(lines: SourceLine[]): HttpAuth | undefined {
   if (!source) return undefined
   try {
     const value = JSON.parse(source) as Record<string, unknown>
+    if (value.kind === "oauth2") return parseHttpOAuth2(value)
     if (value.kind === "none") return { kind: "none" }
     if (value.kind === "bearer" && typeof value.token === "string") {
       return { kind: "bearer", token: value.token }
@@ -212,6 +219,11 @@ function parseSection(
   })
   const dependsOn = lines.map((line) => httpDirectiveValue(line.text, "depends")).find(Boolean)
   const extract = lines.flatMap((line): HttpChainExtraction[] => {
+    const valueSource = httpDirectiveValue(line.text, "extract-value")
+    if (valueSource !== null) {
+      const extraction = parseHttpExtractionValue(valueSource)
+      return extraction ? [extraction] : []
+    }
     const secretSource = httpDirectiveValue(line.text, "extract-secret")
     const publicSource = httpDirectiveValue(line.text, "extract")
     const source = secretSource ?? publicSource
@@ -234,6 +246,16 @@ function parseSection(
   return {
     blockId: stableBlockId,
     name,
+    ...httpRequestDescription(
+      lineSources
+        .slice(0, requestStart.index)
+        .map((line) => httpDirectiveValue(line, "description")),
+    ),
+    scripts: parseHttpScripts(
+      lineSources
+        .map((line) => httpDirectiveValue(line, "tuiminal-scripts"))
+        .find((value) => value !== null) ?? "",
+    ),
     method: requestStart.method,
     url: requestStart.url,
     headers: parsedHeaders.headers,
@@ -313,6 +335,8 @@ export function requestFromHttpFile(
       ...(block.editable ? {} : { rawText: block.rawText }),
     },
     name: block.name,
+    ...(block.scripts ? { scripts: block.scripts } : {}),
+    ...(block.description !== undefined ? { description: block.description } : {}),
     method: block.method,
     url: parsedUrl.url,
     query: block.query.length ? block.query : parsedUrl.query,

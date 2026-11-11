@@ -26,6 +26,7 @@ function urlSecretValues(value: string) {
 
 function authSecretValues(request: HttpRequestDefinition, variables: HttpVariableContext) {
   const auth = request.auth
+  if (auth.kind === "oauth2") return [resolved(auth.clientSecret, variables)]
   if (auth.kind === "bearer") return [resolved(auth.token, variables)]
   if (auth.kind === "api-key") return [resolved(auth.value, variables)]
   if (auth.kind !== "basic") return []
@@ -49,7 +50,10 @@ export function httpRequestSecretValues(
     ...(request.body.multipart ?? []),
   ]
   for (const item of structured) {
-    if (item.sensitivity !== "normal" || httpHeaderSensitivity(item.name) !== "normal")
+    if (
+      item.sensitivity !== "normal" ||
+      httpHeaderSensitivity(resolved(item.name, variables)) !== "normal"
+    )
       values.push(resolved(item.value, variables))
   }
   values.push(...authSecretValues(request, variables))
@@ -70,10 +74,10 @@ export function httpSensitiveHeaderNames(
           entry.enabled &&
           (entry.sensitivity !== "normal" || httpTemplateReferencesSecret(entry.value, variables)),
       )
-      .map((entry) => entry.name.trim().toLowerCase()),
+      .map((entry) => resolved(entry.name, variables).trim().toLowerCase()),
   )
   if (request.auth.kind === "api-key" && request.auth.placement === "header") {
-    names.add(request.auth.name.toLowerCase())
+    names.add(resolved(request.auth.name, variables).trim().toLowerCase())
   }
   for (const [name] of headers) {
     if (httpHeaderSensitivity(name) !== "normal") {

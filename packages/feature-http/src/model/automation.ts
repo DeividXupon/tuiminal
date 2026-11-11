@@ -1,5 +1,5 @@
 import { isHttpAssertionExpressionSupported } from "./assertions"
-import { isValidHttpJsonPathExpression } from "./response"
+import { validateHttpExtraction } from "./chain-extractions"
 import type { HttpAssertionDefinition, HttpChainExtraction, HttpRequestDefinition } from "./types"
 
 function uniqueId(requestId: string, kind: "assertion" | "extraction") {
@@ -10,10 +10,15 @@ export function createHttpAssertionDraft(requestId: string): HttpAssertionDefini
   return { id: uniqueId(requestId, "assertion"), expression: "status == 200" }
 }
 
-export function createHttpExtractionDraft(requestId: string): HttpChainExtraction {
+export function createHttpExtractionDraft(
+  requestId: string,
+  names: readonly string[] = [],
+): HttpChainExtraction {
+  let number = 1
+  while (names.includes(`value_${number}`)) number += 1
   return {
     id: uniqueId(requestId, "extraction"),
-    name: `value_${Date.now().toString(36)}`,
+    name: `value_${number}`,
     jsonPath: "$.value",
     secret: false,
   }
@@ -27,18 +32,9 @@ export function validateHttpRequestAutomation(request: HttpRequestDefinition) {
     return `Assertion inválida: ${invalidAssertion.expression || "(vazia)"}.`
   }
 
-  const names = new Set<string>()
   for (const extraction of request.chain?.extract ?? []) {
-    if (!/^[A-Za-z_$][\w$.-]*$/.test(extraction.name)) {
-      return `Nome de variável extraída inválido: ${extraction.name || "(vazio)"}.`
-    }
-    if (names.has(extraction.name)) {
-      return `A variável extraída ${extraction.name} está duplicada.`
-    }
-    names.add(extraction.name)
-    if (!isValidHttpJsonPathExpression(extraction.jsonPath)) {
-      return `JSONPath inválido na extração ${extraction.name}.`
-    }
+    const error = validateHttpExtraction(extraction, request.chain?.extract ?? [])
+    if (error) return error
   }
   return null
 }

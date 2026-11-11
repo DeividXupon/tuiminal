@@ -59,13 +59,15 @@ function redactEntry<T extends HttpKeyValue | HttpMultipartPart>(
 
 function redactedRequest(request: HttpRequestDefinition, secrets: readonly string[]) {
   const auth =
-    request.auth.kind === "bearer"
-      ? { ...request.auth, token: "<redacted>" as const }
-      : request.auth.kind === "basic"
-        ? { ...request.auth, password: "<redacted>" as const }
-        : request.auth.kind === "api-key"
-          ? { ...request.auth, value: "<redacted>" as const }
-          : request.auth
+    request.auth.kind === "oauth2"
+      ? { ...request.auth, clientSecret: "<redacted>" }
+      : request.auth.kind === "bearer"
+        ? { ...request.auth, token: "<redacted>" as const }
+        : request.auth.kind === "basic"
+          ? { ...request.auth, password: "<redacted>" as const }
+          : request.auth.kind === "api-key"
+            ? { ...request.auth, value: "<redacted>" as const }
+            : request.auth
   return {
     ...request,
     url: redactHttpUrlSecrets(request.url, secrets),

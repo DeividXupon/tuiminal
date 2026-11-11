@@ -13,8 +13,10 @@ describe("HTTP horizontal navigation hierarchy", () => {
     expect(nestedHttpViewCycleDirection({ name: "z" })).toBe(-1)
     expect(nestedHttpViewCycleDirection({ name: "v" })).toBe(1)
     expect(nestedHttpViewCycleDirection({ name: "v", shift: true })).toBeNull()
-    expect(nextHttpAuthKind("none", -1)).toBe("api-key")
-    expect(nextHttpRequestMoreView("preview", 1)).toBe("options")
+    expect(nextHttpAuthKind("none", -1)).toBe("oauth2")
+    expect(nextHttpRequestMoreView("preview", 1)).toBe("docs")
+    expect(nextHttpRequestMoreView("docs", 1)).toBe("options")
+    expect(nextHttpRequestMoreView("options", -1)).toBe("docs")
     expect(nextHttpResponseMoreView("summary", -1)).toBe("console")
   })
 

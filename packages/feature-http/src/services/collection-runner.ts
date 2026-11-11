@@ -1,10 +1,14 @@
+import { authorizeHttpRequest } from "./oauth2-session"
+import { carryHttpScriptScopes, retainHttpScriptVariables } from "./script-scopes"
+import { runHttpScriptPhase, runHttpPostScript, HttpScriptExecutionError } from "./request-scripts"
 import { readFile, realpath, stat } from "node:fs/promises"
 import { resolve, sep } from "node:path"
 import { evaluateHttpAssertions } from "../model/assertions"
 import { redactHttpDiagnostic, redactHttpHistoryUrl } from "../model/history"
 import { HTTP_ENVIRONMENT_PREPARATION_ERROR } from "../model/history-privacy"
 import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
-import { evaluateHttpJsonPath } from "../model/response"
+import { planHttpRequestChain } from "../model/chaining"
+import { evaluateHttpExtraction, httpExtractionIsSecret } from "../model/chain-extractions"
 import {
   combineHttpPrivacy,
   httpRequestSecretValues,
@@ -23,7 +27,6 @@ import type {
 } from "../model/types"
 import { executePreparedHttpRequest, HttpExecutionError } from "./fetch-transport"
 import { HttpRequestValidationError, prepareHttpRequest } from "./request-builder"
-import { responseBodyText } from "./response-reader"
 import { HttpCookieJar, HttpCookieJarStore, type HttpCookieJarResolver } from "./cookies"
 import {
   httpInsecureTlsApproval,
@@ -38,51 +41,14 @@ export type HttpRunItem = {
   method: string
   url: string
   response?: HttpResponseSnapshot
-  error?: { kind: HttpFailureKind; message: string; approval?: HttpInsecureTlsApproval }
+  error?: {
+    kind: HttpFailureKind
+    message: string
+    approval?: HttpInsecureTlsApproval
+  }
 }
 
 export type HttpRunCase = { name: string; items: HttpRunItem[] }
-
-function requestSelector(item: HttpProjectRequestItem) {
-  return item.request.source.kind === "file"
-    ? (item.request.source.blockId.split("#").at(-1) ?? item.request.name)
-    : item.request.name
-}
-
-function selectedRequests(items: HttpProjectRequestItem[], selector?: string) {
-  const selected = selector
-    ? items.find(
-        (item) =>
-          item.request.id === selector ||
-          item.request.name === selector ||
-          requestSelector(item) === selector,
-      )
-    : undefined
-  if (selector && !selected) throw new Error(`Request não encontrado: ${selector}.`)
-  const included = new Set<string>()
-  const visiting = new Set<string>()
-  const ordered: HttpProjectRequestItem[] = []
-  const visit = (item: HttpProjectRequestItem) => {
-    const id = item.request.id
-    if (included.has(id)) return
-    if (visiting.has(id)) throw new Error(`Ciclo de dependência detectado em ${item.request.name}.`)
-    visiting.add(id)
-    const dependency = item.request.chain?.dependsOn
-    if (dependency) {
-      const parent = items.find(
-        (candidate) =>
-          candidate.request.name === dependency || requestSelector(candidate) === dependency,
-      )
-      if (!parent) throw new Error(`Dependência não encontrada: ${dependency}.`)
-      visit(parent)
-    }
-    visiting.delete(id)
-    included.add(id)
-    ordered.push(item)
-  }
-  for (const target of selected ? [selected] : items) visit(target)
-  return ordered
-}
 
 function chainedContext(base: HttpVariableContext, extracted: Map<string, HttpVariableValue>) {
   const context = new Map(base)
@@ -96,11 +62,12 @@ function runnerContext(
   extracted: Map<string, HttpVariableValue>,
   variablesForRequest?: (request: HttpRequestDefinition) => HttpVariableContext,
 ) {
-  const context = new Map(variablesForRequest?.(request) ?? variables)
+  const base = variablesForRequest?.(request) ?? variables
+  const context = new Map(base)
   if (variablesForRequest) {
     for (const [name, value] of variables) context.set(name, value)
   }
-  return chainedContext(context, extracted)
+  return carryHttpScriptScopes(base, chainedContext(context, extracted))
 }
 
 export function redactHttpRunUrl(
@@ -151,16 +118,13 @@ function extractVariables(
   values: Map<string, HttpVariableValue>,
 ) {
   if (!request.chain?.extract.length) return
-  const body = responseBodyText(response, false)
   for (const extraction of request.chain.extract) {
-    const value = evaluateHttpJsonPath(body, extraction.jsonPath)
-    if (value === undefined || (value !== null && typeof value === "object")) {
-      throw new Error(`Extração ${extraction.name} não produziu um valor escalar.`)
-    }
+    if (extraction.enabled === false) continue
+    const value = evaluateHttpExtraction(extraction, response)
     values.set(extraction.name, {
-      value: value === null ? "null" : String(value),
+      value,
       origin: "request",
-      secret: extraction.secret,
+      secret: httpExtractionIsSecret(extraction),
     })
   }
 }
@@ -214,7 +178,7 @@ export async function runHttpCollectionCase({
   isInsecureTlsApproved?: (approval: HttpInsecureTlsApproval) => boolean
   authorizeRedirect?: HttpRedirectAuthorizer
 }): Promise<HttpRunCase> {
-  const selected = selectedRequests(items, selector)
+  const selected = planHttpRequestChain(items, selector)
   const results: HttpRunItem[] = []
   const extracted = new Map<string, HttpVariableValue>()
   const scopedCookieJars = new HttpCookieJarStore()
@@ -222,7 +186,7 @@ export async function runHttpCollectionCase({
 
   for (const item of selected) {
     if (signal?.aborted) break
-    const request = item.request
+    let request = item.request
     const activeCookieJar =
       cookieJarForRequest?.(request) ??
       cookieJar ??
@@ -233,6 +197,13 @@ export async function runHttpCollectionCase({
     try {
       context = runnerContext(request, variables, extracted, variablesForRequest)
       contextReady = true
+      const originalContext = context
+      const before = await runHttpScriptPhase("preRequest", request, context, undefined, signal)
+      request = before.request
+      context = before.variables
+      contextReady = true
+      privacy = combineHttpPrivacy(privacy, requestHttpPrivacy(request, context))
+      request = await authorizeHttpRequest(request, context, root, environmentName, signal)
       privacy = combineHttpPrivacy(privacy, requestHttpPrivacy(request, context))
       const requestSecrets = httpRequestSecretValues(request, context)
       const executionId = `http-run-${Date.now()}-${results.length}`
@@ -248,9 +219,20 @@ export async function runHttpCollectionCase({
               authorizeRedirect(Object.freeze({ ...approval, environmentName }), signal)
           : undefined,
       )
+      const after = await runHttpPostScript(request, context, received, signal)
+      privacy = combineHttpPrivacy(privacy, requestHttpPrivacy(request, after.variables))
+      retainHttpScriptVariables(originalContext, after.variables, extracted)
       const response = {
         ...received,
-        assertions: evaluateRedactedAssertions(request, received, context, requestSecrets),
+        assertions: [
+          ...evaluateRedactedAssertions(request, received, context, requestSecrets),
+          ...before.assertions,
+          ...after.assertions,
+        ].map((test) => ({
+          ...test,
+          expression: privacy.redactText(test.expression),
+          message: privacy.redactText(test.message),
+        })),
       }
       privacy = combineHttpPrivacy(privacy, received.privacy)
       extractVariables(request, response, extracted)
@@ -268,6 +250,7 @@ export async function runHttpCollectionCase({
         response: { ...response, privacy },
       })
     } catch (error) {
+      if (error instanceof HttpScriptExecutionError) context = error.variables
       privacy = combineHttpPrivacy(
         privacy,
         error instanceof HttpExecutionError ? error.privacy : undefined,

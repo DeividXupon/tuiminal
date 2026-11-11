@@ -251,6 +251,33 @@ describe(".http project model", () => {
     ])
   })
 
+  test("preserves explicitly named empty-URL drafts without accepting opaque protocols", () => {
+    const source =
+      '### Draft\n# @name draft\nPOST \nContent-Type: application/json\nX-Draft: yes\n\n{"draft":true}\n'
+    const file = parseHttpFile(source, "draft.http")
+    expect(file.requests).toHaveLength(1)
+    expect(file.requests[0]).toMatchObject({ method: "POST", url: "", editable: true })
+    const block = file.requests[0]
+    if (!block) throw new Error("Missing draft block")
+    const request = requestFromHttpFile(file, block)
+    expect(request.body.text).toBe('{"draft":true}')
+    expect(() => prepareHttpRequest(request, "draft", 0)).toThrow("Informe uma URL")
+    const roundtrip = parseHttpFile(serializeHttpRequestBlock(request), "draft.http")
+    const restored = roundtrip.requests[0]
+    if (!restored) throw new Error("Missing serialized draft block")
+    expect(requestFromHttpFile(roundtrip, restored)).toMatchObject({
+      method: request.method,
+      url: request.url,
+      headers: request.headers,
+      body: request.body,
+    })
+    expect(parseHttpFile("GET\n", "unnamed.http").requests).toHaveLength(0)
+    for (const method of ["GRAPHQL", "GRPC", "WEBSOCKET"]) {
+      const opaque = parseHttpFile(`# @name opaque\n${method}\n`, "opaque.http")
+      expect(opaque.requests[0]?.editable).toBe(false)
+    }
+  })
+
   test("keeps documented but unsupported JetBrains syntax opaque with exact raw text", async () => {
     for (const fixture of [
       "jetbrains-opaque-directives.http",
@@ -1153,8 +1180,8 @@ describe("cURL interoperability", () => {
   })
 })
 
-describe("project-scoped request bodies", () => {
-  test("prepares file and multipart bodies only from files inside the project", async () => {
+describe("request body files", () => {
+  test("preserves relative paths for file and multipart bodies", async () => {
     const root = await temporaryProject()
     await writeFile(resolve(root, "payload.txt"), "hello")
     const request = createScratchRequest("file-body", "example.test/upload")
@@ -1193,19 +1220,23 @@ describe("project-scoped request bodies", () => {
     expect((multipart.body as FormData).get("upload")).toBeInstanceOf(Blob)
   })
 
-  test("blocks traversal and symlinks that resolve outside the project", async () => {
+  test("accepts files outside the project and symlinks to them", async () => {
     const root = await temporaryProject()
     const outside = await temporaryProject()
-    await writeFile(resolve(outside, "secret.txt"), "secret")
-    await symlink(resolve(outside, "secret.txt"), resolve(root, "linked.txt"))
-    const request = createScratchRequest("blocked-file", "example.test/upload")
+    await writeFile(resolve(outside, "payload.txt"), "external fixture")
+    await symlink(resolve(outside, "payload.txt"), resolve(root, "linked.txt"))
+    const request = createScratchRequest("external-file", "example.test/upload")
     request.method = "POST"
     request.body = { kind: "file", text: "", form: [], filePath: "linked.txt" }
-    expect(() => prepareHttpRequest(request, "blocked", 0, undefined, root)).toThrow(
-      "permanecer dentro do projeto",
-    )
-    request.body.filePath = "../secret.txt"
-    expect(() => prepareHttpRequest(request, "blocked", 0, undefined, root)).toThrow()
+    const linked = prepareHttpRequest(request, "linked", 0, undefined, root)
+    expect(await (linked.body as Blob).text()).toBe("external fixture")
+    request.body.filePath = resolve(outside, "payload.txt")
+    const absolute = prepareHttpRequest(request, "absolute", 0)
+    expect(await (absolute.body as Blob).text()).toBe("external fixture")
+    request.body.filePath = outside
+    expect(() => prepareHttpRequest(request, "directory", 0)).toThrow("não aponta para um arquivo")
+    request.body.filePath = ""
+    expect(() => prepareHttpRequest(request, "empty", 0)).toThrow("Selecione um arquivo")
   })
 })
 

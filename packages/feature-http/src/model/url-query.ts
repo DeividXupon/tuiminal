@@ -48,13 +48,12 @@ export function applyHttpUrlQueryEdit(source: string, entries: HttpKeyValue[], r
 
 export function urlVariableCompletion(source: string, cursor: number, names: readonly string[]) {
   const before = source.slice(0, cursor)
-  const match = before.match(/\{\{?([\w$.-]*)$/u)
+  const match = before.match(/\{\{([\w$.-]*)$/u)
   if (!match) return null
   const prefix = match[1] ?? ""
   const start = cursor - match[0].length
-  const suggestions = names
-    .filter((name) => name.toLowerCase().startsWith(prefix.toLowerCase()))
-    .slice(0, 4)
+  const suggestions = names.filter((name) => name.toLowerCase().startsWith(prefix.toLowerCase()))
+
   return suggestions.length ? { start, end: cursor, suggestions } : null
 }
 

@@ -1,3 +1,4 @@
+import type { HttpOAuth2Auth } from "./oauth2"
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const
 
 export type HttpMethod = (typeof HTTP_METHODS)[number] | (string & {})
@@ -10,9 +11,9 @@ export type HttpClientProps = {
   tutorialMode?: boolean
 }
 export type HttpPane = "url" | "navigation" | "request" | "response"
-export type HttpNavigationView = "collection" | "history"
-export type HttpRequestView = "params" | "headers" | "body" | "auth" | "more"
-export type HttpRequestMoreView = "options" | "assertions" | "chaining" | "preview"
+export type HttpNavigationView = "collection" | "environments"
+export type HttpRequestView = "params" | "headers" | "body" | "auth" | "scripts" | "more"
+export type HttpRequestMoreView = "options" | "assertions" | "chaining" | "preview" | "docs"
 export type HttpResponseView = "pretty" | "raw" | "headers" | "timing" | "more"
 export type HttpResponseMoreView = "summary" | "cookies" | "redirects" | "assertions" | "console"
 export type HttpWorkspaceOverlay =
@@ -31,7 +32,7 @@ export type HttpWorkspaceOverlay =
   | "environment-manager"
   | "insecure-tls-confirmation"
   | null
-export type HttpJumpTarget = "url" | "response" | "collection" | "history"
+export type HttpJumpTarget = "url" | "response" | "collection" | "environments"
 export type HttpBodyKind = "none" | "json" | "text" | "xml" | "form" | "multipart" | "file"
 export type HttpResponseBodyKind = "text" | "json" | "xml" | "html" | "binary"
 export type HttpFailureKind =
@@ -62,6 +63,7 @@ export type HttpKeyValue = {
 }
 
 export type HttpAuth =
+  | HttpOAuth2Auth
   | { kind: "none" }
   | { kind: "bearer"; token: string }
   | { kind: "basic"; username: string; password: string }
@@ -85,9 +87,18 @@ export type HttpAssertionResult = {
   message: string
 }
 
-export type HttpChainExtraction = { id?: string; name: string; jsonPath: string; secret: boolean }
+export type HttpChainExtraction = {
+  id?: string
+  name: string
+  jsonPath: string
+  secret: boolean
+  source?: "jsonpath" | "header" | "status"
+  enabled?: boolean
+}
 
 export type HttpRequestDefinition = {
+  inheritedScripts?: Array<{ preRequest: string; postResponse: string }>
+
   id: string
   source:
     | { kind: "scratch" }
@@ -98,9 +109,18 @@ export type HttpRequestDefinition = {
         sourceHash: string
         supported?: boolean
         rawText?: string
+        /** API-backed editor identity; this source is never a local file. */
+        postman?: {
+          collectionId: string
+          collectionName: string
+          requestId: string
+          baseline: string
+        }
       }
   name: string
   method: HttpMethod
+  scripts?: { preRequest: string; postResponse: string }
+  description?: string
   url: string
   query: HttpKeyValue[]
   path: HttpKeyValue[]
@@ -262,6 +282,8 @@ export type HttpHistoryEntry = {
 }
 
 export type HttpWorkspaceState = {
+  collectionDocuments: HttpCollectionSettingsDocument[]
+  environmentDocuments: import("./environment-document-types").HttpEnvironmentDocument[]
   documents: HttpDocumentState[]
   activeDocumentId: string
   activePane: HttpPane
@@ -270,4 +292,38 @@ export type HttpWorkspaceState = {
   overlay: HttpWorkspaceOverlay
   history: HttpHistoryEntry[]
   historySelection: string[]
+}
+
+export type HttpCollectionSettingsTarget = {
+  id: string
+  path: string
+  name: string
+  kind?: "file" | "folder" | "directory"
+  folderId?: string
+}
+export type HttpCollectionAuth =
+  | HttpAuth
+  | { kind: "inherit" }
+  | { kind: "unsupported"; type: string }
+export type HttpCollectionSettingsData = {
+  auth: HttpCollectionAuth
+  scripts: NonNullable<HttpRequestDefinition["scripts"]>
+  variables: Array<{
+    id: string
+    name: string
+    value: string
+    enabled: boolean
+    metadata?: Record<string, unknown>
+  }>
+}
+export type HttpCollectionSettingsDocument = HttpCollectionSettingsData & {
+  id: string
+  target: HttpCollectionSettingsTarget
+  tab: "authorization" | "scripts" | "variables"
+  baseline: string
+  revision: number
+  savedRevision: number
+  loading?: boolean
+  busy?: boolean
+  error?: string
 }

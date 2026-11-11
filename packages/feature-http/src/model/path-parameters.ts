@@ -28,8 +28,10 @@ export function resolveHttpPathParameters(
 ) {
   const parameters = new Map<string, string>()
   for (const entry of entries) {
-    if (entry.enabled && entry.name.trim() && !parameters.has(entry.name)) {
-      parameters.set(entry.name, entry.value)
+    if (!entry.enabled || !entry.name.trim()) continue
+    const name = resolveHttpTemplate(entry.name, variables)
+    if (name.trim() && !parameters.has(name)) {
+      parameters.set(name, entry.value)
     }
   }
   const resolved = resolveHttpTemplate(source, variables).trim()

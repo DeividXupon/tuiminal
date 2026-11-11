@@ -48,6 +48,8 @@ for (const layout of ["compact", "framed"]) {
             TERM: "xterm-256color",
             COLORTERM: "truecolor",
             XDG_CONFIG_HOME: config,
+            XDG_DATA_HOME: resolve(root, "data"),
+            TUIMINAL_HTTP_HOME: resolve(root, "http"),
             TUIMINAL_TEST_SKIP_STARTUP: "1",
             TUIMINAL_SOURCE_FEATURES: "1",
           },
@@ -75,12 +77,17 @@ for (const layout of ["compact", "framed"]) {
         await Bun.sleep(100)
       }
       try {
+        await waitFor(() => Bun.stripANSI(output).includes("ESCOLHA A ORIGEM HTTP"))
+        await send("l")
+        await waitFor(() => Bun.stripANSI(output).includes("Escolha uma chamada"))
+        await send("\x0e")
         await waitFor(() => Bun.stripANSI(output).includes("Scratch"))
         // Fresh HTTP workspaces focus the URL input. Leave it before invoking the
         // global focus shortcut, otherwise "/" becomes part of the request URL.
         await send("\x1b")
         await send("/")
         await send(`http://127.0.0.1:${source.port}/start`)
+        await waitFor(() => Bun.stripANSI(output).includes(`${source.port}/start`))
         await send("\x1b")
         output = ""
         await send("s")

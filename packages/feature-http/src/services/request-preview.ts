@@ -1,3 +1,4 @@
+import { oauthPreviewAuth } from "../model/oauth2"
 import { httpHeaderSensitivity } from "../model/key-value"
 import { sanitizeTerminalText } from "../model/response"
 import {
@@ -62,16 +63,21 @@ function enabledHeaders(request: HttpRequestDefinition, variables: HttpVariableC
     .filter((entry) => entry.enabled && entry.name.trim())
     .map((entry) => ({
       entry,
-      name: entry.name.trim(),
+      name: resolveHttpTemplate(entry.name, variables).trim(),
       value: resolveHttpTemplate(entry.value, variables),
       used: false,
     }))
 }
 
-function authHeaderName(request: HttpRequestDefinition) {
-  if (request.auth.kind === "bearer" || request.auth.kind === "basic") return "authorization"
+function authHeaderName(request: HttpRequestDefinition, variables: HttpVariableContext) {
+  if (
+    request.auth.kind === "oauth2" ||
+    request.auth.kind === "bearer" ||
+    request.auth.kind === "basic"
+  )
+    return "authorization"
   if (request.auth.kind === "api-key" && request.auth.placement === "header") {
-    return request.auth.name.toLowerCase()
+    return resolveHttpTemplate(request.auth.name, variables).trim().toLowerCase()
   }
   return null
 }
@@ -100,7 +106,7 @@ function previewHeaders(
   secretValues: readonly string[],
 ) {
   const candidates = enabledHeaders(request, variables)
-  const authName = authHeaderName(request)
+  const authName = authHeaderName(request, variables)
   let authAssigned = false
   return prepared.headers.map(([name, value], index) => {
     if (!authAssigned && authName === name.toLowerCase()) {
@@ -133,13 +139,23 @@ function previewHeaders(
 
 function requestTemplateSources(request: HttpRequestDefinition) {
   const auth =
-    request.auth.kind === "bearer"
-      ? [request.auth.token]
-      : request.auth.kind === "basic"
-        ? [request.auth.username, request.auth.password]
-        : request.auth.kind === "api-key"
-          ? [request.auth.name, request.auth.value]
-          : []
+    request.auth.kind === "oauth2"
+      ? [
+          request.auth.tokenUrl,
+          request.auth.authorizationUrl,
+          request.auth.clientId,
+          request.auth.clientSecret,
+          request.auth.scope,
+          request.auth.audience,
+          request.auth.redirectUri,
+        ]
+      : request.auth.kind === "bearer"
+        ? [request.auth.token]
+        : request.auth.kind === "basic"
+          ? [request.auth.username, request.auth.password]
+          : request.auth.kind === "api-key"
+            ? [request.auth.name, request.auth.value]
+            : []
   return [
     request.url,
     request.body.text,
@@ -248,7 +264,7 @@ export function createHttpPreparedRequestPreview({
   const secretValues = httpRequestSecretValues(effectiveRequest, variables)
   try {
     const prepared = prepareHttpRequest(
-      effectiveRequest,
+      { ...effectiveRequest, auth: oauthPreviewAuth(effectiveRequest.auth) },
       "request-preview",
       revision,
       variables,

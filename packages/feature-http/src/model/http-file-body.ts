@@ -53,7 +53,9 @@ function parsedMultipartBody(
     .split(`--${boundary}`)
     .map((part, index) => parsedMultipartPart(part, index, block.blockId))
     .filter((part): part is HttpMultipartPart => part !== null)
-  return multipart.length ? { kind: "multipart", text: "", form: [], multipart } : null
+  return multipart.length || block.body.trim() === `--${boundary}--`
+    ? { kind: "multipart", text: "", form: [], multipart }
+    : null
 }
 
 export function parseHttpRequestBody(block: ParsedBodyBlock): HttpRequestDefinition["body"] {
@@ -81,7 +83,12 @@ export function parseHttpRequestBody(block: ParsedBodyBlock): HttpRequestDefinit
 }
 
 function serializedMultipartBody(request: HttpRequestDefinition, eol: string) {
-  const boundary = `TuiminalBoundary${request.id.replace(/[^a-z0-9]/gi, "").slice(-12)}`
+  const contentType = request.headers.find(
+    (header) => header.enabled && header.name.toLowerCase() === "content-type",
+  )
+  const boundary =
+    multipartBoundary(contentType?.value) ??
+    `TuiminalBoundary${request.id.replace(/[^a-z0-9]/gi, "").slice(-12)}`
   const parts = (request.body.multipart ?? []).filter((part) => part.enabled && part.name.trim())
   const body = parts
     .flatMap((part) => [
@@ -94,11 +101,12 @@ function serializedMultipartBody(request: HttpRequestDefinition, eol: string) {
     ])
     .concat(`--${boundary}--`)
     .join(eol)
-  const hasContentType = request.headers.some(
-    (header) => header.name.toLowerCase() === "content-type",
-  )
-  const headers = hasContentType
-    ? request.headers
+  const headers = contentType
+    ? request.headers.map((header) =>
+        header.enabled && header.name.toLowerCase() === "content-type"
+          ? { ...header, value: `multipart/form-data; boundary=${boundary}` }
+          : header,
+      )
     : [
         ...request.headers,
         {
@@ -119,7 +127,21 @@ export function serializeHttpRequestBody(request: HttpRequestDefinition, eol: st
     for (const entry of request.body.form) {
       if (entry.enabled && entry.name.trim()) params.append(entry.name, entry.value)
     }
-    return { headers: request.headers, body: params.toString() }
+    const headers = request.headers.some(
+      (header) => header.enabled && header.name.toLowerCase() === "content-type",
+    )
+      ? request.headers
+      : [
+          ...request.headers,
+          {
+            id: `${request.id}-form-content-type`,
+            enabled: true,
+            name: "Content-Type",
+            value: "application/x-www-form-urlencoded",
+            sensitivity: "normal" as const,
+          },
+        ]
+    return { headers, body: params.toString() }
   }
   if (request.body.kind === "file") {
     return { headers: request.headers, body: `< ${request.body.filePath ?? ""}` }

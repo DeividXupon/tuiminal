@@ -91,6 +91,7 @@ function assertNoLiteralProjectSecrets(request: HttpRequestDefinition) {
   ]
     .filter((entry) => entry.sensitivity === "literal-secret")
     .map((entry) => entry.value)
+  if (request.auth.kind === "oauth2") secretValues.push(request.auth.clientSecret)
   if (request.auth.kind === "bearer") secretValues.push(request.auth.token)
   if (request.auth.kind === "basic") secretValues.push(request.auth.password)
   if (request.auth.kind === "api-key") secretValues.push(request.auth.value)

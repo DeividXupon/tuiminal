@@ -40,7 +40,6 @@ function collectionRunnerCommand(key: OverlayKey, focusedId: string): OverlayCom
   }
   if (key.name === "t") return { kind: "cycle-runner-target" }
   if (key.name === "c") return { kind: "cycle-runner-concurrency" }
-  if (key.name === "x") return { kind: "apply-overlay" }
   if (key.name === "i") return { kind: "approve-runner-insecure-tls" }
   return closesOverlay(key) ? { kind: "close-overlay" } : { kind: "ignore" }
 }

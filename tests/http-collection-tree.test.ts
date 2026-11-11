@@ -90,3 +90,33 @@ describe("HTTP method cycling", () => {
     expect(nextHttpMethod("CUSTOM", 1)).toBe("GET")
   })
 })
+
+test("uses exact collection names for display and search while retaining file identities", () => {
+  const path = "postman/b8-caas---dashboard.http"
+  const name = "B8 CaaS - Dashboard"
+  const files = [
+    { path, name },
+    { path: "postman/empty.http", name: "Vazio / São Paulo [A]" },
+    { path: "postman/copy.http", name },
+  ]
+  const requests = [item(path, "list", "List users")]
+  const rows = buildHttpCollectionTree(requests, new Set([`file:${path}`]), "", [], files, [], true)
+  expect(rows.map((row) => [row.id, row.kind === "file" && row.name])).toEqual([
+    [`file:${path}`, name],
+    ["file:postman/copy.http", name],
+    ["file:postman/empty.http", "Vazio / São Paulo [A]"],
+  ])
+  const matches = buildHttpCollectionTree(requests, new Set(), name, [], files, [], true)
+  expect(matches.map((row) => row.id)).toEqual([
+    `file:${path}`,
+    "request:list",
+    "file:postman/copy.http",
+  ])
+  const empty = buildHttpCollectionTree(requests, new Set(), "são paulo [a]", [], files, [], true)
+  expect(empty).toMatchObject([
+    { id: "file:postman/empty.http", name: "Vazio / São Paulo [A]", requestCount: 0 },
+  ])
+  expect(buildHttpCollectionTree([], new Set(), "", [], [{ path: "local.http" }])).toMatchObject([
+    { name: "local.http" },
+  ])
+})

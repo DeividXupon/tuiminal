@@ -1,12 +1,20 @@
+import { defaultHttpOAuth2 } from "./oauth2"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import type { HttpAuth, HttpRequestMoreView, HttpResponseMoreView, HttpResponseView } from "./types"
 
-export const HTTP_AUTH_KINDS: readonly HttpAuth["kind"][] = ["none", "bearer", "basic", "api-key"]
+export const HTTP_AUTH_KINDS: readonly HttpAuth["kind"][] = [
+  "none",
+  "bearer",
+  "basic",
+  "api-key",
+  "oauth2",
+]
 export const HTTP_REQUEST_MORE_VIEWS: readonly HttpRequestMoreView[] = [
   "options",
   "assertions",
   "chaining",
   "preview",
+  "docs",
 ]
 export const HTTP_RESPONSE_VIEWS: readonly HttpResponseView[] = [
   "pretty",
@@ -43,6 +51,7 @@ export function nextHttpAuthKind(current: HttpAuth["kind"], direction: -1 | 1) {
 }
 
 export function httpAuthForKind(kind: HttpAuth["kind"]): HttpAuth {
+  if (kind === "oauth2") return defaultHttpOAuth2()
   if (kind === "bearer") return { kind, token: "" }
   if (kind === "basic") return { kind, username: "", password: "" }
   if (kind === "api-key") {

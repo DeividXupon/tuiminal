@@ -18,12 +18,12 @@ import type {
 export function contextualNavigationCommand(
   key: HttpKey,
   activePane: HttpPane,
-  navigationView: "collection" | "history",
+  navigationView: "collection" | "environments",
 ): HttpKeyboardCommand | null {
   if (activePane !== "navigation" || navigationView !== "collection") return null
   if (key.name === "f") return { kind: "focus-collection-search" }
-  if (key.name === "i") return { kind: "open-overlay", overlay: "collection-import" }
-  if (key.name === "r") return { kind: "open-overlay", overlay: "collection-runner" }
+  if (!key.ctrl && !key.meta && !key.option && ["i", "r", "o", "n", "p", "d"].includes(key.name))
+    return { kind: "ignore" }
   return null
 }
 
@@ -42,7 +42,6 @@ function nestedRequestCommand(key: HttpKey, requestView: HttpRequestView) {
 function requestMoreCommand(
   key: HttpKey,
   requestMoreView: HttpRequestMoreView,
-  running: boolean,
 ): HttpKeyboardCommand | null {
   const direction = nestedHttpViewCycleDirection(key)
   if (direction) {
@@ -54,22 +53,9 @@ function requestMoreCommand(
   if (key.name === "n" && ["assertions", "chaining"].includes(requestMoreView)) {
     return { kind: "add-automation-row" }
   }
-  if (requestMoreView === "options" && key.name === "t") return { kind: "cycle-request-timeout" }
-  if (requestMoreView === "options" && key.name === "r") {
-    return { kind: "toggle-request-redirects" }
-  }
-  if (requestMoreView === "options" && key.shift && key.name === "l") {
-    return { kind: "toggle-request-no-log" }
-  }
-  if (requestMoreView === "options" && key.name === "c") {
-    return { kind: "toggle-request-cookie-jar" }
-  }
-  if (requestMoreView === "options" && key.shift && key.name === "v") {
-    return { kind: "toggle-request-tls-verification" }
-  }
+  if (["options", "docs"].includes(requestMoreView)) return null
   if (key.name === "i") return { kind: "open-overlay", overlay: "curl-import" }
-  if (key.name === "x" && !running) return { kind: "open-overlay", overlay: "curl-export" }
-  return key.name === "d" && requestMoreView === "options" ? { kind: "duplicate-document" } : null
+  return null
 }
 
 export function contextualRequestCommand(
@@ -77,12 +63,20 @@ export function contextualRequestCommand(
   activePane: HttpPane,
   requestView: HttpRequestView,
   requestMoreView: HttpRequestMoreView,
-  running: boolean,
 ): HttpKeyboardCommand | null {
   if (activePane !== "request") return null
+  if (
+    !key.ctrl &&
+    !key.meta &&
+    !key.option &&
+    (requestView === "auth" || (requestView === "more" && requestMoreView !== "docs")) &&
+    ["enter", "return"].includes(key.name)
+  ) {
+    return { kind: "focus-request-form" }
+  }
   const nested = nestedRequestCommand(key, requestView)
   if (nested) return nested
-  return requestView === "more" ? requestMoreCommand(key, requestMoreView, running) : null
+  return requestView === "more" ? requestMoreCommand(key, requestMoreView) : null
 }
 
 export function contextualResponseCommand(

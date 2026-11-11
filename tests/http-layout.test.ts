@@ -59,6 +59,42 @@ describe("HTTP adaptive layout", () => {
     expect(resizeHttpSplitRatio(0.25, -1)).toBe(0.25)
   })
 
+  test.each([96, 120, 132, 140, 160, 220])(
+    "widens focused navigation at %i columns while reserving usable editors",
+    (width) => {
+      for (const splitRatio of [0.25, 0.5, 0.7]) {
+        const options = { width, height: 30, contentHeight: 20, splitRatio }
+        const resting = resolveHttpLayout(options)
+        const focused = resolveHttpLayout({ ...options, navigationFocused: true })
+        expect(focused.mode).toBe(resting.mode)
+        expect(focused.navigation.width).toBeGreaterThan(resting.navigation.width)
+        expect(focused.navigation.width).toBeLessThanOrEqual(56)
+        expect(focused.request.width).toBeGreaterThanOrEqual(42)
+        expect(focused.response.width).toBeGreaterThanOrEqual(42)
+        expect(focused.navigation.height).toBe(resting.navigation.height)
+        expect(focused.navigation.width).toBeLessThan(focused.request.left)
+        expect(focused.response.left + focused.response.width).toBe(width)
+        expect(resolveHttpLayout({ ...options, navigationFocused: false })).toEqual(resting)
+      }
+    },
+  )
+
+  test.each([72, 80, 95])("widens the focused overlay within %i columns", (width) => {
+    const resting = resolveHttpLayout({ width, height: 24 })
+    const focused = resolveHttpLayout({ width, height: 24, navigationFocused: true })
+    expect(focused.navigation.width).toBeGreaterThan(resting.navigation.width)
+    expect(focused.navigation.width).toBeLessThanOrEqual(width - 4)
+    expect(focused.request).toEqual(resting.request)
+    expect(focused.response).toEqual(resting.response)
+  })
+
+  test("keeps full-width navigation unchanged on minimum terminals", () => {
+    const options = { width: 52, height: 24 }
+    expect(resolveHttpLayout({ ...options, navigationFocused: true })).toEqual(
+      resolveHttpLayout(options),
+    )
+  })
+
   test.each([
     [60, 16],
     [72, 18],
@@ -69,10 +105,10 @@ describe("HTTP adaptive layout", () => {
   ] as const)(
     "keeps the complete workspace inside %ix%i in framed and compact layouts",
     (width, height) => {
-      for (const chrome of [
-        { appHeaderRows: 2, outerPadding: 1, spacing: 1 },
-        { appHeaderRows: 1, outerPadding: 0, spacing: 0 },
-      ]) {
+      for (const chrome of [false, true].flatMap((navigationFocused) => [
+        { appHeaderRows: 2, outerPadding: 1, spacing: 1, navigationFocused },
+        { appHeaderRows: 1, outerPadding: 0, spacing: 0, navigationFocused },
+      ])) {
         const { layout, bodyHeight } = resolveHttpWorkspaceLayout({
           terminalWidth: width,
           terminalHeight: height,

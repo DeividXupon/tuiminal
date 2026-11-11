@@ -1,7 +1,14 @@
 import type { HttpRequestView } from "./types"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 
-const HTTP_REQUEST_VIEWS: readonly HttpRequestView[] = ["params", "headers", "body", "auth", "more"]
+export const HTTP_REQUEST_VIEWS: readonly HttpRequestView[] = [
+  "params",
+  "headers",
+  "body",
+  "auth",
+  "scripts",
+  "more",
+]
 
 export function httpRequestViewCycleDirection(key: {
   name: string

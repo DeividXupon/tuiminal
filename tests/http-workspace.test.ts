@@ -127,7 +127,7 @@ describe("HTTP workspace state", () => {
       },
     }
     const content = httpResponseContent(state.documents[0]!, [])
-    expect(content).toContain("EXIBIÇÃO LIMITADA")
+    expect(content).toContain("LIMITED DISPLAY")
     expect(content.length).toBeLessThan(body.length)
   })
 
@@ -219,7 +219,7 @@ describe("HTTP workspace state", () => {
     expect(changed.documents[0]?.revision).toBe(0)
   })
 
-  test("enforces the document limit and never closes the final scratch", () => {
+  test("replaces the last tab at the document limit and never closes the final scratch", () => {
     let state = createHttpWorkspaceState(createScratchRequest("one"))
     for (let index = 2; index <= HTTP_DOCUMENT_LIMIT + 2; index += 1) {
       state = httpWorkspaceReducer(state, {
@@ -228,11 +228,46 @@ describe("HTTP workspace state", () => {
       })
     }
     expect(state.documents).toHaveLength(HTTP_DOCUMENT_LIMIT)
+    expect(state.documents.map((document) => document.request.id)).toEqual([
+      "one",
+      "2",
+      "3",
+      "4",
+      "5",
+      "8",
+    ])
+    expect(state.activeDocumentId).toBe("8")
+    const selected = httpWorkspaceReducer(state, {
+      type: "add-document",
+      request: state.documents[0]!.request,
+    })
+    expect(selected.activeDocumentId).toBe("one")
+    expect(selected.documents).toBe(state.documents)
+    const dirty = httpWorkspaceReducer(state, {
+      type: "update-request",
+      documentId: "8",
+      patch: { name: "Unsaved" },
+    })
+    expect(
+      httpWorkspaceReducer(dirty, { type: "add-document", request: createScratchRequest("nine") }),
+    ).toBe(dirty)
     const one = createHttpWorkspaceState(createScratchRequest("only"))
-    expect(httpWorkspaceReducer(one, { type: "close-document", documentId: "only" })).toBe(one)
+    expect(httpWorkspaceReducer(one, { type: "close-document", documentId: "only" })).toMatchObject(
+      { documents: [], activeDocumentId: "" },
+    )
   })
 
-  test("requires confirmation only before closing a dirty non-final document", () => {
+  test("starts without a request and protects edits in the final tab", () => {
+    expect(createHttpWorkspaceState()).toMatchObject({ documents: [], activeDocumentId: "" })
+    const state = httpWorkspaceReducer(createHttpWorkspaceState(createScratchRequest("only")), {
+      type: "update-request",
+      documentId: "only",
+      patch: { url: "https://example.test/draft" },
+    })
+    expect(httpDocumentNeedsDiscardConfirmation(state.documents, "only")).toBe(true)
+  })
+
+  test("requires confirmation before closing a dirty document", () => {
     let state = createHttpWorkspaceState(createScratchRequest("one"))
     expect(httpDocumentNeedsDiscardConfirmation(state.documents, "one")).toBe(false)
     state = httpWorkspaceReducer(state, {
@@ -438,7 +473,27 @@ describe("HTTP keyboard ownership", () => {
       overlay,
     })
 
+  test("opens shared actions and box selection without stealing editor text", () => {
+    expect(command({ name: "?" })).toEqual({ kind: "open-overlay", overlay: "help" })
+    expect(command({ name: "/", shift: true })).toEqual({ kind: "open-overlay", overlay: "help" })
+    expect(command({ name: "m" })).toEqual({ kind: "choose-box" })
+    expect(command({ name: "m", shift: true })).toEqual({ kind: "cycle-method", direction: 1 })
+    for (const id of [
+      "http-url-input",
+      "http-body-editor-request",
+      "http-key-value-name-fixture",
+      "http-response-search-request",
+    ]) {
+      expect(command({ name: "m" }, id)).toEqual({ kind: "ignore" })
+      expect(command({ name: "?" }, id)).toEqual({ kind: "ignore" })
+    }
+  })
+
   test("inputs consume text and release one layer with Escape", () => {
+    for (const shift of [false, true])
+      expect(command({ name: "tab", shift }, "http-body-editor-request")).toEqual({
+        kind: "ignore",
+      })
     expect(command({ name: "s" }, "http-url-input")).toEqual({ kind: "ignore" })
     expect(command({ name: "escape" }, "http-url-input")).toEqual({ kind: "blur-url" })
     expect(command({ name: "enter", ctrl: true }, "http-body-editor-request")).toEqual({
@@ -463,9 +518,11 @@ describe("HTTP keyboard ownership", () => {
       direction: -1,
     })
     expect(command({ name: "escape" }, "", true)).toEqual({ kind: "close-navigation" })
-    expect(command({ name: "x" })).toEqual({ kind: "cancel" })
-    expect(command({ name: "2" })).toEqual({ kind: "pane", pane: "response" })
-    expect(command({ name: "up", ctrl: true })).toEqual({
+    expect(command({ name: "escape" })).toEqual({ kind: "cancel" })
+    expect(command({ name: "x" })).toEqual({ kind: "close-document" })
+    expect(command({ name: "w" })).toEqual({ kind: "open-overlay", overlay: "curl-export" })
+    expect(command({ name: "2" })).toEqual({ kind: "select-document", index: 1 })
+    expect(command({ name: "+" })).toEqual({
       kind: "resize-split",
       direction: 1,
     })
@@ -501,7 +558,7 @@ describe("HTTP keyboard ownership", () => {
         minimum: false,
         activePane: "request",
       }),
-    ).toEqual({ kind: "cycle-pane", direction: -1 })
+    ).toEqual({ kind: "ignore" })
     for (const [name, direction] of [
       ["h", -1],
       ["l", 1],
@@ -543,15 +600,17 @@ describe("HTTP keyboard ownership", () => {
     ).toEqual({ kind: "response-json", action: "expand" })
   })
 
-  test("cycles all five request views only while the request pane owns the keyboard", () => {
+  test("cycles all six request views only while the request pane owns the keyboard", () => {
     for (const [name, requestView, view] of [
       ["f", "params", "headers"],
       ["f", "headers", "body"],
       ["f", "body", "auth"],
-      ["f", "auth", "more"],
+      ["f", "auth", "scripts"],
+      ["f", "scripts", "more"],
       ["f", "more", "params"],
       ["a", "params", "more"],
-      ["a", "more", "auth"],
+      ["a", "more", "scripts"],
+      ["a", "scripts", "auth"],
     ] as const) {
       expect(
         resolveHttpKeyboardCommand({
@@ -779,7 +838,7 @@ describe("HTTP keyboard ownership", () => {
         activePane: "navigation",
         navigationView: "collection",
       }),
-    ).toEqual({ kind: "open-overlay", overlay: "collection-import" })
+    ).toEqual({ kind: "ignore" })
     expect(
       resolveHttpKeyboardCommand({
         key: { name: "i" },
@@ -790,7 +849,7 @@ describe("HTTP keyboard ownership", () => {
         activePane: "request",
         requestView: "more",
       }),
-    ).toEqual({ kind: "open-overlay", overlay: "curl-import" })
+    ).toEqual({ kind: "none" })
     expect(
       resolveHttpKeyboardCommand({
         key: { name: "v" },
@@ -812,7 +871,7 @@ describe("HTTP keyboard ownership", () => {
         activePane: "request",
         requestView: "more",
       }),
-    ).toEqual({ kind: "request-more-view", view: "preview" })
+    ).toEqual({ kind: "request-more-view", view: "docs" })
     expect(
       resolveHttpKeyboardCommand({
         key: { name: "n" },
@@ -849,13 +908,7 @@ describe("HTTP keyboard ownership", () => {
         requestMoreView: "preview",
       }),
     ).toEqual({ kind: "none" })
-    for (const [name, kind] of [
-      ["t", "cycle-request-timeout"],
-      ["r", "toggle-request-redirects"],
-      ["c", "toggle-request-cookie-jar"],
-      ["v", "toggle-request-tls-verification"],
-      ["l", "toggle-request-no-log"],
-    ] as const) {
+    for (const name of ["t", "v", "l", "i", "d"]) {
       expect(
         resolveHttpKeyboardCommand({
           key: { name, shift: name === "l" || name === "v" },
@@ -867,7 +920,7 @@ describe("HTTP keyboard ownership", () => {
           requestView: "more",
           requestMoreView: "options",
         }),
-      ).toEqual({ kind })
+      ).toEqual({ kind: "none" })
     }
     expect(command({ name: "escape" }, "http-automation-assertion-one", false)).toEqual({
       kind: "blur-control",
@@ -901,7 +954,7 @@ describe("HTTP keyboard ownership", () => {
         activePane: "navigation",
         navigationView: "collection",
       }),
-    ).toEqual({ kind: "open-overlay", overlay: "collection-runner" })
+    ).toEqual({ kind: "pane", pane: "request" })
     expect(command({ name: "t" }, "", false, "collection-runner")).toEqual({
       kind: "cycle-runner-target",
     })
@@ -909,7 +962,7 @@ describe("HTTP keyboard ownership", () => {
       kind: "cycle-runner-concurrency",
     })
     expect(command({ name: "x" }, "", false, "collection-runner")).toEqual({
-      kind: "apply-overlay",
+      kind: "ignore",
     })
     expect(command({ name: "i" }, "", false, "collection-runner")).toEqual({
       kind: "approve-runner-insecure-tls",
@@ -952,4 +1005,14 @@ test("HTTP key/value names complete common headers by prefix", () => {
   expect(completeHttpKeyValueName("cont", COMMON_HTTP_HEADER_NAMES)).toBe("Content-Type")
   expect(completeHttpKeyValueName("content-type", COMMON_HTTP_HEADER_NAMES)).toBeUndefined()
   expect(completeHttpKeyValueName("x-unknown", COMMON_HTTP_HEADER_NAMES)).toBeUndefined()
+})
+
+test("an empty HTTP workspace starts in collections while explicit requests start at the URL", () => {
+  const empty = createHttpWorkspaceState()
+  expect(empty.activePane).toBe("navigation")
+  expect(empty.navigationView).toBe("collection")
+  expect(empty.navigationOpen).toBe(true)
+  const withRequest = createHttpWorkspaceState(createScratchRequest("initial"))
+  expect(withRequest.activePane).toBe("url")
+  expect(withRequest.navigationOpen).toBe(false)
 })
