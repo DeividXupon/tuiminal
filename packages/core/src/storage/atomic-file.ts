@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { dirname, parse, resolve } from "node:path"
+import { withAtomicFileLock } from "./atomic-file-lock"
 
 export class AtomicFileConflictError extends Error {
   constructor(message: string) {
@@ -77,6 +78,25 @@ export function atomicWriteFileSync(
 ) {
   const target = resolve(path)
   const parent = ensureSafeParent(target)
+  try {
+    return withAtomicFileLock(target, () => writeLockedFile(target, parent, content, options))
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED") {
+      throw new AtomicFileConflictError(
+        "O arquivo mudou em outra instância; recarregue antes de salvar.",
+      )
+    }
+    throw error
+  }
+}
+
+function writeLockedFile(
+  target: string,
+  parent: string,
+  content: string | Uint8Array,
+  options: { expectedHash?: string | null; mode?: number; backup?: boolean },
+) {
   const mode = options.mode ?? 0o600
   const currentHash = currentFileHash(target)
   if (options.expectedHash !== undefined && currentHash !== options.expectedHash) {
