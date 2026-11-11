@@ -6,6 +6,7 @@ import {
   RGBA,
   type BoxRenderable,
   type InputRenderable,
+  type Renderable,
   type ScrollBoxRenderable,
 } from "@opentui/core"
 import { testRender } from "@opentui/react/test-utils"
@@ -128,6 +129,19 @@ async function collectionAction(action: string, workspace = false) {
 }
 
 async function keyboardCollectionAction(index: number) {
+  // A watcher can publish the renamed row before its mutation finishes.
+  // Wait for the row's actions to return before sending the next shortcut.
+  const hasActions = (node: Renderable): boolean =>
+    (node.id.startsWith("http-collection-actions-") && node.width > 0) ||
+    node.getChildren().some(hasActions)
+  await settle(() => {
+    const tree = tui?.renderer.root.findDescendantById("http-collection-scroll")
+    return Boolean(
+      tree &&
+        hasActions(tree) &&
+        !tui?.renderer.root.findDescendantById("http-collection-name-input"),
+    )
+  })
   await key("a")
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-menu")))
   for (let i = 0; i < index; i++) await key("ARROW_DOWN")

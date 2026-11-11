@@ -8,6 +8,7 @@ const IGNORED_DIRECTORIES = new Set([
   ".next",
   ".nuxt",
   ".output",
+  ".tuiminal-locks",
   ".turbo",
   "build",
   "coverage",

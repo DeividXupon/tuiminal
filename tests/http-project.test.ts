@@ -386,16 +386,21 @@ describe(".http project model", () => {
     })
   })
 
-  test("discovers project requests and ignores heavy trees and symlinks", async () => {
+  test("discovers project requests and ignores lock sidecars, heavy trees and symlinks", async () => {
     const root = await temporaryProject()
     await mkdir(resolve(root, "api"), { recursive: true })
     await mkdir(resolve(root, "node_modules/pkg"), { recursive: true })
     await writeFile(resolve(root, "api/users.http"), source)
     await writeFile(resolve(root, "node_modules/pkg/ignored.http"), "GET ignored.test")
+    for (const directory of [".tuiminal-locks", "api/.tuiminal-locks"]) {
+      await mkdir(resolve(root, directory), { recursive: true })
+      await writeFile(resolve(root, directory, "ignored.http"), "GET https://lock.example.test")
+    }
     await symlink(resolve(root, "api/users.http"), resolve(root, "linked.http"))
 
     const collection = await scanHttpProject(root)
     expect(collection.files.map((file) => file.path)).toEqual(["api/users.http"])
+    expect(collection.directories).toEqual(["api"])
     expect(collection.files[0]?.requests).toHaveLength(2)
   })
 
@@ -445,6 +450,11 @@ describe(".http project model", () => {
   test("refreshes discovery only for files that affect the HTTP workspace", () => {
     expect(httpProjectChangeRequiresRefresh("src/app.ts")).toBe(false)
     expect(httpProjectChangeRequiresRefresh("node_modules/pkg/request.http")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh(".tuiminal-locks/request.http")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("api/.tuiminal-locks/request.http")).toBe(false)
+    expect(httpProjectChangeRequiresRefresh("api\\.tuiminal-locks\\http-client.env.json")).toBe(
+      false,
+    )
     expect(httpProjectChangeRequiresRefresh("api/users.http")).toBe(true)
     expect(httpProjectChangeRequiresRefresh("nested/http-client.env.json")).toBe(true)
     expect(httpProjectChangeRequiresRefresh(".tuiminal/http/config.json")).toBe(true)
