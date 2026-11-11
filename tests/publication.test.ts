@@ -48,12 +48,12 @@ describe("publication gates", () => {
     }
   })
   test("never publishes a stable or different prerelease channel", () => {
-    expect(publicationChannel("0.2.0-alpha.0")).toBe("alpha")
+    expect(publicationChannel("0.2.0-beta.0")).toBe("beta")
     for (const version of [
       "0.2.0",
-      "0.2.0-beta.0",
+      "0.2.0-alpha.0",
       "latest",
-      "0.2.0-alpha.0;echo",
+      "0.2.0-beta.0;echo",
       "0.2.0-pre-alpha.0",
     ])
       expect(() => publicationChannel(version)).toThrow()

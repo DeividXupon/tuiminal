@@ -23,6 +23,10 @@ export async function buildWorkspacePackages() {
     })
     if (directory === "packages/core") {
       cpSync(
+        join(workspaceRoot, directory, "src/i18n/ru.json"),
+        join(destination, "dist/i18n/ru.json"),
+      )
+      cpSync(
         join(workspaceRoot, directory, "src/syntax/assets"),
         join(destination, "dist/syntax/assets"),
         {
@@ -30,6 +34,10 @@ export async function buildWorkspacePackages() {
         },
       )
     }
+    if (directory === "packages/feature-terminal")
+      cpSync(join(workspaceRoot, directory, "src/audio"), join(destination, "dist/audio"), {
+        recursive: true,
+      })
     for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md"])
       cpSync(join(workspaceRoot, file), join(destination, file))
     writeFileSync(

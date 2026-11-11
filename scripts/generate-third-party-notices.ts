@@ -208,6 +208,15 @@ export function thirdPartyNotices() {
           "",
         ]
       : []),
+    "## Bundled notification sounds",
+    "",
+    "Term Agents includes seven sounds from Kenney Interface Sounds 1.0 (CC0-1.0), converted to mono PCM WAV. Source: https://kenney.nl/assets/interface-sounds. Original hashes and encoding are recorded in packages/feature-terminal/src/audio/source.json.",
+    "",
+    readFileSync(
+      join(projectRoot, "packages/feature-terminal/src/audio/License.txt"),
+      "utf8",
+    ).trim(),
+    "",
     "## Bundled syntax assets",
     "",
     "Parsers and highlight queries are bundled for offline use. Pinned source archives and their SHA-512 integrity values are recorded in scripts/syntax-sources.json. Upstream license texts are included below.",
@@ -228,7 +237,10 @@ export function thirdPartyNotices() {
       `### ${document.packages.sort().join(", ")} — ${document.name}`,
       "",
       "```text",
-      document.text.replaceAll("```", "` ` `"),
+      document.text
+        .replaceAll("```", "` ` `")
+        .replace(/\r\n?/g, "\n")
+        .replace(/[ \t]+$/gm, ""),
       "```",
       "",
     ]),

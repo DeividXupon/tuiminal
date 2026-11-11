@@ -51,18 +51,34 @@ async function verifyToolUi(
         )
     }
     try {
+      if (!terminal) throw new Error(`Packaged ${tool} has no terminal`)
+      if (tool === "http") {
+        await waitFor(() => screen.screen().text.includes("CHOOSE HTTP SOURCE"), "source picker")
+        terminal.write("l")
+        await waitFor(() => screen.screen().text.includes("Choose a request"), "empty workspace")
+        terminal.write("\x0e")
+      }
       // ANSI output consists of incremental repaint operations, not whole text
       // lines. Assert the emulated visible screen, including after a plasma fade.
       await waitFor(() => screen.screen().text.includes(expected), "opening")
-      if (!terminal) throw new Error(`Packaged ${tool} has no terminal`)
-      if (tool === "database" || tool === "http") {
+      if (tool === "http") {
         terminal.write("\x1b")
         await Bun.sleep(150)
       }
       if (tool === "database") {
-        // First Escape blurs the connection field; the next closes its dialog.
-        terminal.write("\x1b")
-        await Bun.sleep(150)
+        // Wait for the visible modal to retire before sending the application quit key.
+        for (
+          let attempt = 0;
+          attempt < 4 && screen.screen().text.includes("NEW CONNECTION");
+          attempt++
+        ) {
+          terminal.write("\x1b[27u")
+          await Bun.sleep(150)
+        }
+        await waitFor(
+          () => !screen.screen().text.includes("NEW CONNECTION"),
+          "connection modal dismissal",
+        )
       }
       if (tool === "terminal") {
         terminal.write("\x02")

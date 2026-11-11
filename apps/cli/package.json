@@ -1,6 +1,6 @@
 {
   "name": "@xupon/tuiminal-cli",
-  "version": "0.2.0-alpha.0",
+  "version": "0.2.0-beta.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -16,8 +16,8 @@
     "tuiminal": "./bin/tuiminal.ts"
   },
   "scripts": {
-    "dev": "bun ../../scripts/build-features.ts && bun --watch src/index.tsx",
-    "start": "bun ../../scripts/build-features.ts && bun src/index.tsx"
+    "dev": "bun ../../scripts/build-features.ts && bun --watch bin/tuiminal.ts",
+    "start": "bun ../../scripts/build-features.ts && bun bin/tuiminal.ts"
   },
   "dependencies": {
     "@opentui/core": "^0.5.9",

@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildWorkspacePackages } from "./build-packages"
-import { workspaceRoot } from "./workspace-model"
 import { parseNpmPackResult } from "./npm-pack-model"
+import { workspaceRoot } from "./workspace-model"
 
 const npm = Bun.which(process.platform === "win32" ? "npm.cmd" : "npm")
 if (!npm) throw new Error("npm is required to verify the published package format")
@@ -94,10 +94,22 @@ try {
     `
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { realpathSync } from "node:fs";
+import { realpathSync, readFileSync } from "node:fs";
 const hostRequire = createRequire(import.meta.url);
 const theme = await import("@xupon/tuiminal-core/settings/theme");
 theme.initializeUiSettings();
+const { atomicWriteFileSync, AtomicFileConflictError } = await import("@xupon/tuiminal-core/storage/atomic-file");
+const settingsPath = process.env.XDG_CONFIG_HOME + "/atomic-smoke.json";
+const initialHash = atomicWriteFileSync(settingsPath, "initial", { expectedHash: null });
+atomicWriteFileSync(settingsPath, "saved", { expectedHash: initialHash, backup: true });
+assert.equal(readFileSync(settingsPath, "utf8"), "saved");
+assert.equal(readFileSync(settingsPath + ".bak", "utf8"), "initial");
+assert.throws(() => atomicWriteFileSync(settingsPath, "stale", { expectedHash: initialHash }), AtomicFileConflictError);
+console.log("Installed core package saves with its native file lock and rejects stale writes");
+const i18n = await import("@xupon/tuiminal-core/i18n/index");
+assert(i18n.isLanguage("ru"));
+assert.equal(i18n.translateUi("Configurações", "ru"), "Настройки");
+assert.equal(i18n.translateUi("Terminal 42", "ru"), "Терминал 42");
 const features = ${JSON.stringify(workspaces.filter(({ directory }) => directory !== "packages/core").map(({ manifest }) => manifest.name))};
 for (const name of features) {
   const resolved = import.meta.resolve(name);
