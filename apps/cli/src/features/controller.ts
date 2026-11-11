@@ -68,7 +68,7 @@ export class FeatureController {
           ? requested
           : null
         : preferredInstalledFeature(installed, requested ?? undefined)
-      if (initial) await this.dependencies.load(initial)
+      if (initial) await this.load(initial)
       this.update({ installed, ready: true })
     } catch (error) {
       this.update({
@@ -77,13 +77,19 @@ export class FeatureController {
       })
     }
   }
+  private load(id: FeatureId) {
+    return this.dependencies.load(
+      id,
+      this.environment?.catalog.artifacts.find((artifact) => artifact.id === id),
+    )
+  }
   async open(id: FeatureId) {
     if (!this.state.installed.includes(id) || this.operation || this.removing || this.disposed)
       return false
     const generation = ++this.openGeneration
     this.update({ busy: id, error: "" })
     try {
-      await this.dependencies.load(id)
+      await this.load(id)
       return !this.disposed && generation === this.openGeneration
     } catch (error) {
       if (generation === this.openGeneration)

@@ -5,7 +5,7 @@ import {
   type FeatureCatalog,
 } from "../../apps/cli/src/features/model"
 import { featureDigest } from "../../apps/cli/src/features/download"
-export function featureFixture(version = "1.2.3") {
+export function featureFixture(version = "1.2.3", revision = "") {
   const archives = new Map<string, Buffer>()
   const contents = new Map<string, Map<string, Buffer>>()
   const catalog: FeatureCatalog = { schema: 1, version, artifacts: [] }
@@ -13,7 +13,9 @@ export function featureFixture(version = "1.2.3") {
     const files = new Map(
       featureFileNames(id).map((name) => [
         name,
-        Buffer.from(`export const identity = ${JSON.stringify(`${version}/${id}/${name}/✓`)};`),
+        Buffer.from(
+          `export const identity = ${JSON.stringify(`${version}/${id}/${name}/✓${revision}`)};`,
+        ),
       ]),
     )
     const archive = gzipSync(

@@ -141,14 +141,19 @@ same installation/verification flow using those files. No npm publication is nee
 Changes to feature source require rebuilding payloads (`bun run build:features`, or
 restarting `bun run dev`), restarting the application, and installing the newly
 generated tool. Running `bun run dev` performs the build and launch together. The CLI's watch
-mode alone does not rebuild an installed feature snapshot.
+mode alone does not rebuild an installed feature snapshot. Each completed build retains
+an immutable download directory keyed by its catalog hash. An already open installer
+continues installing and activating that catalog's payloads after another build; a
+new session uses the newly published catalog. The catalog is replaced atomically only
+after all five archives are ready. Failed builds leave the previous catalog usable.
 
 `TUIMINAL_SOURCE_FEATURES=1` is an explicit repository-test escape hatch. The release
 build replaces that source loader with a stub and rejects any feature implementation
 in its dependency graph, so an inherited flag cannot enable bundled tools. Tests use
 fixture storage and never install into the user's cache.
 
-`build:features` emits `dist/features/<version>/catalog.json` and five archives.
+`build:features` emits `dist/features/<version>/catalog.json`, five canonical archives,
+and retained development downloads under `snapshots/<catalog-hash>/`.
 The release-candidate workflow builds these once, then supplies the same artifacts to
 all six native builds through `TUIMINAL_RELEASE_FEATURES_DIR`. Each build validates
 all archives before embedding the catalog. `TUIMINAL_FEATURE_BASE_URL` can select a
@@ -161,6 +166,9 @@ existing version. See [release process](../release-process.md).
 
 ## Evidence
 
+- `tests/feature-build-snapshot.test.ts`: installation, activation and reinstallation
+  across local rebuilds, fresh-session selection, failed build preservation and
+  unchanged integrity verification.
 - `tests/feature-installation.test.ts`: catalog bounds, archive/file identity,
   concurrent publication, tamper detection/repair, cancellation, progress, no replay,
   isolated initialization, verified-byte imports and all six language catalogs.

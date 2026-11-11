@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { gzipSync } from "node:zlib"
 import {
@@ -7,8 +7,8 @@ import {
   type FeatureCatalog,
   type FeatureId,
   type FeaturePayload,
-  parseFeatureCatalog,
 } from "../apps/cli/src/features/model"
+import { publishFeatureBuild } from "./publish-feature-build"
 import { bindFeatureImports, SHARED_FEATURE_IMPORTS } from "./feature-payload-model"
 import { assertWorkspaceVersions, workspaceRoot } from "./workspace-model"
 
@@ -31,8 +31,8 @@ export async function buildFeaturePayloads(outputDirectory?: string) {
     version: string
   }
   const destination = outputDirectory ?? join(workspaceRoot, "dist", "features", version)
-  mkdirSync(destination, { recursive: true })
   const catalog: FeatureCatalog = { schema: 1, version, artifacts: [] }
+  const archives = new Map<string, Buffer>()
   for (const id of FEATURE_IDS) {
     const payload: FeaturePayload = { schema: 1, id, version, files: {} }
     const files = []
@@ -72,7 +72,7 @@ export async function buildFeaturePayloads(outputDirectory?: string) {
     }
     const archive = gzipSync(JSON.stringify(payload), { level: 9 })
     const filename = `tuiminal-${version}-${id}.json.gz`
-    writeFileSync(join(destination, filename), archive)
+    archives.set(filename, archive)
     catalog.artifacts.push({
       id,
       version,
@@ -82,8 +82,7 @@ export async function buildFeaturePayloads(outputDirectory?: string) {
       files,
     })
   }
-  parseFeatureCatalog(catalog, version)
-  writeFileSync(join(destination, "catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`)
+  publishFeatureBuild(destination, catalog, archives)
   console.log(`Built ${catalog.artifacts.length} official feature downloads in ${destination}`)
   return { catalog, destination }
 }

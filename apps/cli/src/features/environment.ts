@@ -1,12 +1,12 @@
-import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 import metadata from "../../package.json"
 import { FeatureInstallError, parseFeatureCatalog } from "./model"
 import { MINIMAL_BUILD } from "./mode"
 import { RELEASE_FEATURE_CATALOG } from "./release-catalog"
 import { FeatureStore } from "./store"
+import { localFeatureCatalog } from "./catalog-snapshot"
 
 export const FEATURE_VERSION = metadata.version
 export async function featureEnvironment() {
@@ -15,16 +15,16 @@ export async function featureEnvironment() {
     : null
   if (!localDirectory && !RELEASE_FEATURE_CATALOG)
     throw new FeatureInstallError("catalog", "Missing embedded feature catalog")
-  const catalog = parseFeatureCatalog(
-    RELEASE_FEATURE_CATALOG ??
-      JSON.parse(await readFile(join(localDirectory ?? "", "catalog.json"), "utf8")),
-    FEATURE_VERSION,
-  )
+  const local =
+    localDirectory && !RELEASE_FEATURE_CATALOG
+      ? await localFeatureCatalog(localDirectory, FEATURE_VERSION)
+      : null
+  const catalog = local?.catalog ?? parseFeatureCatalog(RELEASE_FEATURE_CATALOG, FEATURE_VERSION)
   const mirror = process.env.TUIMINAL_FEATURE_BASE_URL
   const baseUrl = mirror
     ? new URL(mirror.endsWith("/") ? mirror : `${mirror}/`)
-    : localDirectory
-      ? pathToFileURL(`${localDirectory}/`)
+    : local
+      ? local.baseUrl
       : new URL(`https://github.com/DeividXupon/tuiminal/releases/download/v${FEATURE_VERSION}/`)
   const dataHome =
     process.env.XDG_DATA_HOME ||

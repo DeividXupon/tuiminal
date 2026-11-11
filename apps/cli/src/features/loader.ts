@@ -21,11 +21,12 @@ export async function importVerifiedFeature(bytes: Uint8Array): Promise<Record<s
 
 function sqliteWorkerCommand() {
   return MINIMAL_BUILD
-    ? [process.execPath, "--internal-sqlite-worker"]
+    ? [process.execPath, "--internal-sqlite-worker", ...pinnedArtifactArguments("database")]
     : [
         process.execPath,
         fileURLToPath(new URL("../../bin/tuiminal.ts", import.meta.url)),
         "--internal-sqlite-worker",
+        ...pinnedArtifactArguments("database"),
       ]
 }
 
@@ -110,7 +111,7 @@ async function loadEntry(id: FeatureId, name: string, withHost = true, pinned?: 
   return module
 }
 const pending = new Map<FeatureId, Promise<void>>()
-export async function loadFeature(id: FeatureId) {
+export async function loadFeature(id: FeatureId, artifact?: FeatureArtifact) {
   if (loadedFeature(id)) return
   const current = pending.get(id)
   if (current) return current
@@ -119,7 +120,7 @@ export async function loadFeature(id: FeatureId) {
       await prepareHost()
       return (await import("./source-loader")).loadSourceFeature(id)
     }
-    const module = await loadEntry(id, "index.mjs")
+    const module = await loadEntry(id, "index.mjs", true, artifact)
     registerFeature(id, module as FeatureModules[typeof id])
   })()
   pending.set(id, load)
@@ -142,9 +143,9 @@ export async function runInstalledHttp(command: "run" | "import" | "postman", ar
   ] as (args: string[]) => Promise<number>
   return run(args)
 }
-export async function runInstalledSqliteWorker() {
+export async function runInstalledSqliteWorker(args: string[] = []) {
   if (typeof process.send !== "function") throw new Error("SQLite worker requires an IPC channel")
-  await loadEntry("database", "sqlite-worker.mjs", false)
+  await loadEntry("database", "sqlite-worker.mjs", false, parsePinnedArtifact("database", args[0]))
 }
 
 export async function runInstalledTerminalSidebar(args: string[]) {

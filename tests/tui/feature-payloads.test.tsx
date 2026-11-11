@@ -1,3 +1,4 @@
+import agentSounds from "../../packages/feature-terminal/src/audio/agent-sounds.json"
 import "./setup"
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
@@ -133,4 +134,21 @@ test("installed Runner opens its configuration and command editor with native in
   await settle(() => tui!.renderer.currentFocusedRenderable?.id === "runner-config-list")
   await key("ESCAPE")
   await settle(() => !tui!.renderer.root.findDescendantById("runner-config-modal"))
+})
+
+test("Terminal payload embeds all recordings and exposes cancellable sound preview", async () => {
+  const artifact = build.catalog.artifacts.find((entry) => entry.id === "terminal")!
+  const files = decodeFeaturePayload(
+    await readFile(join(build.destination, artifact.filename)),
+    artifact,
+  )
+  const source = files.get("index.mjs")!.toString()
+  for (const encoded of Object.values(agentSounds)) expect(source.includes(encoded)).toBe(true)
+  const terminal = (await loadPayload("terminal")) as FeatureModules["terminal"]
+  const controller = new AbortController()
+  controller.abort()
+  expect(await terminal.previewTerminalAgentSound("question_004", controller.signal)).toBe(
+    "cancelled",
+  )
+  await terminal.stopAllTermAgentsProcesses()
 })

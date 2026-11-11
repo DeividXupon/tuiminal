@@ -78,12 +78,34 @@ describe("Tuiminal CLI", () => {
     },
   )
 
+  test("prints help in Russian when it is the saved language", async () => {
+    const result = await runCliWith({ args: ["--help"], language: "ru" })
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain("Использование:")
+    expect(result.stdout).toContain("tuiminal <инструмент> [каталог]")
+    expect(result.stdout).toContain("Показать эту справку")
+    expect(result.stderr).toBe("")
+  })
+
   test("documents the available isolated tools", async () => {
     const result = await runCli("--help")
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("banco, git, runner, http, terminal")
     expect(result.stdout).not.toMatch(/pomo/i)
+    expect(result.stdout).toContain("tuiminal <tool> [directory]")
+  })
+
+  test("prints help in English when no language is saved", async () => {
+    const result = await runCli("--help")
+    expect(result.stdout).toContain("Usage:")
+    expect(result.stdout).toContain("Show this help")
+  })
+
+  test("prints help in Brazilian Portuguese when it is the saved language", async () => {
+    const result = await runCliWith({ args: ["--help"], language: "pt-BR" })
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain("Uso:")
     expect(result.stdout).toContain("tuiminal <ferramenta> [diretório]")
   })
 
@@ -92,9 +114,9 @@ describe("Tuiminal CLI", () => {
     async (name) => {
       const result = await runCli(name, "missing-cli-fixture-directory")
       expect(result.exitCode).toBe(1)
-      expect(result.stderr).toContain("Informe uma ferramenta e, opcionalmente, um diretório.")
-      expect(result.stderr).not.toContain("Não foi possível abrir")
-      expect(result.stdout).toContain("tuiminal <ferramenta> [diretório]")
+      expect(result.stderr).toContain("Provide a tool and, optionally, a directory.")
+      expect(result.stderr).not.toContain("Could not open")
+      expect(result.stdout).toContain("tuiminal <tool> [directory]")
     },
   )
 })

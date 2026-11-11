@@ -14,7 +14,7 @@ if (!helpRequested && (args.includes("--version") || args.includes("-v"))) {
 }
 
 if (args[0] === "--internal-sqlite-worker") {
-  await (await import("../src/features/loader")).runInstalledSqliteWorker()
+  await (await import("../src/features/loader")).runInstalledSqliteWorker(args.slice(1))
   // The worker stays alive through its IPC message listener.
 } else if (args[0] === "--internal-terminal-project-sync-worker") {
   await (await import("../src/features/loader")).runInstalledTerminalProjectSyncWorker(
