@@ -16,6 +16,17 @@ process.env.TUIMINAL_TEST_STATIC_LOADERS = "1"
 // explicitly removes this flag before mounting App.
 process.env.TUIMINAL_TEST_SKIP_STARTUP = "1"
 
+// TUI assertions use the Brazilian Portuguese source text. Save it as the
+// fixture language instead of relying on the application default (English).
+const { mkdirSync, writeFileSync } = await import("node:fs")
+const { dirname } = await import("node:path")
+const { initializeUiSettings, UI_SETTINGS_PATH } = await import(
+  "../../packages/core/src/settings/theme"
+)
+mkdirSync(dirname(UI_SETTINGS_PATH), { recursive: true })
+writeFileSync(UI_SETTINGS_PATH, JSON.stringify({ language: "pt-BR" }))
+initializeUiSettings()
+
 const { loadSourceFeature } = await import("../../apps/cli/src/features/source-loader")
 for (const id of ["database", "git", "runner", "http", "terminal"] as const)
   await loadSourceFeature(id)

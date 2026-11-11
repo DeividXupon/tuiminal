@@ -3,6 +3,14 @@ import { TERMINAL_PROJECT_SYNC_PREVIEW_MESSAGES } from "./terminal-project-sync-
 import { TERMINAL_PROJECT_SYNC_PROGRESS_MESSAGES } from "./terminal-project-sync-progress-catalog"
 
 export const TERMINAL_PROJECT_SYNC_MESSAGES = [
+  [
+    "Remoto → Local",
+    "Remote → Local",
+    "Remoto → Local",
+    "リモート → ローカル",
+    "远程 → 本地",
+    "원격 → 로컬",
+  ],
   ...TERMINAL_PROJECT_SYNC_AUTOMATIC_MESSAGES,
   [
     "[R] Sincronizar remoto",

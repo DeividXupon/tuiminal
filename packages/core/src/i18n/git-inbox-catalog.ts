@@ -36,12 +36,12 @@ export const GIT_INBOX_MESSAGES = [
   ["Menções", "Mentions", "Menciones", "メンション", "提及", "멘션"],
   ["Salvas", "Saved", "Guardadas", "保存済み", "已保存", "저장됨"],
   [
-    "  ESTADO · REPOSITÓRIO / ASSUNTO · ATUALIZAÇÃO",
-    "  STATE · REPOSITORY / SUBJECT · UPDATED",
-    "  ESTADO · REPOSITORIO / ASUNTO · ACTUALIZACIÓN",
-    "  状態・リポジトリ / 件名・更新",
-    "  状态 · 仓库 / 主题 · 更新",
-    "  상태 · 저장소 / 제목 · 업데이트",
+    "ESTADO · REPOSITÓRIO / ASSUNTO · ATUALIZAÇÃO",
+    "STATE · REPOSITORY / SUBJECT · UPDATED",
+    "ESTADO · REPOSITORIO / ASUNTO · ACTUALIZACIÓN",
+    "状態・リポジトリ / 件名・更新",
+    "状态 · 仓库 / 主题 · 更新",
+    "상태 · 저장소 / 제목 · 업데이트",
   ],
   [
     "Nenhuma notificação nesta seção.",

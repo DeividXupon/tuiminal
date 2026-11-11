@@ -9,6 +9,7 @@ describe("translation prefixes", () => {
     ["ja", "エラー", "エラー", "設定"],
     ["zh-CN", "错误", "错误", "设置"],
     ["ko", "오류", "오류", "설정"],
+    ["ru", "Ошибка", "ОШИБКА", "Настройки"],
   ] as const)("preserves nested prefixes and whitespace in %s", (language, error, upper, label) => {
     expect(translateUi(" \tErro: \t⚠  ERRO: Configurações \r\n", language)).toBe(
       ` \t${error}: \t⚠  ${upper}: ${label} \r\n`,

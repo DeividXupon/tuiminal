@@ -268,7 +268,7 @@ export function LanguageDetail({
         compact={compact}
         contentWidth={contentWidth}
       />
-      <box style={{ height: 6, flexShrink: 0 }}>
+      <box style={{ height: LANGUAGE_OPTIONS.length, flexShrink: 0 }}>
         {LANGUAGE_OPTIONS.map((language) => {
           const selected = settings.language === language.id
           return (

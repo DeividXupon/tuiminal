@@ -55,4 +55,12 @@ export const APPEARANCE_MESSAGES = [
     "都市蓝与霓虹强调色",
     "도시적인 파란색과 네온 강조색",
   ],
+  [
+    "violeta cósmico e acentos rosa do Posting",
+    "Posting's cosmic violet and pink accents",
+    "violeta cósmico y acentos rosas de Posting",
+    "Postingの宇宙的な紫とピンクのアクセント",
+    "Posting 的宇宙紫与粉色强调色",
+    "Posting의 우주빛 보라색과 분홍색 강조색",
+  ],
 ] as const

@@ -1,5 +1,13 @@
 export const HTTP_POSTMAN_MESSAGES = [
   [
+    "Chamadas: {count}",
+    "Calls: {count}",
+    "Llamadas: {count}",
+    "呼び出し: {count}",
+    "调用: {count}",
+    "호출: {count}",
+  ],
+  [
     "[Ctrl+S] Salvar no Postman",
     "[Ctrl+S] Save to Postman",
     "[Ctrl+S] Guardar en Postman",
@@ -164,12 +172,12 @@ export const HTTP_POSTMAN_MESSAGES = [
   ],
   ["[O] Postman", "[O] Postman", "[O] Postman", "[O] Postman", "[O] Postman", "[O] Postman"],
   [
-    "A chave é guardada no gerenciador de credenciais do sistema.",
-    "The key is stored in the system credential manager.",
-    "La clave se guarda en el gestor de credenciales del sistema.",
-    "キーはシステムの資格情報マネージャーに保存されます。",
-    "密钥保存在系统凭据管理器中。",
-    "키는 시스템 자격 증명 관리자에 저장됩니다.",
+    "Por padrão, a chave é guardada no gerenciador de credenciais do sistema.",
+    "By default, the key is stored in the system credential manager.",
+    "De forma predeterminada, la clave se guarda en el gestor de credenciales del sistema.",
+    "既定では、キーはシステムの資格情報マネージャーに保存されます。",
+    "默认情况下，密钥保存在系统凭据管理器中。",
+    "기본적으로 키는 시스템 자격 증명 관리자에 저장됩니다.",
   ],
   [
     "--api-key-stdin lê a chave da entrada padrão sem colocá-la na linha de comando.",
@@ -180,12 +188,12 @@ export const HTTP_POSTMAN_MESSAGES = [
     "--api-key-stdin은 키를 명령줄에 넣지 않고 표준 입력에서 읽습니다.",
   ],
   [
-    "Chave de API Postman: ",
-    "Postman API key: ",
-    "Clave de API de Postman: ",
-    "Postman API キー: ",
+    "Chave de API Postman:",
+    "Postman API key:",
+    "Clave de API de Postman:",
+    "Postman API キー:",
     "Postman API 密钥：",
-    "Postman API 키: ",
+    "Postman API 키:",
   ],
   [
     "Coleção importada:",

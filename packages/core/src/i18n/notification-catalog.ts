@@ -1,5 +1,14 @@
 export const NOTIFICATION_MESSAGES = [
   [
+    "[Enter] Confirmar",
+    "[Enter] Confirm",
+    "[Enter] Confirmar",
+    "[Enter] 確認",
+    "[Enter] 确认",
+    "[Enter] 확인",
+  ],
+  ["[Esc] Recusar", "[Esc] Decline", "[Esc] Rechazar", "[Esc] 拒否", "[Esc] 拒绝", "[Esc] 거절"],
+  [
     "Texto selecionado copiado.",
     "Selected text copied.",
     "Texto seleccionado copiado.",

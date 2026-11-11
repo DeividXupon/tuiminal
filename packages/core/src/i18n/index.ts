@@ -1,12 +1,24 @@
+import { HTTP_OAUTH2_MESSAGES } from "./http-oauth2-catalog"
+import { HTTP_COLLECTION_SETTINGS_MESSAGES } from "./http-collection-settings-catalog"
+import { HTTP_ENVIRONMENT_TABS_MESSAGES } from "./http-environment-tabs-catalog"
+import { HTTP_CHAINING_MESSAGES } from "./http-chaining-catalog"
+import { HTTP_POSTMAN_STORAGE_MESSAGES } from "./http-postman-storage-catalog"
+import { TERMINAL_SOUND_MESSAGES } from "./terminal-sounds-catalog"
+import { HTTP_COLLECTION_MENU_MESSAGES } from "./http-collection-menu-catalog"
 import { DATABASE_PALETTE_ACTIONS_MESSAGES } from "./database-palette-actions-catalog"
 import { DATABASE_PALETTE_LABELS_MESSAGES } from "./database-palette-labels-catalog"
 import { RUNNER_PALETTE_ACTIONS_MESSAGES } from "./runner-palette-actions-catalog"
 import { RUNNER_PALETTE_LABELS_MESSAGES } from "./runner-palette-labels-catalog"
 import { RUNNER_STATUS_MESSAGES } from "./runner-status-catalog"
+import { RUNNER_TUTORIAL_BASICS_MESSAGES } from "./runner-tutorial-basics-catalog"
+import { RUNNER_TUTORIAL_ADVANCED_MESSAGES } from "./runner-tutorial-advanced-catalog"
 import stringWidth from "string-width"
 import { APPEARANCE_MESSAGES } from "./appearance-catalog"
 import { CONFIGURATION_MESSAGES } from "./configuration-catalog"
-import { DATABASE_CONNECTION_MESSAGES } from "./database-connections-catalog"
+import {
+  DATABASE_CONNECTION_MESSAGES,
+  DATABASE_CONNECTION_PATTERNS,
+} from "./database-connections-catalog"
 import { DATABASE_PRIVACY_MESSAGES } from "./database-privacy-catalog"
 import { FEATURE_MESSAGES } from "./features-catalog"
 import { GIT_ACTION_PALETTE_MESSAGES } from "./git-action-palette-catalog"
@@ -25,6 +37,7 @@ import { GIT_PARTIAL_STAGE_MESSAGES } from "./git-partial-stage-catalog"
 import { GIT_PR_MESSAGES } from "./git-pr-catalog"
 import { GIT_REMOTE_PALETTE_ACTION_MESSAGES } from "./git-remote-palette-actions-catalog"
 import { GIT_REMOTE_PALETTE_MESSAGES } from "./git-remote-palette-catalog"
+import { HTTP_ACTIONS_MESSAGES } from "./http-actions-catalog"
 import { HTTP_MESSAGES } from "./http-catalog"
 import { HTTP_CONFLICT_MESSAGES } from "./http-conflict-catalog"
 import { HTTP_ENVIRONMENT_MESSAGES, HTTP_ENVIRONMENT_PATTERNS } from "./http-environment-catalog"
@@ -37,11 +50,15 @@ import {
   HTTP_POSTMAN_ERROR_MESSAGES,
   HTTP_POSTMAN_ERROR_PATTERNS,
 } from "./http-postman-errors-catalog"
+import { HTTP_POSTMAN_LIVE_MESSAGES } from "./http-postman-live-catalog"
 import { HTTP_POSTMAN_SOURCE_MESSAGES } from "./http-postman-source-catalog"
 import { HTTP_PREVIEW_MESSAGES } from "./http-preview-catalog"
 import { HTTP_PROJECT_MESSAGES, HTTP_PROJECT_PATTERNS } from "./http-project-catalog"
 import { HTTP_REDIRECT_MESSAGES } from "./http-redirect-catalog"
+import { HTTP_REQUEST_FORMS_MESSAGES } from "./http-request-forms-catalog"
+import { HTTP_REQUEST_TABLES_MESSAGES } from "./http-request-tables-catalog"
 import { HTTP_REQUEST_MESSAGES } from "./http-request-catalog"
+import { HTTP_RESPONSE_TABLE_MESSAGES } from "./http-response-tables-catalog"
 import { HTTP_RESPONSE_MESSAGES, HTTP_RESPONSE_PATTERNS } from "./http-response-catalog"
 import { HTTP_RUNNER_MESSAGES, HTTP_RUNNER_PATTERNS } from "./http-runner-catalog"
 import { HTTP_TRANSPORT_MESSAGES } from "./http-transport-catalog"
@@ -58,9 +75,11 @@ import { RUNNER_VALIDATION_MESSAGES, RUNNER_VALIDATION_PATTERNS } from "./runner
 import { RUNNER_YAML_MESSAGES } from "./runner-yaml-catalog"
 import { RUNNER_YAML_COMPLETION_MESSAGES } from "./runner-yaml-completion-catalog"
 import { TERMINAL_MESSAGES } from "./terminal-catalog"
+import { TERMINAL_FILES_MESSAGES } from "./terminal-files-catalog"
 import { TERMINAL_TUTORIAL_MESSAGES } from "./terminal-tutorial-catalog"
+import { withRussianTranslation } from "./russian"
 
-export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko"
+export type LanguageId = "pt-BR" | "en" | "es" | "ja" | "zh-CN" | "ko" | "ru"
 
 export type LanguageOption = {
   id: LanguageId
@@ -68,7 +87,7 @@ export type LanguageOption = {
   shortName: string
 }
 
-export const DEFAULT_LANGUAGE: LanguageId = "pt-BR"
+export const DEFAULT_LANGUAGE: LanguageId = "en"
 
 export const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
   { id: "pt-BR", nativeName: "Português (Brasil)", shortName: "PT-BR" },
@@ -77,6 +96,7 @@ export const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
   { id: "ja", nativeName: "日本語", shortName: "JA" },
   { id: "zh-CN", nativeName: "简体中文", shortName: "ZH-CN" },
   { id: "ko", nativeName: "한국어", shortName: "KO" },
+  { id: "ru", nativeName: "Русский", shortName: "RU" },
 ] as const
 
 export function isLanguage(value: unknown): value is LanguageId {
@@ -101,6 +121,7 @@ const UI_LOCALES: Record<LanguageId, string> = {
   ja: "ja-JP",
   "zh-CN": "zh-CN",
   ko: "ko-KR",
+  ru: "ru-RU",
 }
 
 export function formatUiDateTime(
@@ -126,6 +147,8 @@ const MESSAGES: readonly Message[] = [
   ...FEATURE_MESSAGES,
   ...CONFIGURATION_MESSAGES,
   ...TERMINAL_MESSAGES,
+  ...TERMINAL_FILES_MESSAGES,
+  ...TERMINAL_SOUND_MESSAGES,
   ...DATABASE_PALETTE_LABELS_MESSAGES,
   ...DATABASE_PALETTE_ACTIONS_MESSAGES,
   ...DATABASE_CONNECTION_MESSAGES,
@@ -134,6 +157,8 @@ const MESSAGES: readonly Message[] = [
   ...RUNNER_PALETTE_LABELS_MESSAGES,
   ...RUNNER_PALETTE_ACTIONS_MESSAGES,
   ...RUNNER_STATUS_MESSAGES,
+  ...RUNNER_TUTORIAL_BASICS_MESSAGES,
+  ...RUNNER_TUTORIAL_ADVANCED_MESSAGES,
   ...RUNNER_HELP_MESSAGES,
   ...RUNNER_YAML_MESSAGES,
   ...RUNNER_YAML_COMPLETION_MESSAGES,
@@ -716,12 +741,12 @@ const MESSAGES: readonly Message[] = [
     "쿼리 및 데이터 영역",
   ],
   [
-    "Este bloco mostra a consulta executada, seus resultados, a estrutura da tabela, os índices e as alterações ainda não salvas.",
-    "This panel shows the executed query, its results, table structure, indexes, and unsaved changes.",
-    "Este panel muestra la consulta ejecutada, sus resultados, la estructura de la tabla, los índices y los cambios sin guardar.",
-    "実行したクエリ、結果、テーブル構造、インデックス、未保存の変更を表示します。",
-    "此面板显示已执行查询、结果、表结构、索引和尚未保存的更改。",
-    "실행된 쿼리, 결과, 테이블 구조, 인덱스 및 저장되지 않은 변경 사항을 보여줍니다.",
+    "Aqui ficam as abas de dados, colunas, índices e schema. O inspetor acompanha a linha selecionada dentro desta área.",
+    "This area contains the data, columns, indexes, and schema tabs. The inspector follows the selected row inside this area.",
+    "Esta área contiene las pestañas de datos, columnas, índices y schema. El inspector sigue la fila seleccionada dentro de esta área.",
+    "この領域にはデータ、列、インデックス、スキーマのタブがあります。インスペクターはこの領域内で選択行を表示します。",
+    "此区域包含数据、列、索引和结构标签页。检查器在该区域内显示选中的行。",
+    "이 영역에는 데이터, 열, 인덱스, 스키마 탭이 있습니다. 검사기는 이 영역 안에서 선택한 행을 표시합니다.",
   ],
   [
     "No tour, tudo aqui é simulado e nenhum banco real é acessado.",
@@ -731,21 +756,14 @@ const MESSAGES: readonly Message[] = [
     "教程中所有内容均为模拟，不会访问真实数据库。",
     "튜토리얼 중에는 모든 것이 시뮬레이션되며 실제 데이터베이스에 접근하지 않습니다.",
   ],
+  ["Editor SQL", "SQL editor", "Editor SQL", "SQL エディター", "SQL 编辑器", "SQL 편집기"],
   [
-    "Consulta visualizada",
-    "Displayed query",
-    "Consulta visualizada",
-    "表示中のクエリ",
-    "显示的查询",
-    "표시된 쿼리",
-  ],
-  [
-    "Aqui você confere qual SQL produziu os dados exibidos logo abaixo. A grade representa o resultado dessa consulta.",
-    "Here you can see which SQL produced the data below. The grid represents the query result.",
-    "Aquí puedes ver qué SQL produjo los datos de abajo. La cuadrícula representa el resultado de la consulta.",
-    "下に表示されたデータを生成したSQLを確認できます。グリッドがクエリ結果です。",
-    "这里可以查看生成下方数据的 SQL。网格代表查询结果。",
-    "아래 데이터를 생성한 SQL을 확인할 수 있습니다. 그리드는 쿼리 결과입니다.",
+    "Escreva SQL no editor. [Ctrl+A] executa o comando na posição do cursor; o resultado aparece abaixo.",
+    "Write SQL in the editor. [Ctrl+A] runs the statement at the cursor; the result appears below.",
+    "Escribe SQL en el editor. [Ctrl+A] ejecuta la sentencia en el cursor; el resultado aparece debajo.",
+    "エディターにSQLを入力します。[Ctrl+A]でカーソル位置の文を実行し、結果を下に表示します。",
+    "在编辑器中编写 SQL。[Ctrl+A] 执行光标所在的语句；结果显示在下方。",
+    "편집기에 SQL을 작성하세요. [Ctrl+A]는 커서 위치의 문을 실행하며 결과는 아래에 표시됩니다.",
   ],
   [
     "A consulta deste tutorial é apenas uma demonstração.",
@@ -1437,12 +1455,12 @@ const MESSAGES: readonly Message[] = [
   ["sem padrão", "no default", "sin valor predeterminado", "既定値なし", "无默认值", "기본값 없음"],
   ["Alteração", "Change", "Cambio", "変更", "更改", "변경"],
   [
-    "[Ctrl+D] alternar driver",
-    "[Ctrl+D] switch driver",
-    "[Ctrl+D] cambiar driver",
-    "[Ctrl+D] ドライバー切替",
-    "[Ctrl+D] 切换驱动",
-    "[Ctrl+D] 드라이버 전환",
+    "[A←]/[F→] alternar driver",
+    "[A←]/[F→] switch driver",
+    "[A←]/[F→] cambiar driver",
+    "[A←]/[F→] ドライバー切替",
+    "[A←]/[F→] 切换驱动",
+    "[A←]/[F→] 드라이버 전환",
   ],
   [
     "[Ctrl+R] Testar",
@@ -1469,12 +1487,12 @@ const MESSAGES: readonly Message[] = [
     "[Ctrl+S] 저장 후 연결",
   ],
   [
-    "[Ctrl+W] ◆ LEITURA + ESCRITA",
-    "[Ctrl+W] ◆ READ + WRITE",
-    "[Ctrl+W] ◆ LECTURA + ESCRITURA",
-    "[Ctrl+W] ◆ 読み書き",
-    "[Ctrl+W] ◆ 读写",
-    "[Ctrl+W] ◆ 읽기 + 쓰기",
+    "[Ctrl+W] ◆ SOMENTE LEITURA",
+    "[Ctrl+W] ◆ READ-ONLY",
+    "[Ctrl+W] ◆ SOLO LECTURA",
+    "[Ctrl+W] ◆ 読み取り専用",
+    "[Ctrl+W] ◆ 只读",
+    "[Ctrl+W] ◆ 읽기 전용",
   ],
   [
     "[Ctrl+W] ◇ SOMENTE LEITURA",
@@ -3195,12 +3213,12 @@ const MESSAGES: readonly Message[] = [
     "쓰기 실패.",
   ],
   [
-    "Conexão em somente leitura. Use [C] > [E] e habilite LEITURA + ESCRITA.",
-    "Connection is read-only. Use [C] > [E] and enable READ + WRITE.",
-    "La conexión es de solo lectura. Usa [C] > [E] y activa LECTURA + ESCRITURA.",
-    "読み取り専用接続です。[C] > [E]で読み取り + 書き込みを有効にしてください。",
-    "连接为只读。请使用 [C] > [E] 启用读写。",
-    "읽기 전용 연결입니다. [C] > [E]에서 읽기 + 쓰기를 활성화하세요.",
+    "Conexão em somente leitura. Use [C] > [E] e desmarque SOMENTE LEITURA com [Ctrl+W].",
+    "Connection is read-only. Use [C] > [E] and uncheck READ-ONLY with [Ctrl+W].",
+    "La conexión es de solo lectura. Usa [C] > [E] y desmarca SOLO LECTURA con [Ctrl+W].",
+    "読み取り専用接続です。[C] > [E]で[Ctrl+W]を押して読み取り専用のチェックを外してください。",
+    "连接为只读。请使用 [C] > [E]，按 [Ctrl+W] 取消勾选只读。",
+    "읽기 전용 연결입니다. [C] > [E]에서 [Ctrl+W]로 읽기 전용 선택을 해제하세요.",
   ],
   [
     "Views são somente leitura e não podem ser alteradas por esta tela.",
@@ -4680,12 +4698,12 @@ const MESSAGES: readonly Message[] = [
   ],
   ["[X] Export.", "[X] Export", "[X] Export.", "[X] 書き出し", "[X] 导出", "[X] 내보내기"],
   [
-    "[X] Exportar log",
-    "[X] Export log",
-    "[X] Exportar log",
-    "[X] ログを書き出し",
-    "[X] 导出日志",
-    "[X] 로그 내보내기",
+    "[Ctrl+X] Exportar log",
+    "[Ctrl+X] Export log",
+    "[Ctrl+X] Exportar log",
+    "[Ctrl+X] ログを書き出し",
+    "[Ctrl+X] 导出日志",
+    "[Ctrl+X] 로그 내보내기",
   ],
   [
     "[I] Entrada do processo",
@@ -4874,22 +4892,33 @@ const MESSAGES: readonly Message[] = [
 
   // Cliente HTTP.
   ...HTTP_MESSAGES,
+  ...HTTP_ACTIONS_MESSAGES,
   ...HTTP_NAVIGATION_MESSAGES,
   ...HTTP_REDIRECT_MESSAGES,
   ...HTTP_CONFLICT_MESSAGES,
   ...HTTP_ENVIRONMENT_MESSAGES,
+  ...HTTP_ENVIRONMENT_TABS_MESSAGES,
+  ...HTTP_COLLECTION_SETTINGS_MESSAGES,
   ...HTTP_IMPORT_MESSAGES,
   ...HTTP_POSTMAN_MESSAGES,
+  ...HTTP_POSTMAN_STORAGE_MESSAGES,
   ...HTTP_POSTMAN_SOURCE_MESSAGES,
+  ...HTTP_POSTMAN_LIVE_MESSAGES,
   ...HTTP_POSTMAN_ERROR_MESSAGES,
   ...HTTP_OVERLAY_MESSAGES,
   ...HTTP_PROJECT_MESSAGES,
   ...HTTP_REQUEST_MESSAGES,
+  ...HTTP_REQUEST_TABLES_MESSAGES,
+  ...HTTP_REQUEST_FORMS_MESSAGES,
+  ...HTTP_CHAINING_MESSAGES,
+  ...HTTP_OAUTH2_MESSAGES,
+  ...HTTP_COLLECTION_MENU_MESSAGES,
   ...HTTP_TRANSPORT_MESSAGES,
   ...HTTP_TUTORIAL_MESSAGES,
   ...TERMINAL_TUTORIAL_MESSAGES,
   ...HTTP_PREVIEW_MESSAGES,
   ...HTTP_RESPONSE_MESSAGES,
+  ...HTTP_RESPONSE_TABLE_MESSAGES,
   ...HTTP_RUNNER_MESSAGES,
   ...HTTP_WORKSPACE_SETTINGS_MESSAGES,
   ...APPEARANCE_MESSAGES,
@@ -4984,24 +5013,26 @@ const MESSAGES: readonly Message[] = [
   ["▦ Seção 2×2", "▦ 2×2 section", "▦ Sección 2×2", "▦ 2×2 セクション", "▦ 2×2 分区", "▦ 2×2 섹션"],
 ] as const
 
-const LANGUAGE_COLUMN: Record<Exclude<LanguageId, "pt-BR">, 1 | 2 | 3 | 4 | 5> = {
+const LANGUAGE_COLUMN: Record<Exclude<LanguageId, "pt-BR">, 1 | 2 | 3 | 4 | 5 | 6> = {
   en: 1,
   es: 2,
   ja: 3,
   "zh-CN": 4,
   ko: 5,
+  ru: 6,
 }
 
-const CATALOG = new Map<string, Message>()
+const CATALOG = new Map<string, readonly [...Message, russian: string]>()
 let maxMessageLength = 0
 for (const message of MESSAGES) {
-  CATALOG.set(message[0], message)
+  CATALOG.set(message[0], withRussianTranslation(message))
   maxMessageLength = Math.max(maxMessageLength, message[0].length)
 }
 
 type Pattern = readonly [RegExp, string, string, string, string, string]
 
-const PATTERNS: readonly Pattern[] = [
+const SOURCE_PATTERNS: readonly Pattern[] = [
+  ...DATABASE_CONNECTION_PATTERNS,
   ...RUNNER_VALIDATION_PATTERNS,
   ...NOTIFICATION_PATTERNS,
   ...HTTP_WORKSPACE_SETTINGS_PATTERNS,
@@ -5794,6 +5825,8 @@ const PATTERNS: readonly Pattern[] = [
   ],
 ] as const
 
+const PATTERNS = SOURCE_PATTERNS.map(withRussianTranslation)
+
 type TranslationColumn = (typeof LANGUAGE_COLUMN)[Exclude<LanguageId, "pt-BR">]
 type TranslationPrefix = { body: string; prefix: string; warning: boolean }
 type PendingTranslationPrefix = { source: string; prefix: string; warning: boolean }
@@ -5804,6 +5837,7 @@ const ERROR_PREFIXES = {
   ja: ["エラー: ", "エラー: "],
   "zh-CN": ["错误: ", "错误: "],
   ko: ["오류: ", "오류: "],
+  ru: ["Ошибка: ", "ОШИБКА: "],
 } as const
 
 function exactTranslation(core: string, column: TranslationColumn) {

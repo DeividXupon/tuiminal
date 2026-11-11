@@ -6,6 +6,9 @@ import { GIT_PR_WORKFLOW_MESSAGES } from "./git-pr-workflow-catalog"
 import { GIT_COMPARE_TUTORIAL_MESSAGES } from "./git-compare-tutorial-catalog"
 import { GIT_TUTORIAL_MESSAGES } from "./git-tutorial-catalog"
 import { GIT_TUTORIAL_LOG_MESSAGES } from "./git-tutorial-log-catalog"
+import { GIT_PR_TUTORIAL_MESSAGES } from "./git-pr-tutorial-catalog"
+import { GIT_ISSUES_TUTORIAL_MESSAGES } from "./git-issues-tutorial-catalog"
+import { GIT_INBOX_TUTORIAL_MESSAGES } from "./git-inbox-tutorial-catalog"
 
 export const GIT_PR_MESSAGES = [
   ["Diffs", "Diffs", "Diffs", "Diff", "差异", "Diffs"],
@@ -384,6 +387,9 @@ export const GIT_PR_MESSAGES = [
   ...GIT_TUTORIAL_MESSAGES,
   ...GIT_TUTORIAL_LOG_MESSAGES,
   ...GIT_COMPARE_TUTORIAL_MESSAGES,
+  ...GIT_PR_TUTORIAL_MESSAGES,
+  ...GIT_ISSUES_TUTORIAL_MESSAGES,
+  ...GIT_INBOX_TUTORIAL_MESSAGES,
   ...GIT_PR_DETAIL_MESSAGES,
   ...GIT_PR_ACTION_MESSAGES,
 ] as const

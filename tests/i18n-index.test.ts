@@ -11,7 +11,7 @@ test("indexes translation sources once and switches languages without rebuilding
     try {
       const ui = await import(${JSON.stringify(moduleUrl)});
       const translations = [];
-      for (const language of ["pt-BR", "en", "es", "ja", "zh-CN", "ko", "en"]) {
+      for (const language of ["pt-BR", "en", "es", "ja", "zh-CN", "ko", "ru", "en"]) {
         ui.setLanguage(language);
         translations.push(ui.translateUi("  CONFIGURAÇÕES GLOBAIS  "));
       }
@@ -50,6 +50,7 @@ test("indexes translation sources once and switches languages without rebuilding
     "  グローバル設定  ",
     "  全局设置  ",
     "  전역 설정  ",
+    "  ГЛОБАЛЬНЫЕ НАСТРОЙКИ  ",
     "  GLOBAL SETTINGS  ",
   ])
   expect(result.marked).toBe("◆ GLOBAL SETTINGS")
@@ -57,4 +58,30 @@ test("indexes translation sources once and switches languages without rebuilding
   expect(result.dynamic).toBe("ターミナル 42")
   expect(result.indexes).toBe(1)
   expect(result.sizes[0]).toBeGreaterThan(1000)
+})
+
+test("indexes only trimmed sources because translateUi looks up trimmed text", () => {
+  const moduleUrl = new URL("../packages/core/src/i18n/index.ts", import.meta.url).href
+  const script = `
+    const NativeMap = globalThis.Map;
+    const maps = [];
+    globalThis.Map = class extends NativeMap {
+      constructor(entries) { super(entries); maps.push(this); }
+    };
+    try {
+      const ui = await import(${JSON.stringify(moduleUrl)});
+      ui.translateUi("CONFIGURAÇÕES GLOBAIS", "en");
+      const index = maps.find((map) => map.has("CONFIGURAÇÕES GLOBAIS"));
+      console.log(JSON.stringify([...index.keys()].filter((key) => key !== key.trim())));
+    } finally {
+      globalThis.Map = NativeMap;
+    }
+  `
+  const child = Bun.spawnSync([process.execPath, "-e", script], {
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  expect(child.stderr.toString()).toBe("")
+  expect(JSON.parse(child.stdout.toString())).toEqual([])
 })

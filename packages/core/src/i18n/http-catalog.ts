@@ -1,4 +1,7 @@
+import { HTTP_EDITOR_MESSAGES } from "./http-editor-catalog"
+
 export const HTTP_MESSAGES = [
+  ...HTTP_EDITOR_MESSAGES,
   ["HISTÓRICO HTTP", "HTTP HISTORY", "HISTORIAL HTTP", "HTTP履歴", "HTTP 历史", "HTTP 기록"],
   [
     "Nenhuma requisição nesta sessão.",
@@ -18,14 +21,21 @@ export const HTTP_MESSAGES = [
   ],
   ["REQUISIÇÃO", "REQUEST", "SOLICITUD", "リクエスト", "请求", "요청"],
   ["RESPOSTA", "RESPONSE", "RESPUESTA", "レスポンス", "响应", "응답"],
-  ["[M] Método", "[M] Method", "[M] Método", "[M] メソッド", "[M] 方法", "[M] 메서드"],
   [
-    "Troque o método com [M].",
-    "Change the method with [M].",
-    "Cambia el método con [M].",
-    "[M]でメソッドを変更できます。",
-    "按 [M] 更改方法。",
-    "[M]으로 메서드를 변경하세요.",
+    "[Shift+M] Método",
+    "[Shift+M] Method",
+    "[Shift+M] Método",
+    "[Shift+M] メソッド",
+    "[Shift+M] 方法",
+    "[Shift+M] 메서드",
+  ],
+  [
+    "Troque o método com [Shift+M].",
+    "Change the method with [Shift+M].",
+    "Cambia el método con [Shift+M].",
+    "[Shift+M]でメソッドを変更できます。",
+    "按 [Shift+M] 更改方法。",
+    "[Shift+M]으로 메서드를 변경하세요.",
   ],
   [
     "× FALHA NA REQUISIÇÃO",
@@ -380,11 +390,11 @@ export const HTTP_MESSAGES = [
     "[/] URL · [1/2] 창 · [S] 전송 · [C/Y] 탐색",
   ],
   [
-    "[/] URL · [M] método · [S] enviar · [C] coleção · [Y] histórico · [Ctrl+N/W] tabs",
-    "[/] URL · [M] method · [S] send · [C] collection · [Y] history · [Ctrl+N/W] tabs",
-    "[/] URL · [M] método · [S] enviar · [C] colección · [Y] historial · [Ctrl+N/W] pestañas",
-    "[/] URL・[M] メソッド・[S] 送信・[C] コレクション・[Y] 履歴・[Ctrl+N/W] タブ",
-    "[/] URL · [M] 方法 · [S] 发送 · [C] 集合 · [Y] 历史 · [Ctrl+N/W] 标签",
-    "[/] URL · [M] 메서드 · [S] 전송 · [C] 컬렉션 · [Y] 기록 · [Ctrl+N/W] 탭",
+    "[/] URL · [Shift+M] método · [S] enviar · [C] coleção · [Y] histórico · [Ctrl+N/W] tabs",
+    "[/] URL · [Shift+M] method · [S] send · [C] collection · [Y] history · [Ctrl+N/W] tabs",
+    "[/] URL · [Shift+M] método · [S] enviar · [C] colección · [Y] historial · [Ctrl+N/W] pestañas",
+    "[/] URL・[Shift+M] メソッド・[S] 送信・[C] コレクション・[Y] 履歴・[Ctrl+N/W] タブ",
+    "[/] URL · [Shift+M] 方法 · [S] 发送 · [C] 集合 · [Y] 历史 · [Ctrl+N/W] 标签",
+    "[/] URL · [Shift+M] 메서드 · [S] 전송 · [C] 컬렉션 · [Y] 기록 · [Ctrl+N/W] 탭",
   ],
 ] as const

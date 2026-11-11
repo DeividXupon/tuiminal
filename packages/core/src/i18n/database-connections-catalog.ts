@@ -1,5 +1,53 @@
 export const DATABASE_CONNECTION_MESSAGES = [
   [
+    "Lendo configurações de banco…",
+    "Reading database configuration…",
+    "Leyendo la configuración de bases de datos…",
+    "データベース設定を読み取り中…",
+    "正在读取数据库配置…",
+    "데이터베이스 설정 읽는 중…",
+  ],
+  [
+    "Conexões externas encontradas",
+    "External connections found",
+    "Conexiones externas encontradas",
+    "外部接続が見つかりました",
+    "已找到外部连接",
+    "외부 연결을 찾았습니다",
+  ],
+  [
+    "Abra Conexões para completar os campos ausentes.",
+    "Open Connections to complete the missing fields.",
+    "Abra Conexiones para completar los campos que faltan.",
+    "接続を開いて不足している項目を入力してください。",
+    "打开连接以填写缺少的字段。",
+    "연결을 열어 누락된 필드를 입력하세요.",
+  ],
+  [
+    "Revise os avisos de descoberta em Conexões.",
+    "Review discovery warnings in Connections.",
+    "Revise los avisos de detección en Conexiones.",
+    "接続で検出時の警告を確認してください。",
+    "请在连接中查看发现警告。",
+    "연결에서 검색 경고를 확인하세요.",
+  ],
+  [
+    "Use {VAR} para variáveis de ambiente.",
+    "Use {VAR} for environment variables.",
+    "Use {VAR} para variables de entorno.",
+    "環境変数には {VAR} を使用します。",
+    "使用 {VAR} 引用环境变量。",
+    "환경 변수에는 {VAR}를 사용하세요.",
+  ],
+  [
+    "[↑/↓] Selecionar · [Tab/Enter] Completar · [Esc] Fechar",
+    "[↑/↓] Select · [Tab/Enter] Complete · [Esc] Close",
+    "[↑/↓] Seleccionar · [Tab/Enter] Completar · [Esc] Cerrar",
+    "[↑/↓] 選択 · [Tab/Enter] 補完 · [Esc] 閉じる",
+    "[↑/↓] 选择 · [Tab/Enter] 补全 · [Esc] 关闭",
+    "[↑/↓] 선택 · [Tab/Enter] 완성 · [Esc] 닫기",
+  ],
+  [
     "COMPLETAR CONEXÃO EXTERNA",
     "COMPLETE EXTERNAL CONNECTION",
     "COMPLETAR CONEXIÓN EXTERNA",
@@ -38,5 +86,16 @@ export const DATABASE_CONNECTION_MESSAGES = [
     "pgpass の使用をやめるにはパスワードを入力してください。",
     "请输入密码以停止使用 pgpass。",
     "pgpass 사용을 중지하려면 비밀번호를 입력하세요.",
+  ],
+] as const
+
+export const DATABASE_CONNECTION_PATTERNS = [
+  [
+    /^Variável de ambiente não definida: (.+)$/,
+    "Environment variable is not defined: $1",
+    "Variable de entorno no definida: $1",
+    "環境変数が定義されていません: $1",
+    "未定义环境变量: $1",
+    "환경 변수가 정의되지 않음: $1",
   ],
 ] as const

@@ -56,12 +56,12 @@ export const GIT_ISSUE_MESSAGES = [
   ["Estou envolvido", "Involved", "Estoy involucrado", "関与中", "我参与的", "내가 참여함"],
   ["Mencionaram-me", "Mentioned", "Me mencionaron", "メンション", "提及我的", "나를 멘션함"],
   [
-    "  ESTADO · REPOSITÓRIO / ISSUE / TÍTULO · ATUALIZAÇÃO · CONVERSA",
-    "  STATE · REPOSITORY / ISSUE / TITLE · UPDATED · CONVERSATION",
-    "  ESTADO · REPOSITORIO / ISSUE / TÍTULO · ACTUALIZACIÓN · CONVERSACIÓN",
-    "  状態・リポジトリ / ISSUE / タイトル・更新・会話",
-    "  状态 · 仓库 / ISSUE / 标题 · 更新 · 对话",
-    "  상태 · 저장소 / ISSUE / 제목 · 업데이트 · 대화",
+    "ESTADO · REPOSITÓRIO / ISSUE / TÍTULO · ATUALIZAÇÃO · CONVERSA",
+    "STATE · REPOSITORY / ISSUE / TITLE · UPDATED · CONVERSATION",
+    "ESTADO · REPOSITORIO / ISSUE / TÍTULO · ACTUALIZACIÓN · CONVERSACIÓN",
+    "状態・リポジトリ / ISSUE / タイトル・更新・会話",
+    "状态 · 仓库 / ISSUE / 标题 · 更新 · 对话",
+    "상태 · 저장소 / ISSUE / 제목 · 업데이트 · 대화",
   ],
   [
     "Nenhuma issue nesta seção.",

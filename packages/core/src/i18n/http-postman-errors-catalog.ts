@@ -1,5 +1,37 @@
 export const HTTP_POSTMAN_ERROR_MESSAGES = [
   [
+    "A chave foi aceita pelo Postman, mas não foi possível salvá-la no gerenciador de credenciais do sistema.",
+    "Postman accepted the key, but it could not be saved in the system credential store.",
+    "Postman aceptó la clave, pero no se pudo guardar en el gestor de credenciales del sistema.",
+    "Postman はキーを受け入れましたが、システムの資格情報ストアに保存できませんでした。",
+    "Postman 已接受密钥，但无法将其保存到系统凭据存储中。",
+    "Postman에서 키를 승인했지만 시스템 자격 증명 저장소에 저장하지 못했습니다.",
+  ],
+  [
+    "No Linux, disponibilize libsecret e um serviço de credenciais. No Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+    "On Linux, ensure libsecret and a credential service are available. On Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+    "En Linux, asegúrate de que libsecret y un servicio de credenciales estén disponibles. En Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+    "Linux では libsecret と資格情報サービスが必要です。Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+    "在 Linux 上，请确保 libsecret 和凭据服务可用。在 Ubuntu/Debian 上运行：sudo apt install libsecret-1-0 gnome-keyring",
+    "Linux에서는 libsecret과 자격 증명 서비스를 사용할 수 있어야 합니다. Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+  ],
+  [
+    "Inicie e desbloqueie o cofre na mesma sessão do terminal (inclusive em SSH/WSL) e repita: tuiminal postman login",
+    "Start and unlock the keyring in the same terminal session (including SSH/WSL), then retry: tuiminal postman login",
+    "Inicia y desbloquea el llavero en la misma sesión de terminal (también en SSH/WSL) y vuelve a ejecutar: tuiminal postman login",
+    "同じ端末セッション（SSH/WSL を含む）でキーリングを起動してロックを解除し、再実行してください: tuiminal postman login",
+    "在同一终端会话（包括 SSH/WSL）中启动并解锁密钥环，然后重试：tuiminal postman login",
+    "동일한 터미널 세션(SSH/WSL 포함)에서 키링을 시작하고 잠금을 해제한 다음 다시 실행하세요: tuiminal postman login",
+  ],
+  [
+    "Desbloqueie o gerenciador de credenciais do sistema, permita o acesso do Tuiminal e repita: tuiminal postman login",
+    "Unlock the system credential store, allow Tuiminal access, then retry: tuiminal postman login",
+    "Desbloquea el gestor de credenciales del sistema, permite el acceso de Tuiminal y vuelve a ejecutar: tuiminal postman login",
+    "システムの資格情報ストアのロックを解除し、Tuiminal のアクセスを許可してから再実行してください: tuiminal postman login",
+    "解锁系统凭据存储，允许 Tuiminal 访问，然后重试：tuiminal postman login",
+    "시스템 자격 증명 저장소의 잠금을 해제하고 Tuiminal의 접근을 허용한 다음 다시 실행하세요: tuiminal postman login",
+  ],
+  [
     "Headers com segredos privados importados não podem ser enviados ao Postman.",
     "Headers with imported private secrets cannot be sent to Postman.",
     "No se pueden enviar a Postman encabezados con secretos privados importados.",
