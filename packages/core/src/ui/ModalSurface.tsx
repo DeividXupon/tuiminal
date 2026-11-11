@@ -1,11 +1,14 @@
 import type { BoxRenderable } from "@opentui/core"
 import type { ReactNode, Ref } from "react"
 import { COLORS } from "../settings/theme"
+import { useWorkspaceRepaint } from "./workspace-repaint"
 
 export type ModalSurfaceProps = {
   id: string
   width: number
   height: number
+  /** Use intrinsic content height, bounded by height, for short forms and confirmations. */
+  fitContent?: boolean
   zIndex: number
   borderColor: string
   onBackdropPress: () => void
@@ -27,6 +30,7 @@ export function ModalSurface({
   id,
   width,
   height,
+  fitContent = false,
   zIndex,
   borderColor,
   onBackdropPress,
@@ -42,6 +46,7 @@ export function ModalSurface({
   border = true,
   placement = "center",
 }: ModalSurfaceProps) {
+  useWorkspaceRepaint(id)
   const backdropLayerId = layerId ?? `${id}-layer`
   return (
     <>
@@ -86,7 +91,8 @@ export function ModalSurface({
           style={{
             ...(positionRelative ? { position: "relative" as const } : {}),
             width,
-            height,
+            height: fitContent ? "auto" : height,
+            maxHeight: height,
             borderStyle: "rounded",
             borderColor,
             backgroundColor,

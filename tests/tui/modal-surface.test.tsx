@@ -9,6 +9,33 @@ import { ModalSurface } from "../../packages/core/src/ui/ModalSurface"
 
 let tui: TestRendererSetup | undefined
 
+test("content-sized dialogs shrink to text and retain wrapped content", async () => {
+  tui = await testRender(
+    <ModalSurface
+      id="content-modal"
+      width={32}
+      height={20}
+      fitContent
+      zIndex={970}
+      borderColor="#ff5555"
+      onBackdropPress={() => {}}
+    >
+      <text content="Title" />
+      <text content="A longer description that wraps across several terminal rows." />
+      <box flexGrow={1} />
+      <InlineButton id="content-confirm" label="[Y] Confirm" onPress={() => {}} />
+    </ModalSurface>,
+    { width: 80, height: 25 },
+  )
+  await tui.renderOnce()
+  const dialog = tui.renderer.root.findDescendantById("content-modal")
+  const confirm = tui.renderer.root.findDescendantById("content-confirm")
+  if (!dialog || !confirm) throw new Error("Content dialog did not mount")
+  expect(dialog.height).toBe(7)
+  expect(confirm.screenY + confirm.height).toBe(dialog.screenY + dialog.height - 1)
+  expect(tui.captureCharFrame()).toContain("terminal rows.")
+})
+
 afterEach(() => {
   act(() => tui?.renderer.destroy())
   tui = undefined

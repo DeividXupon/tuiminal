@@ -59,6 +59,11 @@ test.each(["constructor", "__proto__", "toString", "hasOwnProperty", "not-a-pale
           language: "en",
           terminalMasterKey: "Ctrl+B",
           terminalAgentCommands: [],
+          terminalAgentSounds: {
+            question: "question_004",
+            completed: "select_004",
+            error: "error_005",
+          },
           terminalRemoteCodexProfiles: [],
           terminalRemoteCodexActiveProfileId: null,
           sensitiveTerms: ["fixture"],

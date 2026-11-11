@@ -1,4 +1,16 @@
 export {
+  TERMINAL_AGENT_SOUND_OPTIONS,
+  DEFAULT_TERMINAL_AGENT_SOUNDS,
+  type TerminalAgentSoundId,
+  type TerminalAgentSoundEvent,
+  type TerminalAgentSounds,
+} from "./terminal-sounds"
+import {
+  DEFAULT_TERMINAL_AGENT_SOUNDS,
+  normalizeTerminalAgentSounds,
+  type TerminalAgentSounds,
+} from "./terminal-sounds"
+export {
   isTerminalMasterKey,
   matchesTerminalMasterKey,
   TERMINAL_MASTER_KEYS,
@@ -40,6 +52,7 @@ export type UiSettings = {
   palette: PaletteId
   layout: LayoutMode
   language: LanguageId
+  terminalAgentSounds: TerminalAgentSounds
   terminalAgentCommands: string[]
   terminalMasterKey: TerminalMasterKey
   terminalRemoteCodexProfiles: TerminalRemoteCodexProfile[]
@@ -61,6 +74,7 @@ export const PALETTE_OPTIONS: ReadonlyArray<{
   { id: "dracula", label: "Dracula", description: "roxo vibrante e contraste gótico" },
   { id: "catppuccin", label: "Catppuccin", description: "tons pastel suaves e modernos" },
   { id: "tokyo-night", label: "Tokyo Night", description: "azul urbano e acentos neon" },
+  { id: "galaxy", label: "Galaxy", description: "violeta cósmico e acentos rosa do Posting" },
 ]
 
 const DEFAULT_SETTINGS: UiSettings = {
@@ -69,6 +83,7 @@ const DEFAULT_SETTINGS: UiSettings = {
   layout: "framed",
   language: DEFAULT_LANGUAGE,
   terminalMasterKey: DEFAULT_TERMINAL_MASTER_KEY,
+  terminalAgentSounds: { ...DEFAULT_TERMINAL_AGENT_SOUNDS },
   terminalAgentCommands: [],
   terminalRemoteCodexProfiles: [],
   terminalRemoteCodexActiveProfileId: null,
@@ -116,6 +131,7 @@ function loadSettings(): UiSettings {
       palette: isPalette(parsed.palette) ? parsed.palette : DEFAULT_SETTINGS.palette,
       layout: isLayout(parsed.layout) ? parsed.layout : DEFAULT_SETTINGS.layout,
       language: isLanguage(parsed.language) ? parsed.language : DEFAULT_SETTINGS.language,
+      terminalAgentSounds: normalizeTerminalAgentSounds(parsed.terminalAgentSounds),
       terminalAgentCommands: normalizeTerminalAgentCommands(parsed.terminalAgentCommands),
       terminalMasterKey: isTerminalMasterKey(parsed.terminalMasterKey)
         ? parsed.terminalMasterKey
@@ -229,6 +245,7 @@ export function databaseSelectionColors() {
 export function getUiSettings(): UiSettings {
   return {
     ...currentSettings,
+    terminalAgentSounds: { ...currentSettings.terminalAgentSounds },
     terminalAgentCommands: [...currentSettings.terminalAgentCommands],
     terminalRemoteCodexProfiles: currentSettings.terminalRemoteCodexProfiles.map((profile) => ({
       ...profile,
@@ -268,6 +285,9 @@ export function updateUiSettings(
     palette: isPalette(patch.palette) ? patch.palette : currentSettings.palette,
     layout: isLayout(patch.layout) ? patch.layout : currentSettings.layout,
     language: isLanguage(patch.language) ? patch.language : currentSettings.language,
+    terminalAgentSounds: normalizeTerminalAgentSounds(
+      patch.terminalAgentSounds ?? currentSettings.terminalAgentSounds,
+    ),
     terminalAgentCommands:
       patch.terminalAgentCommands === undefined
         ? [...currentSettings.terminalAgentCommands]
@@ -300,6 +320,7 @@ export function updateUiSettings(
     return {
       settings: {
         ...next,
+        terminalAgentSounds: { ...next.terminalAgentSounds },
         terminalAgentCommands: [...next.terminalAgentCommands],
         terminalRemoteCodexProfiles: next.terminalRemoteCodexProfiles.map((profile) => ({
           ...profile,
@@ -313,6 +334,7 @@ export function updateUiSettings(
     return {
       settings: {
         ...next,
+        terminalAgentSounds: { ...next.terminalAgentSounds },
         terminalAgentCommands: [...next.terminalAgentCommands],
         terminalRemoteCodexProfiles: next.terminalRemoteCodexProfiles.map((profile) => ({
           ...profile,

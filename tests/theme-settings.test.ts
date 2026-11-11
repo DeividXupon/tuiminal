@@ -6,7 +6,7 @@ import { DEFAULT_SENSITIVE_TERMS } from "../packages/core/src/security/sensitive
 import { PALETTE_OPTIONS, paletteFor } from "../packages/core/src/settings/theme"
 
 describe("UI settings", () => {
-  test("offers seven complete palettes in Dark and Light", () => {
+  test("offers eight complete palettes in Dark and Light", () => {
     expect(PALETTE_OPTIONS.map((palette) => palette.id)).toEqual([
       "prime",
       "midnight",
@@ -15,10 +15,14 @@ describe("UI settings", () => {
       "dracula",
       "catppuccin",
       "tokyo-night",
+      "galaxy",
     ])
     for (const palette of PALETTE_OPTIONS) {
-      expect(paletteFor(palette.id, "dark").canvas).toMatch(/^#[\da-f]{6}$/i)
-      expect(paletteFor(palette.id, "light").canvas).toMatch(/^#[\da-f]{6}$/i)
+      for (const mode of ["dark", "light"] as const) {
+        const colors = paletteFor(palette.id, mode)
+        expect(Object.keys(colors).sort()).toEqual(Object.keys(paletteFor("prime", mode)).sort())
+        for (const color of Object.values(colors)) expect(color).toMatch(/^#[\da-f]{6}$/i)
+      }
     }
   })
 

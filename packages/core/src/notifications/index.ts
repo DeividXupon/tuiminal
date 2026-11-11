@@ -1,3 +1,4 @@
+export { ConfirmationNotification } from "./ConfirmationNotification"
 export type {
   AppNotification,
   NotificationInput,

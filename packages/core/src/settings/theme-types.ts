@@ -6,6 +6,7 @@ export type PaletteId =
   | "dracula"
   | "catppuccin"
   | "tokyo-night"
+  | "galaxy"
 
 export type ColorPalette = {
   canvas: string

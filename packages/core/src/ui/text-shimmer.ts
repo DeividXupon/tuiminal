@@ -1,5 +1,8 @@
 import { RGBA, type TextChunk } from "@opentui/core"
 
+export const TEXT_SHIMMER_FRAME_MS = 60
+export const TEXT_SHIMMER_FRAME_COUNT = 28
+
 export type TextShimmerAnimation = {
   frame: number
   frameCount: number
@@ -17,7 +20,7 @@ export function blendTextColor(from: RGBA, to: RGBA, ratio: number) {
   )
 }
 
-/** Smooth traveling highlight shared by Term Agents shortcut and diff glyphs. */
+/** Smooth traveling highlight shared by UI shortcuts and Term Agents diff glyphs. */
 export function textShimmerIntensity(
   position: number,
   length: number,

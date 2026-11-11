@@ -76,7 +76,7 @@ test("translation and wide glyphs retain their text and shortcut accent", async 
   expect(colorOf("[Enter]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
 })
 
-test("directional hints distinguish the A/F key from the semantic arrow", async () => {
+test("directional hints color the complete bracketed key blue", async () => {
   tui = await testRender(
     <ShortcutText content="[A←] anterior  [F→] próximo" style={{ fg: "#A0A0A0" }} />,
     { width: 40, height: 4 },
@@ -84,6 +84,24 @@ test("directional hints distinguish the A/F key from the semantic arrow", async 
   await tui.renderOnce()
   expect(colorOf("[A")).toEqual(RGBA.fromHex("#4B75FF").toInts())
   expect(colorOf("[F")).toEqual(RGBA.fromHex("#4B75FF").toInts())
-  expect(colorOf("←]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
-  expect(colorOf("→]")).toEqual(RGBA.fromHex("#A0A0A0").toInts())
+  expect(colorOf("←]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+  expect(colorOf("→]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
+})
+
+test("selected and disabled controls retain blue hints and purple action hints", async () => {
+  tui = await testRender(
+    <box>
+      <InlineButton label="[?] Ações" selected onPress={() => undefined} />
+      <InlineButton
+        label="[Ctrl+S] Salvar"
+        disabled
+        shortcutColor="#777777"
+        onPress={() => undefined}
+      />
+    </box>,
+    { width: 60, height: 6 },
+  )
+  await tui.renderOnce()
+  expect(colorOf("[?]")).toEqual(RGBA.fromHex("#A855F7").toInts())
+  expect(colorOf("[Ctrl+S]")).toEqual(RGBA.fromHex("#4B75FF").toInts())
 })

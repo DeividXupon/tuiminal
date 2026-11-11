@@ -1,60 +1,20 @@
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
-import { Writable } from "node:stream"
-import { OptimizedBuffer, resolveRenderLib } from "@opentui/core"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { useKeyboard } from "@opentui/react"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
 import { App } from "../../apps/cli/src/App"
-import { useWorkspaceRepaint } from "../../apps/cli/src/hooks/use-workspace-repaint"
+import { useWorkspaceRepaint } from "../../packages/core/src/ui/workspace-repaint"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
+
+import { outputScreen } from "./output-screen"
 
 let tui: TestRendererSetup | undefined
 const settings = getUiSettings()
 const onlyTab = process.env.TUIMINAL_ONLY_TAB
 const initialTab = process.env.TUIMINAL_INITIAL_TAB
 let screen: ReturnType<typeof outputScreen> | undefined
-
-function outputScreen(columns: number, rows: number) {
-  const lib = resolveRenderLib()
-  const terminal = lib.createEmbeddedTerminal({ cols: columns, rows, maxScrollback: 0 })
-  const buffer = OptimizedBuffer.create(columns, rows, "wcwidth")
-  const decoder = new TextDecoder()
-  const stdout = Object.assign(
-    new Writable({
-      write(chunk, _encoding, callback) {
-        lib.embeddedTerminalWrite(terminal, chunk)
-        callback()
-      },
-    }),
-    { isTTY: true, columns, rows, getColorDepth: () => 24 },
-  )
-  return {
-    stdout: stdout as unknown as NodeJS.WriteStream,
-    read() {
-      lib.embeddedTerminalCompose(terminal, buffer.ptr, 0, 0)
-      return decoder.decode(buffer.getRealCharBytes(true))
-    },
-    leaveStaleCells() {
-      // Simulate terminal cells left behind by an earlier frame, including spaces
-      // the renderer still believes are blank. Save/restore the physical cursor.
-      lib.embeddedTerminalWrite(
-        terminal,
-        new TextEncoder().encode("\x1b7\x1b[1;1HOLD-SCREEN\x1b[1;105HOLD\x1b[25;108HSTALE\x1b8"),
-      )
-    },
-    resize(width: number, height: number) {
-      lib.embeddedTerminalResize(terminal, width, height)
-      buffer.resize(width, height)
-    },
-    destroy() {
-      lib.destroyEmbeddedTerminal(terminal)
-      buffer.destroy()
-      stdout.destroy()
-    },
-  }
-}
 
 afterEach(async () => {
   await act(async () => tui?.renderer.destroy())
@@ -180,7 +140,7 @@ test("workspace repaint requests retire on unmount and idle frames stay incremen
       expect(tui.captureCharFrame()).not.toContain("WORKSPACE")
       expect(tui.renderer.root.listenerCount("layout-changed")).toBe(initialListeners)
       expect(updates.length).toBeGreaterThan(0)
-      expect(Math.max(...updates)).toBeLessThan(60)
+      expect(updates.filter((count) => count === 60 * 16)).toHaveLength(1)
     }
   } finally {
     tui.renderer.off("frame", recordFrame)

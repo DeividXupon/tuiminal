@@ -1,4 +1,5 @@
 import * as sharedActionPaletteLifecycle from "@xupon/tuiminal-core/ui/use-action-palette"
+import * as sharedWorkspaceRepaint from "@xupon/tuiminal-core/ui/workspace-repaint"
 // Shared instances used by the private official-feature payload format.
 import { registerFeatureHost } from "@xupon/tuiminal-core/runtime/feature-host"
 import * as shared0 from "react"
@@ -86,6 +87,7 @@ export function prepareFeatureHost(
       "@xupon/tuiminal-core/ui/NativeDiff": shared31,
       "@xupon/tuiminal-core/ui/text-shimmer": shared32,
       "@xupon/tuiminal-core/ui/use-action-palette": sharedActionPaletteLifecycle,
+      "@xupon/tuiminal-core/ui/workspace-repaint": sharedWorkspaceRepaint,
       "@xupon/tuiminal-core/ui/ActionPalette": shared33,
       "@xupon/tuiminal-core/ui/FocusSelectionOverlay": shared34,
       "@xupon/tuiminal-core/ui/action-palette": shared35,

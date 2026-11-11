@@ -131,18 +131,21 @@ describe("action key color", () => {
     const chunk = styled.chunks.find((candidate) => candidate.text === token)
     return chunk?.fg?.toInts()
   }
-  const purple = RGBA.fromHex(ACTION_KEY_COLOR).toInts()
+  const actionPurple = RGBA.fromHex(ACTION_KEY_COLOR).toInts()
   const blue = RGBA.fromHex(BRAND_COLOR).toInts()
 
-  test("draws [?] and declared action keys in purple and other hints in the brand blue", () => {
-    expect(colorOf("[?] Ações  [R] Atualizar", "[?]")).toEqual(purple)
+  test("draws the action palette and explicit action keys in purple and other hints in blue", () => {
+    expect(colorOf("[?] Ações  [R] Atualizar", "[?]")).toEqual(actionPurple)
     expect(colorOf("[?] Ações  [R] Atualizar", "[R]")).toEqual(blue)
-    expect(colorOf("Sync [Ctrl+B] > [R]", "[Ctrl+B]", undefined, ["[Ctrl+B]"])).toEqual(purple)
+    expect(colorOf("Sync [Ctrl+B] > [R]", "[Ctrl+B]", undefined, ["[Ctrl+B]"])).toEqual(
+      actionPurple,
+    )
     expect(colorOf("[Ctrl+B] Criar", "[Ctrl+B]")).toEqual(blue)
     expect(colorOf("[?/Esc] Fechar", "[?/Esc]")).toEqual(blue)
   })
 
-  test("keeps an explicit muted or disabled color", () => {
-    expect(colorOf("[?] Ações", "[?]", "#777777")).toEqual(RGBA.fromHex("#777777").toInts())
+  test("preserves shortcut colors when a caller passes a muted or disabled label color", () => {
+    expect(colorOf("[?] Ações", "[?]", "#777777")).toEqual(actionPurple)
+    expect(colorOf("[R] Atualizar", "[R]", "#777777")).toEqual(blue)
   })
 })

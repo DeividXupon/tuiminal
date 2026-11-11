@@ -17,9 +17,13 @@ export type InlineButtonProps = {
   disabled?: boolean
   /** Resting background; active, focused and pressed states keep their own highlight. */
   backgroundColor?: string | undefined
+  highlightShortcuts?: boolean
+  shortcutsMuted?: boolean | undefined
   shortcutColor?: string | undefined
+  /** Explicit semantic exception, such as red tab-close shortcuts. */
+  shortcutBaseColor?: string | undefined
   shortcutAnimation?: ShortcutAnimation | undefined
-  /** Exact bracket tokens drawn in the action-key purple, such as the Master Key. */
+  /** Exact bracketed action keys to highlight in purple. */
   actionKeys?: readonly string[] | undefined
   buttonRef?: Ref<ButtonRenderable>
 }
@@ -65,7 +69,10 @@ export function InlineButton({
   disabled = false,
   compact = LAYOUT.compact,
   backgroundColor,
+  highlightShortcuts = true,
+  shortcutsMuted = false,
   shortcutColor,
+  shortcutBaseColor,
   shortcutAnimation,
   actionKeys,
   buttonRef,
@@ -82,8 +89,10 @@ export function InlineButton({
       {(state) => (
         <ShortcutText
           content={` ${translateUi(label)} `}
-          highlight={!selected}
+          highlight={highlightShortcuts}
+          shortcutsMuted={shortcutsMuted}
           shortcutColor={shortcutColor}
+          shortcutBaseColor={shortcutBaseColor}
           shortcutAnimation={shortcutAnimation}
           actionKeys={actionKeys}
           style={buttonColors({

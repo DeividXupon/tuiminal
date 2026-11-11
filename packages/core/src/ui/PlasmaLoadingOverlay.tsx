@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { COLORS } from "../settings/theme"
 import { translateUi } from "../i18n/index"
 import { createPlasmaFrame, plasmaExitPresence, plasmaStyledText } from "./plasma-loader"
+import { useWorkspaceRepaint } from "./workspace-repaint"
 
 const FRAME_INTERVAL_MS = 72
 const EXIT_DURATION_MS = 220
@@ -82,6 +83,7 @@ export function PlasmaLoadingOverlay({
 
   const renderedPresence = animationEnabled ? presence : active ? 1 : 0
   const renderedVisible = animationEnabled ? visible : active
+  useWorkspaceRepaint("loading", renderedVisible)
   const plasma = useMemo(
     () => createPlasmaFrame(dimensions.width, dimensions.height, frame, renderedPresence),
     [dimensions.height, dimensions.width, frame, renderedPresence],

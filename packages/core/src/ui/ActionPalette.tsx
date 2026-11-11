@@ -158,6 +158,7 @@ function ActionPaletteRow({
  * example versioned projects above local branches.
  */
 export function ActionPalette<Id extends string>({
+  active = true,
   id,
   title,
   accent,
@@ -169,6 +170,7 @@ export function ActionPalette<Id extends string>({
   onRun,
   onClose,
 }: {
+  active?: boolean
   id: string
   /** Untranslated title. */
   title: string
@@ -196,16 +198,34 @@ export function ActionPalette<Id extends string>({
   const sideSelection = useListSelection(sideEntries)
   const selected = actionSelection.selected
   const dialogWidth = Math.max(1, Math.min(120, width - 2))
-  const dialogHeight = Math.max(1, Math.min(32, height - 2))
   const showSide = Boolean(side) && dialogWidth >= SIDE_PANEL_MIN_DIALOG_WIDTH
+  const sideRows =
+    showSide && side
+      ? side.length *
+          (1 +
+            Math.max(
+              1,
+              ...side.map(
+                (section) =>
+                  sideEntries.filter((entry) => entry.sectionId === section.id).length +
+                  Number(Boolean(section.error || section.loading)),
+              ),
+            )) +
+        side.length -
+        1
+      : 0
+  const dialogHeight = Math.max(
+    1,
+    Math.min(32, height - 2, 5 + Math.max(1, visible.length * 2, sideRows)),
+  )
   const activePanel = showSide ? panel : "actions"
   const contentWidth = Math.max(1, dialogWidth - 4)
   const sideWidth = showSide ? Math.max(1, Math.floor((contentWidth - 1) / 3) - 2) : 0
   const rowWidth = showSide ? Math.max(1, contentWidth - sideWidth - 5) : contentWidth
 
   useEffect(() => {
-    dialog.current?.focus()
-  }, [])
+    if (active) dialog.current?.focus()
+  }, [active])
   useEffect(() => {
     const search = input.current
     if (!search) return
@@ -254,6 +274,7 @@ export function ActionPalette<Id extends string>({
   }
 
   useKeyboard((key) => {
+    if (!active) return
     const searchFocused = input.current?.focused ?? false
     if (handleDialogKey(key, searchFocused) || handleNavigation(key, searchFocused)) {
       consume(key)
