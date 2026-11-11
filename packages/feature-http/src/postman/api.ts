@@ -1,4 +1,4 @@
-import { validatePostmanApiKey, type PostmanAccount } from "./account"
+import { type PostmanAccount, validatePostmanApiKey } from "./account"
 
 export type PostmanWorkspace = { id: string; name: string; visibility?: string }
 export type PostmanCollection = { id: string; uid?: string; name: string; updatedAt?: string }
@@ -34,6 +34,12 @@ function items<T>(source: Json, name: string): T[] {
 function resourceId(id: string) {
   if (!/^[\w-]{1,128}$/u.test(id)) throw new Error("Identificador Postman inválido.")
   return encodeURIComponent(id)
+}
+
+function collectionItemId(id: string) {
+  // Collection reads accept an owner-prefixed UID; item endpoints require the UUID.
+  const uid = /^\d+-([\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/i.exec(id)
+  return resourceId(uid?.[1] ?? id)
 }
 
 async function boundedJson(response: Response): Promise<Json> {
@@ -148,6 +154,23 @@ export class PostmanApi {
     throw new Error("Paginação dos workspaces Postman excedeu o limite.")
   }
 
+  async createWorkspace(name: string): Promise<PostmanWorkspace> {
+    const workspace = object(
+      (
+        await this.requestJson(
+          "/workspaces",
+          undefined,
+          { workspace: { name: name.trim(), type: "personal" } },
+          "POST",
+        )
+      ).workspace,
+    )
+    if (typeof workspace.id !== "string" || typeof workspace.name !== "string")
+      throw new Error("Resposta inesperada da API Postman.")
+    resourceId(workspace.id)
+    return { id: workspace.id, name: workspace.name }
+  }
+
   async collections(workspaceId: string): Promise<PostmanCollection[]> {
     const all: PostmanCollection[] = []
     let offset = 0
@@ -178,11 +201,42 @@ export class PostmanApi {
     )
   }
 
+  async saveEnvironment(id: string, name: string, values: PostmanVariable[]) {
+    await this.requestJson(`/environments/${resourceId(id)}`, undefined, {
+      environment: { name, values },
+    })
+  }
+
+  async createEnvironment(workspaceId: string, name: string, values: PostmanVariable[]) {
+    const result = object(
+      (
+        await this.requestJson(
+          "/environments",
+          { workspace: resourceId(workspaceId) },
+          { environment: { name, values } },
+          "POST",
+        )
+      ).environment,
+    )
+    if (typeof result.id !== "string") throw new Error("Resposta inesperada da API Postman.")
+    return resourceId(typeof result.uid === "string" ? result.uid : result.id)
+  }
+
+  async deleteEnvironment(id: string) {
+    await this.requestJson(`/environments/${resourceId(id)}`, undefined, undefined, "DELETE")
+  }
+
+  async saveGlobals(workspaceId: string, values: PostmanVariable[]) {
+    await this.requestJson(`/workspaces/${resourceId(workspaceId)}/global-variables`, undefined, {
+      values,
+    })
+  }
+
   async collection(id: string): Promise<Json> {
     return object((await this.get(`/collections/${resourceId(id)}`)).collection)
   }
 
-  async createCollection(workspaceId: string, name: string) {
+  async createCollection(workspaceId: string, name: string, contents?: Json) {
     return object(
       (
         await this.requestJson(
@@ -190,17 +244,23 @@ export class PostmanApi {
           { workspace: resourceId(workspaceId) },
           {
             collection: {
+              ...(contents ?? {}),
               info: {
+                ...(contents?.info as Json | undefined),
                 name,
                 schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
               },
-              item: [],
+              item: contents?.item ?? [],
             },
           },
           "POST",
         )
       ).collection,
     )
+  }
+
+  async replaceCollection(collectionId: string, collection: Json) {
+    return this.requestJson(`/collections/${resourceId(collectionId)}`, undefined, { collection })
   }
 
   async renameCollection(collectionId: string, name: string) {
@@ -221,27 +281,57 @@ export class PostmanApi {
     )
   }
 
-  async createRequest(collectionId: string, name: string, folderId?: string) {
+  async createRequest(collectionId: string, name: string, folderId?: string, fields?: Json) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/requests`,
-      folderId ? { folder: resourceId(folderId) } : undefined,
-      { name, method: "GET", url: "https://example.invalid" },
+      `/collections/${collectionItemId(collectionId)}/requests`,
+      folderId ? { folderId: resourceId(folderId) } : undefined,
+      { name, method: "GET", url: "https://example.invalid", ...fields },
       "POST",
     )
   }
 
   async createFolder(collectionId: string, name: string, parentFolderId?: string) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/folders`,
+      `/collections/${collectionItemId(collectionId)}/folders`,
       undefined,
       { name, ...(parentFolderId ? { folder: resourceId(parentFolderId) } : {}) },
       "POST",
     )
   }
 
+  async copyFolder(collectionId: string, folderId: string, parentFolderId?: string) {
+    const source = object(
+      (
+        await this.get(
+          `/collections/${collectionItemId(collectionId)}/folders/${resourceId(folderId)}`,
+        )
+      ).data,
+    )
+    const owner = String(source.owner ?? "")
+    if (!/^\d+$/.test(owner)) throw new Error("Identificador Postman inválido.")
+    const uid = (id: string) =>
+      /^\d+-[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)
+        ? resourceId(id)
+        : `${owner}-${resourceId(id)}`
+    return this.requestJson(
+      "/collection-folders-transfers",
+      undefined,
+      {
+        ids: [uid(folderId)],
+        mode: "copy",
+        target: {
+          id: uid(parentFolderId ?? collectionId),
+          model: parentFolderId ? "folder" : "collection",
+        },
+        location: { position: "end" },
+      },
+      "POST",
+    )
+  }
+
   async renameFolder(collectionId: string, folderId: string, name: string) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/folders/${resourceId(folderId)}`,
+      `/collections/${collectionItemId(collectionId)}/folders/${resourceId(folderId)}`,
       undefined,
       { name },
       "PUT",
@@ -250,7 +340,7 @@ export class PostmanApi {
 
   async deleteFolder(collectionId: string, folderId: string) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/folders/${resourceId(folderId)}`,
+      `/collections/${collectionItemId(collectionId)}/folders/${resourceId(folderId)}`,
       undefined,
       undefined,
       "DELETE",
@@ -259,7 +349,7 @@ export class PostmanApi {
 
   async deleteRequest(collectionId: string, requestId: string) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/requests/${resourceId(requestId)}`,
+      `/collections/${collectionItemId(collectionId)}/requests/${resourceId(requestId)}`,
       undefined,
       undefined,
       "DELETE",
@@ -268,7 +358,7 @@ export class PostmanApi {
 
   async updateRequest(collectionId: string, requestId: string, changes: Record<string, unknown>) {
     return this.requestJson(
-      `/collections/${resourceId(collectionId)}/requests/${resourceId(requestId)}`,
+      `/collections/${collectionItemId(collectionId)}/requests/${resourceId(requestId)}`,
       undefined,
       changes,
     )

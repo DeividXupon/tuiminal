@@ -89,7 +89,7 @@ async function selectedEnvironmentVariables(
   }
 }
 
-async function saveVariables(
+export async function savePostmanVariables(
   root: string,
   collectionName: string,
   remoteEnvironmentName: string | undefined,
@@ -117,12 +117,7 @@ async function saveVariables(
   throw new Error("Não foi possível escolher um nome de ambiente livre.")
 }
 
-export async function pullPostmanCollection(
-  root: string,
-  api: PullApi,
-  options: PostmanPullOptions,
-  credentialStore?: HttpCredentialStore,
-) {
+export async function preparePostmanCollection(api: PullApi, options: PostmanPullOptions) {
   const collections = options.collections ?? (await api.collections(options.workspaceId))
   const selected = collections.find(
     (collection) =>
@@ -148,11 +143,21 @@ export async function pullPostmanCollection(
     ...remoteEnvironment.entries,
   ])
   for (const [name, value] of privateValues) variables.set(name, value)
+  return { selected, document, report, warnings, remoteEnvironment, variables }
+}
 
+export async function pullPostmanCollection(
+  root: string,
+  api: PullApi,
+  options: PostmanPullOptions,
+  credentialStore?: HttpCredentialStore,
+) {
+  const { selected, document, report, warnings, remoteEnvironment, variables } =
+    await preparePostmanCollection(api, options)
   await ensureHttpWorkspaceDirectory(root)
   const canonicalRoot = await realpath(root)
   const outputDirectory = await safeImportDirectory(canonicalRoot)
-  const savedEnvironment = await saveVariables(
+  const savedEnvironment = await savePostmanVariables(
     canonicalRoot,
     selected.name,
     remoteEnvironment.name,
@@ -169,6 +174,7 @@ export async function pullPostmanCollection(
         selected.id,
         document,
         options.workspaceId,
+        selected.name,
       )
     } catch (error) {
       await rm(path, { force: true })

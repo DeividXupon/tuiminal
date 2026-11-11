@@ -11,6 +11,7 @@ import { pullPostmanCollection } from "../packages/feature-http/src/postman/pull
 import { pushPostmanRequest } from "../packages/feature-http/src/postman/sync"
 import { saveHttpRequest } from "../packages/feature-http/src/storage/collections"
 import type { HttpCredentialStore } from "../packages/feature-http/src/storage/environments"
+import type { HttpRequestDefinition } from "../packages/feature-http/src/model/types"
 
 const roots: string[] = []
 afterEach(async () => {
@@ -29,6 +30,7 @@ function fixture() {
           method: "GET",
           url: "https://example.test/users",
           header: [] as Array<{ key: string; value: string }>,
+          body: undefined as Record<string, unknown> | undefined,
         },
       },
     ],
@@ -55,6 +57,27 @@ function fixture() {
       const item = collection.item[0]!
       if (value.name) item.name = String(value.name)
       Object.assign(item.request, value)
+      if (value.dataMode === "formdata" || value.dataMode === "urlencoded") {
+        const fields = value.data as Array<{
+          key: string
+          value: string
+          type: string
+          enabled: boolean
+        }>
+        item.request.body = {
+          mode: value.dataMode,
+          [value.dataMode]: fields.map((field) => ({
+            key: field.key,
+            type: field.type,
+            disabled: !field.enabled,
+            ...(field.type === "file" ? { src: field.value } : { value: field.value }),
+          })),
+        }
+      } else if (value.dataMode === "binary") {
+        item.request.body = { mode: "file", file: { src: value.rawModeData } }
+      } else if (value.dataMode === "raw") {
+        item.request.body = { mode: "raw", raw: value.rawModeData, options: value.dataOptions }
+      }
       return {}
     },
   }
@@ -70,10 +93,12 @@ function fixture() {
   return { collection, updates, api, store }
 }
 
-async function setup(withSecretHeader = false) {
+async function setup(withSecretHeader = false, initialBody?: Record<string, unknown>) {
   const root = await mkdtemp(resolve(tmpdir(), "tuiminal-postman-push-"))
   roots.push(root)
   const state = fixture()
+  const item = state.collection.item[0]
+  if (item && initialBody) item.request.body = initialBody
   if (withSecretHeader) {
     state.collection.item[0]!.request.header.push({
       key: "Authorization",
@@ -201,5 +226,113 @@ describe("Postman request push", () => {
       dataOptions: { raw: { language: "json" } },
     })
     expect(state.updates[0]).not.toHaveProperty("timeoutMs")
+  })
+
+  test.each(["form", "multipart", "file"] as const)(
+    "saves %s bodies and confirms the remote representation",
+    async (kind) => {
+      const state = await setup()
+      const entry = {
+        id: "field",
+        enabled: true,
+        name: "files",
+        value: "/fixture/first file.bin",
+        sensitivity: "normal" as const,
+      }
+      const body: HttpRequestDefinition["body"] = {
+        kind,
+        text: "",
+        filePath: "/fixture/binary.bin",
+        form: [{ ...entry, name: "label", value: "hello & {{name}}" }],
+        multipart: [
+          { ...entry, kind: "file" },
+          { ...entry, id: "second", kind: "file", value: "/fixture/second.bin" },
+          { ...entry, id: "text", kind: "text", name: "label", value: "hello & {{name}}" },
+        ],
+      }
+      const saved = await saveHttpRequest(state.root, { ...state.request, method: "POST", body })
+      expect(saved.body.kind).toBe(kind)
+      expect(await pushPostmanRequest(state.root, state.api, saved)).toBe("pushed")
+      const update = state.updates[0]
+      expect(update?.dataMode).toBe(
+        { form: "urlencoded", multipart: "formdata", file: "binary" }[kind],
+      )
+      expect(state.collection.item[0]?.event).toHaveLength(1)
+      if (kind === "multipart") {
+        expect(update?.data).toEqual([
+          { key: "files", value: "/fixture/first file.bin", type: "file", enabled: true },
+          { key: "files", value: "/fixture/second.bin", type: "file", enabled: true },
+          { key: "label", value: "hello & {{name}}", type: "text", enabled: true },
+        ])
+        expect(update?.headerData).toEqual([])
+        const empty = await saveHttpRequest(state.root, {
+          ...saved,
+          body: { ...saved.body, multipart: [] },
+        })
+        expect(empty.body.kind).toBe("multipart")
+        expect(await pushPostmanRequest(state.root, state.api, empty)).toBe("pushed")
+        expect(state.updates.at(-1)?.data).toEqual([])
+        expect(await pushPostmanRequest(state.root, state.api, empty)).toBe("unchanged")
+      } else {
+        if (kind === "file") expect(update?.rawModeData).toBe("/fixture/binary.bin")
+        else
+          expect(update?.data).toEqual([
+            { key: "label", value: "hello & {{name}}", enabled: true, type: "text" },
+          ])
+        expect(await pushPostmanRequest(state.root, state.api, saved)).toBe("unchanged")
+      }
+    },
+  )
+
+  test("preserves imported multipart boundaries and all files across edits and repeated saves", async () => {
+    const state = await setup(true, {
+      mode: "formdata",
+      formdata: [
+        { key: "label", type: "text", value: "before" },
+        { key: "files", type: "file", src: ["/fixture/one.bin", "/fixture/two.bin"] },
+      ],
+    })
+    expect(state.request.body.multipart).toHaveLength(3)
+    let saved = await saveHttpRequest(state.root, {
+      ...state.request,
+      body: {
+        ...state.request.body,
+        multipart: (state.request.body.multipart ?? []).map((part) =>
+          part.kind === "text" ? { ...part, value: "after" } : part,
+        ),
+      },
+    })
+    for (let index = 0; index < 2; index++) {
+      saved = await saveHttpRequest(state.root, saved)
+      expect(saved.body.multipart?.map((part) => part.value)).toEqual([
+        "after",
+        "/fixture/one.bin",
+        "/fixture/two.bin",
+      ])
+    }
+    expect(await pushPostmanRequest(state.root, state.api, saved)).toBe("pushed")
+    expect(state.updates[0]?.data).toHaveLength(3)
+    expect(state.updates[0]?.headerData).toEqual([
+      { key: "Authorization", value: "Bearer private-token", enabled: true },
+    ])
+    expect(await pushPostmanRequest(state.root, state.api, saved)).toBe("unchanged")
+  })
+
+  test("does not advance the baseline when the remote API ignores the body update", async () => {
+    const state = await setup()
+    const saved = await saveHttpRequest(state.root, {
+      ...state.request,
+      body: { kind: "file", filePath: "/fixture/data.bin", text: "", form: [] },
+    })
+    const provenance = resolve(state.root, `${state.result.path}.postman.json`)
+    const original = await readFile(provenance, "utf8")
+    state.api.updateRequest = async () => ({})
+    await expect(pushPostmanRequest(state.root, state.api, saved)).rejects.toThrow(
+      "confirmação remota falhou",
+    )
+    expect(await readFile(provenance, "utf8")).toBe(original)
+    expect(await readFile(resolve(state.root, state.result.path), "utf8")).toContain(
+      "/fixture/data.bin",
+    )
   })
 })

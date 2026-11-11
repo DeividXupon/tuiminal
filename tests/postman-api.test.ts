@@ -10,6 +10,7 @@ import { parsePostmanLoginOptions } from "../packages/feature-http/src/cli/postm
 import { postmanDisplayName } from "../packages/feature-http/src/postman/display"
 import { HTTP_POSTMAN_ERROR_MESSAGES } from "../packages/core/src/i18n/http-postman-errors-catalog"
 import { HTTP_POSTMAN_MESSAGES } from "../packages/core/src/i18n/http-postman-catalog"
+import { HTTP_POSTMAN_STORAGE_MESSAGES } from "../packages/core/src/i18n/http-postman-storage-catalog"
 import { translateUi, type LanguageId } from "../packages/core/src/i18n/index"
 
 function memoryStore(): HttpCredentialStore & { values: Map<string, string> } {
@@ -49,7 +50,11 @@ describe("Postman account", () => {
     ])
     const pushMessages = HTTP_POSTMAN_MESSAGES.filter((message) => pushSources.has(message[0]))
     expect(pushMessages).toHaveLength(pushSources.size)
-    for (const message of [...HTTP_POSTMAN_ERROR_MESSAGES, ...pushMessages]) {
+    for (const message of [
+      ...HTTP_POSTMAN_ERROR_MESSAGES,
+      ...HTTP_POSTMAN_STORAGE_MESSAGES,
+      ...pushMessages,
+    ]) {
       languages.forEach((language, index) => {
         expect(translateUi(message[0], language)).toBe(message[index] ?? "")
       })

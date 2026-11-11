@@ -1,8 +1,14 @@
 import { readdir } from "node:fs/promises"
 import { resolve } from "node:path"
-import { loadLinkedPostmanCollections, type LinkedPostmanCollection } from "./collection-catalog"
+import {
+  loadLinkedPostmanCollections,
+  refreshLinkedPostmanCollectionName,
+  type LinkedPostmanCollection,
+} from "./collection-catalog"
+import type { PostmanCollection } from "./api"
 import { pullPostmanCollection } from "./pull"
 import { repairDuplicatePostmanRequestIds } from "./repair-ids"
+import { repairPostmanDraftAssociations } from "./repair-draft-associations"
 
 type WorkspaceApi = Parameters<typeof pullPostmanCollection>[1]
 
@@ -24,11 +30,18 @@ async function repairLinkedCollections(
   root: string,
   linked: LinkedPostmanCollection[],
   workspaceId: string,
+  collections: readonly PostmanCollection[],
+  api: Pick<WorkspaceApi, "collection">,
 ) {
   const errors: string[] = []
   for (const entry of linked.filter((item) => item.workspaceId === workspaceId)) {
     try {
+      await repairPostmanDraftAssociations(root, entry.filePath, api)
       await repairDuplicatePostmanRequestIds(root, entry.filePath)
+      const collection = collections.find(
+        (item) => item.id === entry.collectionId || item.uid === entry.collectionId,
+      )
+      if (collection) await refreshLinkedPostmanCollectionName(root, entry, collection.name)
     } catch (error) {
       errors.push(`${entry.filePath}: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -71,7 +84,9 @@ export async function syncPostmanWorkspace(
     requests: 0,
     errors: [],
   }
-  result.errors.push(...(await repairLinkedCollections(root, linked, workspaceId)))
+  result.errors.push(
+    ...(await repairLinkedCollections(root, linked, workspaceId, collections, api)),
+  )
   let done = 0
   for (const collection of collections) {
     if (!present.has(collection.id)) {

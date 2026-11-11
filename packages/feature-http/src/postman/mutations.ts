@@ -15,6 +15,7 @@ import {
 } from "../storage/collection-management"
 import { deleteHttpRequest, saveHttpRequest } from "../storage/collections"
 import type { PostmanApi } from "./api"
+import { assertPostmanRequestLinks } from "./association-validation"
 import { safeImportDirectory } from "./pull"
 import {
   postmanRemoteHash,
@@ -78,7 +79,10 @@ function folderIdForPath(collection: unknown, path: string) {
 
 async function metadata(root: string, path: string) {
   const metadataPath = await postmanSidecar(root, path)
-  return { metadataPath, value: await readPostmanProvenance(metadataPath) }
+  const value = await readPostmanProvenance(metadataPath)
+  const source = await readFile(metadataPath.slice(0, -".postman.json".length), "utf8")
+  assertPostmanRequestLinks(parseHttpFile(source, path), value)
+  return { metadataPath, value }
 }
 
 async function createLocalFolderRequest(
@@ -207,13 +211,14 @@ export async function duplicatePostmanRequest(
   root: string,
   api: MutationApi,
   request: HttpRequestDefinition,
+  copyName?: string,
 ) {
   if (request.source.kind !== "file" || !isPostmanPath(request.source.path)) {
     throw new Error("Selecione uma request Postman salva para duplicar.")
   }
   const separator = request.name.lastIndexOf(" / ")
   const leaf = separator < 0 ? request.name : request.name.slice(separator + 3)
-  const name = `${leaf} copy`
+  const name = copyName?.trim() || `${leaf} copy`
   const folderId =
     separator < 0
       ? undefined
@@ -330,6 +335,7 @@ export async function renamePostmanCollection(
   const newPath = await renameHttpCollection(root, path, name, expectedHash)
   const newSidecar = `${resolve(root, newPath)}.postman.json`
   if (newPath !== path) await rename(metadataPath, newSidecar)
+  value.collectionName = name.trim()
   if (collectionBaselineMatches)
     value.collectionHash = postmanRemoteHash(await api.collection(value.collectionId))
   await replacePostmanProvenance(newSidecar, value)

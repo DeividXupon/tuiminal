@@ -3,6 +3,7 @@ import {
   loadPostmanAccount,
   removePostmanAccount,
   savePostmanAccount,
+  savePostmanAccountLocally,
   type PostmanRegion,
 } from "../postman/account"
 import { pullPostmanCollection } from "../postman/pull"
@@ -13,6 +14,40 @@ import { readFile } from "node:fs/promises"
 import { resolve, sep } from "node:path"
 import { parseHttpFile, requestFromHttpFile } from "../model/http-file"
 import { pushPostmanRequest } from "../postman/sync"
+import { confirmPlaintextPostmanAccount } from "./postman-confirmation"
+import { PostmanLocalAccountError } from "../postman/local-account"
+
+function credentialDiagnostic(message: string, color: 31 | 33) {
+  const forceColor = process.env.FORCE_COLOR
+  const useColor =
+    !process.env.NO_COLOR &&
+    forceColor !== "0" &&
+    (forceColor !== undefined || (process.stderr.isTTY && process.env.TERM !== "dumb"))
+  const text = translateUi(message)
+  process.stderr.write(`${useColor ? `\u001b[${color}m${text}\u001b[0m` : text}\n`)
+}
+
+function reportCredentialSaveError() {
+  credentialDiagnostic(
+    "A chave foi aceita pelo Postman, mas não foi possível salvá-la no gerenciador de credenciais do sistema.",
+    31,
+  )
+  if (process.platform === "linux") {
+    credentialDiagnostic(
+      "No Linux, disponibilize libsecret e um serviço de credenciais. No Ubuntu/Debian: sudo apt install libsecret-1-0 gnome-keyring",
+      33,
+    )
+    credentialDiagnostic(
+      "Inicie e desbloqueie o cofre na mesma sessão do terminal (inclusive em SSH/WSL) e repita: tuiminal postman login",
+      33,
+    )
+  } else {
+    credentialDiagnostic(
+      "Desbloqueie o gerenciador de credenciais do sistema, permita o acesso do Tuiminal e repita: tuiminal postman login",
+      33,
+    )
+  }
+}
 
 function help() {
   return `${translateUi("Uso:")}
@@ -25,7 +60,7 @@ function help() {
   tuiminal postman pull <workspace-id> <collection-id> [--environment <environment-id>]
   tuiminal postman push <postman/file.http> [request-name]
 
-${translateUi("A chave é guardada no gerenciador de credenciais do sistema.")}
+${translateUi("Por padrão, a chave é guardada no gerenciador de credenciais do sistema.")}
 ${translateUi("--api-key-stdin lê a chave da entrada padrão sem colocá-la na linha de comando.")}`
 }
 
@@ -53,8 +88,8 @@ async function keyFromTerminal(): Promise<string> {
     throw new Error("Use --api-key-stdin para fornecer a chave sem eco no terminal.")
   }
   const previousRaw = process.stdin.isRaw
-  process.stdout.write(translateUi("Chave de API Postman: "))
   process.stdin.setRawMode(true)
+  process.stdout.write(translateUi("Chave de API Postman: "))
   process.stdin.resume()
   return new Promise((resolve, reject) => {
     let key = ""
@@ -112,7 +147,26 @@ async function login(options: string[]) {
   const apiKey = apiKeyStdin ? await keyFromStdin() : await keyFromTerminal()
   const account = { apiKey, region }
   await new PostmanApi(account).workspaces()
-  await savePostmanAccount(account)
+  try {
+    await savePostmanAccount(account)
+  } catch (error) {
+    if (error instanceof PostmanLocalAccountError) throw error
+    reportCredentialSaveError()
+    if (!process.stdin.isTTY || apiKeyStdin) {
+      throw new Error(
+        "Para escolher salvar sem criptografia, execute tuiminal postman login em um terminal interativo.",
+      )
+    }
+    credentialDiagnostic(
+      "A chave será salva em texto puro, sem criptografia, em um arquivo local do Tuiminal. Quem puder ler esse arquivo poderá usar sua conta Postman.",
+      33,
+    )
+    if (!(await confirmPlaintextPostmanAccount())) {
+      throw new Error("Login cancelado. A chave informada não foi salva.")
+    }
+    savePostmanAccountLocally(account)
+    credentialDiagnostic("Chave salva localmente sem criptografia.", 33)
+  }
   console.log(translateUi(`Postman conectado (${region.toUpperCase()}).`))
 }
 
@@ -214,7 +268,7 @@ export async function postmanCli(args: string[]): Promise<number> {
     await execute(args[0], args.slice(1))
     return 0
   } catch (error) {
-    console.error(translateUi(error instanceof Error ? error.message : String(error)))
+    credentialDiagnostic(error instanceof Error ? error.message : String(error), 31)
     return 1
   }
 }

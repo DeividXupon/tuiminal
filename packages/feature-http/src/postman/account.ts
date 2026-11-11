@@ -1,4 +1,9 @@
 import { runtimeCredentialStore, type HttpCredentialStore } from "../storage/environments"
+import {
+  readLocalPostmanAccount,
+  removeLocalPostmanAccount,
+  writeLocalPostmanAccount,
+} from "./local-account"
 
 const SERVICE = "dev.tuiminal.postman"
 const ACCOUNT = "api-account"
@@ -20,25 +25,34 @@ function credentialStore(store?: HttpCredentialStore) {
   return selected
 }
 
-export async function savePostmanAccount(account: PostmanAccount, store?: HttpCredentialStore) {
+function validatedAccount(account: PostmanAccount): PostmanAccount {
   const apiKey = validatePostmanApiKey(account.apiKey)
   if (account.region !== "us" && account.region !== "eu") {
     throw new Error("Região Postman inválida. Use us ou eu.")
   }
+  return { apiKey, region: account.region }
+}
+
+export async function savePostmanAccount(
+  account: PostmanAccount,
+  store?: HttpCredentialStore,
+  root?: string,
+) {
+  const value = validatedAccount(account)
   await credentialStore(store).set({
     service: SERVICE,
     name: ACCOUNT,
-    value: JSON.stringify({ apiKey, region: account.region }),
+    value: JSON.stringify(value),
   })
+  removeLocalPostmanAccount(root)
 }
 
-export async function loadPostmanAccount(
-  store?: HttpCredentialStore,
-): Promise<PostmanAccount | null> {
-  const value = await credentialStore(store).get({ service: SERVICE, name: ACCOUNT })
-  if (value === null) return null
+export function savePostmanAccountLocally(account: PostmanAccount, root?: string) {
+  writeLocalPostmanAccount(validatedAccount(account), root)
+}
+
+function parseAccount(parsed: unknown): PostmanAccount {
   try {
-    const parsed: unknown = JSON.parse(value)
     if (!parsed || typeof parsed !== "object") throw new Error()
     const account = parsed as Partial<PostmanAccount>
     if (account.region !== "us" && account.region !== "eu") throw new Error()
@@ -48,6 +62,32 @@ export async function loadPostmanAccount(
   }
 }
 
-export async function removePostmanAccount(store?: HttpCredentialStore) {
-  return credentialStore(store).delete({ service: SERVICE, name: ACCOUNT })
+export async function loadPostmanAccount(
+  store?: HttpCredentialStore,
+  root?: string,
+): Promise<PostmanAccount | null> {
+  const local = readLocalPostmanAccount(root)
+  if (local) return local.account === null ? null : parseAccount(local.account)
+  const value = await credentialStore(store).get({ service: SERVICE, name: ACCOUNT })
+  if (value === null) return null
+  try {
+    return parseAccount(JSON.parse(value))
+  } catch {
+    throw new Error("A credencial Postman salva está inválida; conecte a conta novamente.")
+  }
+}
+
+export async function removePostmanAccount(store?: HttpCredentialStore, root?: string) {
+  const local = readLocalPostmanAccount(root)
+  let removed: boolean
+  try {
+    removed = await credentialStore(store).delete({ service: SERVICE, name: ACCOUNT })
+  } catch (error) {
+    if (!local) throw error
+    // Do not resurrect an older secure account when its store becomes available.
+    writeLocalPostmanAccount(null, root)
+    return local.account !== null
+  }
+  removeLocalPostmanAccount(root)
+  return removed || Boolean(local && local.account !== null)
 }

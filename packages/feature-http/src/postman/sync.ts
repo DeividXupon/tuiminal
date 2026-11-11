@@ -1,36 +1,28 @@
+import { remoteOAuth2 } from "../model/oauth2-postman"
 import { createHash, randomUUID } from "node:crypto"
 import { lstat, open, readFile, realpath, rename, rm } from "node:fs/promises"
 import { dirname, relative, resolve, sep } from "node:path"
-import { parseHttpFile, requestFromHttpFile } from "../model/http-file"
+import { parseHttpFile, requestFromHttpFile, type ParsedHttpFile } from "../model/http-file"
 import type { HttpAuth, HttpRequestDefinition } from "../model/types"
-import { urlQueryEntryPrefix } from "../model/url-query"
+import { postmanRequestSnapshot, type Snapshot } from "./snapshot"
+export { postmanRequestSnapshot, type Snapshot } from "./snapshot"
+import { confirmPostmanDescription } from "./description"
 import type { PostmanApi } from "./api"
+import { assertPostmanRequestLinks } from "./association-validation"
+import {
+  confirmPostmanRequestBody,
+  postmanBodyHeaders,
+  postmanMultipartHeaders,
+  postmanRequestBody,
+} from "./request-body"
 
-export type PostmanEntry = {
-  key: string
-  requestId: string
-  remoteHash: string
-  baseline: Snapshot
-}
-export type PostmanFolder = { id: string; path: string; remoteHash: string }
-export type PostmanCollectionFolder = PostmanFolder & { filePath: string }
-export type PostmanProvenance = {
-  version: 1
-  collectionId: string
-  workspaceId?: string
-  collectionHash?: string
-  entries: PostmanEntry[]
-  folders?: PostmanFolder[]
-}
-export type Snapshot = {
-  name: string
-  method: string
-  url: string
-  headers: Array<{ key: string; value: string; enabled: boolean }>
-  path: Array<{ key: string; value: string; enabled: boolean }>
-  auth: HttpAuth
-  body: HttpRequestDefinition["body"]
-}
+import type { PostmanEntry, PostmanFolder, PostmanProvenance } from "./provenance"
+export type {
+  PostmanEntry,
+  PostmanFolder,
+  PostmanCollectionFolder,
+  PostmanProvenance,
+} from "./provenance"
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -80,40 +72,6 @@ export function postmanRemoteFolders(collection: unknown): PostmanFolder[] {
   return found
 }
 
-function requestUrl(request: HttpRequestDefinition) {
-  const query = request.query
-    .filter((entry) => !entry.id.startsWith(urlQueryEntryPrefix(request.id)))
-    .filter((entry) => entry.enabled && entry.name.trim())
-    .map((entry) => {
-      const value = /\{\{[^{}]+\}\}/.test(entry.value)
-        ? entry.value
-        : encodeURIComponent(entry.value)
-      return `${encodeURIComponent(entry.name)}=${value}`
-    })
-    .join("&")
-  return query ? `${request.url}${request.url.includes("?") ? "&" : "?"}${query}` : request.url
-}
-
-export function postmanRequestSnapshot(request: HttpRequestDefinition): Snapshot {
-  return {
-    name: request.name,
-    method: request.method,
-    url: requestUrl(request),
-    headers: request.headers.map((entry) => ({
-      key: entry.name,
-      value: entry.value,
-      enabled: entry.enabled,
-    })),
-    path: request.path.map((entry) => ({
-      key: entry.name,
-      value: entry.value,
-      enabled: entry.enabled,
-    })),
-    auth: request.auth,
-    body: request.body,
-  }
-}
-
 function changed(a: unknown, b: unknown) {
   return JSON.stringify(a) !== JSON.stringify(b)
 }
@@ -127,10 +85,11 @@ function remoteName(before: string, after: string) {
   return prefix && after.startsWith(prefix) ? after.slice(prefix.length) : after
 }
 
-function remoteAuth(auth: HttpAuth) {
+export function remoteAuth(auth: HttpAuth) {
   if (JSON.stringify(auth).match(/\{\{postman_[^{}]+\}\}/)) {
     throw new Error("Autenticação com segredo privado importado não pode ser enviada ao Postman.")
   }
+  if (auth.kind === "oauth2") return remoteOAuth2(auth)
   if (auth.kind === "none") return null
   if (auth.kind === "bearer")
     return { type: "bearer", bearer: [{ key: "token", value: auth.token }] }
@@ -153,19 +112,7 @@ function remoteAuth(auth: HttpAuth) {
   }
 }
 
-function remoteBody(body: Snapshot["body"]) {
-  if (!["none", "json", "text", "xml"].includes(body.kind)) {
-    throw new Error("Envio deste formato de body ao Postman ainda não é suportado.")
-  }
-  if (body.kind === "none") return { dataMode: "none", rawModeData: "" }
-  return {
-    dataMode: "raw",
-    rawModeData: body.text,
-    dataOptions: { raw: { language: body.kind === "text" ? "text" : body.kind } },
-  }
-}
-
-function remoteHeaders(headers: Snapshot["headers"]) {
+export function remoteHeaders(headers: Snapshot["headers"]) {
   if (headers.some((header) => /\{\{postman_[^{}]+\}\}/.test(header.value))) {
     throw new Error("Headers com segredos privados importados não podem ser enviados ao Postman.")
   }
@@ -176,15 +123,24 @@ export function postmanRequestKey(blockId: string) {
   return blockId.slice(blockId.lastIndexOf("#") + 1)
 }
 
-function payload(before: Snapshot, after: Snapshot) {
+export function postmanRequestPayload(before: Snapshot, after: Snapshot) {
   const update: Record<string, unknown> = {}
+  if (after.scripts && before.scripts?.preRequest !== after.scripts.preRequest)
+    update.preRequestScript = after.scripts.preRequest
+  if (after.scripts && before.scripts?.postResponse !== after.scripts.postResponse)
+    update.tests = after.scripts.postResponse
+  const bodyChanged = changed(before.body, after.body)
+  const headers = postmanBodyHeaders(after.headers, after.body)
   if (before.name !== after.name) update.name = remoteName(before.name, after.name)
+  if (after.description !== undefined && before.description !== after.description)
+    update.description = after.description
   if (before.method !== after.method) update.method = after.method
   if (before.url !== after.url) update.url = after.url
-  if (changed(before.headers, after.headers)) update.headerData = remoteHeaders(after.headers)
+  if (changed(postmanBodyHeaders(before.headers, after.body), headers))
+    update.headerData = remoteHeaders(headers)
   if (changed(before.path, after.path)) update.pathVariableData = after.path
   if (changed(before.auth, after.auth)) update.auth = remoteAuth(after.auth)
-  if (changed(before.body, after.body)) Object.assign(update, remoteBody(after.body))
+  if (bodyChanged) Object.assign(update, postmanRequestBody(after.body))
   return update
 }
 
@@ -236,6 +192,9 @@ export async function readPostmanProvenance(path: string): Promise<PostmanProven
   if (data.workspaceId !== undefined && !validId(data.workspaceId)) {
     throw new Error("Associação Postman inválida. Importe a coleção novamente.")
   }
+  if (data.collectionName !== undefined && typeof data.collectionName !== "string") {
+    throw new Error("Associação Postman inválida. Importe a coleção novamente.")
+  }
   if (data.collectionHash !== undefined && !/^[a-f0-9]{64}$/u.test(String(data.collectionHash))) {
     throw new Error("Associação Postman inválida. Importe a coleção novamente.")
   }
@@ -276,21 +235,11 @@ export async function replacePostmanProvenance(path: string, value: PostmanProve
   }
 }
 
-export async function writePostmanProvenance(
-  root: string,
-  filePath: string,
-  collectionId: string,
-  collection: unknown,
-  workspaceId?: string,
-) {
-  if (!validId(collectionId)) throw new Error("Identificador de coleção Postman inválido.")
-  if (workspaceId !== undefined && !validId(workspaceId))
-    throw new Error("Identificador de workspace Postman inválido.")
-  const path = await postmanSidecar(root, filePath)
-  const source = await readFile(path.slice(0, -".postman.json".length), "utf8")
-  const file = parseHttpFile(source, filePath)
+export function postmanProvenanceEntries(file: ParsedHttpFile, collection: unknown) {
   const items = postmanRemoteRequests(collection)
-  const entries = file.requests.flatMap((block, index): PostmanEntry[] => {
+  if (items.length !== file.requests.length)
+    throw new Error("Associação Postman inválida. Importe a coleção novamente.")
+  return file.requests.flatMap((block, index): PostmanEntry[] => {
     const item = items[index]
     if (!item || !validId(item.id)) return []
     return [
@@ -302,12 +251,32 @@ export async function writePostmanProvenance(
       },
     ]
   })
+}
+
+export async function writePostmanProvenance(
+  root: string,
+  filePath: string,
+  collectionId: string,
+  collection: unknown,
+  workspaceId?: string,
+  collectionName?: string,
+) {
+  if (!validId(collectionId)) throw new Error("Identificador de coleção Postman inválido.")
+  if (workspaceId !== undefined && !validId(workspaceId))
+    throw new Error("Identificador de workspace Postman inválido.")
+  const path = await postmanSidecar(root, filePath)
+  const source = await readFile(path.slice(0, -".postman.json".length), "utf8")
+  const file = parseHttpFile(source, filePath)
+  const name = collectionName ?? record(record(collection)?.info)?.name
+  const entries = postmanProvenanceEntries(file, collection)
   const handle = await open(path, "wx", 0o600)
   try {
     await handle.writeFile(
       JSON.stringify({
         version: 1,
+        requestMappingVersion: 2,
         collectionId,
+        ...(typeof name === "string" ? { collectionName: name } : {}),
         workspaceId,
         collectionHash: postmanRemoteHash(collection),
         entries,
@@ -341,6 +310,7 @@ export async function pushPostmanRequest(
   }
   const localSource = await readFile(metadataPath.slice(0, -".postman.json".length), "utf8")
   const local = parseHttpFile(localSource, requestSource.path)
+  assertPostmanRequestLinks(local, metadata)
   if (local.sourceHash !== requestSource.sourceHash) {
     throw new Error("O arquivo HTTP mudou; recarregue a request antes de enviá-la.")
   }
@@ -348,7 +318,7 @@ export async function pushPostmanRequest(
   const block = blocks.length === 1 ? blocks[0] : undefined
   if (!block?.editable) throw new Error("A request local não está disponível para edição.")
   const current = postmanRequestSnapshot(requestFromHttpFile(local, block))
-  const update = payload(entry.baseline, current)
+  const update = postmanRequestPayload(entry.baseline, current)
   if (Object.keys(update).length === 0) return "unchanged" as const
   const collection = await api.collection(metadata.collectionId)
   const collectionBaselineMatches = metadata.collectionHash === postmanRemoteHash(collection)
@@ -356,11 +326,21 @@ export async function pushPostmanRequest(
   if (!remote || postmanRemoteHash(remote) !== entry.remoteHash) {
     throw new Error("A request mudou no Postman; importe a coleção novamente antes de enviar.")
   }
+  if (
+    current.body.kind === "multipart" &&
+    update.dataMode !== undefined &&
+    update.headerData === undefined
+  ) {
+    // Keep unchanged remote header values, including protected imported secrets.
+    update.headerData = postmanMultipartHeaders(remote.request)
+  }
   await api.updateRequest(metadata.collectionId, entry.requestId, update)
   const refreshed = await api.collection(metadata.collectionId)
   const updated = postmanRemoteRequests(refreshed).find((item) => item.id === entry.requestId)
   if (!updated)
     throw new Error("Request enviada, mas a confirmação remota falhou. Reimporte a coleção.")
+  if (update.dataMode !== undefined) confirmPostmanRequestBody(current.body, updated.request)
+  confirmPostmanDescription(update, updated)
   entry.remoteHash = postmanRemoteHash(updated)
   entry.baseline = current
   if (collectionBaselineMatches) {

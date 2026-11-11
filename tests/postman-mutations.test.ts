@@ -89,6 +89,7 @@ test("creates a collection in the selected Postman workspace and syncs its reque
   const provenancePath = resolve(root, `${path}.postman.json`)
   expect(JSON.parse(await readFile(provenancePath, "utf8")).workspaceId).toBe("w2")
   expect(calls).toContain("create-collection:w2:Users")
+  expect(JSON.parse(await readFile(provenancePath, "utf8")).collectionName).toBe("Users")
 
   const created = await createPostmanRequest(root, api, path, "List", projectFileHash(""))
   expect(calls).toContain("create-request:c1:List")
@@ -108,6 +109,9 @@ test("creates a collection in the selected Postman workspace and syncs its reque
   expect(
     JSON.parse(await readFile(resolve(root, `${renamedPath}.postman.json`), "utf8")).collectionId,
   ).toBe("c1")
+  expect(
+    JSON.parse(await readFile(resolve(root, `${renamedPath}.postman.json`), "utf8")).collectionName,
+  ).toBe("People")
   await deletePostmanCollection(root, api, renamedPath, projectFileHash(""))
   expect(calls).toContain("delete-collection:c1")
   expect(await Bun.file(resolve(root, renamedPath)).exists()).toBe(false)

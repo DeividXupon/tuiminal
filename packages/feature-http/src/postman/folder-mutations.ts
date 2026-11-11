@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 import { atomicWriteProjectFile, projectFileHash } from "@xupon/tuiminal-core/storage/project-files"
 import { parseHttpFile, requestFromHttpFile, serializeHttpRequestBlock } from "../model/http-file"
 import type { PostmanApi } from "./api"
+import { PostmanCollectionConflict } from "./conflict"
 import {
   postmanRemoteFolders,
   postmanRemoteHash,
@@ -52,7 +53,7 @@ function updatedMetadata(metadata: PostmanProvenance, after: unknown) {
 
 function assertCollectionUnchanged(metadata: PostmanProvenance, remote: unknown) {
   if (metadata.collectionHash !== postmanRemoteHash(remote)) {
-    throw new Error("A coleção mudou no Postman; importe-a novamente antes de editar a pasta.")
+    throw new PostmanCollectionConflict()
   }
 }
 

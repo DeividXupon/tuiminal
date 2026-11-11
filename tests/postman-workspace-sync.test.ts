@@ -65,8 +65,8 @@ test("loads every missing collection in a workspace without creating duplicate c
   expect(globalsCalls).toBe(1)
   const paths = ["postman/users.http", "postman/orders.http"] as const
   expect(await loadLinkedPostmanCollections(root, paths)).toEqual([
-    { filePath: paths[0], workspaceId: "w1", collectionId: "c1" },
-    { filePath: paths[1], workspaceId: "w1", collectionId: "c2" },
+    { filePath: paths[0], workspaceId: "w1", collectionId: "c1", name: "Users" },
+    { filePath: paths[1], workspaceId: "w1", collectionId: "c2", name: "Orders" },
   ])
   expect(await readFile(resolve(root, paths[0]), "utf8")).toContain("GET https://example.test")
   const second = await syncPostmanWorkspace(root, api, "w1")
@@ -159,4 +159,61 @@ test("repairs duplicate request IDs in an existing linked Postman collection", a
   expect(updatedId).toBe("r2")
   expect(remote.item[0]?.request.method).toBe("GET")
   expect((await syncPostmanWorkspace(root, api, "w1")).errors).toEqual([])
+})
+
+test("recovers original collection names for legacy links without replacing edited requests", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "tuiminal-postman-names-"))
+  roots.push(root)
+  let name = "B8 CaaS - Dashboard"
+  let fetched = 0
+  const api = {
+    async collections() {
+      return [{ id: "c1", uid: "owner-c1", name }]
+    },
+    async collection() {
+      fetched++
+      return {
+        info: {
+          name,
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [
+          { id: "r1", name: "List", request: { method: "GET", url: "https://example.invalid" } },
+        ],
+      }
+    },
+    async globals() {
+      return []
+    },
+    async environments() {
+      return []
+    },
+    async environment() {
+      throw new Error("No environment")
+    },
+  } as Parameters<typeof syncPostmanWorkspace>[1]
+  expect((await syncPostmanWorkspace(root, api, "w1")).errors).toEqual([])
+  const path = "postman/b8-caas---dashboard.http"
+  const sourcePath = resolve(root, path)
+  const sidecarPath = `${sourcePath}.postman.json`
+  const metadata = await readPostmanProvenance(sidecarPath)
+  expect(metadata.collectionName).toBe(name)
+  delete metadata.collectionName
+  await writeFile(sidecarPath, JSON.stringify(metadata))
+  const edited = (await readFile(sourcePath, "utf8")).replace(
+    "https://example.invalid",
+    "https://example.invalid/local-edit",
+  )
+  await writeFile(sourcePath, edited)
+  for (const remoteName of [name, "B8 CaaS – Painel São Paulo", "Release.http"]) {
+    name = remoteName
+    const result = await syncPostmanWorkspace(root, api, "w1")
+    expect(result).toMatchObject({ imported: 0, errors: [] })
+    expect(fetched).toBe(1)
+    expect(await readFile(sourcePath, "utf8")).toBe(edited)
+    expect(await readPostmanProvenance(sidecarPath)).toEqual({ ...metadata, collectionName: name })
+    expect(await loadLinkedPostmanCollections(root, [path])).toEqual([
+      { filePath: path, workspaceId: "w1", collectionId: "c1", name },
+    ])
+  }
 })
