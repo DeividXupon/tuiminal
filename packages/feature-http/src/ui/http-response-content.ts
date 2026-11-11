@@ -3,6 +3,7 @@ import { evaluateHttpJsonPath, foldHttpJson, withHttpLineNumbers } from "../mode
 import type { HttpDocumentState, HttpResponseSnapshot } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
 import { responseBodyText } from "../services/response-reader"
+import { httpResponseTableData } from "./http-response-table-data"
 import { formatHttpBytes, formatHttpDuration } from "./format"
 
 const MAX_HTTP_DISPLAY_CHARACTERS = 50_000
@@ -160,7 +161,16 @@ export function httpResponseCopyContent(document: HttpDocumentState, cookies: Ht
     return response.headers.map(([name, value]) => `${name}: ${value}`).join("\n")
   }
   if (document.responseView !== "pretty" && document.responseView !== "raw") {
-    return httpResponseContent(document, cookies)
+    const table = httpResponseTableData(document, cookies)
+    return table
+      ? [
+          table.columns.join("\t"),
+          ...table.rows.map((row) => row.map((cell) => cell.text).join("\t")),
+          table.rows.length ? table.note : table.empty,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : ""
   }
   if (response.bodyKind === "binary") return ""
   const pretty = document.responseView === "pretty"

@@ -1,9 +1,9 @@
+import { oauthPreviewAuth } from "../model/oauth2"
 import { useCallback, useMemo, useState } from "react"
 import { exportPreparedRequestAsCurl } from "../exporting/curl"
 import { importCurl } from "../importing/curl"
 import { httpRequestSecretValues } from "../model/secrets"
 import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
-import { HTTP_DOCUMENT_LIMIT } from "../model/workspace"
 import { HTTP_WORKING_DIRECTORY } from "../services/context"
 import { prepareHttpRequest } from "../services/request-builder"
 import { applyHttpWorkspaceConfig, type HttpWorkspaceConfig } from "../storage/config"
@@ -12,7 +12,6 @@ type HttpClipboard = { copyToClipboardOSC52: (content: string) => boolean }
 
 export function useHttpCurl({
   activeDocument,
-  documentCount,
   workspaceConfig,
   variablesForRequest,
   clipboard,
@@ -20,7 +19,6 @@ export function useHttpCurl({
   onImported,
 }: {
   activeDocument: HttpDocumentState | undefined
-  documentCount: number
   workspaceConfig: HttpWorkspaceConfig
   variablesForRequest: (request: HttpRequestDefinition) => HttpVariableContext
   clipboard: HttpClipboard
@@ -36,7 +34,7 @@ export function useHttpCurl({
       const configured = applyHttpWorkspaceConfig(request, workspaceConfig)
       const variables = variablesForRequest(request)
       const prepared = prepareHttpRequest(
-        configured,
+        { ...configured, auth: oauthPreviewAuth(configured.auth) },
         "curl-preview",
         revision,
         variables,
@@ -51,10 +49,6 @@ export function useHttpCurl({
   }, [request, revision, variablesForRequest, workspaceConfig])
 
   const applyImport = useCallback(() => {
-    if (documentCount >= HTTP_DOCUMENT_LIMIT) {
-      setNotice(`LIMITE DE ${HTTP_DOCUMENT_LIMIT} REQUESTS ABERTOS`)
-      return
-    }
     try {
       const request = importCurl(command, `http-curl-${Date.now()}`)
       onImported(request)
@@ -63,7 +57,7 @@ export function useHttpCurl({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     }
-  }, [command, documentCount, onImported, setNotice])
+  }, [command, onImported, setNotice])
 
   const copyExport = useCallback(() => {
     const copied = clipboard.copyToClipboardOSC52(exported)

@@ -1,157 +1,22 @@
-import type {
-  InputRenderable,
-  MouseEvent as OpenTuiMouseEvent,
-  ScrollBoxRenderable,
-  TextareaRenderable,
-} from "@opentui/core"
-import { Fragment, useRef } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import type { HttpLayout } from "../model/layout"
-import type { HttpRequestTableKey } from "../hooks/use-http-request-tables"
-import type {
-  HttpAssertionDefinition,
-  HttpBodyKind,
-  HttpAuth,
-  HttpChainExtraction,
-  HttpKeyValue,
-  HttpNavigationView,
-  HttpProjectRequestItem,
-  HttpMultipartPart,
-  HttpPane,
-  HttpRequestView,
-  HttpRequestMoreView,
-  HttpResponseView,
-  HttpWorkspaceState,
-} from "../model/types"
-import type { HttpCookie } from "../services/cookies"
-import type { HttpPreparedRequestPreview } from "../services/request-preview"
+import type { HttpWorkspaceBodyProps } from "./http-workspace-body-props"
+import { HttpCollectionSettingsPane } from "./HttpCollectionSettingsPane"
+import { HttpEnvironmentPane } from "./HttpEnvironmentPane"
+import { httpChainingRequests } from "../model/chaining"
+import {
+  useWorkspaceRepaint,
+  WorkspaceRepaintBoundary,
+} from "@xupon/tuiminal-core/ui/workspace-repaint"
+import { useRef } from "react"
+import { HttpSplitHandle, splitRatioFromMouse } from "./HttpSplitHandle"
+import { HttpEmptyState } from "./HttpEmptyState"
 import { HttpNavigationPane } from "./HttpNavigationPane"
-import type { HttpCollectionTreeRow } from "../model/collection-tree"
-import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
-import type { HttpKey } from "../model/keyboard-types"
 import { HttpRequestPane } from "./HttpRequestPane"
 import { HttpResponsePane } from "./HttpResponsePane"
-import type { HttpSourceMode } from "../model/source-mode"
-import type { PostmanCollectionFolder } from "../postman/sync"
-import type { PostmanWorkspace } from "../postman/api"
-
-type HttpWorkspaceBodyProps = {
-  state: HttpWorkspaceState
-  layout: HttpLayout
-  height: number
-  registerHeaderInput: (documentId: string, input: InputRenderable | null) => void
-  registerBodyEditor: (documentId: string, editor: TextareaRenderable | null) => void
-  registerRawScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
-  registerScroll: (documentId: string, scroll: ScrollBoxRenderable | null) => void
-  registerResponseSearch: (documentId: string, input: InputRenderable | null) => void
-  registerCollectionSearch: (input: InputRenderable | null) => void
-  requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
-  collectionTreeKeyRef: { current: ((key: HttpKey) => boolean) | null }
-  onSelectDocument: (documentId: string) => void
-  onNavigationView: (view: HttpNavigationView) => void
-  onCloseNavigation: () => void
-  onSelectPane: (pane: HttpPane) => void
-  onSelectRequestView: (documentId: string, view: HttpRequestView, focusControl?: boolean) => void
-  onSelectRequestMoreView: (documentId: string, view: HttpRequestMoreView) => void
-  onSelectResponseView: (documentId: string, view: HttpResponseView) => void
-  onResponsePresentationChange: (
-    documentId: string,
-    patch: Partial<HttpWorkspaceState["documents"][number]["responsePresentation"]>,
-  ) => void
-  onQueryChange: (documentId: string, entries: HttpKeyValue[]) => void
-  onPathChange: (documentId: string, entries: HttpKeyValue[]) => void
-  onHeadersChange: (documentId: string, headers: HttpKeyValue[]) => void
-  onAuthChange: (documentId: string, auth: HttpAuth) => void
-  onBodyChange: (documentId: string, value: string) => void
-  onBodyFormChange: (documentId: string, entries: HttpKeyValue[]) => void
-  onBodyKindChange: (documentId: string, kind: HttpBodyKind) => void
-  onBodyMultipartChange: (documentId: string, parts: HttpMultipartPart[]) => void
-  onBodyFileChange: (documentId: string, path: string) => void
-  onSend: (documentId: string) => void
-  projectRequests: HttpProjectRequestItem[]
-  projectDirectories: string[]
-  projectFiles: string[]
-  postmanFolders: PostmanCollectionFolder[]
-  postmanWorkspace: PostmanWorkspace | null
-  onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
-  projectErrors: number
-  sourceMode: HttpSourceMode
-  onOpenProjectRequest: (item: HttpProjectRequestItem) => void
-  onImportCollection: () => void
-  onOpenPostman: () => void
-  onRunCollection: () => void
-  onManageCollection: (
-    action: HttpCollectionAction,
-    row: HttpCollectionTreeRow | null,
-    name?: string,
-  ) => Promise<boolean>
-  onNameChange: (documentId: string, name: string) => void
-  onMethodChange: (documentId: string, method: string) => void
-  onOptionsChange: (
-    documentId: string,
-    options: HttpWorkspaceState["documents"][number]["request"]["options"],
-  ) => void
-  onAssertionsChange: (documentId: string, assertions: HttpAssertionDefinition[]) => void
-  onChainChange: (
-    documentId: string,
-    chain: { dependsOn?: string; extract: HttpChainExtraction[] },
-  ) => void
-  onImportCurl: () => void
-  onExportCurl: () => void
-  onDuplicate: (documentId: string) => void
-  onMove: () => void
-  onDelete: () => void
-  cookies: HttpCookie[]
-  onCopyResponse: (documentId: string, content: string, label: string) => void
-  onSaveResponse: (documentId: string) => void
-  onOpenResponse: (documentId: string) => void
-  onDownloadResponse: (documentId: string) => void
-  onCancelDownload: () => void
-  downloadingDocumentId: string | null
-  onToggleHistory: (entryId: string) => void
-  onCompareHistory: () => void
-  onOpenHistory: (entry: HttpWorkspaceState["history"][number]) => void
-  preparedPreview: HttpPreparedRequestPreview | null
-  onSplitRatioChange: (ratio: number) => void
-}
-
-function splitRatioFromMouse(layout: HttpLayout, event: OpenTuiMouseEvent) {
-  const target = event.currentTarget
-  if (!target) return null
-  const stacked = layout.request.left === layout.response.left
-  const available = stacked
-    ? layout.request.height + layout.response.height
-    : layout.request.width + layout.response.width
-  const start = stacked ? target.screenY + layout.request.top : target.screenX + layout.request.left
-  const position = stacked ? event.y : event.x
-  return Math.min(0.7, Math.max(0.25, (position - start) / Math.max(1, available)))
-}
-
-function HttpSplitHandle({ layout, onStart }: { layout: HttpLayout; onStart: () => void }) {
-  const stacked = layout.request.left === layout.response.left
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes expose mouse events but no ARIA role; keyboard split controls remain available in the footer.
-    <box
-      id="http-split-handle"
-      style={{
-        position: "absolute",
-        left: stacked ? layout.request.left : layout.response.left - 1,
-        top: stacked ? layout.response.top - 1 : layout.request.top,
-        width: stacked ? layout.request.width : 1,
-        height: stacked ? 1 : layout.request.height,
-        zIndex: 4,
-        backgroundColor: COLORS.border,
-      }}
-      onMouseDown={(event) => {
-        onStart()
-        event.preventDefault()
-      }}
-    />
-  )
-}
-
 export function HttpWorkspaceBody({
+  active: workspaceActive,
+  interactionBlocked = false,
   state,
+  oauth,
   layout,
   height,
   registerHeaderInput,
@@ -178,8 +43,9 @@ export function HttpWorkspaceBody({
   onBodyFormChange,
   onBodyKindChange,
   onBodyMultipartChange,
-  onBodyFileChange,
+  onBodyFilesChange,
   onSend,
+  onCancel,
   projectRequests,
   projectDirectories,
   projectFiles,
@@ -194,6 +60,8 @@ export function HttpWorkspaceBody({
   onRunCollection,
   onManageCollection,
   onNameChange,
+  onDocsChange,
+  onScriptsChange,
   onMethodChange,
   onOptionsChange,
   onAssertionsChange,
@@ -210,9 +78,8 @@ export function HttpWorkspaceBody({
   onDownloadResponse,
   onCancelDownload,
   downloadingDocumentId,
-  onToggleHistory,
-  onCompareHistory,
-  onOpenHistory,
+  collectionSettings,
+  environments,
   preparedPreview,
   onSplitRatioChange,
 }: HttpWorkspaceBodyProps) {
@@ -222,11 +89,27 @@ export function HttpWorkspaceBody({
     state.navigationOpen ||
     (layout.mode === "minimum" && state.activePane === "navigation")
   const navigationOverlayOpen = !layout.navigationFixed && state.navigationOpen
+  useWorkspaceRepaint(
+    JSON.stringify([
+      layout.mode,
+      layout.navigation.width,
+      navigationVisible,
+      navigationOverlayOpen,
+      state.documents.length === 0,
+      environments.active?.id,
+      collectionSettings.active?.id,
+    ]),
+  )
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI requires drag continuation on the containing box and does not expose ARIA roles.
     <box
-      style={{ height, flexShrink: 0, position: "relative", overflow: "hidden" }}
+      style={{
+        height,
+        flexShrink: 0,
+        position: "relative",
+        overflow: "hidden",
+      }}
       onMouseDrag={(event) => {
         if (!draggingSplit.current) return
         event.preventDefault()
@@ -241,8 +124,68 @@ export function HttpWorkspaceBody({
         draggingSplit.current = false
       }}
     >
+      {state.documents.length === 0 &&
+      !collectionSettings.active &&
+      !environments.active &&
+      !navigationOverlayOpen ? (
+        <HttpEmptyState
+          left={layout.request.left}
+          width={layout.response.left + layout.response.width - layout.request.left}
+          height={height}
+        />
+      ) : null}
+      {collectionSettings.active && !navigationOverlayOpen ? (
+        <HttpCollectionSettingsPane
+          key={collectionSettings.active.id}
+          settings={collectionSettings}
+          document={collectionSettings.active}
+          active={
+            workspaceActive &&
+            !interactionBlocked &&
+            !state.overlay &&
+            state.activePane !== "navigation"
+          }
+          onFocus={() => onSelectPane("request")}
+          onBack={() => {
+            onNavigationView("collection")
+            onSelectPane("navigation")
+          }}
+          position={{
+            left: layout.request.left,
+            top: 0,
+            width: layout.response.left + layout.response.width - layout.request.left,
+            height,
+          }}
+        />
+      ) : null}
+      {environments.active && !navigationOverlayOpen ? (
+        <HttpEnvironmentPane
+          key={environments.active.id}
+          environments={environments}
+          document={environments.active}
+          active={
+            workspaceActive &&
+            !interactionBlocked &&
+            !state.overlay &&
+            state.activePane !== "navigation"
+          }
+          onFocus={() => onSelectPane("request")}
+          onBack={() => {
+            onNavigationView("environments")
+            onSelectPane("navigation")
+          }}
+          position={{
+            left: layout.request.left,
+            top: 0,
+            width: layout.response.left + layout.response.width - layout.request.left,
+            height,
+          }}
+        />
+      ) : null}
       {state.documents.map((document) => {
         const active = document.request.id === state.activeDocumentId
+        const interactive =
+          workspaceActive && active && !interactionBlocked && state.overlay === null
         const contentRight = layout.response.left + layout.response.width
         const maximizedPane = layout.simultaneousPanes ? document.maximizedPane : null
         const maximizedPosition = {
@@ -263,12 +206,28 @@ export function HttpWorkspaceBody({
           (layout.simultaneousPanes || state.activePane === "response")
 
         return (
-          <Fragment key={document.request.id}>
+          <WorkspaceRepaintBoundary
+            key={document.request.id}
+            visible={active}
+            transitionKey={JSON.stringify([requestVisible, responseVisible, maximizedPane])}
+          >
             <HttpRequestPane
               document={document}
+              oauthContext={
+                oauth
+                  ? {
+                      variables: oauth.variablesForRequest(document.request),
+                      environmentName: oauth.environmentName,
+                    }
+                  : undefined
+              }
               requestTableKeyRef={requestTableKeyRef}
+              chainRequests={httpChainingRequests(
+                projectRequests,
+                state.documents.map((item) => item.request),
+              )}
               visible={requestVisible}
-              focused={active && state.overlay === null && state.activePane === "request"}
+              focused={interactive && state.activePane === "request"}
               position={maximizedPane === "request" ? maximizedPosition : layout.request}
               registerHeaderInput={(input) => registerHeaderInput(document.request.id, input)}
               registerBodyEditor={(editor) => registerBodyEditor(document.request.id, editor)}
@@ -285,10 +244,12 @@ export function HttpWorkspaceBody({
               onBodyFormChange={(entries) => onBodyFormChange(document.request.id, entries)}
               onBodyKindChange={(kind) => onBodyKindChange(document.request.id, kind)}
               onBodyMultipartChange={(parts) => onBodyMultipartChange(document.request.id, parts)}
-              onBodyFileChange={(path) => onBodyFileChange(document.request.id, path)}
+              onBodyFilesChange={(path) => onBodyFilesChange(document.request.id, path)}
               onSend={() => onSend(document.request.id)}
               onFocus={() => onSelectPane("request")}
               onNameChange={(name) => onNameChange(document.request.id, name)}
+              onScriptsChange={(value) => onScriptsChange(document.request.id, value)}
+              onDocsChange={(value) => onDocsChange(document.request.id, value)}
               onMethodChange={(method) => onMethodChange(document.request.id, method)}
               onOptionsChange={(options) => onOptionsChange(document.request.id, options)}
               onAssertionsChange={(assertions) =>
@@ -305,7 +266,7 @@ export function HttpWorkspaceBody({
             <HttpResponsePane
               document={document}
               visible={responseVisible}
-              focused={active && state.overlay === null && state.activePane === "response"}
+              focused={interactive && state.activePane === "response"}
               position={maximizedPane === "response" ? maximizedPosition : layout.response}
               registerScroll={(scroll) => registerScroll(document.request.id, scroll)}
               registerSearchInput={(input) => registerResponseSearch(document.request.id, input)}
@@ -319,16 +280,17 @@ export function HttpWorkspaceBody({
               onSave={() => onSaveResponse(document.request.id)}
               onOpen={() => onOpenResponse(document.request.id)}
               onDownload={() => onDownloadResponse(document.request.id)}
+              onCancel={() => onCancel(document.request.id)}
               onCancelDownload={onCancelDownload}
               downloading={downloadingDocumentId === document.request.id}
             />
-          </Fragment>
+          </WorkspaceRepaintBoundary>
         )
       })}
       <HttpNavigationPane
         state={state}
         visible={navigationVisible}
-        focused={state.overlay === null && state.activePane === "navigation"}
+        focused={workspaceActive && state.overlay === null && state.activePane === "navigation"}
         overlay={!layout.navigationFixed}
         position={layout.navigation}
         onViewChange={onNavigationView}
@@ -348,13 +310,15 @@ export function HttpWorkspaceBody({
         onOpenPostman={onOpenPostman}
         onRunCollection={onRunCollection}
         onManageCollection={onManageCollection}
+        onCollectionSettings={collectionSettings.open}
         registerCollectionSearch={registerCollectionSearch}
         collectionTreeKeyRef={collectionTreeKeyRef}
-        onToggleHistory={onToggleHistory}
-        onCompareHistory={onCompareHistory}
-        onOpenHistory={onOpenHistory}
+        environments={environments}
       />
-      {layout.simultaneousPanes &&
+      {!collectionSettings.active &&
+      !environments.active &&
+      state.documents.length > 0 &&
+      layout.simultaneousPanes &&
       !navigationOverlayOpen &&
       !state.documents.find((document) => document.request.id === state.activeDocumentId)
         ?.maximizedPane ? (

@@ -90,6 +90,7 @@ function Harness({ initial }: { initial: HttpDocumentState }) {
         onOpen={() => {}}
         onDownload={() => {}}
         onCancelDownload={() => {}}
+        onCancel={() => {}}
         downloading={false}
       />
     </box>

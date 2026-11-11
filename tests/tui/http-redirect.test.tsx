@@ -1,4 +1,5 @@
 import "./setup"
+import { openLocalHttp } from "./http-source"
 import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
@@ -108,6 +109,7 @@ for (const layout of ["compact", "framed"] as const) {
       `### Redirect UI\n# @name redirect-ui\nPOST http://127.0.0.1:${source.port}/start\nContent-Type: text/plain\n\nfixture-body\n`,
     )
     tui = await testRender(<App />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() =>
       Boolean(
         current().renderer.root.findDescendantById(
@@ -142,10 +144,14 @@ for (const layout of ["compact", "framed"] as const) {
       current().renderer.root.findDescendantById("http-redirect-approval-modal"),
     ).toBeUndefined()
 
-    await press("http-collection-help")
-    await press("http-collection-runner-button")
+    await press("http-collection-file-redirect-ui.http")
+    await key("a")
+    await settle(() =>
+      Boolean(current().renderer.root.findDescendantById("http-collection-menu-run-collection")),
+    )
+    await press("http-collection-menu-run-collection")
     await settle(
-      () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-dataset",
+      () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-target",
     )
     await press("http-collection-runner-run")
     await settle(
@@ -153,9 +159,13 @@ for (const layout of ["compact", "framed"] as const) {
     )
     await key("ESCAPE")
     await settle(
-      () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-dataset",
+      () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-target",
     )
     expect(current().renderer.root.findDescendantById("http-collection-runner-modal")).toBeDefined()
+    await key("d")
+    await settle(
+      () => current().renderer.currentFocusedRenderable?.id === "http-collection-runner-dataset",
+    )
     await key("ESCAPE")
     expect(current().renderer.currentFocusedRenderable?.id).not.toBe(
       "http-collection-runner-dataset",

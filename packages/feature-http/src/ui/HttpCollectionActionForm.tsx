@@ -4,6 +4,7 @@ import { useKeyboard, useRenderer } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ConfirmationNotification } from "@xupon/tuiminal-core/notifications/index"
 import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
 import type { HttpCollectionTreeRow } from "../model/collection-tree"
 import type { PostmanWorkspace } from "../postman/api"
@@ -12,6 +13,7 @@ import type { HttpSourceMode } from "../model/source-mode"
 function heading(action: HttpCollectionAction) {
   if (action === "delete") return "EXCLUIR"
   if (action === "rename") return "RENOMEAR"
+  if (action === "duplicate") return "DUPLICAR"
   return "CRIAR"
 }
 
@@ -57,7 +59,7 @@ export function HttpCollectionActionForm({
   name: string
   contentWidth: number
   onNameChange: (name: string) => void
-  onApply: (name?: string) => void
+  onApply: (name?: string) => void | Promise<void>
   onCancel: () => void
   destination: "tuiminal" | "postman"
   workspaces: PostmanWorkspace[]
@@ -93,6 +95,24 @@ export function HttpCollectionActionForm({
     const timer = setTimeout(() => inputRef.current?.focus(), 20)
     return () => clearTimeout(timer)
   }, [action])
+  if (action === "delete")
+    return (
+      <ConfirmationNotification
+        id="http-collection-action-form"
+        title="EXCLUIR"
+        target={targetName(row)}
+        message="Confirme a exclusão deste item e de seu conteúdo."
+        confirmLabel="[Enter] Excluir"
+        confirmId="http-collection-action-apply"
+        cancelId="http-collection-action-cancel"
+        returnFocusId="http-navigation-collection"
+        onConfirm={async () => {
+          await onApply()
+          onCancel()
+        }}
+        onCancel={onCancel}
+      />
+    )
   return (
     <box id="http-collection-action-form" style={{ flexShrink: 0 }}>
       <text
@@ -100,36 +120,29 @@ export function HttpCollectionActionForm({
           `${translateUi(heading(action))} · ${targetName(row)}`,
           contentWidth,
         )}
-        style={{ fg: action === "delete" ? COLORS.danger : COLORS.http }}
+        style={{ fg: COLORS.http }}
       />
-      {action === "delete" ? (
-        <text
-          content={translateUi("Confirme a exclusão deste item e de seu conteúdo.")}
-          style={{ fg: COLORS.warning }}
-        />
-      ) : (
-        <input
-          ref={inputRef}
-          id="http-collection-name-input"
-          value={name}
-          placeholder={translateUi("Nome")}
-          onInput={onNameChange}
-          onKeyDown={(event) => {
-            if (event.name === "return" || event.name === "enter") {
-              event.preventDefault()
-              event.stopPropagation()
-              onApply(inputRef.current?.value)
-            }
-            if (event.name === "escape") {
-              event.preventDefault()
-              event.stopPropagation()
-              onCancel()
-            }
-          }}
-          onMouseDown={() => inputRef.current?.focus()}
-          style={{ backgroundColor: COLORS.canvas, focusedBackgroundColor: COLORS.panelRaised }}
-        />
-      )}
+      <input
+        ref={inputRef}
+        id="http-collection-name-input"
+        value={name}
+        placeholder={translateUi("Nome")}
+        onInput={onNameChange}
+        onKeyDown={(event) => {
+          if (event.name === "return" || event.name === "enter") {
+            event.preventDefault()
+            event.stopPropagation()
+            onApply(inputRef.current?.value)
+          }
+          if (event.name === "escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            onCancel()
+          }
+        }}
+        onMouseDown={() => inputRef.current?.focus()}
+        style={{ backgroundColor: COLORS.canvas, focusedBackgroundColor: COLORS.panelRaised }}
+      />
       {action === "create-collection" ? (
         <>
           <text
@@ -178,8 +191,8 @@ export function HttpCollectionActionForm({
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
         <InlineButton
           id="http-collection-action-apply"
-          label={action === "delete" ? "[Enter] Excluir" : "[Enter] Salvar"}
-          accent={action === "delete" ? COLORS.danger : COLORS.http}
+          label="[Enter] Salvar"
+          accent={COLORS.http}
           disabled={!canApply(action, name, destination, activeWorkspace, workspaces)}
           onPress={() => onApply(inputRef.current?.value)}
         />

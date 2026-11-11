@@ -47,6 +47,26 @@ describe("application boundaries", () => {
     expect(ownsKeyboardFocus(httpKeyboardScope, "http-response-scroll-scratch")).toBe(false)
   })
 
+  test("HTTP environment inputs and menus own global keys, while browsing controls do not", () => {
+    for (const id of [
+      "http-environment-name",
+      "http-environment-cell-0-name",
+      "http-environment-cell-0-value",
+      "http-environment-menu",
+      "http-environment-menu-delete",
+    ])
+      expect(ownsKeyboardFocus(httpKeyboardScope, id)).toBe(true)
+    for (const id of [
+      "http-environment-pane",
+      "http-environment-entry-1",
+      "http-environment-actions-1",
+      "http-environment-save",
+      "http-environment-retry",
+    ])
+      expect(ownsKeyboardFocus(httpKeyboardScope, id)).toBe(false)
+    expect(httpKeyboardScope.deferEscape).toBe(true)
+  })
+
   test("stale or blurred renderables do not retain global shortcut ownership", () => {
     expect(focusedRenderableId({ id: "http-url-input", focused: true })).toBe("http-url-input")
     expect(focusedRenderableId({ id: "http-url-input", focused: false })).toBeUndefined()

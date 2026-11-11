@@ -1,9 +1,26 @@
+import type { HttpCollectionSettingsTarget } from "../model/collection-settings"
+import { HttpCollectionEmpty } from "./HttpCollectionEmpty"
+import { HttpCollectionWorkspaceRow } from "./HttpCollectionWorkspaceRow"
+import { useHttpCollectionScroll } from "../hooks/use-http-collection-scroll"
+import {
+  collectionWorkspace,
+  collectionDestination,
+  missingPostmanWorkspace,
+  collectionActionName,
+  useHttpCollectionMenu,
+} from "../hooks/use-http-collection-menu"
+import { HttpCollectionSearch } from "./HttpCollectionSearch"
+import { HttpCollectionDraft, collectionDraftAnchor } from "./HttpCollectionDraft"
+import { HttpCollectionMenu } from "./HttpCollectionMenu"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { buildHttpCollectionTree, type HttpCollectionTreeRow } from "../model/collection-tree"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import {
+  buildHttpCollectionTree,
+  type HttpCollectionTreeRow,
+  type HttpCollectionFile,
+} from "../model/collection-tree"
 import {
   httpCollectionSelectionAfterAction,
   visibleHttpCollectionSelection,
@@ -20,33 +37,15 @@ import { useHttpCollectionBranches } from "../hooks/use-http-collection-branches
 import { isPostmanPath } from "../postman/mutations"
 import { HttpCollectionActionForm } from "./HttpCollectionActionForm"
 import { HttpCollectionRow } from "./HttpCollectionRow"
-import { HttpCollectionCommands } from "./HttpCollectionCommands"
+import type { HttpCollectionRunTarget } from "../hooks/use-http-collection-runner"
 import { runCollectionCommand } from "./run-collection-command"
 import type { HttpSourceMode } from "../model/source-mode"
 import type { PostmanCollectionFolder } from "../postman/sync"
 import type { PostmanWorkspace } from "../postman/api"
 
-function collectionDestination(
-  action: HttpCollectionAction,
-  mode: HttpSourceMode,
-  workspace: PostmanWorkspace | undefined | null,
-): HttpCollectionDestination | undefined {
-  if (action !== "create-collection") return undefined
-  return mode === "postman" && workspace
-    ? { kind: "postman", workspaceId: workspace.id }
-    : { kind: "tuiminal" }
-}
-
-function missingPostmanWorkspace(
-  action: HttpCollectionAction,
-  destination: "tuiminal" | "postman",
-  workspace: PostmanWorkspace | undefined | null,
-) {
-  return action === "create-collection" && destination === "postman" && !workspace
-}
-
 export function HttpCollectionTree({
   state,
+  active,
   sourceMode,
   postmanWorkspace,
   onPostmanWorkspaceChange,
@@ -67,15 +66,17 @@ export function HttpCollectionTree({
   onPostman,
   onRun,
   onManage,
+  onSettings,
 }: {
   state: HttpWorkspaceState
+  active: boolean
   sourceMode: HttpSourceMode
   postmanWorkspace: PostmanWorkspace | null
   onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
   contentWidth: number
   projectRequests: HttpProjectRequestItem[]
   projectDirectories: string[]
-  projectFiles: string[]
+  projectFiles: HttpCollectionFile[]
   postmanFolders: PostmanCollectionFolder[]
   projectErrors: number
   selection: string | null
@@ -86,21 +87,23 @@ export function HttpCollectionTree({
   onFocus: () => void
   onOpen: (request: HttpProjectRequestItem) => void
   onImport: () => void
-  onPostman: () => void
-  onRun: () => void
+  onPostman: (action?: "create-workspace") => void
+  onRun: (collection: HttpCollectionRunTarget) => void
+  onSettings: (target: HttpCollectionSettingsTarget) => void
   onManage: (
     action: HttpCollectionAction,
     row: HttpCollectionTreeRow | null,
     name?: string,
     destination?: HttpCollectionDestination,
-  ) => Promise<boolean>
+  ) => Promise<boolean | string>
 }) {
   const [query, setQuery] = useState("")
-  const [helpOpen, setHelpOpen] = useState(false)
   const [pending, setPending] = useState<{
     action: HttpCollectionAction
     row: HttpCollectionTreeRow | null
   } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const applying = useRef(false)
   const [name, setName] = useState("")
   const postmanDestination = usePostmanCollectionDestination()
   const {
@@ -111,13 +114,12 @@ export function HttpCollectionTree({
     workspaceError,
     setWorkspaceError,
   } = postmanDestination
-  const searchRef = useRef<InputRenderable | null>(null)
   const handlerRef = useRef<((key: HttpKey) => boolean) | null>(null)
   const { collapsed, expand, toggle } = useHttpCollectionBranches(
     sourceMode,
     postmanWorkspace,
     projectDirectories,
-    projectFiles,
+    projectFiles.map((file) => file.path),
     postmanFolders,
   )
   const rows = useMemo(
@@ -141,30 +143,39 @@ export function HttpCollectionTree({
       sourceMode,
     ],
   )
-  const selected = rows.find((row) => row.id === selection) ?? null
+  const methodWidth = projectRequests.reduce(
+    (width, item) => Math.max(width, displayWidth(item.request.method)),
+    3,
+  )
   useEffect(() => {
-    if (!pending && selection && !selected) {
+    if (!active && !applying.current) setPending(null)
+  }, [active])
+  const workspace = collectionWorkspace(sourceMode, postmanWorkspace)
+  const workspaceSelected = Boolean(workspace && selection === workspace.id)
+  const inlineCollection = pending?.action === "create-collection" && Boolean(postmanWorkspace)
+  const selected = rows.find((row) => row.id === selection) ?? null
+  const menu = useHttpCollectionMenu(
+    active && !pending,
+    workspaceSelected ? workspace : selected,
+    setSelection,
+    onFocus,
+  )
+  useEffect(() => {
+    if (!pending && selection && !selected && !workspaceSelected) {
       setSelection(visibleHttpCollectionSelection(rows, selection))
     }
-  }, [pending, rows, selected, selection, setSelection])
-  useEffect(() => {
-    const scroll = scrollRef.current
-    const index = rows.findIndex((row) => row.id === selection)
-    if (!scroll || index < 0) return
-    const formLines =
-      pending?.action === "create-collection"
-        ? destination === "postman"
-          ? 5
-          : 4
-        : pending
-          ? 3
-          : 0
-    const line = 4 + (helpOpen ? 4 + (selected ? 1 : 0) : 0) + formLines + index
-    const visible = Math.max(1, scroll.viewport.height)
-    if (line < scroll.scrollTop) scroll.scrollTo(line)
-    else if (line >= scroll.scrollTop + visible) scroll.scrollTo(line - visible + 1)
-  }, [destination, helpOpen, pending, rows, scrollRef, selected, selection])
+  }, [pending, rows, selected, selection, setSelection, workspaceSelected])
+  useHttpCollectionScroll({
+    scrollRef,
+    pending,
+    rows,
+    selection,
+    destination,
+    inlineCollection,
+    workspaceSelected,
+  })
   const start = (action: HttpCollectionAction, row: HttpCollectionTreeRow | null) => {
+    if (applying.current) return
     if (
       action === "create-collection" &&
       row?.kind === "directory" &&
@@ -172,23 +183,26 @@ export function HttpCollectionTree({
     ) {
       row = null
     }
-    setName(
-      action === "rename" && row ? (row.kind === "request" ? row.item.request.name : row.name) : "",
-    )
+    setName(collectionActionName(action, row))
     setPending({ action, row })
+    if (row && ["create-request", "create-folder"].includes(action)) expand(row.id)
     if (action === "create-collection")
       postmanDestination.reset(sourceMode === "postman" ? "postman" : "tuiminal")
     onFocus()
   }
   const apply = async (currentName = name) => {
-    if (!pending) return
+    if (!pending || applying.current) return
     const workspace = postmanWorkspace ?? workspaces[workspaceIndex]
     if (missingPostmanWorkspace(pending.action, destination, workspace)) {
       setWorkspaceError("Selecione um workspace Postman.")
       return
     }
     const target = collectionDestination(pending.action, sourceMode, workspace)
-    if (await onManage(pending.action, pending.row, currentName, target)) {
+    applying.current = true
+    setBusy(true)
+    try {
+      const result = await onManage(pending.action, pending.row, currentName, target)
+      if (!result) return
       if (target?.kind === "postman" && workspace) {
         onPostmanWorkspaceChange(workspace)
       }
@@ -197,36 +211,65 @@ export function HttpCollectionTree({
         expand(row.kind === "request" ? `file:${row.path}` : row.id)
       }
       setPending(null)
-      setSelection(httpCollectionSelectionAfterAction(pending.action, pending.row, currentName))
+      setSelection(
+        selectionForResult(
+          result,
+          httpCollectionSelectionAfterAction(
+            pending.action,
+            pending.row,
+            currentName,
+            sourceMode === "postman" ? "postman" : "",
+          ),
+        ),
+      )
       setName("")
+    } finally {
+      applying.current = false
+      setBusy(false)
     }
   }
+  const edit = {
+    name,
+    busy,
+    onChange: setName,
+    onApply: (value: string) => void apply(value),
+    onCancel: () => {
+      if (!applying.current) setPending(null)
+    },
+  }
+  const draftAnchor = inlineCollection ? null : collectionDraftAnchor(pending, rows)
+  const draft =
+    pending && draftAnchor !== undefined ? (
+      <HttpCollectionDraft
+        action={pending.action}
+        row={pending.row}
+        methodWidth={methodWidth}
+        edit={edit}
+      />
+    ) : null
   const compactSearch = contentWidth < 30
   const handleKey = (key: HttpKey) => {
-    if (key.name === "?" || (key.name === "/" && key.shift)) {
-      setHelpOpen((open) => !open)
+    if (pending && pending.action !== "delete") {
+      if (key.name === "escape") edit.onCancel()
+      else if (key.name === "return" || key.name === "enter") void apply()
       return true
     }
-    if (key.name === "escape" && helpOpen) {
-      setHelpOpen(false)
-      return true
-    }
+    if (menu.handleKey(key)) return true
     const command = resolveHttpCollectionTreeCommand(
       key,
       rows,
       selection,
       pending?.action === "delete",
+      workspace?.id,
     )
     if (!command) return false
-    if (command.kind === "open-postman" && sourceMode === "local") return false
-    runCollectionCommand(command, selected, {
+    runCollectionCommand(command, {
       select: setSelection,
       toggle,
       open: onOpen,
-      start,
       apply: () => void apply(),
       cancel: () => setPending(null),
-      postman: onPostman,
+      workspaceMenu: menu.open,
     })
     return true
   }
@@ -241,35 +284,55 @@ export function HttpCollectionTree({
 
   return (
     <>
-      <InlineButton
-        id="http-collection-help"
-        label="[?] Comandos"
-        accent={COLORS.http}
-        active={helpOpen}
-        onPress={() => {
-          onFocus()
-          setHelpOpen((open) => !open)
-        }}
-      />
-      {helpOpen ? (
-        <HttpCollectionCommands
-          sourceMode={sourceMode}
-          selected={selected}
-          contentWidth={contentWidth}
-          onImport={onImport}
-          onRun={onRun}
-          onPostman={onPostman}
-          onStart={start}
+      {menu.row ? (
+        <HttpCollectionMenu
+          settingsEnabled={sourceMode === "postman"}
+          row={menu.row}
+          onClose={menu.close}
+          onSelect={(action) => {
+            menu.close()
+            switch (action) {
+              case "settings":
+                if (menu.row && menu.row.kind !== "workspace" && menu.row.kind !== "request")
+                  onSettings(menu.row)
+                return
+              case "select-workspace":
+                return onPostman()
+              case "create-workspace":
+                return onPostman(action)
+              case "import-collection":
+                return onImport()
+              case "run-collection":
+                if (menu.row?.kind === "file") onRun({ path: menu.row.path, name: menu.row.name })
+                return
+              default:
+                start(action, menu.row?.kind === "workspace" ? null : menu.row)
+            }
+          }}
         />
       ) : null}
-      {pending ? (
+      <HttpCollectionWorkspaceRow
+        workspace={workspace}
+        selected={workspaceSelected}
+        active={active && !pending}
+        contentWidth={contentWidth}
+        onSelect={() => {
+          onFocus()
+          setSelection(workspace.id)
+        }}
+        onActions={menu.open}
+        onContextMenu={pending ? undefined : menu.openFor}
+      />
+      {pending &&
+      !inlineCollection &&
+      (pending.action === "delete" || pending.action === "create-collection") ? (
         <HttpCollectionActionForm
           action={pending.action}
           row={pending.row}
           name={name}
           contentWidth={contentWidth}
           onNameChange={setName}
-          onApply={(currentName) => void apply(currentName)}
+          onApply={apply}
           onCancel={() => setPending(null)}
           destination={destination}
           sourceMode={sourceMode}
@@ -280,75 +343,43 @@ export function HttpCollectionTree({
           workspaceError={workspaceError}
         />
       ) : null}
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          id="http-collection-search-button"
-          label={compactSearch ? "[F]" : "[F] Buscar"}
-          accent={COLORS.http}
-          active={Boolean(query)}
-          onPress={() => {
-            onFocus()
-            searchRef.current?.focus()
-          }}
-        />
-        <input
-          ref={(input) => {
-            searchRef.current = input
-            registerSearchInput(input)
-          }}
-          id="http-collection-search"
-          value={query}
-          placeholder={compactSearch ? "…" : translateUi("Buscar coleção")}
-          onInput={setQuery}
-          onMouseDown={() => {
-            onFocus()
-            searchRef.current?.focus()
-          }}
-          style={{
-            flexGrow: 1,
-            backgroundColor: COLORS.canvas,
-            focusedBackgroundColor: COLORS.panelRaised,
-          }}
-        />
-        {query ? (
-          <InlineButton
-            id="http-collection-search-clear"
-            label="[×]"
-            accent={COLORS.danger}
-            onPress={() => setQuery("")}
-          />
-        ) : null}
-      </box>
+      <HttpCollectionSearch
+        compact={compactSearch}
+        query={query}
+        onChange={setQuery}
+        onFocus={onFocus}
+        register={registerSearchInput}
+      />
+      {draftAnchor === null ? draft : null}
       {rows.length ? (
         rows.map((row) => (
-          <HttpCollectionRow
-            key={row.id}
-            row={row}
-            contentWidth={contentWidth}
-            activeDocumentId={state.activeDocumentId}
-            selected={selection === row.id}
-            onPress={() => {
-              onFocus()
-              setSelection(row.id)
-              if (row.kind === "request") onOpen(row.item)
-              else toggle(row.id)
-            }}
-          />
+          <Fragment key={row.id}>
+            <HttpCollectionRow
+              edit={pending?.action === "rename" && pending.row?.id === row.id ? edit : undefined}
+              row={row}
+              contentWidth={contentWidth}
+              methodWidth={methodWidth}
+              activeDocumentId={state.activeDocumentId}
+              selected={selection === row.id}
+              onActions={selection === row.id && active && !pending ? menu.open : undefined}
+              onContextMenu={pending ? undefined : menu.openFor}
+              onDoubleClick={
+                sourceMode !== "postman" || row.kind === "request"
+                  ? undefined
+                  : () => onSettings(row)
+              }
+              onPress={() => {
+                onFocus()
+                setSelection(row.id)
+                if (row.kind === "request") onOpen(row.item)
+                else toggle(row.id)
+              }}
+            />
+            {draftAnchor === row.id ? draft : null}
+          </Fragment>
         ))
       ) : (
-        <text
-          content={truncateDisplay(
-            translateUi(
-              query
-                ? "Nenhum request corresponde à busca."
-                : sourceMode === "postman"
-                  ? "Nenhuma coleção neste workspace."
-                  : "Nenhum arquivo .http ou .rest no projeto.",
-            ),
-            contentWidth,
-          )}
-          style={{ fg: COLORS.muted }}
-        />
+        <HttpCollectionEmpty query={query} sourceMode={sourceMode} contentWidth={contentWidth} />
       )}
       {projectErrors ? (
         <text
@@ -361,4 +392,8 @@ export function HttpCollectionTree({
       ) : null}
     </>
   )
+}
+
+function selectionForResult(result: boolean | string, fallback: string | null) {
+  return typeof result === "string" ? result : fallback
 }

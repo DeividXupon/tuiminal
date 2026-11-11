@@ -1,45 +1,28 @@
-import { useCallback, useState, type RefObject } from "react"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import type { HttpDocumentState } from "../model/types"
-import type { HttpRequestDefinition } from "../model/types"
-import { HTTP_DOCUMENT_LIMIT, type HttpWorkspaceAction } from "../model/workspace"
+import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
+import { type RefObject, useCallback, useRef, useState } from "react"
+import type { HttpSourceMode } from "../model/source-mode"
+import type { HttpDocumentState, HttpRequestDefinition } from "../model/types"
+import type { HttpWorkspaceAction } from "../model/workspace"
+import { createLivePostmanRequest, duplicateLivePostmanRequest } from "../postman/live-mutations"
+import { type LivePostmanSession, requirePostmanSession } from "../postman/live-session"
+import { isPostmanPath } from "../postman/mutations"
 import type { HttpDocumentRefs } from "../runtime"
-import { loadPostmanAccount } from "../postman/account"
-import { PostmanApi } from "../postman/api"
-import { duplicatePostmanRequest, isPostmanPath } from "../postman/mutations"
-import { pushPostmanRequest } from "../postman/sync"
-import { savePostmanDraft } from "../postman/draft"
-import { belongsToHttpSource, type HttpSourceMode } from "../model/source-mode"
 import {
   duplicateHttpRequest,
   HttpExternalChangeError,
   saveHttpRequest,
 } from "../storage/collections"
 import {
-  inspectHttpExternalConflict,
-  resolveHttpExternalConflict,
   type HttpExternalConflictPreview,
   type HttpExternalConflictResolution,
+  inspectHttpExternalConflict,
+  resolveHttpExternalConflict,
 } from "../storage/conflicts"
-
-async function savedRequestNotice(root: string, saved: HttpRequestDefinition) {
-  if (saved.source.kind !== "file" || !isPostmanPath(saved.source.path)) {
-    return `REQUEST SALVO · ${saved.source.kind === "file" ? saved.source.path : saved.name}`
-  }
-  try {
-    const account = await loadPostmanAccount()
-    if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
-    const result = await pushPostmanRequest(root, new PostmanApi(account), saved)
-    return result === "pushed" ? "REQUEST SALVO NO POSTMAN" : "REQUEST SALVO · POSTMAN EM DIA"
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return `${translateUi("SALVO LOCALMENTE · POSTMAN PENDENTE")}: ${message}`
-  }
-}
 
 export function useHttpRequestPersistence({
   root,
   sourceMode,
+  postmanSession,
   collectionFiles,
   documents,
   documentRefs,
@@ -49,6 +32,7 @@ export function useHttpRequestPersistence({
 }: {
   root: string
   sourceMode: HttpSourceMode
+  postmanSession?: LivePostmanSession | null
   collectionFiles: Array<{ path: string; sourceHash: string }>
   documents: HttpDocumentState[]
   documentRefs: RefObject<Map<string, HttpDocumentRefs>>
@@ -56,6 +40,8 @@ export function useHttpRequestPersistence({
   refreshProject: () => Promise<void>
   setNotice: (notice: string) => void
 }) {
+  const { notify } = useNotifications()
+  const saving = useRef(new Set<string>())
   const [externalConflict, setExternalConflict] = useState<HttpExternalConflictPreview | null>(null)
   const [pendingPostmanSaveId, setPendingPostmanSaveId] = useState<string | null>(null)
   const [resolvingExternalConflict, setResolvingExternalConflict] = useState(false)
@@ -77,36 +63,44 @@ export function useHttpRequestPersistence({
       const document = documents.find((candidate) => candidate.request.id === documentId)
       if (!document || document.execution.status === "running") return
       if (sourceMode === "postman" && document.request.source.kind === "scratch") {
-        setPendingPostmanSaveId(documentId)
+        setPendingPostmanSaveId(postmanDraftToSave(document))
         return
       }
-      if (
-        sourceMode === "postman" &&
-        document.request.source.kind === "file" &&
-        !belongsToHttpSource(document.request.source.path, sourceMode)
-      ) {
-        setNotice("A request pertence à biblioteca local.")
-        return
-      }
+      if (saving.current.has(documentId)) return
+      saving.current.add(documentId)
       setNotice("SALVANDO REQUEST…")
       try {
-        const saved = await saveHttpRequest(root, document.request)
+        const saved = await saveForSource(root, sourceMode, postmanSession, document.request)
         if (saved.id !== documentId) documentRefs.current.delete(documentId)
-        dispatch({ type: "commit-saved-document", documentId, request: saved })
+        dispatch({
+          type: "commit-saved-document",
+          documentId,
+          request: saved,
+          revision: document.revision,
+          submittedRequest: document.request,
+        })
         await refreshProject()
-        setNotice(await savedRequestNotice(root, saved))
+        notify({ source: "HTTP", kind: "success", message: savedNotice(sourceMode, saved) })
       } catch (error) {
         if (error instanceof HttpExternalChangeError) {
           await openExternalConflict(document.request)
           return
         }
-        setNotice(error instanceof Error ? error.message : String(error))
+        notify({
+          source: "HTTP",
+          kind: "error",
+          message: error instanceof Error ? error.message : String(error),
+        })
+      } finally {
+        saving.current.delete(documentId)
       }
     },
     [
+      postmanSession,
       dispatch,
       documentRefs,
       documents,
+      notify,
       openExternalConflict,
       refreshProject,
       root,
@@ -118,7 +112,7 @@ export function useHttpRequestPersistence({
   const savePostmanDraftInCollection = useCallback(
     async (path: string, folder?: { id: string; path: string }) => {
       const document = documents.find((candidate) => candidate.request.id === pendingPostmanSaveId)
-      if (!document || document.request.source.kind !== "scratch") return
+      if (document?.request.source.kind !== "scratch") return
       const collection = collectionFiles.find((file) => file.path === path)
       if (!collection) {
         setNotice("A coleção Postman mudou; atualize a biblioteca.")
@@ -126,19 +120,22 @@ export function useHttpRequestPersistence({
       }
       setPendingPostmanSaveId(null)
       try {
-        const account = await loadPostmanAccount()
-        if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
+        if (!postmanSession) throw new Error("Selecione um workspace Postman.")
         setNotice("SALVANDO REQUEST NO POSTMAN…")
-        const saved = await savePostmanDraft(
-          root,
-          new PostmanApi(account),
-          document.request,
+        const saved = await createLivePostmanRequest(
+          postmanSession,
           path,
-          collection.sourceHash,
-          folder,
+          document.request,
+          folder?.id,
         )
         if (saved.id !== document.request.id) documentRefs.current.delete(document.request.id)
-        dispatch({ type: "commit-saved-document", documentId: document.request.id, request: saved })
+        dispatch({
+          type: "commit-saved-document",
+          documentId: document.request.id,
+          request: saved,
+          revision: document.revision,
+          submittedRequest: document.request,
+        })
         await refreshProject()
         setNotice("REQUEST SALVO NO POSTMAN")
       } catch (error) {
@@ -147,13 +144,13 @@ export function useHttpRequestPersistence({
       }
     },
     [
+      postmanSession,
       collectionFiles,
       dispatch,
       documentRefs,
       documents,
       pendingPostmanSaveId,
       refreshProject,
-      root,
       setNotice,
     ],
   )
@@ -161,7 +158,7 @@ export function useHttpRequestPersistence({
   const duplicateDocument = useCallback(
     async (documentId: string) => {
       const document = documents.find((candidate) => candidate.request.id === documentId)
-      if (!document || documents.length >= HTTP_DOCUMENT_LIMIT) return
+      if (!document) return
       try {
         const postman =
           document.request.source.kind === "file" && isPostmanPath(document.request.source.path)
@@ -169,11 +166,10 @@ export function useHttpRequestPersistence({
           throw new Error("Salve a request antes de duplicá-la no Postman.")
         }
         const duplicate = postman
-          ? await (async () => {
-              const account = await loadPostmanAccount()
-              if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
-              return duplicatePostmanRequest(root, new PostmanApi(account), document.request)
-            })()
+          ? await duplicateLivePostmanRequest(
+              requirePostmanSession(postmanSession),
+              document.request,
+            )
           : await duplicateHttpRequest(root, document.request)
         dispatch({ type: "add-document", request: duplicate })
         setNotice(
@@ -184,7 +180,7 @@ export function useHttpRequestPersistence({
         setNotice(error instanceof Error ? error.message : String(error))
       }
     },
-    [dispatch, documents, refreshProject, root, setNotice],
+    [dispatch, documents, refreshProject, root, setNotice, postmanSession],
   )
 
   const resolveExternalConflict = useCallback(
@@ -242,4 +238,24 @@ export function useHttpRequestPersistence({
     resolveExternalConflict,
     cancelExternalConflict,
   }
+}
+
+function postmanDraftToSave({ request, revision, savedRevision }: HttpDocumentState) {
+  return revision !== savedRevision || request.url.trim() ? request.id : null
+}
+
+function saveForSource(
+  root: string,
+  mode: HttpSourceMode,
+  session: LivePostmanSession | null | undefined,
+  request: HttpRequestDefinition,
+) {
+  return mode === "postman"
+    ? requirePostmanSession(session).save(request)
+    : saveHttpRequest(root, request)
+}
+
+function savedNotice(mode: HttpSourceMode, request: HttpRequestDefinition) {
+  if (mode === "postman") return "REQUEST SALVO NO POSTMAN"
+  return `REQUEST SALVO · ${request.source.kind === "file" ? request.source.path : request.name}`
 }

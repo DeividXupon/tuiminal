@@ -4,6 +4,8 @@ import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 
+import { HttpTutorialRequestTable } from "./HttpTutorialRequestTable"
+
 export function HttpTutorialDemo() {
   const terminal = useTerminalDimensions()
   const narrow = terminal.width < 92
@@ -22,10 +24,9 @@ export function HttpTutorialDemo() {
     >
       <text content={translateUi("PROJETO")} style={{ fg: COLORS.http }} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton label={translateUi("[I] Importar")} accent={COLORS.http} onPress={noop} />
-        <InlineButton label={translateUi("[R] Rodar")} accent={COLORS.http} onPress={noop} />
+        <text content="▾ api" style={{ fg: COLORS.text, flexGrow: 1 }} />
+        <InlineButton label="[A]" accent={COLORS.http} onPress={noop} />
       </box>
-      <text content="▾ api" style={{ fg: COLORS.muted }} />
       <text content={`  ◆ ${translateUi("GET Buscar usuário")}`} style={{ fg: COLORS.text }} />
       <text content={`  ◇ ${translateUi("POST Criar usuário")}`} style={{ fg: COLORS.muted }} />
     </box>
@@ -105,8 +106,7 @@ export function HttpTutorialDemo() {
                 />
               ))}
             </box>
-            <text content="id = 42" style={{ fg: COLORS.text }} />
-            <text content="Accept: application/json" style={{ fg: COLORS.text }} />
+            <HttpTutorialRequestTable />
             <box
               id="tutorial-http-automation"
               style={{

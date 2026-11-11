@@ -1,7 +1,9 @@
+import { RGBA, StyledText } from "@opentui/core"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { HttpDocumentState, HttpResponseSnapshot } from "../model/types"
 import { formatHttpBytes, formatHttpDuration } from "./format"
+import { HttpPaneTitle } from "./HttpPaneTitle"
 
 function statusColor(status: number) {
   if (status >= 200 && status < 300) return COLORS.success
@@ -12,26 +14,41 @@ function statusColor(status: number) {
 export function HttpResponseHeader({
   document,
   response,
+  onFocus,
 }: {
   document: HttpDocumentState
   response: HttpResponseSnapshot | null
+  onFocus: () => void
 }) {
   return (
     <box
-      style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
+      style={{
+        minHeight: 1,
+        flexShrink: 0,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+      }}
     >
-      <text content={translateUi("RESPOSTA")} style={{ fg: COLORS.http }} />
+      <HttpPaneTitle pane="response" requestId={document.request.id} onFocus={onFocus} />
       {response ? (
-        <box style={{ flexDirection: "row" }}>
-          <text
-            content={`${response.status} ${response.statusText}`}
-            style={{ fg: statusColor(response.status) }}
-          />
-          <text
-            content={` · ${formatHttpDuration(response.timings.totalMs)} · ${formatHttpBytes(response.capturedBytes)}${response.truncated ? ` · ${translateUi("TRUNCADO")}` : ""}`}
-            style={{ fg: response.truncated ? COLORS.warning : COLORS.muted }}
-          />
-        </box>
+        <text
+          content={
+            new StyledText([
+              {
+                __isChunk: true,
+                text: `${response.status} ${response.statusText}`,
+                fg: RGBA.fromHex(statusColor(response.status)),
+              },
+              {
+                __isChunk: true,
+                text: ` · ${formatHttpDuration(response.timings.totalMs)} · ${formatHttpBytes(response.capturedBytes)}${response.truncated ? ` · ${translateUi("TRUNCADO")}` : ""}`,
+                fg: RGBA.fromHex(response.truncated ? COLORS.warning : COLORS.muted),
+              },
+            ])
+          }
+          style={{ flexShrink: 1, minWidth: 0 }}
+        />
       ) : (
         <text
           content={translateUi(

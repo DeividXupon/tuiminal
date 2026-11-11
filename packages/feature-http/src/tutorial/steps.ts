@@ -14,16 +14,16 @@ export const HTTP_TUTORIAL_STEPS = [
     title: "Método, URL, ambiente e envio",
     description:
       "A barra estável concentra o alvo da requisição. Enviar e cancelar funcionam pelo teclado ou pelo mouse.",
-    hint: "[/] URL · [M] método · [E] ambiente · [S] enviar · [X] cancelar",
+    hint: "[/] URL · [Shift+M] método · [E] ambiente · [S] enviar · [Esc] cancelar",
     kind: "action",
   },
   {
     targetId: "tutorial-http-collection",
     group: "HTTP · PROJETO",
-    title: "Coleção e histórico",
+    title: "Coleção e ambientes",
     description:
-      "A sidebar acompanha os arquivos .http, importa Postman/OpenAPI com prévia e reúne execuções da sessão.",
-    hint: "[I] importa com prévia · [R] executa coleção · [Y] abre histórico",
+      "A sidebar reúne as coleções e os ambientes do workspace. Global aparece primeiro; cada ambiente abre uma tabela de variáveis em sua própria aba.",
+    hint: "[C] Coleção · [E] Ambientes",
     kind: "block",
   },
   {

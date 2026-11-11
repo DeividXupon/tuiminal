@@ -1,56 +1,24 @@
-import type { InputRenderable } from "@opentui/core"
+import { HttpDialog } from "./HttpDialog"
+import { HttpRunnerResults } from "./HttpRunnerResults"
+import { useKeyboard, useRenderer } from "@opentui/react"
+import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpRunCase } from "../services/collection-runner"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 
-function runItemPassed(item: HttpRunCase["items"][number]) {
-  return (
-    Boolean(item.response) &&
-    !item.error &&
-    (item.response?.assertions ?? []).every((assertion) => assertion.passed)
-  )
-}
-
-function RunnerResults({ cases, width }: { cases: HttpRunCase[]; width: number }) {
-  if (!cases.length) {
-    return (
-      <text content={translateUi("Os resultados aparecerão aqui.")} style={{ fg: COLORS.muted }} />
-    )
-  }
-  return (
-    <scrollbox scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
-      {cases.flatMap((testCase) => {
-        const passed = testCase.items.filter(runItemPassed).length
-        const casePassed = passed === testCase.items.length && Boolean(testCase.items.length)
-        return [
-          <text
-            key={`case-${testCase.name}`}
-            content={truncateDisplay(
-              `${casePassed ? "✓" : "×"} ${testCase.name} · ${passed}/${testCase.items.length}`,
-              width,
-            )}
-            style={{ fg: casePassed ? COLORS.success : COLORS.danger }}
-          />,
-          ...testCase.items.map((item) => {
-            const itemPassed = runItemPassed(item)
-            const detail = item.error
-              ? translateUi(item.error.message)
-              : `${item.response?.status ?? "—"} · ${item.method} ${item.requestName}`
-            return (
-              <text
-                key={`${testCase.name}-${item.requestId}`}
-                content={truncateDisplay(`  ${itemPassed ? "✓" : "×"} ${detail}`, width)}
-                style={{ fg: itemPassed ? COLORS.text : COLORS.warning }}
-              />
-            )
-          }),
-        ]
-      })}
-    </scrollbox>
-  )
+function runnerFocusFields(running: boolean, hasApproval: boolean, hasResults: boolean) {
+  return [
+    ...(!running ? ["target", "concurrency"] : []),
+    "dataset",
+    ...(hasApproval ? ["approve-tls"] : []),
+    ...(hasResults ? ["content"] : []),
+    "run",
+    "modal-close",
+  ].map((name) => `http-collection-runner-${name}`)
 }
 
 export function HttpCollectionRunnerModal({
@@ -86,15 +54,54 @@ export function HttpCollectionRunnerModal({
   onApproveInsecureTls: () => void
   onClose: () => void
 }) {
+  const renderer = useRenderer()
+  const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const datasetRef = useRef<InputRenderable | null>(null)
-  const width = Math.min(86, Math.max(42, terminalWidth - 4))
-  const height = Math.min(24, Math.max(12, terminalHeight - 4))
-  const contentWidth = width - 4
+  const width = Math.min(80, Math.max(24, terminalWidth - 4))
+  const contentWidth = width - 5
+  const wide = contentWidth >= 64
+  const height = Math.min(
+    status === "idle" && !error && !cases.length ? (wide ? 15 : 18) : 26,
+    terminalHeight - 2,
+  )
+  const running = status === "running"
+  const focus = (id: string) => {
+    renderer.root.findDescendantById(id)?.focus()
+    scrollRef.current?.scrollChildIntoView(id)
+  }
   useEffect(() => {
-    if (status !== "idle") return
-    const timer = setTimeout(() => datasetRef.current?.focus(), 0)
+    if (status === "running") return
+    const timer = setTimeout(
+      () => renderer.root.findDescendantById("http-collection-runner-target")?.focus(),
+      0,
+    )
     return () => clearTimeout(timer)
-  }, [status])
+  }, [renderer, status])
+  useKeyboard((key) => {
+    if (key.defaultPrevented) return
+    const focused = renderer.currentFocusedRenderable?.id ?? ""
+    if (!focused.startsWith("http-collection-runner-")) return
+    if (key.name === "tab") {
+      key.preventDefault()
+      key.stopPropagation()
+      const fields = runnerFocusFields(running, Boolean(pendingTlsApproval), cases.length > 0)
+      const index = fields.indexOf(focused)
+      focus(
+        fields[(index + (key.shift ? fields.length - 1 : 1)) % fields.length] ??
+          "http-collection-runner-run",
+      )
+    } else if (
+      key.name === "d" &&
+      !key.ctrl &&
+      !key.meta &&
+      !key.option &&
+      focused !== "http-collection-runner-dataset"
+    ) {
+      key.preventDefault()
+      key.stopPropagation()
+      focus("http-collection-runner-dataset")
+    }
+  })
   const statusLabel = {
     idle: "PRONTO",
     running: "EXECUTANDO…",
@@ -103,84 +110,166 @@ export function HttpCollectionRunnerModal({
   }[status]
 
   return (
-    <box
+    <HttpDialog
       id="http-collection-runner-modal"
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2) - 1),
-        width,
-        height,
-        zIndex: 110,
-        ...panelBorder(COLORS.http),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      title={"EXECUTAR COLEÇÃO"}
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      closeLabel={running ? "[Esc] Cancelar" : "[Esc] Fechar"}
+      onClose={onClose}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
+      <scrollbox
+        ref={scrollRef}
+        id="http-collection-runner-content"
+        scrollY
+        viewportCulling={false}
+        focusable
+        style={{ flexGrow: 1, minHeight: 0, overflow: "hidden" }}
       >
-        <text content={translateUi("EXECUTAR COLEÇÃO")} style={{ fg: COLORS.http }} />
-        <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <InlineButton
-          label={targetName ? `[T] Alvo: ${targetName}` : "[T] Alvo: TODOS"}
-          accent={COLORS.http}
-          onPress={onCycleTarget}
-        />
-        <InlineButton
-          label={`[C] Concorrência: ${concurrency}`}
-          accent={COLORS.http}
-          onPress={onCycleConcurrency}
-        />
-      </box>
-      <text content={translateUi("DATASET OPCIONAL NO PROJETO")} style={{ fg: COLORS.muted }} />
-      <input
-        ref={datasetRef}
-        id="http-collection-runner-dataset"
-        value={datasetPath}
-        placeholder={translateUi("data.json ou data.csv")}
-        onInput={onDatasetPathChange}
-        onSubmit={onRun}
-        onMouseDown={() => datasetRef.current?.focus()}
-        style={{
-          backgroundColor: COLORS.canvas,
-          focusedBackgroundColor: COLORS.panelRaised,
-        }}
-      />
-      <text
-        content={`${translateUi("STATUS")}  ${translateUi(statusLabel)}`}
-        style={{ fg: status === "running" ? COLORS.warning : COLORS.muted }}
-      />
-      {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
-      {pendingTlsApproval ? (
-        <box style={{ height: 2, flexShrink: 0 }}>
-          <text
-            content={truncateDisplay(
-              `${translateUi("TLS INSEGURO")} · ${pendingTlsApproval.target}`,
-              contentWidth,
-            )}
-            style={{ fg: COLORS.danger }}
+        <box
+          style={{
+            flexDirection: wide ? "row" : "column",
+            flexShrink: 0,
+            gap: 1,
+            paddingBottom: 1,
+          }}
+        >
+          <box style={{ flexGrow: 1, minWidth: 0, width: wide ? "60%" : "100%", flexShrink: 0 }}>
+            <text content={translateUi("REQUISIÇÕES A EXECUTAR")} style={{ fg: COLORS.muted }} />
+            <box style={{ height: 1, flexDirection: "row" }}>
+              <text
+                id="http-collection-runner-target-name"
+                content={truncateDisplay(
+                  targetName ?? translateUi("Todas as requisições"),
+                  (wide ? Math.floor(contentWidth * 0.6) : contentWidth) - 16,
+                )}
+                style={{ fg: COLORS.text, flexGrow: 1, minWidth: 0 }}
+              />
+              <InlineButton
+                id="http-collection-runner-target"
+                label="[T] Próxima"
+                accent={COLORS.http}
+                disabled={running}
+                onPress={onCycleTarget}
+              />
+            </box>
+          </box>
+          <box style={{ flexShrink: 0 }}>
+            <text content={translateUi("CASOS EM PARALELO")} style={{ fg: COLORS.muted }} />
+            <InlineButton
+              id="http-collection-runner-concurrency"
+              label={`[C] ${concurrency} / 8`}
+              accent={COLORS.http}
+              disabled={running}
+              onPress={onCycleConcurrency}
+            />
+          </box>
+        </box>
+        <text content={translateUi("DADOS DE TESTE · OPCIONAL")} style={{ fg: COLORS.muted }} />
+        <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
+          <input
+            ref={datasetRef}
+            id="http-collection-runner-dataset"
+            value={datasetPath}
+            placeholder={translateUi("data.json ou data.csv")}
+            onInput={onDatasetPathChange}
+            onSubmit={() => focus("http-collection-runner-run")}
+            onMouseDown={() => datasetRef.current?.focus()}
+            style={{
+              flexGrow: 1,
+              width: 0,
+              minWidth: 0,
+              backgroundColor: COLORS.canvas,
+              focusedBackgroundColor: COLORS.panelRaised,
+            }}
           />
           <InlineButton
-            id="http-collection-runner-approve-tls"
-            label="[I] Autorizar nesta sessão"
-            accent={COLORS.danger}
-            onPress={onApproveInsecureTls}
+            id="http-collection-runner-edit-dataset"
+            label="[D] Editar"
+            accent={COLORS.http}
+            onPress={() => focus("http-collection-runner-dataset")}
           />
         </box>
-      ) : null}
-      <RunnerResults cases={cases} width={contentWidth} />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        <InlineButton
-          id="http-collection-runner-run"
-          label={status === "running" ? "[X] Cancelar" : "[Ctrl+Enter] Executar"}
-          accent={status === "running" ? COLORS.danger : COLORS.http}
-          onPress={onRun}
+        <text
+          content={translateUi("JSON ou CSV da biblioteca HTTP. Vazio: um único caso.")}
+          style={{ fg: COLORS.muted, flexShrink: 0 }}
         />
+        {datasetPath ? (
+          <text
+            content={translateUi(
+              "Cada linha é um caso; o paralelismo limita os casos simultâneos.",
+            )}
+            style={{ fg: COLORS.muted, flexShrink: 0 }}
+          />
+        ) : null}
+        {error ? (
+          <text
+            id="http-collection-runner-error"
+            content={translateUi(error)}
+            style={{ fg: COLORS.danger, flexShrink: 0, marginTop: 1 }}
+          />
+        ) : null}
+        {pendingTlsApproval ? (
+          <box style={{ height: 2, flexShrink: 0 }}>
+            <text
+              content={truncateDisplay(
+                `${translateUi("TLS INSEGURO")} · ${pendingTlsApproval.target}`,
+                contentWidth,
+              )}
+              style={{ fg: COLORS.danger }}
+            />
+            <InlineButton
+              id="http-collection-runner-approve-tls"
+              label="[I] Autorizar nesta sessão"
+              accent={COLORS.danger}
+              onPress={onApproveInsecureTls}
+            />
+          </box>
+        ) : null}
+        {status !== "idle" || cases.length ? (
+          <box style={{ flexShrink: 0, marginTop: 1 }}>
+            <text content={translateUi("RESULTADOS")} style={{ fg: COLORS.muted }} />
+            {running ? (
+              <text
+                content={translateUi("Execução em andamento. Você pode cancelar abaixo.")}
+                style={{ fg: COLORS.text }}
+              />
+            ) : null}
+            <HttpRunnerResults cases={cases} width={contentWidth} />
+          </box>
+        ) : null}
+      </scrollbox>
+      <box
+        id="http-collection-runner-footer"
+        style={{ flexShrink: 0, paddingTop: height >= 18 ? 1 : 0 }}
+      >
+        <ShortcutText
+          content={translateUi("[Tab] Próximo campo · [Shift+Tab] Anterior")}
+          style={{ fg: COLORS.muted, flexShrink: 0 }}
+        />
+        <box
+          style={{
+            minHeight: 1,
+            flexShrink: 0,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          <text
+            content={translateUi(statusLabel)}
+            style={{ fg: running ? COLORS.warning : COLORS.muted }}
+          />
+          <InlineButton
+            id="http-collection-runner-run"
+            label={status === "running" ? "[Esc] Cancelar" : "[Ctrl+Enter] Executar"}
+            accent={status === "running" ? COLORS.danger : COLORS.http}
+            onPress={onRun}
+          />
+        </box>
       </box>
-    </box>
+    </HttpDialog>
   )
 }

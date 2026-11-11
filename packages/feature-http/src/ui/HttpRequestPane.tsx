@@ -1,14 +1,14 @@
-import {
-  RGBA,
-  type InputRenderable,
-  type ScrollBoxRenderable,
-  type TextareaRenderable,
-} from "@opentui/core"
+import type { HttpOAuthContext } from "./HttpOAuth2Controls"
+import type { HttpChainingKeyRef } from "../hooks/use-http-chaining-navigation"
+import { HttpBoxSelection } from "./HttpBoxSelection"
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
+import type { InputRenderable, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useRef, useState } from "react"
 import { COLORS, focusedPanelBorder, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type {
   HttpAuth,
+  HttpProjectRequestItem,
   HttpAssertionDefinition,
   HttpBodyKind,
   HttpChainExtraction,
@@ -18,6 +18,8 @@ import type {
   HttpRequestView,
   HttpRequestMoreView,
 } from "../model/types"
+import type { HttpOptionsKeyRef } from "../hooks/use-http-options-navigation"
+import type { HttpAssertionsKeyRef } from "../hooks/use-http-assertions-navigation"
 import type { HttpParameterSection } from "../model/parameter-navigation"
 import {
   consumeHttpRequestTableKey,
@@ -30,31 +32,40 @@ import { HttpKeyValueEditor } from "./HttpKeyValueEditor"
 import { HttpMultipartEditor } from "./HttpMultipartEditor"
 import { HttpOpaqueRequestContent } from "./HttpOpaqueRequestContent"
 import { HttpRequestMoreEditor } from "./HttpRequestMoreEditor"
-import { HttpBodyKindButtons } from "./HttpRequestPaneControls"
+import { HttpBodyKindButtons, RequestPaneTitle } from "./HttpRequestPaneControls"
 import { HttpRequestViewTabs } from "./HttpRequestViewTabs"
+import { HttpBodyEditor } from "./HttpBodyEditor"
+import { HttpBodyFile } from "./HttpBodyFile"
+import { HttpRequestScripts } from "./HttpRequestScripts"
 
-function RequestPaneTitle({ dirty }: { dirty: boolean }) {
-  return (
-    <box
-      style={{
-        height: 1,
-        flexShrink: 0,
-        flexDirection: "row",
-        justifyContent: "space-between",
-      }}
-    >
-      <text content={translateUi("REQUISIÇÃO")} style={{ fg: COLORS.http }} />
-      <text
-        content={dirty ? translateUi("● MODIFICADO") : translateUi("SALVO")}
-        style={{ fg: dirty ? COLORS.warning : COLORS.muted }}
-      />
-    </box>
+function requestEditorHint(document: HttpDocumentState) {
+  const form =
+    document.requestView === "auth" ||
+    (document.requestView === "more" && document.requestMoreView !== "preview")
+  return form
+    ? "[Enter] Editar · [Tab] Campos · [Esc] Voltar"
+    : "[Ctrl+Enter] Enviar · [Esc] Sair do editor"
+}
+
+function bodyFilePath(document: HttpDocumentState) {
+  const body = document.request.body
+  return body.kind === "file" ? (body.filePath ?? "") : ""
+}
+
+function showRequestEditorHint(document: HttpDocumentState, dense: boolean) {
+  return !(
+    LAYOUT.compact ||
+    dense ||
+    (document.requestView === "more" &&
+      ["options", "assertions", "chaining", "docs"].includes(document.requestMoreView))
   )
 }
 
 export function HttpRequestPane({
   document,
+  oauthContext,
   requestTableKeyRef,
+  chainRequests,
   visible,
   focused,
   position,
@@ -70,11 +81,13 @@ export function HttpRequestPane({
   onBodyFormChange,
   onBodyKindChange,
   onBodyMultipartChange,
-  onBodyFileChange,
+  onBodyFilesChange,
   onSend,
   onFocus,
   onSelectMoreView,
   onNameChange,
+  onDocsChange,
+  onScriptsChange,
   onMethodChange,
   onOptionsChange,
   onAssertionsChange,
@@ -86,7 +99,9 @@ export function HttpRequestPane({
   onDelete,
   preparedPreview,
 }: {
+  chainRequests: HttpProjectRequestItem[]
   document: HttpDocumentState
+  oauthContext?: HttpOAuthContext | undefined
   requestTableKeyRef: { current: ((key: HttpRequestTableKey) => boolean) | null }
   visible: boolean
   focused: boolean
@@ -104,10 +119,12 @@ export function HttpRequestPane({
   onBodyFormChange: (entries: HttpKeyValue[]) => void
   onBodyKindChange: (kind: HttpBodyKind) => void
   onBodyMultipartChange: (parts: HttpMultipartPart[]) => void
-  onBodyFileChange: (path: string) => void
+  onBodyFilesChange: (paths: string[]) => void
   onSend: () => void
   onFocus: () => void
   onNameChange: (name: string) => void
+  onScriptsChange: (value: NonNullable<HttpDocumentState["request"]["scripts"]>) => void
+  onDocsChange: (value: string) => void
   onMethodChange: (method: string) => void
   onOptionsChange: (options: HttpDocumentState["request"]["options"]) => void
   onAssertionsChange: (assertions: HttpAssertionDefinition[]) => void
@@ -119,17 +136,22 @@ export function HttpRequestPane({
   onDelete: () => void
   preparedPreview: HttpPreparedRequestPreview | null
 }) {
-  const bodyEditorRef = useRef<TextareaRenderable | null>(null)
-  const fileInputRef = useRef<InputRenderable | null>(null)
   const [parameterSection, setParameterSection] = useState<HttpParameterSection>("query")
   const request = document.request
-  const dirty = document.revision !== document.savedRevision
+  const optionsKeyRef = useRef<HttpOptionsKeyRef["current"]>(null)
+  const assertionsKeyRef = useRef<HttpAssertionsKeyRef["current"]>(null)
+  const chainingKeyRef = useRef<HttpChainingKeyRef["current"]>(null)
+  useWorkspaceRepaint(
+    JSON.stringify([
+      document.requestView,
+      document.requestMoreView,
+      request.body.kind,
+      parameterSection,
+    ]),
+    visible,
+  )
   const dense = position.height <= 10
-  // More needs four visible option rows in addition to the pane and local tab chrome.
-  const denseMore = position.height < 14
   const bodyDisabled = request.body.kind === "none"
-  const textBody =
-    request.body.kind === "json" || request.body.kind === "text" || request.body.kind === "xml"
   const tables = useHttpRequestTables({
     request,
     view: document.requestView,
@@ -146,25 +168,34 @@ export function HttpRequestPane({
     },
   })
   if (visible && focused) {
-    requestTableKeyRef.current = (key) => consumeHttpRequestTableKey(key, tables.handleKey)
+    requestTableKeyRef.current = (key) =>
+      consumeHttpRequestTableKey(key, (event) => {
+        if (document.requestView !== "more") return tables.handleKey(event)
+        const handler = {
+          options: optionsKeyRef.current,
+          assertions: assertionsKeyRef.current,
+          chaining: chainingKeyRef.current,
+          preview: null,
+          docs: null,
+        }[document.requestMoreView]
+        return handler?.(event) ?? false
+      })
   }
 
+  const paneStyle = {
+    position: "absolute" as const,
+    ...position,
+    ...focusedPanelBorder(focused, COLORS.http),
+    backgroundColor: COLORS.panel,
+    paddingLeft: 1,
+    paddingRight: 1,
+    overflow: "hidden" as const,
+  }
   if (request.source.kind === "file" && request.source.supported === false) {
     return (
-      <box
-        id={`http-request-pane-${request.id}`}
-        visible={visible}
-        style={{
-          position: "absolute",
-          ...position,
-          ...focusedPanelBorder(focused, COLORS.http),
-          backgroundColor: COLORS.panel,
-          paddingLeft: 1,
-          paddingRight: 1,
-          overflow: "hidden",
-        }}
-      >
-        {dense ? null : <RequestPaneTitle dirty={false} />}
+      <box id={`http-request-pane-${request.id}`} focusable visible={visible} style={paneStyle}>
+        {dense ? null : <RequestPaneTitle dirty={false} requestId={request.id} onFocus={onFocus} />}
+        <HttpBoxSelection id={`http-request-pane-${request.id}`} />
         <HttpOpaqueRequestContent
           requestId={request.id}
           rawText={request.source.rawText ?? ""}
@@ -177,20 +208,15 @@ export function HttpRequestPane({
   }
 
   return (
-    <box
-      id={`http-request-pane-${request.id}`}
-      visible={visible}
-      style={{
-        position: "absolute",
-        ...position,
-        ...focusedPanelBorder(focused, COLORS.http),
-        backgroundColor: COLORS.panel,
-        paddingLeft: 1,
-        paddingRight: 1,
-        overflow: "hidden",
-      }}
-    >
-      {dense ? null : <RequestPaneTitle dirty={dirty} />}
+    <box id={`http-request-pane-${request.id}`} focusable visible={visible} style={paneStyle}>
+      <HttpBoxSelection id={`http-request-pane-${request.id}`} />
+      {dense ? null : (
+        <RequestPaneTitle
+          dirty={document.revision !== document.savedRevision}
+          requestId={request.id}
+          onFocus={onFocus}
+        />
+      )}
       <HttpRequestViewTabs
         current={document.requestView}
         focused={focused}
@@ -205,6 +231,7 @@ export function HttpRequestPane({
           <HttpKeyValueEditor
             idPrefix={`${request.id}-query`}
             title="QUERY PARAMS"
+            fillHeight
             entries={request.query}
             onChange={onQueryChange}
             dense={dense}
@@ -213,6 +240,7 @@ export function HttpRequestPane({
           <HttpKeyValueEditor
             idPrefix={`${request.id}-path`}
             title="PATH PARAMS"
+            fillHeight
             entries={request.path}
             onChange={onPathChange}
             dense={dense}
@@ -243,31 +271,13 @@ export function HttpRequestPane({
             focused={focused}
             onChange={onBodyKindChange}
           />
-          <textarea
-            ref={(editor) => {
-              bodyEditorRef.current = editor
-              registerBodyEditor(editor)
-            }}
-            id={`http-body-editor-${request.id}`}
-            visible={textBody}
-            initialValue={request.body.text}
-            placeholder={'{\n  "name": "Tuiminal"\n}'}
-            onMouseDown={() => {
-              onFocus()
-              bodyEditorRef.current?.focus()
-            }}
-            onContentChange={() => onBodyChange(bodyEditorRef.current?.plainText ?? "")}
-            onSubmit={onSend}
-            style={{
-              flexGrow: 1,
-              backgroundColor: COLORS.canvas,
-              focusedBackgroundColor: COLORS.canvas,
-              textColor: COLORS.text,
-              focusedTextColor: COLORS.text,
-              cursorColor: COLORS.http,
-              selectionBg: RGBA.fromHex("#5a351d"),
-              wrapMode: "word",
-            }}
+          <HttpBodyEditor
+            request={request}
+            visible={visible && document.requestView === "body"}
+            register={registerBodyEditor}
+            onFocus={onFocus}
+            onChange={onBodyChange}
+            onSend={onSend}
           />
           <box visible={request.body.kind === "form"} style={{ flexGrow: 1 }}>
             <HttpKeyValueEditor
@@ -279,50 +289,38 @@ export function HttpRequestPane({
               navigation={tables.keyValueNavigation("form")}
             />
           </box>
-          <box visible={request.body.kind === "multipart"} style={{ flexGrow: 1 }}>
+          {visible &&
+          document.requestView === "body" &&
+          ["file", "multipart"].includes(request.body.kind) ? (
+            <HttpBodyFile
+              requestId={request.id}
+              path={bodyFilePath(document)}
+              focused={focused}
+              multipart={request.body.kind === "multipart"}
+              compact={position.height < 18}
+              onFocus={onFocus}
+              onChange={onBodyFilesChange}
+            />
+          ) : null}
+          <box visible={request.body.kind === "multipart"} style={{ flexGrow: 1, minHeight: 0 }}>
             <HttpMultipartEditor
               requestId={request.id}
               parts={request.body.multipart ?? []}
+              dense={dense}
               onChange={onBodyMultipartChange}
               navigation={tables.multipartNavigation()}
-            />
-          </box>
-          <box visible={request.body.kind === "file"} style={{ flexGrow: 1, paddingTop: 1 }}>
-            <text
-              content={translateUi("ARQUIVO RELATIVO AO PROJETO")}
-              style={{ fg: COLORS.muted }}
-            />
-            <input
-              ref={fileInputRef}
-              id={`http-key-value-file-${request.id}`}
-              value={request.body.filePath ?? ""}
-              placeholder={translateUi("CAMINHO DO ARQUIVO")}
-              onInput={onBodyFileChange}
-              onMouseDown={() => fileInputRef.current?.focus()}
-              style={{
-                backgroundColor: COLORS.canvas,
-                focusedBackgroundColor: COLORS.panelRaised,
-              }}
-            />
-            <text
-              content={translateUi("Arquivos fora do projeto e symlinks externos são bloqueados.")}
-              style={{ fg: COLORS.warning }}
             />
           </box>
           <box
             visible={bodyDisabled}
             style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: 1,
-              bottom: 0,
+              flexGrow: 1,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: COLORS.canvas,
             }}
           >
-            <text content={translateUi("BODY DESATIVADO")} style={{ fg: COLORS.muted }} />
+            <ShortcutText content="BODY DESATIVADO" style={{ fg: COLORS.muted }} />
           </box>
         </box>
         <box
@@ -332,10 +330,19 @@ export function HttpRequestPane({
           <HttpAuthEditor
             requestId={request.id}
             auth={request.auth}
-            focused={focused}
+            oauthContext={oauthContext}
+            onFocus={onFocus}
+            focused={focused && document.requestView === "auth"}
             onChange={onAuthChange}
           />
         </box>
+        <HttpRequestScripts
+          request={request}
+          visible={visible && document.requestView === "scripts"}
+          active={focused}
+          onFocus={onFocus}
+          onChange={onScriptsChange}
+        />
         <box
           visible={document.requestView === "more"}
           style={{
@@ -344,13 +351,17 @@ export function HttpRequestPane({
             right: 0,
             top: 0,
             bottom: 0,
-            padding: denseMore ? 0 : 1,
           }}
         >
           <HttpRequestMoreEditor
             document={document}
-            dense={denseMore}
-            focused={focused}
+            visible={visible && document.requestView === "more"}
+            onDocsChange={onDocsChange}
+            focused={visible && focused && document.requestView === "more"}
+            optionsKeyRef={optionsKeyRef}
+            assertionsKeyRef={assertionsKeyRef}
+            chainingKeyRef={chainingKeyRef}
+            chainRequests={chainRequests}
             onSelectView={onSelectMoreView}
             onNameChange={onNameChange}
             onMethodChange={onMethodChange}
@@ -367,12 +378,12 @@ export function HttpRequestPane({
           />
         </box>
       </box>
-      {LAYOUT.compact || dense ? null : (
-        <text
-          content={translateUi("[Ctrl+Enter] Enviar · [Esc] Sair do editor")}
+      {showRequestEditorHint(document, dense) ? (
+        <ShortcutText
+          content={requestEditorHint(document)}
           style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
         />
-      )}
+      ) : null}
     </box>
   )
 }

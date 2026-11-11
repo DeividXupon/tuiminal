@@ -8,6 +8,7 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { HTTP_RESPONSE_VIEWS, nextHttpResponseView } from "../model/nested-view-navigation"
 import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
+import { HttpResponseBodyActions } from "./HttpResponseBodyActions"
 import { HttpResponseMoreTabs } from "./HttpResponseMoreTabs"
 
 function viewLabel(view: HttpResponseView) {
@@ -54,6 +55,8 @@ function ResponseInput({
       onMouseDown={() => inputRef.current?.focus()}
       style={{
         flexGrow: 1,
+        width: 0,
+        minWidth: 0,
         backgroundColor: COLORS.canvas,
         focusedBackgroundColor: COLORS.panelRaised,
       }}
@@ -91,11 +94,12 @@ function ResponseActions({
   downloading: boolean
 }) {
   const presentation = document.responsePresentation
+  const bodyView = document.responseView === "pretty" || document.responseView === "raw"
   const supportsJson = response.bodyKind === "json" && document.responseView === "pretty"
-  const nextFold = presentation.foldDepth === null ? 2 : presentation.foldDepth === 2 ? 1 : null
   return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}>
+    <box style={{ minHeight: 1, flexShrink: 0, flexDirection: "row", flexWrap: "wrap" }}>
       <InlineButton
+        id={`http-response-search-open-${document.request.id}`}
         label="[Ctrl+F] Buscar"
         accent={COLORS.http}
         active={presentation.searchOpen}
@@ -104,54 +108,26 @@ function ResponseActions({
           setTimeout(() => searchRef.current?.focus(), 0)
         }}
       />
-      {jsonTreeActive ? null : (
-        <InlineButton
-          label="Wrap"
-          accent={COLORS.http}
-          active={presentation.wrap}
-          onPress={() => onChange({ wrap: !presentation.wrap })}
-        />
-      )}
-      <InlineButton
-        label="Linhas"
-        accent={COLORS.http}
-        active={presentation.lineNumbers}
-        onPress={() => onChange({ lineNumbers: !presentation.lineNumbers })}
-      />
       {supportsJson ? (
-        <InlineButton
-          label={presentation.foldDepth === null ? "Fold" : `Fold ${presentation.foldDepth}`}
-          accent={COLORS.http}
-          active={presentation.foldDepth !== null}
-          onPress={() => onChange({ foldDepth: nextFold })}
-        />
-      ) : null}
-      {supportsJson ? (
-        <InlineButton
-          label="JSONPath"
-          accent={COLORS.http}
-          active={presentation.jsonPathOpen}
-          onPress={() => {
-            onChange({ jsonPathOpen: !presentation.jsonPathOpen })
-            setTimeout(() => jsonPathRef.current?.focus(), 0)
-          }}
+        <HttpResponseBodyActions
+          presentation={presentation}
+          jsonTreeActive={jsonTreeActive}
+          onChange={onChange}
+          jsonPathRef={jsonPathRef}
         />
       ) : null}
       <InlineButton
         id={`http-response-copy-${document.request.id}`}
         label="Copiar"
         accent={COLORS.http}
-        disabled={
-          response.bodyKind === "binary" &&
-          (document.responseView === "pretty" || document.responseView === "raw")
-        }
+        disabled={response.bodyKind === "binary" && bodyView}
         onPress={onCopy}
       />
       {onCopyLine ? (
         <InlineButton label="Copiar linha" accent={COLORS.http} onPress={onCopyLine} />
       ) : null}
-      <InlineButton label="Salvar" accent={COLORS.http} onPress={onSave} />
-      {response.bodyKind === "binary" ? (
+      {bodyView ? <InlineButton label="Salvar" accent={COLORS.http} onPress={onSave} /> : null}
+      {bodyView && response.bodyKind === "binary" ? (
         <InlineButton label="[O] Abrir" accent={COLORS.http} onPress={onOpen} />
       ) : null}
       {response.truncated ? (
@@ -198,7 +174,7 @@ function SearchRow({
       />
       <text
         content={`${current}/${matches}`}
-        style={{ fg: matches ? COLORS.http : COLORS.muted }}
+        style={{ fg: matches ? COLORS.http : COLORS.muted, flexShrink: 0 }}
       />
       <InlineButton
         label="[Enter] Próximo"
@@ -286,10 +262,6 @@ export function HttpResponseToolbar({
   const searchRef = useRef<InputRenderable | null>(null)
   const jsonPathRef = useRef<InputRenderable | null>(null)
   const presentation = document.responsePresentation
-  const contentView =
-    document.responseView === "pretty" ||
-    document.responseView === "raw" ||
-    document.responseView === "headers"
   useKeyboard((key) => {
     if (!active || key.name !== "escape") return
     if (presentation.searchOpen) {
@@ -316,9 +288,10 @@ export function HttpResponseToolbar({
     <>
       <box
         style={{
-          height: 1,
+          minHeight: 1,
           flexShrink: 0,
           flexDirection: "row",
+          flexWrap: "wrap",
           backgroundColor: COLORS.panelRaised,
           overflow: "hidden",
         }}
@@ -334,6 +307,7 @@ export function HttpResponseToolbar({
         {HTTP_RESPONSE_VIEWS.map((view) => (
           <InlineButton
             key={view}
+            id={`http-response-view-${view}`}
             label={viewLabel(view)}
             accent={COLORS.http}
             active={document.responseView === view}
@@ -361,7 +335,7 @@ export function HttpResponseToolbar({
           onChange={(moreView) => onChange({ moreView })}
         />
       ) : null}
-      {response && contentView ? (
+      {response ? (
         <ResponseActions
           document={document}
           response={response}

@@ -320,6 +320,7 @@ export function useHttpRequestTables({
     return editTableRow(key.name, section)
   }
   const handleKey = (key: HttpKey) => {
+    if (renderer.currentFocusedRenderable?.id.startsWith("http-body-file-")) return false
     if (!focused || !section || key.ctrl || key.option || key.meta) return false
     if (mode === "cell") return handleCellKey(key)
     if (mode === "table") return handleTableKey(key)

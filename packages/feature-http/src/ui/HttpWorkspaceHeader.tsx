@@ -1,5 +1,7 @@
+import { httpWorkspaceTabs } from "../model/environment-documents"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { InputRenderable } from "@opentui/core"
-import type { HttpCompletionKey } from "./HttpOmnibar"
 import type { HttpLayout } from "../model/layout"
 import type {
   HttpDocumentState,
@@ -22,8 +24,6 @@ export function HttpWorkspaceHeader({
   terminalWidth,
   sourceMode,
   urlRef,
-  completionKeyRef,
-  variableNames,
   environmentName,
   productionEnvironment,
   onChooseSource,
@@ -37,14 +37,12 @@ export function HttpWorkspaceHeader({
   onOpenEnvironment,
   onNavigation,
 }: {
-  document: HttpDocumentState
+  document: HttpDocumentState | undefined
   state: HttpWorkspaceState
   layout: HttpLayout
   terminalWidth: number
   sourceMode: HttpSourceMode
   urlRef: { current: InputRenderable | null }
-  completionKeyRef: { current: ((key: HttpCompletionKey) => boolean) | null }
-  variableNames: string[]
   environmentName: string | null
   productionEnvironment: boolean
   onChooseSource: () => void
@@ -61,7 +59,7 @@ export function HttpWorkspaceHeader({
   return (
     <>
       <HttpDocumentBar
-        documents={state.documents}
+        documents={httpWorkspaceTabs(state)}
         activeDocumentId={state.activeDocumentId}
         compact={terminalWidth < 96}
         sourceMode={sourceMode}
@@ -70,41 +68,71 @@ export function HttpWorkspaceHeader({
         onClose={onCloseDocument}
         onAdd={onAddDocument}
       />
-      <HttpOmnibar
-        request={document.request}
-        focused={state.overlay === null && state.activePane === "url"}
-        twoRows={layout.omnibarRows === 2}
-        running={document.execution.status === "running"}
-        readOnly={isOpaqueHttpRequest(document.request)}
-        urlRef={urlRef}
-        completionKeyRef={completionKeyRef}
-        onFocus={() => dispatch({ type: "select-pane", pane: "url" })}
-        variableNames={variableNames}
-        onUrlChange={(url) =>
-          dispatch({
-            type: "update-request",
-            documentId: document.request.id,
-            patch: {
-              url,
-              query: syncHttpUrlQuery(url, document.request.query, document.request.id),
-            },
-          })
-        }
-        onCycleMethod={onCycleMethod}
-        onSend={() => onSend(document.request.id)}
-        onCancel={() => onCancel(document.request.id)}
-        environmentName={environmentName}
-        productionEnvironment={productionEnvironment}
-        onOpenEnvironment={onOpenEnvironment}
-      />
-      <HttpPaneSelector
-        mode={layout.mode}
-        activePane={state.activePane}
-        navigationOpen={state.navigationOpen}
-        navigationView={state.navigationView}
-        onPane={(pane: HttpPane) => dispatch({ type: "select-pane", pane })}
-        onNavigation={onNavigation}
-      />
+      {document ? (
+        <>
+          <HttpOmnibar
+            request={document.request}
+            focused={state.overlay === null && state.activePane === "url"}
+            twoRows={layout.omnibarRows === 2}
+            running={document.execution.status === "running"}
+            readOnly={isOpaqueHttpRequest(document.request)}
+            urlRef={urlRef}
+            onFocus={() => dispatch({ type: "select-pane", pane: "url" })}
+            onUrlChange={(url) =>
+              dispatch({
+                type: "update-request",
+                documentId: document.request.id,
+                patch: {
+                  url,
+                  query: syncHttpUrlQuery(url, document.request.query, document.request.id),
+                },
+              })
+            }
+            onCycleMethod={onCycleMethod}
+            onSend={() => onSend(document.request.id)}
+            onCancel={() => onCancel(document.request.id)}
+            environmentName={environmentName}
+            productionEnvironment={productionEnvironment}
+            onOpenEnvironment={onOpenEnvironment}
+          />
+          <HttpPaneSelector
+            mode={layout.mode}
+            activePane={state.activePane}
+            navigationOpen={state.navigationOpen}
+            navigationView={state.navigationView}
+            onPane={(pane: HttpPane) => dispatch({ type: "select-pane", pane })}
+            onNavigation={onNavigation}
+          />
+        </>
+      ) : (
+        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+          <InlineButton
+            id="http-pane-collection"
+            label="[C] Coleção"
+            accent={COLORS.http}
+            onPress={() => onNavigation("collection")}
+          />
+          <InlineButton
+            id="http-pane-environments"
+            label="[E] Ambientes"
+            accent={COLORS.http}
+            onPress={() => onNavigation("environments")}
+          />
+          <box style={{ flexGrow: 1 }} />
+          <InlineButton
+            id="http-environment-button"
+            label={
+              terminalWidth < 72
+                ? "[E]"
+                : environmentName
+                  ? `[E] ${environmentName}`
+                  : "[E] Sem ambiente"
+            }
+            accent={COLORS.http}
+            onPress={onOpenEnvironment}
+          />
+        </box>
+      )}
     </>
   )
 }

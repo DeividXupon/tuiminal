@@ -1,15 +1,18 @@
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useEffect, useRef } from "react"
 import type { HttpDocumentState, HttpJumpTarget, HttpPane } from "../model/types"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogSection } from "./HttpDialogDetails"
 
 const JUMP_ACTIONS: ReadonlyArray<{ target: HttpJumpTarget; label: string }> = [
   { target: "url", label: "[U] URL" },
   { target: "response", label: "[R] Resposta" },
   { target: "collection", label: "[C] Coleção" },
-  { target: "history", label: "[Y] Histórico" },
+  { target: "environments", label: "[E] Ambientes" },
 ]
 
 function contextualHelp(document: HttpDocumentState, activePane: HttpPane) {
@@ -28,13 +31,13 @@ function contextualHelp(document: HttpDocumentState, activePane: HttpPane) {
   }
   if (activePane === "navigation") {
     return [
-      "[C] Coleção · [Y] Histórico",
+      "[C] Coleção · [E] Ambientes",
       "[Enter] Abrir item · [Esc] Fechar navegação",
       "[Tab/Shift+Tab/H/L] Alternar painéis",
     ]
   }
   return [
-    "[/] Focar URL · [M] Trocar método · [S] Enviar",
+    "[/] Focar URL · [Shift+M] Trocar método · [S] Enviar",
     "[A←]/[F→] Alternar Params, Headers, Body, Auth e Mais",
     ...(document.request.source.kind === "file" &&
     document.request.source.path.replaceAll("\\", "/").startsWith("postman/")
@@ -62,10 +65,7 @@ export function HttpWorkspaceOverlay({
   onClose: () => void
 }) {
   const firstButtonRef = useRef<ButtonRenderable | null>(null)
-  const width = Math.min(68, Math.max(36, terminalWidth - 6))
-  const height = overlay === "jump" ? 13 : 10
-  const left = Math.max(0, Math.floor((terminalWidth - width) / 2))
-  const top = Math.max(1, Math.floor((terminalHeight - height) / 2) - 1)
+  const width = Math.max(1, Math.min(76, terminalWidth - 2))
 
   useEffect(() => {
     const timer = setTimeout(() => firstButtonRef.current?.focus(), 0)
@@ -73,70 +73,55 @@ export function HttpWorkspaceOverlay({
   }, [])
 
   return (
-    <box
+    <HttpDialog
+      fitContent
+      scrollContent
       id="http-overlay"
-      style={{
-        position: "absolute",
-        left,
-        top,
-        width,
-        height,
-        zIndex: 100,
-        ...panelBorder(COLORS.http),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      title={overlay === "jump" ? "IR PARA" : "AJUDA HTTP"}
+      width={width}
+      height={Math.min(18, terminalHeight - 2)}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      closeRef={firstButtonRef}
+      closeId="http-overlay-close"
+      actions={[]}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text
-          content={translateUi(overlay === "jump" ? "IR PARA" : "AJUDA HTTP")}
-          style={{ fg: COLORS.http }}
-        />
-        <InlineButton
-          id="http-overlay-close"
-          buttonRef={firstButtonRef}
-          label="[Esc] Fechar"
-          accent={COLORS.http}
-          onPress={onClose}
-        />
-      </box>
       {overlay === "jump" ? (
         <>
           <text
             content={translateUi("Escolha uma área pelo teclado ou mouse.")}
             style={{ fg: COLORS.muted }}
           />
-          <box style={{ flexGrow: 1, paddingTop: 1 }}>
-            {JUMP_ACTIONS.map((action) => (
-              <InlineButton
-                key={action.target}
-                id={`http-overlay-jump-${action.target}`}
-                label={action.label}
-                accent={COLORS.http}
-                onPress={() => onJump(action.target)}
-              />
-            ))}
+          <box style={{ flexShrink: 0, marginTop: 1 }}>
+            <HttpDialogSection>
+              {JUMP_ACTIONS.map((action) => (
+                <InlineButton
+                  key={action.target}
+                  id={`http-overlay-jump-${action.target}`}
+                  label={action.label}
+                  accent={COLORS.http}
+                  onPress={() => onJump(action.target)}
+                />
+              ))}
+            </HttpDialogSection>
           </box>
         </>
       ) : (
         <>
-          <text content={translateUi("ATALHOS DO CONTEXTO ATUAL")} style={{ fg: COLORS.muted }} />
-          <box style={{ flexGrow: 1, paddingTop: 1 }}>
+          <HttpDialogSection title="ATALHOS DO CONTEXTO ATUAL">
             {contextualHelp(document, activePane).map((line) => (
-              <text key={line} content={translateUi(line)} style={{ fg: COLORS.text }} />
+              <ShortcutText key={line} content={line} style={{ fg: COLORS.text, flexShrink: 0 }} />
             ))}
-          </box>
+          </HttpDialogSection>
           <text
             content={translateUi(
               "Atalhos globais ficam suspensos enquanto esta ajuda está aberta.",
             )}
-            style={{ fg: COLORS.muted }}
+            style={{ fg: COLORS.muted, flexShrink: 0, marginTop: 1 }}
           />
         </>
       )}
-    </box>
+    </HttpDialog>
   )
 }

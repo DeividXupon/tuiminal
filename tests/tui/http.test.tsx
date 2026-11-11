@@ -1,3 +1,4 @@
+import { openLocalHttp, openHttpWorkspaceChooser } from "./http-source"
 import "./setup"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
@@ -22,17 +23,18 @@ import {
   updateUiSettings,
 } from "../../packages/core/src/settings/theme"
 import { HttpClient } from "../../packages/feature-http/src/HttpClient"
+import { withNotifications } from "../../packages/core/src/notifications/index"
 import { HTTP_TUTORIAL_STEPS } from "../../packages/feature-http/src"
 import { App } from "../../apps/cli/src/App"
 import { UnsavedChangesExitModal } from "../../apps/cli/src/ui/UnsavedChangesExitModal"
 import { HttpExternalConflictModal } from "../../packages/feature-http/src/ui/HttpExternalConflictModal"
 import { resolveHttpWorkspaceLayout } from "../../packages/feature-http/src/model/layout"
-import { parseHttpFile } from "../../packages/feature-http/src/model/http-file"
 import { HTTP_RENDERER_LISTENER_BUDGET } from "../../packages/feature-http/src/model/renderer-listener-budget"
 import { displayWidth, type LanguageId } from "../../packages/core/src/i18n"
 import { BRAND_COLOR } from "../../packages/core/src/ui/brand"
 import { savePostmanAccount } from "../../packages/feature-http/src/postman/account"
 
+const HttpClientWithNotifications = withNotifications(HttpClient)
 let tui: TestRendererSetup | undefined
 const initialSettings = getUiSettings()
 const originalSecrets = Bun.secrets
@@ -93,13 +95,48 @@ async function press(id: string) {
   })
 }
 
-async function openCollectionHelp() {
-  await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-help")))
-  await press("http-collection-help")
+async function typeEnvironmentFields(name: string, variables: Array<[string, string]>) {
+  await click("http-environment-name")
+  await act(async () => tui?.mockInput.typeText(name))
+  for (let index = 0; index < variables.length; index++) {
+    await key("TAB")
+    await settle(
+      () => tui?.renderer.currentFocusedRenderable?.id === `http-environment-cell-${index}-name`,
+    )
+    await act(async () => tui?.mockInput.typeText(variables[index]?.[0] ?? ""))
+    await key("TAB")
+    await settle(
+      () => tui?.renderer.currentFocusedRenderable?.id === `http-environment-cell-${index}-value`,
+    )
+    await act(async () => tui?.mockInput.typeText(variables[index]?.[1] ?? ""))
+  }
+}
+
+async function collectionAction(action: string, workspace = false) {
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-navigation-collection")))
+  await press("http-navigation-collection")
+  if (workspace) {
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-collection-workspace-heading")),
+    )
+    await press("http-collection-workspace-heading")
+  }
+  await key("a")
+  const id = `http-collection-menu-${action}`
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById(id)))
+  await press(id)
+}
+
+async function keyboardCollectionAction(index: number) {
+  await key("a")
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-menu")))
+  for (let i = 0; i < index; i++) await key("ARROW_DOWN")
+  await enter()
 }
 
 async function click(id: string) {
   if (!tui) throw new Error("TUI HTTP não montada")
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById(id)?.width))
   const target = tui.renderer.root.findDescendantById(id)
   if (!target) throw new Error(`Mouse target ${id} não encontrado`)
   await act(async () => {
@@ -142,13 +179,18 @@ describe("HTTP TUI", () => {
       resolve(root, "postman/remote-source.http"),
       "# @name Remote only\nGET https://remote.test\n",
     )
-    globalThis.fetch = (async (_input: RequestInfo | URL) =>
-      Response.json({ workspaces: [], meta: {} })) as typeof fetch
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname
+      if (path === "/workspaces")
+        return Response.json({ workspaces: [{ id: "w1", name: "Remote" }] })
+      if (path === "/environments") return Response.json({ environments: [] })
+      if (path === "/collections") return Response.json({ collections: [] })
+      return Response.json({ values: [] })
+    }) as typeof fetch
     try {
       await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
-      await click("http-source-local-card")
+      await openLocalHttp(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-file-local-source.http")),
       )
@@ -158,6 +200,7 @@ describe("HTTP TUI", () => {
       await click("http-change-source")
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
       await click("http-source-postman-card")
+      await openHttpWorkspaceChooser(tui)
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-modal")))
       await key("ESCAPE")
       await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
@@ -177,14 +220,16 @@ describe("HTTP TUI", () => {
 
   test("keeps a dirty HTTP draft open when changing source", async () => {
     await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
-    tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-picker")))
-    await key("l")
+    tui = await testRender(<HttpClientWithNotifications active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-input")))
     await click("http-url-input")
     await key("x")
     await click("http-change-source")
     expect(tui.renderer.root.findDescendantById("http-source-picker")).toBeUndefined()
+    await settle(
+      () => tui?.captureCharFrame().includes("Salve ou feche os requests alterados") ?? false,
+    )
     expect(tui.captureCharFrame()).toContain("Salve ou feche os requests alterados")
   })
 
@@ -194,6 +239,7 @@ describe("HTTP TUI", () => {
       <HttpClient active onUnsavedChangesChange={(dirty) => dirtyStates.push(dirty)} />,
       { width: 120, height: 30 },
     )
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await act(async () => Bun.sleep(80))
     await tui.renderOnce()
@@ -217,6 +263,7 @@ describe("HTTP TUI", () => {
 
   test("cycles URL, navigation, request, and response panels from the keyboard", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
 
     await key("TAB")
@@ -243,8 +290,9 @@ describe("HTTP TUI", () => {
     expect(responsePane?.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.http).toInts())
   })
 
-  test("shows contextual request arrows and cycles all five request views", async () => {
+  test("shows contextual request arrows and cycles all six request views", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     expect(tui.renderer.root.findDescendantById("http-request-view-next")).toBeUndefined()
 
@@ -260,8 +308,10 @@ describe("HTTP TUI", () => {
     await settle(() => tui?.captureCharFrame().includes("BODY DESATIVADO") ?? false)
     await key("f")
     await settle(
-      () => tui?.captureCharFrame().includes("Nenhuma autenticação configurada.") ?? false,
+      () => tui?.captureCharFrame().includes("Nenhuma credencial configurada nesta aba.") ?? false,
     )
+    await key("f")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-script-tab-preRequest")))
     await key("f")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
     await key("f")
@@ -278,29 +328,34 @@ describe("HTTP TUI", () => {
 
   test("enters empty request tables and creates rows while typing", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("TAB")
     await key("TAB")
 
+    for (const section of ["query", "path"]) {
+      expect(
+        Boolean(
+          tui.renderer.root.findDescendantById(`http-key-value-enter-http-scratch-1-${section}`),
+        ),
+      ).toBe(true)
+    }
     expect(
-      tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query"),
-    ).toBeDefined()
-    expect(
-      tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path"),
-    ).toBeUndefined()
+      tui
+        .captureCharFrame()
+        .split("\n")
+        .find((line) => line.includes("QUERY PARAMS")),
+    ).toContain("[Enter] Adicionar")
 
     await key("j")
     await settle(
       () =>
-        !tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query") &&
-        Boolean(tui?.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
+        tui
+          ?.captureCharFrame()
+          .split("\n")
+          .find((line) => line.includes("PATH PARAMS"))
+          ?.includes("[Enter] Adicionar") ?? false,
     )
-    expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-query")),
-    ).toBe(false)
-    expect(
-      Boolean(tui.renderer.root.findDescendantById("http-key-value-enter-http-scratch-1-path")),
-    ).toBe(true)
     expect(tui.captureCharFrame().match(/Nenhum item definido\./g)?.length).toBe(2)
 
     await enter()
@@ -355,16 +410,20 @@ describe("HTTP TUI", () => {
     )
 
     await key("f")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-script-tab-preRequest")))
+    await key("f")
     expect(tui.renderer.root.findDescendantById("http-request-more-next")).toBeDefined()
     await key("v")
     await settle(() => tui?.captureCharFrame().includes("ASSERTIONS DO REQUEST") ?? false)
     expect(tui.renderer.root.findDescendantById("http-assertion-add")).toBeDefined()
     await key("l")
-    await settle(() => !tui?.renderer.root.findDescendantById("http-assertion-add"))
+    await settle(() => !(tui?.captureCharFrame().includes("[N] Adicionar") ?? true))
+    expect(tui.renderer.root.findDescendantById("http-assertion-add")).toBeDefined()
   })
 
   test("navigates populated request tables before editing a selected cell", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await act(async () => tui?.mockInput.typeText("https://example.test/search?manga=2&lang=pt"))
     await key("TAB")
@@ -384,7 +443,7 @@ describe("HTTP TUI", () => {
     const secondValue = tui.renderer.root.findDescendantById(
       "http-key-value-value-http-scratch-1-url-query-1",
     ) as InputRenderable
-    expect(firstName.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
+    expect(firstName.backgroundColor.equals(RGBA.fromHex(COLORS.canvas))).toBe(true)
     expect(secondValue.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
     await enter()
     await settle(
@@ -414,6 +473,7 @@ describe("HTTP TUI", () => {
 
   test("selects an inactive request block and enters its table with the mouse", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("TAB")
     await key("TAB")
@@ -431,6 +491,7 @@ describe("HTTP TUI", () => {
 
   test("toggles and deletes a selected request row in table mode", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("TAB")
     await key("TAB")
@@ -454,6 +515,7 @@ describe("HTTP TUI", () => {
 
   test("navigates to row actions and deletes query parameters with Enter", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await act(async () => tui?.mockInput.typeText("https://example.test/search?manga=2&lang=pt"))
     await key("TAB")
@@ -493,6 +555,7 @@ describe("HTTP TUI", () => {
 
   test("uses the same enter and draft-row flow for Headers, Form, and Multipart", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("TAB")
     await key("TAB")
@@ -556,7 +619,7 @@ describe("HTTP TUI", () => {
     await key("h")
     await key("h")
     await enter()
-    await settle(() => tui?.captureCharFrame().includes("[F] upload") ?? false)
+    await settle(() => tui?.captureCharFrame().includes("File") ?? false)
     await key("l")
     await key("l")
     await key("l")
@@ -570,6 +633,7 @@ describe("HTTP TUI", () => {
     await writeFile(path, source)
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById("http-navigation-project-opaque-ui.http#opaque-ui"),
@@ -635,7 +699,8 @@ describe("HTTP TUI", () => {
     const initial = "### Conflict request\n# @name conflict\nGET https://example.test/original\n"
     await writeFile(path, initial)
     try {
-      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      tui = await testRender(<HttpClientWithNotifications active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById("http-navigation-project-conflict.http#conflict"),
@@ -667,140 +732,44 @@ describe("HTTP TUI", () => {
     }
   })
 
-  test.each([120, 52])("keeps environment list actions on one row at %i columns", async (width) => {
+  test.each([120, 52])("keeps environment sidebar actions visible at %i columns", async (width) => {
     updateUiSettings({ language: "pt-BR" })
     tui = await testRender(<HttpClient active />, { width, height: 30 })
-    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await openLocalHttp(tui)
     await press("http-environment-button")
-    await settle(
-      () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
+    await settle(() =>
+      Boolean(tui?.renderer.root.findDescendantById("http-environment-new")?.width),
     )
-    const hints = tui.renderer.root.findDescendantById("http-environment-list-hints") as {
-      screenY: number
+    for (const id of [
+      "http-environment-entry-0",
+      "http-environment-new",
+      "http-environment-refresh",
+      "http-environment-none",
+    ]) {
+      const control = tui.renderer.root.findDescendantById(id)!
+      expect(control.screenX).toBeGreaterThanOrEqual(0)
+      expect(control.screenX + control.width).toBeLessThanOrEqual(width)
+      expect(control.screenY + control.height).toBeLessThan(30)
     }
-    const create = tui.renderer.root.findDescendantById("http-environment-new") as {
-      screenY: number
-    }
-    expect(hints.screenY).toBe(create.screenY)
-    const line = tui.captureCharFrame().split("\n")[hints.screenY] ?? ""
-    expect(line).toContain("[↑/↓] Navegar")
-    expect(line).toContain("[N] Novo ambiente")
-    if (width === 120) expect(line).toContain("[D] Excluir")
-    const spans = tui.captureSpans().lines[hints.screenY]?.spans ?? []
-    for (const shortcut of ["[↑/↓]", "[N]"]) {
-      const span = spans.find((candidate) => candidate.text.includes(shortcut))
-      expect(span?.fg.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
-    }
+    expect(tui.renderer.root.findDescendantById("http-navigation-history")).toBeUndefined()
   })
 
-  test("creates and selects a global private environment with keyboard table editing", async () => {
-    const root = process.env.TUIMINAL_WORKDIR ?? ""
-    const privatePath = resolve(root, "http-client.private.env.json")
+  test("creates a local private environment with keyboard table editing", async () => {
+    const privatePath = resolve(process.env.TUIMINAL_WORKDIR ?? "", "http-client.private.env.json")
     await unlink(privatePath).catch(() => undefined)
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await openLocalHttp(tui)
       await press("http-environment-button")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
-      )
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-new")))
       await press("http-environment-new")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
-      )
-      expect(tui.renderer.root.findDescendantById("http-environment-private")).toBeUndefined()
-      await key("/")
-      await settle(() => tui?.captureCharFrame().includes("[Enter] Tabela") ?? false)
-      const nameRail = tui.renderer.root.findDescendantById(
-        "http-environment-name-rail",
-      ) as BoxRenderable
-      const tableRail = tui.renderer.root.findDescendantById(
-        "http-environment-table-rail",
-      ) as BoxRenderable
-      const nameInput = tui.renderer.root.findDescendantById(
-        "http-environment-create-name",
-      ) as InputRenderable
-      expect(nameRail.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
-      expect(tableRail.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
-      expect(nameRail.height).toBe(1)
-      expect(tableRail.height).toBeGreaterThan(1)
-      expect(nameInput.backgroundColor.equals(RGBA.fromHex(COLORS.canvas))).toBe(true)
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-name",
-      )
-      await act(async () => tui?.mockInput.typeText("local"))
-      await key("ESCAPE")
-      await key("/")
-      await key("ARROW_DOWN")
-      expect(nameRail.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
-      expect(tableRail.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
-      )
-      await act(async () => tui?.mockInput.typeText("apiToken"))
-      await key("TAB")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
-      )
-      await act(async () => {
-        tui?.mockInput.typeText("fixture-secret")
-        await tui?.renderOnce()
-      })
+      await typeEnvironmentFields("local", [
+        ["apiToken", "fixture-secret"],
+        ["tenant", "fixture-tenant"],
+      ])
       expect(tui.captureCharFrame()).toContain("fixture-secret")
-      expect(tui.renderer.root.findDescendantById("http-environment-keychain")).toBeUndefined()
-      await key("TAB")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-1",
-      )
-      await act(async () => tui?.mockInput.typeText("tenant"))
-      await key("TAB")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-1",
-      )
-      await act(async () => tui?.mockInput.typeText("fixture-tenant"))
-      await key("ESCAPE")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
-      )
-      await key("ESCAPE")
-      await key("/")
-      await key("RETURN")
-      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-environment-manager-modal")
-      const firstRow = tui.renderer.root.findDescendantById(
-        "http-environment-row-0",
-      ) as BoxRenderable
-      const secondRow = tui.renderer.root.findDescendantById(
-        "http-environment-row-1",
-      ) as BoxRenderable
-      const firstVariable = tui.renderer.root.findDescendantById(
-        "http-environment-create-variable-0",
-      ) as InputRenderable
-      const firstValue = tui.renderer.root.findDescendantById(
-        "http-environment-create-value-0",
-      ) as InputRenderable
-      expect(firstRow.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
-      expect(secondRow.backgroundColor.equals(RGBA.fromHex(COLORS.panelRaised))).toBe(true)
-      expect(firstVariable.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
-      expect(firstValue.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
-      await key("ARROW_UP")
-      await key("ARROW_RIGHT")
-      expect(firstVariable.backgroundColor.equals(RGBA.fromHex(COLORS.panelAlt))).toBe(true)
-      expect(firstValue.backgroundColor.equals(RGBA.fromHex(COLORS.http))).toBe(true)
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
-      )
-      await key("ESCAPE")
-      await key("ESCAPE")
-      expect(tui.renderer.root.findDescendantById("http-environment-create-save")).toBeDefined()
-      await press("http-environment-create-save")
-      await settle(
-        () =>
-          !(tui?.captureCharFrame().includes("AMBIENTES HTTP") ?? true) &&
-          (tui?.captureCharFrame().includes("[E] local") ?? false),
-      )
+      await press("http-environment-save")
+      await settle(() => tui?.captureCharFrame().includes("[E] local") ?? false)
       const saved = await readFile(privatePath, "utf8")
       expect(saved).not.toContain("fixture-secret")
       expect(saved).not.toContain("fixture-tenant")
@@ -813,48 +782,25 @@ describe("HTTP TUI", () => {
   })
 
   test.each(["framed", "compact"] as const)(
-    "keeps the bordered environment modal as the only focused area in %s layout",
+    "environment tabs replace the request editor in %s layout",
     async (layout) => {
       updateUiSettings({ layout, language: "pt-BR" })
       tui = await testRender(<HttpClient active />, { width: 120, height: 40 })
-      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await openLocalHttp(tui)
       await press("http-environment-button")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
-      )
-      const modal = tui.renderer.root.findDescendantById(
-        "http-environment-manager-modal",
-      ) as BoxRenderable
-      const urlPane = tui.renderer.root.findDescendantById("http-url-pane") as BoxRenderable
-      expect(modal.border).toBe(true)
-      expect(modal.borderStyle).toBe("rounded")
-      expect(tui.captureCharFrame().split("\n")[modal.screenY]?.[modal.screenX]).toBe("╭")
-      expect(urlPane.border).toBe(false)
-      await click("http-url-input")
-      expect(tui.renderer.currentFocusedRenderable?.id).toBe("http-environment-choice-none")
-      await key("n")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
-      )
-      expect(tui.renderer.root.findDescendantById("http-environment-create-name")).toBeDefined()
-      expect(tui.renderer.root.findDescendantById("http-environment-back")).toBeUndefined()
-      const formHints = tui.renderer.root.findDescendantById("http-environment-form-hints") as {
-        screenY: number
-      }
-      const slash = tui
-        .captureSpans()
-        .lines[formHints.screenY]?.spans.find((span) => span.text.includes("[/]"))
-      expect(slash?.fg.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
-      await key("b")
-      expect(tui.renderer.root.findDescendantById("http-environment-create-name")).toBeDefined()
-      await key("ESCAPE")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
-      )
-      await key("ESCAPE")
-      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-entry-0")))
+      await press("http-environment-entry-0")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-environment-pane")
+      expect(tui.renderer.root.findDescendantById("http-url-input")).toBeUndefined()
       expect(tui.renderer.root.findDescendantById("http-environment-manager-modal")).toBeUndefined()
-      expect(urlPane.border).toEqual(["left"])
+      await enter()
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-cell-0-name",
+      )
+      await key("ESCAPE")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-environment-pane")
+      await key("w", true)
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-input")))
     },
   )
 
@@ -864,6 +810,7 @@ describe("HTTP TUI", () => {
     let remoteMethod = "GET"
     let remoteUrl = "{{baseUrl}}/users"
     let pushes = 0
+    let collectionReads = 0
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname
       if (path === "/workspaces")
@@ -899,7 +846,8 @@ describe("HTTP TUI", () => {
             ],
           },
         })
-      if (path === "/collections/c1")
+      if (path === "/collections/c1") {
+        collectionReads++
         return Response.json({
           collection: {
             info: {
@@ -908,6 +856,7 @@ describe("HTTP TUI", () => {
             item: [{ id: "r1", name: "List", request: { method: remoteMethod, url: remoteUrl } }],
           },
         })
+      }
       if (path === "/collections/c1/requests/r1" && init?.method === "PUT") {
         pushes += 1
         const changes = JSON.parse(String(init.body)) as { method?: string; url?: string }
@@ -927,9 +876,11 @@ describe("HTTP TUI", () => {
     }) as typeof fetch
     try {
       await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
-      tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      tui = await testRender(<HttpClientWithNotifications active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
+      await click("http-change-source")
       await click("http-source-postman-card")
+      await openHttpWorkspaceChooser(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
       )
@@ -939,36 +890,29 @@ describe("HTTP TUI", () => {
         tui.renderer.root.findDescendantById("http-postman-environment")?.width,
       ).toBeGreaterThan(0)
       await key("e")
-      await settle(() => tui?.captureCharFrame().includes("[E] Stage") ?? false)
+      await settle(() => tui?.captureCharFrame().includes("[E] Ambiente Stage") ?? false)
       const environmentButton = tui.renderer.root.findDescendantById("http-postman-environment")
       expect(tui.captureCharFrame().split("\n")[environmentButton?.screenY ?? 0]).toContain("Stage")
-      expect(tui.captureCharFrame()).toContain("[E] Stage")
+      expect(tui.captureCharFrame()).toContain("[E] Ambiente Stage")
       await enter()
       await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
-      expect(await readFile(resolve(root, "postman/users.http"), "utf8")).toContain(
-        "GET {{baseUrl}}/users",
-      )
-      expect(await readFile(resolve(root, "postman/orders.http"), "utf8")).toContain(
-        "POST https://example.test/orders",
-      )
-      expect(await readFile(resolve(root, "http-client.private.env.json"), "utf8")).not.toContain(
-        "stage.example.test",
-      )
-      await settle(() => tui?.captureCharFrame().includes("[E] Postman · Orders · Stage") ?? false)
+      expect(await Bun.file(resolve(root, "postman/c1.http")).exists()).toBe(false)
+      expect(await Bun.file(resolve(root, "postman/c2.http")).exists()).toBe(false)
+      await settle(() => tui?.captureCharFrame().includes("[E] Stage") ?? false)
       expect(
         tui?.renderer.root.findDescendantById("http-collection-directory-postman"),
       ).toBeUndefined()
       expect(tui?.captureCharFrame()).toContain("My Workspace")
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/orders.http")),
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/c2.http")),
       )
       expect(
-        tui?.renderer.root.findDescendantById("http-collection-folder-postman/orders.http:f1"),
+        tui?.renderer.root.findDescendantById("http-collection-folder-postman/c2.http:f1"),
       ).toBeUndefined()
-      await press("http-collection-file-postman/orders.http")
-      const folderId = "http-collection-folder-postman/orders.http:f1"
+      await press("http-collection-file-postman/c2.http")
+      const folderId = "http-collection-folder-postman/c2.http:f1"
       await settle(() => Boolean(tui?.renderer.root.findDescendantById(folderId)))
-      const orderRequestId = "http-navigation-project-postman/orders.http#admin-create"
+      const orderRequestId = "http-navigation-project-postman/c2.http#r2"
       expect(tui?.renderer.root.findDescendantById(orderRequestId)).toBeUndefined()
       await press(folderId)
       await settle(() => Boolean(tui?.renderer.root.findDescendantById(orderRequestId)))
@@ -986,21 +930,21 @@ describe("HTTP TUI", () => {
       const folderName = tui
         .captureSpans()
         .lines[folderRow?.screenY ?? 0]?.spans.find((span) => span.text.includes("Admin"))
-      expect(folderName?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+      expect(folderName?.fg.toInts()).toEqual(RGBA.fromHex(COLORS.text).toInts())
       await press(folderId)
       expect(tui?.renderer.root.findDescendantById(orderRequestId)).toBeUndefined()
       await press(folderId)
       await settle(() => Boolean(tui?.renderer.root.findDescendantById(orderRequestId)))
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/users.http")),
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/c1.http")),
       )
-      await click("http-collection-file-postman/users.http")
+      await click("http-collection-file-postman/c1.http")
       await settle(() =>
         Boolean(
-          tui?.renderer.root.findDescendantById("http-navigation-project-postman/users.http#list"),
+          tui?.renderer.root.findDescendantById("http-navigation-project-postman/c1.http#r1"),
         ),
       )
-      await click("http-navigation-project-postman/users.http#list")
+      await click("http-navigation-project-postman/c1.http#r1")
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-push-button")))
       const urlMethod = tui.renderer.root.findDescendantById("http-method-button")
       const urlMethodText = tui
@@ -1012,18 +956,24 @@ describe("HTTP TUI", () => {
       await settle(() => pushes === 1)
       expect(remoteUrl).toBe("{{baseUrl}}/usersm")
       await settle(() => tui?.captureCharFrame().includes("REQUEST SALVO NO POSTMAN") ?? false)
+      const beforeMouseSave = collectionReads
       await click("http-postman-push-button")
-      await settle(() => tui?.captureCharFrame().includes("SEM ALTERAÇÕES PARA ENVIAR") ?? false)
+      await settle(() => collectionReads > beforeMouseSave)
+      const beforeKeyboardSave = collectionReads
       await key("p", true)
-      await settle(() => tui?.captureCharFrame().includes("SEM ALTERAÇÕES PARA ENVIAR") ?? false)
+      await settle(() => collectionReads > beforeKeyboardSave)
       expect(pushes).toBe(1)
       remoteUrl = "https://changed-elsewhere.test/users"
       await click("http-url-input")
       await key("x")
       await key("s", true)
-      await settle(() => tui?.captureCharFrame().includes("SALVO LOCALMENTE") ?? false)
+      await settle(() => tui?.captureCharFrame().includes("A request mudou no Postman") ?? false)
       expect(pushes).toBe(1)
-      expect(await readFile(resolve(root, "postman/users.http"), "utf8")).toContain("usersmx")
+      expect(
+        (tui.renderer.root.findDescendantById("http-url-input") as InputRenderable).value,
+      ).toBe("{{baseUrl}}/usersmx")
+      expect(remoteUrl).toBe("https://changed-elsewhere.test/users")
+      expect(await Bun.file(resolve(root, "postman/c1.http")).exists()).toBe(false)
     } finally {
       globalThis.fetch = originalFetch
       await rm(resolve(root, "postman"), { recursive: true, force: true })
@@ -1071,15 +1021,17 @@ describe("HTTP TUI", () => {
     try {
       await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
       tui = await testRender(<HttpClient active />, { width: 100, height: 32 })
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await openLocalHttp(tui)
+      await click("http-change-source")
       await click("http-source-postman-card")
+      await openHttpWorkspaceChooser(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
       )
       await enter()
-      const fileId = "http-collection-file-postman/repeated.http"
-      const folderId = "http-collection-folder-postman/repeated.http:f1"
-      const nestedId = "http-collection-folder-postman/repeated.http:f2"
+      const fileId = "http-collection-file-postman/c1.http"
+      const folderId = "http-collection-folder-postman/c1.http:f1"
+      const nestedId = "http-collection-folder-postman/c1.http:f2"
       await settle(() => Boolean(tui?.renderer.root.findDescendantById(fileId)))
       expect(tui?.renderer.root.findDescendantById(folderId)).toBeUndefined()
       expect(tui.captureCharFrame()).not.toContain("GET New R")
@@ -1098,16 +1050,17 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.captureCharFrame().includes("GET New R") ?? false)
       await press(fileId)
       await settle(() => !(tui?.captureCharFrame().includes("GET New R") ?? true))
-      expect(tui.captureCharFrame()).toContain("▸ repeated")
+      expect(tui.captureCharFrame()).toContain("▸ Repeated")
       await press(fileId)
       await settle(() => tui?.captureCharFrame().includes("GET New R") ?? false)
-      const file = parseHttpFile(
-        await readFile(resolve(root, "postman/repeated.http"), "utf8"),
-        "postman/repeated.http",
+      const requestIds = Array.from(
+        { length: 20 },
+        (_, index) => `http-navigation-project-postman/c1.http#r${index + 1}`,
       )
-      expect(new Set(file.requests.map((block) => block.blockId)).size).toBe(20)
-      await openCollectionHelp()
-      await press("http-postman-open")
+      expect(requestIds.every((id) => tui?.renderer.root.findDescendantById(id))).toBe(true)
+      expect(new Set(requestIds).size).toBe(20)
+      expect(await Bun.file(resolve(root, "postman/c1.http")).exists()).toBe(false)
+      await collectionAction("select-workspace", true)
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-modal")))
       await enter()
       await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
@@ -1155,31 +1108,31 @@ describe("HTTP TUI", () => {
     try {
       await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
       tui = await testRender(<HttpClient active />, { width: 100, height: 32 })
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      await openLocalHttp(tui)
+      await click("http-change-source")
       await click("http-source-postman-card")
+      await openHttpWorkspaceChooser(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
       )
       await enter()
       await settle(() =>
-        Boolean(
-          tui?.renderer.root.findDescendantById("http-collection-file-postman/collection14.http"),
-        ),
+        Boolean(tui?.renderer.root.findDescendantById("http-collection-file-postman/c14.http")),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
       const scroll = tui.renderer.root.findDescendantById(
         "http-collection-scroll",
       ) as ScrollBoxRenderable
       expect(scroll.viewportCulling).toBe(false)
-      expect(tui.captureCharFrame()).toContain("▸ collecti")
+      expect(tui.captureCharFrame()).toContain("▸ Collecti")
       expect(tui.captureCharFrame()).not.toContain("GET New Req")
       for (const collection of collections) {
-        const id = `http-collection-file-postman/${collection.name.toLowerCase()}.http`
+        const id = `http-collection-file-postman/${collection.id}.http`
         await press(id)
         await press(id)
       }
       await settle(() => !(tui?.captureCharFrame().includes("GET New Req") ?? true))
-      expect(tui.captureCharFrame()).toContain("▸ collecti")
+      expect(tui.captureCharFrame()).toContain("▸ Collecti")
     } finally {
       globalThis.fetch = originalFetch
       await rm(resolve(root, "postman"), { recursive: true, force: true })
@@ -1201,11 +1154,31 @@ describe("HTTP TUI", () => {
         schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
       },
       item: [] as Array<
-        | { id: string; name: string; request: { method: string; url: string } }
         | {
             id: string
             name: string
-            item: Array<{ id: string; name: string; request: { method: string; url: string } }>
+            request: {
+              method: string
+              url: string
+              auth?: unknown
+              header?: unknown
+              description?: string
+            }
+          }
+        | {
+            id: string
+            name: string
+            item: Array<{
+              id: string
+              name: string
+              request: {
+                method: string
+                url: string
+                auth?: unknown
+                header?: unknown
+                description?: string
+              }
+            }>
           }
       >,
     }
@@ -1221,12 +1194,18 @@ describe("HTTP TUI", () => {
           ],
           meta: {},
         })
+      if (url.pathname === "/collections" && (!init?.method || init.method === "GET"))
+        return Response.json({
+          collections: writes.length ? [{ id: "c1", name: collectionName }] : [],
+        })
+      if (url.pathname === "/environments") return Response.json({ environments: [] })
+      if (url.pathname.endsWith("/global-variables")) return Response.json({ values: [] })
       if (url.pathname === "/collections" && init?.method === "POST") {
         writes.push(`collection:${url.searchParams.get("workspace")}`)
         return Response.json({ collection: { id: "c1" } })
       }
       if (url.pathname === "/collections/c1" && init?.method === "GET")
-        return Response.json({ collection: structuredClone(remote) })
+        return Response.json({ collection: remote })
       if (url.pathname === "/collections/c1/folders" && init?.method === "POST") {
         const body = JSON.parse(String(init.body)) as { name: string }
         writes.push(`folder:${body.name}`)
@@ -1234,8 +1213,15 @@ describe("HTTP TUI", () => {
         return Response.json({ data: { id: "f1" } })
       }
       if (url.pathname === "/collections/c1/requests" && init?.method === "POST") {
-        const body = JSON.parse(String(init.body)) as { name: string; method: string; url: string }
-        const folderId = url.searchParams.get("folder")
+        const body = JSON.parse(String(init.body)) as {
+          name: string
+          method: string
+          url: string
+          auth?: unknown
+          headerData?: unknown
+          description?: string
+        }
+        const folderId = url.searchParams.get("folderId")
         writes.push(`request:${body.name}:${folderId ?? "root"}`)
         const target = folderId
           ? remote.item.find((item) => item.id === folderId && "item" in item)
@@ -1245,7 +1231,13 @@ describe("HTTP TUI", () => {
         destination.push({
           id,
           name: body.name,
-          request: { method: body.method, url: body.url },
+          request: {
+            method: body.method,
+            url: body.url,
+            auth: body.auth,
+            header: body.headerData,
+            description: body.description ?? "",
+          },
         })
         return Response.json({ data: { id } })
       }
@@ -1264,17 +1256,17 @@ describe("HTTP TUI", () => {
     }) as typeof fetch
     try {
       await savePostmanAccount({ apiKey: "PMAK-fixture", region: "us" })
-      tui = await testRender(<HttpClient active />, { width: 130, height: 36 })
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-postman")))
+      tui = await testRender(<HttpClientWithNotifications active />, { width: 130, height: 36 })
+      await openLocalHttp(tui)
+      await click("http-change-source")
       await click("http-source-postman-card")
+      await openHttpWorkspaceChooser(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-postman-workspace-w1")),
       )
-      await key("ESCAPE")
+      await click("http-postman-workspace-w2")
       await settle(() => !tui?.renderer.root.findDescendantById("http-postman-modal"))
-      await openCollectionHelp()
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-create")))
-      await click("http-collection-create")
+      await collectionAction("create-collection", true)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1282,29 +1274,16 @@ describe("HTTP TUI", () => {
         tui?.mockInput.typeText(collectionName)
         await tui?.renderOnce()
       })
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-workspace-next")),
-      )
-      expect(tui?.renderer.currentFocusedRenderable?.id).toBe("http-collection-name-input")
-      await key("ARROW_DOWN")
-      await settle(() => tui?.captureCharFrame().includes("Second") ?? false)
       await enter()
       await settle(
         () =>
-          Boolean(
-            tui?.renderer.root.findDescendantById(
-              `http-collection-file-postman/${collectionName}.http`,
-            ),
-          ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
+          Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-postman/c1.http`)) &&
+          !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       expect(writes).toContain("collection:w2")
-      expect(
-        JSON.parse(
-          await readFile(resolve(root, `postman/${collectionName}.http.postman.json`), "utf8"),
-        ).workspaceId,
-      ).toBe("w2")
-      await click(`http-collection-file-postman/${collectionName}.http`)
-      await click("http-request-create")
+      expect(await Bun.file(resolve(root, "postman/c1.http.postman.json")).exists()).toBe(false)
+      await click(`http-collection-file-postman/c1.http`)
+      await collectionAction("create-request")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1316,14 +1295,12 @@ describe("HTTP TUI", () => {
       await settle(
         () =>
           Boolean(
-            tui?.renderer.root.findDescendantById(
-              `http-navigation-project-postman/${collectionName}.http#list`,
-            ),
+            tui?.renderer.root.findDescendantById(`http-navigation-project-postman/c1.http#r1`),
           ) && !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
       expect(writes).toContain("request:List:root")
-      await click(`http-collection-file-postman/${collectionName}.http`)
-      await press("http-folder-create")
+      await click(`http-collection-file-postman/c1.http`)
+      await collectionAction("create-folder")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1332,7 +1309,7 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await enter()
-      const folderRow = `http-collection-folder-postman/${collectionName}.http:f1`
+      const folderRow = `http-collection-folder-postman/c1.http:f1`
       await settle(
         () =>
           Boolean(tui?.renderer.root.findDescendantById(folderRow)) &&
@@ -1340,7 +1317,7 @@ describe("HTTP TUI", () => {
       )
       expect(writes).toContain("folder:People")
       await click(folderRow)
-      await click("http-request-create")
+      await collectionAction("create-request")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1354,15 +1331,15 @@ describe("HTTP TUI", () => {
           writes.includes("request:Search:f1") &&
           !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
-      expect(await readFile(resolve(root, `postman/${collectionName}.http`), "utf8")).toContain(
-        "People / Search",
-      )
+      expect(remote.item.find((item) => item.id === "f1")).toMatchObject({
+        item: [expect.objectContaining({ name: "Search" })],
+      })
       await key("ESCAPE")
       await key("n", true)
       // The omnibar keeps its native input across documents; focus alone can be stale.
       await settle(
         () =>
-          Boolean(tui?.renderer.root.findDescendantById("http-document-http-scratch-2")) &&
+          Boolean(tui?.renderer.root.findDescendantById("http-document-http-scratch-1")) &&
           tui?.renderer.currentFocusedRenderable?.id === "http-url-input" &&
           (tui.renderer.currentFocusedRenderable as InputRenderable).value === "",
       )
@@ -1374,7 +1351,7 @@ describe("HTTP TUI", () => {
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-postman-save-modal")))
       await key("ARROW_DOWN")
       await enter()
-      await settle(() => writes.includes("update:r3"))
+      await settle(() => writes.includes("request:Scratch:f1"))
       await settle(() => tui?.captureCharFrame().includes("REQUEST SALVO NO POSTMAN") ?? false)
       expect(writes).toContain("request:Scratch:f1")
       expect(
@@ -1382,13 +1359,12 @@ describe("HTTP TUI", () => {
           .flatMap((item) => ("item" in item ? item.item : [item]))
           .find((item) => item.id === "r3")?.request.url,
       ).toBe("https://draft.example.test")
-      expect(await readFile(resolve(root, `postman/${collectionName}.http`), "utf8")).toContain(
-        "https://draft.example.test",
-      )
+      expect(writes).not.toContain("update:r3")
+      expect(await Bun.file(resolve(root, "postman/c1.http")).exists()).toBe(false)
     } finally {
       globalThis.fetch = originalFetch
-      await rm(resolve(root, `postman/${collectionName}.http`), { force: true })
-      await rm(resolve(root, `postman/${collectionName}.http.postman.json`), { force: true })
+      await rm(resolve(root, `postman/c1.http`), { force: true })
+      await rm(resolve(root, `postman/c1.http.postman.json`), { force: true })
       if (!postmanDirectoryExisted) await rm(postmanDirectory, { recursive: true, force: true })
     }
   }, 15_000)
@@ -1407,13 +1383,12 @@ describe("HTTP TUI", () => {
         tui?.mockInput.typeText(value)
         await tui?.renderOnce()
       })
-      await click("http-collection-action-apply")
+      await enter()
     }
     try {
       tui = await testRender(<HttpClient active />, { width: 160, height: 42 })
-      await openCollectionHelp()
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-folder-create")))
-      await click("http-folder-create")
+      await openLocalHttp(tui)
+      await collectionAction("create-folder", true)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1427,7 +1402,7 @@ describe("HTTP TUI", () => {
       )
 
       await click(`http-collection-directory-${folder}`)
-      await click("http-collection-create")
+      await collectionAction("create-collection")
       await typeName("Service")
       await settle(() =>
         Boolean(
@@ -1435,7 +1410,7 @@ describe("HTTP TUI", () => {
         ),
       )
       await click(`http-collection-file-${folder}/Service.http`)
-      await click("http-request-create")
+      await collectionAction("create-request")
       await typeName("Listar")
       await settle(() =>
         Boolean(
@@ -1447,7 +1422,7 @@ describe("HTTP TUI", () => {
       expect(await readFile(resolve(folderPath, "Service.http"), "utf8")).toContain("### Listar")
 
       await click(`http-navigation-project-${folder}/Service.http#listar`)
-      await click("http-collection-rename")
+      await collectionAction("rename")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1459,7 +1434,7 @@ describe("HTTP TUI", () => {
         input?.selectAll()
         tui?.mockInput.typeText("Consultar")
       })
-      await click("http-collection-action-apply")
+      await enter()
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById(
@@ -1469,7 +1444,7 @@ describe("HTTP TUI", () => {
       )
 
       await click(`http-navigation-project-${folder}/Service.http#consultar`)
-      await click("http-collection-delete")
+      await collectionAction("delete")
       expect(await readFile(resolve(folderPath, "Service.http"), "utf8")).toContain("Consultar")
       await click("http-collection-action-apply")
       await settle(
@@ -1481,13 +1456,13 @@ describe("HTTP TUI", () => {
       expect(await Bun.file(resolve(folderPath, "Service.http")).exists()).toBe(false)
 
       await click(`http-collection-directory-${folder}`)
-      await click("http-collection-create")
+      await collectionAction("create-collection")
       await typeName("Users")
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Users.http`)),
       )
       await click(`http-collection-file-${folder}/Users.http`)
-      await click("http-collection-rename")
+      await collectionAction("rename")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1498,14 +1473,14 @@ describe("HTTP TUI", () => {
         input?.selectAll()
         tui?.mockInput.typeText("Accounts")
       })
-      await click("http-collection-action-apply")
+      await enter()
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/Accounts.http`),
         ),
       )
       await click(`http-collection-file-${folder}/Accounts.http`)
-      await click("http-collection-delete")
+      await collectionAction("delete")
       await click("http-collection-action-apply")
       await settle(
         () =>
@@ -1513,7 +1488,7 @@ describe("HTTP TUI", () => {
       )
 
       await click(`http-collection-directory-${folder}`)
-      await click("http-collection-rename")
+      await collectionAction("rename")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1524,14 +1499,14 @@ describe("HTTP TUI", () => {
         input?.selectAll()
         tui?.mockInput.typeText(renamedFolder)
       })
-      await click("http-collection-action-apply")
+      await enter()
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById(`http-collection-directory-${renamedFolder}`),
         ),
       )
       await click(`http-collection-directory-${renamedFolder}`)
-      await click("http-collection-delete")
+      await collectionAction("delete")
       await click("http-collection-action-apply")
       await settle(
         () => !tui?.renderer.root.findDescendantById(`http-collection-directory-${renamedFolder}`),
@@ -1556,6 +1531,7 @@ describe("HTTP TUI", () => {
         )
       }
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}`)),
       )
@@ -1564,9 +1540,9 @@ describe("HTTP TUI", () => {
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
       await key("?")
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-collection-create")))
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-action-palette")))
       await key("ESCAPE")
-      expect(tui?.renderer.root.findDescendantById("http-collection-create")).toBeUndefined()
+      expect(tui?.renderer.root.findDescendantById("http-action-palette")).toBeUndefined()
       await key("f")
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-collection-search")
       await act(async () => {
@@ -1592,7 +1568,9 @@ describe("HTTP TUI", () => {
         await tui?.renderOnce()
       })
       await key("ESCAPE")
-      await key("N", false, true)
+      await key("HOME")
+      await key("ARROW_DOWN")
+      await keyboardCollectionAction(4)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1609,7 +1587,7 @@ describe("HTTP TUI", () => {
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
       expect(await Bun.file(collectionPath).exists()).toBe(true)
-      await key("e")
+      await keyboardCollectionAction(2)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1629,7 +1607,7 @@ describe("HTTP TUI", () => {
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
-      await key("e")
+      await keyboardCollectionAction(2)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1649,7 +1627,7 @@ describe("HTTP TUI", () => {
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
-      await key("n")
+      await keyboardCollectionAction(0)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1671,7 +1649,7 @@ describe("HTTP TUI", () => {
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
       await key("ARROW_DOWN")
-      await key("e")
+      await keyboardCollectionAction(0)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1697,13 +1675,13 @@ describe("HTTP TUI", () => {
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
       await key("END")
-      await key("d")
+      await keyboardCollectionAction(1)
       await settle(() =>
         Boolean(tui?.renderer.root.findDescendantById("http-collection-action-form")),
       )
       await key("ESCAPE")
       expect(await readFile(collectionPath, "utf8")).toContain("Consultar")
-      await key("d")
+      await keyboardCollectionAction(1)
       await enter()
       await settle(
         () =>
@@ -1713,7 +1691,9 @@ describe("HTTP TUI", () => {
           ) &&
           !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
-      await key("N", false, true)
+      await key("HOME")
+      await key("ARROW_DOWN")
+      await keyboardCollectionAction(4)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1729,7 +1709,12 @@ describe("HTTP TUI", () => {
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
-      await key("d")
+      await key("a")
+      await key("ARROW_UP")
+      await enter()
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-action-form",
+      )
       await enter()
       await settle(
         () =>
@@ -1737,7 +1722,9 @@ describe("HTTP TUI", () => {
           !tui?.renderer.root.findDescendantById(`http-collection-file-${folder}/ToDelete.http`) &&
           !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
-      await key("p")
+      await key("HOME")
+      await key("ARROW_DOWN")
+      await keyboardCollectionAction(1)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1753,7 +1740,7 @@ describe("HTTP TUI", () => {
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
-      await key("e")
+      await keyboardCollectionAction(2)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1773,7 +1760,12 @@ describe("HTTP TUI", () => {
         ),
       )
       await settle(() => !tui?.renderer.root.findDescendantById("http-collection-action-form"))
-      await key("d")
+      await key("a")
+      await key("ARROW_UP")
+      await enter()
+      await settle(
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-action-form",
+      )
       await enter()
       await settle(
         () =>
@@ -1781,13 +1773,15 @@ describe("HTTP TUI", () => {
           !tui?.renderer.root.findDescendantById(`http-collection-directory-${folder}/Renamed`) &&
           !tui?.renderer.root.findDescendantById("http-collection-action-form"),
       )
-      await key("y")
-      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-history")
+      await press("http-navigation-environments")
+      await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-environment-entry-0")
       await key("c")
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-navigation-collection",
       )
-      await key("p")
+      await key("HOME")
+      await key("ARROW_DOWN")
+      await keyboardCollectionAction(1)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
       )
@@ -1833,6 +1827,7 @@ describe("HTTP TUI", () => {
     )
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() =>
         Boolean(
           tui?.renderer.root.findDescendantById(
@@ -1843,9 +1838,7 @@ describe("HTTP TUI", () => {
       await press("http-navigation-project-scoped-environment/api/requests.http#scoped")
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-environment-button")
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-choice-shared")),
-      )
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-entry-1")))
       const listFrame = tui.captureCharFrame()
       expect(listFrame).toContain("shared")
       expect(listFrame).not.toContain("dev")
@@ -1853,34 +1846,9 @@ describe("HTTP TUI", () => {
       expect(listFrame).not.toContain("sibling-only")
 
       await press("http-environment-new")
-      await key("/")
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-name",
-      )
-      await act(async () => tui?.mockInput.typeText("created-local"))
-      await key("ESCAPE")
-      await key("/")
-      await key("ARROW_DOWN")
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
-      )
-      await act(async () => tui?.mockInput.typeText("apiToken"))
-      await key("TAB")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
-      )
-      await act(async () => {
-        tui?.mockInput.typeText("global-ui-value")
-        await tui?.renderOnce()
-      })
-      await press("http-environment-create-save")
-      await settle(
-        () =>
-          !(tui?.captureCharFrame().includes("AMBIENTES HTTP") ?? true) &&
-          (tui?.captureCharFrame().includes("[E] created-local") ?? false),
-      )
+      await typeEnvironmentFields("created-local", [["apiToken", "global-ui-value"]])
+      await press("http-environment-save")
+      await settle(() => tui?.captureCharFrame().includes("[E] created-local") ?? false)
       expect(JSON.parse(await readFile(globalPath, "utf8"))).toEqual({ shared: { host: "global" } })
       const saved = await readFile(privatePath, "utf8")
       expect(saved).not.toContain("global-ui-value")
@@ -1904,30 +1872,25 @@ describe("HTTP TUI", () => {
     await unlink(privatePath).catch(() => undefined)
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-environment-button")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-choice-none",
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-entry-0")))
+      await press("http-environment-entry-0")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-environment-cell-0-name")?.width),
       )
-      await press("http-environment-globals")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-manager-modal",
-      )
-      expect(tui.captureCharFrame()).toContain("Globals")
+      expect(tui.captureCharFrame()).toContain("Global")
       expect(tui.captureCharFrame()).not.toContain("DEFAULTS DO WORKSPACE HTTP")
-      await key("/")
-      await key("RETURN")
-      await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-variable-0",
-      )
+      await click("http-environment-cell-0-name")
       await act(async () => tui?.mockInput.typeText("manga"))
       await key("TAB")
       await settle(
-        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-create-value-0",
+        () => tui?.renderer.currentFocusedRenderable?.id === "http-environment-cell-0-value",
       )
       await act(async () => tui?.mockInput.typeText("2"))
-      await press("http-environment-create-save")
-      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-globals")))
+      await press("http-environment-save")
+      await settle(() => !(tui?.captureCharFrame().includes("Global ●") ?? true))
       const saved = JSON.parse(await readFile(privatePath, "utf8")) as {
         Globals: { manga: string }
       }
@@ -1948,12 +1911,13 @@ describe("HTTP TUI", () => {
     await writeFile(privatePath, JSON.stringify({ Globals: { manga: "secret-fixture" } }))
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-button")))
       await act(async () => Bun.sleep(100))
-      await act(async () => tui?.mockInput.typeText("https://example.test/{"))
+      await act(async () => tui?.mockInput.typeText("https://example.test/{{"))
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
-      expect(tui.captureCharFrame()).not.toContain("secret-fixture")
+      expect(tui.captureCharFrame()).toContain("secret-fixture")
       await key("TAB")
       await settle(
         () =>
@@ -1983,10 +1947,11 @@ describe("HTTP TUI", () => {
     await writeFile(privatePath, JSON.stringify({ Globals: { manga: "secret-fixture" } }))
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-button")))
       await act(async () => Bun.sleep(100))
-      await act(async () => tui?.mockInput.typeText("http://{"))
+      await act(async () => tui?.mockInput.typeText("http://{{"))
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
 
       await act(async () => {
@@ -1994,8 +1959,9 @@ describe("HTTP TUI", () => {
         await Bun.sleep(10)
         await tui?.renderOnce()
       })
-      await settle(() => !tui?.renderer.root.findDescendantById("http-url-variable-manga"))
-      await click("http-url-input")
+      await key("ESCAPE")
+      await key("ESCAPE")
+      await key("/")
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-url-variable-manga")))
       await key("ESCAPE")
       await settle(() => !tui?.renderer.root.findDescendantById("http-url-variable-manga"))
@@ -2017,6 +1983,7 @@ describe("HTTP TUI", () => {
 
   test("keeps a query parameter name unfinished while typing in the URL", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await act(async () => tui?.mockInput.typeText("https://example.test/search?"))
     for (const [index, letter] of [..."manga"].entries()) {
@@ -2051,41 +2018,36 @@ describe("HTTP TUI", () => {
     await settle(() => input.value === "https://example.test/search?manga=23")
   })
 
-  test("edits and deletes a saved environment from the manager", async () => {
+  test("edits and deletes a saved environment from its tab", async () => {
     const root = process.env.TUIMINAL_WORKDIR ?? ""
     const privatePath = resolve(root, "http-client.private.env.json")
     const original = await readFile(privatePath).catch(() => null)
     await writeFile(privatePath, JSON.stringify({ local: { manga: "private-fixture" } }))
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-environment-button")
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-edit-local")),
-      )
-      await press("http-environment-edit-local")
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-create-name")),
-      )
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-entry-1")))
+      await press("http-environment-entry-1")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-name")))
       const nameInput = tui.renderer.root.findDescendantById(
-        "http-environment-create-name",
+        "http-environment-name",
       ) as InputRenderable
       expect(nameInput.value).toBe("local")
       expect(tui.captureCharFrame()).toContain("private-fixture")
-      await press("http-environment-create-save")
+      await press("http-environment-save")
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-environment-delete")))
+      await press("http-environment-delete")
       await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-delete-local")),
-      )
-      await press("http-environment-delete-local")
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-environment-delete-confirm")),
+        Boolean(tui?.renderer.root.findDescendantById("http-discard-document-confirm")),
       )
       expect(tui.captureCharFrame()).toContain("local")
-      await press("http-environment-delete-confirm")
+      await press("http-discard-document-confirm")
       await settle(
         () =>
-          Boolean(tui?.renderer.root.findDescendantById("http-environment-choice-none")) &&
-          !tui?.renderer.root.findDescendantById("http-environment-choice-local"),
+          Boolean(tui?.renderer.root.findDescendantById("http-environment-entry-0")) &&
+          !tui?.renderer.root.findDescendantById("http-environment-entry-1"),
       )
       expect(JSON.parse(await readFile(privatePath, "utf8"))).toEqual({})
     } finally {
@@ -2118,6 +2080,7 @@ describe("HTTP TUI", () => {
     process.env.TUIMINAL_ONLY_TAB = "http"
     try {
       tui = await testRender(<App />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await act(async () => {
         tui?.mockInput.typeText("example.test")
@@ -2147,6 +2110,7 @@ describe("HTTP TUI", () => {
     for (const layout of ["framed", "compact"] as const) {
       updateUiSettings({ layout, language: "pt-BR" })
       tui = await testRender(<HttpClient active />, { width: 160, height: 40 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       expect(tui.captureCharFrame()).toContain("REQUISIÇÃO")
       expect(tui.captureCharFrame()).toContain("RESPOSTA")
@@ -2157,8 +2121,18 @@ describe("HTTP TUI", () => {
       await settle(() => tui?.captureCharFrame().match(/GET Scratch/g)?.length === 4)
       expect(tui.captureCharFrame().match(/GET Scratch/g)).toHaveLength(4)
       await key("ESCAPE")
-      await press("http-request-view-headers")
+      await settle(() => true)
+      const activePane = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-2")
+      const headers = activePane?.findDescendantById("http-request-view-headers")
+      if (!headers) throw new Error("Missing Headers tab on the active document")
+      await act(async () => tui?.mockMouse.click(headers.screenX + 1, headers.screenY))
       await settle(() => tui?.captureCharFrame().includes("[Enter] Tabela") ?? false)
+      await enter()
+      await settle(
+        () =>
+          tui?.renderer.currentFocusedRenderable?.id ===
+          "http-key-value-section-http-scratch-2-header",
+      )
       await enter()
       await settle(() =>
         (tui?.renderer.currentFocusedRenderable?.id ?? "").startsWith("http-key-value-name-"),
@@ -2228,6 +2202,7 @@ describe("HTTP TUI", () => {
             />,
             { width, height },
           )
+          await openLocalHttp(tui)
           await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
           const frame = tui.captureCharFrame()
           expect(frame).not.toContain("undefined")
@@ -2240,7 +2215,7 @@ describe("HTTP TUI", () => {
             "http-environment-button",
             "http-send-button",
             "http-save-button",
-            "http-help-button",
+            "http-action-palette-open",
           ]) {
             const target = tui.renderer.root.findDescendantById(id)
             expect(target, `${id} ausente em ${width}x${height} ${layoutMode}`).toBeDefined()
@@ -2269,8 +2244,8 @@ describe("HTTP TUI", () => {
             expect(footer).toBeDefined()
             for (const id of [
               "http-navigation-collection",
-              "http-navigation-history",
-              "http-collection-help",
+              "http-navigation-environments",
+              "http-collection-workspace-heading",
               "http-collection-search-button",
             ]) {
               const target = tui.renderer.root.findDescendantById(id)
@@ -2286,7 +2261,7 @@ describe("HTTP TUI", () => {
               "http-maximize-button",
               "http-jump-button",
               "http-save-button",
-              "http-help-button",
+              "http-action-palette-open",
             ]) {
               const target = tui.renderer.root.findDescendantById(id)
               expect(target, `${id} ausente em ${layoutMode}`).toBeDefined()
@@ -2362,11 +2337,8 @@ describe("HTTP TUI", () => {
     async (layout) => {
       updateUiSettings({ layout, language: "pt-BR" })
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await openCollectionHelp()
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
-      )
-      await press("http-collection-import-button")
+      await openLocalHttp(tui)
+      await collectionAction("import-collection", true)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
       )
@@ -2390,12 +2362,9 @@ describe("HTTP TUI", () => {
     )
     await writeFile(sourcePath, fixture)
     try {
-      tui = await testRender(<HttpClient active />, { width: 160, height: 40 })
-      await openCollectionHelp()
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
-      )
-      await click("http-collection-import-button")
+      tui = await testRender(<HttpClientWithNotifications active />, { width: 160, height: 40 })
+      await openLocalHttp(tui)
+      await collectionAction("import-collection", true)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
       )
@@ -2455,11 +2424,8 @@ describe("HTTP TUI", () => {
     )
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await openCollectionHelp()
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
-      )
-      await press("http-collection-import-button")
+      await openLocalHttp(tui)
+      await collectionAction("import-collection", true)
       await settle(
         () => tui?.renderer.currentFocusedRenderable?.id === "http-collection-import-source",
       )
@@ -2477,11 +2443,11 @@ describe("HTTP TUI", () => {
 
   test("keeps the import path, drop area and action visible in a short terminal", async () => {
     tui = await testRender(<HttpClient active />, { width: 56, height: 18 })
+    await openLocalHttp(tui)
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-navigation-collection")))
     await press("http-navigation-collection")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-pane-collection")))
-    await openCollectionHelp()
-    await press("http-collection-import-button")
+    await collectionAction("import-collection", true)
     await settle(() =>
       Boolean(tui?.renderer.root.findDescendantById("http-collection-import-modal")),
     )
@@ -2501,11 +2467,8 @@ describe("HTTP TUI", () => {
     await writeFile(sourcePath, "{}")
     try {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
-      await openCollectionHelp()
-      await settle(() =>
-        Boolean(tui?.renderer.root.findDescendantById("http-collection-import-button")),
-      )
-      await click("http-collection-import-button")
+      await openLocalHttp(tui)
+      await collectionAction("import-collection", true)
       await click("http-collection-import-drop-zone")
       await act(async () => {
         await tui?.mockInput.pasteBracketedText(pathToFileURL(sourcePath).href)
@@ -2524,22 +2487,19 @@ describe("HTTP TUI", () => {
     }
   })
 
-  test("opens contextual help and jump mode as one keyboard layer", async () => {
+  test("opens the action palette and keeps legacy jump navigation", async () => {
     tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
-    await press("http-help-button")
-    await settle(() => tui?.captureCharFrame().includes("AJUDA HTTP") ?? false)
-    expect(tui.captureCharFrame()).toContain("AJUDA HTTP")
-    expect(tui.captureCharFrame()).toContain("ATALHOS DO CONTEXTO ATUAL")
+    await press("http-action-palette-open")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-action-palette")))
+    expect(tui.captureCharFrame()).toContain("Escolher box")
     await key("ESCAPE")
-    expect(tui.captureCharFrame()).not.toContain("AJUDA HTTP")
-
-    await press("http-jump-button")
+    await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+    expect(tui.renderer.root.findDescendantById("http-action-palette")).toBeUndefined()
+    await key("ESCAPE")
+    await key("o", true)
     await settle(() => tui?.captureCharFrame().includes("IR PARA") ?? false)
-    expect(tui.captureCharFrame()).toContain("IR PARA")
-    expect(tui.renderer.root.findDescendantById("http-overlay-jump-headers")).toBeUndefined()
-    await key("p")
-    expect(tui.captureCharFrame()).toContain("IR PARA")
     await key("r")
     await settle(() => !(tui?.captureCharFrame().includes("IR PARA") ?? true))
     expect(tui.captureCharFrame()).toContain("SEM RESPOSTA")
@@ -2549,6 +2509,7 @@ describe("HTTP TUI", () => {
     "resizes the request/response split with a real mouse drag (%i ms)",
     async (delayMs) => {
       tui = await testRender(<HttpClient active />, { width: 120, height: 30 })
+      await openLocalHttp(tui)
       await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-split-handle")))
       const request = tui.renderer.root.findDescendantById("http-request-pane-http-scratch-1")
       const response = tui.renderer.root.findDescendantById("http-response-pane-http-scratch-1")
@@ -2583,13 +2544,14 @@ describe("HTTP TUI", () => {
       <HttpClient active initialUrlRequest={{ id: 1, url: "http://localhost:3000/api" }} />,
       { width: 120, height: 30 },
     )
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
     await key("a")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-request-cookie-jar")))
-    await key("c")
-    await settle(() => tui?.captureCharFrame().includes("[C] Cookie jar: ignorar") ?? false)
-    await key("z")
+    await press("http-request-cookie-jar")
+    await settle(() => tui?.captureCharFrame().includes("ignorar") ?? false)
+    await press("http-request-more-preview")
     await key("F10")
     await settle(() => tui?.captureCharFrame().includes("COOKIE JAR") ?? false)
     expect(tui.captureCharFrame()).toContain("ignorar")
@@ -2600,6 +2562,7 @@ describe("HTTP TUI", () => {
       <HttpClient active initialUrlRequest={{ id: 1, url: "https://example.test/api" }} />,
       { width: 120, height: 30 },
     )
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
     await key("a")
@@ -2613,7 +2576,7 @@ describe("HTTP TUI", () => {
       await tui?.renderOnce()
     })
     await key("ESCAPE")
-    await key("z")
+    await press("http-request-more-preview")
     await key("F10")
     await settle(() => tui?.captureCharFrame().includes("http://proxy.test:8080/") ?? false)
     expect(tui.captureCharFrame()).toContain("PROXY")
@@ -2624,14 +2587,15 @@ describe("HTTP TUI", () => {
       <HttpClient active initialUrlRequest={{ id: 1, url: "https://127.0.0.1:1/private" }} />,
       { width: 120, height: 30 },
     )
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await key("ESCAPE")
     await key("a")
     await settle(() =>
       Boolean(tui?.renderer.root.findDescendantById("http-request-tls-verification")),
     )
-    await key("v", false, true)
-    await settle(() => tui?.captureCharFrame().includes("[Shift+V] TLS INSEGURO") ?? false)
+    await press("http-request-tls-verification")
+    await settle(() => tui?.captureCharFrame().includes("TLS INSEGURO") ?? false)
     await press("http-send-button")
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-insecure-tls-modal")))
 
@@ -2714,6 +2678,7 @@ describe("HTTP TUI", () => {
         width: 120,
         height: 32,
       })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       act(() => tui?.mockInput.pressEnter())
       await settle(() => tui?.captureCharFrame().includes('"answer": 42') ?? false)
@@ -2743,6 +2708,7 @@ describe("HTTP TUI", () => {
         width: 120,
         height: 32,
       })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       act(() => tui?.mockInput.pressEnter())
       await settle(() => tui?.captureCharFrame().includes('▾   "user": {') ?? false)
@@ -2795,6 +2761,7 @@ describe("HTTP TUI", () => {
         width: 120,
         height: 32,
       })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       act(() => tui?.mockInput.pressEnter())
       await settle(() =>
@@ -2839,6 +2806,7 @@ describe("HTTP TUI", () => {
     test("submits the freshly pasted URL when Enter follows in the same input batch", async () => {
       const origin = new URL(url).origin
       tui = await testRender(<HttpClient active />, { width: 120, height: 32 })
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
 
       await act(async () => {
@@ -2858,6 +2826,7 @@ describe("HTTP TUI", () => {
         <HttpClient active initialUrlRequest={{ id: 1, url: continuousUrl }} />,
         { width: 120, height: 32 },
       )
+      await openLocalHttp(tui)
       await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
       await press("http-send-button")
       await settle(() => tui?.captureCharFrame().includes("TRUNCADO") ?? false)

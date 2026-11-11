@@ -1,9 +1,10 @@
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
 import { diffHttpHistoryEntries } from "../model/history"
 import type { HttpHistoryEntry } from "../model/types"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogSection } from "./HttpDialogDetails"
 
 const DIFF_SYNTAX = createUiSyntaxStyle()
 
@@ -26,39 +27,50 @@ export function HttpHistoryDiffModal({
   terminalHeight: number
   onClose: () => void
 }) {
-  const width = Math.max(40, Math.min(110, terminalWidth - 6))
-  const height = Math.max(10, Math.min(30, terminalHeight - 4))
+  const width = Math.max(1, Math.min(110, terminalWidth - 2))
   const content = diffContent(entries[0], entries[1])
+  const height = Math.max(1, Math.min(30, terminalHeight - 2, 10 + content.split("\n").length))
   return (
-    <box
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
-        width,
-        height,
-        zIndex: 100,
-        ...panelBorder(COLORS.http),
-        backgroundColor: COLORS.panel,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+    <HttpDialog
+      id="http-history-diff-modal"
+      title={"COMPARAR RESPOSTAS"}
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      actions={[]}
     >
       <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
+        style={{
+          flexShrink: 0,
+          flexDirection: width >= 70 ? "row" : "column",
+          gap: width >= 70 ? 1 : 0,
+        }}
       >
-        <text content={translateUi("COMPARAR RESPOSTAS")} style={{ fg: COLORS.http }} />
-        <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
+        {entries.map((entry, index) => (
+          <box
+            key={index === 0 ? "before" : "after"}
+            style={{ flexGrow: 1, width: width >= 70 ? "50%" : "100%", minWidth: 0 }}
+          >
+            <HttpDialogSection accent={index === 0 ? COLORS.danger : COLORS.success}>
+              <text
+                content={truncateDisplay(
+                  `${index === 0 ? "−" : "+"} ${entry.status ?? "ERR"} · ${entry.requestName}`,
+                  (width >= 70 ? Math.floor((width - 5) / 2) : width - 4) - 2,
+                )}
+                wrapMode="none"
+                style={{ height: 1, fg: COLORS.text }}
+              />
+            </HttpDialogSection>
+          </box>
+        ))}
       </box>
-      <text
-        content={`${entries[0].status ?? "ERR"} ${entries[0].requestName}  ↔  ${entries[1].status ?? "ERR"} ${entries[1].requestName}`}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
       <scrollbox
         scrollY
         scrollX
         viewportCulling
-        style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
+        style={{ flexGrow: 1, minHeight: 1, marginTop: 1, backgroundColor: COLORS.canvas }}
       >
         <code
           content={content}
@@ -69,6 +81,6 @@ export function HttpHistoryDiffModal({
           style={{ width: "100%", height: Math.max(1, content.split("\n").length) }}
         />
       </scrollbox>
-    </box>
+    </HttpDialog>
   )
 }

@@ -27,7 +27,7 @@ export function useHttpNavigation({
   )
 
   const toggleNavigation = useCallback(
-    (view: "collection" | "history") => {
+    (view: "collection" | "environments") => {
       if (!layout.navigationFixed && state.navigationOpen && state.navigationView === view) {
         dispatch({ type: "close-navigation" })
         return

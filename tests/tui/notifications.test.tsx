@@ -1,3 +1,4 @@
+import { openLocalHttp } from "./http-source"
 import "./setup"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { unlink } from "node:fs/promises"
@@ -473,6 +474,7 @@ test("HTTP response completion reaches the global center", async () => {
       </NotificationProvider>,
       { width: 120, height: 30 },
     )
+    await openLocalHttp(tui)
     await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
     await act(async () => {
       tui?.mockInput.pressEnter()

@@ -1,49 +1,23 @@
+import { HttpBoxSelection } from "./HttpBoxSelection"
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useRef } from "react"
 import {
-  type HttpJsonTree,
   httpJsonPathAtLine,
   httpJsonTreeActionForKey,
-  httpJsonTreeForDocument,
   updateHttpJsonTree,
 } from "../model/json-tree"
-import { findHttpTextMatches } from "../model/response"
-import type { HttpDocumentState, HttpResponseSnapshot, HttpResponseView } from "../model/types"
+import type { HttpDocumentState, HttpResponseView } from "../model/types"
 import type { HttpCookie } from "../services/cookies"
-import { responseFiletype } from "./format"
+import { HttpResponseDocument } from "./HttpResponseDocument"
+import { HttpResponseTableDocument } from "./HttpResponseTableDocument"
+import { useHttpResponseContent } from "./use-http-response-content"
 import { HttpResponseHeader } from "./HttpResponseHeader"
 import { HttpResponseState } from "./HttpResponseState"
 import { HttpResponseToolbar } from "./HttpResponseToolbar"
-import { buildHttpJsonDocument } from "./http-json-document"
-import { httpResponseContent, httpResponseCopyContent } from "./http-response-content"
-
-const RESPONSE_SYNTAX = createUiSyntaxStyle()
-const MAX_HIGHLIGHTED_RESPONSE_BYTES = 500_000
-
-function textLineCount(content: string) {
-  let lines = 1
-  for (let index = 0; index < content.length; index += 1) {
-    if (content.charCodeAt(index) === 10) lines += 1
-  }
-  return lines
-}
-
-function matchedTextLine(content: string, match: { start: number; end: number; column: number }) {
-  const start = Math.max(0, match.start - match.column + 1)
-  const nextBreak = content.indexOf("\n", match.end)
-  return content.slice(start, nextBreak < 0 ? content.length : nextBreak)
-}
-
-function renderedResponseContent(
-  document: HttpDocumentState,
-  cookies: HttpCookie[],
-  structured: boolean,
-) {
-  return structured ? "" : httpResponseContent(document, cookies)
-}
+import { httpResponseCopyContent } from "./http-response-content"
 
 function responseCopyLabel(document: HttpDocumentState) {
   if (document.responseView === "headers") return "HEADERS"
@@ -55,110 +29,8 @@ function responseCopyLabel(document: HttpDocumentState) {
   ) {
     return "VALOR JSONPATH"
   }
+  if (document.responseView !== "pretty" && document.responseView !== "raw") return "CONTEÚDO"
   return "BODY DA RESPOSTA"
-}
-
-function HttpResponseDocument({
-  content,
-  response,
-  wrap,
-  jsonTree,
-  lineNumbers,
-  focused,
-}: {
-  content: string
-  response: HttpResponseSnapshot
-  wrap: boolean
-  jsonTree: HttpJsonTree | null
-  lineNumbers: boolean
-  focused: boolean
-}) {
-  const paletteKey = [
-    COLORS.canvas,
-    COLORS.panelAlt,
-    COLORS.panelRaised,
-    COLORS.text,
-    COLORS.muted,
-    COLORS.focus,
-    COLORS.http,
-    COLORS.success,
-    COLORS.warning,
-  ].join("\u0000")
-  const jsonLines = jsonTree?.lines
-  const jsonDocument = useMemo(() => {
-    void paletteKey
-    return jsonLines
-      ? buildHttpJsonDocument(
-          { lines: jsonLines, selectedPath: "" },
-          {
-            palette: COLORS,
-            lineNumbers,
-            focused: false,
-            highlightSelection: false,
-          },
-        )
-      : null
-  }, [jsonLines, lineNumbers, paletteKey])
-  if (jsonDocument && jsonTree) {
-    const selectedLine = jsonTree.lines[jsonTree.selectedLine]
-    const selectedContent = `${
-      lineNumbers
-        ? `${String(jsonTree.selectedLine + 1).padStart(String(jsonTree.lines.length).length)} │ `
-        : ""
-    }${selectedLine?.tokens.map((token) => token.text).join("") ?? ""}`
-    return (
-      <box style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), flexShrink: 0 }}>
-        <text
-          id={`http-response-json-${response.requestId}`}
-          content={jsonDocument}
-          wrapMode={wrap ? "word" : "none"}
-          style={{ width: "100%", height: Math.max(1, jsonTree.lines.length), bg: COLORS.canvas }}
-        />
-        {focused ? (
-          <box
-            id={`http-response-json-selection-${response.requestId}`}
-            style={{
-              position: "absolute",
-              left: 0,
-              top: jsonTree.selectedLine,
-              width: "100%",
-              height: 1,
-              zIndex: 1,
-              backgroundColor: COLORS.http,
-            }}
-          >
-            <text
-              content={selectedContent}
-              wrapMode="none"
-              style={{ width: "100%", height: 1, bg: COLORS.http, fg: COLORS.canvas }}
-            />
-          </box>
-        ) : null}
-      </box>
-    )
-  }
-  const filetype = responseFiletype(response)
-  const height = textLineCount(content)
-  const displayedContent = content || translateUi("(resposta vazia)")
-  if (filetype === "text" || response.capturedBytes > MAX_HIGHLIGHTED_RESPONSE_BYTES) {
-    return (
-      <text
-        content={displayedContent}
-        wrapMode={wrap ? "word" : "none"}
-        style={{ width: "100%", height, bg: COLORS.canvas, fg: COLORS.text }}
-      />
-    )
-  }
-  return (
-    <code
-      content={displayedContent}
-      filetype={filetype}
-      syntaxStyle={RESPONSE_SYNTAX}
-      bg={COLORS.canvas}
-      wrapMode={wrap ? "word" : "none"}
-      style={{ width: "100%", height }}
-    />
-  )
 }
 
 export function HttpResponsePane({
@@ -177,6 +49,7 @@ export function HttpResponsePane({
   onOpen,
   onDownload,
   onCancelDownload,
+  onCancel,
   downloading,
 }: {
   document: HttpDocumentState
@@ -193,25 +66,22 @@ export function HttpResponsePane({
   onSave: () => void
   onOpen: () => void
   onDownload: () => void
+  onCancel: () => void
   onCancelDownload: () => void
   downloading: boolean
 }) {
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
-  const response = document.execution.status === "success" ? document.execution.response : null
+  const previousView = useRef("")
   const presentation = document.responsePresentation
-  const jsonTree = useMemo(() => httpJsonTreeForDocument(document), [document])
-  // The structured JSON document owns rendering while its tree is active. Build
-  // the separate plain/pretty string only when a view or action actually needs it.
-  const content = renderedResponseContent(document, cookies, jsonTree !== null)
-  const matches = useMemo(
-    () => findHttpTextMatches(content, presentation.searchQuery),
-    [content, presentation.searchQuery],
-  )
-  const stale = response ? response.requestRevision !== document.revision : false
-  const activeMatch = matches.length
-    ? matches[presentation.searchMatchIndex % matches.length]
-    : undefined
-  const matchedLine = activeMatch ? matchedTextLine(content, activeMatch) : undefined
+  const { response, jsonTree, table, content, matches, activeMatch, matchedLine, stale } =
+    useHttpResponseContent(document, cookies, position.width)
+
+  useEffect(() => {
+    const key = `${document.responseView}:${presentation.moreView}`
+    if (previousView.current === key) return
+    previousView.current = key
+    scrollRef.current?.scrollTo(0)
+  }, [document.responseView, presentation.moreView])
 
   useEffect(() => {
     if (!presentation.searchOpen || !matches.length) return
@@ -233,6 +103,10 @@ export function HttpResponsePane({
     }
   }, [focused, jsonTree, presentation.searchOpen, presentation.jsonPathOpen])
 
+  useWorkspaceRepaint(
+    JSON.stringify([document.responseView, presentation.moreView, document.execution.status]),
+    visible,
+  )
   const cycleSearch = () => {
     if (!matches.length) return
     onPresentationChange({ searchMatchIndex: (presentation.searchMatchIndex + 1) % matches.length })
@@ -255,18 +129,20 @@ export function HttpResponsePane({
   return (
     <box
       id={`http-response-pane-${document.request.id}`}
+      focusable
       visible={visible}
       style={{
         position: "absolute",
         ...position,
         ...focusedPanelBorder(focused, COLORS.http),
-        backgroundColor: COLORS.panelAlt,
+        backgroundColor: COLORS.panel,
         paddingLeft: 1,
         paddingRight: 1,
         overflow: "hidden",
       }}
     >
-      <HttpResponseHeader document={document} response={response} />
+      <HttpBoxSelection id={`http-response-pane-${document.request.id}`} />
+      <HttpResponseHeader document={document} response={response} onFocus={onFocus} />
       <HttpResponseToolbar
         document={document}
         response={response}
@@ -310,7 +186,7 @@ export function HttpResponsePane({
           }}
           id={`http-response-scroll-${document.request.id}`}
           scrollY
-          scrollX={jsonTree !== null || !presentation.wrap}
+          scrollX={table !== null || jsonTree !== null || !presentation.wrap}
           viewportCulling
           onKeyDown={handleJsonTreeKey}
           onMouseDown={(event) => {
@@ -326,14 +202,22 @@ export function HttpResponsePane({
           }}
           style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
         >
-          <HttpResponseDocument
-            content={content}
-            response={response}
-            wrap={jsonTree ? false : presentation.wrap}
-            jsonTree={jsonTree}
-            lineNumbers={presentation.lineNumbers}
-            focused={focused}
-          />
+          {table ? (
+            <HttpResponseTableDocument
+              document={table}
+              id={`http-response-table-${document.request.id}`}
+              selectedLine={presentation.searchOpen ? activeMatch?.line : undefined}
+            />
+          ) : (
+            <HttpResponseDocument
+              content={content}
+              response={response}
+              wrap={jsonTree ? false : presentation.wrap}
+              jsonTree={jsonTree}
+              lineNumbers={presentation.lineNumbers}
+              focused={focused}
+            />
+          )}
           {stale ? (
             <text
               content={translateUi("RESPOSTA DE UMA REVISÃO ANTERIOR")}
@@ -348,7 +232,9 @@ export function HttpResponsePane({
           ) : null}
         </scrollbox>
       ) : (
-        <HttpResponseState document={document} />
+        <box style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
+          <HttpResponseState document={document} onCancel={onCancel} />
+        </box>
       )}
     </box>
   )

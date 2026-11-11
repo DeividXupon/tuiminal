@@ -1,11 +1,12 @@
 import type { BoxRenderable, Renderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
+import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type { PendingHttpRedirect } from "../services/redirect-approvals"
 import { httpInsecureTlsApproval } from "../model/tls-policy"
+import type { PendingHttpRedirect } from "../services/redirect-approvals"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
 import { HttpInsecureTlsModal } from "./HttpInsecureTlsModal"
 
 const RISK_COPY = {
@@ -33,8 +34,21 @@ export function HttpRedirectApprovalModal({
   const focusedApproval = useRef<number | null>(null)
   const approval = pending.approval
   const onlyTls = approval.risks.length === 1 && approval.risks[0] === "insecure-tls"
-  const width = Math.min(88, Math.max(24, terminalWidth - 4))
-  const height = Math.min(17, Math.max(8, terminalHeight - 4))
+  const width = Math.max(1, Math.min(88, terminalWidth - 2))
+  const contentLines = [
+    approval.fromOrigin,
+    `→ ${approval.toOrigin}`,
+    `${approval.method} ${approval.displayUrl}`,
+    `${translateUi("AMBIENTE")}  ${approval.environmentName ?? translateUi("Sem ambiente")}`,
+    ...approval.risks.map((risk) => translateUi(RISK_COPY[risk])),
+    translateUi("Headers privados da origem não serão encaminhados."),
+    translateUi("Continuar envia somente este salto, sem repetir as requisições anteriores."),
+  ]
+  const contentRows = contentLines.reduce(
+    (rows, line) => rows + Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, width - 5))),
+    0,
+  )
+  const height = Math.max(1, Math.min(24, terminalHeight - 2, 10 + contentRows))
   useEffect(
     () => () => {
       const previous = returnFocus.current
@@ -78,7 +92,14 @@ export function HttpRedirectApprovalModal({
     <box
       id="http-redirect-approval-layer"
       onMouseDown={(event) => event.stopPropagation()}
-      style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", zIndex: 250 }}
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: terminalWidth,
+        height: terminalHeight,
+        zIndex: 250,
+      }}
     >
       {onlyTls ? (
         <HttpInsecureTlsModal
@@ -89,35 +110,54 @@ export function HttpRedirectApprovalModal({
           onClose={cancel}
         />
       ) : (
-        <box
+        <HttpDialog
           id="http-redirect-approval-modal"
-          ref={modalRef}
-          focusable
-          style={{
-            position: "absolute",
-            left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-            top: 0,
-            width,
-            height,
-            ...panelBorder(COLORS.danger),
-            backgroundColor: COLORS.panelRaised,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
+          title="AUTORIZAR ESTE REDIRECT?"
+          width={width}
+          height={height}
+          terminalWidth={terminalWidth}
+          terminalHeight={terminalHeight}
+          dialogRef={modalRef}
+          accent={COLORS.danger}
+          zIndex={250}
+          onClose={cancel}
+          closeLabel="[Esc] Não seguir"
+          closeId="http-redirect-approval-deny"
+          actions={[
+            {
+              id: "http-redirect-approval-confirm",
+              label: "[Y] Autorizar este salto",
+              accent: COLORS.danger,
+              onPress: confirm,
+            },
+          ]}
         >
-          <text
-            content={translateUi("AUTORIZAR ESTE REDIRECT?")}
-            style={{ fg: COLORS.danger, height: 1, flexShrink: 0 }}
-          />
-          <scrollbox ref={scrollRef} scrollY style={{ flexGrow: 1 }}>
-            <text
-              content={`${approval.fromOrigin}\n→ ${approval.toOrigin}\n${approval.method} ${approval.displayUrl}`}
-              style={{ fg: COLORS.text }}
-            />
-            <text
-              content={`${translateUi("AMBIENTE")}  ${approval.environmentName ?? translateUi("Sem ambiente")}`}
-              style={{ fg: COLORS.muted }}
-            />
+          <scrollbox ref={scrollRef} scrollY style={{ flexGrow: 1, minHeight: 0 }}>
+            <HttpDialogSection title="ORIGEM" accent={COLORS.muted}>
+              <text
+                content={approval.fromOrigin}
+                wrapMode="word"
+                style={{ flexShrink: 0, fg: COLORS.muted }}
+              />
+            </HttpDialogSection>
+            <box style={{ flexShrink: 0, marginTop: 1, marginBottom: 1 }}>
+              <HttpDialogSection title="DESTINO" accent={COLORS.warning}>
+                <text
+                  content={`→ ${approval.toOrigin}`}
+                  wrapMode="word"
+                  style={{ flexShrink: 0, fg: COLORS.text }}
+                />
+                <text
+                  content={`${approval.method} ${approval.displayUrl}`}
+                  wrapMode="word"
+                  style={{ flexShrink: 0, fg: COLORS.text }}
+                />
+                <text
+                  content={`${translateUi("AMBIENTE")}  ${approval.environmentName ?? translateUi("Sem ambiente")}`}
+                  style={{ fg: COLORS.muted }}
+                />
+              </HttpDialogSection>
+            </box>
             {approval.risks.map((risk) => (
               <text
                 key={risk}
@@ -125,10 +165,7 @@ export function HttpRedirectApprovalModal({
                 style={{ fg: COLORS.warning }}
               />
             ))}
-            <text
-              content={translateUi("Headers privados da origem não serão encaminhados.")}
-              style={{ fg: COLORS.muted }}
-            />
+            <HttpDialogNotice text="Headers privados da origem não serão encaminhados." />
             <text
               content={translateUi(
                 "Continuar envia somente este salto, sem repetir as requisições anteriores.",
@@ -136,21 +173,7 @@ export function HttpRedirectApprovalModal({
               style={{ fg: COLORS.text }}
             />
           </scrollbox>
-          <box style={{ height: 2, flexShrink: 0 }}>
-            <InlineButton
-              id="http-redirect-approval-deny"
-              label="[Esc] Não seguir"
-              accent={COLORS.http}
-              onPress={cancel}
-            />
-            <InlineButton
-              id="http-redirect-approval-confirm"
-              label="[Y] Autorizar este salto"
-              accent={COLORS.danger}
-              onPress={confirm}
-            />
-          </box>
-        </box>
+        </HttpDialog>
       )}
     </box>
   )

@@ -1,27 +1,14 @@
+import { requirePostmanSession, type LivePostmanSession } from "../postman/live-session"
+import { manageLivePostmanCollection } from "../postman/live-mutations"
+import { duplicateCollectionItem, refreshDuplicatedSource } from "./duplicate-http-collection-item"
 import { dirname } from "node:path"
-import { useCallback } from "react"
+import { useCallback, useRef } from "react"
 import { projectFileHash } from "@xupon/tuiminal-core/storage/project-files"
 import type { HttpCollectionTreeRow } from "../model/collection-tree"
 import type { HttpDocumentState, HttpProjectRequestItem } from "../model/types"
 import { belongsToHttpSource, type HttpSourceMode } from "../model/source-mode"
-import { createScratchRequest, type HttpWorkspaceAction } from "../model/workspace"
+import type { HttpWorkspaceAction } from "../model/workspace"
 import { deleteHttpRequest } from "../storage/collections"
-import { loadPostmanAccount } from "../postman/account"
-import { PostmanApi } from "../postman/api"
-import {
-  createPostmanCollection,
-  createPostmanRequest,
-  deletePostmanCollection,
-  deletePostmanRequest,
-  isPostmanPath,
-  renamePostmanCollection,
-  renamePostmanRequest,
-} from "../postman/mutations"
-import {
-  createPostmanFolder,
-  deletePostmanFolder,
-  renamePostmanFolder,
-} from "../postman/folder-mutations"
 import {
   createHttpCollection,
   createHttpFolder,
@@ -38,6 +25,7 @@ export type HttpCollectionAction =
   | "create-folder"
   | "create-request"
   | "rename"
+  | "duplicate"
   | "delete"
 export type HttpCollectionDestination =
   | { kind: "tuiminal" }
@@ -93,11 +81,7 @@ function assertReady(documents: HttpDocumentState[]) {
 function closeAffected(
   dispatch: (action: HttpWorkspaceAction) => void,
   affected: HttpDocumentState[],
-  all: HttpDocumentState[],
 ) {
-  if (affected.length && affected.length === all.length) {
-    dispatch({ type: "add-document", request: createScratchRequest(`http-scratch-${Date.now()}`) })
-  }
   for (const document of affected)
     dispatch({ type: "close-document", documentId: document.request.id })
 }
@@ -148,115 +132,9 @@ async function deleteItem({ root, files, row }: ManagementInput) {
   else await deleteHttpFolder(root, row.path)
 }
 
-async function connectedPostmanApi() {
-  const account = await loadPostmanAccount()
-  if (!account) throw new Error("Postman desconectado. Execute: tuiminal postman login")
-  return new PostmanApi(account)
-}
-
-async function existingPostmanAction(
-  action: HttpCollectionAction,
-  input: ManagementInput,
-): Promise<HttpProjectRequestItem | null> {
-  const { root, files, row, name } = input
-  if (!row) return null
-  const path = row.path
-  const api = await connectedPostmanApi()
-  if (action === "create-request") {
-    return createLinkedRequest(root, api, files, row, name)
-  }
-  if (action === "create-folder") {
-    await createLinkedFolder(root, api, row, name)
-    return null
-  }
-  if (action === "rename") {
-    if (row?.kind === "request") {
-      const request = await renamePostmanRequest(root, api, row.item.request, name)
-      return { filePath: path, request }
-    }
-    if (row.kind === "folder") {
-      await renamePostmanFolder(root, api, path, row.folderId, name, fileHash(files, path))
-      return null
-    }
-    await renamePostmanCollection(root, api, path, name, fileHash(files, path))
-    return null
-  }
-  if (action === "delete") {
-    if (row?.kind === "request") await deletePostmanRequest(root, api, row.item.request)
-    else if (row.kind === "folder")
-      await deletePostmanFolder(root, api, path, row.folderId, fileHash(files, path))
-    else await deletePostmanCollection(root, api, path, fileHash(files, path))
-  }
-  return null
-}
-
-async function createLinkedRequest(
-  root: string,
-  api: PostmanApi,
-  files: CollectionFile[],
-  row: HttpCollectionTreeRow,
-  name: string,
-) {
-  const path = row.path
-  const request = await createPostmanRequest(
-    root,
-    api,
-    path,
-    row.kind === "folder" ? `${row.folderPath} / ${name}` : name,
-    fileHash(files, path),
-    row.kind === "folder" ? row.folderId : undefined,
-  )
-  return { filePath: path, request }
-}
-
-async function createLinkedFolder(
-  root: string,
-  api: PostmanApi,
-  row: HttpCollectionTreeRow,
-  name: string,
-) {
-  if (row.kind === "request") throw new Error("Selecione a coleção ou pasta Postman.")
-  await createPostmanFolder(
-    root,
-    api,
-    row.path,
-    name,
-    row.kind === "folder" ? row.folderId : undefined,
-  )
-}
-
-async function postmanAction(
-  action: HttpCollectionAction,
-  input: ManagementInput,
-  destination?: HttpCollectionDestination,
-): Promise<HttpProjectRequestItem | null> {
-  const { root, row, name } = input
-  if (action === "create-collection") {
-    if (destination?.kind === "postman") {
-      await createPostmanCollection(
-        root,
-        await connectedPostmanApi(),
-        destination.workspaceId,
-        name,
-      )
-      return null
-    }
-    const inPostmanDirectory =
-      row?.kind === "directory" && (row.path === "postman" || isPostmanPath(row.path))
-    return createItem(inPostmanDirectory ? { ...input, row: null } : input, action)
-  }
-  if (row?.kind === "directory" && (row.path === "postman" || isPostmanPath(row.path))) {
-    if (action === "create-request")
-      throw new Error("Selecione uma coleção Postman para criar a request.")
-    throw new Error("Pastas locais em /postman não representam pastas do Postman.")
-  }
-  if (row?.kind !== "directory" && row && isPostmanPath(row.path)) {
-    return existingPostmanAction(action, input)
-  }
-  return performLocalAction(action, input)
-}
-
 async function performLocalAction(action: HttpCollectionAction, input: ManagementInput) {
+  if (action === "duplicate")
+    return duplicateCollectionItem(input.root, input.files, input.row, input.name)
   if (action === "delete") {
     await deleteItem(input)
     return null
@@ -294,8 +172,11 @@ function assertSourceAction(
 export function useHttpCollectionManagement({
   root,
   sourceMode,
+  postmanSession,
+  ensurePostmanSession,
   files,
   getDocuments,
+  settingsBlocked,
   dispatch,
   refreshProject,
   openRequest,
@@ -303,39 +184,118 @@ export function useHttpCollectionManagement({
 }: {
   root: string
   sourceMode: HttpSourceMode
+  postmanSession?: LivePostmanSession | null
+  ensurePostmanSession?: (workspaceId?: string) => Promise<LivePostmanSession>
   files: CollectionFile[]
   getDocuments: () => HttpDocumentState[]
+  settingsBlocked?: () => boolean
   dispatch: (action: HttpWorkspaceAction) => void
   refreshProject: () => Promise<void>
   openRequest: (item: HttpProjectRequestItem) => void
   setNotice: (notice: string) => void
 }) {
-  return useCallback(
+  const busy = useRef(false)
+  const manage = useCallback(
     async (
       action: HttpCollectionAction,
       row: HttpCollectionTreeRow | null,
       name = "",
       destination?: HttpCollectionDestination,
     ) => {
+      if (busy.current) return false
+      busy.current = true
       try {
-        if (action !== "delete" && !name.trim()) throw new Error("Informe um nome.")
-        if ((action === "rename" || action === "delete") && !row) return false
+        if (settingsBlocked?.())
+          throw new Error("Salve ou feche as configurações alteradas antes de mudar de workspace.")
+        if (!validAction(action, name, row)) return false
         assertSourceAction(sourceMode, action, row, destination)
         const all = getDocuments()
         const affected = affectedDocuments(action, row, all)
         assertReady(affected)
-        const opened = await postmanAction(action, { root, files, row, name }, destination)
-        closeAffected(dispatch, affected, all)
-        if (opened) openRequest(opened)
+        const opened =
+          sourceMode === "postman"
+            ? await manageLivePostmanCollection(
+                await collectionSession(postmanSession, ensurePostmanSession, destination),
+                action,
+                row,
+                name,
+                destination?.kind === "postman" ? destination.workspaceId : undefined,
+              )
+            : await performLocalAction(action, { root, files, row, name })
+        await finishCollectionAction(
+          action,
+          root,
+          row,
+          postmanSession,
+          getDocuments,
+          dispatch,
+          affected,
+        )
+        const selection = openManagedRequest(opened, openRequest)
         await refreshProject()
         setNotice(action === "delete" ? "ITEM EXCLUÍDO DA COLEÇÃO" : "COLEÇÃO ATUALIZADA")
-        return true
+        return selection
       } catch (error) {
         await refreshProject().catch(() => {})
         setNotice(error instanceof Error ? error.message : String(error))
         return false
+      } finally {
+        busy.current = false
       }
     },
-    [dispatch, files, getDocuments, openRequest, refreshProject, root, setNotice, sourceMode],
+    [
+      dispatch,
+      files,
+      getDocuments,
+      settingsBlocked,
+      openRequest,
+      refreshProject,
+      root,
+      setNotice,
+      sourceMode,
+      postmanSession,
+      ensurePostmanSession,
+    ],
   )
+  return { manage, pending: false, content: null }
+}
+
+async function finishCollectionAction(
+  action: HttpCollectionAction,
+  root: string,
+  row: HttpCollectionTreeRow | null,
+  session: LivePostmanSession | null | undefined,
+  getDocuments: () => HttpDocumentState[],
+  dispatch: (action: HttpWorkspaceAction) => void,
+  affected: HttpDocumentState[],
+) {
+  if (action !== "duplicate") closeAffected(dispatch, affected)
+  else if (!session) await refreshDuplicatedSource(root, row, getDocuments, dispatch)
+}
+
+async function collectionSession(
+  session: LivePostmanSession | null | undefined,
+  ensure: ((workspaceId?: string) => Promise<LivePostmanSession>) | undefined,
+  destination: HttpCollectionDestination | undefined,
+) {
+  if (ensure) return ensure(destination?.kind === "postman" ? destination.workspaceId : undefined)
+  return requirePostmanSession(session)
+}
+
+function validAction(
+  action: HttpCollectionAction,
+  name: string,
+  row: HttpCollectionTreeRow | null,
+) {
+  if (action !== "delete" && !name.trim()) throw new Error("Informe um nome.")
+  return !(["rename", "delete", "duplicate"].includes(action) && !row)
+}
+
+function openManagedRequest(
+  opened: HttpProjectRequestItem | string | null,
+  open: (item: HttpProjectRequestItem) => void,
+) {
+  if (typeof opened === "string") return opened
+  if (opened) open(opened)
+  return true
 }

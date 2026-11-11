@@ -1,155 +1,196 @@
-import type { InputRenderable } from "@opentui/core"
-import { useRef } from "react"
+import { useMemo, useState } from "react"
+import { Button } from "@tuiparts/react/button"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { createHttpExtractionDraft } from "../model/automation"
-import type { HttpChainExtraction, HttpRequestDefinition } from "../model/types"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { httpChainPlan } from "../model/chaining"
+import { previewHttpExtractions } from "../model/chain-extractions"
+import type {
+  HttpProjectRequestItem,
+  HttpRequestDefinition,
+  HttpResponseSnapshot,
+} from "../model/types"
+import {
+  useHttpChainingNavigation,
+  type HttpChainingKeyRef,
+} from "../hooks/use-http-chaining-navigation"
+import { HttpChainingRow } from "./HttpChainingRow"
+import { HttpChainDependencyPicker } from "./HttpChainDependencyPicker"
+import { HttpFormSection } from "./HttpRequestForm"
 
 export function HttpRequestChainingEditor({
-  requestId,
-  chain,
+  request,
+  requests,
+  response,
   focused,
+  keyRef,
   onChange,
   onFocus,
 }: {
-  requestId: string
-  chain: NonNullable<HttpRequestDefinition["chain"]>
+  request: HttpRequestDefinition
+  requests: HttpProjectRequestItem[]
+  response?: HttpResponseSnapshot | undefined
   focused: boolean
+  keyRef: HttpChainingKeyRef
   onChange: (chain: NonNullable<HttpRequestDefinition["chain"]>) => void
   onFocus: () => void
 }) {
-  const dependencyRef = useRef<InputRenderable | null>(null)
-  const inputs = useRef(new Map<string, InputRenderable>())
-  const patch = (index: number, value: Partial<HttpChainExtraction>) =>
-    onChange({
-      ...chain,
-      extract: chain.extract.map((item, candidate) =>
-        candidate === index ? { ...item, ...value } : item,
-      ),
-    })
-  const remove = (index: number) =>
-    onChange({ ...chain, extract: chain.extract.filter((_, candidate) => candidate !== index) })
-  const add = () =>
-    onChange({ ...chain, extract: [...chain.extract, createHttpExtractionDraft(requestId)] })
+  const [contentWidth, setContentWidth] = useState(1)
+  const chain = request.chain ?? { extract: [] }
+  const nav = useHttpChainingNavigation({
+    requestId: request.id,
+    chain,
+    focused,
+    keyRef,
+    onChange,
+    onFocus,
+  })
+  const plan = useMemo(() => httpChainPlan(request, requests), [request, requests])
+  const previews = useMemo(
+    () => previewHttpExtractions(chain.extract, response),
+    [chain.extract, response],
+  )
+  const chooseDependency = (dependsOn: string | undefined) => {
+    const next = { ...chain }
+    if (dependsOn) next.dependsOn = dependsOn
+    else delete next.dependsOn
+    onChange(next)
+  }
   return (
-    <box style={{ flexGrow: 1, paddingTop: 1 }}>
-      <text content={translateUi("CHAINING DO REQUEST")} style={{ fg: COLORS.text }} />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("DEPENDÊNCIA")} style={{ width: 14, fg: COLORS.muted }} />
-        <input
-          ref={dependencyRef}
-          id={`http-automation-dependency-${requestId}`}
-          value={chain.dependsOn ?? ""}
-          placeholder={translateUi("@name do request anterior")}
-          width="70%"
-          onInput={(dependsOn) => {
-            const next = { ...chain }
-            if (dependsOn) next.dependsOn = dependsOn
-            else delete next.dependsOn
-            onChange(next)
+    <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI box owns keyboard selection for this form. */}
+      <box id={nav.selectionId} focusable flexGrow={1} minHeight={0} onKeyDown={nav.keyDown}>
+        <HttpFormSection
+          first
+          title="CHAINING DO REQUEST"
+          actions={
+            <InlineButton
+              id="http-extraction-add"
+              label={focused ? "[N] Adicionar" : "Adicionar"}
+              accent={COLORS.http}
+              onPress={nav.add}
+            />
+          }
+        >
+          {null}
+        </HttpFormSection>
+        <scrollbox
+          id={`http-automation-form-chaining-${request.id}`}
+          ref={nav.scroll}
+          scrollY
+          viewportCulling={false}
+          viewportOptions={{
+            onSizeChange() {
+              setContentWidth(Math.max(1, this.width - 1))
+              nav.setViewport(`${this.width}:${this.height}`)
+            },
           }}
-          onMouseDown={() => {
-            onFocus()
-            dependencyRef.current?.focus()
-          }}
-          style={{ backgroundColor: COLORS.canvas, focusedBackgroundColor: COLORS.panelRaised }}
-        />
-      </box>
-      <text
-        content={translateUi("O request dependente executa depois deste alvo.")}
-        style={{ fg: COLORS.muted }}
-      />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text content={translateUi("EXTRAÇÕES")} style={{ flexGrow: 1, fg: COLORS.text }} />
-        {focused ? (
-          <InlineButton
-            id="http-extraction-add"
-            label="[N] Adicionar"
-            accent={COLORS.http}
-            onPress={add}
-          />
-        ) : null}
-      </box>
-      <scrollbox scrollY viewportCulling style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
-        {chain.extract.length ? (
-          chain.extract.map((extraction, index) => {
-            const key = extraction.id ?? `${requestId}-extraction-${index}`
-            return (
-              <box key={key} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-                <InlineButton
-                  label={extraction.secret ? "● SECRETO" : "○ PÚBLICO"}
-                  accent={extraction.secret ? COLORS.warning : COLORS.http}
-                  active={extraction.secret}
-                  onPress={() => patch(index, { secret: !extraction.secret })}
+          style={{ flexGrow: 1, minHeight: 1, backgroundColor: COLORS.canvas }}
+        >
+          <box width={contentWidth} flexShrink={0}>
+            <box
+              id={`http-chain-dependency-${request.id}`}
+              flexShrink={0}
+              border={["left"]}
+              borderColor={focused && nav.row < 0 ? COLORS.http : COLORS.border}
+            >
+              <text content={translateUi("ANTES DO ENVIO")} fg={COLORS.http} height={1} />
+              <Button
+                id={`http-chain-choose-${request.id}`}
+                width="100%"
+                height={1}
+                onPress={() => {
+                  nav.select(-1, 0)
+                  nav.setPickerOpen(true)
+                }}
+              >
+                <text
+                  content={
+                    request.chain?.dependsOn
+                      ? (plan.items.at(-2)?.request.name ?? request.chain.dependsOn)
+                      : translateUi("Nenhuma dependência")
+                  }
+                  wrapMode="none"
+                  fg={COLORS.text}
+                  bg={focused && nav.row < 0 ? COLORS.diffModifiedBg : COLORS.panelAlt}
                 />
-                <input
-                  ref={(input) => {
-                    if (input) inputs.current.set(`${index}-name`, input)
-                    else inputs.current.delete(`${index}-name`)
-                  }}
-                  id={`http-automation-extraction-name-${requestId}-${index}`}
-                  value={extraction.name}
-                  placeholder={translateUi("NOME DA VARIÁVEL")}
-                  width="28%"
-                  onInput={(name) => patch(index, { name })}
-                  onKeyDown={(event) => {
-                    if (!event.ctrl || event.name !== "d") return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    remove(index)
-                  }}
-                  onMouseDown={() => {
-                    onFocus()
-                    inputs.current.get(`${index}-name`)?.focus()
-                  }}
-                  style={{
-                    backgroundColor: COLORS.canvas,
-                    focusedBackgroundColor: COLORS.panelRaised,
-                  }}
+              </Button>
+              {plan.error ? (
+                <text content={translateUi(plan.error)} fg={COLORS.danger} />
+              ) : (
+                <text
+                  content={plan.items
+                    .map((item) => `${item.request.method} ${item.request.name}`)
+                    .join(" → ")}
+                  fg={COLORS.muted}
+                  wrapMode="none"
+                  height={1}
                 />
-                <input
-                  ref={(input) => {
-                    if (input) inputs.current.set(`${index}-path`, input)
-                    else inputs.current.delete(`${index}-path`)
-                  }}
-                  id={`http-automation-extraction-path-${requestId}-${index}`}
-                  value={extraction.jsonPath}
-                  placeholder="$.token"
-                  width="28%"
-                  onInput={(jsonPath) => patch(index, { jsonPath })}
-                  onKeyDown={(event) => {
-                    if (!event.ctrl || event.name !== "d") return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    remove(index)
-                  }}
-                  onMouseDown={() => {
-                    onFocus()
-                    inputs.current.get(`${index}-path`)?.focus()
-                  }}
-                  style={{
-                    backgroundColor: COLORS.canvas,
-                    focusedBackgroundColor: COLORS.panelRaised,
-                  }}
+              )}
+            </box>
+            <text
+              content={translateUi("APÓS A RESPOSTA")}
+              fg={COLORS.http}
+              marginTop={1}
+              height={1}
+              flexShrink={0}
+            />
+            <text
+              content={translateUi("PRÉVIA DA ÚLTIMA RESPOSTA")}
+              fg={COLORS.muted}
+              height={1}
+              flexShrink={0}
+            />
+            {chain.extract.length ? (
+              chain.extract.map((item, index) => (
+                <HttpChainingRow
+                  key={item.id ?? index}
+                  requestId={request.id}
+                  item={item}
+                  index={index}
+                  focused={focused}
+                  navigation={nav}
+                  preview={previews[index] ?? { error: null, value: "" }}
                 />
-                <InlineButton label="[×]" accent={COLORS.danger} onPress={() => remove(index)} />
-              </box>
-            )
-          })
-        ) : (
+              ))
+            ) : (
+              <text
+                content={translateUi("Extraia um valor e use {{variavel}} no próximo request.")}
+                fg={COLORS.muted}
+              />
+            )}
+          </box>
+        </scrollbox>
+        <box
+          id={`http-chain-footer-${request.id}`}
+          flexShrink={0}
+          backgroundColor={COLORS.panelAlt}
+        >
           <text
-            content={translateUi("Nenhuma extração configurada.")}
-            style={{ fg: COLORS.muted }}
+            content={translateUi("Variáveis valem para esta execução; segredos ficam em memória.")}
+            fg={COLORS.muted}
           />
-        )}
-      </scrollbox>
-      <text
-        content={translateUi(
-          "Extrações secretas ficam somente em memória e nunca entram em relatórios.",
-        )}
-        style={{ fg: COLORS.muted }}
-      />
-    </box>
+          {focused ? (
+            <ShortcutText
+              content={
+                nav.editing
+                  ? "[Tab] Campos · [Esc/Enter] Selecionar · [Ctrl+D] Excluir"
+                  : "[J/K/↑/↓] Itens · [H/L/←/→] Campos · [Enter] Abrir"
+              }
+              style={{ fg: COLORS.muted }}
+            />
+          ) : null}
+        </box>
+      </box>
+      {nav.pickerOpen ? (
+        <HttpChainDependencyPicker
+          request={request}
+          requests={requests}
+          onChange={chooseDependency}
+          onClose={nav.closePicker}
+        />
+      ) : null}
+    </>
   )
 }

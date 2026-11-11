@@ -1,9 +1,13 @@
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
-import { useEffect, useState } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useEffect, useRef, useState } from "react"
 import type { PostmanCollectionFolder } from "../postman/sync"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogSection } from "./HttpDialogDetails"
+import { HttpPostmanDestinationRow } from "./HttpPostmanDestinationRow"
 
 type Destination = { filePath: string; label: string; folder?: { id: string; path: string } }
 
@@ -44,10 +48,24 @@ export function HttpPostmanSaveModal({
   onClose: () => void
 }) {
   const renderer = useRenderer()
+  const listRef = useRef<ScrollBoxRenderable | null>(null)
   const [selection, setSelection] = useState(0)
+  const compact = terminalHeight < 20
+  // biome-ignore lint/correctness/useExhaustiveDependencies: row heights change when the terminal is resized.
+  useEffect(() => {
+    listRef.current?.scrollChildIntoView(`http-postman-save-option-${selection}`)
+  }, [selection, compact])
+
   const options = destinations(files, folders)
-  const width = Math.min(68, Math.max(38, terminalWidth - 4))
-  const height = Math.min(22, Math.max(9, terminalHeight - 2))
+  const width = Math.max(1, Math.min(78, terminalWidth - 2))
+  const height = Math.max(
+    1,
+    Math.min(24, terminalHeight - 2, 9 + Math.max(2, options.length * (compact ? 1 : 2))),
+  )
+  const choose = () => {
+    const selected = options[selection]
+    if (selected) onSelect(selected.filePath, selected.folder)
+  }
   useEffect(() => {
     const timer = setTimeout(
       () => renderer.root.findDescendantById("http-postman-save-modal")?.focus(),
@@ -64,67 +82,63 @@ export function HttpPostmanSaveModal({
       return setSelection((index) => Math.max(0, index - 1))
     if (key.name === "down" || key.name === "j")
       return setSelection((index) => Math.min(options.length - 1, index + 1))
-    const selected = options[selection]
-    if (selected) onSelect(selected.filePath, selected.folder)
+    choose()
   })
   return (
-    <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: this backdrop blocks pointer input behind the modal. */}
-      <box
-        onMouseDown={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-        }}
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 140,
-        }}
+    <HttpDialog
+      id="http-postman-save-modal"
+      title="SALVAR NO POSTMAN"
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      zIndex={140}
+      actions={[
+        {
+          id: "http-postman-save-confirm",
+          label: "[Enter] Salvar",
+          disabled: !options.length,
+          onPress: choose,
+        },
+      ]}
+    >
+      <HttpDialogSection title="REQUEST">
+        <text
+          content={truncateDisplay(requestName, width - 7)}
+          wrapMode="none"
+          style={{ height: 1, fg: COLORS.text }}
+        />
+      </HttpDialogSection>
+      <text
+        content={`${translateUi("DESTINO")} · ${options.length}`}
+        style={{ height: 1, flexShrink: 0, marginTop: compact ? 0 : 1, fg: COLORS.muted }}
       />
-      <box
-        id="http-postman-save-modal"
-        focusable
-        style={{
-          position: "absolute",
-          left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-          top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
-          width,
-          height,
-          zIndex: 141,
-          border: true,
-          borderStyle: "rounded",
-          borderColor: COLORS.http,
-          backgroundColor: COLORS.panelRaised,
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <text content={translateUi("SALVAR NO POSTMAN")} style={{ fg: COLORS.http }} />
-        <text content={truncateDisplay(requestName, width - 4)} style={{ fg: COLORS.text }} />
-        {options.length ? (
-          <scrollbox scrollY style={{ flexGrow: 1 }}>
-            {options.map((option, index) => (
-              <InlineButton
-                key={`${option.filePath}:${option.folder?.id ?? "root"}`}
-                id={`http-postman-save-option-${index}`}
-                label={truncateDisplay(option.label, width - 7)}
-                accent={COLORS.http}
-                selected={selection === index}
-                onPress={() => onSelect(option.filePath, option.folder)}
-              />
-            ))}
-          </scrollbox>
-        ) : (
-          <text
-            content={translateUi("Crie ou importe uma coleção Postman antes de salvar.")}
-            style={{ fg: COLORS.warning, flexGrow: 1 }}
-          />
-        )}
-        <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
-      </box>
-    </>
+      {options.length ? (
+        <scrollbox ref={listRef} scrollY style={{ flexGrow: 1, minHeight: 0 }}>
+          {options.map((option, index) => (
+            <HttpPostmanDestinationRow
+              key={`${option.filePath}:${option.folder?.id ?? "root"}`}
+              index={index}
+              label={option.label}
+              folder={!!option.folder}
+              compact={compact}
+              selected={selection === index}
+              width={width}
+              onPress={() => onSelect(option.filePath, option.folder)}
+            />
+          ))}
+        </scrollbox>
+      ) : (
+        <text
+          content={translateUi("Crie ou importe uma coleção Postman antes de salvar.")}
+          style={{ fg: COLORS.warning, flexGrow: 1 }}
+        />
+      )}
+      <ShortcutText
+        content="[↑/↓] Navegar"
+        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+      />
+    </HttpDialog>
   )
 }

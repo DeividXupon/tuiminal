@@ -47,6 +47,12 @@ export function useHttpRequestEditing({
     },
     [dispatch],
   )
+  const changeDescription = useCallback(
+    (documentId: string, description: string) => {
+      dispatch({ type: "update-request", documentId, patch: { description } })
+    },
+    [dispatch],
+  )
 
   const changeAssertions = useCallback(
     (documentId: string, assertions: HttpAssertionDefinition[]) => {
@@ -171,7 +177,10 @@ export function useHttpRequestEditing({
             ...(activeDocument.request.chain ?? { extract: [] }),
             extract: [
               ...(activeDocument.request.chain?.extract ?? []),
-              createHttpExtractionDraft(documentId),
+              createHttpExtractionDraft(
+                documentId,
+                (activeDocument.request.chain?.extract ?? []).map((item) => item.name),
+              ),
             ],
           },
         },
@@ -183,6 +192,7 @@ export function useHttpRequestEditing({
     cycleMethod,
     changeMethod,
     changeName,
+    changeDescription,
     changeAssertions,
     changeChain,
     changeOptions,

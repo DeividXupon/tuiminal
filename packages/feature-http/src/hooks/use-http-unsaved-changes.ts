@@ -5,9 +5,10 @@ import { hasUnsavedHttpDocuments } from "../model/workspace"
 export function useHttpUnsavedChanges(
   documents: HttpDocumentState[],
   onChange: ((dirty: boolean) => void) | undefined,
+  environmentDirty = false,
 ) {
   useLayoutEffect(() => {
-    onChange?.(hasUnsavedHttpDocuments(documents))
+    onChange?.(environmentDirty || hasUnsavedHttpDocuments(documents))
     return () => onChange?.(false)
-  }, [documents, onChange])
+  }, [documents, onChange, environmentDirty])
 }

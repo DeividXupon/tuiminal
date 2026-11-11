@@ -1,20 +1,21 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
-import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
+import { useRef } from "react"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { HttpRequestTableNavigation } from "../hooks/use-http-request-tables"
 import type { HttpMultipartPart } from "../model/types"
 import { HttpMultipartRow } from "./HttpMultipartRow"
+import { HttpRequestTable } from "./HttpRequestTable"
 
 export function HttpMultipartEditor({
   requestId,
   parts,
   onChange,
   navigation,
+  dense = false,
 }: {
   requestId: string
+  dense?: boolean
   parts: HttpMultipartPart[]
   onChange: (parts: HttpMultipartPart[]) => void
   navigation: HttpRequestTableNavigation<HttpMultipartPart>
@@ -24,11 +25,6 @@ export function HttpMultipartEditor({
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const currentRows = useRef(rows)
   currentRows.current = rows
-  useEffect(() => {
-    if (navigation.active && navigation.mode !== "block") {
-      scrollRef.current?.scrollTo(Math.max(0, navigation.row - 2))
-    }
-  }, [navigation.active, navigation.mode, navigation.row])
   const patchPart = (id: string, patch: Partial<HttpMultipartPart>) => {
     if (id === navigation.draft.id) {
       if (patch.name !== undefined) navigation.onDraftInput("name", patch.name)
@@ -39,63 +35,32 @@ export function HttpMultipartEditor({
   }
 
   return (
-    <box
-      id={`http-key-value-section-${requestId}-multipart`}
-      focusable
-      style={{ ...focusedPanelBorder(navigation.active, COLORS.http), flexGrow: 1 }}
+    <HttpRequestTable
+      idPrefix={`${requestId}-multipart`}
+      title="MULTIPART"
+      count={parts.length}
+      enabledCount={parts.filter((part) => part.enabled).length}
+      navigation={navigation}
+      scrollRef={scrollRef}
+      dense={dense}
+      multipart
     >
-      <box
-        {...(navigation.active ? {} : { onMouseDown: navigation.onFocusBlock })}
-        style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
-      >
-        <text
-          content={translateUi("MULTIPART")}
-          style={{ flexGrow: 1, fg: navigation.active ? COLORS.http : COLORS.muted }}
-        />
-        {navigation.active && navigation.mode === "block" ? (
-          <InlineButton label="[Enter] Tabela" accent={COLORS.http} onPress={navigation.onEnter} />
-        ) : null}
-      </box>
-      <scrollbox
-        ref={scrollRef}
-        scrollY
-        viewportCulling
-        style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
-      >
-        {rows.length ? (
-          rows.map((part, index) => (
-            <HttpMultipartRow
-              key={part.id}
-              part={part}
-              index={index}
-              draft={part.id === navigation.draft.id}
-              navigation={navigation}
-              currentRows={currentRows}
-              onPatch={patchPart}
-              onDelete={(id) => onChange(parts.filter((candidate) => candidate.id !== id))}
-            />
-          ))
-        ) : (
-          <text content={translateUi("Nenhuma parte definida.")} style={{ fg: COLORS.muted }} />
-        )}
-      </scrollbox>
-      {navigation.active && navigation.mode === "table" ? (
-        <box style={{ height: 1, flexShrink: 0, overflow: "hidden" }}>
-          <ShortcutText
-            content={
-              navigation.column === 2
-                ? "[Enter] Excluir linha · [Space] Ativar/desativar"
-                : "[Space] Ativar/desativar · [←/→] Selecionar [×]"
-            }
-            style={{ fg: COLORS.muted }}
+      {rows.length ? (
+        rows.map((part, index) => (
+          <HttpMultipartRow
+            key={part.id}
+            part={part}
+            index={index}
+            draft={part.id === navigation.draft.id}
+            navigation={navigation}
+            currentRows={currentRows}
+            onPatch={patchPart}
+            onDelete={(id) => onChange(parts.filter((candidate) => candidate.id !== id))}
           />
-        </box>
+        ))
       ) : (
-        <text
-          content={translateUi("[T] texto · [F] arquivo relativo ao projeto")}
-          style={{ fg: COLORS.muted }}
-        />
+        <text content={translateUi("Nenhuma parte definida.")} style={{ fg: COLORS.muted }} />
       )}
-    </box>
+    </HttpRequestTable>
   )
 }

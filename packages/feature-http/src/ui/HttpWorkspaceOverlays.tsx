@@ -22,6 +22,7 @@ import { HttpHistoryDiffModal } from "./HttpHistoryDiffModal"
 import { HttpRequestFileModal } from "./HttpRequestFileModal"
 import { HttpWorkspaceOverlay } from "./HttpWorkspaceOverlay"
 import { HttpPostmanModal } from "./HttpPostmanModal"
+import { HttpPostmanWorkspaceCreateModal } from "./HttpPostmanWorkspaceCreateModal"
 import { HttpPostmanSaveModal } from "./HttpPostmanSaveModal"
 import type { PostmanCollectionFolder } from "../postman/sync"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
@@ -54,7 +55,7 @@ export function HttpWorkspaceOverlays({
   onCancelCloseDocument,
 }: {
   overlay: HttpWorkspaceOverlayKind
-  document: HttpDocumentState
+  document: HttpDocumentState | undefined
   activePane: HttpPane
   terminalWidth: number
   terminalHeight: number
@@ -79,10 +80,10 @@ export function HttpWorkspaceOverlays({
     back: () => void
   }
   postman: {
-    root: string
+    creatingWorkspace: boolean
     onWorkspaceSelected: (
       workspace: import("../postman/api").PostmanWorkspace,
-      result: import("../postman/workspace-sync").WorkspaceSyncResult,
+      result: import("../postman/live-session").LivePostmanSession,
     ) => Promise<void>
   }
   collectionRunner: {
@@ -97,7 +98,7 @@ export function HttpWorkspaceOverlays({
     cycleTarget: () => void
     cycleConcurrency: () => void
     approvePendingTls: () => void
-    cancel: () => void
+    cancel: () => boolean
     run: () => Promise<void>
   }
   environment: {
@@ -134,11 +135,14 @@ export function HttpWorkspaceOverlays({
   onConfirmCloseDocument: () => void
   onCancelCloseDocument: () => void
 }) {
+  const PostmanDialog = postman.creatingWorkspace
+    ? HttpPostmanWorkspaceCreateModal
+    : HttpPostmanModal
   return (
     <>
-      {overlay === "jump" || overlay === "help" ? (
+      {hasDocumentOverlay(document, overlay, ["jump", "help"]) ? (
         <HttpWorkspaceOverlay
-          overlay={overlay}
+          overlay={overlay as "jump" | "help"}
           document={document}
           activePane={activePane}
           terminalWidth={terminalWidth}
@@ -168,9 +172,9 @@ export function HttpWorkspaceOverlays({
           onClose={onClose}
         />
       ) : null}
-      {overlay === "request-move" || overlay === "request-delete" ? (
+      {hasDocumentOverlay(document, overlay, ["request-move", "request-delete"]) ? (
         <HttpRequestFileModal
-          mode={overlay}
+          mode={overlay as "request-move" | "request-delete"}
           requestName={document.request.name}
           currentPath={document.request.source.kind === "file" ? document.request.source.path : ""}
           targetPath={moveTarget}
@@ -193,8 +197,7 @@ export function HttpWorkspaceOverlays({
         />
       ) : null}
       {overlay === "postman-browser" ? (
-        <HttpPostmanModal
-          root={postman.root}
+        <PostmanDialog
           terminalWidth={terminalWidth}
           terminalHeight={terminalHeight}
           onWorkspaceSelected={postman.onWorkspaceSelected}
@@ -212,8 +215,7 @@ export function HttpWorkspaceOverlays({
           onApproveInsecureTls={collectionRunner.approvePendingTls}
           onRun={() => void collectionRunner.run()}
           onClose={() => {
-            collectionRunner.cancel()
-            onClose()
+            if (!collectionRunner.cancel()) onClose()
           }}
         />
       ) : null}
@@ -254,7 +256,7 @@ export function HttpWorkspaceOverlays({
           onClose={onCancelCloseDocument}
         />
       ) : null}
-      {externalConflict.pendingPostmanSaveId ? (
+      {document && externalConflict.pendingPostmanSaveId ? (
         <HttpPostmanSaveModal
           files={postmanSave.files}
           folders={postmanSave.folders}
@@ -269,4 +271,12 @@ export function HttpWorkspaceOverlays({
       ) : null}
     </>
   )
+}
+
+function hasDocumentOverlay(
+  document: HttpDocumentState | undefined,
+  overlay: HttpWorkspaceOverlayKind,
+  kinds: HttpWorkspaceOverlayKind[],
+): document is HttpDocumentState {
+  return Boolean(document && kinds.includes(overlay))
 }

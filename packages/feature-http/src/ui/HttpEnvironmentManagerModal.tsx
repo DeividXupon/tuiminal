@@ -1,24 +1,24 @@
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  HttpEnvironmentCreateForm,
-  HttpEnvironmentList,
   environmentFormRows,
+  HttpEnvironmentCreateForm,
   type HttpEnvironmentFormMode,
+  HttpEnvironmentList,
   type HttpEnvironmentRow,
 } from "./HttpEnvironmentManagerContent"
-import {
-  environmentFocusId,
-  environmentKeyIsHandled,
-  consumeEnvironmentKey,
-  type EnvironmentManagerProps,
-  type EnvironmentKeyEvent,
-  type EnvironmentScreen,
-} from "./http-environment-manager-keyboard"
 import {
   HttpEnvironmentDeleteConfirm,
   HttpEnvironmentManagerShell,
 } from "./HttpEnvironmentManagerShell"
+import {
+  consumeEnvironmentKey,
+  type EnvironmentKeyEvent,
+  type EnvironmentManagerProps,
+  type EnvironmentScreen,
+  environmentFocusId,
+  environmentKeyIsHandled,
+} from "./http-environment-manager-keyboard"
 
 export function HttpEnvironmentManagerModal({
   environments,
@@ -49,8 +49,14 @@ export function HttpEnvironmentManagerModal({
   const [column, setColumn] = useState<0 | 1>(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const width = Math.max(46, Math.min(86, terminalWidth - 4))
-  const height = Math.max(14, Math.min(28, terminalHeight - 2))
+  const width = Math.max(1, Math.min(86, terminalWidth - 2))
+  const contentHeight =
+    screen === "list"
+      ? 9 + environments.length
+      : screen === "delete"
+        ? 11 + (error ? 2 : 0)
+        : 12 + rows.length + (error ? 2 : 0)
+  const height = Math.max(1, Math.min(28, terminalHeight - 2, contentHeight))
   const choices = useMemo<Array<string | null>>(
     () => [null, ...environments.map((environment) => environment.name)],
     [environments],
@@ -66,7 +72,7 @@ export function HttpEnvironmentManagerModal({
     setOriginalName(null)
     setName("")
     setRows([{ id: crypto.randomUUID(), name: "", value: "" }])
-    setMode("overview")
+    setMode("name")
     setTarget("name")
     setRowIndex(0)
     setColumn(0)
@@ -81,7 +87,7 @@ export function HttpEnvironmentManagerModal({
       setOriginalName(environmentName)
       setName(environmentName)
       setRows(environmentFormRows(environment))
-      setMode("overview")
+      setMode("name")
       setTarget("name")
       setRowIndex(0)
       setColumn(0)
@@ -95,7 +101,7 @@ export function HttpEnvironmentManagerModal({
     setOriginalName(null)
     setName("Globals")
     setRows(environmentFormRows(globals))
-    setMode("overview")
+    setMode("cell")
     setTarget("table")
     setRowIndex(0)
     setColumn(0)
@@ -264,7 +270,11 @@ export function HttpEnvironmentManagerModal({
       if (event.name === "escape") return leaveCreateMode()
       switch (mode) {
         case "name":
-          if (event.name === "tab") enterTarget("table")
+          if (event.name === "tab") {
+            setMode("cell")
+            setRowIndex(0)
+            setColumn(0)
+          }
           return
         case "cell":
           if (event.name === "tab") nextCell(Boolean(event.shift))
@@ -280,16 +290,7 @@ export function HttpEnvironmentManagerModal({
           return
       }
     },
-    [
-      save,
-      enterTarget,
-      handleChooseKey,
-      handleFormCommonKey,
-      handleTableKey,
-      leaveCreateMode,
-      mode,
-      nextCell,
-    ],
+    [save, handleChooseKey, handleFormCommonKey, handleTableKey, leaveCreateMode, mode, nextCell],
   )
 
   const handleKey = useCallback(
@@ -313,14 +314,10 @@ export function HttpEnvironmentManagerModal({
       terminalHeight={terminalHeight}
       width={width}
       height={height}
-      onClose={
-        screen === "list"
-          ? onClose
-          : screen === "delete"
-            ? () => setScreen("list")
-            : leaveCreateMode
+      onClose={screen === "list" ? onClose : () => setScreen("list")}
+      closeLabel={
+        screen === "list" ? "[Esc] Fechar" : screen === "delete" ? "[Esc] Voltar" : "Voltar"
       }
-      closeLabel={screen === "list" ? "[Esc] Fechar" : "[Esc] Voltar"}
     >
       {screen === "list" ? (
         <HttpEnvironmentList
@@ -336,6 +333,7 @@ export function HttpEnvironmentManagerModal({
         />
       ) : screen === "delete" ? (
         <HttpEnvironmentDeleteConfirm
+          width={width - 4}
           name={originalName ?? ""}
           error={error}
           busy={busy}

@@ -1,33 +1,44 @@
 import type { TextareaRenderable } from "@opentui/core"
+import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { useEffect, useMemo, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { importCurl } from "../importing/curl"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
+
+function curlPreview(command: string) {
+  if (!command.trim())
+    return { text: "Cole um comando cURL para visualizar o preview.", error: false, fixed: true }
+  try {
+    const request = importCurl(command, "http-curl-preview")
+    return {
+      text: `${request.method} ${request.url}\n${request.headers.length} headers · ${request.body.kind}`,
+      error: false,
+      fixed: false,
+    }
+  } catch (error) {
+    return {
+      text: error instanceof Error ? error.message : String(error),
+      error: true,
+      fixed: true,
+    }
+  }
+}
 
 function CurlImportContent({
   command,
   onCommandChange,
   onApply,
+  preview,
+  compact,
 }: {
   command: string
   onCommandChange: (command: string) => void
   onApply: () => void
+  preview: ReturnType<typeof curlPreview>
+  compact: boolean
 }) {
   const editorRef = useRef<TextareaRenderable | null>(null)
-  const preview = useMemo(() => {
-    if (!command.trim())
-      return { text: "Cole um comando cURL para visualizar o preview.", error: false }
-    try {
-      const request = importCurl(command, "http-curl-preview")
-      return {
-        text: `${request.method} ${request.url} · ${request.headers.length} headers · ${request.body.kind}`,
-        error: false,
-      }
-    } catch (error) {
-      return { text: error instanceof Error ? error.message : String(error), error: true }
-    }
-  }, [command])
   useEffect(() => {
     const timer = setTimeout(() => editorRef.current?.focus(), 0)
     return () => clearTimeout(timer)
@@ -35,6 +46,7 @@ function CurlImportContent({
 
   return (
     <>
+      <text content="cURL" style={{ height: 1, flexShrink: 0, fg: COLORS.muted }} />
       <textarea
         ref={editorRef}
         id="http-curl-import-editor"
@@ -43,8 +55,8 @@ function CurlImportContent({
         onContentChange={() => onCommandChange(editorRef.current?.plainText ?? "")}
         onSubmit={onApply}
         style={{
-          height: 6,
-          flexShrink: 0,
+          flexGrow: 1,
+          minHeight: compact ? 1 : 2,
           backgroundColor: COLORS.canvas,
           focusedBackgroundColor: COLORS.canvas,
           textColor: COLORS.text,
@@ -53,17 +65,20 @@ function CurlImportContent({
           wrapMode: "word",
         }}
       />
-      <text content={translateUi("PREVIEW")} style={{ fg: COLORS.muted }} />
-      <text
-        content={translateUi(preview.text)}
-        style={{ flexGrow: 1, fg: preview.error ? COLORS.danger : COLORS.text }}
-      />
-      <InlineButton
-        label="[Ctrl+Enter] Importar em nova tab"
-        accent={COLORS.http}
-        disabled={preview.error || !command.trim()}
-        onPress={onApply}
-      />
+      <box style={{ flexShrink: 0, marginTop: compact ? 0 : 1 }}>
+        <HttpDialogSection title="PREVIEW" accent={preview.error ? COLORS.danger : COLORS.http}>
+          <text
+            id="http-curl-import-preview"
+            content={preview.fixed ? translateUi(preview.text) : preview.text}
+            wrapMode="word"
+            style={{
+              maxHeight: compact ? 1 : 3,
+              flexShrink: 0,
+              fg: preview.error ? COLORS.danger : COLORS.text,
+            }}
+          />
+        </HttpDialogSection>
+      </box>
     </>
   )
 }
@@ -89,51 +104,61 @@ export function HttpCurlModal({
   onCopy: () => void
   onClose: () => void
 }) {
-  const width = Math.min(82, Math.max(40, terminalWidth - 4))
-  const height = Math.min(16, Math.max(10, terminalHeight - 4))
+  const width = Math.max(1, Math.min(86, terminalWidth - 2))
+  const preview = useMemo(() => curlPreview(command), [command])
+  const contentRows = (mode === "curl-import" ? command : curl)
+    .split("\n")
+    .reduce(
+      (rows, line) => rows + Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, width - 5))),
+      0,
+    )
+  const height = Math.max(
+    1,
+    Math.min(
+      22,
+      terminalHeight - 2,
+      mode === "curl-import" ? 12 + Math.max(2, contentRows) : 8 + contentRows,
+    ),
+  )
   return (
-    <box
+    <HttpDialog
       id="http-curl-modal"
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(1, Math.floor((terminalHeight - height) / 2) - 1),
-        width,
-        height,
-        zIndex: 100,
-        ...panelBorder(COLORS.http),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      title={mode === "curl-import" ? "IMPORTAR cURL" : "EXPORTAR cURL"}
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      actions={
+        mode === "curl-import"
+          ? [
+              {
+                id: "http-curl-import-apply",
+                label: "[Ctrl+Enter] Importar em nova tab",
+                shortLabel: "[Ctrl+Enter] Importar",
+                disabled: preview.error || !command.trim(),
+                onPress: () => onApplyImport(command),
+              },
+            ]
+          : [{ id: "http-curl-export-copy", label: "[C] Copiar cURL redigido", onPress: onCopy }]
+      }
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text
-          content={translateUi(mode === "curl-import" ? "IMPORTAR cURL" : "EXPORTAR cURL")}
-          style={{ fg: COLORS.http }}
-        />
-        <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
-      </box>
       {mode === "curl-import" ? (
         <CurlImportContent
           command={command}
           onCommandChange={onCommandChange}
           onApply={() => onApplyImport(command)}
+          preview={preview}
+          compact={terminalHeight < 18}
         />
       ) : (
         <>
-          <text
-            content={translateUi("SEGREDOS REDIGIDOS POR PADRÃO")}
-            style={{ fg: COLORS.warning }}
-          />
+          <HttpDialogNotice text="SEGREDOS REDIGIDOS POR PADRÃO" />
           <scrollbox scrollX scrollY style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}>
             <text content={curl} style={{ fg: COLORS.text }} />
           </scrollbox>
-          <InlineButton label="[C] Copiar cURL redigido" accent={COLORS.http} onPress={onCopy} />
         </>
       )}
-    </box>
+    </HttpDialog>
   )
 }

@@ -1,42 +1,57 @@
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { usePostmanRequestCounts } from "../hooks/use-postman-request-counts"
 import { loadPostmanAccount } from "../postman/account"
 import { PostmanApi, type PostmanEnvironment, type PostmanWorkspace } from "../postman/api"
-import { postmanDisplayName } from "../postman/display"
-import { syncPostmanWorkspace, type WorkspaceSyncResult } from "../postman/workspace-sync"
+import { LivePostmanSession } from "../postman/live-session"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
+import { HttpPostmanWorkspaceRow } from "./HttpPostmanWorkspaceRow"
 
 const ARROWS = new Set(["up", "down", "j", "k"])
 const ENTER = new Set(["enter", "return"])
 
 export function HttpPostmanModal({
-  root,
   terminalWidth,
   terminalHeight,
   onWorkspaceSelected,
   onClose,
 }: {
-  root: string
   terminalWidth: number
   terminalHeight: number
-  onWorkspaceSelected: (workspace: PostmanWorkspace, result: WorkspaceSyncResult) => Promise<void>
+  onWorkspaceSelected: (workspace: PostmanWorkspace, result: LivePostmanSession) => Promise<void>
   onClose: () => void
 }) {
   const renderer = useRenderer()
+  const listRef = useRef<ScrollBoxRenderable | null>(null)
   const apiRef = useRef<PostmanApi | null>(null)
+  const loadingSession = useRef<LivePostmanSession | null>(null)
   const [workspaces, setWorkspaces] = useState<PostmanWorkspace[]>([])
   const [selection, setSelection] = useState(0)
+  useEffect(() => {
+    listRef.current?.scrollTo(Math.max(0, selection - 2))
+  }, [selection])
+
   const [environments, setEnvironments] = useState<PostmanEnvironment[]>([])
   const [environmentIndex, setEnvironmentIndex] = useState(0)
   const [busy, setBusy] = useState(true)
+  const requestCounts = usePostmanRequestCounts(apiRef, workspaces, busy)
   const [progress, setProgress] = useState("")
   const [disconnected, setDisconnected] = useState(false)
   const [error, setError] = useState("")
   const [failures, setFailures] = useState<string[]>([])
-  const width = Math.min(84, Math.max(42, terminalWidth - 4))
-  const height = Math.min(27, Math.max(13, terminalHeight - 2))
+  const width = Math.max(1, Math.min(84, terminalWidth - 2))
+  const contentHeight =
+    (terminalHeight < 20 ? 7 : 10) + Math.max(1, failures.length || workspaces.length)
+  const height = Math.max(
+    1,
+    Math.min(27, terminalHeight - 2, contentHeight + Number(Boolean(error))),
+  )
 
   useEffect(() => {
     let disposed = false
@@ -59,6 +74,8 @@ export function HttpPostmanModal({
     return () => {
       disposed = true
       apiRef.current = null
+      loadingSession.current?.dispose()
+      loadingSession.current = null
     }
   }, [])
 
@@ -93,31 +110,41 @@ export function HttpPostmanModal({
   const choose = useCallback(
     async (workspace: PostmanWorkspace) => {
       const api = apiRef.current
-      if (!api || busy) return
+      if (!api || busy || loadingSession.current) return
       setBusy(true)
       setError("")
       setFailures([])
       setProgress("Carregando coleções…")
       try {
-        const result = await syncPostmanWorkspace(
-          root,
+        const result = new LivePostmanSession(
           api,
           workspace.id,
-          (done, total) => setProgress(`Coleções ${done}/${total}…`),
           environments[environmentIndex - 1]?.uid ?? environments[environmentIndex - 1]?.id,
         )
-        if (apiRef.current !== api) return
+        loadingSession.current = result
+        await result.load((done, total) => {
+          if (apiRef.current === api) setProgress(`Coleções ${done}/${total}…`)
+        })
+        if (apiRef.current !== api) {
+          result.dispose()
+          return
+        }
         await onWorkspaceSelected(workspace, result)
+        loadingSession.current = null
         if (result.errors.length) setFailures(result.errors)
         else onClose()
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause))
       } finally {
-        setBusy(false)
-        setProgress("")
+        loadingSession.current?.dispose()
+        loadingSession.current = null
+        if (apiRef.current === api) {
+          setBusy(false)
+          setProgress("")
+        }
       }
     },
-    [busy, environmentIndex, environments, onClose, onWorkspaceSelected, root],
+    [busy, environmentIndex, environments, onClose, onWorkspaceSelected],
   )
 
   useKeyboard((key) => {
@@ -145,137 +172,127 @@ export function HttpPostmanModal({
     }
   })
 
+  const footerActions = () => {
+    if (failures.length)
+      return [{ id: "http-postman-done", label: "[Enter] Concluir", onPress: onClose }]
+    if (busy || disconnected || !workspaces.length) return []
+    return [
+      {
+        id: "http-postman-open",
+        label: "[Enter] Abrir workspace",
+        onPress: () => {
+          const workspace = workspaces[selection]
+          if (workspace) void choose(workspace)
+        },
+      },
+    ]
+  }
   return (
-    <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the backdrop blocks workspace pointer input. */}
-      <box
-        id="http-postman-backdrop"
-        onMouseDown={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-        }}
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 124,
-        }}
-      />
-      <box
-        id="http-postman-modal"
-        focusable
-        style={{
-          position: "absolute",
-          left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-          top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
-          width,
-          height,
-          zIndex: 125,
-          border: true,
-          borderStyle: "rounded",
-          borderColor: COLORS.http,
-          backgroundColor: COLORS.panelRaised,
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <box
-          style={{
-            height: 1,
-            flexShrink: 0,
-            flexDirection: "row",
-            justifyContent: "space-between",
-          }}
-        >
-          <text content={translateUi("WORKSPACES POSTMAN")} style={{ fg: COLORS.http }} />
-          <InlineButton
-            id="http-postman-close"
-            label="[Esc] Fechar"
-            accent={COLORS.http}
-            disabled={busy}
-            onPress={onClose}
-          />
-        </box>
-        {busy ? (
+    <HttpDialog
+      fitContent={busy || disconnected}
+      id="http-postman-modal"
+      title="WORKSPACES POSTMAN"
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      zIndex={140}
+      busy={busy}
+      closeId="http-postman-close"
+      actions={footerActions()}
+    >
+      {busy ? (
+        <HttpDialogSection title="Postman">
           <text
             content={translateUi(progress || "Carregando Postman...")}
             style={{ fg: COLORS.muted }}
           />
-        ) : null}
-        {disconnected ? (
+        </HttpDialogSection>
+      ) : null}
+      {disconnected ? (
+        <HttpDialogSection title="Postman">
+          <HttpDialogNotice text="Conecte a conta: tuiminal postman login" />
+        </HttpDialogSection>
+      ) : null}
+      {error ? (
+        <text
+          content={truncateDisplay(translateUi(error), width - 4)}
+          style={{ fg: COLORS.danger }}
+        />
+      ) : null}
+      {failures.length ? (
+        <>
           <text
-            content={translateUi("Conecte a conta: tuiminal postman login")}
+            content={translateUi(`${failures.length} coleções não puderam ser carregadas.`)}
             style={{ fg: COLORS.warning }}
           />
-        ) : null}
-        {error ? (
-          <text
-            content={truncateDisplay(translateUi(error), width - 4)}
-            style={{ fg: COLORS.danger }}
-          />
-        ) : null}
-        {failures.length ? (
-          <>
-            <text
-              content={translateUi(`${failures.length} coleções não puderam ser carregadas.`)}
-              style={{ fg: COLORS.warning }}
-            />
-            <scrollbox scrollY style={{ flexGrow: 1 }}>
-              {failures.map((failure) => (
-                <text
-                  key={failure}
-                  content={truncateDisplay(translateUi(failure), width - 4)}
-                  style={{ fg: COLORS.warning }}
-                />
-              ))}
-            </scrollbox>
-            <InlineButton
-              id="http-postman-done"
-              label="[Enter] Concluir"
-              accent={COLORS.http}
-              onPress={onClose}
-            />
-          </>
-        ) : !busy && !disconnected ? (
-          <>
-            {workspaces.length === 0 ? (
+          <scrollbox scrollY style={{ flexGrow: 1 }}>
+            {failures.map((failure) => (
               <text
-                content={translateUi("Nenhum workspace acessível.")}
-                style={{ fg: COLORS.muted }}
+                key={failure}
+                content={truncateDisplay(translateUi(failure), width - 4)}
+                style={{ fg: COLORS.warning }}
               />
-            ) : null}
-            <scrollbox scrollY style={{ flexGrow: 1 }}>
-              {workspaces.map((workspace, index) => (
-                <InlineButton
-                  key={workspace.id}
-                  id={`http-postman-workspace-${workspace.id}`}
-                  label={truncateDisplay(
-                    `${postmanDisplayName(workspace.name)} · ${postmanDisplayName(workspace.visibility ?? "")}`,
-                    width - 6,
-                  )}
-                  accent={COLORS.http}
-                  active={index === selection}
-                  onPress={() => void choose(workspace)}
-                />
-              ))}
-            </scrollbox>
+            ))}
+          </scrollbox>
+        </>
+      ) : !busy && !disconnected ? (
+        <>
+          <text
+            content={`${translateUi("WORKSPACES POSTMAN")} · ${workspaces.length}`}
+            style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+          />
+          {workspaces.length === 0 ? (
+            <text
+              content={translateUi("Nenhum workspace acessível.")}
+              style={{ fg: COLORS.muted }}
+            />
+          ) : null}
+          <scrollbox
+            ref={listRef}
+            scrollY
+            style={{ flexGrow: 1, minHeight: 0, overflow: "hidden" }}
+          >
+            {workspaces.map((workspace, index) => (
+              <HttpPostmanWorkspaceRow
+                key={workspace.id}
+                workspace={workspace}
+                count={requestCounts[workspace.id]}
+                selected={index === selection}
+                width={Math.min(width, terminalWidth - 2) - 5}
+                onPress={() => void choose(workspace)}
+              />
+            ))}
+          </scrollbox>
+          <box
+            style={{
+              height: 1,
+              flexShrink: 0,
+              flexDirection: "row",
+              marginTop: terminalHeight < 20 ? 0 : 1,
+            }}
+          >
             <InlineButton
               id="http-postman-environment"
-              label={`[E] ${environments[environmentIndex - 1]?.name ?? translateUi("Sem ambiente")}`}
+              label="[E] Ambiente"
               accent={COLORS.http}
               onPress={() =>
                 setEnvironmentIndex((index) => (index + 1) % (environments.length + 1))
               }
             />
             <text
-              content={translateUi("[↑/↓] escolher · [Enter] abrir coleções")}
-              style={{ fg: COLORS.muted }}
+              content={truncateDisplay(
+                environments[environmentIndex - 1]?.name ?? translateUi("Sem ambiente"),
+                Math.max(1, width - 24),
+              )}
+              wrapMode="none"
+              style={{ height: 1, fg: COLORS.text, flexGrow: 1, minWidth: 0 }}
             />
-          </>
-        ) : null}
-      </box>
-    </>
+          </box>
+          <ShortcutText content="[↑/↓] Navegar" style={{ fg: COLORS.muted, flexShrink: 0 }} />
+        </>
+      ) : null}
+    </HttpDialog>
   )
 }

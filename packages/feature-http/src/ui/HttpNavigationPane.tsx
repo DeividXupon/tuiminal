@@ -1,17 +1,21 @@
+import type { HttpCollectionSettingsTarget } from "../model/collection-settings"
+import { HttpBoxSelection } from "./HttpBoxSelection"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
 import { Button } from "@tuiparts/react/button"
+import { useRenderer } from "@opentui/react"
 import { useEffect, useRef, useState } from "react"
 import { COLORS, focusedPanelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpNavigationView, HttpProjectRequestItem, HttpWorkspaceState } from "../model/types"
-import type { HttpHistoryEntry } from "../model/types"
 import { HttpCollectionTree } from "./HttpCollectionTree"
-import type { HttpCollectionTreeRow } from "../model/collection-tree"
+import type { HttpCollectionTreeRow, HttpCollectionFile } from "../model/collection-tree"
 import type { HttpCollectionAction } from "../hooks/use-http-collection-management"
+import type { HttpCollectionRunTarget } from "../hooks/use-http-collection-runner"
 import type { HttpKey } from "../model/keyboard-types"
-import { HttpHistoryList } from "./HttpHistoryList"
+import { HttpEnvironmentNavigation } from "./HttpEnvironmentNavigation"
+import type { HttpEnvironmentTabs } from "../hooks/use-http-environment-tabs"
 import type { HttpSourceMode } from "../model/source-mode"
 import type { PostmanCollectionFolder } from "../postman/sync"
 import type { PostmanWorkspace } from "../postman/api"
@@ -40,11 +44,10 @@ export function HttpNavigationPane({
   onOpenPostman,
   onRunCollection,
   onManageCollection,
+  onCollectionSettings,
   registerCollectionSearch,
   collectionTreeKeyRef,
-  onToggleHistory,
-  onCompareHistory,
-  onOpenHistory,
+  environments,
 }: {
   state: HttpWorkspaceState
   visible: boolean
@@ -57,7 +60,7 @@ export function HttpNavigationPane({
   onFocus: () => void
   projectRequests: HttpProjectRequestItem[]
   projectDirectories: string[]
-  projectFiles: string[]
+  projectFiles: HttpCollectionFile[]
   postmanFolders: PostmanCollectionFolder[]
   postmanWorkspace: PostmanWorkspace | null
   onPostmanWorkspaceChange: (workspace: PostmanWorkspace) => void
@@ -65,32 +68,35 @@ export function HttpNavigationPane({
   sourceMode: HttpSourceMode
   onOpenProjectRequest: (request: HttpProjectRequestItem) => void
   onImportCollection: () => void
-  onOpenPostman: () => void
-  onRunCollection: () => void
+  onOpenPostman: (action?: "create-workspace") => void
+  onRunCollection: (collection: HttpCollectionRunTarget) => void
+  onCollectionSettings: (target: HttpCollectionSettingsTarget) => void
   onManageCollection: (
     action: HttpCollectionAction,
     row: HttpCollectionTreeRow | null,
     name?: string,
-  ) => Promise<boolean>
+  ) => Promise<boolean | string>
   registerCollectionSearch: (input: InputRenderable | null) => void
   collectionTreeKeyRef: { current: ((key: HttpKey) => boolean) | null }
-  onToggleHistory: (entryId: string) => void
-  onCompareHistory: () => void
-  onOpenHistory: (entry: HttpHistoryEntry) => void
+  environments: HttpEnvironmentTabs
 }) {
   const contentWidth = Math.max(8, position.width - 4)
   const compactTabs = contentWidth < 28
   const collectionRef = useRef<ButtonRenderable | null>(null)
-  const historyRef = useRef<ButtonRenderable | null>(null)
+  const environmentsRef = useRef<ButtonRenderable | null>(null)
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
-  const [collectionSelection, setCollectionSelection] = useState<string | null>(null)
+  const [collectionSelection, setCollectionSelection] = useState<string | null>(
+    `workspace:${sourceMode}`,
+  )
+  const renderer = useRenderer()
   useEffect(() => {
-    if (!visible || !focused || state.overlay) return
-    const timer = setTimeout(() =>
-      (state.navigationView === "collection" ? collectionRef.current : historyRef.current)?.focus(),
-    )
+    if (!visible || !focused || state.overlay || state.navigationView === "environments") return
+    const timer = setTimeout(() => {
+      if (renderer.root.findDescendantById("http-collection-menu")) return
+      collectionRef.current?.focus()
+    })
     return () => clearTimeout(timer)
-  }, [focused, state.navigationView, state.overlay, visible])
+  }, [focused, state.navigationView, state.overlay, visible, renderer])
   return (
     <box
       id="http-navigation-pane"
@@ -106,6 +112,7 @@ export function HttpNavigationPane({
         overflow: "hidden",
       }}
     >
+      <HttpBoxSelection id="http-navigation-pane" />
       <box
         style={{
           height: 1,
@@ -126,14 +133,14 @@ export function HttpNavigationPane({
           }}
         />
         <InlineButton
-          id="http-navigation-history"
-          buttonRef={historyRef}
-          label={compactTabs ? "[Y]" : "[Y] Histórico"}
+          id="http-navigation-environments"
+          buttonRef={environmentsRef}
+          label={compactTabs ? "[E]" : "[E] Ambientes"}
           accent={COLORS.http}
-          active={state.navigationView === "history"}
+          active={state.navigationView === "environments"}
           onPress={() => {
             onFocus()
-            onViewChange("history")
+            onViewChange("environments")
           }}
         />
       </box>
@@ -146,18 +153,9 @@ export function HttpNavigationPane({
       >
         {state.navigationView === "collection" ? (
           <>
-            <text
-              id="http-collection-workspace-heading"
-              content={truncateDisplay(
-                sourceMode === "postman"
-                  ? (postmanWorkspace?.name ?? translateUi("WORKSPACE POSTMAN"))
-                  : translateUi("PROJETO"),
-                contentWidth,
-              )}
-              style={{ fg: sourceMode === "postman" ? COLORS.text : COLORS.muted }}
-            />
             <HttpCollectionTree
               state={state}
+              active={visible && focused && !state.overlay}
               sourceMode={sourceMode}
               postmanWorkspace={postmanWorkspace}
               onPostmanWorkspaceChange={onPostmanWorkspaceChange}
@@ -178,8 +176,11 @@ export function HttpNavigationPane({
               onPostman={onOpenPostman}
               onRun={onRunCollection}
               onManage={onManageCollection}
+              onSettings={onCollectionSettings}
             />
-            <text content={translateUi("SCRATCH")} style={{ fg: COLORS.muted }} />
+            {state.documents.some((document) => document.request.source.kind === "scratch") ? (
+              <text content={translateUi("SCRATCH")} style={{ fg: COLORS.muted }} />
+            ) : null}
             {state.documents
               .filter((document) => document.request.source.kind === "scratch")
               .map((document) => (
@@ -216,31 +217,14 @@ export function HttpNavigationPane({
                 </Button>
               ))}
           </>
-        ) : state.history.length ? (
-          <HttpHistoryList
-            state={state}
-            contentWidth={contentWidth}
-            projectRequests={projectRequests}
-            onToggle={onToggleHistory}
-            onOpen={onOpenHistory}
-          />
         ) : (
-          <text
-            content={truncateDisplay(translateUi("Nenhuma execução nesta sessão."), contentWidth)}
-            style={{ fg: COLORS.muted }}
+          <HttpEnvironmentNavigation
+            environments={environments}
+            width={contentWidth}
+            active={visible && focused && !state.overlay}
           />
         )}
       </scrollbox>
-      {state.navigationView === "history" && state.history.length ? (
-        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-          <InlineButton
-            label={`Comparar ${state.historySelection.length}/2`}
-            accent={COLORS.http}
-            disabled={state.historySelection.length !== 2}
-            onPress={onCompareHistory}
-          />
-        </box>
-      ) : null}
       {overlay ? (
         <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
       ) : null}

@@ -110,6 +110,9 @@ describe("HTTP download UI ownership", () => {
     act(() => {
       pending = Array.from({ length: 3 }, () => h.api.downloadComplete("first"))
     })
+    await act(async () => {
+      await Bun.sleep(0)
+    })
     expect(h.requests).toHaveLength(1)
     await act(async () => {
       h.requests[0]?.finish()
@@ -129,6 +132,9 @@ describe("HTTP download UI ownership", () => {
       act(() => {
         pending = retained("first")
       })
+      await act(async () => {
+        await Bun.sleep(0)
+      })
       act(() => tui?.renderer.destroy())
       tui = undefined
       expect(h.requests[0]?.signal.aborted).toBe(true)
@@ -138,6 +144,9 @@ describe("HTTP download UI ownership", () => {
         else h.requests[0]?.fail(new Error("obsolete failure"))
         await pending
         await retained("second")
+      })
+      await act(async () => {
+        await Bun.sleep(0)
       })
       expect(h.requests).toHaveLength(1)
       expect(h.notices).toEqual([])
@@ -150,6 +159,9 @@ describe("HTTP download UI ownership", () => {
     let pending: Promise<void> | undefined
     act(() => {
       pending = h.api.downloadComplete("first")
+    })
+    await act(async () => {
+      await Bun.sleep(0)
     })
     h.replace([h.second, h.first])
     expect(h.requests[0]?.signal.aborted).toBe(false)
@@ -171,12 +183,18 @@ describe("HTTP download UI ownership", () => {
       pending = h.api.downloadComplete("first")
     })
     await act(async () => {
+      await Bun.sleep(0)
+    })
+    await act(async () => {
       h.requests[0]?.fail(new Error("synthetic failure"))
       await pending
     })
     expect(h.api.downloadingDocumentId).toBeNull()
     act(() => {
       pending = h.api.downloadComplete("second")
+    })
+    await act(async () => {
+      await Bun.sleep(0)
     })
     expect(h.requests).toHaveLength(2)
     await act(async () => {

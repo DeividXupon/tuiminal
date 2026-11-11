@@ -6,13 +6,14 @@ import type { HttpProjectRequestItem } from "../model/types"
 import { isOpaqueHttpRequest } from "../model/request-capabilities"
 import {
   createScratchRequest,
-  HTTP_DOCUMENT_LIMIT,
   httpDocumentNeedsDiscardConfirmation,
   type HttpWorkspaceAction,
 } from "../model/workspace"
 
 export function useHttpDocuments({
   documents,
+  replacingDocumentId,
+  cancelReplacement,
   documentRefs,
   abortControllers,
   documentCounter,
@@ -22,6 +23,8 @@ export function useHttpDocuments({
   dispatch,
 }: {
   documents: HttpDocumentState[]
+  replacingDocumentId: string | null
+  cancelReplacement: () => void
   documentRefs: RefObject<Map<string, HttpDocumentRefs>>
   abortControllers: RefObject<Map<string, AbortController>>
   documentCounter: RefObject<number>
@@ -32,11 +35,11 @@ export function useHttpDocuments({
 }) {
   const [pendingCloseId, setPendingCloseId] = useState<string | null>(null)
   const selectDocument = useCallback(
-    (documentId: string) => {
+    (documentId: string, focusUrl = true) => {
       blurDocumentControls()
       dispatch({ type: "select-document", documentId })
-      dispatch({ type: "select-pane", pane: "url" })
-      setTimeout(() => urlRef.current?.focus(), 0)
+      dispatch({ type: "select-pane", pane: focusUrl ? "url" : "request" })
+      if (focusUrl) setTimeout(() => urlRef.current?.focus(), 0)
     },
     [blurDocumentControls, dispatch, urlRef],
   )
@@ -57,15 +60,20 @@ export function useHttpDocuments({
     [blurDocumentControls, dispatch, refsFor, urlRef],
   )
   const addDocument = useCallback(() => {
-    if (documents.length >= HTTP_DOCUMENT_LIMIT) return
-    documentCounter.current += 1
+    do {
+      documentCounter.current += 1
+    } while (
+      documents.some(
+        (document) => document.request.id === `http-scratch-${documentCounter.current}`,
+      )
+    )
     dispatch({
       type: "add-document",
       request: createScratchRequest(`http-scratch-${documentCounter.current}`),
     })
     dispatch({ type: "select-pane", pane: "url" })
     setTimeout(() => urlRef.current?.focus(), 0)
-  }, [documentCounter, dispatch, documents.length, urlRef])
+  }, [documents, documentCounter, dispatch, urlRef])
   const cancelDocument = useCallback(
     (documentId: string) => {
       const document = documents.find((candidate) => candidate.request.id === documentId)
@@ -87,7 +95,7 @@ export function useHttpDocuments({
   const requestCloseDocument = useCallback(
     (documentId: string) => {
       const document = documents.find((candidate) => candidate.request.id === documentId)
-      if (!document || documents.length === 1) return
+      if (!document) return
       if (httpDocumentNeedsDiscardConfirmation(documents, documentId)) {
         setPendingCloseId(documentId)
         dispatch({ type: "open-overlay", overlay: "discard-document" })
@@ -98,10 +106,14 @@ export function useHttpDocuments({
     [closeDocument, dispatch, documents],
   )
   const confirmCloseDocument = useCallback(() => {
-    if (pendingCloseId) closeDocument(pendingCloseId)
+    const closingId = pendingCloseId ?? replacingDocumentId
+    if (closingId) closeDocument(closingId)
     setPendingCloseId(null)
-  }, [closeDocument, pendingCloseId])
-  const cancelPendingClose = useCallback(() => setPendingCloseId(null), [])
+  }, [closeDocument, pendingCloseId, replacingDocumentId])
+  const cancelPendingClose = useCallback(() => {
+    setPendingCloseId(null)
+    cancelReplacement()
+  }, [cancelReplacement])
   return {
     selectDocument,
     openProjectRequest,
@@ -111,6 +123,8 @@ export function useHttpDocuments({
     requestCloseDocument,
     confirmCloseDocument,
     cancelPendingClose,
-    pendingCloseDocument: documents.find((document) => document.request.id === pendingCloseId),
+    pendingCloseDocument: documents.find(
+      (document) => document.request.id === (pendingCloseId ?? replacingDocumentId),
+    ),
   }
 }

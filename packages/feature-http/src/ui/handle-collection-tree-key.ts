@@ -7,6 +7,7 @@ export function handleHttpCollectionTreeKey(
   focusedId: string,
   keyRef: { current: ((key: HttpKey) => boolean) | null },
 ) {
+  if (/^http-collection-(menu|action-)/.test(focusedId)) return false
   if (state.overlay !== null || state.activePane !== "navigation") return false
   if (state.navigationView !== "collection") return false
   if (focusedId === "http-collection-search" || focusedId === "http-collection-name-input") {

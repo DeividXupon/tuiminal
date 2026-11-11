@@ -27,10 +27,10 @@ reuse shared infrastructure/minimal app contracts, not prior feature internals.
 - Imports read bounded sources, preview, revalidate digest/path/destination and
   create exclusively under global imported/. Never overwrite source/project files,
   follow unsafe destination symlinks, fetch external refs or expose literal secrets.
-- Postman is an explicitly linked local copy, not atomic live synchronization.
-  Keep API keys in the credential store and fetched secrets out of project/.http
-  files. Validate sidecar identity/conflicts, preserve unique block IDs and remote
-  associations, and report local success/remote failure separately.
+- Interactive Postman uses an owned API-backed memory session, never collection
+  files or sidecars. Confirm writes before marking drafts saved; preserve concurrent
+  edits and failed saves. CLI pull/push retains protected copies and sidecars.
+  Keys use OS storage by default; plaintext requires explicit CLI consent.
 
 ## Execution and privacy
 

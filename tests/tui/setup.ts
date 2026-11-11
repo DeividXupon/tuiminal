@@ -1,6 +1,17 @@
 // Reuse the global fixture: cached services and TUI mounts must see the same
 // launch directory both with plain `bun test` and the dedicated test:tui command.
 import "../setup"
+import { beforeEach } from "bun:test"
+import { rmSync } from "node:fs"
+import { join } from "node:path"
+import { HTTP_LAST_WORKSPACE_FILE } from "../../packages/feature-http/src/storage/last-workspace"
+
+beforeEach(() => {
+  // Startup preferences survive mounts within a test, but never leak to another test.
+  const root = process.env.TUIMINAL_HTTP_HOME
+  if (!root) throw new Error("Missing isolated HTTP home")
+  rmSync(join(root, HTTP_LAST_WORKSPACE_FILE), { force: true })
+})
 
 // React's optional User Timing tracks recursively serialize component props,
 // including every byte of captured HTTP bodies. That browser-profiler telemetry

@@ -1,3 +1,5 @@
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpDocumentState, HttpPane } from "../model/types"
 import type { HttpWorkspaceAction } from "../model/workspace"
 import { resizeHttpSplitRatio } from "../model/layout"
@@ -9,27 +11,35 @@ export function HttpClientFooter({
   narrow,
   document,
   activePane,
-  notice,
   responseJsonTree,
   dispatch,
   onJump,
   onHelp,
   onSave,
-  onPushPostman,
 }: {
   availableWidth: number
   minimum: boolean
   narrow: boolean
-  document: HttpDocumentState
+  document: HttpDocumentState | undefined
   activePane: HttpPane
-  notice: string
   responseJsonTree: boolean
   dispatch: (action: HttpWorkspaceAction) => void
   onJump: () => void
   onHelp: () => void
   onSave: () => void
-  onPushPostman: () => void
 }) {
+  if (!document)
+    return (
+      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+        <InlineButton id="http-jump-button" label="[M]" accent={COLORS.http} onPress={onJump} />
+        <InlineButton
+          id="http-action-palette-open"
+          label="[?] Ações"
+          accent={COLORS.http}
+          onPress={onHelp}
+        />
+      </box>
+    )
   return (
     <HttpWorkspaceFooter
       availableWidth={availableWidth}
@@ -54,12 +64,11 @@ export function HttpClientFooter({
       onJump={onJump}
       onHelp={onHelp}
       onSave={onSave}
-      onPushPostman={onPushPostman}
+      onPushPostman={onSave}
       postmanRequest={
         document.request.source.kind === "file" &&
         document.request.source.path.replaceAll("\\", "/").startsWith("postman/")
       }
-      notice={notice}
       responseJsonTree={responseJsonTree}
     />
   )

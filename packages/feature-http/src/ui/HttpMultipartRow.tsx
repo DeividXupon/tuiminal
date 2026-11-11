@@ -6,6 +6,8 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpRequestTableNavigation } from "../hooks/use-http-request-tables"
 import type { HttpMultipartPart } from "../model/types"
 
+import { REQUEST_TABLE_ACTION_WIDTH, useHttpRequestTableColumns } from "./HttpRequestTable"
+
 type RowProps = {
   part: HttpMultipartPart
   index: number
@@ -26,6 +28,7 @@ function MultipartCell({
   currentRows,
   onPatch,
 }: RowProps & { column: 0 | 1; background: string; selected: boolean }) {
+  const columns = useHttpRequestTableColumns()
   const inputRef = useRef<InputRenderable | null>(null)
   const field = column === 0 ? "name" : "value"
   return (
@@ -36,7 +39,6 @@ function MultipartCell({
       placeholder={translateUi(
         column === 0 ? "NOME" : part.kind === "file" ? "CAMINHO DO ARQUIVO" : "VALOR",
       )}
-      width={column === 0 ? "28%" : "42%"}
       onInput={(value) => {
         if (value !== currentRows.current.find((item) => item.id === part.id)?.[field]) {
           onPatch(part.id, { [field]: value })
@@ -47,9 +49,18 @@ function MultipartCell({
         inputRef.current?.focus()
       }}
       style={{
+        width: column === 0 ? columns.name : columns.value,
+        flexShrink: 0,
         backgroundColor: selected ? COLORS.http : background,
         focusedBackgroundColor: background,
-        textColor: selected ? COLORS.canvas : COLORS.text,
+        textColor: selected
+          ? COLORS.canvas
+          : !part.enabled
+            ? COLORS.muted
+            : column === 0
+              ? COLORS.http
+              : COLORS.text,
+        focusedTextColor: COLORS.text,
       }}
     />
   )
@@ -57,12 +68,16 @@ function MultipartCell({
 
 export function HttpMultipartRow(props: RowProps) {
   const { part, index, draft, navigation, onPatch, onDelete } = props
-  const background = index % 2 === 0 ? COLORS.panelAlt : COLORS.panelRaised
+  const columns = useHttpRequestTableColumns()
+  const background = index % 2 === 0 ? COLORS.canvas : COLORS.panelAlt
   const selected = navigation.active && navigation.mode === "table" && navigation.row === index
   return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: background }}>
+    <box
+      id={`http-key-value-row-${part.id}`}
+      style={{ height: 1, flexShrink: 0, flexDirection: "row", backgroundColor: background }}
+    >
       {draft ? (
-        <text content="   " />
+        <text content="" width={REQUEST_TABLE_ACTION_WIDTH} flexShrink={0} />
       ) : (
         <InlineButton
           id={`http-key-value-enabled-${part.id}`}
@@ -73,31 +88,34 @@ export function HttpMultipartRow(props: RowProps) {
           onPress={() => onPatch(part.id, { enabled: !part.enabled })}
         />
       )}
-      {draft ? (
-        <text content="   " />
-      ) : (
-        <InlineButton
-          id={`http-key-value-kind-${part.id}`}
-          label={part.kind === "file" ? "[F]" : "[T]"}
-          accent={COLORS.http}
-          active={part.kind === "file"}
-          selected={selected && navigation.column === -1}
-          onPress={() => onPatch(part.id, { kind: part.kind === "file" ? "text" : "file" })}
-        />
-      )}
+      <box width={columns.kind} height={1} flexShrink={0}>
+        {draft ? null : (
+          <InlineButton
+            id={`http-key-value-kind-${part.id}`}
+            label={part.kind === "file" ? "File" : "Text"}
+            accent={COLORS.http}
+            active={part.kind === "file"}
+            selected={selected && navigation.column === -1}
+            onPress={() => onPatch(part.id, { kind: part.kind === "file" ? "text" : "file" })}
+          />
+        )}
+      </box>
       <MultipartCell
         {...props}
         column={0}
         background={background}
         selected={selected && navigation.column === 0}
       />
+      <text content="│" width={1} flexShrink={0} fg={COLORS.border} />
       <MultipartCell
         {...props}
         column={1}
         background={background}
         selected={selected && navigation.column === 1}
       />
-      {draft ? null : (
+      {draft ? (
+        <text content="" width={REQUEST_TABLE_ACTION_WIDTH} flexShrink={0} />
+      ) : (
         <InlineButton
           id={`http-key-value-delete-${part.id}`}
           label="[×]"

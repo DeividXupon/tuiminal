@@ -1,3 +1,4 @@
+import { authorizeHttpRequest } from "../services/oauth2-session"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { HttpDocumentState, HttpRequestDefinition, HttpVariableContext } from "../model/types"
 import { HttpCookieJarStore } from "../services/cookies"
@@ -134,7 +135,13 @@ export function useHttpResponse({
       setDownload(operation)
       setNotice("BAIXANDO RESPOSTA COMPLETA…")
       try {
-        const configured = applyHttpWorkspaceConfig(document.request, workspaceConfig)
+        const configured = await authorizeHttpRequest(
+          applyHttpWorkspaceConfig(document.request, workspaceConfig),
+          variablesForRequest(document.request),
+          HTTP_WORKING_DIRECTORY,
+          environmentName,
+          controller.signal,
+        )
         const prepared = prepareHttpRequest(
           configured,
           `http-download-${Date.now()}`,

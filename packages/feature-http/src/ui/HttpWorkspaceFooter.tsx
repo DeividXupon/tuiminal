@@ -21,7 +21,6 @@ export function HttpWorkspaceFooter({
   onSave,
   onPushPostman,
   postmanRequest,
-  notice,
   responseJsonTree,
 }: {
   availableWidth: number
@@ -36,7 +35,6 @@ export function HttpWorkspaceFooter({
   onSave: () => void
   onPushPostman: () => void
   postmanRequest: boolean
-  notice: string
   responseJsonTree: boolean
 }) {
   const compactControls = narrow || availableWidth < 150
@@ -45,12 +43,12 @@ export function HttpWorkspaceFooter({
     : maximized
       ? "[F10] Restaurar"
       : "[F10] Maximizar"
-  const jumpLabel = compactControls ? "[Ctrl+O]" : "[Ctrl+O] Ir"
+  const jumpLabel = compactControls ? "[M]" : "[M] Escolher box"
   const saveLabel = httpSaveLabel(compactControls, postmanRequest)
   const postmanLabel = compactControls ? "[Ctrl+P]" : "[Ctrl+P] Postman"
-  const helpLabel = compactControls ? "[F1]" : "[F1] Ajuda"
+  const helpLabel = compactControls ? "[?]" : "[?] Ações"
   const controlLabels = [
-    ...(minimum ? [] : ["[Ctrl+↓]", "[Ctrl+↑]", maximizeLabel]),
+    ...(minimum ? [] : ["[-]", "[+]", maximizeLabel]),
     jumpLabel,
     saveLabel,
     ...(postmanRequest ? [postmanLabel] : []),
@@ -60,15 +58,13 @@ export function HttpWorkspaceFooter({
     (total, label) => total + displayWidth(translateUi(label)) + 2,
     0,
   )
-  const copy =
-    notice ||
-    (responseJsonTree
-      ? "[↑/↓] blocos JSON · [←/→/Enter] recolher/expandir · [Tab/H/L] painéis"
-      : readOnly
-        ? "SOMENTE LEITURA · RECURSO .HTTP NÃO SUPORTADO"
-        : minimum
-          ? "[Tab/H/L] painéis · [/] URL · [S] enviar"
-          : "[Tab/H/L] painéis · [/] URL · [M] método · [S] enviar · [C] coleção · [Y] histórico")
+  const copy = responseJsonTree
+    ? "[↑/↓] blocos JSON · [←/→/Enter] recolher/expandir · [Tab/H/L] painéis"
+    : readOnly
+      ? "SOMENTE LEITURA · RECURSO .HTTP NÃO SUPORTADO"
+      : minimum
+        ? "[Tab/H/L] painéis · [/] URL · [S] enviar"
+        : "[Tab/H/L] painéis · [/] URL · [Shift+M] método · [S] enviar · [C] coleção · [E] ambientes"
   const copyWidth = Math.max(1, availableWidth - controlsWidth)
 
   return (
@@ -85,13 +81,13 @@ export function HttpWorkspaceFooter({
         <>
           <InlineButton
             id="http-split-decrease"
-            label="[Ctrl+↓]"
+            label="[-]"
             accent={COLORS.http}
             onPress={() => onResize(-1)}
           />
           <InlineButton
             id="http-split-increase"
-            label="[Ctrl+↑]"
+            label="[+]"
             accent={COLORS.http}
             onPress={() => onResize(1)}
           />
@@ -104,13 +100,7 @@ export function HttpWorkspaceFooter({
           />
         </>
       )}
-      <InlineButton
-        id="http-jump-button"
-        label={jumpLabel}
-        accent={COLORS.http}
-        disabled={readOnly}
-        onPress={onJump}
-      />
+      <InlineButton id="http-jump-button" label={jumpLabel} accent={COLORS.http} onPress={onJump} />
       <InlineButton
         id="http-save-button"
         label={saveLabel}
@@ -127,7 +117,12 @@ export function HttpWorkspaceFooter({
           onPress={onPushPostman}
         />
       ) : null}
-      <InlineButton id="http-help-button" label={helpLabel} accent={COLORS.http} onPress={onHelp} />
+      <InlineButton
+        id="http-action-palette-open"
+        label={helpLabel}
+        accent={COLORS.http}
+        onPress={onHelp}
+      />
     </box>
   )
 }

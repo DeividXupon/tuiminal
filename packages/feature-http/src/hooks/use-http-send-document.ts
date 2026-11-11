@@ -1,3 +1,4 @@
+import { httpChainingRequests } from "../model/chaining"
 import { useCallback } from "react"
 import {
   HTTP_ENVIRONMENT_PREPARATION_ERROR,
@@ -39,6 +40,7 @@ type HistoryTools = {
 }
 
 type SendContext = {
+  prepareRequest?: ((request: HttpRequestDefinition) => HttpRequestDefinition) | undefined
   getDocuments: () => HttpDocumentState[]
   projectRequests: HttpProjectRequestItem[]
   workspaceConfig: HttpWorkspaceConfig
@@ -75,17 +77,16 @@ function startExecution(context: SendContext, document: HttpDocumentState) {
   return { details, controller }
 }
 
-function configuredItems(context: SendContext, document: HttpDocumentState) {
-  const activeItem = {
-    filePath: document.request.source.kind === "file" ? document.request.source.path : "",
-    request: document.request,
-  }
-  return [
-    ...context.projectRequests.filter((item) => item.request.id !== document.request.id),
-    activeItem,
-  ].map((item) => ({
+function configuredItems(context: SendContext) {
+  return httpChainingRequests(
+    context.projectRequests,
+    context.getDocuments().map((item) => item.request),
+  ).map((item) => ({
     ...item,
-    request: applyHttpWorkspaceConfig(item.request, context.workspaceConfig),
+    request: applyHttpWorkspaceConfig(
+      context.prepareRequest?.(item.request) ?? item.request,
+      context.workspaceConfig,
+    ),
   }))
 }
 
@@ -195,7 +196,7 @@ async function sendHttpDocument(context: SendContext, documentId: string) {
   try {
     const chain = await runHttpCollectionCase({
       name: document.request.name,
-      items: configuredItems(context, document),
+      items: configuredItems(context),
       selector: document.request.id,
       variables: new Map(),
       variablesForRequest: context.variablesForRequest,

@@ -1,54 +1,95 @@
-import { useEffect, useState, type ReactNode } from "react"
-import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
-import { loadPostmanAccount } from "../postman/account"
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
 import type { HttpSourceMode } from "../model/source-mode"
+import type { HttpClientProps } from "../model/types"
+import { readHttpLastWorkspace, saveHttpLastWorkspace } from "../storage/last-workspace"
+import {
+  openInitialPostmanWorkspace,
+  type HttpRestoredPostmanWorkspace,
+} from "../services/startup-workspace"
 import { HttpSourcePicker } from "./HttpSourcePicker"
+
+export type HttpSourceWorkspaceProps = HttpClientProps & {
+  sourceMode: HttpSourceMode
+  onChooseSource: () => void
+  startup?: HttpRestoredPostmanWorkspace | undefined
+}
 
 export function HttpSourceClient({
   active,
   children,
 }: {
   active: boolean
-  children: (source: HttpSourceMode, onChooseSource: () => void) => ReactNode
+  children: (
+    source: HttpSourceMode,
+    onChooseSource: () => void,
+    restored: HttpRestoredPostmanWorkspace | undefined,
+  ) => ReactNode
 }) {
   const [source, setSource] = useState<HttpSourceMode | null>(null)
-  const [checking, setChecking] = useState(true)
-  const [postmanConnected, setPostmanConnected] = useState(false)
-  useEffect(() => {
-    let disposed = false
-    void loadPostmanAccount()
-      .then(
-        (account) => {
-          if (disposed) return
-          setPostmanConnected(Boolean(account))
-          if (!account) setSource("local")
-        },
-        () => {
-          if (!disposed) setSource("local")
-        },
-      )
-      .finally(() => {
-        if (!disposed) setChecking(false)
-      })
-    return () => {
-      disposed = true
-    }
-  }, [])
-  const chooseSource = async () => {
-    setChecking(true)
+  const [restored, setRestored] = useState<HttpRestoredPostmanWorkspace>()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const generation = useRef(0)
+  const pending = useRef(false)
+  const { notify } = useNotifications()
+  useWorkspaceRepaint(source ?? "source-picker")
+  useEffect(
+    () => () => {
+      generation.current++
+    },
+    [],
+  )
+
+  const openWorkspace = (result: HttpRestoredPostmanWorkspace) => {
+    saveHttpLastWorkspace({
+      source: "postman",
+      workspaceId: result.workspace.id,
+      ...(result.session.environmentId ? { environmentId: result.session.environmentId } : {}),
+    })
+    setRestored(result)
+    setSource("postman")
+    for (const message of result.session.errors) notify({ source: "HTTP", message })
+  }
+  const select = async (selected: HttpSourceMode) => {
+    if (selected === "postman" && pending.current) return
+    const token = ++generation.current
+    setError("")
+    setRestored(undefined)
+    pending.current = selected === "postman"
+    setLoading(pending.current)
+    if (selected === "local") return setSource("local")
     try {
-      const account = await loadPostmanAccount()
-      setPostmanConnected(Boolean(account))
-      setSource(account ? null : "local")
-    } catch {
-      setPostmanConnected(false)
-      setSource("local")
+      const result = await openInitialPostmanWorkspace(readHttpLastWorkspace())
+      if (token !== generation.current) return result.session.dispose()
+      openWorkspace(result)
+    } catch (cause) {
+      if (token === generation.current)
+        setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
-      setChecking(false)
+      if (token === generation.current) {
+        pending.current = false
+        setLoading(false)
+      }
     }
   }
-  if (checking) return <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }} />
-  if (!source && postmanConnected) return <HttpSourcePicker active={active} onSelect={setSource} />
-  if (!source) return null
-  return children(source, () => void chooseSource())
+  if (!source)
+    return (
+      <HttpSourcePicker
+        active={active}
+        loading={loading}
+        error={error}
+        onSelect={(selected) => void select(selected)}
+      />
+    )
+  return children(
+    source,
+    () => {
+      generation.current++
+      setRestored(undefined)
+      setSource(null)
+    },
+    restored,
+  )
 }

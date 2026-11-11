@@ -6,12 +6,10 @@ import type { HttpRequestMoreView } from "../model/types"
 
 export function HttpRequestMoreTabs({
   view,
-  dense,
   focused,
   onChange,
 }: {
   view: HttpRequestMoreView
-  dense: boolean
   focused: boolean
   onChange: (view: HttpRequestMoreView) => void
 }) {
@@ -20,10 +18,12 @@ export function HttpRequestMoreTabs({
     assertions: "Assertions",
     chaining: "Chaining",
     preview: "Preview",
+    docs: "Docs",
   }
   const buttons = HTTP_REQUEST_MORE_VIEWS.map((candidate) => (
     <InlineButton
       key={candidate}
+      id={`http-request-more-${candidate}`}
       label={labels[candidate]}
       accent={COLORS.http}
       active={view === candidate}
@@ -48,25 +48,19 @@ export function HttpRequestMoreTabs({
       onPress={() => onChange(nextHttpRequestMoreView(view, 1))}
     />
   ) : null
-  if (dense) {
-    return (
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        {previous}
-        {buttons}
-        {next}
-      </box>
-    )
-  }
   return (
-    <box style={{ height: 2, flexShrink: 0 }}>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        {previous}
-        {buttons.slice(0, 2)}
-      </box>
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        {buttons.slice(2)}
-        {next}
-      </box>
+    <box
+      style={{
+        minHeight: 1,
+        flexShrink: 0,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        backgroundColor: COLORS.panelAlt,
+      }}
+    >
+      {previous}
+      {buttons}
+      {next}
     </box>
   )
 }

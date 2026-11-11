@@ -1,13 +1,14 @@
 import type { BoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { createUiSyntaxStyle } from "@xupon/tuiminal-core/ui/syntax-style"
+import { useEffect, useRef } from "react"
 import type {
   HttpExternalConflictPreview,
   HttpExternalConflictResolution,
 } from "../storage/conflicts"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
 
 const DIFF_SYNTAX = createUiSyntaxStyle()
 
@@ -33,100 +34,106 @@ export function HttpExternalConflictModal({
   onClose: () => void
 }) {
   const modalRef = useRef<BoxRenderable | null>(null)
-  const width = Math.max(46, Math.min(116, terminalWidth - 4))
-  const height = Math.max(12, Math.min(34, terminalHeight - 2))
+  const width = Math.max(1, Math.min(116, terminalWidth - 2))
+  const height = Math.max(
+    1,
+    Math.min(
+      34,
+      terminalHeight - 2,
+      14 + Math.max(1, conflict.diff.length) + (conflict.canUseExternal ? 0 : 2),
+    ),
+  )
   const content = conflictDiffContent(conflict)
+  const short = terminalHeight < 20
+  const diff = (
+    <code
+      content={content}
+      filetype="diff"
+      syntaxStyle={DIFF_SYNTAX}
+      bg={COLORS.canvas}
+      wrapMode="none"
+      style={{ width: "100%", height: Math.max(1, content.split("\n").length), flexShrink: 0 }}
+    />
+  )
   useEffect(() => {
     const timer = setTimeout(() => modalRef.current?.focus(), 0)
     return () => clearTimeout(timer)
   }, [])
   return (
-    <box
-      ref={modalRef}
+    <HttpDialog
       id="http-external-conflict-modal"
-      focusable
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2)),
-        width,
-        height,
-        zIndex: 130,
-        ...panelBorder(COLORS.warning),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      scrollContent={short}
+      title={"CONFLITO EXTERNO"}
+      width={width}
+      height={height}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      accent={COLORS.warning}
+      dialogRef={modalRef}
+      zIndex={130}
+      closeLabel="[Esc] Voltar"
+      closeId="http-external-conflict-close"
+      actions={[
+        {
+          id: "http-external-conflict-reload",
+          label: "[R] Recarregar externo",
+          disabled: busy || !conflict.canUseExternal,
+          onPress: () => onResolve("reload"),
+        },
+        {
+          id: "http-external-conflict-apply-local",
+          label: "[L] Aplicar versão local",
+          accent: COLORS.warning,
+          disabled: busy || !conflict.canUseExternal,
+          onPress: () => onResolve("apply-local"),
+        },
+        {
+          id: "http-external-conflict-save-copy",
+          label: "[C] Salvar versão local como cópia",
+          shortLabel: "[C] Salvar cópia",
+          disabled: busy,
+          onPress: () => onResolve("save-copy"),
+        },
+      ]}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text content={translateUi("CONFLITO EXTERNO")} style={{ fg: COLORS.warning }} />
-        <InlineButton
-          id="http-external-conflict-close"
-          label="[Esc] Voltar"
-          accent={COLORS.http}
-          onPress={onClose}
+      <HttpDialogSection accent={COLORS.warning}>
+        <text
+          content={truncateDisplay(conflict.requestName, width - 7)}
+          style={{ fg: COLORS.text }}
         />
-      </box>
-      <text
-        content={truncateDisplay(`${conflict.requestName} · ${conflict.path}`, width - 4)}
-        style={{ fg: COLORS.text }}
-      />
-      <text
-        content={translateUi("O arquivo mudou fora do Tuiminal. Compare antes de escolher.")}
-        style={{ fg: COLORS.warning }}
+        <text
+          content={truncateDisplay(conflict.path, width - 7)}
+          wrapMode="none"
+          style={{ fg: COLORS.muted, height: 1 }}
+        />
+      </HttpDialogSection>
+      <HttpDialogNotice
+        text="O arquivo mudou fora do Tuiminal. Compare antes de escolher."
+        warning
       />
       <text
         content={translateUi("− ARQUIVO EXTERNO · + VERSÃO LOCAL")}
         style={{ fg: COLORS.muted }}
       />
-      <scrollbox
-        scrollY
-        scrollX
-        viewportCulling
-        style={{ flexGrow: 1, backgroundColor: COLORS.canvas }}
-      >
-        <code
-          content={content}
-          filetype="diff"
-          syntaxStyle={DIFF_SYNTAX}
-          bg={COLORS.canvas}
-          wrapMode="none"
-          style={{ width: "100%", height: Math.max(1, content.split("\n").length) }}
-        />
-      </scrollbox>
+      {short ? (
+        diff
+      ) : (
+        <scrollbox
+          scrollY
+          scrollX
+          viewportCulling
+          style={{ flexGrow: 1, minHeight: 1, backgroundColor: COLORS.canvas }}
+        >
+          {diff}
+        </scrollbox>
+      )}
       {!conflict.canUseExternal ? (
         <text
           content={translateUi("O request original foi removido; apenas uma cópia local é segura.")}
-          style={{ fg: COLORS.danger }}
+          style={{ fg: COLORS.danger, flexShrink: 0 }}
         />
       ) : null}
-      <box style={{ height: 2, flexShrink: 0 }}>
-        <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-          <InlineButton
-            id="http-external-conflict-reload"
-            label="[R] Recarregar externo"
-            accent={COLORS.http}
-            disabled={busy || !conflict.canUseExternal}
-            onPress={() => onResolve("reload")}
-          />
-          <InlineButton
-            id="http-external-conflict-apply-local"
-            label="[L] Aplicar versão local"
-            accent={COLORS.warning}
-            disabled={busy || !conflict.canUseExternal}
-            onPress={() => onResolve("apply-local")}
-          />
-        </box>
-        <InlineButton
-          id="http-external-conflict-save-copy"
-          label="[C] Salvar versão local como cópia"
-          accent={COLORS.http}
-          disabled={busy}
-          onPress={() => onResolve("save-copy")}
-        />
-      </box>
-    </box>
+    </HttpDialog>
   )
 }

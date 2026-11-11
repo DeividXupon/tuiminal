@@ -1,13 +1,13 @@
 import { decodePasteBytes, type InputRenderable } from "@opentui/core"
 import { useKeyboard, usePaste, useRenderer } from "@opentui/react"
-import { useEffect, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useEffect, useRef, useState } from "react"
 import {
+  type HttpImportPathSuggestion,
   pastedHttpImportSourcePath,
   suggestHttpImportSourcePaths,
-  type HttpImportPathSuggestion,
 } from "../services/import-source-path"
 
 export function HttpImportSourcePicker({
@@ -129,12 +129,12 @@ export function HttpImportSourcePicker({
         onMouseDrop={() => sourceRef.current?.focus()}
         style={{
           flexGrow: 1,
-          minHeight: tiny ? 4 : compact ? 5 : 7,
+          minHeight: tiny ? 3 : compact ? 5 : 10,
           flexShrink: 0,
           border: true,
           borderStyle: "rounded",
-          borderColor: COLORS.http,
-          backgroundColor: COLORS.panelAlt,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.canvas,
           alignItems: "center",
           justifyContent: "center",
         }}

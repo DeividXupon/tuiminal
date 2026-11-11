@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
   HttpProjectRequestItem,
   HttpRequestDefinition,
@@ -15,6 +15,7 @@ import type { HttpInsecureTlsApproval } from "../model/tls-policy"
 import type { HttpRedirectAuthorizer } from "../model/redirect-policy"
 
 type RunnerStatus = "idle" | "running" | "complete" | "cancelled"
+export type HttpCollectionRunTarget = { path: string; name: string }
 
 function completedRunnerStatus(aborted: boolean, approval: HttpInsecureTlsApproval | null) {
   if (aborted) return "cancelled"
@@ -76,6 +77,11 @@ export function useHttpCollectionRunner({
   authorizeRedirect: HttpRedirectAuthorizer
 }) {
   const [targetId, setTargetId] = useState<string | null>(null)
+  const [collection, setCollection] = useState<HttpCollectionRunTarget | null>(null)
+  const scopedItems = useMemo(
+    () => (collection ? items.filter((item) => item.filePath === collection.path) : items),
+    [collection, items],
+  )
   const [datasetPath, setDatasetPath] = useState("")
   const [concurrency, setConcurrency] = useState(1)
   const [status, setStatus] = useState<RunnerStatus>("idle")
@@ -107,24 +113,30 @@ export function useHttpCollectionRunner({
     }
   }, [root, resetRun])
 
-  const open = useCallback(() => {
-    resetRun()
-    setTargetId((current) =>
-      current && items.some((item) => item.request.id === current) ? current : null,
-    )
-  }, [items, resetRun])
+  const open = useCallback(
+    (target?: HttpCollectionRunTarget) => {
+      resetRun()
+      setCollection(target ?? null)
+      setTargetId(null)
+    },
+    [resetRun],
+  )
   const cycleTarget = useCallback(() => {
     resetRun()
     setTargetId((current) => {
-      const options = [null, ...items.map((item) => item.request.id)]
+      const options = [null, ...scopedItems.map((item) => item.request.id)]
       const index = options.indexOf(current)
       return options[(index + 1) % options.length] ?? null
     })
-  }, [items, resetRun])
+  }, [scopedItems, resetRun])
   const cycleConcurrency = useCallback(() => {
     setConcurrency((current) => (current >= 8 ? 1 : current + 1))
   }, [])
-  const cancel = useCallback(() => controllerRef.current?.abort(), [])
+  const cancel = useCallback(() => {
+    const controller = controllerRef.current
+    controller?.abort()
+    return controller !== null
+  }, [])
 
   const run = useCallback(async () => {
     if (!lifecycle.current.mounted || lifecycle.current.root !== root) return
@@ -132,11 +144,11 @@ export function useHttpCollectionRunner({
       cancel()
       return
     }
-    if (!items.length) {
+    if (!scopedItems.length) {
       setError("Nenhum request de projeto para executar.")
       return
     }
-    const selected = items.find((item) => item.request.id === targetId)
+    const selected = scopedItems.find((item) => item.request.id === targetId)
     const controller = new AbortController()
     controllerRef.current = controller
     const current = () =>
@@ -147,7 +159,7 @@ export function useHttpCollectionRunner({
     setCases([])
     setError("")
     const context = {
-      items,
+      items: scopedItems,
       ...(selected ? { selector: selected.request.id } : {}),
       variablesForRequest,
       root,
@@ -178,7 +190,7 @@ export function useHttpCollectionRunner({
     datasetPath,
     environmentName,
     isInsecureTlsApproved,
-    items,
+    scopedItems,
     root,
     targetId,
     variablesForRequest,
@@ -193,7 +205,10 @@ export function useHttpCollectionRunner({
 
   return {
     targetId,
-    targetName: items.find((item) => item.request.id === targetId)?.request.name ?? null,
+    targetName:
+      scopedItems.find((item) => item.request.id === targetId)?.request.name ??
+      collection?.name ??
+      null,
     datasetPath,
     setDatasetPath,
     concurrency,

@@ -1,10 +1,8 @@
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { nextHttpRequestView } from "../model/request-view-navigation"
+import { HTTP_REQUEST_VIEWS, nextHttpRequestView } from "../model/request-view-navigation"
 import type { HttpRequestView } from "../model/types"
-
-const HTTP_REQUEST_VIEWS = ["params", "headers", "body", "auth", "more"] as const
 
 function requestViewLabel(view: HttpRequestView) {
   return {
@@ -12,6 +10,7 @@ function requestViewLabel(view: HttpRequestView) {
     headers: "Headers",
     body: "Body",
     auth: "Autenticação",
+    scripts: "Scripts",
     more: "Mais",
   }[view]
 }
@@ -34,9 +33,10 @@ export function HttpRequestViewTabs({
   return (
     <box
       style={{
-        height: 1,
+        minHeight: 1,
         flexShrink: 0,
         flexDirection: "row",
+        flexWrap: "wrap",
         backgroundColor: COLORS.panelRaised,
         overflow: "hidden",
       }}

@@ -1,3 +1,4 @@
+import { openLocalHttp } from "./http-source"
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import type { TestRendererSetup } from "@opentui/core/testing"
@@ -102,6 +103,7 @@ for (const layout of ["compact", "framed"] as const) {
     )
     await fixture(historyPath, null)
     tui = await testRender(<HttpClient active />, { width: 140, height: 36 })
+    await openLocalHttp(tui)
     await settle(() =>
       Boolean(
         currentTui().renderer.root.findDescendantById(
@@ -112,13 +114,17 @@ for (const layout of ["compact", "framed"] as const) {
     await press("http-navigation-project-alpha-history.http#success")
     await press("http-environment-button")
     await settle(() =>
-      Boolean(
-        currentTui().renderer.root.findDescendantById("http-environment-choice-alpha-fixture"),
-      ),
+      Boolean(currentTui().renderer.root.findDescendantById("http-environment-entry-1")),
     )
     expect(currentTui().captureCharFrame()).toContain("Sem ambiente")
-    await press("http-environment-choice-alpha-fixture")
+    await press("http-environment-entry-1")
+    await settle(() =>
+      Boolean(currentTui().renderer.root.findDescendantById("http-environment-activate")),
+    )
+    await press("http-environment-activate")
     await settle(() => currentTui().captureCharFrame().includes("[E] alpha-fixture"))
+    await press("http-navigation-collection")
+    await press("http-navigation-project-alpha-history.http#success")
     await press("http-send-button")
     await settle(() => received.length === 1 && currentTui().captureCharFrame().includes(secret))
     expect(received[0]).toContain(`q=${secret}`)

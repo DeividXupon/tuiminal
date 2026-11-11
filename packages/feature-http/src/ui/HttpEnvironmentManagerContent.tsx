@@ -1,14 +1,15 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useEffect, useRef } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
+import { useCallback, useEffect, useRef } from "react"
 import type { HttpEnvironment } from "../storage/environments"
+import { HttpEnvironmentChoice } from "./HttpEnvironmentChoice"
 import {
-  HttpEnvironmentTableRow,
   type HttpEnvironmentFormMode,
   type HttpEnvironmentRow,
+  HttpEnvironmentTableRow,
 } from "./HttpEnvironmentTableRow"
 
 export type { HttpEnvironmentFormMode, HttpEnvironmentRow } from "./HttpEnvironmentTableRow"
@@ -89,43 +90,29 @@ export function HttpEnvironmentList({
         active
         onPress={onOpenGlobals}
       />
-      <scrollbox ref={scrollRef} scrollY viewportCulling style={{ flexGrow: 1, paddingTop: 1 }}>
+      <scrollbox
+        ref={scrollRef}
+        scrollY
+        viewportCulling
+        style={{ flexGrow: 1, minHeight: 0, overflow: "hidden", paddingTop: 1 }}
+      >
         {choices.map((name, index) => {
           const environment = name
             ? environments.find((candidate) => candidate.name === name)
             : undefined
-          const details = environment?.production ? " · PROD" : ""
           return (
-            <box key={name ?? "none"} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-              <box style={{ flexGrow: 1, overflow: "hidden" }}>
-                <InlineButton
-                  id={`http-environment-choice-${name ?? "none"}`}
-                  label={truncateDisplay(
-                    `${name === activeName ? "◆" : "◇"} ${name ?? translateUi("Sem ambiente")}${details}`,
-                    Math.max(12, contentWidth - (name ? 24 : 2)),
-                  )}
-                  accent={environment?.production ? COLORS.danger : COLORS.http}
-                  active={index === selection}
-                  onPress={() => onSelect(name)}
-                />
-              </box>
-              {name ? (
-                <>
-                  <InlineButton
-                    id={`http-environment-edit-${name}`}
-                    label="[E] Editar"
-                    accent={COLORS.http}
-                    onPress={() => onEdit(name)}
-                  />
-                  <InlineButton
-                    id={`http-environment-delete-${name}`}
-                    label="[D] Excluir"
-                    accent={COLORS.danger}
-                    onPress={() => onDelete(name)}
-                  />
-                </>
-              ) : null}
-            </box>
+            <HttpEnvironmentChoice
+              key={name ?? "none"}
+              name={name}
+              production={!!environment?.production}
+              current={name === activeName}
+              selected={index === selection}
+              index={index}
+              width={contentWidth}
+              onSelect={onSelect}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
           )
         })}
       </scrollbox>
@@ -147,6 +134,13 @@ export function HttpEnvironmentList({
       </box>
     </>
   )
+}
+
+function formHint(mode: HttpEnvironmentFormMode, globals: boolean) {
+  if (mode === "name" || mode === "cell") return "[Tab] Próximo campo · [Shift+Tab] Anterior"
+  return globals
+    ? "[/] Tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
+    : "[/] Nome ou tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
 }
 
 export function HttpEnvironmentCreateForm({
@@ -185,22 +179,26 @@ export function HttpEnvironmentCreateForm({
   onFocusCell: (index: number, column: 0 | 1) => void
 }) {
   const tableScrollRef = useRef<ScrollBoxRenderable | null>(null)
-  useEffect(() => {
+  const revealRow = useCallback(() => {
     if (mode === "table" || mode === "cell") {
-      tableScrollRef.current?.scrollTo(Math.max(0, rowIndex - 2))
+      const scroll = tableScrollRef.current
+      if (!scroll) return
+      const precedingRows = Math.min(2, Math.max(0, scroll.viewport.height - 1))
+      scroll.scrollTo(Math.max(0, rowIndex - precedingRows))
     }
   }, [mode, rowIndex])
+  useEffect(revealRow, [revealRow])
   return (
     <>
       <text
         content={translateUi(
           formKind === "create"
-            ? "Novo ambiente global"
+            ? "Novo ambiente"
             : formKind === "edit"
               ? "Editar ambiente"
               : "Globals · sempre ativo",
         )}
-        style={{ fg: COLORS.http }}
+        style={{ fg: COLORS.http, flexShrink: 0 }}
       />
       <box
         id="http-environment-name-block"
@@ -251,7 +249,13 @@ export function HttpEnvironmentCreateForm({
       </box>
       <box
         id="http-environment-table-block"
-        style={{ flexGrow: 1, flexDirection: "row", backgroundColor: COLORS.panelRaised }}
+        style={{
+          flexGrow: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          flexDirection: "row",
+          backgroundColor: COLORS.panelRaised,
+        }}
       >
         <box
           id="http-environment-table-rail"
@@ -262,7 +266,7 @@ export function HttpEnvironmentCreateForm({
               mode === "choose" && target === "table" ? COLORS.http : COLORS.panelRaised,
           }}
         />
-        <box style={{ flexGrow: 1 }}>
+        <box style={{ flexGrow: 1, minHeight: 0, overflow: "hidden" }}>
           {mode === "choose" ? (
             <InlineButton
               id="http-environment-target-table"
@@ -276,7 +280,13 @@ export function HttpEnvironmentCreateForm({
             <text content={translateUi("VARIÁVEL")} style={{ width: "50%", fg: COLORS.muted }} />
             <text content={translateUi("VALOR")} style={{ fg: COLORS.muted }} />
           </box>
-          <scrollbox ref={tableScrollRef} scrollY viewportCulling style={{ flexGrow: 1 }}>
+          <scrollbox
+            ref={tableScrollRef}
+            scrollY
+            viewportCulling
+            onSizeChange={revealRow}
+            style={{ flexGrow: 1, minHeight: 0, overflow: "hidden" }}
+          >
             {rows.map((row, index) => (
               <HttpEnvironmentTableRow
                 key={row.id}
@@ -296,21 +306,26 @@ export function HttpEnvironmentCreateForm({
         <ShortcutText
           id="http-environment-form-hints"
           content="[↑/↓] Nome/Tabela · [Enter] Editar · [Esc] Voltar"
-          style={{ fg: COLORS.muted }}
+          style={{ fg: COLORS.muted, flexShrink: 0 }}
         />
       ) : (
         <ShortcutText
           id="http-environment-form-hints"
-          content={
-            formKind === "globals"
-              ? "[/] Tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
-              : "[/] Nome ou tabela · [Enter] Editar · [Tab] Próximo · [Esc] Voltar"
-          }
-          style={{ fg: COLORS.muted }}
+          content={formHint(mode, formKind === "globals")}
+          style={{ fg: COLORS.muted, flexShrink: 0 }}
         />
       )}
       {error ? <text content={translateUi(error)} style={{ fg: COLORS.danger }} /> : null}
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+      <box
+        style={{
+          minHeight: 1,
+          flexShrink: 0,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          backgroundColor: COLORS.panelRaised,
+        }}
+      >
         <InlineButton
           id="http-environment-create-save"
           label={

@@ -1,9 +1,10 @@
 import type { InputRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { useEffect, useRef } from "react"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
 
 export function HttpRequestFileModal({
   mode,
@@ -29,8 +30,7 @@ export function HttpRequestFileModal({
   const inputRef = useRef<InputRenderable | null>(null)
   const confirmRef = useRef<ButtonRenderable | null>(null)
   const moving = mode === "request-move"
-  const width = Math.min(76, Math.max(38, terminalWidth - 6))
-  const height = moving ? 10 : 9
+  const width = Math.max(1, Math.min(80, terminalWidth - 2))
   useEffect(() => {
     const timer = setTimeout(() =>
       moving ? inputRef.current?.focus() : confirmRef.current?.focus(),
@@ -39,39 +39,42 @@ export function HttpRequestFileModal({
   }, [moving])
 
   return (
-    <box
+    <HttpDialog
+      fitContent
+      scrollContent
       id="http-request-file-modal"
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(1, Math.floor((terminalHeight - height) / 2) - 1),
-        width,
-        height,
-        zIndex: 100,
-        ...panelBorder(moving ? COLORS.http : COLORS.danger),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      title={moving ? "MOVER REQUEST" : "EXCLUIR REQUEST"}
+      width={width}
+      height={terminalHeight - 2}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      onClose={onClose}
+      accent={moving ? COLORS.http : COLORS.danger}
+      actions={[
+        moving
+          ? {
+              id: "http-request-move-apply",
+              label: "[Ctrl+Enter] Mover",
+              onPress: onApply,
+              disabled: !targetPath.trim() || targetPath === currentPath,
+            }
+          : {
+              id: "http-request-delete-confirm",
+              label: "[D] Excluir agora",
+              buttonRef: confirmRef,
+              accent: COLORS.danger,
+              onPress: onApply,
+            },
+      ]}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text
-          content={translateUi(moving ? "MOVER REQUEST" : "EXCLUIR REQUEST")}
-          style={{ fg: moving ? COLORS.http : COLORS.danger }}
-        />
-        <InlineButton label="[Esc] Fechar" accent={COLORS.http} onPress={onClose} />
-      </box>
-      <text content={requestName} style={{ fg: COLORS.text }} />
-      <text
-        content={`${translateUi("ARQUIVO ATUAL")}  ${currentPath}`}
-        style={{ fg: COLORS.muted }}
-      />
+      <HttpDialogSection title="ARQUIVO ATUAL" accent={moving ? COLORS.http : COLORS.danger}>
+        <text content={requestName} wrapMode="word" style={{ fg: COLORS.text, flexShrink: 0 }} />
+        <text content={currentPath} wrapMode="word" style={{ fg: COLORS.muted, flexShrink: 0 }} />
+      </HttpDialogSection>
       {moving ? (
-        <>
+        <box style={{ flexShrink: 0, marginTop: 1 }}>
           <text
-            content={translateUi("ARQUIVO DE DESTINO NO PROJETO")}
+            content={translateUi("ARQUIVO DE DESTINO NA BIBLIOTECA HTTP")}
             style={{ fg: COLORS.muted }}
           />
           <input
@@ -87,34 +90,13 @@ export function HttpRequestFileModal({
             content={translateUi("O request será anexado se o arquivo de destino já existir.")}
             style={{ fg: COLORS.muted }}
           />
-          <InlineButton
-            label="[Ctrl+Enter] Mover"
-            accent={COLORS.http}
-            disabled={!targetPath.trim() || targetPath === currentPath}
-            onPress={onApply}
-          />
-        </>
+        </box>
       ) : (
-        <>
-          <text
-            content={translateUi(
-              "Esta ação remove somente este request; um arquivo vazio também será removido.",
-            )}
-            style={{ fg: COLORS.warning }}
-          />
-          <text
-            content={translateUi("Alterações não salvas neste request serão perdidas.")}
-            style={{ fg: COLORS.danger }}
-          />
-          <InlineButton
-            id="http-request-delete-confirm"
-            buttonRef={confirmRef}
-            label="[D] Excluir agora"
-            accent={COLORS.danger}
-            onPress={onApply}
-          />
-        </>
+        <box style={{ flexShrink: 0, marginTop: 1 }}>
+          <HttpDialogNotice text="Esta ação remove somente este request; um arquivo vazio também será removido." />
+          <HttpDialogNotice text="Alterações não salvas neste request serão perdidas." warning />
+        </box>
       )}
-    </box>
+    </HttpDialog>
   )
 }

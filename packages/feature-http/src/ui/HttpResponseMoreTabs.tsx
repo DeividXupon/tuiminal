@@ -33,7 +33,15 @@ export function HttpResponseMoreTabs({
   onChange: (moreView: HttpResponseMoreView) => void
 }) {
   return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row", overflow: "hidden" }}>
+    <box
+      style={{
+        minHeight: 1,
+        flexShrink: 0,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        overflow: "hidden",
+      }}
+    >
       {focused ? (
         <DirectionalButton
           id="http-response-more-previous"
@@ -46,6 +54,7 @@ export function HttpResponseMoreTabs({
       {HTTP_RESPONSE_MORE_VIEWS.map((view) => (
         <InlineButton
           key={view}
+          id={`http-response-more-${view}`}
           label={moreTabLabel(view, response, cookieCount)}
           accent={COLORS.http}
           active={active === view}

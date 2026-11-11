@@ -1,9 +1,10 @@
-import { type BoxRenderable } from "@opentui/core"
+import type { BoxRenderable } from "@opentui/core"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { useEffect, useRef } from "react"
-import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import type { HttpInsecureTlsApproval } from "../model/tls-policy"
+import { HttpDialog } from "./HttpDialog"
+import { HttpDialogNotice, HttpDialogSection } from "./HttpDialogDetails"
 
 export function HttpInsecureTlsModal({
   approval,
@@ -19,58 +20,53 @@ export function HttpInsecureTlsModal({
   onClose: () => void
 }) {
   const modalRef = useRef<BoxRenderable | null>(null)
-  const width = Math.min(78, Math.max(42, terminalWidth - 6))
-  const height = 10
+  const width = Math.max(1, Math.min(78, terminalWidth - 2))
   useEffect(() => {
     const timer = setTimeout(() => modalRef.current?.focus(), 0)
     return () => clearTimeout(timer)
   }, [])
   return (
-    <box
-      ref={modalRef}
+    <HttpDialog
+      fitContent
+      scrollContent
       id="http-insecure-tls-modal"
-      focusable
-      style={{
-        position: "absolute",
-        left: Math.max(0, Math.floor((terminalWidth - width) / 2)),
-        top: Math.max(0, Math.floor((terminalHeight - height) / 2) - 1),
-        width,
-        height,
-        zIndex: 140,
-        ...panelBorder(COLORS.danger),
-        backgroundColor: COLORS.panelRaised,
-        paddingLeft: 1,
-        paddingRight: 1,
-      }}
+      title="CONFIRMAR TLS INSEGURO"
+      width={width}
+      height={terminalHeight - 2}
+      terminalWidth={terminalWidth}
+      terminalHeight={terminalHeight}
+      dialogRef={modalRef}
+      accent={COLORS.danger}
+      zIndex={140}
+      closeLabel="[Esc] Cancelar"
+      onClose={onClose}
+      actions={[
+        {
+          id: "http-insecure-tls-confirm",
+          label: "[I] Autorizar nesta sessão",
+          accent: COLORS.danger,
+          onPress: onConfirm,
+        },
+      ]}
     >
-      <box
-        style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "space-between" }}
-      >
-        <text content={translateUi("CONFIRMAR TLS INSEGURO")} style={{ fg: COLORS.danger }} />
-        <InlineButton label="[Esc] Cancelar" accent={COLORS.http} onPress={onClose} />
-      </box>
-      <text content={truncateDisplay(approval.target, width - 4)} style={{ fg: COLORS.text }} />
-      <text
-        content={`${translateUi("AMBIENTE")}  ${approval.environmentName ?? translateUi("Sem ambiente")}`}
-        style={{ fg: COLORS.muted }}
-      />
-      <text
-        content={translateUi("A identidade do servidor não será verificada neste destino.")}
-        style={{ fg: COLORS.warning }}
-      />
-      <text
-        content={translateUi("A autorização vale somente para este destino e esta sessão.")}
-        style={{ fg: COLORS.warning }}
-      />
-      <box style={{ flexGrow: 1 }} />
-      <box style={{ height: 1, flexShrink: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-        <InlineButton
-          id="http-insecure-tls-confirm"
-          label="[I] Autorizar nesta sessão"
-          accent={COLORS.danger}
-          onPress={onConfirm}
+      <HttpDialogSection title="DESTINO" accent={COLORS.danger}>
+        <text
+          content={approval.target}
+          wrapMode="word"
+          style={{ fg: COLORS.text, flexShrink: 0 }}
         />
+        <text
+          content={`${translateUi("AMBIENTE")}  ${approval.environmentName ?? translateUi("Sem ambiente")}`}
+          style={{ fg: COLORS.muted }}
+        />
+      </HttpDialogSection>
+      <box style={{ flexShrink: 0, gap: 1, marginTop: 1 }}>
+        <HttpDialogNotice
+          text="A identidade do servidor não será verificada neste destino."
+          warning
+        />
+        <HttpDialogNotice text="A autorização vale somente para este destino e esta sessão." />
       </box>
-    </box>
+    </HttpDialog>
   )
 }

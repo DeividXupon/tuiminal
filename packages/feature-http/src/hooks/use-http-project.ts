@@ -1,3 +1,4 @@
+import { HttpScriptScopeStore } from "../services/script-scopes"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { requestFromHttpFile } from "../model/http-file"
 import type { HttpProjectRequestItem, HttpRequestDefinition } from "../model/types"
@@ -29,7 +30,8 @@ import {
   type CreateGlobalHttpEnvironmentInput,
 } from "../storage/global-environments"
 
-export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
+export function useHttpProject(root = HTTP_WORKING_DIRECTORY, enabled = true) {
+  const scriptScopes = useRef(new HttpScriptScopeStore())
   const [project, setProject] = useState<HttpProjectCollection>({
     root,
     files: [],
@@ -49,10 +51,16 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
     pending: Promise<void> | null
   }>({ root, disposed: false, queued: false, pending: null })
   if (refreshStateRef.current.root !== root) {
-    refreshStateRef.current = { root, disposed: false, queued: false, pending: null }
+    refreshStateRef.current = {
+      root,
+      disposed: false,
+      queued: false,
+      pending: null,
+    }
   }
 
   const refresh = useCallback(() => {
+    if (!enabled) return Promise.resolve()
     const state = refreshStateRef.current
     state.queued = true
     if (state.pending) return state.pending
@@ -97,9 +105,10 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
       },
     )
     return pending
-  }, [root])
+  }, [root, enabled])
 
   useEffect(() => {
+    if (!enabled) return
     const state = refreshStateRef.current
     state.disposed = false
     let stopWatching: (() => void) | undefined
@@ -115,7 +124,7 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
       state.queued = false
       stopWatching?.()
     }
-  }, [refresh, root])
+  }, [refresh, root, enabled])
 
   const projectRequests = useMemo<HttpProjectRequestItem[]>(
     () =>
@@ -159,7 +168,19 @@ export function useHttpProject(root = HTTP_WORKING_DIRECTORY) {
         source.kind === "file"
           ? project.files.find((file) => file.path === source.path)?.variables
           : undefined
-      return environmentVariableContext(activeEnvironment, fileVariables, {}, globals)
+      return scriptScopes.current.context(
+        environmentVariableContext(activeEnvironment, fileVariables, {}, globals),
+        {
+          environment: `environment:${activeEnvironment?.name ?? ""}`,
+          globals: "globals",
+          collectionVariables: `file:${source.kind === "file" ? source.path : ""}`,
+        },
+        {
+          environment: activeEnvironment?.values ?? {},
+          globals: globals?.values ?? {},
+          collectionVariables: fileVariables ?? {},
+        },
+      )
     },
     [activeEnvironment, globals, project.files],
   )
