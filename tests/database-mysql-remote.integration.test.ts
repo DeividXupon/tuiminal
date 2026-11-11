@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { randomUUID } from "node:crypto"
+import { fileURLToPath } from "node:url"
 import type {
   DatabaseConnectionProfile,
   DatabaseTable,
@@ -111,181 +112,216 @@ if (remoteEnvironment.status === "invalid") {
   })
 }
 
-suite("remote MySQL integration", () => {
-  beforeAll(async () => {
-    const config = configuration()
-    api = await import("../packages/feature-database/src/services/database")
-    try {
-      const added = await api.addDatabaseConnection(
-        {
-          name: "Remote MySQL integration",
-          driver: "mysql",
-          host: config.host,
-          port: config.port,
-          database: config.database,
-          username: config.username,
-          ssl: true,
-          writeEnabled: true,
-        },
-        config.password,
-        false,
+function defineRemoteMySqlTests() {
+  suite("remote MySQL integration", () => {
+    beforeAll(async () => {
+      const config = configuration()
+      api = await import("../packages/feature-database/src/services/database")
+      try {
+        const added = await api.addDatabaseConnection(
+          {
+            name: "Remote MySQL integration",
+            driver: "mysql",
+            host: config.host,
+            port: config.port,
+            database: config.database,
+            username: config.username,
+            ssl: true,
+            writeEnabled: true,
+          },
+          config.password,
+          false,
+        )
+        profile = added.profile
+        await createFixture()
+      } catch (error) {
+        await cleanupFixture()
+        throw error
+      }
+    }, 60_000)
+
+    afterAll(async () => {
+      const error = await cleanupFixture()
+      if (error) throw error
+    }, 60_000)
+
+    test("connects to the configured MySQL 8.4 database over TLS", async () => {
+      const identity = await execute("SELECT VERSION() AS version, DATABASE() AS database_name")
+      expect(String(identity.rows[0]?.version ?? "")).toMatch(/^8\.4(?:\.|$)/u)
+      expect(identity.rows[0]?.database_name).toBe(configuration().database)
+
+      const tls = await execute("SHOW SESSION STATUS LIKE 'Ssl_cipher'")
+      expect(String(tls.rows[0]?.Value ?? tls.rows[0]?.value ?? "")).not.toBe("")
+    }, 30_000)
+
+    test("browses only the owned catalog fixture and its relationships", async () => {
+      if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
+      const usersTable = table(names.users)
+      const catalog = await api.listDatabaseTables(profile.id)
+      expect(catalog.tables).toEqual(
+        expect.arrayContaining([
+          usersTable,
+          expect.objectContaining({ name: names.activeUsers, type: "view" }),
+        ]),
       )
-      profile = added.profile
-      await createFixture()
-    } catch (error) {
-      await cleanupFixture()
-      throw error
-    }
-  }, 60_000)
 
-  afterAll(async () => {
-    const error = await cleanupFixture()
-    if (error) throw error
-  }, 60_000)
+      const page = await api.loadTablePage(profile.id, usersTable, 0, 10, true, {
+        search: "ALI",
+        sort: { column: "email", direction: "desc" },
+      })
+      expect(page.rows).toHaveLength(1)
+      expect(page.rows[0]).toMatchObject({ name: "Alice", email: "alice@example.test" })
 
-  test("connects to the configured MySQL 8.4 database over TLS", async () => {
-    const identity = await execute("SELECT VERSION() AS version, DATABASE() AS database_name")
-    expect(String(identity.rows[0]?.version ?? "")).toMatch(/^8\.4(?:\.|$)/u)
-    expect(identity.rows[0]?.database_name).toBe(configuration().database)
+      const structure = await api.loadDatabaseTableStructure(profile.id, usersTable)
+      expect(structure.ddl.toUpperCase()).toContain("CREATE TABLE")
+      expect(structure.constraints.map((constraint) => constraint.type)).toEqual(
+        expect.arrayContaining(["PRIMARY KEY", "UNIQUE", "CHECK", "FOREIGN KEY"]),
+      )
+      expect(structure.indexes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: `${prefix}_users_name_idx`, unique: false }),
+        ]),
+      )
+      expect(structure.relationships).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ direction: "outgoing", relatedTable: names.teams }),
+          expect.objectContaining({ direction: "incoming", relatedTable: names.orders }),
+        ]),
+      )
+    }, 30_000)
 
-    const tls = await execute("SHOW SESSION STATUS LIKE 'Ssl_cipher'")
-    expect(String(tls.rows[0]?.Value ?? tls.rows[0]?.value ?? "")).not.toBe("")
-  }, 30_000)
+    test("isolates CRUD work and rolls back a failing batch", async () => {
+      if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
+      const usersTable = table(names.users)
+      const columns = await api.loadDatabaseTableColumns(profile.id, usersTable)
+      await expect(
+        api.applyTableMutations(profile.id, [
+          {
+            table: usersTable,
+            columns,
+            mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Should rollback" } },
+            originalRow: { id: 1, name: "Alice" },
+          },
+          {
+            table: usersTable,
+            columns,
+            mutation: { kind: "insert", values: { name: "Missing email" } },
+            originalRow: null,
+          },
+        ]),
+      ).rejects.toThrow()
+      const rolledBack = await execute(`SELECT name FROM ${quote(names.users)} WHERE id = 1`)
+      expect(rolledBack.rows[0]).toEqual({ name: "Alice" })
 
-  test("browses only the owned catalog fixture and its relationships", async () => {
-    if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
-    const usersTable = table(names.users)
-    const catalog = await api.listDatabaseTables(profile.id)
-    expect(catalog.tables).toEqual(
-      expect.arrayContaining([
-        usersTable,
-        expect.objectContaining({ name: names.activeUsers, type: "view" }),
-      ]),
-    )
-
-    const page = await api.loadTablePage(profile.id, usersTable, 0, 10, true, {
-      search: "ALI",
-      sort: { column: "email", direction: "desc" },
-    })
-    expect(page.rows).toHaveLength(1)
-    expect(page.rows[0]).toMatchObject({ name: "Alice", email: "alice@example.test" })
-
-    const structure = await api.loadDatabaseTableStructure(profile.id, usersTable)
-    expect(structure.ddl.toUpperCase()).toContain("CREATE TABLE")
-    expect(structure.constraints.map((constraint) => constraint.type)).toEqual(
-      expect.arrayContaining(["PRIMARY KEY", "UNIQUE", "CHECK", "FOREIGN KEY"]),
-    )
-    expect(structure.indexes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: `${prefix}_users_name_idx`, unique: false }),
-      ]),
-    )
-    expect(structure.relationships).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ direction: "outgoing", relatedTable: names.teams }),
-        expect.objectContaining({ direction: "incoming", relatedTable: names.orders }),
-      ]),
-    )
-  }, 30_000)
-
-  test("isolates CRUD work and rolls back a failing batch", async () => {
-    if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
-    const usersTable = table(names.users)
-    const columns = await api.loadDatabaseTableColumns(profile.id, usersTable)
-    await expect(
-      api.applyTableMutations(profile.id, [
+      const email = `${prefix}@example.test`
+      await api.applyTableMutations(profile.id, [
         {
           table: usersTable,
           columns,
-          mutation: { kind: "update", rowKey: { id: 1 }, values: { name: "Should rollback" } },
-          originalRow: { id: 1, name: "Alice" },
-        },
-        {
-          table: usersTable,
-          columns,
-          mutation: { kind: "insert", values: { name: "Missing email" } },
+          mutation: {
+            kind: "insert",
+            values: { team_id: 1, name: "Remote Insert", email, status: "active" },
+          },
           originalRow: null,
         },
-      ]),
-    ).rejects.toThrow()
-    const rolledBack = await execute(`SELECT name FROM ${quote(names.users)} WHERE id = 1`)
-    expect(rolledBack.rows[0]).toEqual({ name: "Alice" })
+      ])
+      const inserted = await execute(
+        `SELECT id, team_id, name, email, status FROM ${quote(names.users)} ` +
+          `WHERE email = '${email}'`,
+      )
+      const row = inserted.rows[0]
+      if (!row) throw new Error("The isolated insert was not found.")
 
-    const email = `${prefix}@example.test`
-    await api.applyTableMutations(profile.id, [
-      {
-        table: usersTable,
-        columns,
-        mutation: {
-          kind: "insert",
-          values: { team_id: 1, name: "Remote Insert", email, status: "active" },
+      await api.applyTableMutations(profile.id, [
+        {
+          table: usersTable,
+          columns,
+          mutation: { kind: "update", rowKey: { id: row.id }, values: { name: "Remote Updated" } },
+          originalRow: row,
         },
-        originalRow: null,
-      },
-    ])
-    const inserted = await execute(
-      `SELECT id, team_id, name, email, status FROM ${quote(names.users)} ` +
-        `WHERE email = '${email}'`,
-    )
-    const row = inserted.rows[0]
-    if (!row) throw new Error("The isolated insert was not found.")
+      ])
+      expect(
+        (await execute(`SELECT name FROM ${quote(names.users)} WHERE id = ${Number(row.id)}`))
+          .rows[0],
+      ).toEqual({ name: "Remote Updated" })
 
-    await api.applyTableMutations(profile.id, [
-      {
-        table: usersTable,
-        columns,
-        mutation: { kind: "update", rowKey: { id: row.id }, values: { name: "Remote Updated" } },
-        originalRow: row,
-      },
-    ])
-    expect(
-      (await execute(`SELECT name FROM ${quote(names.users)} WHERE id = ${Number(row.id)}`))
-        .rows[0],
-    ).toEqual({ name: "Remote Updated" })
+      const updated = { ...row, name: "Remote Updated" }
+      await api.applyTableMutations(profile.id, [
+        {
+          table: usersTable,
+          columns,
+          mutation: { kind: "delete", rowKey: { id: row.id } },
+          originalRow: updated,
+        },
+      ])
+      const remaining = await execute(
+        `SELECT COUNT(*) AS count FROM ${quote(names.users)} WHERE id = ${Number(row.id)}`,
+      )
+      expect(Number(remaining.rows[0]?.count)).toBe(0)
+    }, 30_000)
 
-    const updated = { ...row, name: "Remote Updated" }
-    await api.applyTableMutations(profile.id, [
-      {
-        table: usersTable,
-        columns,
-        mutation: { kind: "delete", rowKey: { id: row.id } },
-        originalRow: updated,
-      },
-    ])
-    const remaining = await execute(
-      `SELECT COUNT(*) AS count FROM ${quote(names.users)} WHERE id = ${Number(row.id)}`,
-    )
-    expect(Number(remaining.rows[0]?.count)).toBe(0)
-  }, 30_000)
+    test("preserves exact decimal values on the remote native driver", async () => {
+      if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
+      const exactTable = table(names.exactAmounts)
+      const columns = await api.loadDatabaseTableColumns(profile.id, exactTable)
+      const amountColumn = columns.find((column) => column.field === "amount")
+      if (!amountColumn) throw new Error("Missing remote decimal fixture column.")
 
-  test("preserves exact decimal values on the remote native driver", async () => {
-    if (!api || !profile) throw new Error("Remote MySQL fixture is not connected.")
-    const exactTable = table(names.exactAmounts)
-    const columns = await api.loadDatabaseTableColumns(profile.id, exactTable)
-    const amountColumn = columns.find((column) => column.field === "amount")
-    if (!amountColumn) throw new Error("Missing remote decimal fixture column.")
-
-    const expected = "9007199254740993.010000000000000001"
-    await api.applyTableMutations(profile.id, [
-      {
-        table: exactTable,
-        columns,
-        mutation: {
-          kind: "insert",
-          values: {
-            id: 1,
-            amount: api.coerceDatabaseCellValue(
-              amountColumn,
-              "9.007199254740993010000000000000001e15",
-            ),
+      const expected = "9007199254740993.010000000000000001"
+      await api.applyTableMutations(profile.id, [
+        {
+          table: exactTable,
+          columns,
+          mutation: {
+            kind: "insert",
+            values: {
+              id: 1,
+              amount: api.coerceDatabaseCellValue(
+                amountColumn,
+                "9.007199254740993010000000000000001e15",
+              ),
+            },
           },
+          originalRow: null,
         },
-        originalRow: null,
-      },
-    ])
-    const result = await execute(
-      `SELECT CAST(amount AS CHAR) AS amount FROM ${quote(names.exactAmounts)} WHERE id = 1`,
-    )
-    expect(result.rows).toEqual([{ amount: expected }])
-  }, 30_000)
-})
+      ])
+      const result = await execute(
+        `SELECT CAST(amount AS CHAR) AS amount FROM ${quote(names.exactAmounts)} WHERE id = 1`,
+      )
+      expect(result.rows).toEqual([{ amount: expected }])
+    }, 30_000)
+  })
+}
+
+if (process.env.TUIMINAL_TEST_MYSQL_ISOLATED === "1") defineRemoteMySqlTests()
+else {
+  test.skipIf(remoteEnvironment.status !== "enabled")(
+    "remote MySQL integration runs with isolated database settings and caches",
+    async () => {
+      // The database module captures its config path at import. Another suite may
+      // already have imported it and removed its fixture, so use a fresh process.
+      const child = Bun.spawn(
+        [process.execPath, "test", fileURLToPath(import.meta.url), "--timeout", "120000"],
+        {
+          env: { ...process.env, TUIMINAL_TEST_MYSQL_ISOLATED: "1" },
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      )
+      try {
+        const [exitCode, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ])
+        if (exitCode !== 0) throw new Error(stderr || stdout || `MySQL suite exited ${exitCode}`)
+        expect(exitCode).toBe(0)
+      } finally {
+        if (child.exitCode === null) child.kill()
+        await child.exited
+      }
+    },
+    300_000,
+  )
+}

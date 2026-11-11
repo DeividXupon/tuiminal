@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import {
   databaseQueryBoxTargets,
   useDatabaseBoxSelection,
@@ -81,6 +82,7 @@ import {
   queryCompletionPresentation,
   queryResultSummary,
   queryWindowLoadingLabel,
+  queryAccessHeader,
 } from "../rendering/query-presentation"
 import { applySqlSyntaxHighlights, sqlEditorGutterWidth } from "../rendering/sql-highlight"
 import {
@@ -1764,11 +1766,8 @@ export function DatabaseQueryWorkspace({
     result?.rows.some((row) => Object.values(row).some((value) => value === "<mascarado>")),
   )
   const querySensitiveDataMasked = sensitiveDataIsMasked(querySensitiveVisibility)
-  const accessHeader = compactActions
-    ? canWrite
-      ? "RW"
-      : "RO"
-    : translateUi(canWrite ? "◆ LEITURA + ESCRITA" : "◇ SOMENTE LEITURA")
+  const accessHeader = queryAccessHeader(compactActions, canWrite)
+  useWorkspaceRepaint(JSON.stringify([workspaceMode, resultInspectorOnly, resultPane]))
   const favoriteHeader = activeSavedQuery
     ? ` · ★${favoriteDirty ? "●" : ""} ${activeSavedQuery.name}`
     : ""

@@ -55,6 +55,7 @@ const completedProfiles = new Map<string, DatabaseConnectionProfile>()
 const completedCredentials = new Map<string, string>()
 let externalCandidates: ExternalDatabaseConnectionCandidate[] = []
 let externalWarnings: string[] = []
+const unsafeMyCnfWarning = "~/.my.cnf: a senha foi ignorada porque o arquivo não é privado."
 
 export { externalDatabasePaths } from "./external-database-files"
 
@@ -86,7 +87,10 @@ function profileOrCandidate(
     }).filter(([, value]) => value !== undefined),
   ) as ExternalDatabaseConnectionCandidate
   if (candidate.missing.length) result.candidates.push(candidate)
-  else result.profiles.push(candidate)
+  else {
+    const { missing: _missing, ...profile } = candidate
+    result.profiles.push(profile)
+  }
   if (passwordAvailable) result.credentials.set(id, password ?? "")
 }
 
@@ -95,31 +99,31 @@ function addMyCnf(result: ExternalDiscoveryResult, source: string, secretsAllowe
   if (parsed.hasUnsupportedInclude) {
     result.warnings.push("~/.my.cnf: diretivas !include e !includedir não são seguidas.")
   }
-  const values = parsed.values
-  if (!Object.keys(values).length) return
-  const passwordPresent = Object.hasOwn(values, "password")
-  profileOrCandidate(
-    result,
-    {
-      name: ".my.cnf · client",
-      driver: "mysql",
-      source: "external",
-      externalSource: "mysql-option-file",
-      host: values.host || undefined,
-      port: port(values.port, 3306),
-      database: values.database || undefined,
-      username: values.user || undefined,
-      socket: values.socket || undefined,
-      ssl: mysqlTlsMode(values["ssl-mode"]) !== "disable",
-      tlsMode: values.socket ? "disable" : mysqlTlsMode(values["ssl-mode"]),
-      writeEnabled: true,
-    },
-    "client",
-    secretsAllowed ? values.password : undefined,
-    !passwordPresent || secretsAllowed,
-  )
-  if (passwordPresent && !secretsAllowed) {
-    result.warnings.push("~/.my.cnf: a senha foi ignorada porque o arquivo não é privado.")
+  for (const { name, values } of parsed.profiles) {
+    const passwordPresent = Object.hasOwn(values, "password")
+    profileOrCandidate(
+      result,
+      {
+        name: `.my.cnf · ${name}`,
+        driver: "mysql",
+        source: "external",
+        externalSource: "mysql-option-file",
+        host: values.host || undefined,
+        port: port(values.port, 3306),
+        database: values.database || undefined,
+        username: values.user || undefined,
+        socket: values.socket || undefined,
+        ssl: mysqlTlsMode(values["ssl-mode"]) !== "disable",
+        tlsMode: values.socket ? "disable" : mysqlTlsMode(values["ssl-mode"]),
+        writeEnabled: true,
+      },
+      name,
+      secretsAllowed ? values.password : undefined,
+      !passwordPresent || secretsAllowed,
+    )
+    if (passwordPresent && !secretsAllowed && !result.warnings.includes(unsafeMyCnfWarning)) {
+      result.warnings.push(unsafeMyCnfWarning)
+    }
   }
 }
 
@@ -152,7 +156,7 @@ function pgpassTarget(values: Record<string, string>) {
   const host = values.host?.trim()
   const username = values.user?.trim()
   const database = values.dbname?.trim() || username
-  if (!host || !username || !database || host.includes(",")) return null
+  if (host?.includes(",")) return null
   return { host, port: port(values.port, 5432), database, username }
 }
 
@@ -169,7 +173,11 @@ function addPostgresService(
     return
   }
   const servicePasswordPresent = Object.hasOwn(group.values, "password")
-  let password = passSecretsAllowed ? matchingPgpassPassword(passEntries, target) : undefined
+  const { host, username, database } = target
+  let password =
+    passSecretsAllowed && host && username && database
+      ? matchingPgpassPassword(passEntries, { ...target, host, username, database })
+      : undefined
   if (servicePasswordPresent) {
     password = serviceSecretsAllowed ? group.values.password : undefined
   }

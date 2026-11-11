@@ -56,10 +56,29 @@ export function parseOptionGroups(source: string): ParsedOptionGroup[] {
 
 export function parseMyCnf(source: string) {
   const groups = parseOptionGroups(source)
-  const client = groups.find((group) => group.name.toLowerCase() === "client")?.values ?? {}
-  const mysql = groups.find((group) => group.name.toLowerCase() === "mysql")?.values ?? {}
+  const byName = new Map<string, Record<string, string>>()
+  const suffixes = new Map<string, string>()
+  for (const group of groups) {
+    const name = group.name.toLowerCase()
+    byName.set(name, { ...byName.get(name), ...group.values })
+    const match = name.match(/^(client|mysql)([_-].+)$/u)
+    const suffix = match?.[2]
+    if (suffix && (!suffixes.has(suffix) || match?.[1] === "client")) {
+      suffixes.set(suffix, group.name)
+    }
+  }
+  const values = { ...byName.get("client"), ...byName.get("mysql") }
+  const profiles: ParsedOptionGroup[] = []
+  if (Object.keys(values).length) profiles.push({ name: "client", values })
+  for (const [suffix, name] of suffixes) {
+    profiles.push({
+      name,
+      values: { ...values, ...byName.get(`client${suffix}`), ...byName.get(`mysql${suffix}`) },
+    })
+  }
   return {
-    values: { ...client, ...mysql },
+    values,
+    profiles,
     hasUnsupportedInclude: source
       .split(/\r?\n/u)
       .some((line) => /^\s*!include(?:dir)?\b/iu.test(line)),

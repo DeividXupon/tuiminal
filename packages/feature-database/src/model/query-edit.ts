@@ -40,7 +40,8 @@ export function databaseQueryTableWriteBlockReason(
   columns: DatabaseColumn[] | null,
   resultColumns: string[],
 ) {
-  if (!canWrite) return "Conexão em somente leitura. Use [C] > [E] e habilite LEITURA + ESCRITA."
+  if (!canWrite)
+    return "Conexão em somente leitura. Use [C] > [E] e desmarque SOMENTE LEITURA com [Ctrl+W]."
   if (!table) return "A edição exige um SELECT simples de uma única tabela."
   if (table.type !== "table") return "Views e resultados derivados são somente leitura."
   if (!columns) return "Carregando a estrutura da tabela…"

@@ -127,26 +127,43 @@ afterEach(async () => {
   fixtureRoot = ""
 })
 
-test("catalog search Enter focuses the filtered list without opening a table", async () => {
-  await mount("compact", 1, false, true)
-  await key("/")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-search")
-  await act(async () => {
-    tui?.mockInput.typeText("log_entry")
-    await tui?.renderOnce()
-  })
-  await settle(() => tui?.captureCharFrame().includes("▦ log_entry") ?? false)
+test.each(["compact", "framed"] as const)(
+  "catalog search shortcut and Enter preserve the filter in %s",
+  async (layout) => {
+    await mount(layout, 1, false, true)
+    const shortcut = tui?.renderer.root.findDescendantById("table-search-shortcut")
+    const search = tui?.renderer.root.findDescendantById("table-search")
+    expect(shortcut).toBeDefined()
+    if (!shortcut || !search) throw new Error("Missing catalog filter controls")
+    expect(shortcut.screenY).toBe(search.screenY)
+    expect(tui?.captureCharFrame().split("\n")[search?.screenY ?? 0]).toContain("[/]")
+    await key("/")
+    expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-search")
+    await act(async () => {
+      tui?.mockInput.typeText("log_entry")
+      await tui?.renderOnce()
+    })
+    await settle(() => tui?.captureCharFrame().includes("▦ log_entry") ?? false)
 
-  await key("RETURN")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-list")
-  expect(tui?.renderer.root.findDescendantById("database-table-header")).toBeUndefined()
-  expect(tui?.captureCharFrame()).not.toContain("◆ DDL")
+    await key("RETURN")
+    expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-list")
+    expect(tui?.renderer.root.findDescendantById("database-table-header")).toBeUndefined()
+    expect(tui?.captureCharFrame()).not.toContain("◆ DDL")
 
-  await key("RETURN")
-  await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-table-header")))
-  const history = tui?.renderer.root.findDescendantById("tutorial-db-table-history")
-  expect(tui?.captureCharFrame().split("\n")[history?.screenY ?? 0]).toContain("log_entry")
-})
+    await act(async () => {
+      await tui?.mockMouse.click(shortcut.screenX + 2, shortcut.screenY)
+      await tui?.renderOnce()
+    })
+    expect(tui?.renderer.currentFocusedRenderable?.id).toBe("table-search")
+    expect(tui?.captureCharFrame().split("\n")[search?.screenY ?? 0]).toContain("log_entry")
+    expect(tui?.captureCharFrame()).not.toContain("▦ demo")
+    await key("RETURN")
+    await key("RETURN")
+    await settle(() => Boolean(tui?.renderer.root.findDescendantById("database-table-header")))
+    const history = tui?.renderer.root.findDescendantById("tutorial-db-table-history")
+    expect(tui?.captureCharFrame().split("\n")[history?.screenY ?? 0]).toContain("log_entry")
+  },
+)
 
 test.each(["framed", "compact"] as const)(
   "table actions stay below the grid and remain clickable in %s",
@@ -546,6 +563,38 @@ test("rapid review confirmation applies one transaction and locks its approved s
     expect(database.query("SELECT COUNT(*) AS count FROM demo").get()).toEqual({ count: 0 })
   } finally {
     database.close()
+  }
+})
+
+test("connection creation bounds keyboard listeners and releases them on close", async () => {
+  await mount("compact", 1, false)
+  const renderer = tui?.renderer
+  if (!renderer) throw new Error("Missing renderer")
+  const baseline = renderer.keyInput.listenerCount("keypress")
+  const resizeBaseline = renderer.listenerCount("resize")
+  for (let cycle = 0; cycle < 3; cycle++) {
+    await key("c")
+    await settle(() => Boolean(renderer.root.findDescendantById("database-connection-list")))
+    const listListeners = renderer.keyInput.listenerCount("keypress")
+    await key("c")
+    await settle(() => renderer.currentFocusedRenderable?.id === "db-connection-name")
+    // Autocomplete belongs only to the focused field, regardless of form size.
+    expect(renderer.keyInput.listenerCount("keypress")).toBe(listListeners + 1)
+    expect(renderer.keyInput.listenerCount("keypress")).toBeLessThanOrEqual(
+      renderer.keyInput.getMaxListeners(),
+    )
+    for (let field = 0; field < 8; field++) {
+      await key("TAB")
+      expect(renderer.keyInput.listenerCount("keypress")).toBeLessThanOrEqual(listListeners + 1)
+    }
+    await key("ESCAPE")
+    await key("ESCAPE")
+    await settle(() => Boolean(renderer.root.findDescendantById("database-connection-list")))
+    expect(renderer.keyInput.listenerCount("keypress")).toBe(listListeners)
+    await key("ESCAPE")
+    await settle(() => !renderer.root.findDescendantById("database-connection-modal"))
+    expect(renderer.keyInput.listenerCount("keypress")).toBe(baseline)
+    expect(renderer.listenerCount("resize")).toBe(resizeBaseline)
   }
 })
 

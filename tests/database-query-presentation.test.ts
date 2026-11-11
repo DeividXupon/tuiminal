@@ -65,7 +65,7 @@ test("query result summary exposes the absolute window and available directions"
       false,
       false,
     ),
-  ).toBe("41–90 linhas ↑↓ · 4.0 ms")
-  expect(queryWindowLoadingLabel(-1)).toBe("Carregando 40 linhas acima…")
-  expect(queryWindowLoadingLabel(1)).toBe("Carregando 40 linhas abaixo…")
+  ).toBe("41–90 rows ↑↓ · 4.0 ms")
+  expect(queryWindowLoadingLabel(-1)).toBe("Loading 40 rows above…")
+  expect(queryWindowLoadingLabel(1)).toBe("Loading 40 rows below…")
 })

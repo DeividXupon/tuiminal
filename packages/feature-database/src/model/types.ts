@@ -21,6 +21,7 @@ export type DatabaseConnectionProfile = {
   source: DatabaseConnectionSource
   host?: string
   port?: number
+  portExpression?: string
   database?: string
   username?: string
   socket?: string
@@ -54,6 +55,7 @@ export type DatabaseConnectionDraft = Pick<
 } & {
   credentialSource?: DatabaseCredentialSource
   tlsMode?: DatabaseTlsMode | undefined
+  portExpression?: string | undefined
 }
 
 export type DatabaseTable = {

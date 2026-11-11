@@ -140,6 +140,7 @@ export function DatabaseBatchExportModal({
 
   return (
     <ModalSurface
+      fitContent
       id="database-batch-export-modal"
       dialogRef={dialogRef}
       width={width}

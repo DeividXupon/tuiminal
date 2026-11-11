@@ -115,6 +115,7 @@ export function DatabaseCellEditor({
 
   return (
     <ModalSurface
+      fitContent
       id="database-cell-editor-modal"
       width={width}
       height={height}

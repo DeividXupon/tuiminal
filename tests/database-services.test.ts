@@ -6,6 +6,7 @@ import { join } from "node:path"
 // These services capture their config root at import. Use a fresh process so
 // the existing SQLite suite and these fakes cannot share caches or credentials.
 test.each([
+  "saved connection environment references survive testing and editing",
   "history filtering resolves its target once",
   "batch history resolves its target once",
   "native connection tests close on query failure",

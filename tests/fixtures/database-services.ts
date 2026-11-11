@@ -177,7 +177,107 @@ function environmentReplacement() {
   assert.equal(db.sessionPasswords.has("environment-database-url"), false)
 }
 
+async function savedEnvironmentReferences() {
+  const originalSql = Bun.SQL
+  const originalSecrets = Bun.secrets
+  const credentials = new Map<string, string>()
+  const options: Record<string, unknown>[] = []
+  let closes = 0
+  class FakeSQL {
+    constructor(value: Record<string, unknown>) {
+      options.push(value)
+    }
+    begin(_mode: string, run: (client: FakeSQL) => unknown) {
+      return Promise.resolve(run(this))
+    }
+    unsafe() {
+      return { execute: async () => [{ connection_ok: 1 }] }
+    }
+    async close() {
+      closes++
+    }
+  }
+  Object.defineProperty(Bun, "SQL", { value: FakeSQL })
+  Object.assign(Bun, {
+    secrets: {
+      async get({ name }: { name: string }) {
+        return credentials.get(name) ?? null
+      },
+      async set({ name, value }: { name: string; value: string }) {
+        credentials.set(name, value)
+      },
+      async delete({ name }: { name: string }) {
+        return credentials.delete(name)
+      },
+    },
+  })
+  process.env.TUIMINAL_FIXTURE_HOST = "first.invalid"
+  process.env.TUIMINAL_FIXTURE_PORT = "5432"
+  process.env.TUIMINAL_FIXTURE_PASSWORD = "fictional-{NOT_RECURSIVE}"
+  const draft = {
+    name: "Fixture",
+    driver: "postgres" as const,
+    host: "{TUIMINAL_FIXTURE_HOST}",
+    portExpression: "{TUIMINAL_FIXTURE_PORT}",
+    database: "fixture",
+    username: "fixture",
+    ssl: false,
+    writeEnabled: false,
+  }
+  try {
+    const { profile: saved } = await db.addDatabaseConnection(
+      draft,
+      "{TUIMINAL_FIXTURE_PASSWORD}",
+      true,
+    )
+    assert.equal(closes, 1)
+    assert.equal(options[0]?.hostname, "first.invalid")
+    assert.equal(options[0]?.port, 5432)
+    assert.equal(options[0]?.password, "fictional-{NOT_RECURSIVE}")
+    assert.equal(credentials.get(saved.id), "{TUIMINAL_FIXTURE_PASSWORD}")
+    const reloaded = db.normalizeSavedProfile(JSON.parse(JSON.stringify(saved)))
+    assert.equal(reloaded?.host, "{TUIMINAL_FIXTURE_HOST}")
+    assert.equal(reloaded?.portExpression, "{TUIMINAL_FIXTURE_PORT}")
+    assert(!JSON.stringify(db.readSettings()).includes("first.invalid"))
+    assert(!JSON.stringify(db.readSettings()).includes("fictional-"))
+    db.sessionPasswords.clear()
+    await db.testSavedDatabaseConnection(saved.id, draft, "")
+    const scope = db.savedQueryScopeKey(saved.id)
+    process.env.TUIMINAL_FIXTURE_HOST = "second.invalid"
+    process.env.TUIMINAL_FIXTURE_PORT = "5433"
+    process.env.TUIMINAL_FIXTURE_PASSWORD = "fictional-changed"
+    const client = await db.createNativeClient(db.connectionProfile(saved.id))
+    await client.close()
+    assert.equal(options.at(-1)?.hostname, "second.invalid")
+    assert.equal(options.at(-1)?.port, 5433)
+    assert.equal(options.at(-1)?.password, "fictional-changed")
+    assert.notEqual(db.savedQueryScopeKey(saved.id), scope)
+    await db.updateDatabaseConnection(saved.id, draft, "", true)
+    assert.equal(credentials.get(saved.id), "{TUIMINAL_FIXTURE_PASSWORD}")
+    const count = options.length
+    delete process.env.TUIMINAL_FIXTURE_HOST
+    await assert.rejects(db.testDatabaseConnection(draft, ""), /TUIMINAL_FIXTURE_HOST/)
+    assert.equal(options.length, count)
+    process.env.TUIMINAL_FIXTURE_HOST = "fixture.invalid"
+    delete process.env.TUIMINAL_FIXTURE_PASSWORD
+    await assert.rejects(
+      db.testSavedDatabaseConnection(saved.id, draft, ""),
+      /TUIMINAL_FIXTURE_PASSWORD/,
+    )
+    assert.equal(db.sessionPasswords.size, 1)
+    process.env.TUIMINAL_FIXTURE_PORT = "65536"
+    await assert.rejects(db.testDatabaseConnection(draft, ""), /porta/)
+    await db.removeDatabaseConnection(saved.id)
+  } finally {
+    Object.defineProperty(Bun, "SQL", { value: originalSql })
+    Object.assign(Bun, { secrets: originalSecrets })
+    for (const field of ["HOST", "PORT", "PASSWORD"])
+      delete process.env[`TUIMINAL_FIXTURE_${field}`]
+  }
+}
+
 const scenarios: Record<string, () => void | Promise<void>> = {
+  "saved connection environment references survive testing and editing": savedEnvironmentReferences,
   "history filtering resolves its target once": historyFiltering,
   "batch history resolves its target once": batchHistory,
   "native connection tests close on query failure": () => nativeTest(true),

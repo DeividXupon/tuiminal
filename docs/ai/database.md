@@ -7,26 +7,30 @@ Code: [feature](../../packages/feature-database/src/).
 
 ## Connections and reads
 
-- Start unconfigured. Native MySQL/MariaDB, PostgreSQL and SQLite are supported;
-  optional MCP is explicitly opt-in/read-only. Environment URLs are discovered
-  session profiles, not editable saved connections.
-- The connection manager discovers external CLI profiles on open and `[R]` refresh:
-  MySQL `~/.my.cnf` (`[client]` merged with overriding `[mysql]` values),
-  `mysql_config_editor print --all`, PostgreSQL `~/.pg_service.conf`, and matching
-  `~/.pgpass` entries. Honor `PGSERVICEFILE`/`PGPASSFILE` and Windows AppData
-  defaults. Run subprocesses by argv without a shell, bound output/time, and stop
-  only the owned process on abort.
-- External profiles remain session-only and are not copied into `databases.json`.
-  They expose the source and preserve configured TLS mode. Complete missing
-  database/password fields once per session; do not attempt to extract masked
-  `mysql_config_editor` passwords. External profiles allow writes, but normal
-  write review and confirmation still apply.
+- Start unconfigured. Support native MySQL/MariaDB, PostgreSQL and SQLite;
+  MCP is opt-in/read-only. Environment URLs are session profiles, not editable
+  saved connections.
+- Discover CLI profiles on manager open and `[R]`: MySQL `~/.my.cnf`,
+  `mysql_config_editor print --all`, PostgreSQL `~/.pg_service.conf` and `~/.pgpass`.
+  Honor `PGSERVICEFILE`/`PGPASSFILE` and Windows AppData defaults. Use argv without
+  a shell, bound output/time, and stop only owned subprocesses on abort.
+- MySQL merges `[client]` then `[mysql]`. Each matching `_`/`-` suffix pair adds
+  a profile inheriting those defaults; never mix suffixes or import server/tool
+  groups. Show incomplete profiles and warnings in the initial manager.
+- External profiles stay session-only, outside `databases.json`, with source and
+  TLS mode intact. Complete missing fields once per session, retaining loaded
+  passwords; never extract masked `mysql_config_editor` passwords. Writes require
+  normal review and confirmation.
 - Read secrets from external Unix files only when the file is regular, owned by
   the effective user and has no group/other permissions; Windows relies on ACLs.
   Bound files to 256 KiB and discovered profiles to 100. An unsafe file may
   contribute non-secret metadata, with a visible warning, but never its password.
   Saved PostgreSQL profiles may select `pgpass` instead of storing a password;
   resolve the first matching entry at connection time without persisting it.
+- Connection inputs accept `{NAME}` references to the launch process environment.
+  Complete names only, never values; resolve once without executing shell code.
+  Saved metadata and credential storage retain references. Keep numeric port
+  expressions separate from resolved ports and scope query history by resolved target.
 - Store connection metadata/favorites in restricted `databases.json`; passwords
   belong in the OS credential store. Decode URL passwords once and clear stale
   session passwords on rediscovery. Temporary test clients close on every path;

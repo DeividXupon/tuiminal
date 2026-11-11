@@ -130,8 +130,11 @@ export function DatabaseChangesModal({
 
   if (!open) return null
   const width = Math.max(1, Math.min(118, terminal.width - 2))
-  const height = Math.max(1, Math.min(28, terminal.height))
   const compact = width < 88
+  const height = Math.max(
+    1,
+    Math.min(28, terminal.height, (compact ? 7 : 8) + Math.max(1, items.length * 5)),
+  )
   const approvedCount = items.filter((item) => item.approved).length
   const allApproved = items.length > 0 && approvedCount === items.length
   const contentWidth = Math.max(8, width - 8)

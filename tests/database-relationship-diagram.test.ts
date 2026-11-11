@@ -62,7 +62,7 @@ test("narrow diagram stacks source and target with composite columns", () => {
 test("self relation stays local and Unicode names keep terminal width", () => {
   const self = { ...outgoing, name: "fk_self", relatedTable: "users", columns: ["parent_id"] }
   const lines = renderDatabaseRelationshipDiagram(selected, [self], 30)
-  expect(lines.join("\n")).toContain("fk_self (auto-relação)")
+  expect(lines.join("\n")).toContain("fk_self (self-reference)")
   expect(lines.join("\n")).toContain("--->")
   const unicode = renderDatabaseRelationshipDiagram(
     { schema: "主", name: "顧客一覧", type: "table" },

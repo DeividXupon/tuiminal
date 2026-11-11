@@ -82,8 +82,11 @@ export function DatabaseQueryHistoryModal({
   const parameterSpace = Math.min(selectedEntry?.parameterPreview.length ?? 0, compact ? 2 : 4)
   const headerHeight = 3 + historyPrivacyLayout(privacy, Math.max(1, width - 6)).height
   const listHeight = Math.max(
-    4,
-    Math.floor((height - 6 - headerHeight) * (compact ? 0.52 : 0.58)) - parameterSpace,
+    1,
+    Math.min(
+      visibleEntries.length * 2,
+      Math.floor((height - 6 - headerHeight) * (compact ? 0.52 : 0.58)) - parameterSpace,
+    ),
   )
   const rowWidth = Math.max(12, width - 8)
   const parameterLimit = compact ? 2 : 4
@@ -178,6 +181,7 @@ export function DatabaseQueryHistoryModal({
 
   return (
     <ModalSurface
+      fitContent
       id="database-query-history-modal"
       dialogRef={modalRef}
       width={width}

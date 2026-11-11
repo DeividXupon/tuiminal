@@ -4,6 +4,14 @@ import type { DatabaseQueryWindowDirection } from "../model/query-window"
 import type { SqlCompletionKind } from "../model/sql-autocomplete"
 import type { DatabaseQueryResult, DatabaseTableMutation } from "../model/types"
 
+export function queryAccessHeader(compact: boolean, canWrite: boolean) {
+  return compact
+    ? canWrite
+      ? "RW"
+      : "RO"
+    : translateUi(canWrite ? "◆ LEITURA + ESCRITA" : "◇ SOMENTE LEITURA")
+}
+
 export function queryCompletionPresentation(kind: SqlCompletionKind) {
   switch (kind) {
     case "keyword":

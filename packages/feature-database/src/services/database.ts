@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto"
+import { expandConnectionEnvironment } from "../model/connection-environment"
+import { normalizedDraft, profileFromDraft, resolvedConnectionProfile } from "./connection-draft"
+export { defaultPort, normalizedDraft, profileFromDraft } from "./connection-draft"
 import { affectedRowCount, queryResultColumns } from "../model/query-result-metadata"
 
 export { affectedRowCount, queryResultColumns } from "../model/query-result-metadata"
@@ -24,7 +27,7 @@ export {
 
 import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { isAbsolute, join, resolve } from "node:path"
+import { join } from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { definedProperties } from "@xupon/tuiminal-core/data/defined-properties"
@@ -436,6 +439,8 @@ export function normalizeSavedProfile(value: unknown): DatabaseConnectionProfile
     source: "saved" as const,
     host: typeof candidate.host === "string" ? candidate.host : undefined,
     port: typeof candidate.port === "number" ? candidate.port : undefined,
+    portExpression:
+      typeof candidate.portExpression === "string" ? candidate.portExpression : undefined,
     database: typeof candidate.database === "string" ? candidate.database : undefined,
     username: typeof candidate.username === "string" ? candidate.username : undefined,
     socket: typeof candidate.socket === "string" ? candidate.socket : undefined,
@@ -654,12 +659,6 @@ export function databaseDriverLabel(driver: DatabaseDriver) {
   return DRIVER_LABELS[driver]
 }
 
-export function defaultPort(driver: DatabaseDriver) {
-  if (driver === "mysql" || driver === "mcp-mysql") return 3306
-  if (driver === "postgres") return 5432
-  return undefined
-}
-
 export function listDatabaseConnections(): DatabaseConnectionProfile[] {
   const saved = readSettings().connections
   const environment = discoveredEnvironmentProfile()
@@ -689,8 +688,9 @@ export function setDefaultDatabaseConnection(connectionId: string) {
 }
 
 export function savedQueryScopeKey(connectionId: string) {
-  const profile = listDatabaseConnections().find((connection) => connection.id === connectionId)
-  if (!profile) return `${connectionId}::unknown`
+  const saved = listDatabaseConnections().find((connection) => connection.id === connectionId)
+  if (!saved) return `${connectionId}::unknown`
+  const profile = resolvedConnectionProfile(saved)
   const target =
     profile.driver === "sqlite"
       ? (profile.filename ?? "")
@@ -846,77 +846,6 @@ export function clearLegacyDatabaseQueryHistoryContent() {
   return listDatabaseQueryHistory()
 }
 
-function normalizedNetworkDraft(draft: DatabaseConnectionDraft, name: string) {
-  const socket = draft.socket?.trim()
-  const host = draft.host?.trim()
-  const database = draft.database?.trim()
-  const username = draft.username?.trim()
-  const port = Math.floor(draft.port ?? defaultPort(draft.driver) ?? 0)
-  if (!host && !(draft.driver === "mysql" && socket)) throw new Error("Informe o host do banco.")
-  if (!database) throw new Error("Informe o nome do banco.")
-  if (!username) throw new Error("Informe o usuário.")
-  if (port < 1 || port > 65_535) throw new Error("Informe uma porta válida.")
-  return {
-    ...draft,
-    name,
-    host,
-    socket: draft.driver === "mysql" ? socket : undefined,
-    port,
-    database,
-    username,
-    filename: undefined,
-    command: undefined,
-    tlsMode: draft.ssl ? draft.tlsMode : "disable",
-  }
-}
-
-export function normalizedDraft(draft: DatabaseConnectionDraft): DatabaseConnectionDraft {
-  const name = draft.name.trim()
-  if (!name) throw new Error("Informe um nome para a conexão.")
-
-  if (draft.driver === "sqlite") {
-    const rawFilename = draft.filename?.trim()
-    if (!rawFilename) throw new Error("Informe o caminho do arquivo SQLite.")
-    const expanded = rawFilename.startsWith("~/")
-      ? join(homedir(), rawFilename.slice(2))
-      : rawFilename
-    return {
-      ...draft,
-      name,
-      filename: isAbsolute(expanded) ? expanded : resolve(process.cwd(), expanded),
-      host: undefined,
-      port: undefined,
-      database: undefined,
-      username: undefined,
-      command: undefined,
-      ssl: false,
-    }
-  }
-
-  if (draft.driver === "mcp-mysql") {
-    const command = draft.command?.trim()
-    if (!command) throw new Error("Informe o executável do servidor MCP.")
-    const expanded = command.startsWith("~/") ? join(homedir(), command.slice(2)) : command
-    if (!canExecute(expanded)) {
-      throw new Error(`O MCP não foi encontrado ou não é executável: ${expanded}`)
-    }
-    return {
-      ...draft,
-      name,
-      command: expanded,
-      host: undefined,
-      port: undefined,
-      database: undefined,
-      username: undefined,
-      filename: undefined,
-      ssl: false,
-      writeEnabled: false,
-    }
-  }
-
-  return normalizedNetworkDraft(draft, name)
-}
-
 export async function savePassword(connectionId: string, password: string) {
   sessionPasswords.set(connectionId, password)
   const secrets = runtimeBun().secrets
@@ -944,13 +873,6 @@ export async function getPassword(connectionId: string, profile?: DatabaseConnec
   return ""
 }
 
-export function profileFromDraft(
-  draft: DatabaseConnectionDraft,
-  id = `database-${randomUUID()}`,
-): DatabaseConnectionProfile {
-  return definedProperties({ ...normalizedDraft(draft), id, source: "saved" as const })
-}
-
 async function closeFailedDatabaseClient(close: () => Promise<void>) {
   try {
     await close()
@@ -960,7 +882,11 @@ async function closeFailedDatabaseClient(close: () => Promise<void>) {
 }
 
 export async function testDatabaseConnection(draft: DatabaseConnectionDraft, password: string) {
-  const profile = profileFromDraft(draft, `test-${randomUUID()}`)
+  const profile = definedProperties({
+    ...normalizedDraft(draft),
+    id: `test-${randomUUID()}`,
+    source: "saved" as const,
+  })
   if (password) sessionPasswords.set(profile.id, password)
   let close: (() => Promise<void>) | undefined
   let verified = false
@@ -1349,7 +1275,10 @@ export async function createNativeClient(profile: DatabaseConnectionProfile) {
     port: profile.port,
     database: profile.database,
     username: profile.username,
-    password: await getPassword(profile.id, profile),
+    password:
+      profile.source === "saved" && profile.credentialSource !== "pgpass"
+        ? expandConnectionEnvironment(await getPassword(profile.id, profile), process.env)
+        : await getPassword(profile.id, profile),
     tls: profile.socket ? false : (profile.tlsMode ?? profile.ssl),
     max: 3,
     idleTimeout: 30,
@@ -1360,7 +1289,7 @@ export async function createNativeClient(profile: DatabaseConnectionProfile) {
 export function connectionProfile(connectionId: string) {
   const profile = listDatabaseConnections().find((item) => item.id === connectionId)
   if (!profile) throw new Error("A conexão selecionada não existe mais.")
-  return profile
+  return resolvedConnectionProfile(profile)
 }
 
 export async function getMcpClient(profile: DatabaseConnectionProfile) {

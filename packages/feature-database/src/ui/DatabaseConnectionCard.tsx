@@ -34,7 +34,7 @@ export function DatabaseConnectionCard({
     profile.filename ||
     profile.socket ||
     (profile.host
-      ? `${profile.host}:${profile.port ?? ""}/${profile.database ?? ""}`
+      ? `${profile.host}:${profile.portExpression ?? profile.port ?? ""}/${profile.database ?? ""}`
       : undefined) ||
     profile.command ||
     translateUi("configuração externa")

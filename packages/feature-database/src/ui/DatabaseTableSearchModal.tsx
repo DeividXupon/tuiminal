@@ -87,6 +87,7 @@ export function DatabaseTableSearchModal({
 
   return (
     <ModalSurface
+      fitContent
       id="database-table-search-modal"
       dialogRef={modalRef}
       width={width}

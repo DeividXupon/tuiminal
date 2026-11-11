@@ -20,15 +20,19 @@ import {
   testSavedDatabaseConnection,
   updateDatabaseConnection,
 } from "../services/database"
-import { completeExternalDatabaseConnection } from "../services/external-database-connections"
-import { padDisplayEnd, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import {
+  completeExternalDatabaseConnection,
+  externalDatabasePassword,
+} from "../services/external-database-connections"
+import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
-import type { PasswordInputRenderable } from "@xupon/tuiminal-core/ui/PasswordInput"
-import "@xupon/tuiminal-core/ui/PasswordInput"
+import { ConnectionInput } from "./DatabaseConnectionInput"
+import { resolveConnectionPassword } from "../services/connection-environment"
 import { DatabaseConnectionList } from "./DatabaseConnectionList"
 
 type DatabaseConnectionModalProps = {
@@ -84,6 +88,12 @@ function availableDriverOptions(
     : DATABASE_DRIVER_OPTIONS
 }
 
+function driverDescription(driver: DatabaseDriver, fixed: boolean) {
+  const option = DATABASE_DRIVER_OPTIONS.find((option) => option.id === driver)
+  const description = translateUi(option?.description ?? databaseDriverLabel(driver))
+  return fixed ? description : `${description}  ·  ${translateUi("[A←]/[F→] alternar driver")}`
+}
+
 function createDraft(driver: DatabaseDriver = "mysql"): DatabaseConnectionDraft {
   return {
     name: translateUi(
@@ -112,6 +122,7 @@ function draftFromProfile(profile: DatabaseConnectionProfile): DatabaseConnectio
     driver: profile.driver,
     host: profile.host,
     port: profile.port,
+    portExpression: profile.portExpression,
     database: profile.database,
     username: profile.username,
     socket: profile.socket,
@@ -122,77 +133,6 @@ function draftFromProfile(profile: DatabaseConnectionProfile): DatabaseConnectio
     credentialSource: profile.credentialSource ?? "tuiminal",
     writeEnabled: profile.writeEnabled,
   }
-}
-
-function ConnectionInput({
-  label,
-  id,
-  value,
-  placeholder,
-  width,
-  inputRef,
-  onInput,
-  onSubmit,
-  masked = false,
-  maxLength = 256,
-}: {
-  label: string
-  id: string
-  value: string
-  placeholder: string
-  width?: number | "auto" | `${number}%`
-  inputRef: React.RefObject<InputRenderable | null>
-  onInput: (value: string) => void
-  onSubmit: () => void
-  masked?: boolean
-  maxLength?: number
-}) {
-  const inputStyle = {
-    flexGrow: width === undefined ? 1 : 0,
-    backgroundColor: COLORS.panelRaised,
-    focusedBackgroundColor: COLORS.panelRaised,
-    textColor: masked ? COLORS.panelRaised : COLORS.text,
-    focusedTextColor: masked ? COLORS.panelRaised : COLORS.text,
-    selectionFg: masked ? COLORS.panelRaised : COLORS.text,
-    cursorColor: COLORS.database,
-    placeholderColor: COLORS.muted,
-  }
-
-  return (
-    <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-      <text
-        content={padDisplayEnd(translateUi(label), 12)}
-        style={{ width: 12, flexShrink: 0, fg: COLORS.muted }}
-      />
-      {masked ? (
-        <password-input
-          ref={inputRef as React.RefObject<PasswordInputRenderable | null>}
-          id={id}
-          value={value}
-          placeholder={translateUi(placeholder)}
-          {...(width === undefined ? {} : { width })}
-          maxLength={maxLength}
-          onMouseDown={() => inputRef.current?.focus()}
-          onInput={onInput}
-          onSubmit={onSubmit}
-          style={inputStyle}
-        />
-      ) : (
-        <input
-          ref={inputRef}
-          id={id}
-          value={value}
-          placeholder={translateUi(placeholder)}
-          {...(width === undefined ? {} : { width })}
-          maxLength={maxLength}
-          onMouseDown={() => inputRef.current?.focus()}
-          onInput={onInput}
-          onSubmit={onSubmit}
-          style={inputStyle}
-        />
-      )}
-    </box>
-  )
 }
 
 function DatabasePasswordField({
@@ -316,6 +256,7 @@ export function DatabaseConnectionModal({
     () => [...connections, ...externalCandidates],
     [connections, externalCandidates],
   )
+  const hasDiscoveryDetails = discoveringExternal || externalWarnings.length > 0
   const usesPgpass = draft.driver === "postgres" && draft.credentialSource === "pgpass"
   const driverOptions = availableDriverOptions(externalCandidate, draft.driver)
 
@@ -383,6 +324,17 @@ export function DatabaseConnectionModal({
     setNotice("")
   }, [])
 
+  const cycleDriver = (direction: -1 | 1) => {
+    const currentIndex = DATABASE_DRIVER_OPTIONS.findIndex((option) => option.id === draft.driver)
+    const nextIndex =
+      (currentIndex + direction + DATABASE_DRIVER_OPTIONS.length) % DATABASE_DRIVER_OPTIONS.length
+    const next = DATABASE_DRIVER_OPTIONS[nextIndex]
+    if (next) {
+      chooseDriver(next.id)
+      driverRefs.current[nextIndex]?.focus()
+    }
+  }
+
   const toggleCredentialSource = useCallback(() => {
     if (draft.driver === "postgres") {
       setDraft((current) => ({
@@ -422,7 +374,7 @@ export function DatabaseConnectionModal({
     setEditingConnectionId(null)
     setExternalCandidate(candidate)
     setDraft({ ...draftFromProfile(candidate), credentialSource: "tuiminal", writeEnabled: true })
-    setPassword("")
+    setPassword(externalDatabasePassword(candidate.id) ?? "")
     setDeleteConfirmationId(null)
     setNotice(translateUi("Complete os campos ausentes."))
     setScreen("form")
@@ -468,8 +420,12 @@ export function DatabaseConnectionModal({
     try {
       if (externalCandidate) {
         const normalized = normalizedDraft(draft)
-        await testDatabaseConnection(normalized, password)
-        const profile = completeExternalDatabaseConnection(externalCandidate, normalized, password)
+        await testDatabaseConnection(draft, password)
+        const profile = completeExternalDatabaseConnection(
+          externalCandidate,
+          normalized,
+          resolveConnectionPassword(password),
+        )
         onCreated(profile, translateUi("Conexão externa disponível nesta sessão"))
         return
       }
@@ -517,7 +473,8 @@ export function DatabaseConnectionModal({
 
   useEffect(() => {
     if (!open) return
-    const nextScreen = startInForm || connectionItems.length === 0 ? "form" : "connections"
+    const nextScreen =
+      startInForm || (connectionItems.length === 0 && !hasDiscoveryDetails) ? "form" : "connections"
     setScreen(nextScreen)
     setNotice("")
     setDeleteConfirmationId(null)
@@ -530,7 +487,15 @@ export function DatabaseConnectionModal({
     const selected = connections.findIndex((profile) => profile.id === selectedConnectionId)
     setSelectedIndex(Math.max(0, selected))
     if (nextScreen === "form") setTimeout(() => focusFormInput(nameRef), 0)
-  }, [connectionItems.length, connections, focusFormInput, open, selectedConnectionId, startInForm])
+  }, [
+    connectionItems.length,
+    connections,
+    focusFormInput,
+    hasDiscoveryDetails,
+    open,
+    selectedConnectionId,
+    startInForm,
+  ])
 
   useEffect(() => {
     if (open && screen === "form") setTimeout(() => focusFormInput(nameRef), 0)
@@ -562,9 +527,8 @@ export function DatabaseConnectionModal({
     return () => clearTimeout(timeout)
   }, [deleteConfirmationId])
 
-  // With no profiles there is no useful connection-list screen. Deriving this
-  // synchronously avoids flashing an empty list before the opening effect runs.
-  const activeScreen: ModalScreen = connectionItems.length === 0 ? "form" : screen
+  const activeScreen: ModalScreen =
+    connectionItems.length === 0 && !hasDiscoveryDetails ? "form" : screen
 
   useEffect(() => {
     if (!open || activeScreen !== "connections") return
@@ -574,7 +538,7 @@ export function DatabaseConnectionModal({
   }, [activeScreen, open, selectedIndex])
 
   useKeyboard((key) => {
-    if (!open) return
+    if (!open || key.defaultPrevented) return
     const focusedId = renderer.currentFocusedRenderable?.id
     const editing = formRefs.some((ref) => ref.current?.id === focusedId)
 
@@ -590,6 +554,7 @@ export function DatabaseConnectionModal({
       return
     }
     if (activeScreen === "form") {
+      const driverDirection = directionalShortcutDirection(key)
       const consume = () => {
         key.preventDefault()
         key.stopPropagation()
@@ -602,13 +567,9 @@ export function DatabaseConnectionModal({
         const nextIndex = (currentIndex + direction + controls.length) % controls.length
         const next = controls[nextIndex]
         if (next) focusFormControl(next)
-      } else if (key.ctrl && key.name === "d" && !externalCandidate) {
+      } else if (driverDirection && !editing && !externalCandidate) {
         consume()
-        const currentIndex = DATABASE_DRIVER_OPTIONS.findIndex(
-          (option) => option.id === draft.driver,
-        )
-        const next = DATABASE_DRIVER_OPTIONS[(currentIndex + 1) % DATABASE_DRIVER_OPTIONS.length]
-        if (next) chooseDriver(next.id)
+        cycleDriver(driverDirection)
       } else if (
         key.ctrl &&
         key.name === "t" &&
@@ -682,7 +643,7 @@ export function DatabaseConnectionModal({
   const isNetworkDriver = draft.driver === "mysql" || draft.driver === "postgres"
   const desiredHeight =
     activeScreen === "connections"
-      ? Math.max(14, Math.min(26, connectionItems.length * 3 + 10))
+      ? Math.min(26, Math.max(1, connectionItems.length * 3) + 9)
       : isNetworkDriver
         ? 22
         : 16
@@ -691,7 +652,6 @@ export function DatabaseConnectionModal({
     Math.max(10, terminal.height - 4),
     Math.max(6, terminal.height - 2),
   )
-  const selectedDriver = DATABASE_DRIVER_OPTIONS.find((option) => option.id === draft.driver)
   const updateDraft = (patch: Partial<DatabaseConnectionDraft>) =>
     setDraft((current) => ({ ...current, ...patch }))
   const compact = width < 58
@@ -815,7 +775,7 @@ export function DatabaseConnectionModal({
 
             <ShortcutText
               content={truncateDisplay(
-                `${translateUi(selectedDriver?.description ?? databaseDriverLabel(draft.driver))}  ·  ${translateUi("[Ctrl+D] alternar driver")}`,
+                driverDescription(draft.driver, Boolean(externalCandidate)),
                 Math.max(8, width - (compact ? 4 : 6)),
               )}
               style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
@@ -823,6 +783,10 @@ export function DatabaseConnectionModal({
             <text
               content="DADOS DA CONEXÃO"
               style={{ height: 1, flexShrink: 0, fg: COLORS.database, marginTop: 1 }}
+            />
+            <text
+              content={translateUi("Use {VAR} para variáveis de ambiente.")}
+              style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
             />
             <ConnectionInput
               label="Nome"
@@ -868,15 +832,11 @@ export function DatabaseConnectionModal({
                 <ConnectionInput
                   label="Porta"
                   id="db-connection-port"
-                  value={String(draft.port ?? "")}
+                  value={draft.portExpression ?? String(draft.port ?? "")}
                   placeholder={String(defaultPort(draft.driver) ?? "")}
                   inputRef={portRef}
-                  onInput={(port) => {
-                    const digits = port.replace(/\D/g, "")
-                    updateDraft({ port: digits ? Number(digits) : undefined })
-                  }}
+                  onInput={(portExpression) => updateDraft({ portExpression })}
                   onSubmit={() => focusNext(portRef)}
-                  maxLength={5}
                 />
                 <ConnectionInput
                   label="Banco"
@@ -936,12 +896,10 @@ export function DatabaseConnectionModal({
                   id="db-connection-access"
                   buttonRef={accessRef}
                   label={
-                    draft.writeEnabled
-                      ? "[Ctrl+W] ◆ LEITURA + ESCRITA"
-                      : "[Ctrl+W] ◇ SOMENTE LEITURA"
+                    draft.writeEnabled ? "[Ctrl+W] ◇ SOMENTE LEITURA" : "[Ctrl+W] ◆ SOMENTE LEITURA"
                   }
                   accent={draft.writeEnabled ? COLORS.warning : COLORS.database}
-                  active={draft.writeEnabled}
+                  active={!draft.writeEnabled}
                   disabled={draft.driver === "mcp-mysql" || Boolean(externalCandidate)}
                   onPress={() => updateDraft({ writeEnabled: !draft.writeEnabled })}
                 />

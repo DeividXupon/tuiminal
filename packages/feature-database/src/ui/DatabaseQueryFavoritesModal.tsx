@@ -155,13 +155,15 @@ export function DatabaseQueryFavoritesModal({
 
   if (!mode) return null
   const width = Math.max(1, Math.min(94, availableWidth - 2))
-  const height = Math.max(1, Math.min(mode === "save" ? 15 : 24, terminal.height - 4))
+  const listHeight = queries.length ? Math.min(24, 5 + queries.length * 3) : 7
+  const height = Math.max(1, Math.min(mode === "save" ? 15 : listHeight, terminal.height - 4))
   const compact = width < 64
   const previewWidth = Math.max(12, width - 8)
   const selectedQuery = queries[selectedIndex] ?? null
 
   return (
     <ModalSurface
+      fitContent={mode === "save"}
       id="database-saved-query-modal"
       dialogRef={dialogRef}
       width={width}

@@ -201,6 +201,23 @@ test("external candidates open a session-only completion form", async () => {
   await tui.renderOnce()
   expect(tui.captureCharFrame()).toContain("COMPLETAR CONEXÃO EXTERNA")
   expect(tui.renderer.root.findDescendantById("db-connection-password")).toBeDefined()
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await act(async () => Bun.sleep(10))
+    if (tui.renderer.currentFocusedRenderable?.id === "db-connection-name") break
+  }
+  await act(async () => tui?.mockInput.pressEscape())
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await act(async () => Bun.sleep(10))
+    if (tui.renderer.currentFocusedRenderable?.id !== "db-connection-name") break
+  }
+  expect(tui.renderer.currentFocusedRenderable?.id).not.toBe("db-connection-name")
+  for (const key of ["a", "f"]) {
+    await act(async () => tui?.mockInput.pressKey(key))
+    await tui.renderOnce()
+    expect(tui.captureCharFrame()).toContain("◆ MySQL")
+    expect(tui.captureCharFrame()).not.toContain("[A←]/[F→]")
+    expect(tui.renderer.root.findDescendantById("db-connection-driver-postgres")).toBeUndefined()
+  }
 })
 
 test("saved PostgreSQL profiles can select pgpass without a password input", async () => {

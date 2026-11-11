@@ -1,4 +1,8 @@
 import {
+  useWorkspaceRepaint,
+  WorkspaceRepaintBoundary,
+} from "@xupon/tuiminal-core/ui/workspace-repaint"
+import {
   databaseTableBoxTargets,
   useDatabaseBoxSelection,
 } from "./hooks/use-database-box-selection"
@@ -6,7 +10,13 @@ import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import { paletteAction, useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
 import { databaseGridActions } from "./ui/database-grid-actions"
 import type { InputRenderable, ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import {
+  AppContext,
+  useAppContext,
+  useKeyboard,
+  useRenderer,
+  useTerminalDimensions,
+} from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
@@ -86,7 +96,7 @@ import {
   TABLE_HISTORY_LIMIT,
 } from "./rendering/constants"
 import { tableReadNotification } from "./rendering/table-read-notification"
-import { fitCell, shorten } from "./rendering/workspace-shared"
+import { shorten } from "./rendering/workspace-shared"
 import {
   applyTableMutations,
   DatabaseMutationCommitUncertainError,
@@ -106,24 +116,54 @@ import { DatabaseCellEditor } from "./ui/DatabaseCellEditor"
 import { type DatabaseChangeReviewItem, DatabaseChangesModal } from "./ui/DatabaseChangesModal"
 import { DatabaseConnectionModal } from "./ui/DatabaseConnectionModal"
 import { DatabaseEmptyState } from "./ui/DatabaseEmptyState"
+import { DatabaseGridColumnHeaders } from "./ui/DatabaseGridColumnHeaders"
 import { DatabaseGridRowView } from "./ui/DatabaseGridRowView"
 import { DatabaseLoadingOverlay } from "./ui/DatabaseLoadingOverlay"
 import { DatabaseSchemaView } from "./ui/DatabaseSchemaView"
 import { DatabaseTableHeader } from "./ui/DatabaseTableHeader"
+import { DatabaseTableMetadata } from "./ui/DatabaseTableMetadata"
 import { DatabaseTableSearchModal } from "./ui/DatabaseTableSearchModal"
 import { RowInspector } from "./ui/RowInspector"
 
-export function DatabaseViewer({
-  active,
-  tutorialMode = false,
-  queryRerunRequest = null,
-  onQueryRerunRequestHandled = () => undefined,
-}: {
+type DatabaseViewerProps = {
   active: boolean
   tutorialMode?: boolean
+  tutorialTargetId?: string | null
   queryRerunRequest?: DatabaseQueryRerunRequest | null
   onQueryRerunRequestHandled?: () => void
-}) {
+}
+
+export function DatabaseViewer(props: DatabaseViewerProps) {
+  const liveMounted = useRef(false)
+  if (!props.tutorialMode) liveMounted.current = true
+  const context = useAppContext()
+  const liveContext = useMemo(
+    () => ({ ...context, keyHandler: props.tutorialMode ? null : context.keyHandler }),
+    [context, props.tutorialMode],
+  )
+  return (
+    <box style={{ flexGrow: 1, position: "relative" }}>
+      {liveMounted.current && (
+        <box visible={!props.tutorialMode} style={{ flexGrow: 1 }}>
+          <WorkspaceRepaintBoundary transitionKey="database-live" visible={!props.tutorialMode}>
+            <AppContext.Provider value={liveContext}>
+              <DatabaseWorkspace {...props} active={props.active && !props.tutorialMode} />
+            </AppContext.Provider>
+          </WorkspaceRepaintBoundary>
+        </box>
+      )}
+      {props.tutorialMode && (
+        <DatabaseTutorialDemo activeTargetId={props.tutorialTargetId ?? null} />
+      )}
+    </box>
+  )
+}
+
+function DatabaseWorkspace({
+  active,
+  queryRerunRequest = null,
+  onQueryRerunRequestHandled = () => undefined,
+}: DatabaseViewerProps) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const { notify } = useNotifications()
@@ -192,6 +232,7 @@ export function DatabaseViewer({
   >({})
   const [batchExportOpen, setBatchExportOpen] = useState(false)
   const [queryOpen, setQueryOpen] = useState(false)
+  useWorkspaceRepaint(JSON.stringify([view, queryOpen, narrowDetailOpen]))
   const [queryTabs, setQueryTabs] = useState<DatabaseSqlTab[]>([])
   const [activeQueryTabId, setActiveQueryTabId] = useState("")
   const [tableSearchOpen, setTableSearchOpen] = useState(false)
@@ -274,12 +315,6 @@ export function DatabaseViewer({
     actionRowCount,
   })
   const compactEmptyState = terminal.height < 24 || terminal.width < 72
-  const metadataNameWidth = Math.max(10, Math.min(28, Math.floor(tableAreaWidth * 0.34)))
-  const metadataTypeWidth = Math.max(9, Math.min(24, Math.floor(tableAreaWidth * 0.3)))
-  const metadataDetailWidth = Math.max(8, tableAreaWidth - metadataNameWidth - metadataTypeWidth)
-  const indexNameWidth = Math.max(10, Math.min(28, Math.floor(tableAreaWidth * 0.32)))
-  const indexTypeWidth = 9
-  const indexDefinitionWidth = Math.max(8, tableAreaWidth - indexNameWidth - indexTypeWidth)
   const tableWindow = useDatabaseTableWindow({
     connectionId: activeConnectionId,
     table: selectedTable,
@@ -410,7 +445,7 @@ export function DatabaseViewer({
   const selectedRowKey = selectedGridRow?.rowKey ?? null
   const selectedColumn = pageData?.columns[selectedColumnIndex] ?? null
   const tableWriteBlockReason = !connectionCanWrite
-    ? "Conexão em somente leitura. Use [C] > [E] e habilite LEITURA + ESCRITA."
+    ? "Conexão em somente leitura. Use [C] > [E] e desmarque SOMENTE LEITURA com [Ctrl+W]."
     : selectedTable?.type !== "table"
       ? "Views são somente leitura e não podem ser alteradas por esta tela."
       : !selectedTable
@@ -1303,7 +1338,7 @@ export function DatabaseViewer({
 
   useEffect(() => {
     if (!active || discoveringExternal || connections.length > 0) return
-    setConnectionModalStartsInForm(true)
+    setConnectionModalStartsInForm(false)
     setConnectionModalOpen(true)
   }, [active, connections.length, discoveringExternal])
 
@@ -1896,59 +1931,6 @@ export function DatabaseViewer({
         ? "⚠ SENSÍVEIS MASCARADOS  ·  "
         : "",
   )
-  if (tutorialMode) return <DatabaseTutorialDemo />
-
-  function renderColumnMetadata(column: TablePage["columns"][number]) {
-    const attributes = [
-      column.key === "PRI" ? "PK" : column.key || "",
-      column.nullable ? "NULL" : "NOT NULL",
-      column.defaultValue === null ? translateUi("sem padrão") : `= ${column.defaultValue}`,
-    ]
-      .filter(Boolean)
-      .join(" · ")
-    return (
-      <text
-        key={column.field}
-        content={`${fitCell(column.field, metadataNameWidth)}${fitCell(column.type, metadataTypeWidth)}${fitCell(attributes, metadataDetailWidth)}`}
-        style={{ fg: column.key === "PRI" ? COLORS.database : COLORS.text }}
-      />
-    )
-  }
-
-  function renderColumnHeader(column: TablePage["columns"][number], visibleIndex: number) {
-    const absoluteIndex = columnOffset + visibleIndex
-    const selected = activePane === "grid" && absoluteIndex === selectedColumnIndex
-    const sortMarker =
-      activeTableQuery.sort?.column === column.field
-        ? activeTableQuery.sort.direction === "asc"
-          ? " ↑"
-          : " ↓"
-        : ""
-    return (
-      <box key={column.field} style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-        <text
-          content={fitCell(`${column.key === "PRI" ? "◆ " : ""}${column.field}${sortMarker}`)}
-          style={{
-            fg: selected ? selectionColors.foreground : COLORS.database,
-            bg: selected ? selectionColors.background : COLORS.panelRaised,
-          }}
-        />
-        {visibleIndex < visibleColumns.length - 1 ? (
-          <text content="│" style={{ fg: COLORS.border, bg: COLORS.panelRaised }} />
-        ) : null}
-      </box>
-    )
-  }
-
-  function renderIndex(index: DatabaseIndex) {
-    return (
-      <text
-        key={index.name}
-        content={`${fitCell(index.name, indexNameWidth)}${fitCell(index.unique ? "UNIQUE" : "INDEX", indexTypeWidth)}${fitCell(index.definition, indexDefinitionWidth)}`}
-        style={{ fg: index.unique ? COLORS.database : COLORS.text }}
-      />
-    )
-  }
 
   const queryWorkspaces =
     activeConnection && activeConnectionId
@@ -1966,54 +1948,56 @@ export function DatabaseViewer({
                 overflow: "hidden",
               }}
             >
-              <DatabaseQueryWorkspace
-                active={active && visible}
-                tabId={tab.id}
-                tabs={queryTabs}
-                activeTabId={activeQueryTabId}
-                connection={activeConnection}
-                connectionId={activeConnectionId}
-                tables={catalog?.tables ?? []}
-                selectedTable={selectedTable}
-                selectedTableColumns={pageData?.columns ?? null}
-                availableWidth={tableAreaWidth}
-                rerunRequest={
-                  tab.id === activeQueryTabId &&
-                  queryRerunRequest?.connectionId === activeConnectionId
-                    ? queryRerunRequest
-                    : null
-                }
-                onRerunRequestHandled={onQueryRerunRequestHandled}
-                onClose={closeQueryWorkspace}
-                onReturnToCatalog={() => {
-                  setQueryOpen(false)
-                  focusPane("catalog")
-                }}
-                onSelectTab={setActiveQueryTabId}
-                onNewTab={() => createQueryTab()}
-                onCloseTab={closeQueryTab}
-                onSwitchTab={switchQueryTab}
-                stagedChanges={stagedChanges}
-                setStagedChanges={setStagedChanges}
-                changesModalOpen={changesModalOpen}
-                onOpenChangesReview={() => {
-                  setChangesModalNotice("")
-                  setChangesModalOpen(true)
-                }}
-                writeBusy={writeBusy}
-                dataRevision={refreshKey}
-                maskingTermsSignature={maskingTermsSignature}
-                onDatabaseChanged={() => {
-                  loadedCatalogKeyRef.current = null
-                  loadedPageKeyRef.current = null
-                  setCatalogRefreshKey((current) => current + 1)
-                  setRefreshKey((current) => current + 1)
-                  if (view === "indexes") setIndexesLoading(true)
-                  if (view === "schema") setStructureLoading(true)
-                  setIndexes(null)
-                  setTableStructure(null)
-                }}
-              />
+              <WorkspaceRepaintBoundary transitionKey={tab.id} visible={visible}>
+                <DatabaseQueryWorkspace
+                  active={active && visible}
+                  tabId={tab.id}
+                  tabs={queryTabs}
+                  activeTabId={activeQueryTabId}
+                  connection={activeConnection}
+                  connectionId={activeConnectionId}
+                  tables={catalog?.tables ?? []}
+                  selectedTable={selectedTable}
+                  selectedTableColumns={pageData?.columns ?? null}
+                  availableWidth={tableAreaWidth}
+                  rerunRequest={
+                    tab.id === activeQueryTabId &&
+                    queryRerunRequest?.connectionId === activeConnectionId
+                      ? queryRerunRequest
+                      : null
+                  }
+                  onRerunRequestHandled={onQueryRerunRequestHandled}
+                  onClose={closeQueryWorkspace}
+                  onReturnToCatalog={() => {
+                    setQueryOpen(false)
+                    focusPane("catalog")
+                  }}
+                  onSelectTab={setActiveQueryTabId}
+                  onNewTab={() => createQueryTab()}
+                  onCloseTab={closeQueryTab}
+                  onSwitchTab={switchQueryTab}
+                  stagedChanges={stagedChanges}
+                  setStagedChanges={setStagedChanges}
+                  changesModalOpen={changesModalOpen}
+                  onOpenChangesReview={() => {
+                    setChangesModalNotice("")
+                    setChangesModalOpen(true)
+                  }}
+                  writeBusy={writeBusy}
+                  dataRevision={refreshKey}
+                  maskingTermsSignature={maskingTermsSignature}
+                  onDatabaseChanged={() => {
+                    loadedCatalogKeyRef.current = null
+                    loadedPageKeyRef.current = null
+                    setCatalogRefreshKey((current) => current + 1)
+                    setRefreshKey((current) => current + 1)
+                    if (view === "indexes") setIndexesLoading(true)
+                    if (view === "schema") setStructureLoading(true)
+                    setIndexes(null)
+                    setTableStructure(null)
+                  }}
+                />
+              </WorkspaceRepaintBoundary>
             </box>
           )
         })
@@ -2036,9 +2020,11 @@ export function DatabaseViewer({
       {connections.length === 0 ? (
         <DatabaseEmptyState
           onOpenActions={actionPalette.open}
-          key={LAYOUT.compact ? "database-empty-compact" : "database-empty-framed"}
           compact={compactEmptyState}
           terminalWidth={terminal.width}
+          discoveringExternal={discoveringExternal}
+          hasExternalCandidates={externalCandidates.length > 0}
+          hasExternalWarnings={externalWarnings.length > 0}
           onOpenConnections={() => {
             setConnectionModalStartsInForm(false)
             setConnectionModalOpen(true)
@@ -2084,29 +2070,51 @@ export function DatabaseViewer({
                 />
               </box>
             </box>
-            <input
-              ref={searchRef}
-              id="table-search"
-              placeholder={translateUi("Filtrar schema ou tabela…")}
-              onInput={setSearch}
-              onMouseDown={() => {
-                activatePane("catalog")
-                searchRef.current?.focus()
-              }}
-              onSubmit={() => {
-                activatePane("catalog")
-                tableListRef.current?.focus()
-              }}
-              width={Math.max(8, sidebarWidth - 4)}
+            <box
               style={{
-                backgroundColor: COLORS.panelRaised,
-                focusedBackgroundColor: COLORS.panelRaised,
-                textColor: COLORS.text,
-                focusedTextColor: COLORS.text,
-                cursorColor: COLORS.database,
+                height: 1,
+                width: Math.max(8, sidebarWidth - 4),
+                flexDirection: "row",
+                flexShrink: 0,
                 marginBottom: 1,
+                backgroundColor: COLORS.panelRaised,
               }}
-            />
+            >
+              <InlineButton
+                id="table-search-shortcut"
+                label="[/]"
+                accent={COLORS.database}
+                backgroundColor={COLORS.panelRaised}
+                onPress={() => {
+                  activatePane("catalog")
+                  searchRef.current?.focus()
+                }}
+              />
+              <input
+                ref={searchRef}
+                id="table-search"
+                placeholder={translateUi("Filtrar schema ou tabela…")}
+                onInput={setSearch}
+                onMouseDown={() => {
+                  activatePane("catalog")
+                  searchRef.current?.focus()
+                }}
+                onSubmit={() => {
+                  activatePane("catalog")
+                  tableListRef.current?.focus()
+                }}
+                style={{
+                  backgroundColor: COLORS.panelRaised,
+                  focusedBackgroundColor: COLORS.panelRaised,
+                  textColor: COLORS.text,
+                  focusedTextColor: COLORS.text,
+                  cursorColor: COLORS.database,
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  minWidth: 1,
+                }}
+              />
+            </box>
             <select
               ref={tableListRef}
               id="table-list"
@@ -2245,26 +2253,13 @@ export function DatabaseViewer({
                 </box>
               ) : rowsLoading || !pageData ? (
                 <box style={{ flexGrow: 1 }} />
-              ) : view === "columns" ? (
-                <box style={{ flexGrow: 1 }}>
-                  <text
-                    content={`${fitCell(translateUi("COLUNA"), metadataNameWidth)}${fitCell(translateUi("TIPO"), metadataTypeWidth)}${fitCell(translateUi("ATRIBUTOS"), metadataDetailWidth)}`}
-                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                  />
-                  {pageData.columns.map(renderColumnMetadata)}
-                </box>
-              ) : view === "indexes" ? (
-                <box style={{ flexGrow: 1 }}>
-                  <text
-                    content={`${fitCell(translateUi("ÍNDICE"), indexNameWidth)}${fitCell(translateUi("TIPO"), indexTypeWidth)}${fitCell(translateUi("DEFINIÇÃO / COLUNAS"), indexDefinitionWidth)}`}
-                    style={{ fg: COLORS.database, bg: COLORS.panelRaised }}
-                  />
-                  {indexesLoading ? null : indexes?.length ? (
-                    indexes.map(renderIndex)
-                  ) : (
-                    <text content="Nenhum índice encontrado." style={{ fg: COLORS.muted }} />
-                  )}
-                </box>
+              ) : view === "columns" || view === "indexes" ? (
+                <DatabaseTableMetadata
+                  width={tableAreaWidth}
+                  view={view}
+                  columns={pageData.columns}
+                  indexes={indexesLoading ? null : indexes}
+                />
               ) : view === "schema" ? (
                 <DatabaseSchemaView
                   table={selectedTable}
@@ -2319,7 +2314,13 @@ export function DatabaseViewer({
                             />
                           </Button>
                           <text content="│" style={{ fg: COLORS.border, bg: COLORS.panelRaised }} />
-                          {visibleColumns.map(renderColumnHeader)}
+                          <DatabaseGridColumnHeaders
+                            columns={visibleColumns}
+                            columnOffset={columnOffset}
+                            selectedColumnIndex={selectedColumnIndex}
+                            active={activePane === "grid"}
+                            sort={activeTableQuery.sort}
+                          />
                         </box>
                       ) : (
                         <text content="Tabela sem colunas visíveis" style={{ fg: COLORS.muted }} />
