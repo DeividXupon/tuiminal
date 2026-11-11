@@ -50,6 +50,9 @@ export const testRemoteCodexConnection: FeatureModules["terminal"]["testRemoteCo
 ) => requireFeature("terminal").testRemoteCodexConnection(...args)
 export const checkRemoteServerReadiness: FeatureModules["terminal"]["checkRemoteServerReadiness"] =
   (...args) => requireFeature("terminal").checkRemoteServerReadiness(...args)
+export const previewTerminalAgentSound: FeatureModules["terminal"]["previewTerminalAgentSound"] = (
+  ...args
+) => requireFeature("terminal").previewTerminalAgentSound(...args)
 export const listSshConfigProfiles: FeatureModules["terminal"]["listSshConfigProfiles"] = (
   ...args
 ) => requireFeature("terminal").listSshConfigProfiles(...args)

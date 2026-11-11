@@ -1,3 +1,4 @@
+export { previewTerminalAgentSound } from "./services/agent-sounds"
 export { TermAgents } from "./TerminalWorkspace"
 export type { RemoteServerSetupRequest } from "./model/sessions"
 export { PinnedTerminalSidebar } from "./ui/PinnedTerminalSidebar"

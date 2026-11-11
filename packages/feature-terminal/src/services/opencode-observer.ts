@@ -154,6 +154,8 @@ export class OpenCodeObserver {
     if (title) observed.session = { ...observed.session, title }
     applyOpenCodeLiveEvent(observed, value, event?.type)
     this.publish(observed)
+    if (event?.type === "session.error" && sessionId === this.activeSessionId)
+      this.events.onTaskFailed?.()
     if (eventNeedsHydration(event?.type)) this.scheduleHydration(sessionId)
   }
 

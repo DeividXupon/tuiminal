@@ -30,6 +30,7 @@ export type OpenCodeHydration = {
 export type OpenCodeActivity = NonNullable<OpenCodeHydration["activity"]>
 
 export type OpenCodeObserverEvents = {
+  onTaskFailed?: () => void
   onActivity: (
     activity: "thinking" | "writing" | "running" | "updating" | "coding" | "tooling",
   ) => void

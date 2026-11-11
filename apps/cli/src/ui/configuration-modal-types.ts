@@ -23,6 +23,7 @@ export type ConfigurationModalProps = {
   onSectionChange: (section: ConfigurationSection) => void
   onSectionFocus: (section: ConfigurationSection) => void
   onNavigationFocus: () => void
+  onTerminalAgentSoundsChange?: ((sounds: UiSettings["terminalAgentSounds"]) => void) | undefined
   onTerminalAgentCommandsChange?: ((commands: string[]) => void) | undefined
   onTerminalRemoteProfilesList?:
     | ((signal?: AbortSignal) => Promise<UiSettings["terminalRemoteCodexProfiles"]>)
@@ -63,6 +64,7 @@ export type ConfigurationModalProps = {
 
 export const CONFIGURATION_SECTION_LABELS: Record<ConfigurationSection, string> = {
   terminal: "Terminal",
+  terminalSounds: "SONS DOS AGENTES",
   remoteConnection: "CONEXÃO REMOTA",
   gitDiffs: "DIFFS",
   gitPullRequests: "PULL REQUESTS",

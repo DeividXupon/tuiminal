@@ -24,6 +24,7 @@ const CLAUDE_IDENTITY: AgentIdentity = {
 }
 
 export type ClaudeHookEvents = {
+  onTaskFailed?: () => void
   onActivity: (activity: AgentActivity) => void
   onState: (state: AgentState) => void
   onTitle: (title: string) => void
@@ -309,6 +310,7 @@ export class ClaudeHookObserver {
     }
     this.hydration(failed ? "unknown" : "done", failed ? "failed" : "completed", false)
     this.events.onState(failed ? "unknown" : "done")
+    if (failed) this.events.onTaskFailed?.()
     this.remember(failed ? "failed" : "idle")
   }
 

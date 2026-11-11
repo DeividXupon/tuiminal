@@ -1,0 +1,15 @@
+{
+  "url": "https://kenney.nl/assets/interface-sounds",
+  "version": "1.0",
+  "license": "CC0-1.0",
+  "encoding": "Base64 WAV, PCM 16-bit, 44100 Hz, mono. Converted from the original OGG files using ffmpeg -ac 1 -ar 44100 -c:a pcm_s16le -map_metadata -1.",
+  "sourceSha256": {
+    "error_005.ogg": "3f75b11df5b06d68d2c25fbf0e9c9d9e7dd9250562a4007ee34856b8a309a2ae",
+    "question_002.ogg": "46056f10c70dda860e93bd27b66f4d33c0b7154eff28def06471b50028efa5b3",
+    "question_003.ogg": "00bafc564e29c12e99da584864a750260e7110378251d63d3aa5b3d727836efe",
+    "question_004.ogg": "585ecb58b529dc49b5c5ce5ba93427bf73b7052bae55e49c43ba8f169c93ac99",
+    "select_004.ogg": "eb6cb435f3f2ab14f85f46a2bdd9073ec511d0f1f8d8c890c6636045703a5fd4",
+    "select_005.ogg": "ad09146e4ea33b931b2f5dfb4051a4f1fe4a36f1a48c42c5e9269c292ae21214",
+    "select_006.ogg": "b44550fa8d3276c072ce7c3c1315d949f7a28a95bc22b3618ad4eea62eac8abe"
+  }
+}

@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -16,6 +17,7 @@ import {
 import { ConfigurationDetailHeader } from "./ConfigurationDetailHeader"
 import type { ConfigurationModalProps } from "./configuration-modal-types"
 import { TerminalRemoteSettingsDetail } from "./TerminalRemoteSettingsDetail"
+import { TerminalSoundSettingsDetail } from "./TerminalSoundSettingsDetail"
 import { TerminalSettingsDetail } from "./TerminalSettingsDetail"
 
 function ActionDetail({
@@ -73,6 +75,7 @@ type ConfigurationDetailProps = Pick<
   | "notice"
   | "onClose"
   | "onNavigationFocus"
+  | "onTerminalAgentSoundsChange"
   | "onTerminalAgentCommandsChange"
   | "onTerminalRemoteProfilesList"
   | "onTerminalRemoteProfileActivate"
@@ -101,6 +104,7 @@ export function ConfigurationDetail({
   onNavigationFocus,
   queryHistoryCount,
   tutorialLabel,
+  onTerminalAgentSoundsChange,
   onTerminalAgentCommandsChange,
   onTerminalRemoteProfilesList,
   onTerminalRemoteProfileActivate,
@@ -120,6 +124,17 @@ export function ConfigurationDetail({
   compact,
   contentWidth,
 }: ConfigurationDetailProps) {
+  useWorkspaceRepaint(section)
+  if (section === "terminalSounds")
+    return (
+      <TerminalSoundSettingsDetail
+        sounds={settings.terminalAgentSounds}
+        onChange={onTerminalAgentSoundsChange}
+        notice={notice}
+        compact={compact}
+        contentWidth={contentWidth}
+      />
+    )
   if (section === "terminal")
     return (
       <TerminalSettingsDetail

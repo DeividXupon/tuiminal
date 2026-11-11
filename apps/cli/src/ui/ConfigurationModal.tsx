@@ -43,6 +43,7 @@ export function ConfigurationModal({
   onSectionChange,
   onSectionFocus,
   onNavigationFocus,
+  onTerminalAgentSoundsChange,
   onTerminalAgentCommandsChange,
   onTerminalRemoteProfilesList,
   onTerminalRemoteProfileActivate,
@@ -202,6 +203,7 @@ export function ConfigurationModal({
               onNavigationFocus={onNavigationFocus}
               queryHistoryCount={queryHistoryCount}
               tutorialLabel={tutorialLabel}
+              onTerminalAgentSoundsChange={onTerminalAgentSoundsChange}
               onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
               onTerminalRemoteProfilesList={onTerminalRemoteProfilesList}
               onTerminalRemoteProfileActivate={onTerminalRemoteProfileActivate}
@@ -258,6 +260,7 @@ export function ConfigurationModal({
                 onNavigationFocus={onNavigationFocus}
                 queryHistoryCount={queryHistoryCount}
                 tutorialLabel={tutorialLabel}
+                onTerminalAgentSoundsChange={onTerminalAgentSoundsChange}
                 onTerminalAgentCommandsChange={onTerminalAgentCommandsChange}
                 onTerminalRemoteProfilesList={onTerminalRemoteProfilesList}
                 onTerminalRemoteProfileActivate={onTerminalRemoteProfileActivate}

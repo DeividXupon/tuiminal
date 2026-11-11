@@ -24,6 +24,7 @@ function navigationGroup(section: ConfigurationSection): NavigationGroup {
   if (isGitConfigurationSection(section)) return "github"
   if (
     section === "terminal" ||
+    section === "terminalSounds" ||
     section === "remoteConnection" ||
     section === "sensitive" ||
     section === "history"
@@ -77,7 +78,7 @@ function NavigationRow({
   const showRail = gitSection ? focused : active
   const labelWidth = focused ? 16 : summary ? 14 : 24
   const trailing = focused ? (
-    <ShortcutText content="[Enter]" highlight={false} style={{ fg: BRAND_COLOR }} />
+    <ShortcutText content="[Enter]" style={{ fg: BRAND_COLOR }} />
   ) : summary ? (
     <text content={truncateDisplay(summary, 10)} style={{ fg: COLORS.muted }} />
   ) : null

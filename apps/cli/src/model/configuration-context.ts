@@ -8,6 +8,7 @@ export type ConfigurationSection =
   | "gitRepositories"
   | "gitBrowser"
   | "terminal"
+  | "terminalSounds"
   | "remoteConnection"
   | "colorMode"
   | "palette"
@@ -81,6 +82,7 @@ export function configurationSectionsForContext(context: ConfigurationContext) {
   if (context === "terminal")
     return [
       "terminal",
+      "terminalSounds",
       "remoteConnection",
       ...GLOBAL_CONFIGURATION_SECTIONS.filter((section) => section !== "layout"),
     ] as ConfigurationSection[]

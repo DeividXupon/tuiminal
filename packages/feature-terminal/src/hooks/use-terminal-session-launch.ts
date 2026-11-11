@@ -1,7 +1,8 @@
+import type { LaunchContext, TerminalSize } from "./terminal-launch-context"
 import { basename } from "node:path"
 import type { EmbeddedTerminalRenderable } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { type RefObject, useCallback, useRef } from "react"
+import { useCallback, useRef } from "react"
 import type { AgentMessageHistoryEntry } from "../model/agent-message-history"
 import { agentProvider } from "../model/agent-provider"
 import type { AgentActivity, AgentState } from "../model/agent-state"
@@ -10,9 +11,9 @@ import {
   type AgentSessionIntegration,
   type TermAgentsCommand,
   integratedAgentLaunch,
-  type TerminalSession,
 } from "../model/sessions"
 import { terminalExitMessage } from "../rendering/presentation"
+import { createAgentSoundObserver } from "../services/agent-sound-observer"
 import { AgentMonitor } from "../services/agent-monitor"
 import { startIntegratedAgentTerminal } from "../services/integrated-agent-terminal"
 import { OpenCodeSessionProjection } from "../services/opencode-session-projection"
@@ -26,31 +27,6 @@ import { startWorkspaceTerminal } from "../services/terminal-backend"
 import type { TerminalLaunch, TerminalLaunches } from "../services/terminal-launches"
 import { stopTerminalBeforeRestart, TerminalRetirementError } from "../services/terminal-lifecycle"
 import { notifyTerminalExit, useTerminalNotifications } from "./use-terminal-notifications"
-
-type TerminalSize = { columns: number; rows: number }
-type Notify = Parameters<typeof notifyTerminalExit>[0]
-
-type LaunchContext = {
-  dimensions: RefObject<{ width: number; height: number }>
-  terminals: RefObject<Map<string, EmbeddedTerminalRenderable>>
-  handles: RefObject<Map<string, TermAgentsProcessHandle>>
-  commands: RefObject<Map<string, TermAgentsCommand>>
-  sizes: RefObject<Map<string, TerminalSize>>
-  launches: RefObject<TerminalLaunches>
-  outputs: RefObject<Map<string, AgentMonitor>>
-  activeSession: RefObject<string | null>
-  updateSession: (id: string, update: Partial<TerminalSession>) => void
-  updateAgentMessages: (
-    id: string,
-    messages: readonly AgentMessageHistoryEntry[],
-    replace: boolean,
-  ) => void
-  clearAgentMessages: (id: string) => void
-  closeFinishedShell: (id: string) => void
-  focusTerminal: (id: string) => void
-  setNotice: (message: string) => void
-  notify: Notify
-}
 
 type ActiveLaunch = { handle: TermAgentsProcessHandle | null; ended: boolean }
 
@@ -201,6 +177,7 @@ async function launchTerminal(
   if (!command || !terminal) return
   const integration = integratedAgentLaunch(command)
   const isCurrent = () => currentLaunch(id, terminal, launch, context)
+  const sounds = createAgentSoundObserver(isCurrent)
   const stopped = await stopTerminalBeforeRestart({
     handle: context.handles.current.get(id),
     close: clear,
@@ -272,12 +249,15 @@ async function launchTerminal(
   }
   try {
     const events = {
+      onTaskFailed: sounds.onTaskFailed,
       onActivity(activity: AgentActivity) {
+        sounds.observe("working")
         agentActivity = activity
         agentState = "working"
         updateIntegratedAgent()
       },
       onState(state: AgentState) {
+        sounds.observe(state)
         agentState = state
         if (state === "working") agentActivity = "thinking"
         updateIntegratedAgent()
@@ -309,6 +289,7 @@ async function launchTerminal(
               ...events,
               onHydrated(thread) {
                 if (!launch.isCurrent()) return
+                sounds.reset(thread.state)
                 agentState = thread.state
                 updateIntegratedAgent()
                 if (integration.remote) {
@@ -353,6 +334,7 @@ async function launchTerminal(
               onActiveSessionChanged(sessionId) {
                 if (!launch.isCurrent()) return
                 openCodeSessions.activate(sessionId)
+                sounds.reset(openCodeSessions.snapshot().active?.agent.state ?? "idle")
                 if (openCodeSessions.has(sessionId)) publishOpenCodeSessions()
               },
               onHydrated(hydration) {

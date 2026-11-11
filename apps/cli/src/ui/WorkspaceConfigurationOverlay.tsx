@@ -64,6 +64,9 @@ export function WorkspaceConfigurationOverlay({
         onSectionChange={selectSection}
         onSectionFocus={focusSection}
         onNavigationFocus={focusNavigation}
+        onTerminalAgentSoundsChange={(terminalAgentSounds) =>
+          applySettings({ terminalAgentSounds })
+        }
         onTerminalAgentCommandsChange={(terminalAgentCommands) =>
           applySettings({ terminalAgentCommands })
         }

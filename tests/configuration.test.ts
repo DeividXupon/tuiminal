@@ -10,6 +10,11 @@ import { configurationSettingPatch } from "../apps/cli/src/model/configuration-o
 import { getUiSettings } from "../packages/core/src/settings/theme"
 
 describe("contextual settings", () => {
+  test("agent sounds are available only in Term Agents", () => {
+    expect(configurationSectionsForContext("terminal")).toContain("terminalSounds")
+    for (const context of ["global", "database", "git", "installer"] as const)
+      expect(configurationSectionsForContext(context)).not.toContain("terminalSounds")
+  })
   test("shows Database settings first only in the Database context", () => {
     expect(configurationSectionsForContext("database")).toEqual([
       "sensitive",

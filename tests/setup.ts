@@ -45,6 +45,7 @@ process.env.HOME = testHome
 process.env.USERPROFILE = testHome
 process.env.XDG_DATA_HOME = join(testRoot, "data")
 process.env.TUIMINAL_SOURCE_FEATURES = "1"
+process.env.TUIMINAL_AGENT_SOUNDS = "0"
 process.env.XDG_CONFIG_HOME = join(testRoot, "config")
 process.env.TUIMINAL_WORKDIR = projectRoot
 process.env.TUIMINAL_HTTP_HOME = projectRoot
