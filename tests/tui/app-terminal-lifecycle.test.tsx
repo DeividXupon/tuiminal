@@ -113,6 +113,14 @@ test("a native terminal keeps its process and output across repeated feature swi
     await key("3", { meta: true })
     await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
     await key("4", { meta: true })
+    if (cycle === 0) {
+      await settle(() => Boolean(tui?.renderer.root.findDescendantById("http-source-local-card")))
+      await key("l")
+      await settle(() =>
+        Boolean(tui?.renderer.root.findDescendantById("http-navigation-collection")),
+      )
+      await key("n", { ctrl: true })
+    }
     await settle(() => tui?.captureCharFrame().includes("GET Scratch") ?? false)
     await key("ESCAPE")
     await key("5", { meta: true })

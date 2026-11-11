@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core"
+import type { BoxRenderable, Renderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -8,17 +8,10 @@ import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import { TutorialTargetOutline } from "./TutorialTargetOutline"
+import { DATABASE_TUTORIAL_STEPS } from "./database-steps"
 
-export type TutorialStep = {
-  targetId: string
-  group: string
-  title: string
-  description: string
-  hint?: string
-  kind: "block" | "control" | "action"
-  accent?: string
-  stateful?: boolean
-}
+import type { TutorialStep } from "./types"
+export type { TutorialStep } from "./types"
 type TargetRect = { x: number; y: number; width: number; height: number }
 type CardGeometry = { x: number; y: number; width: number; height: number }
 
@@ -33,253 +26,6 @@ type TutorialOverlayProps = {
   onClose: () => void
   onStepChange?: (targetId: string | null) => void
 }
-
-const DATABASE_TUTORIAL_STEPS: TutorialStep[] = [
-  {
-    targetId: "tutorial-db-catalog",
-    group: "BLOCO 1 DE 3",
-    title: "Catálogo do banco",
-    description:
-      "Este bloco reúne a conexão ativa, a busca e a árvore de schemas, tabelas e views.",
-    hint: "[H/←] e [L/→] usam o bloco vizinho quando a direção está livre.",
-    kind: "block",
-  },
-  {
-    targetId: "tutorial-db-connection",
-    group: "CATÁLOGO · ATIVAÇÃO",
-    title: "Conexão ativa",
-    description:
-      "Mostra qual banco está em uso. O gerenciamento de conexões fica na ação inferior do catálogo.",
-    kind: "control",
-  },
-  {
-    targetId: "table-search",
-    group: "CATÁLOGO · CONTROLE",
-    title: "Filtro rápido",
-    description:
-      "Filtra a árvore pelo nome do schema ou da tabela sem consultar novamente o banco.",
-    hint: "Atalhos: [/] · [Esc] devolve o foco à lista",
-    kind: "control",
-  },
-  {
-    targetId: "table-list",
-    group: "CATÁLOGO · ATIVAÇÃO",
-    title: "Árvore de tabelas",
-    description:
-      "Use [↑↓] ou [J/K] para navegar e [Enter] para abrir. O mouse também seleciona e rola a lista.",
-    hint: "Ao abrir uma tabela, a área de dados recebe o foco.",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-new-connection",
-    group: "CATÁLOGO · AÇÃO",
-    title: "Criar nova / conexões",
-    description: "Abre o gerenciador para trocar, editar, excluir ou cadastrar conexões.",
-    hint: "Atalho: [C]",
-    kind: "action",
-  },
-  {
-    targetId: "tutorial-db-new-query",
-    group: "CATÁLOGO · AÇÃO",
-    title: "Criar query",
-    description:
-      "Abre o workspace SQL com até seis editores e resultados independentes. Autocomplete, favoritos e histórico respeitam a conexão ativa.",
-    hint: "[W] abre · [Ctrl+A] executa somente o comando atual",
-    kind: "action",
-  },
-  {
-    targetId: "tutorial-db-grid",
-    group: "BLOCO 2 DE 3",
-    title: "Consultas e área de dados",
-    description:
-      "Este bloco mostra a consulta executada, seus resultados, a estrutura da tabela, os índices e as alterações ainda não salvas.",
-    hint: "No tour, tudo aqui é simulado e nenhum banco real é acessado.",
-    kind: "block",
-  },
-  {
-    targetId: "tutorial-db-query-preview",
-    group: "DADOS · CONSULTA",
-    title: "Consulta visualizada",
-    description:
-      "Aqui você confere qual SQL produziu os dados exibidos logo abaixo. A grade representa o resultado dessa consulta.",
-    hint: "A consulta deste tutorial é apenas uma demonstração.",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-table-history",
-    group: "DADOS · NAVEGAÇÃO",
-    title: "Tabelas abertas",
-    description:
-      "Mantém até seis tabelas abertas sem duplicar nomes. Ao reabrir uma tabela, o foco volta para a aba existente.",
-    hint: "Atalhos: [A←] e [F→]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-view-data",
-    group: "DADOS · ATIVAÇÃO",
-    title: "Registros",
-    description:
-      "Exibe as linhas da tabela e habilita navegação, edição e carregamento incremental.",
-    hint: "Atalho: [1]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-view-columns",
-    group: "DADOS · ATIVAÇÃO",
-    title: "Colunas",
-    description: "Mostra tipo, chave, nulabilidade e valor padrão de cada coluna.",
-    hint: "Atalho: [2]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-view-indexes",
-    group: "DADOS · ATIVAÇÃO",
-    title: "Índices",
-    description: "Lista índices simples e únicos, incluindo sua definição e colunas.",
-    hint: "Atalho: [3]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-view-schema",
-    group: "DADOS · ESTRUTURA",
-    title: "Schema completo",
-    description:
-      "Reúne o DDL, constraints, índices e relacionamentos de entrada e saída da tabela.",
-    hint: "Atalho: [4]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-sensitive",
-    group: "DADOS · PRIVACIDADE",
-    title: "Dados sensíveis",
-    description:
-      "Campos sensíveis começam visíveis. [V] mascara os valores; para revelá-los novamente, confirme com [V].",
-    hint: "Atalho: [V]",
-    kind: "action",
-    accent: COLORS.database,
-  },
-  {
-    targetId: "tutorial-db-table-tools",
-    group: "DADOS · FILTRO",
-    title: "Ordenar e buscar",
-    description:
-      "[O] alterna a coluna ativa entre ordem normal, crescente e decrescente. [S] busca um texto em todas as colunas.",
-    hint: "A ordenação e a busca ficam isoladas por conexão e tabela.",
-    kind: "action",
-  },
-  {
-    targetId: "tutorial-db-selection",
-    group: "DADOS · SELEÇÃO EM LOTE",
-    title: "Selecionar várias linhas",
-    description:
-      "[Alt+Space] fixa a linha inicial. [↑/↓] ajusta um intervalo contínuo entre ela e a linha atual.",
-    hint: "[Alt+Space] iniciar/finalizar · [↑/↓] ajustar · [Esc] limpar",
-    kind: "action",
-    accent: COLORS.database,
-  },
-  {
-    targetId: "tutorial-db-export",
-    group: "DADOS · SELEÇÃO EM LOTE",
-    title: "Exportar a seleção",
-    description:
-      "Copia ou salva somente as linhas marcadas em CSV, TSV ou JSON usando as colunas visíveis no resultado.",
-    hint: "Atalho: [X] · valores mascarados continuam protegidos",
-    kind: "action",
-    accent: COLORS.database,
-  },
-  {
-    targetId: "tutorial-db-new-row",
-    group: "DADOS · ESCRITA",
-    title: "Preparar nova linha",
-    description:
-      "Cria uma linha local em azul. O banco só será alterado depois da revisão e confirmação.",
-    hint: "Atalho: [Ctrl+A]",
-    kind: "action",
-  },
-  {
-    targetId: "tutorial-db-edit-cell",
-    group: "DADOS · ESCRITA",
-    title: "Editar uma ou várias linhas",
-    description:
-      "Sem marcação, edita a célula ativa. Com linhas marcadas, prepara o mesmo valor na coluna ativa para todas elas.",
-    hint: "Atalhos: [E] ou [Enter]",
-    kind: "action",
-    accent: COLORS.warning,
-  },
-  {
-    targetId: "tutorial-db-delete-row",
-    group: "DADOS · ESCRITA",
-    title: "Preparar exclusão",
-    description:
-      "Marca em vermelho a linha atual ou todas as linhas selecionadas, mas ainda não executa o DELETE.",
-    hint: "Atalho: [dd]",
-    kind: "action",
-    accent: COLORS.danger,
-  },
-  {
-    targetId: "tutorial-db-undo-row",
-    group: "DADOS · ESCRITA",
-    title: "Desfazer alteração",
-    description:
-      "Remove as alterações preparadas da linha atual ou do conjunto selecionado antes que cheguem ao banco.",
-    hint: "Atalho: [U]",
-    kind: "action",
-  },
-  {
-    targetId: "tutorial-db-review",
-    group: "DADOS · CONFIRMAÇÃO",
-    title: "Revisar e salvar",
-    description:
-      "Lista os comandos SQL preparados. Você escolhe quais aprovar e confirma novamente para executá-los.",
-    hint: "Atalho: [Ctrl+S]",
-    kind: "action",
-    accent: COLORS.success,
-  },
-  {
-    targetId: "tutorial-db-table-grid",
-    group: "DADOS · NAVEGAÇÃO",
-    title: "Grade de registros",
-    description:
-      "A célula ativa recebe destaque. Use [↑↓] ou [J/K] entre linhas e [H/←] ou [L/→] entre colunas. No limite, os mesmos atalhos passam ao bloco vizinho.",
-    hint: "Clique em qualquer célula para selecioná-la.",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-inspector-toggle",
-    group: "DADOS · ATIVAÇÃO",
-    title: "Abrir inspetor",
-    description:
-      "Em terminais estreitos, alterna a área central entre a grade e os campos completos do registro.",
-    hint: "Atalho: [I]",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-inspector",
-    group: "BLOCO 3 DE 3",
-    title: "Dados completos da linha",
-    description:
-      "Este último bloco mostra todos os campos da linha selecionada, um abaixo do outro, inclusive os que não cabem na grade.",
-    hint: "Em telas estreitas, use [I] para abrir este bloco.",
-    kind: "block",
-  },
-  {
-    targetId: "tutorial-db-inspector-fields",
-    group: "INSPETOR · ATIVAÇÃO",
-    title: "Campos do registro",
-    description:
-      "Navegue com [↑↓] ou [J/K]. [Enter] ou [E] edita o campo selecionado usando o mesmo fluxo seguro da grade.",
-    kind: "control",
-  },
-  {
-    targetId: "tutorial-db-window-navigation",
-    group: "DADOS · NAVEGAÇÃO",
-    title: "Janela de linhas e foco",
-    description:
-      "Ao passar da última ou primeira linha, carregue mais 40 e mantenha até 50 na grade. Confira qual bloco recebe o teclado.",
-    hint: "[↑/↓] carrega nas extremidades · [H/←] [L/→] navega célula ou bloco",
-    kind: "control",
-  },
-]
 
 const GENERIC_TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -300,6 +46,16 @@ function isVisible(renderable: Renderable) {
     current = current.parent
   }
   return true
+}
+
+function visibleTutorialTarget(root: Renderable, id: string): Renderable | null {
+  if (!root.visible) return null
+  if (root.id === id) return root
+  for (const child of root.getChildren()) {
+    const target = visibleTutorialTarget(child, id)
+    if (target) return target
+  }
+  return null
 }
 
 function sameSteps(left: TutorialStep[], right: TutorialStep[]) {
@@ -362,6 +118,11 @@ export function estimateTutorialTextHeight(
 
 export function getTutorialSteps(screen: string): TutorialStep[] {
   if (screen === "database") return DATABASE_TUTORIAL_STEPS
+  if (screen === "runner")
+    return (loadedFeature("runner")?.RUNNER_TUTORIAL_STEPS ?? []).map((step) => ({
+      ...step,
+      accent: COLORS.runner,
+    }))
   if (screen === "git") return [...(loadedFeature("git")?.GIT_TUTORIAL_STEPS ?? [])]
   if (screen === "http") return [...(loadedFeature("http")?.HTTP_TUTORIAL_STEPS ?? [])]
   if (screen === "terminal") return [...(loadedFeature("terminal")?.TERMINAL_TUTORIAL_STEPS ?? [])]
@@ -370,6 +131,7 @@ export function getTutorialSteps(screen: string): TutorialStep[] {
 
 export function TutorialOverlay({ open, steps, onClose, onStepChange }: TutorialOverlayProps) {
   const renderer = useRenderer()
+  const cardRef = useRef<BoxRenderable | null>(null)
   const terminal = useTerminalDimensions()
   const [availableSteps, setAvailableSteps] = useState<TutorialStep[]>([])
   const [stepIndex, setStepIndex] = useState(0)
@@ -377,6 +139,16 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
   const [contentOpacity, setContentOpacity] = useState(1)
   const [transitioning, setTransitioning] = useState(false)
   const transitionTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
+
+  useEffect(() => {
+    if (!open) return
+    const previous = renderer.currentFocusedRenderable
+    previous?.blur()
+    cardRef.current?.focus()
+    return () => {
+      if (previous && !previous.isDestroyed && isVisible(previous)) previous.focus()
+    }
+  }, [open, renderer])
 
   useEffect(() => {
     if (!open) {
@@ -389,7 +161,7 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
     const inspectTargets = () => {
       const available = steps.filter((step) => {
         if (step.stateful) return true
-        const target = renderer.root.findDescendantById(step.targetId)
+        const target = visibleTutorialTarget(renderer.root, step.targetId)
         return Boolean(
           target &&
             isVisible(target) &&
@@ -429,7 +201,7 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
     }
 
     const inspectTarget = () => {
-      const target = renderer.root.findDescendantById(step.targetId)
+      const target = visibleTutorialTarget(renderer.root, step.targetId)
       const rawX = target ? Math.round(target.screenX) : 0
       const rawY = target ? Math.round(target.screenY) : 0
       const x = clamp(rawX, 0, Math.max(0, terminal.width - 1))
@@ -530,6 +302,7 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
   useKeyboard((key) => {
     if (!open) return
     key.preventDefault()
+    key.stopPropagation()
     if (key.name === "escape" || key.name === "q") onClose()
     else if (transitioning) return
     else if (key.name === "left" || key.name === "up") previous()
@@ -551,10 +324,15 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
       const contentWidth = Math.max(12, width - 6)
       const description = translateUi(step?.description ?? "")
       const hint = translateUi(step?.hint ?? "")
-      const descriptionHeight = estimateTutorialTextHeight(description, contentWidth, 2, 6)
       const hintHeight = step?.hint
         ? estimateTutorialTextHeight(`◇ ${hint}`, contentWidth, 1, 4)
         : 0
+      const descriptionHeight = estimateTutorialTextHeight(
+        description,
+        contentWidth,
+        2,
+        Math.max(2, terminal.height - 7 - hintHeight),
+      )
       return {
         descriptionHeight,
         hintHeight,
@@ -700,7 +478,7 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
             top={targetRect.y}
             width={targetRight - targetRect.x}
             height={targetBottom - targetRect.y}
-            zIndex={981}
+            zIndex={983}
           />
           <TutorialTargetOutline
             target={targetRect}
@@ -713,6 +491,9 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
       )}
 
       <box
+        ref={cardRef}
+        id="tutorial-overlay-card"
+        focusable
         style={{
           position: "absolute",
           left: animatedCard.x,
@@ -753,6 +534,7 @@ export function TutorialOverlay({ open, steps, onClose, onStepChange }: Tutorial
             style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
           />
           <ShortcutText
+            id="tutorial-description"
             content={step?.description ?? "O tutorial começará em instantes."}
             style={{
               height: targetCard.descriptionHeight,

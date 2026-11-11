@@ -1,4 +1,5 @@
 import "./setup"
+import { openLocalHttp } from "./http-source"
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -98,6 +99,8 @@ test("Ghostty Option symbols switch tools through the native input parser", asyn
   await key("™")
   await settle(() => tui?.captureCharFrame().includes("[C] DIFFS") ?? false)
   await key("¢")
+  if (!tui) throw new Error("TUI not mounted")
+  await openLocalHttp(tui)
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
   await key("ESCAPE")
   await key("¡")
@@ -130,6 +133,8 @@ for (const kittyKeyboard of [false, true]) {
 
 test("Option symbols remain text in focused inputs and connection dialogs", async () => {
   await mount("http")
+  if (!tui) throw new Error("TUI not mounted")
+  await openLocalHttp(tui)
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
   const url = tui?.renderer.currentFocusedRenderable as InputRenderable
   const before = url.value

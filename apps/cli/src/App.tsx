@@ -20,7 +20,7 @@ import type {
   DatabaseQueryRerunRequest,
 } from "@xupon/tuiminal-feature-database"
 import type { HttpClientUrlRequest } from "@xupon/tuiminal-feature-http"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { TOOL_KEYBOARD_SCOPES } from "./feature-registry"
 import {
   DatabaseQueryHistoryModal,
@@ -39,15 +39,17 @@ import { useFeatureWorkspace, WorkspaceInstaller, withFeatures } from "./feature
 import { globalApplicationShortcut } from "./global-shortcuts"
 import { useApplicationExit } from "./hooks/use-application-exit"
 import { useConfigurationLayer } from "./hooks/use-configuration-layer"
+import { useExclusiveKeyboardFocus } from "./hooks/use-exclusive-keyboard-focus"
 import { useGitConfigurationLayer } from "./hooks/use-git-configuration-layer"
 import { useRemoteServerSetup } from "./hooks/use-remote-server-setup"
-import { useWorkspaceRepaint } from "./hooks/use-workspace-repaint"
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
 import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } from "./tool-catalog"
-import { getTutorialSteps, TutorialOverlay } from "./tutorial/TutorialOverlay"
+import { TutorialOverlay } from "./tutorial/TutorialOverlay"
+import { useTutorial } from "./tutorial/use-tutorial"
 import { applicationExitLayer } from "./ui/application-exit-layer"
 import type { ConfigurationSection } from "./ui/ConfigurationModal"
 import { withMouseTrail } from "./ui/MouseTrailSurface"
@@ -77,6 +79,7 @@ function contextualSettingsOwnKey(focusedId: string | null | undefined, keyName:
 }
 
 export function AppContent() {
+  useExclusiveKeyboardFocus()
   const features = useFeatureWorkspace()
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -94,8 +97,6 @@ export function AppContent() {
   const [databaseQueryRerunRequest, setDatabaseQueryRerunRequest] =
     useState<DatabaseQueryRerunRequest | null>(null)
   const [runnerHttpRequest, setRunnerHttpRequest] = useState<HttpClientUrlRequest | null>(null)
-  const [tutorialOpen, setTutorialOpen] = useState(false)
-  const [tutorialTargetId, setTutorialTargetId] = useState<string | null>(null)
   const [terminalMasterKeyActive, setTerminalMasterKeyActive] = useState(false)
   const [terminalSidebarFocused, setTerminalSidebarFocused] = useState(false)
   useEffect(() => {
@@ -152,7 +153,15 @@ export function AppContent() {
   } = configuration
   const openTerminalForSetup = useCallback(() => void selectTab("terminal"), [selectTab])
   const remoteSetup = useRemoteServerSetup(closeSettings, openTerminalForSetup)
-  const tutorialSteps = useMemo(() => getTutorialSteps(tutorialScreen), [tutorialScreen])
+  const {
+    tutorialOpen,
+    tutorialTargetId,
+    setTutorialTargetId,
+    tutorialSteps,
+    startTutorial,
+    closeTutorial,
+    runnerTutorial,
+  } = useTutorial(tutorialScreen, closeSettings)
   const modalBlocked = settingsOpen || tutorialOpen || exit.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
   useWorkspaceRepaint(
@@ -193,15 +202,6 @@ export function AppContent() {
     },
     [ONLY_TAB, closeSettings, queryHistoryCanRerun],
   )
-  const startTutorial = useCallback(() => {
-    closeSettings()
-    setTutorialTargetId(null)
-    setTutorialOpen(true)
-  }, [closeSettings])
-  const closeTutorial = useCallback(() => {
-    setTutorialOpen(false)
-    setTutorialTargetId(null)
-  }, [])
   const openFeatures = useCallback(() => {
     closeSettings()
     features.setInstaller(true)
@@ -356,8 +356,7 @@ export function AppContent() {
   if (ONLY_TAB) {
     const compact = ONLY_TAB === "terminal" || LAYOUT.compact
     const headerHeight = compact ? 1 : 2
-    const shortcutColor =
-      ONLY_TAB === "terminal" && !terminalMasterKeyActive ? COLORS.muted : undefined
+    const shortcutsMuted = ONLY_TAB === "terminal" && !terminalMasterKeyActive
     const isolatedToolAvailable =
       features.state.installed.includes(ONLY_TAB) && !closed.has(ONLY_TAB)
     return (
@@ -387,7 +386,7 @@ export function AppContent() {
               id="tutorial-settings-button"
               label={compactNavigation ? "[,]" : "[,] Config"}
               accent={COLORS.focus}
-              shortcutColor={shortcutColor}
+              shortcutsMuted={shortcutsMuted}
               onPress={openSettings}
             />
             <InlineButton
@@ -395,7 +394,7 @@ export function AppContent() {
               id="app-exit-button"
               label={compactNavigation ? "[Q]" : "[Q] Sair"}
               accent={COLORS.focus}
-              shortcutColor={shortcutColor}
+              shortcutsMuted={shortcutsMuted}
               onPress={() => void exit.quit()}
             />
           </box>
@@ -414,7 +413,7 @@ export function AppContent() {
             {isolatedToolAvailable && ONLY_TAB === "database" && (
               <DatabaseViewer
                 active={backgroundToolActive}
-                tutorialMode={tutorialOpen}
+                {...{ tutorialMode: tutorialOpen, tutorialTargetId }}
                 queryRerunRequest={databaseQueryRerunRequest}
                 onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
               />
@@ -430,7 +429,7 @@ export function AppContent() {
               />
             )}
             {isolatedToolAvailable && ONLY_TAB === "runner" && (
-              <Runner active={backgroundToolActive} />
+              <Runner active={backgroundToolActive} tutorial={runnerTutorial} />
             )}
             {isolatedToolAvailable && ONLY_TAB === "http" && (
               <HttpClient
@@ -498,7 +497,7 @@ export function AppContent() {
               >
                 <DatabaseViewer
                   active={activeTab === "database" && backgroundToolActive}
-                  tutorialMode={tutorialOpen}
+                  {...{ tutorialMode: tutorialOpen, tutorialTargetId }}
                   queryRerunRequest={databaseQueryRerunRequest}
                   onQueryRerunRequestHandled={() => setDatabaseQueryRerunRequest(null)}
                 />
@@ -530,6 +529,7 @@ export function AppContent() {
               >
                 <Runner
                   active={activeTab === "runner" && backgroundToolActive}
+                  tutorial={runnerTutorial}
                   onOpenHttp={openRunnerPortInHttp}
                 />
               </box>

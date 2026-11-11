@@ -1,3 +1,4 @@
+import { openLocalHttp } from "./http-source"
 import "./setup"
 import { afterEach, expect, test } from "bun:test"
 import { RGBA, type BoxRenderable } from "@opentui/core"
@@ -122,10 +123,17 @@ test("settings center supports Vim and mouse navigation across categories and op
   await settle(() => tui?.captureCharFrame().includes("Dracula") ?? false)
   expect(tui.captureCharFrame()).toContain("Catppuccin")
   expect(tui.captureCharFrame()).toContain("Tokyo Night")
+  expect(tui.captureCharFrame()).toContain("Galaxy")
   await key("l")
   expect(getUiSettings().palette).toBe("midnight")
   await key("h")
   expect(getUiSettings().palette).toBe("prime")
+  await key("h")
+  expect(getUiSettings().palette).toBe("galaxy")
+  await key("l")
+  expect(getUiSettings().palette).toBe("prime")
+  await click("configuration-palette-galaxy")
+  expect(getUiSettings().palette).toBe("galaxy")
   await key("j")
   expect(tui.renderer.root.findDescendantById("configuration-detail-layout")).toBeDefined()
   await key("l")
@@ -136,6 +144,31 @@ test("settings center supports Vim and mouse navigation across categories and op
   expect(tui.renderer.root.findDescendantById("configuration-detail-language")).toBeDefined()
   await click("configuration-language-en")
   expect(getUiSettings().language).toBe("en")
+})
+
+test.each([
+  [100, 28],
+  [60, 20],
+])("Russian is visible, clickable and keyboard-selectable at %sx%s", async (width, height) => {
+  selectInitialTool("runner")
+  updateUiSettings({ language: "pt-BR", layout: "compact" })
+  tui = await testRender(<App />, { width, height })
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
+  const commandList = tui.renderer.root.findDescendantById("runner-command-list")
+  await click("tutorial-settings-button")
+  for (let index = 0; index < 3; index += 1) await key("j")
+  expect(tui.captureCharFrame()).toContain("Русский")
+  await click("configuration-language-ru")
+  expect(getUiSettings().language).toBe("ru")
+  expect(tui.captureCharFrame()).toContain("ЯЗЫК")
+  expect(tui.captureCharFrame()).toContain("◆ Русский")
+  await key("h")
+  expect(getUiSettings().language).toBe("ko")
+  await key("l")
+  expect(getUiSettings().language).toBe("ru")
+  await key("l")
+  expect(getUiSettings().language).toBe("pt-BR")
+  expect(tui.renderer.root.findDescendantById("runner-command-list")).toBe(commandList)
 })
 
 test("narrow settings keeps full-width details and compact category controls", async () => {
@@ -151,8 +184,11 @@ test("narrow settings keeps full-width details and compact category controls", a
   await click("configuration-category-next")
   expect(tui.renderer.root.findDescendantById("configuration-detail-palette")).toBeDefined()
   await settle(() => tui?.captureCharFrame().includes("Tokyo Night") ?? false)
+  expect(tui.captureCharFrame()).toContain("Galaxy")
   await key("l")
   expect(getUiSettings().palette).toBe("midnight")
+  await click("configuration-palette-galaxy")
+  expect(getUiSettings().palette).toBe("galaxy")
   await key("j")
   expect(tui.renderer.root.findDescendantById("configuration-detail-layout")).toBeDefined()
 })
@@ -294,10 +330,37 @@ test("global shortcuts leave Database after closing the connection form", async 
 test("global shortcuts leave HTTP after its URL input releases focus", async () => {
   selectInitialTool("http")
   tui = await testRender(<App />, { width: 120, height: 30, kittyKeyboard: true })
+  await openLocalHttp(tui)
   await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
   await key("ESCAPE")
   await key("3", { meta: true })
   await settle(() => Boolean(tui?.renderer.root.findDescendantById("runner-command-list")))
+})
+
+test("HTTP file controls allow settings and quit while raw dropped paths keep their characters", async () => {
+  selectInitialTool("http")
+  tui = await testRender(<App />, { width: 120, height: 34, kittyKeyboard: true })
+  await openLocalHttp(tui)
+  await settle(() => tui?.renderer.currentFocusedRenderable?.id === "http-url-input")
+  await click("http-request-view-body")
+  await click("http-body-kind-file")
+  const prefix = "http-body-file-http-scratch-1"
+  await settle(() => tui?.renderer.currentFocusedRenderable?.id === `${prefix}-drop`)
+  // A missing fixture path still must not trigger its embedded q, comma or view shortcuts.
+  await act(async () => tui?.mockInput.typeText("/nonexistent-tuiminal-fixture/q,a,f,z,v.bin"))
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById(`${prefix}-error`)))
+  expect(tui.renderer.root.findDescendantById("configuration-modal")).toBeUndefined()
+  expect(tui.renderer.root.findDescendantById("unsaved-changes-exit-modal")).toBeUndefined()
+  expect(tui.renderer.currentFocusedRenderable?.id).toBe(`${prefix}-drop`)
+  await key(",")
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("configuration-modal")))
+  await key("ESCAPE")
+  await settle(() => !tui?.renderer.root.findDescendantById("configuration-modal"))
+  await click(`${prefix}-drop`)
+  await key("q")
+  await settle(() => Boolean(tui?.renderer.root.findDescendantById("unsaved-changes-exit-modal")))
+  await key("ESCAPE")
+  await settle(() => !tui?.renderer.root.findDescendantById("unsaved-changes-exit-modal"))
 })
 
 test("keeps global listener counts bounded after visiting multiple tools", async () => {

@@ -10,19 +10,19 @@ export function NavigationTab({
   label,
   shortcut,
   minimal = false,
-  shortcutColor,
+  shortcutsMuted,
 }: {
   value: AppTab
   label: string
   shortcut: string
   minimal?: boolean
-  shortcutColor?: string | undefined
+  shortcutsMuted?: boolean | undefined
 }) {
   return (
     <Tabs.Tab value={value} flexShrink={0}>
       {(state) => (
         <ShortcutText
-          shortcutColor={shortcutColor}
+          shortcutsMuted={shortcutsMuted}
           content={
             minimal
               ? ` ${state.selected ? "◆" : "◇"} ${shortcut} `

@@ -10,12 +10,12 @@ function WorkspaceTabs({
   installed,
   compact,
   minimal,
-  shortcutColor,
+  shortcutsMuted,
 }: {
   installed: readonly ToolId[]
   compact: boolean
   minimal: boolean
-  shortcutColor?: string | undefined
+  shortcutsMuted?: boolean | undefined
 }) {
   const tabs = [
     { value: "database", label: translateUi("Banco"), compactLabel: "DB", shortcut: "[Alt+1]" },
@@ -40,7 +40,7 @@ function WorkspaceTabs({
             value={value}
             label={compact ? compactLabel : label}
             shortcut={shortcut}
-            shortcutColor={shortcutColor}
+            shortcutsMuted={shortcutsMuted}
           />
         ))}
     </Tabs.List>
@@ -64,7 +64,7 @@ export function WorkspaceHeader({
   openSettings: () => void
   onQuit: () => void
 }) {
-  const shortcutColor = terminalCompact && !terminalMasterKeyActive ? COLORS.muted : undefined
+  const shortcutsMuted = terminalCompact && !terminalMasterKeyActive
   return (
     <box
       id="tutorial-app-header"
@@ -88,7 +88,7 @@ export function WorkspaceHeader({
         installed={installed}
         compact={compactNavigation}
         minimal={minimalNavigation}
-        shortcutColor={shortcutColor}
+        shortcutsMuted={shortcutsMuted}
       />
       <box style={{ flexDirection: "row", alignItems: "center" }}>
         <InlineButton
@@ -96,14 +96,14 @@ export function WorkspaceHeader({
           id="tutorial-settings-button"
           label={compactNavigation ? "[,]" : "[,] Config"}
           accent={COLORS.focus}
-          shortcutColor={shortcutColor}
+          shortcutsMuted={shortcutsMuted}
           onPress={openSettings}
         />
         <InlineButton
           compact={terminalCompact || LAYOUT.compact}
           label={compactNavigation ? "[Q]" : "[Q] Sair"}
           accent={COLORS.focus}
-          shortcutColor={shortcutColor}
+          shortcutsMuted={shortcutsMuted}
           onPress={onQuit}
         />
       </box>

@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { type ComponentType, createElement, useCallback, useEffect, useState } from "react"
 import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
@@ -101,6 +102,7 @@ export function StartupAnimation({
   onComplete: () => void
 }) {
   const [elapsedMs, setElapsedMs] = useState(0)
+  useWorkspaceRepaint("startup")
 
   useEffect(() => {
     const startedAt = performance.now()

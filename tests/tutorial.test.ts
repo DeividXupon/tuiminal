@@ -4,14 +4,23 @@ import {
   getTutorialSteps,
 } from "../apps/cli/src/tutorial/TutorialOverlay"
 import { translateUi } from "../packages/core/src/i18n/index"
+import { GIT_REMOTE_TUTORIAL_STEPS } from "../packages/feature-git/src/tutorial/remote-steps"
 
-const DATABASE_TUTORIAL_SOURCE = (
-  await Promise.all(
-    ["tutorial/DatabaseTutorialDemo.tsx", "ui/DatabaseTableHeader.tsx"].map((filename) =>
-      Bun.file(new URL(`../packages/feature-database/src/${filename}`, import.meta.url)).text(),
-    ),
-  )
-).join("\n")
+const DATABASE_TUTORIAL_SOURCES = await Promise.all(
+  [
+    "DatabaseTutorialDemo.tsx",
+    "DatabaseTutorialCatalog.tsx",
+    "DatabaseTutorialData.tsx",
+    "DatabaseTutorialFooter.tsx",
+    "DatabaseTutorialQuery.tsx",
+    "DatabaseTutorialDialogs.tsx",
+    "fixtures.ts",
+  ].map((filename) =>
+    Bun.file(
+      new URL(`../packages/feature-database/src/tutorial/${filename}`, import.meta.url),
+    ).text(),
+  ),
+)
 const GIT_TUTORIAL_SOURCE = (
   await Promise.all(
     [
@@ -48,10 +57,11 @@ const HTTP_TUTORIAL_SOURCE = await Bun.file(
 ).text()
 
 describe("contextual tutorial", () => {
-  test("keeps non-database tours focused on the active tool", () => {
+  test("keeps dedicated tours focused on the active tool", () => {
     for (const screen of ["runner"]) {
       const steps = getTutorialSteps(screen)
-      expect(steps.map((step) => step.targetId)).toEqual(["tutorial-current-tool"])
+      expect(steps.length).toBeGreaterThan(1)
+      expect(steps.every((step) => step.targetId.startsWith("tutorial-runner-"))).toBe(true)
       expect(steps.some((step) => step.targetId === "tutorial-app-header")).toBe(false)
       expect(steps.some((step) => step.targetId === "tutorial-settings-button")).toBe(false)
     }
@@ -109,7 +119,7 @@ describe("contextual tutorial", () => {
 
   test("covers the local Diffs and branch comparison workflows", () => {
     const steps = getTutorialSteps("git")
-    expect(steps.map((step) => step.targetId)).toEqual([
+    expect(steps.slice(0, 28).map((step) => step.targetId)).toEqual([
       "tutorial-git-diffs-tab",
       "tutorial-git-repository",
       "tutorial-git-local-configuration",
@@ -150,13 +160,11 @@ describe("contextual tutorial", () => {
       "tutorial-git-compare-compared",
     ])
     expect(steps.filter((step) => step.stateful).map((step) => step.targetId)).toEqual(
-      steps.slice(16).map((step) => step.targetId),
+      steps.map((step) => step.targetId),
     )
-    expect(steps.map((step) => step.targetId)).not.toContain("tutorial-git-pr-list")
-    expect(steps.map((step) => step.targetId)).not.toContain("tutorial-git-issues")
-    expect(steps.map((step) => step.targetId)).not.toContain("tutorial-git-inbox")
+    expect(steps.slice(28)).toEqual([...GIT_REMOTE_TUTORIAL_STEPS])
     for (const step of steps) {
-      expect(GIT_TUTORIAL_SOURCE).toContain(step.targetId)
+      if (steps.indexOf(step) < 28) expect(GIT_TUTORIAL_SOURCE).toContain(step.targetId)
       for (const value of [step.group, step.title, step.description, step.hint]) {
         if (value) expect(translateUi(value, "en")).not.toBe(value)
       }
@@ -180,10 +188,15 @@ describe("contextual tutorial", () => {
     expect(targets).not.toContain("tutorial-db-empty")
   })
 
-  test("has a rendered demo target for every database step", () => {
-    expect(DATABASE_TUTORIAL_SOURCE).toContain("export function DatabaseTutorialDemo()")
-    for (const step of getTutorialSteps("database")) {
-      expect(DATABASE_TUTORIAL_SOURCE).toContain(`id="${step.targetId}"`)
+  test("keeps database scenes discoverable and free of live services", () => {
+    expect(getTutorialSteps("database").every((step) => step.stateful)).toBe(true)
+    for (const source of DATABASE_TUTORIAL_SOURCES) {
+      expect(source).not.toContain("/services/")
+      expect(source).not.toContain("/storage/")
+      expect(source).not.toContain("Bun.spawn")
+      expect(source).not.toContain("node:fs")
+      expect(source).not.toContain("DatabaseConnectionModal")
+      expect(source).not.toContain("DatabaseBatchExportModal")
     }
   })
 
@@ -221,3 +234,4 @@ const { loadSourceFeature } = await import("../apps/cli/src/features/source-load
 await loadSourceFeature("git")
 await loadSourceFeature("http")
 await loadSourceFeature("terminal")
+await loadSourceFeature("runner")

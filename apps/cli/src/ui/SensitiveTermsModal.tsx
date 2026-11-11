@@ -101,7 +101,7 @@ export function SensitiveTermsModal({ open, terms, onClose, onSave }: SensitiveT
   const width = Math.max(1, Math.min(88, terminal.width - 2))
   const height = Math.max(1, Math.min(16, terminal.height))
   const compact = width < 64 || height < 14
-  const editorHeight = Math.max(3, height - (compact ? 6 : 8))
+  const editorHeight = Math.max(3, height - (compact ? 7 : 8))
   const empty = parsedCount === 0
 
   return (
