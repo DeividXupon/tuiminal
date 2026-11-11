@@ -150,7 +150,7 @@ export function tuiTerminalActionBenchmarks({
           () => Boolean(tui.renderer.root.findDescendantById("terminal-actions")),
           "Terminal actions for folder navigation",
         )
-        await act(async () => tui.mockInput.pressKey("l"))
+        await act(async () => tui.mockInput.pressKey("l", { shift: true }))
         await waitForUi(
           () => tui.renderer.currentFocusedRenderable?.id === "terminal-sidebar",
           "Terminal sidebar focus",
@@ -287,7 +287,7 @@ export function tuiTerminalActionBenchmarks({
           () => Boolean(tui.renderer.root.findDescendantById("terminal-actions")),
           "Terminal actions for sidebar focus",
         )
-        await act(async () => tui.mockInput.pressKey("l"))
+        await act(async () => tui.mockInput.pressKey("l", { shift: true }))
         await waitForUi(
           () => tui.renderer.currentFocusedRenderable?.id === "terminal-sidebar",
           "Terminal sidebar focus",
@@ -357,7 +357,7 @@ export function tuiTerminalActionBenchmarks({
           () => Boolean(tui.renderer.root.findDescendantById("terminal-actions")),
           "Terminal actions for split",
         )
-        await act(async () => tui.mockInput.pressKey("v"))
+        await act(async () => tui.mockInput.pressKey("c"))
         await waitForUi(
           () => Boolean(tui.renderer.root.findDescendantById("terminal-split-dialog")),
           "Terminal split choice",
@@ -447,10 +447,17 @@ export function tuiTerminalActionBenchmarks({
           "Agent provider picker",
         )
       },
-      verify: async () => {
+      verify: () => {
         if (!tui.renderer.root.findDescendantById("terminal-dialog-agent-provider"))
           throw new Error("Agent provider picker did not open")
+      },
+      afterEach: async () => {
+        if (!tui.renderer.root.findDescendantById("terminal-dialog-agent-provider")) return
         await act(async () => tui.mockInput.pressEscape())
+        await waitForUi(
+          () => !tui.renderer.root.findDescendantById("terminal-dialog-agent-provider"),
+          "Agent provider picker cleanup",
+        )
       },
     }),
   )

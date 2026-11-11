@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { AGENT_RESUME_SOURCE_LIMIT } from "../../packages/feature-terminal/src/model/agent-resume-order"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 
 export async function terminalAgentBenchmarks(root: string): Promise<BenchmarkCase[]> {
@@ -114,7 +115,7 @@ export async function terminalAgentBenchmarks(root: string): Promise<BenchmarkCa
       ],
     },
   ]).flat()
-  const resumeThreads = Array.from({ length: 100 }, (_, index) => ({
+  const resumeThreads = Array.from({ length: AGENT_RESUME_SOURCE_LIMIT + 20 }, (_, index) => ({
     id: `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
     title: `Task ${index}`,
     preview: `Prompt ${index}`,
@@ -385,8 +386,21 @@ export async function terminalAgentBenchmarks(root: string): Promise<BenchmarkCa
         }
       },
       verify: ({ claude, openCode }) => {
-        if (claude.length !== 100 || openCode.length !== 200)
-          throw new Error("Provider resume rosters were not merged and bounded")
+        const expectedIds = new Set(
+          resumeThreads.slice(-AGENT_RESUME_SOURCE_LIMIT).map((thread) => thread.id),
+        )
+        for (const threads of [claude, openCode]) {
+          if (threads.length !== AGENT_RESUME_SOURCE_LIMIT * 2)
+            throw new Error("Provider resume rosters were not bounded per origin")
+          for (const origin of [undefined, profile.id]) {
+            const entries = threads.filter((thread) => thread.remoteProfileId === origin)
+            if (
+              new Set(entries.map((thread) => thread.id)).size !== AGENT_RESUME_SOURCE_LIMIT ||
+              entries.some((thread) => !expectedIds.has(thread.id))
+            )
+              throw new Error("Provider resume rosters lost the newest conversations for an origin")
+          }
+        }
       },
     }),
   ]

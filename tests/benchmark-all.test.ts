@@ -52,6 +52,49 @@ test("aggregate benchmark preserves every raw Git UI sample and suite membership
   }
 }, 30_000)
 
+test("aggregate TUI benchmark repeats current workspace shortcuts and every interaction", () => {
+  const root = mkdtempSync(join(tmpdir(), "tuiminal-benchmark-all-tui-"))
+  const output = join(root, "all.json")
+  try {
+    const child = Bun.spawnSync(
+      [
+        process.execPath,
+        script,
+        "--suite",
+        "tui",
+        "--samples",
+        "2",
+        "--warmup",
+        "1",
+        "--output",
+        output,
+      ],
+      { cwd: projectRoot, stdout: "pipe", stderr: "pipe" },
+    )
+    if (child.exitCode !== 0) throw new Error(new TextDecoder().decode(child.stderr))
+    const report = JSON.parse(readFileSync(output, "utf8")) as {
+      suites: Array<{ id: string; caseIds: string[] }>
+      results: Array<{ id: string; samplesMs: number[] }>
+    }
+    expect(report.suites.map((suite) => suite.id)).toEqual(["tui"])
+    expect(report.results).toHaveLength(35)
+    expect(report.suites[0]?.caseIds).toEqual(report.results.map((result) => result.id))
+    expect(report.suites[0]?.caseIds).toEqual(
+      expect.arrayContaining([
+        "ui.mouse_tab_git",
+        "ui.runner_multi",
+        "ui.terminal_folder_keyboard",
+        "ui.terminal_session_navigation",
+        "ui.terminal_split",
+        "ui.terminal_pinned_activate",
+      ]),
+    )
+    expect(report.results.every((result) => result.samplesMs.length === 2)).toBe(true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)
+
 test("aggregate benchmark runs the opt-in Terminal stress suite at a reduced scale", () => {
   const root = mkdtempSync(join(tmpdir(), "tuiminal-benchmark-all-terminal-stress-"))
   const output = join(root, "all.json")

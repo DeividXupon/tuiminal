@@ -5,6 +5,7 @@ import type { CodexAppServerEvents } from "../../packages/feature-terminal/src/s
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 import { tuiTerminalActionBenchmarks } from "./tui-terminal-actions"
 import { tuiTerminalDialogActionBenchmarks } from "./tui-terminal-dialog-actions"
+import { renderedTabColumn } from "./tui-tabs"
 
 type TuiActionContext = {
   tui: TestRendererSetup
@@ -105,19 +106,19 @@ export function tuiActionBenchmarks({
     defineBenchmark({
       id: "ui.runner_multi",
       tool: "runner",
-      description: "Switch the Runner to multi-process layout from keyboard input",
+      description: "Switch the Runner to multi-process layout with Shift+M",
       beforeEach: async () => {
         await switchTo("3", "Runner")
         if (multiOpen) {
           await focus("runner-command-list")
-          await act(async () => tui.mockInput.pressKey("m"))
+          await act(async () => tui.mockInput.pressKey("m", { shift: true }))
           await tui.renderOnce()
           multiOpen = false
         }
         await focus("runner-command-list")
       },
       run: async () => {
-        await act(async () => tui.mockInput.pressKey("m"))
+        await act(async () => tui.mockInput.pressKey("m", { shift: true }))
         const frame = await waitForUi(
           () => tui.captureCharFrame().includes("MULTI"),
           "Runner multi view",
@@ -179,7 +180,7 @@ export function tuiActionBenchmarks({
     defineBenchmark({
       id: "ui.http_help",
       tool: "http",
-      description: "Open the HTTP help overlay from the F1 shortcut",
+      description: "Open the HTTP action palette from the F1 shortcut",
       beforeEach: async () => {
         if (projectPickerOpen) {
           await switchTo("3", "Runner")
@@ -190,32 +191,32 @@ export function tuiActionBenchmarks({
           await click("http-source-local-card")
         }
         await waitForUi(
-          () => Boolean(tui.renderer.root.findDescendantById("http-help-button")),
+          () => Boolean(tui.renderer.root.findDescendantById("http-action-palette-open")),
           "HTTP workspace",
         )
-        if (tui.renderer.root.findDescendantById("http-overlay")) {
+        if (tui.renderer.root.findDescendantById("http-action-palette")) {
           await act(async () => {
             tui.mockInput.pressKey("ESCAPE")
             await Bun.sleep(60)
           })
           await waitForUi(
-            () => !tui.renderer.root.findDescendantById("http-overlay"),
-            "HTTP help close",
+            () => !tui.renderer.root.findDescendantById("http-action-palette"),
+            "HTTP action palette close",
           )
         }
-        await focus("http-help-button")
+        await focus("http-action-palette-open")
       },
       run: async () => {
         await act(async () => tui.mockInput.pressKey("F1"))
         const frame = await waitForUi(
-          () => Boolean(tui.renderer.root.findDescendantById("http-overlay")),
-          "HTTP help",
+          () => Boolean(tui.renderer.root.findDescendantById("http-action-palette")),
+          "HTTP action palette",
         )
         return frame
       },
       verify: () => {
-        if (!tui.renderer.root.findDescendantById("http-overlay")) {
-          throw new Error("HTTP help overlay is missing")
+        if (!tui.renderer.root.findDescendantById("http-action-palette")) {
+          throw new Error("HTTP action palette is missing")
         }
       },
     }),
@@ -282,7 +283,7 @@ export function tuiActionBenchmarks({
         await click(`terminal-sidebar-pane-${pinnedTargetId}`)
         return waitForUi(
           () =>
-            tui.captureCharFrame().includes("◆ Terminal [Alt+5]") &&
+            renderedTabColumn(tui.captureCharFrame(), "5", "Terminal", true) >= 0 &&
             terminalSidebarSnapshot().view?.activeSessionId === pinnedTargetId &&
             Boolean(tui.renderer.root.findDescendantById(`term-agents-${pinnedTargetId}`)),
           "Existing Terminal pane from pinned sidebar",

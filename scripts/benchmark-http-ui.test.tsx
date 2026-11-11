@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { testRender } from "@opentui/react/test-utils"
 import { act, createElement } from "react"
 import { getUiSettings, updateUiSettings } from "../packages/core/src/settings/theme"
+import { openLocalHttp } from "../tests/tui/http-source"
 import { HttpClient } from "../packages/feature-http/src/HttpClient"
 import { defineBenchmark, measureBenchmark } from "./benchmarks/harness"
 
@@ -93,6 +94,7 @@ test("HTTP request and response latency in the native interface", async () => {
         { width: 120, height: 32 },
       ),
     )
+    await openLocalHttp(tui)
     await waitFor(
       () => tui?.renderer.currentFocusedRenderable?.id === "http-url-input",
       "focused URL input",

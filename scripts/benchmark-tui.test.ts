@@ -13,6 +13,7 @@ import * as terminalProcesses from "../packages/feature-terminal/src/services/te
 import { stopAllTermAgentsProcesses } from "../packages/feature-terminal/src/services/terminal-resources"
 import { type BenchmarkCase, defineBenchmark, measureBenchmark } from "./benchmarks/harness"
 import { tuiActionBenchmarks } from "./benchmarks/tui-actions"
+import { renderedTabColumn } from "./benchmarks/tui-tabs"
 
 const BENCHMARK_KEYPRESS_LISTENER_BUDGET = 16
 
@@ -113,19 +114,18 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
       for (let attempt = 0; attempt < 100; attempt += 1) {
         await tui.renderOnce()
         const frame = tui.captureCharFrame()
-        if (frame.includes(`◆ ${label} [Alt+${key}]`)) return frame
+        if (renderedTabColumn(frame, key, label, true) >= 0) return frame
         await act(async () => Bun.sleep(5))
       }
       throw new Error(`Tab ${label} did not render`)
     }
     async function clickTab(key: string, label: string) {
-      const header = tui.captureCharFrame().split("\n")[0] ?? ""
-      const x = header.indexOf(`${label} [Alt+${key}]`)
+      const x = renderedTabColumn(tui.captureCharFrame(), key, label)
       if (x < 0) throw new Error(`Missing ${label} tab in header`)
       await act(async () => tui.mockMouse.click(x + 2, 0, 0, { delayMs: 0 }))
       await tui.renderOnce()
       const frame = tui.captureCharFrame()
-      if (!frame.includes(`◆ ${label} [Alt+${key}]`)) {
+      if (renderedTabColumn(frame, key, label, true) < 0) {
         throw new Error(`Mouse could not select ${label}`)
       }
       return frame
@@ -169,7 +169,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
         },
         run: () => switchTo(destination.key, destination.label),
         verify: (frame) => {
-          if (!frame.includes(`◆ ${destination.label} [Alt+${destination.key}]`)) {
+          if (renderedTabColumn(frame, destination.key, destination.label, true) < 0) {
             throw new Error(`Missing ${destination.label} frame`)
           }
         },
@@ -184,7 +184,7 @@ test("tab-switch and Terminal action latency in the native renderer", async () =
         },
         run: () => clickTab(destination.key, destination.label),
         verify: (frame) => {
-          if (!frame.includes(`◆ ${destination.label} [Alt+${destination.key}]`)) {
+          if (renderedTabColumn(frame, destination.key, destination.label, true) < 0) {
             throw new Error(`Missing ${destination.label} mouse frame`)
           }
         },

@@ -1,3 +1,4 @@
+import { AGENT_RESUME_SOURCE_LIMIT } from "../../packages/feature-terminal/src/model/agent-resume-order"
 import { type BenchmarkCase, defineBenchmark } from "./harness"
 
 export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
@@ -107,7 +108,7 @@ export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
   }))
   const resumeMessage = {
     result: {
-      data: Array.from({ length: 100 }, (_, index) => ({
+      data: Array.from({ length: AGENT_RESUME_SOURCE_LIMIT + 20 }, (_, index) => ({
         id: `thread-${index}`,
         name: `Terminal feature ${index}`,
         preview: `Implement terminal feature ${index}`,
@@ -273,10 +274,15 @@ export async function terminalFeatureBenchmarks(): Promise<BenchmarkCase[]> {
     defineBenchmark({
       id: "terminal.resume_threads",
       tool: "terminal",
-      description: "Parse, sort and bound 100 Codex resume thread summaries",
+      description: "Parse, sort and bound Codex resume thread summaries above the source limit",
       run: () => codexResumeThreads(resumeMessage),
       verify: (result) => {
-        if (result.length !== 6 || result[0]?.id !== "thread-99") {
+        if (
+          result.length !== AGENT_RESUME_SOURCE_LIMIT ||
+          result.some(
+            (thread, index) => thread.id !== `thread-${AGENT_RESUME_SOURCE_LIMIT + 19 - index}`,
+          )
+        ) {
           throw new Error("Recent Codex threads were not ordered")
         }
       },
