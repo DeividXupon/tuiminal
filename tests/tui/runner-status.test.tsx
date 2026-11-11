@@ -118,7 +118,7 @@ const commands: RunnerCommand[] = Array.from({ length: 24 }, (_, index) => ({
   args: [],
   displayCommand: `fixture ${index}`,
 }))
-async function mount() {
+async function mount(onStop?: () => void) {
   root = mkdtempSync(join(tmpdir(), "runner-status-"))
   const roots = [join(root, "first"), join(root, "second")] as const
   for (const path of roots) mkdirSync(path)
@@ -150,7 +150,10 @@ async function mount() {
         pid: null,
         interactive: false,
         write: () => {},
-        stop: async () => callbacks.onExit({ code: null, signal: "SIGTERM", stopped: true }),
+        stop: async () => {
+          onStop?.()
+          callbacks.onExit({ code: null, signal: "SIGTERM", stopped: true })
+        },
       }
     },
   )
@@ -308,4 +311,64 @@ test("process health and flow outcomes have separate native colors", async () =>
   await settle(() => view().captureCharFrame().includes("SEM SAÚDE"))
   expect(colorOf("SEM SAÚDE")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
   expect(colorOf("RODANDO")).toEqual(RGBA.fromHex(COLORS.runner).toInts())
+})
+
+test("X closes only the active project; its red close control follows selection and mouse clicks", async () => {
+  let stops = 0
+  const launches = await mount(() => {
+    stops += 1
+  })
+  expect(textIn("runner-project-close-0")).toContain("[X]")
+  expect(colorOf("[X]")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
+  expect(textIn("runner-project-close-1")).toContain("×")
+  await key(" ")
+  await settle(() => launches.length === 1)
+  await key("2")
+  await settle(() => textIn("runner-project-close-1").includes("[X]"))
+  expect(textIn("runner-project-close-0")).toContain("×")
+  expect(colorOf("[X]")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
+  await key("x")
+  await settle(() => !view().renderer.root.findDescendantById("runner-project-tab-1"))
+  expect(textIn("runner-project-tabs")).toContain("first")
+  expect(textIn("runner-project-summary")).toContain("1 RODANDO")
+  for (const width of [60, 140]) {
+    act(() => view().resize(width, 36))
+    await view().renderOnce()
+    const close = node("runner-project-close-0")
+    expect(close.screenX + close.width).toBeLessThanOrEqual(width)
+    expect(textIn(close.id)).toContain("[X]")
+    expect(colorOf("[X]")).toEqual(RGBA.fromHex(COLORS.danger).toInts())
+  }
+  const close = node("runner-project-close-0")
+  await act(async () => view().mockMouse.click(close.screenX + 1, close.screenY))
+  await settle(() => Boolean(view().renderer.root.findDescendantById("runner-project-list")))
+  expect(view().renderer.root.findDescendantById("runner-project-tab-0")).toBeUndefined()
+  expect(stops).toBe(0)
+})
+
+test("typing x and cancelling save or project dialogs preserves the command draft and tabs", async () => {
+  await mount()
+  await key("/")
+  await act(async () => view().mockInput.typeText("echo x"))
+  expect(node("runner-command-input")).toHaveProperty("value", "echo x")
+  expect(textIn("runner-project-tabs")).toContain("second")
+  act(() => view().mockInput.pressKey("s", { ctrl: true }))
+  await settle(() => view().renderer.currentFocusedRenderable?.id === "runner-save-command-name")
+  await key("x")
+  await key("ESCAPE")
+  await key("x")
+  expect(textIn("runner-project-tabs")).toContain("first")
+  await key("ESCAPE")
+  await settle(() => view().renderer.currentFocusedRenderable?.id === "runner-command-input")
+  expect(node("runner-command-input")).toHaveProperty("value", "echo x")
+  await key("ESCAPE")
+  await key("n")
+  await settle(() => Boolean(view().renderer.root.findDescendantById("runner-project-list")))
+  await key("x")
+  await key("ESCAPE")
+  expect(textIn("runner-project-tabs")).toContain("second")
+  expect(node("runner-command-input")).toHaveProperty("value", "echo x")
+  await key("x")
+  await settle(() => !view().renderer.root.findDescendantById("runner-project-tab-1"))
+  expect(textIn("runner-project-tabs")).toContain("second")
 })

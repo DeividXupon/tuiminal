@@ -1,11 +1,9 @@
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useEffect, useMemo, useRef } from "react"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import type { RunnerAutostartReview } from "../storage/autostart-trust"
+import { RunnerAutostartTrustView } from "./RunnerAutostartTrustView"
 
 function reviewText(review: RunnerAutostartReview) {
   const lines = [
@@ -51,7 +49,13 @@ export function RunnerAutostartTrustModal({
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const content = useMemo(() => reviewText(review), [review])
   const width = Math.max(30, Math.min(100, terminal.width - 4))
-  const height = Math.max(12, Math.min(24, terminal.height - 2))
+  const contentRows = content
+    .split("\n")
+    .reduce(
+      (rows, line) => rows + Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, width - 5))),
+      0,
+    )
+  const height = Math.max(1, Math.min(24, terminal.height - 2, 8 + contentRows))
 
   useEffect(() => {
     renderer.currentFocusedRenderable?.blur()
@@ -71,57 +75,8 @@ export function RunnerAutostartTrustModal({
   })
 
   return (
-    <ModalSurface
-      id="runner-autostart-trust-modal"
-      dialogRef={dialogRef}
-      width={width}
-      height={height}
-      zIndex={980}
-      borderColor={COLORS.warning}
-      onBackdropPress={onClose}
-    >
-      <text
-        content={translateUi("◆ AUTOSTART DO RUNNER")}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
-      />
-      <text
-        content={translateUi("Este projeto pediu para iniciar comandos automaticamente.")}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
-      />
-      <text
-        content={translateUi(
-          "Revise o projeto, os comandos, diretórios e ambiente antes de confiar.",
-        )}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
-      <scrollbox ref={scrollRef} scrollY style={{ flexGrow: 1, marginTop: 1 }}>
-        <text content={content} style={{ fg: COLORS.text }} />
-      </scrollbox>
-      <text
-        content={translateUi("Uma mudança material pedirá aprovação novamente.")}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
-      />
-      <box
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <InlineButton
-          id="runner-autostart-trust-deny"
-          label="[Esc] Não executar"
-          accent={COLORS.runner}
-          onPress={onClose}
-        />
-        <InlineButton
-          id="runner-autostart-trust-approve"
-          label="[Y/Enter] Confiar e executar"
-          accent={COLORS.warning}
-          onPress={onApprove}
-        />
-      </box>
-    </ModalSurface>
+    <RunnerAutostartTrustView
+      {...{ dialogRef, width, height, onClose, scrollRef, content, onApprove }}
+    />
   )
 }

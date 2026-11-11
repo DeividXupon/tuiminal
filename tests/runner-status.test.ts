@@ -1,3 +1,4 @@
+import russian from "../packages/core/src/i18n/ru.json"
 import { expect, test } from "bun:test"
 import { LANGUAGE_OPTIONS, translateUi } from "../packages/core/src/i18n/index"
 import { RUNNER_STATUS_MESSAGES } from "../packages/core/src/i18n/runner-status-catalog"
@@ -84,7 +85,8 @@ test("active executions win over newer finished instances, and health has its ow
 test("Runner state labels are translated in every supported language", () => {
   for (const message of RUNNER_STATUS_MESSAGES) {
     for (const [index, language] of LANGUAGE_OPTIONS.entries()) {
-      const expected = message[index]
+      const expected =
+        language.id === "ru" ? russian[message[1] as keyof typeof russian] : message[index]
       if (expected === undefined) throw new Error(`Missing Runner translation: ${language.id}`)
       expect(translateUi(message[0], language.id)).toBe(expected)
     }

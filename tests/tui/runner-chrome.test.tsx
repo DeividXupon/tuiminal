@@ -279,7 +279,9 @@ test("expanded log footer filters, copies, exports and clears an isolated execut
       await settle(() => view.renderer.currentFocusedRenderable?.id === "runner-command-list")
       await click("runner-footer-copy")
       expect(copy).toHaveBeenCalledTimes(2)
-      await click("runner-footer-export")
+      expect(view.captureCharFrame()).toContain("[Ctrl+X] Exportar log")
+      await key("x", true)
+      expect(node("runner-project-tab-0")).toBeDefined()
       const exports = readdirSync(join(root, "tuiminal-logs"))
       expect(exports).toHaveLength(1)
       const exportedFile = exports[0]

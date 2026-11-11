@@ -25,6 +25,8 @@ type FooterOptions = {
   openConfiguration: () => void
   openPalette: () => void
   openFilter: () => void
+  submitFilter: () => void
+  closeFilter: () => void
   cycleLogStream: () => void
   toggleTimestamps: () => void
   copySelectedLogs: () => void
@@ -57,6 +59,8 @@ export function runnerFooterActions(options: FooterOptions) {
     openConfiguration,
     openPalette,
     openFilter,
+    submitFilter,
+    closeFilter,
     cycleLogStream,
     toggleTimestamps,
     copySelectedLogs,
@@ -74,7 +78,7 @@ export function runnerFooterActions(options: FooterOptions) {
     },
     {
       id: "runner-footer-export",
-      label: "[X] Exportar log",
+      label: "[Ctrl+X] Exportar log",
       disabled: !hasLogs,
       onPress: exportSelectedLogs,
     },
@@ -168,5 +172,10 @@ export function runnerFooterActions(options: FooterOptions) {
       onPress: openPalette,
     },
   ]
-  return { commands, log }
+  // While the filter input owns typing, letters are text, not log shortcuts.
+  const filter: RunnerCommandFooterAction[] = [
+    { id: "runner-footer-filter-apply", label: "[Enter] Aplicar", onPress: submitFilter },
+    { id: "runner-footer-filter-close", label: "[Esc] Fechar", onPress: closeFilter },
+  ]
+  return { commands, log, filter }
 }

@@ -1,35 +1,30 @@
-import { runnerYamlStyle, useYamlHighlighting } from "./use-yaml-highlighting"
-import { RunnerYamlSuggestions } from "./RunnerYamlSuggestions"
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { translateUi } from "@xupon/tuiminal-core/i18n/index"
-import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
-import type { RunnerCommand } from "../model/types"
 import type { RunnerEnvironmentProfile } from "../model/config"
-import type { RunnerFlow } from "../model/plan"
 import {
-  runnerYamlSource,
-  runnerYamlCommand,
   parseRunnerYaml,
   type RunnerYamlConfiguration,
+  runnerYamlCommand,
   runnerYamlDocument,
+  runnerYamlSource,
   setRunnerYamlDefinition,
   validateRunnerYaml,
 } from "../model/configuration-yaml"
+import type { RunnerFlow } from "../model/plan"
+import type { RunnerCommand } from "../model/types"
 import {
-  runnerYamlContext,
   runnerYamlCompletionCommands,
-  runnerYamlHelp,
+  runnerYamlContext,
   runnerYamlSuggestionDescription,
   runnerYamlSuggestions,
   runnerYamlTemplate,
 } from "../model/yaml-editor"
-import { handleRunnerYamlCompletionKey } from "./runner-yaml-keyboard"
-import { runnerDirectorySuggestions, resolveRunnerEditorPaths } from "../services/editor-paths"
+import { resolveRunnerEditorPaths, runnerDirectorySuggestions } from "../services/editor-paths"
 import { readRunnerYaml, saveRunnerYaml } from "../storage/runner-yaml"
+import { RunnerConfigurationEditorView } from "./RunnerConfigurationEditorView"
+import { handleRunnerYamlCompletionKey } from "./runner-yaml-keyboard"
+import { useYamlHighlighting } from "./use-yaml-highlighting"
 
 export type RunnerEditorTarget =
   | { kind: "configuration" }
@@ -165,7 +160,7 @@ export function RunnerConfigurationEditor({
       if (targetId) {
         const line = (input.current?.plainText ?? "")
           .split("\n")
-          .findIndex((line) => /^  \S/.test(line) && line.includes(targetId))
+          .findIndex((line) => /^ {2}\S/.test(line) && line.includes(targetId))
         if (line >= 0) input.current?.setCursor(line, 0)
       }
     }, 0)
@@ -267,93 +262,30 @@ export function RunnerConfigurationEditor({
       })
   })
   return (
-    <>
-      <ModalSurface
-        id="runner-config-editor"
-        width={Math.max(1, Math.min(140, terminal.width - 2))}
-        height={Math.max(1, terminal.height - 2)}
-        zIndex={975}
-        borderColor={COLORS.runner}
-        onBackdropPress={onClose}
-      >
-        <box height={1} flexDirection="row" justifyContent="space-between">
-          <text content={translateUi("EDITOR YAML DO RUNNER")} fg={COLORS.runner} />
-          <InlineButton label="[Esc] Voltar" onPress={onClose} accent={COLORS.runner} />
-        </box>
-        <text content={snapshot.path} fg={COLORS.muted} height={1} truncate />
-        <box style={{ position: "relative", flexGrow: 1, minHeight: 2 }}>
-          <textarea
-            ref={input}
-            id="runner-config-yaml"
-            initialValue={source}
-            syntaxStyle={runnerYamlStyle}
-            onContentChange={changed}
-            onCursorChange={() => {
-              const editor = input.current
-              queueMicrotask(() => {
-                if (!live.current || input.current !== editor) return
-                syncCursor()
-              })
-              setSuggestionIndex(0)
-              setSuggesting(true)
-              setForcedSuggestions(false)
-            }}
-            onMouseDown={() => {
-              input.current?.focus()
-              queueMicrotask(() => {
-                if (live.current) syncCursor()
-              })
-            }}
-            style={{
-              width: "100%",
-              height: "100%",
-              backgroundColor: COLORS.panelRaised,
-              focusedBackgroundColor: COLORS.panelRaised,
-              textColor: COLORS.text,
-              focusedTextColor: COLORS.text,
-              cursorColor: COLORS.runner,
-              wrapMode: "none",
-            }}
-          />
-          <RunnerYamlSuggestions
-            items={visibleItems}
-            selectedIndex={suggestionIndex}
-            query={context.value}
-            anchor={anchor}
-            editorHeight={editorHeight}
-            editorWidth={editorWidth}
-            onSelect={setSuggestionIndex}
-          />
-        </box>
-        <box height={1} flexDirection="row">
-          <InlineButton
-            id="runner-config-suggest"
-            label="[Ctrl+Space] Sugestões"
-            onPress={() => {
-              setSuggesting(true)
-              setForcedSuggestions(true)
-              input.current?.focus()
-            }}
-            accent={COLORS.runner}
-          />
-        </box>
-        <scrollbox height={terminal.height >= 28 ? 4 : 2} scrollY flexShrink={0}>
-          <text content={translateUi(runnerYamlHelp(context.key))} fg={COLORS.text} />
-        </scrollbox>
-        <text
-          id="runner-config-validation"
-          content={translateUi(saveError || validation.error || "Configuração válida.")}
-          fg={saveError || validation.error ? COLORS.danger : COLORS.success}
-          height={2}
-        />
-        <InlineButton
-          id="runner-config-save"
-          label="[Ctrl+S] Salvar"
-          disabled={!validation.result || saving || Boolean(snapshot.error)}
-          onPress={() => void save()}
-          accent={COLORS.runner}
-        />
-      </ModalSurface>
-    </>
+    <RunnerConfigurationEditorView
+      {...{
+        terminal,
+        onClose,
+        snapshot,
+        input,
+        source,
+        changed,
+        live,
+        syncCursor,
+        setSuggestionIndex,
+        setSuggesting,
+        setForcedSuggestions,
+        visibleItems,
+        suggestionIndex,
+        context,
+        anchor,
+        editorHeight,
+        editorWidth,
+        saveError,
+        validation,
+        saving,
+        save,
+      }}
+    />
   )
 }

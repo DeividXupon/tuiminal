@@ -37,7 +37,11 @@ Actions without a valid target stay disabled.
 Both footers wrap using translated display widths, and the workspace reserves each footer's
 full height so every action, including `[?]`, remains visible on narrow terminals.
 The header places `[N] New tab` between the opened project tabs and command summary.
+The workspace has no blank spacer rows above or immediately below this header.
 Clicking it opens the same project picker as `[N]` to add another project tab.
+The active project tab shows a red `[X]`; inactive tabs show a clickable `×`.
+`[X]` outside inputs and modals closes the active tab without stopping its processes.
+`[Ctrl+X]` exports the selected execution log.
 The `[/]` button sits beside the command input and focuses it, matching the keyboard
 shortcut. `[P]` switches command/process lists and `[D]` refreshes discovery through
 the command-panel header or keyboard. These controls stay outside the footer.
@@ -219,7 +223,31 @@ all Runner-owned processes, probes and restart timers. Session restoration never
 reattaches an orphaned live process. Log retention and explicit log export retain
 the existing Runner contract.
 
+## Guided tutorial
+
+Settings → Tutorial opens a Runner-specific, simulated tour in both the integrated
+workspace and isolated Runner. It covers project selection, discovered/manual
+commands and saving, start/stop outcomes, processes, logs/filtering/ports/history,
+Single/Multi, focus selection, the action palette, environment profiles, YAML
+validation, dependency flows and autostart review. Each step first paints its
+demonstrated state and then highlights the visible result. Backward navigation
+restores that step's original state; reopening starts at the beginning.
+
+All targets remain discoverable while their dialogs or panels are absent. The demo
+has no discovery, filesystem, network or process dependencies and cannot approve
+trust, execute commands or persist configuration. Existing live Runner trees remain
+mounted behind the tour with their keyboard subscriptions suspended. Closing the
+tour restores the live workspace without restarting processes or replacing buffers.
+Tour-only mounts do not initialize live services. The tour uses the live Runner
+layout, controls and dialog views with synthetic data and inert actions; it does
+not maintain a separate approximation of the interface. Copy is localized in all supported
+languages, and targets adapt to narrow terminals and both layout modes.
+
 ## Verification
+
+`tests/runner-tutorial.test.ts` covers metadata, translations and demo dependency
+isolation; `tests/tui/runner-tutorial.test.tsx` covers native target geometry, scene
+results, navigation and absence of live I/O.
 
 `tests/runner-yaml-syntax.test.ts` covers syntax tokens;
 `tests/runner-status.test.ts` covers retained outcomes and project summaries;

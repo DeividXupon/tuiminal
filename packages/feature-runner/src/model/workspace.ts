@@ -25,6 +25,7 @@ export const RUNNER_PROJECT_TAB_SHORTCUTS = ["1", "2", "3", "4"] as const
 export type RunnerWorkspaceProps = {
   active: boolean
   onOpenHttp?: (url: string) => void
+  tutorial?: { targetId: string | null } | null
 }
 
 export type RunnerViewMode = "single" | "multi"

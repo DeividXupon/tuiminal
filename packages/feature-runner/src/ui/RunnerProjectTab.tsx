@@ -14,8 +14,6 @@ export function RunnerProjectTab({
   selected,
   status,
   width,
-  closeLabel,
-  closeWidth,
   onSelect,
   onClose,
 }: {
@@ -25,12 +23,10 @@ export function RunnerProjectTab({
   selected: boolean
   status: RunnerVisualStatus
   width: number
-  closeLabel: string
-  closeWidth: number
   onSelect: () => void
   onClose: () => void
 }) {
-  const labelWidth = Math.max(5, width - closeWidth)
+  const labelWidth = Math.max(5, width - (selected ? 5 : 3))
   const nameWidth = Math.max(0, labelWidth - 4)
   const nameColor =
     status === "idle" ? (selected ? COLORS.text : COLORS.muted) : runnerStatusColor(status)
@@ -64,7 +60,14 @@ export function RunnerProjectTab({
           </box>
         )}
       </Button>
-      <InlineButton label={closeLabel} accent={COLORS.danger} onPress={onClose} />
+      <InlineButton
+        id={`runner-project-close-${index}`}
+        label={selected ? "[X]" : "×"}
+        active={selected}
+        shortcutBaseColor={COLORS.danger}
+        accent={COLORS.danger}
+        onPress={onClose}
+      />
     </box>
   )
 }

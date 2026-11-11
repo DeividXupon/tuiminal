@@ -156,3 +156,38 @@ test.each([false, true])(
     }
   },
 )
+
+test("Log filter shows its own keys and Enter returns M to box selection", async () => {
+  let output: ((line: string, stream: "stdout") => void) | undefined
+  const spawn = spyOn(service, "startRunnerProcess").mockImplementation((_root, _command, io) => {
+    output = io.onLine
+    return { pid: null, interactive: false, write: () => {}, stop: async () => {} }
+  })
+  try {
+    await mount()
+    await key("RETURN")
+    await settle(() => output !== undefined)
+    await act(async () => {
+      output?.("alpha output", "stdout")
+      output?.("beta output", "stdout")
+    })
+    await settle(() => tui.captureCharFrame().includes("beta output"))
+    await key("l")
+    await key("f")
+    await settle(() => focus() === "runner-log-filter")
+    expect(tui.captureCharFrame()).toContain("[Esc] Fechar")
+    expect(tui.captureCharFrame()).not.toContain("[M] Escolher box")
+    await act(async () => tui.mockInput.typeText("alpha"))
+    await settle(() => !tui.captureCharFrame().includes("beta output"))
+    await key("RETURN")
+    await settle(() => focus() === "runner-log-scroll")
+    expect(tui.captureCharFrame()).toContain("[M] Escolher box")
+    await key("m")
+    await settle(() => focus() === "runner-box-selection")
+    expect(node("runner-log-panel-focus-selection-tint")).toBeDefined()
+    expect(node("runner-log-filter")).toHaveProperty("value", "alpha")
+  } finally {
+    act(() => tui.renderer.destroy())
+    spawn.mockRestore()
+  }
+})
