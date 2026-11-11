@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { descendantProcesses } from "../model/agent-detection"
 import { type LiveDiffFile, mergeLiveDiffFiles } from "../model/live-diff"
 import type { RemoteCodexTarget } from "../model/sessions"
@@ -188,5 +188,15 @@ export function useLiveDiffSnapshot({
     running,
   ])
 
-  return { roots, files, filesRef, error, lastProject, snapshotReady, remoteSource, readPatch }
+  return {
+    roots,
+    files,
+    filesRef,
+    error,
+    lastProject,
+    snapshotReady,
+    remoteSource,
+    readPatch,
+    patchRetryMs: remoteSource && running ? REMOTE_POLL_MS : 0,
+  }
 }

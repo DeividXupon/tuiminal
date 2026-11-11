@@ -1,7 +1,7 @@
-import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
 import type { BoxRenderable, DiffRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
+import { syntaxFiletype } from "@xupon/tuiminal-core/syntax/index"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { NativeDiff } from "@xupon/tuiminal-core/ui/NativeDiff"
@@ -10,13 +10,13 @@ import { useLiveDiffFocus } from "../hooks/use-live-diff-focus"
 import { useLiveDiffKeyboard } from "../hooks/use-live-diff-keyboard"
 import { useLiveDiffPatch } from "../hooks/use-live-diff-patch"
 import { useLiveDiffProjects } from "../hooks/use-live-diff-projects"
+import { useLiveDiffSnapshot } from "../hooks/use-live-diff-snapshot"
 import { useRenderableFocus } from "../hooks/use-renderable-focus"
 import type { LiveDiffFile } from "../model/live-diff"
 import type { RemoteCodexTarget } from "../model/sessions"
 import { decoratedLineColors } from "../rendering/live-diff-line-colors"
 import { liveDiffUnwrappedHeight, liveDiffWrappedHeight } from "../rendering/live-diff-table"
 import { terminalShortcutColor } from "../rendering/terminal-shortcut"
-import { useLiveDiffSnapshot } from "../hooks/use-live-diff-snapshot"
 import { LiveDiffFileTable } from "./LiveDiffFileTable"
 import { LiveDiffInfo } from "./LiveDiffInfo"
 
@@ -70,7 +70,7 @@ export function LiveDiffPanel({
   onActivateSession: () => void
   onReturnTerminal: () => void
 }) {
-  const { roots, files, filesRef, error, lastProject, snapshotReady, remoteSource, readPatch } =
+  const { roots, files, error, lastProject, snapshotReady, remoteSource, readPatch, patchRetryMs } =
     useLiveDiffSnapshot({ agentKey, initialDirectory, remote, manualDirectories, running })
   const panel = useRef<BoxRenderable | null>(null)
   const preview = useRef<ScrollBoxRenderable | null>(null)
@@ -110,6 +110,7 @@ export function LiveDiffPanel({
     preview,
     diff,
     readPatch,
+    patchRetryMs,
   )
   const { canvas, diffAddedBg, diffGutterBg, diffRecentBg, diffRemovedBg, panel: panelBg } = COLORS
   const diffAppearance = [

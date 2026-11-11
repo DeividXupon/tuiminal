@@ -73,7 +73,10 @@ export function LiveDiffProjectPicker({
     }
   })
   const width = Math.max(1, Math.min(72, dimensions.width - 2))
-  const height = Math.max(7, Math.min(18, dimensions.height - 2))
+  const height = Math.max(
+    1,
+    Math.min(18, dimensions.height - 2, 5 + Math.max(loading ? 3 : 1, filtered.length)),
+  )
   return (
     <ModalSurface
       dialogRef={dialog}

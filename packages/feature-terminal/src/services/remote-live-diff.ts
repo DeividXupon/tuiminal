@@ -20,6 +20,7 @@ export {
 const MAX_FILE_BYTES = 1024 * 1024
 const MAX_FILE_ENTRIES = 1000
 const MAX_ROOTS = 4
+const FILE_INFO_BATCH_SIZE = 16
 
 type RemoteLiveDiffSourceOptions = {
   command?: readonly string[]
@@ -99,17 +100,25 @@ export function createRemoteLiveDiffSource(
   let disposed = false
   const command =
     options.command ?? remoteLiveDiffSshCommand(remote.profile, remote.workingDirectory)
-  const request = (operation: string, fields: readonly string[], signal: AbortSignal) => {
+  const request = (
+    operation: string,
+    fields: readonly string[],
+    signal: AbortSignal,
+    cancellation: "close" | "discard" = "close",
+  ) => {
     if (disposed) return Promise.reject(new Error("Live Diff remoto fechado."))
     if (!protocol || protocol.closed)
       protocol = new RemoteLiveDiffProtocol(command, options.requestTimeoutMs)
-    return protocol.request(operation, fields, signal)
+    return protocol.request(operation, fields, signal, cancellation)
   }
 
   return {
     async repositoryRoot(_directory, signal) {
       const result = await request("root", [], signal)
-      if (result.status !== 0) return null
+      if (result.status !== 0) {
+        if (result.status === 128 && /not a git repository/u.test(result.stderr)) return null
+        throw commandError("root", result)
+      }
       const root = result.stdout.trim()
       return safeRemoteRoot(root) ? root : null
     },
@@ -149,12 +158,16 @@ export function createRemoteLiveDiffSource(
       if (numstatResult.status !== 0) throw commandError("numstat", numstatResult)
       const detected = parseLiveDiffNameStatus(nameStatusResult.stdout)
       const numstat = parseLiveDiffNumstat(numstatResult.stdout)
-      const records = limited
-        .map((entry) => `${entry.status === "??" ? "U" : "T"}${entry.path}`)
-        .join("\n")
-      const infoResult = await request("file-info", [root, records], signal)
-      if (infoResult.status !== 0) throw commandError("file-info", infoResult)
-      const info = parseFileInfo(infoResult.stdout, limited.length)
+      const info: ReturnType<typeof parseFileInfo> = []
+      for (let offset = 0; offset < limited.length; offset += FILE_INFO_BATCH_SIZE) {
+        const batch = limited.slice(offset, offset + FILE_INFO_BATCH_SIZE)
+        const records = batch
+          .map((entry) => `${entry.status === "??" ? "U" : "T"}${entry.path}`)
+          .join("\n")
+        const infoResult = await request("file-info", [root, records], signal)
+        if (infoResult.status !== 0) throw commandError("file-info", infoResult)
+        info.push(...parseFileInfo(infoResult.stdout, batch.length))
+      }
       const files = limited.map((entry, index) => {
         const untracked = entry.status === "??"
         const detectedChange = detected.get(entry.path)
@@ -193,11 +206,12 @@ export function createRemoteLiveDiffSource(
           "patch",
           [file.root, file.path, file.originalPath ?? ""],
           signal,
+          "discard",
         )
         if (result.status !== 0) return ""
         return Buffer.byteLength(result.stdout) <= MAX_FILE_BYTES ? result.stdout : ""
       }
-      const result = await request("read-file", [file.root, file.path], signal)
+      const result = await request("read-file", [file.root, file.path], signal, "discard")
       if (result.status !== 0 || Buffer.byteLength(result.stdout) > MAX_FILE_BYTES) return ""
       return untrackedPatch(file, result.stdout)
     },

@@ -49,6 +49,7 @@ export function useLiveDiffPatch(
   preview: RenderRef<ScrollBoxRenderable>,
   diff: RenderRef<DiffRenderable>,
   readPatch = readLiveDiffPatch,
+  retryMs = 0,
 ) {
   const previousPatch = useRef<{ key: string; patch: string } | null>(null)
   const patchHistory = useRef(new Map<string, LiveDiffPatchHistory>())
@@ -93,6 +94,7 @@ export function useLiveDiffPatch(
       return
     }
     const controller = new AbortController()
+    let retry: ReturnType<typeof setTimeout> | undefined
     const key = fileKey(selected)
     const previous = previousPatch.current
     const oldPatch = previous?.key === key ? previous.patch : null
@@ -103,40 +105,43 @@ export function useLiveDiffPatch(
       setScrollTarget(null)
       setHighlightedPatch(null)
     }
-    void readPatch(selected, controller.signal)
-      .then((rawPatch) => {
-        if (controller.signal.aborted) return
-        const prepared = prepareLiveDiffPatch(rawPatch)
-        const result = prepared.patch
-        const index = automatic ? latestChangedHunkIndex(oldPatch, result) : null
-        const observed = observeLiveDiffPatch(
-          patchHistory.current,
-          key,
-          result,
-          initiallyRecent.current.delete(key),
-        )
-        previousPatch.current = { key, patch: result }
-        setPatch(result)
-        setSeparatorLines(prepared.separatorLines)
-        setHighlightedPatch(
-          observed.highlighted.length ? { patch: result, lines: observed.highlighted } : null,
-        )
-        setScrollTarget(
-          index === null
-            ? null
-            : { patch: result, index, line: changedHunkLineIndex(result, index, oldPatch) },
-        )
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setPatch("")
-          setSeparatorLines([])
-          setScrollTarget(null)
-          setHighlightedPatch(null)
-        }
-      })
-    return () => controller.abort()
-  }, [selected, automatic, preview, readPatch])
+    const read = () =>
+      void readPatch(selected, controller.signal)
+        .then((rawPatch) => {
+          if (controller.signal.aborted) return
+          const prepared = prepareLiveDiffPatch(rawPatch)
+          const result = prepared.patch
+          const index = automatic ? latestChangedHunkIndex(oldPatch, result) : null
+          const observed = observeLiveDiffPatch(
+            patchHistory.current,
+            key,
+            result,
+            initiallyRecent.current.delete(key),
+          )
+          previousPatch.current = { key, patch: result }
+          setPatch(result)
+          setSeparatorLines(prepared.separatorLines)
+          setHighlightedPatch(
+            observed.highlighted.length ? { patch: result, lines: observed.highlighted } : null,
+          )
+          setScrollTarget(
+            index === null
+              ? null
+              : { patch: result, index, line: changedHunkLineIndex(result, index, oldPatch) },
+          )
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          // Keep the last preview and recover even if the next snapshot is
+          // unchanged, so selecting the same file does not leave a blank panel.
+          if (retryMs > 0) retry = setTimeout(read, retryMs)
+        })
+    read()
+    return () => {
+      controller.abort()
+      clearTimeout(retry)
+    }
+  }, [selected, automatic, preview, readPatch, retryMs])
 
   useEffect(() => {
     if (!scrollTarget || scrollTarget.patch !== patch || !automatic) return

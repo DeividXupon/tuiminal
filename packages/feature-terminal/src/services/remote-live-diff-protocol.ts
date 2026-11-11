@@ -1,7 +1,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 
 const MAX_PROTOCOL_BUFFER = 16 * 1024 * 1024
-const DEFAULT_REQUEST_TIMEOUT_MS = 6_500
+// Includes the SSH handshake (ConnectTimeout=10) on the first request.
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
 export type RemoteLiveDiffProtocolResult = {
   status: number
@@ -12,7 +13,8 @@ export type RemoteLiveDiffProtocolResult = {
 type PendingRequest = {
   resolve: (result: RemoteLiveDiffProtocolResult) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  line: string
+  timer?: ReturnType<typeof setTimeout>
   signal: AbortSignal
   abort: () => void
 }
@@ -66,7 +68,12 @@ export class RemoteLiveDiffProtocol {
     )
   }
 
-  request(operation: string, fields: readonly string[], signal: AbortSignal) {
+  request(
+    operation: string,
+    fields: readonly string[],
+    signal: AbortSignal,
+    cancellation: "close" | "discard" = "close",
+  ) {
     signal.throwIfAborted()
     if (this.closed) return Promise.reject(new Error("Live Diff remoto desconectado."))
     const id = this.nextId++
@@ -76,30 +83,43 @@ export class RemoteLiveDiffProtocol {
         if (!request) return
         const error =
           signal.reason instanceof Error ? signal.reason : new Error("Operação cancelada.")
-        this.release(id, request)
         reject(error)
-        this.stop(error)
+        if (cancellation === "close") this.stop(error)
+        else if (request.timer) {
+          // A preview selection can change while a snapshot shares this helper.
+          // Drain the active reply, retaining its deadline, without killing SSH.
+          signal.removeEventListener("abort", abort)
+        } else this.release(id, request)
       }
-      const timer = setTimeout(() => {
-        const request = this.pending.get(id)
-        if (!request) return
-        const error = new Error("Tempo limite do Live Diff remoto excedido.")
-        this.release(id, request)
-        reject(error)
-        this.stop(error)
-      }, this.timeoutMs)
-      const request = { resolve, reject, timer, signal, abort }
+      const line = `${[id, operation, ...fields.map(encodeField)].join("|")}\n`
+      const request = { resolve, reject, line, signal, abort }
       this.pending.set(id, request)
       signal.addEventListener("abort", abort, { once: true })
-      const line = `${[id, operation, ...fields.map(encodeField)].join("|")}\n`
-      try {
-        this.child.stdin.write(line, (error) => {
-          if (error) this.stop(error)
-        })
-      } catch (error) {
-        this.stop(error instanceof Error ? error : new Error(String(error)))
-      }
+      this.sendNext()
     })
+  }
+
+  private sendNext() {
+    if (this.closed) return
+    const next = this.pending.entries().next().value
+    if (!next) return
+    const [id, request] = next
+    if (request.timer) return
+    // The shell handles one operation at a time. Queued reads must not spend
+    // their timeout waiting for another root or a file preview to finish.
+    request.timer = setTimeout(() => {
+      const request = this.pending.get(id)
+      if (!request) return
+      const error = new Error("Tempo limite do Live Diff remoto excedido.")
+      this.stop(error)
+    }, this.timeoutMs)
+    try {
+      this.child.stdin.write(request.line, (error) => {
+        if (error) this.stop(error)
+      })
+    } catch (error) {
+      this.stop(error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   close() {
@@ -136,6 +156,7 @@ export class RemoteLiveDiffProtocol {
       this.release(id, request)
       request.reject(error instanceof Error ? error : new Error(String(error)))
     }
+    this.sendNext()
   }
 
   private release(id: number, request: PendingRequest) {
