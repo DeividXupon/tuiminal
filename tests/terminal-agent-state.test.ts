@@ -3,10 +3,10 @@ import { AgentOutput } from "../packages/feature-terminal/src/model/agent-output
 import { detectAgentScreen } from "../packages/feature-terminal/src/model/agent-screen"
 import type { AgentProfile } from "../packages/feature-terminal/src/model/agent-state"
 import {
-  observeAgent,
   type AgentIdentity,
   type AgentObservation,
   type AgentSignal,
+  observeAgent,
 } from "../packages/feature-terminal/src/model/agent-state"
 
 const codex: AgentIdentity = { key: "123:codex", label: "Codex", profile: "codex" }
@@ -36,6 +36,28 @@ describe("agent live-screen profiles", () => {
       detectAgentScreen("codex", "The docs say esc to interrupt when reading a file").state,
     ).toBe("unknown")
   })
+  test.each([
+    "• Working (0s • esc…",
+    "Working (1m 02s • esc to inter…",
+    "◦ Running tests (2s • esc to interrupt…",
+    "• Working (0s • esc to interrupt)…",
+  ])("Codex recognizes truncated interrupt controls: %s", (line) => {
+    const screen = `${line}\n› \n? for shortcuts`
+    expect(detectAgentScreen("codex", screen, "project", true).state).toBe("working")
+    expect(detectAgentScreen("codex", `${line}\n• Finished\n› \n? for shortcuts`).state).toBe(
+      "idle",
+    )
+  })
+
+  test.each([
+    "The documentation mentions esc to interrupt…",
+    "• Working (0s • escape…",
+    "• Working (0s • esc to interrupt a command)",
+    "• Working (0s • esc to inter",
+  ])("Codex does not infer activity from lookalike text: %s", (line) => {
+    expect(detectAgentScreen("codex", `${line}\n› \n? for shortcuts`).state).toBe("idle")
+  })
+
   test("Claude prompt boxes distinguish a live spinner from transcript history", () => {
     const prompt = "────────────\n❯ \n────────────\n? for shortcuts"
     expect(detectAgentScreen("claude", `✻ Searching… (2s)\n${prompt}`)).toMatchObject({

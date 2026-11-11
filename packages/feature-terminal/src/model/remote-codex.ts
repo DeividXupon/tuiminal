@@ -17,6 +17,7 @@ export type RemoteCodexIncompatibilityReason =
   | "daemonUnavailable"
   | "proxyUnavailable"
   | "versionMismatch"
+  | "serviceVersionMismatch"
 
 export type RemoteCodexCompatibilityReport = {
   /** Absent on persisted legacy Codex reports. */
@@ -25,6 +26,8 @@ export type RemoteCodexCompatibilityReport = {
   reason: RemoteCodexIncompatibilityReason | null
   localVersion: string | null
   remoteVersion: string | null
+  remoteDaemonVersion?: string
+  remoteAppServerVersion?: string
   daemonAvailable: boolean
   proxyAvailable: boolean
   remoteUserAgent?: string
@@ -46,6 +49,7 @@ const COMPATIBILITY_MESSAGES: Record<RemoteCodexIncompatibilityReason, string> =
   daemonUnavailable: "O Codex remoto não oferece app-server daemon.",
   proxyUnavailable: "O Codex remoto não oferece app-server proxy.",
   versionMismatch: "As versões local e remota do Codex são incompatíveis.",
+  serviceVersionMismatch: "O serviço remoto do Codex usa uma versão diferente do CLI instalado.",
 }
 
 /** Returns the pt-BR source text; callers translate it where it is displayed. */

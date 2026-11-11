@@ -11,6 +11,7 @@ export {
 
 export type AgentResumeThread = CodexResumeThread & { providerId?: AgentProviderId }
 export type AgentResumeTab = "global" | AgentProviderId
+export type AgentResumeSource = `${AgentProviderId}:${"local" | "remote"}`
 export type AgentResumePage<T extends AgentResumeThread = AgentResumeThread> = {
   threads: T[]
   nextCursor: string | null
@@ -26,6 +27,7 @@ export type AgentResumePaginationState = {
   loadingInitial: boolean
   loadingInitialProviders: readonly AgentProviderId[]
   loadingMore: readonly AgentProviderId[]
+  failedSources?: readonly AgentResumeSource[]
 }
 
 export const DEFAULT_AGENT_RESUME_PAGINATION: AgentResumePaginationState = {

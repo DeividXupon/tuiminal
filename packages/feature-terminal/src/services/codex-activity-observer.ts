@@ -1,9 +1,10 @@
 import type { CodexHydratedThread } from "../model/remote-codex"
-import { object, requestKey, type RecordValue } from "./codex-message-history"
+import { object, type RecordValue, requestKey } from "./codex-message-history"
 
 export type CodexActivity = "thinking" | "writing" | "running" | "updating" | "coding" | "tooling"
 export type CodexState = "working" | "blocked" | "done" | "unknown" | "idle"
 type ActivityEvents = {
+  onTaskFailed?: () => void
   onState: (state: CodexState) => void
   onActivity: (activity: CodexActivity) => void
 }
@@ -86,7 +87,9 @@ export class CodexActivityObserver {
   private state: CodexState = "idle"
   private ended = false
   private waiting = false
+  private readonly settledTurns = new Set<string>()
   private readonly requests = new Set<string>()
+  private readonly starts = new Map<string, { threadId: string; previousTurnId: string | null }>()
 
   hydrate(thread: CodexHydratedThread) {
     this.threadId = thread.threadId
@@ -98,6 +101,8 @@ export class CodexActivityObserver {
         (thread.latestTurnStatus === "failed" || thread.latestTurnStatus === "interrupted"))
     this.waiting = thread.state === "blocked"
     this.requests.clear()
+    this.starts.clear()
+    this.settledTurns.clear()
   }
 
   private publish(state: CodexState, events: ActivityEvents, force = false) {
@@ -116,10 +121,39 @@ export class CodexActivityObserver {
   observeClient(message: RecordValue, events: ActivityEvents) {
     if (!message.method && ("result" in message || "error" in message))
       this.resolve(message.id, events)
+    if (message.method !== "turn/start") return
+    const threadId = object(message.params)?.threadId
+    const key = requestKey(message.id)
+    if (key && typeof threadId === "string")
+      this.starts.set(key, { threadId, previousTurnId: this.turnId })
+  }
+
+  private observeStartResponse(message: RecordValue, events: ActivityEvents) {
+    const key = requestKey(message.id)
+    const start = key ? this.starts.get(key) : null
+    if (!key || !start) return
+    this.starts.delete(key)
+    const turn = object(object(message.result)?.turn)
+    if (
+      (this.threadId && start.threadId !== this.threadId) ||
+      (this.turnId !== null && this.turnId !== start.previousTurnId) ||
+      typeof turn?.id !== "string" ||
+      turn.id === this.turnId ||
+      this.settledTurns.has(turn.id) ||
+      turn.status !== "inProgress"
+    )
+      return
+    // A successful start response is lifecycle evidence even without turn/started.
+    this.observeTurn("turn/started", turn.id, "working", events)
   }
 
   private observeStatus(state: CodexState, events: ActivityEvents) {
-    if (this.ended) return
+    if (this.ended) {
+      if (state !== "working" && state !== "blocked") return
+      // Runtime status describes the current thread, not the previously completed turn.
+      this.ended = false
+      this.turnId = null
+    }
     if (state === "working" || state === "blocked") {
       this.waiting = state === "blocked"
       this.publish(this.waiting || this.requests.size ? "blocked" : "working", events)
@@ -138,7 +172,7 @@ export class CodexActivityObserver {
     events: ActivityEvents,
   ) {
     if (method === "turn/started") {
-      if (this.ended && turnId && turnId === this.turnId) return true
+      if (turnId && turnId === this.turnId) return true
       this.turnId = turnId
       this.ended = false
       this.waiting = false
@@ -147,6 +181,7 @@ export class CodexActivityObserver {
       return true
     }
     if (method === "turn/completed" && state) {
+      if (turnId) this.settledTurns.add(turnId)
       this.turnId = turnId
       this.ended = true
       this.waiting = false
@@ -157,23 +192,14 @@ export class CodexActivityObserver {
     return false
   }
 
-  observeServer(message: RecordValue, events: ActivityEvents) {
-    const params = object(message.params)
-    if (this.threadId && params?.threadId !== this.threadId) return
-    const method = message.method
-    const turnId = eventTurnId(params)
-    if (method !== "turn/started" && turnId && this.turnId && turnId !== this.turnId) return
-    const state = codexAppServerState(message)
-    if (this.observeTurn(method, turnId, state, events)) return
-    if (method === "thread/status/changed" && state) {
-      this.observeStatus(state, events)
-      return
-    }
-    if (method === "serverRequest/resolved") {
-      this.resolve(params?.requestId, events)
-      return
-    }
+  private observeActivity(
+    message: RecordValue,
+    state: CodexState | null,
+    turnId: string | null,
+    events: ActivityEvents,
+  ) {
     if (this.ended) return
+    if (turnId && state && !this.turnId) this.turnId = turnId
     if (state === "blocked") {
       const key = requestKey(message.id)
       if (key) this.requests.add(key)
@@ -185,5 +211,33 @@ export class CodexActivityObserver {
     if (state) this.publish(state, events)
     const activity = codexAppServerActivity(message)
     if (activity) events.onActivity(activity)
+  }
+
+  observeServer(message: RecordValue, events: ActivityEvents) {
+    if (!message.method) {
+      this.observeStartResponse(message, events)
+      return
+    }
+    const params = object(message.params)
+    if (this.threadId && params?.threadId !== this.threadId) return
+    const method = message.method
+    const turnId = eventTurnId(params)
+    if (turnId && this.settledTurns.has(turnId)) return
+    if (method !== "turn/started" && turnId && this.turnId && turnId !== this.turnId) return
+    const state = codexAppServerState(message)
+    if (this.observeTurn(method, turnId, state, events)) {
+      if (method === "turn/completed" && object(params?.turn)?.status === "failed")
+        events.onTaskFailed?.()
+      return
+    }
+    if (method === "thread/status/changed" && state) {
+      this.observeStatus(state, events)
+      return
+    }
+    if (method === "serverRequest/resolved") {
+      this.resolve(params?.requestId, events)
+      return
+    }
+    this.observeActivity(message, state, turnId, events)
   }
 }

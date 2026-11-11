@@ -4,13 +4,15 @@ import {
 } from "../model/codex-resume-threads"
 import type { CodexHydratedThread } from "../model/remote-codex"
 import {
-  CodexActivityObserver,
   type CodexActivity,
+  CodexActivityObserver,
   type CodexState,
 } from "./codex-activity-observer"
+import { CodexAuxiliaryThreads } from "./codex-auxiliary-threads"
 import type { CodexObservedUserMessage } from "./codex-message-history"
 import { CodexMessageHistoryObserver } from "./codex-message-history-observer"
 import { codexResumeThreads, resumeListFrame } from "./codex-resume"
+import { CodexTaskTitleObserver } from "./codex-task-title-observer"
 
 type RecordValue = Record<string, unknown>
 
@@ -18,6 +20,7 @@ export type { CodexHydratedThread } from "../model/remote-codex"
 export { codexAppServerActivity, codexAppServerState } from "./codex-activity-observer"
 
 export type CodexAppServerEvents = {
+  onTaskFailed?: () => void
   onActivity: (activity: CodexActivity) => void
   onState: (state: CodexState) => void
   onTitle: (title: string) => void
@@ -32,7 +35,9 @@ export type CodexRelay = {
   sendUpstream: ((value: string) => void) | null
   pending: string[]
   history: CodexMessageHistoryObserver
+  title: CodexTaskTitleObserver
   activity: CodexActivityObserver
+  auxiliary: CodexAuxiliaryThreads
   resumeRequestIds: Set<string>
   resumeRequestSequence: number
   closing: boolean
@@ -45,12 +50,15 @@ function object(value: unknown): RecordValue | null {
 }
 
 export function createCodexRelay(remote?: { id: string; name: string }): CodexRelay {
+  const title = new CodexTaskTitleObserver()
   return {
     upstream: null,
     sendUpstream: null,
     pending: [],
-    history: new CodexMessageHistoryObserver(),
+    history: new CodexMessageHistoryObserver(title),
+    title,
     activity: new CodexActivityObserver(),
+    auxiliary: new CodexAuxiliaryThreads(),
     resumeRequestIds: new Set(),
     resumeRequestSequence: 0,
     closing: false,
@@ -63,7 +71,13 @@ function requestResumeThreads(relay: CodexRelay, relayId: number) {
   relay.resumeRequestSequence += 1
   const id = `tuiminal-resume-list:${relayId}:${relay.resumeRequestSequence}`
   relay.resumeRequestIds.add(id)
-  relay.sendUpstream(resumeListFrame(id))
+  const frame = resumeListFrame(id)
+  relay.title.observeClient(JSON.parse(frame))
+  relay.sendUpstream(frame)
+}
+
+function refreshThreadName(relay: CodexRelay) {
+  if (!relay.closing && relay.sendUpstream) relay.title.refresh(relay.sendUpstream)
 }
 
 export function inspectUpstreamFrame(
@@ -75,13 +89,16 @@ export function inspectUpstreamFrame(
   try {
     const message = object(JSON.parse(value))
     if (!message) return false
+    if (relay.auxiliary.observeServer(message)) return false
+    const titleResponse = relay.title.observeServer(message, events)
     const resumeResponse =
       typeof message.id === "string" && relay.resumeRequestIds.delete(message.id)
-    if (resumeResponse)
+    if (resumeResponse) {
       publishCodexResumeThreads(
         codexResumeThreads(message, relay.remoteProfileId, relay.remoteProfileName),
         relay.remoteProfileId,
       )
+    }
     if (message.method === "item/completed") {
       const params = object(message.params)
       const item = object(params?.item)
@@ -92,9 +109,10 @@ export function inspectUpstreamFrame(
       )
         updateCodexResumeThreadResponse(params.threadId, item.text, relay.remoteProfileId)
     }
-    if (typeof message.method === "string") relay.activity.observeServer(message, events)
+    relay.activity.observeServer(message, events)
     const historyResponse =
       !resumeResponse &&
+      !titleResponse &&
       relay.history.observeServer(
         message,
         {
@@ -106,9 +124,10 @@ export function inspectUpstreamFrame(
         },
         (frame) => relay.sendUpstream?.(frame),
       )
+    if (message.method === "turn/completed") refreshThreadName(relay)
     if (message.method === "turn/completed" || message.method === "thread/name/updated")
       requestResumeThreads(relay, relayId)
-    return resumeResponse || historyResponse
+    return titleResponse || resumeResponse || historyResponse
   } catch {
     // Preserve the original frame even if it cannot be inspected.
     return false
@@ -124,8 +143,12 @@ export function inspectClientFrame(
   try {
     const request = object(JSON.parse(value))
     if (!request) return
+    if (relay.auxiliary.observeClient(request)) return
+    relay.title.observeClient(request)
     relay.activity.observeClient(request, events)
     relay.history.observeClient(request, events)
+    if (["turn/start", "turn/steer", "thread/queue/add"].includes(String(request.method)))
+      queueMicrotask(() => refreshThreadName(relay))
     if (request.method === "initialized") queueMicrotask(() => requestResumeThreads(relay, relayId))
   } catch {
     // Preserve the original frame even if it cannot be inspected.

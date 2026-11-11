@@ -1,4 +1,8 @@
-const MAX_PROXY_MESSAGE_BYTES = 16 * 1024 * 1024
+// Codex 0.163 already sends single plugin/list frames above 16 MiB.
+const MAX_PROXY_MESSAGE_BYTES = 64 * 1024 * 1024
+const DECODE_SLICE_BYTES = 1024 * 1024
+// One maximum frame, its 14-byte header and one decode slice.
+const MAX_PROXY_FRAME_BUFFER_BYTES = MAX_PROXY_MESSAGE_BYTES + 14 + DECODE_SLICE_BYTES
 const MAX_UPGRADE_BYTES = 64 * 1024
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -100,30 +104,59 @@ function unmask(payload: Uint8Array, bytes: Uint8Array, maskOffset: number) {
 
 /** Incrementally decodes server WebSocket frames received through the raw proxy. */
 export class CodexProxyFrameDecoder {
-  private buffered: Uint8Array<ArrayBufferLike> = new Uint8Array()
+  // Grows geometrically so a large frame split into small SSH chunks is copied in linear time.
+  private storage: Uint8Array<ArrayBufferLike> = new Uint8Array()
+  private length = 0
+
+  private append(chunk: Uint8Array) {
+    const required = this.length + chunk.byteLength
+    if (required > MAX_PROXY_FRAME_BUFFER_BYTES)
+      throw new Error("A resposta remota do Codex excedeu o limite permitido.")
+    if (required > this.storage.byteLength) {
+      const doubled = Math.max(required, this.storage.byteLength * 2)
+      const grown = new Uint8Array(Math.min(MAX_PROXY_FRAME_BUFFER_BYTES, doubled))
+      grown.set(this.storage.subarray(0, this.length))
+      this.storage = grown
+    }
+    this.storage.set(chunk, this.length)
+    this.length = required
+  }
 
   push(chunk: Uint8Array) {
-    this.buffered = appendBytes(this.buffered, chunk)
-    if (this.buffered.byteLength > MAX_PROXY_MESSAGE_BYTES + 14)
-      throw new Error("A resposta remota do Codex excedeu o limite permitido.")
+    const frames: DecodedFrame[] = []
+    for (let offset = 0; offset < chunk.byteLength; offset += DECODE_SLICE_BYTES) {
+      this.append(chunk.subarray(offset, offset + DECODE_SLICE_BYTES))
+      frames.push(...this.decodeBuffered())
+    }
+    return frames
+  }
+
+  private decodeBuffered() {
+    const buffered = this.storage.subarray(0, this.length)
     const frames: DecodedFrame[] = []
     let offset = 0
     while (true) {
-      const header = frameHeader(this.buffered, offset)
+      const header = frameHeader(buffered, offset)
       if (!header) break
       const { first, length, headerLength, masked } = header
       const maskLength = masked ? 4 : 0
       if (length > MAX_PROXY_MESSAGE_BYTES)
         throw new Error("A resposta remota do Codex excedeu o limite permitido.")
-      if (this.buffered.byteLength - offset < headerLength + maskLength + length) break
+      if (buffered.byteLength - offset < headerLength + maskLength + length) break
       const maskOffset = offset + headerLength
       const bodyOffset = maskOffset + maskLength
-      const payload = this.buffered.slice(bodyOffset, bodyOffset + length)
-      if (masked) unmask(payload, this.buffered, maskOffset)
+      const payload = buffered.slice(bodyOffset, bodyOffset + length)
+      if (masked) unmask(payload, buffered, maskOffset)
       frames.push({ opcode: first & 0x0f, payload, final: (first & 0x80) !== 0 })
       offset = bodyOffset + length
     }
-    if (offset > 0) this.buffered = this.buffered.slice(offset)
+    if (offset > 0) {
+      this.length -= offset
+      // Release a large buffer once its oversized frame has been consumed.
+      if (this.storage.byteLength > 4 * DECODE_SLICE_BYTES && this.length <= DECODE_SLICE_BYTES)
+        this.storage = this.storage.slice(offset, offset + this.length)
+      else this.storage.copyWithin(0, offset, offset + this.length)
+    }
     return frames
   }
 }

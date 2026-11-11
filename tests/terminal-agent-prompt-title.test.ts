@@ -13,8 +13,8 @@ import {
 import { OpenCodeObserver } from "../packages/feature-terminal/src/services/opencode-observer"
 import { OpenCodeSessionProjection } from "../packages/feature-terminal/src/services/opencode-session-projection"
 
-function codexFixture() {
-  const relay = createCodexRelay()
+function codexFixture(remote = false) {
+  const relay = createCodexRelay(remote ? { id: "remote", name: "Remote" } : undefined)
   const titles: string[] = []
   const requests: Record<string, unknown>[] = []
   relay.sendUpstream = (frame) => requests.push(JSON.parse(frame))
@@ -28,7 +28,96 @@ function codexFixture() {
   }
   const client = (frame: unknown) => inspectClientFrame(JSON.stringify(frame), relay, events, 1)
   const server = (frame: unknown) => inspectUpstreamFrame(JSON.stringify(frame), relay, events, 1)
-  return { client, server, titles, requests }
+  return { client, server, titles, requests, relay }
+}
+
+test.each([false, true])(
+  "Codex thread names outrank the first prompt and remain scoped to the thread (remote=%s)",
+  (remote) => {
+    const { client, server, titles } = codexFixture(remote)
+    client({ id: 1, method: "thread/start", params: {} })
+    server({ id: 1, result: { thread: { id: "one", name: null } } })
+    client({
+      id: 2,
+      method: "turn/start",
+      params: { threadId: "one", input: [{ type: "text", text: "First prompt" }] },
+    })
+    expect(titles.at(-1)).toBe("First prompt")
+    client({
+      id: 3,
+      method: "turn/start",
+      params: { threadId: "one", input: [{ type: "text", text: "Second prompt" }] },
+    })
+    expect(titles.at(-1)).toBe("First prompt")
+
+    server({ method: "thread/name/updated", params: { threadId: "one", threadName: "Named task" } })
+    expect(titles.at(-1)).toBe("Named task")
+    client({ id: 4, method: "thread/start", params: {} })
+    server({ id: 4, result: { thread: { id: "two", name: null } } })
+    expect(titles.at(-1)).toBe("")
+    client({
+      id: 5,
+      method: "turn/start",
+      params: { threadId: "two", input: [{ type: "text", text: "New conversation" }] },
+    })
+    expect(titles.at(-1)).toBe("New conversation")
+  },
+)
+
+for (const remote of [false, true]) {
+  for (const source of ["thread/read", "recent-list"]) {
+    test(`Codex recovers a missing name from ${source} without a rename event (remote=${remote})`, () => {
+      const { client, server, titles, requests } = codexFixture(remote)
+      client({ id: 1, method: "thread/start", params: {} })
+      server({ id: 1, result: { thread: { id: "one", name: null } } })
+      client({
+        id: 2,
+        method: "turn/start",
+        params: { threadId: "one", input: [{ type: "text", text: "First prompt" }] },
+      })
+      let sequence = 10
+      const request = () => {
+        if (source === "recent-list") {
+          server({
+            method: "turn/completed",
+            params: { threadId: "one", turn: { id: "turn", status: "completed" } },
+          })
+          return requests.at(-1)?.id
+        }
+        const id = sequence++
+        client({ id, method: "thread/read", params: { threadId: "one" } })
+        return id
+      }
+      const respond = (id: unknown, thread: unknown) =>
+        server({
+          id,
+          result: source === "recent-list" ? { data: [thread] } : { thread },
+        })
+      respond(request(), { id: "unrelated", name: "Wrong task" })
+      expect(titles.at(-1)).toBe("First prompt")
+      respond(request(), { id: "one", name: null, preview: "Not a name" })
+      expect(titles.at(-1)).toBe("First prompt")
+      respond(request(), { id: "one", name: "Generated name" })
+      expect(titles.at(-1)).toBe("Generated name")
+
+      const stale = request()
+      server({
+        method: "thread/name/updated",
+        params: { threadId: "one", threadName: "Renamed task" },
+      })
+      respond(stale, { id: "one", name: "Old name" })
+      expect(titles.at(-1)).toBe("Renamed task")
+      server({ method: "thread/name/updated", params: { threadId: "one", threadName: "" } })
+      respond(request(), { id: "one", name: "Old name" })
+      expect(titles.at(-1)).toBe("First prompt")
+
+      const previousThread = request()
+      client({ id: 3, method: "thread/start", params: {} })
+      server({ id: 3, result: { thread: { id: "two", name: null } } })
+      respond(previousThread, { id: "one", name: "Wrong conversation" })
+      expect(titles.at(-1)).toBe("")
+    })
+  }
 }
 
 test.each(["turn/start", "turn/steer", "thread/queue/add"])(

@@ -78,9 +78,9 @@ function hydration(session: ClaudeBackgroundSession, state: AgentState): CodexHy
   }
 }
 
-function resumeThread(
+export function claudeBackgroundResumeThread(
   session: ClaudeBackgroundSession,
-  profile: TerminalRemoteCodexProfile,
+  profile?: TerminalRemoteCodexProfile,
 ): ClaudeResumeThread {
   return {
     id: session.sessionId,
@@ -92,9 +92,13 @@ function resumeThread(
     gitBranch: "",
     updatedAt: agentResumeTimestamp(session.updatedAt ?? session.startedAt),
     state: resumeState(session),
-    remoteProfileId: profile.id,
-    remoteProfileName: profile.name,
-    remoteProfileHost: profile.host,
+    ...(profile
+      ? {
+          remoteProfileId: profile.id,
+          remoteProfileName: profile.name,
+          remoteProfileHost: profile.host,
+        }
+      : {}),
   }
 }
 
@@ -124,7 +128,7 @@ export async function loadRemoteClaudeResumeThreadsPage(
   }
   const maximum = Math.max(0, Math.min(AGENT_RESUME_SOURCE_LIMIT, limit))
   const threads = sessions
-    .map((session) => resumeThread(session, profile))
+    .map((session) => claudeBackgroundResumeThread(session, profile))
     .sort(compareAgentResumeThreads)
     .slice(0, AGENT_RESUME_SOURCE_LIMIT)
   mergeClaudeResumeThreads(threads, profile.id)
@@ -149,7 +153,10 @@ export async function refreshRemoteClaudeResumeThreads(
   return page.threads
 }
 
-type BackgroundObserverEvents = Pick<ClaudeHookEvents, "onState" | "onTitle" | "onHydrated">
+type BackgroundObserverEvents = Pick<
+  ClaudeHookEvents,
+  "onState" | "onTitle" | "onHydrated" | "onTaskFailed"
+>
 
 type BackgroundObserverOptions = {
   readSessions?: typeof readRemoteClaudeBackgroundSessions
@@ -196,6 +203,8 @@ function publishBackgroundSession(
   subscriber: BackgroundObserverSubscriber,
   session: ClaudeBackgroundSession,
 ) {
+  const failed =
+    subscriber.turnObserved && session.state === "failed" && subscriber.session?.state !== "failed"
   subscriber.session = session
   const state = subscriberState(subscriber, session)
   if (state === "working" || state === "blocked") subscriber.turnObserved = true
@@ -209,13 +218,14 @@ function publishBackgroundSession(
   ])
   if (subscriber.signature === nextSignature) return
   subscriber.signature = nextSignature
-  const thread = resumeThread(session, remote.profile)
+  const thread = claudeBackgroundResumeThread(session, remote.profile)
   try {
     rememberClaudeResumeThread({ ...thread, updatedAt: Date.now() })
   } catch {
     // Resume metadata must never interrupt the attached official TUI.
   }
   subscriber.events.onState(state)
+  if (failed) subscriber.events.onTaskFailed?.()
   if (session.name) subscriber.events.onTitle(session.name)
   subscriber.events.onHydrated?.(hydration(session, state))
 }

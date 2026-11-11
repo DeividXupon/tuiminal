@@ -285,10 +285,10 @@ function checkedDaemonStart(result: CommandResult, report: RemoteCodexCompatibil
     throw new RemoteCodexCompatibilityError({
       ...report,
       compatible: false,
-      reason: "versionMismatch",
-      remoteVersion: output.appServerVersion,
+      reason: "serviceVersionMismatch",
+      remoteDaemonVersion: output.appServerVersion,
     })
-  return output
+  return { ...report, remoteDaemonVersion: output.appServerVersion }
 }
 
 function checkedLocalCompatibility(result: CommandResult) {
@@ -303,12 +303,16 @@ function checkedInitializedReport(
     !report.localVersion ||
     compatibleCodexVersions(report.localVersion, initialized.remoteVersion)
   )
-    return { ...report, ...initialized }
+    return {
+      ...report,
+      remoteAppServerVersion: initialized.remoteVersion,
+      remoteUserAgent: initialized.remoteUserAgent,
+    }
   throw new RemoteCodexCompatibilityError({
     ...report,
     compatible: false,
-    reason: "versionMismatch",
-    remoteVersion: initialized.remoteVersion,
+    reason: "serviceVersionMismatch",
+    remoteAppServerVersion: initialized.remoteVersion,
     remoteUserAgent: initialized.remoteUserAgent,
   })
 }
@@ -336,20 +340,24 @@ export async function preflightRemoteCodex(
       return { launch, report: checkedCompatibilityReport(localResult, remoteResult) }
     },
   )
-  await withDeadline(signal, stageTimeout(REMOTE_CODEX_DAEMON_TIMEOUT_MS), async (deadline) => {
-    const daemon = await runCommand(
-      options.daemonStartCommand ?? report.launch.daemonStartCommand,
-      deadline,
-    )
-    checkedDaemonStart(daemon, report.report)
-  })
+  const daemonReport = await withDeadline(
+    signal,
+    stageTimeout(REMOTE_CODEX_DAEMON_TIMEOUT_MS),
+    async (deadline) => {
+      const daemon = await runCommand(
+        options.daemonStartCommand ?? report.launch.daemonStartCommand,
+        deadline,
+      )
+      return checkedDaemonStart(daemon, report.report)
+    },
+  )
   const initialized = await withDeadline(
     signal,
     stageTimeout(REMOTE_CODEX_PROXY_TIMEOUT_MS),
     (deadline) =>
       initializeProxy(options.proxyCommand ?? report.launch.proxyCommand, profile.id, deadline),
   )
-  return checkedInitializedReport(report.report, initialized)
+  return checkedInitializedReport(daemonReport, initialized)
 }
 
 export async function handshakeRemoteCodex(

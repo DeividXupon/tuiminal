@@ -49,6 +49,84 @@ function fixture(remote: boolean) {
 for (const remote of [false, true]) {
   const origin = remote ? "remote" : "local"
 
+  test(`${origin} Codex tracks successive prompts when turn start is confirmed by its response`, () => {
+    const f = fixture(remote)
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    for (const number of [2, 3]) {
+      const turnId = `turn-${number}`
+      f.client({
+        id: number,
+        method: "turn/start",
+        params: { threadId: "selected", input: [{ type: "text", text: `Task ${number}` }] },
+      })
+      expect(f.status().state).toBe("done")
+      f.server({ id: number, result: { turn: { id: turnId, status: "inProgress", items: [] } } })
+      expect(f.status()).toEqual({ state: "working", activity: "thinking" })
+      f.event("turn/completed", { turn: { id: `turn-${number - 1}`, status: "completed" } })
+      f.event("item/started", { turnId, item: { type: "commandExecution" } })
+      expect(f.status()).toEqual({ state: "working", activity: "running" })
+      f.event("item/commandExecution/requestApproval", { turnId }, `approval-${number}`)
+      expect(f.status().state).toBe("blocked")
+      f.event("turn/started", { turn: { id: turnId, status: "inProgress" } })
+      expect(f.status().state).toBe("blocked")
+      f.client({ id: `approval-${number}`, result: { decision: "accept" } })
+      expect(f.status().state).toBe("working")
+      f.event("turn/completed", { turn: { id: turnId, status: "completed" } })
+      expect(f.status().state).toBe("done")
+    }
+  })
+
+  test(`${origin} Codex ignores rejected starts and responses for unrelated threads`, () => {
+    const f = fixture(remote)
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    f.client({ id: 2, method: "turn/start", params: { threadId: "selected" } })
+    f.server({ id: 2, error: { code: -32600, message: "Rejected" } })
+    f.client({ id: 3, method: "turn/start", params: { threadId: "child" } })
+    f.server({ id: 3, result: { turn: { id: "child-turn", status: "inProgress" } } })
+    f.server({ id: 4, result: { turn: { id: "unrelated", status: "inProgress" } } })
+    expect(f.status().state).toBe("done")
+  })
+
+  test(`${origin} Codex does not reset live or completed turns when the start response arrives late`, () => {
+    const f = fixture(remote)
+    f.client({ id: 2, method: "turn/start", params: { threadId: "selected" } })
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("item/commandExecution/requestApproval", { turnId: "turn-1" }, 10)
+    f.server({ id: 2, result: { turn: { id: "turn-1", status: "inProgress" } } })
+    expect(f.status().state).toBe("blocked")
+    f.client({ id: 10, result: { decision: "accept" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    f.client({ id: 3, method: "turn/start", params: { threadId: "selected" } })
+    f.event("turn/started", { turn: { id: "turn-2", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-2", status: "completed" } })
+    f.server({ id: 3, result: { turn: { id: "turn-2", status: "inProgress" } } })
+    expect(f.status().state).toBe("done")
+  })
+
+  test(`${origin} Codex rejects stale start responses after a newer turn or thread selection`, () => {
+    const f = fixture(remote)
+    f.client({ id: 2, method: "turn/start", params: { threadId: "selected" } })
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    f.event("turn/started", { turn: { id: "turn-2", status: "inProgress" } })
+    f.event("item/started", { turnId: "turn-2", item: { type: "commandExecution" } })
+    f.server({ id: 2, result: { turn: { id: "turn-1", status: "inProgress" } } })
+    expect(f.status()).toEqual({ state: "working", activity: "running" })
+
+    const resumed = fixture(remote)
+    resumed.select({ type: "idle" }, [{ id: "previous", status: "completed" }])
+    resumed.client({ id: 2, method: "turn/start", params: { threadId: "selected" } })
+    resumed.select()
+    resumed.server({ id: 2, result: { turn: { id: "stale", status: "inProgress" } } })
+    expect(resumed.status().state).toBe("idle")
+    resumed.select({ type: "idle" }, [{ id: "previous", status: "completed" }])
+    resumed.client({ id: 3, method: "turn/start", params: { threadId: "selected" } })
+    resumed.server({ id: 3, result: { turn: { id: "next", status: "inProgress" } } })
+    expect(resumed.status().state).toBe("working")
+  })
+
   test(`${origin} Codex waits for user input until every pending request resolves`, () => {
     const f = fixture(remote)
     f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
@@ -74,7 +152,6 @@ for (const remote of [false, true]) {
     f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
     f.event("thread/status/changed", { status: { type: "idle" } })
     f.event("thread/status/changed", { status: { type: "notLoaded" } })
-    f.event("thread/status/changed", { status: { type: "active", activeFlags: [] } })
     f.event("turn/plan/updated", { turnId: "turn-1", plan: [] })
     f.event("item/agentMessage/delta", { turnId: "turn-1", delta: "Final response" })
     f.event("item/started", {
@@ -88,6 +165,51 @@ for (const remote of [false, true]) {
     f.event("item/started", { turnId: "turn-2", item: { type: "fileChange" } })
     f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
     expect(f.status()).toEqual({ state: "working", activity: "coding" })
+  })
+
+  test(`${origin} Codex reopens completed activity from authoritative thread status`, () => {
+    const f = fixture(remote)
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    f.event("thread/status/changed", {
+      threadId: "child",
+      status: { type: "active", activeFlags: [] },
+    })
+    expect(f.status().state).toBe("done")
+    f.event("thread/status/changed", { status: { type: "active", activeFlags: [] } })
+    expect(f.status()).toEqual({ state: "working", activity: "thinking" })
+    f.event("item/started", { turnId: "turn-1", item: { type: "commandExecution" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    expect(f.status()).toEqual({ state: "working", activity: "thinking" })
+    f.event("item/started", { turnId: "turn-2", item: { type: "reasoning" } })
+    f.event("item/agentMessage/delta", { turnId: "turn-2", delta: "Working" })
+    expect(f.status()).toEqual({ state: "working", activity: "writing" })
+    f.event("turn/completed", { turn: { id: "turn-2", status: "completed" } })
+    expect(f.status().state).toBe("done")
+    f.event("thread/status/changed", {
+      status: { type: "active", activeFlags: ["waitingOnUserInput"] },
+    })
+    expect(f.status().state).toBe("blocked")
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("item/agentMessage/delta", { turnId: "turn-1", delta: "Late" })
+    expect(f.status().state).toBe("blocked")
+    f.event("thread/status/changed", { status: { type: "active", activeFlags: [] } })
+    f.event("item/started", { turnId: "turn-3", item: { type: "commandExecution" } })
+    expect(f.status()).toEqual({ state: "working", activity: "running" })
+  })
+
+  test(`${origin} Codex accepts a start response after thread status reactivates it`, () => {
+    const f = fixture(remote)
+    f.event("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+    f.event("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    f.client({ id: 2, method: "turn/start", params: { threadId: "selected" } })
+    f.event("thread/status/changed", { status: { type: "active", activeFlags: [] } })
+    expect(f.status().state).toBe("working")
+    f.server({ id: 2, result: { turn: { id: "turn-2", status: "inProgress" } } })
+    f.event("item/started", { turnId: "turn-2", item: { type: "commandExecution" } })
+    expect(f.status()).toEqual({ state: "working", activity: "running" })
+    f.event("turn/completed", { turn: { id: "turn-2", status: "completed" } })
+    expect(f.status().state).toBe("done")
   })
 
   test(`${origin} Codex observes explicit idle without claiming successful completion`, () => {

@@ -21,6 +21,7 @@ import {
   subscribeOpenCodeResumeThreads,
 } from "../model/opencode-resume-threads"
 import { loadRemoteClaudeResumeThreadsPage } from "../services/claude-background"
+import { loadLocalClaudeResumeThreadsPage } from "../services/claude-local-resume"
 import { loadClaudeResumeThreadsPage } from "../services/claude-resume-store"
 import {
   loadCodexResumeThreadsPage,
@@ -30,106 +31,18 @@ import {
   loadOpenCodeResumeThreadsPage,
   loadRemoteOpenCodeResumeThreadsPage,
 } from "../services/opencode-server"
+import {
+  type SourceKey,
+  type SourcePage,
+  initialSources,
+  initialLimits,
+  codexLoadMoreTasks,
+  openCodeLoadMoreTasks,
+  claudeLoadMoreTasks,
+} from "../services/agent-resume-pages"
 import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 
 const PROVIDERS: readonly AgentProviderId[] = ["codex", "claude", "opencode"]
-type Origin = "local" | "remote"
-type SourceKey = `${AgentProviderId}:${Origin}`
-type SourcePage = { cursor: string | null; hasMore: boolean }
-type SourcePages = Record<SourceKey, SourcePage>
-type UpdateSource = (key: SourceKey, next: Partial<SourcePage>) => void
-
-function initialLimits() {
-  return {
-    codex: AGENT_RESUME_PAGE_SIZE,
-    claude: AGENT_RESUME_PAGE_SIZE,
-    opencode: AGENT_RESUME_PAGE_SIZE,
-  }
-}
-
-function initialSources(): SourcePages {
-  return {
-    "codex:local": { cursor: null, hasMore: true },
-    "codex:remote": { cursor: null, hasMore: true },
-    "claude:local": { cursor: null, hasMore: true },
-    "claude:remote": { cursor: null, hasMore: true },
-    "opencode:local": { cursor: null, hasMore: true },
-    "opencode:remote": { cursor: null, hasMore: true },
-  }
-}
-
-function codexLoadMoreTasks(
-  pages: SourcePages,
-  profile: TerminalRemoteCodexProfile | undefined,
-  signal: AbortSignal,
-  update: UpdateSource,
-) {
-  const tasks: Promise<void>[] = []
-  const local = pages["codex:local"]
-  if (local.hasMore)
-    tasks.push(
-      loadCodexResumeThreadsPage(TERM_AGENTS_WORKING_DIRECTORY, signal, {
-        append: true,
-        cursor: local.cursor,
-      }).then((page) => update("codex:local", { cursor: page.nextCursor, hasMore: page.hasMore })),
-    )
-  const remote = pages["codex:remote"]
-  if (profile && remote.hasMore)
-    tasks.push(
-      loadRemoteCodexResumeThreadsPage(profile, signal, {
-        append: true,
-        cursor: remote.cursor,
-      }).then((page) => update("codex:remote", { cursor: page.nextCursor, hasMore: page.hasMore })),
-    )
-  return tasks
-}
-
-function openCodeLoadMoreTasks(
-  pages: SourcePages,
-  profile: TerminalRemoteCodexProfile | undefined,
-  signal: AbortSignal,
-  target: number,
-  update: UpdateSource,
-) {
-  const tasks: Promise<void>[] = []
-  if (pages["opencode:local"].hasMore)
-    tasks.push(
-      loadOpenCodeResumeThreadsPage(TERM_AGENTS_WORKING_DIRECTORY, signal, target).then((page) =>
-        update("opencode:local", { hasMore: page.hasMore }),
-      ),
-    )
-  if (profile && pages["opencode:remote"].hasMore)
-    tasks.push(
-      loadRemoteOpenCodeResumeThreadsPage(profile, signal, target).then((page) =>
-        update("opencode:remote", { hasMore: page.hasMore }),
-      ),
-    )
-  return tasks
-}
-
-function claudeLoadMoreTasks(
-  pages: SourcePages,
-  profile: TerminalRemoteCodexProfile | undefined,
-  signal: AbortSignal,
-  target: number,
-  update: UpdateSource,
-) {
-  const tasks: Promise<void>[] = []
-  if (pages["claude:local"].hasMore)
-    tasks.push(
-      Promise.resolve(loadClaudeResumeThreadsPage(target)).then((page) =>
-        update("claude:local", { hasMore: page.hasMore }),
-      ),
-    )
-  if (profile && pages["claude:remote"].hasMore)
-    tasks.push(
-      loadRemoteClaudeResumeThreadsPage(profile, signal, target).then((page) =>
-        update("claude:remote", { hasMore: page.hasMore }),
-      ),
-    )
-  return tasks
-}
-
 function enabled(providerId: AgentProviderId) {
   if (providerId === "codex") return process.env.TUIMINAL_TERMINAL_CODEX_RESUME !== "0"
   if (providerId === "opencode") return process.env.TUIMINAL_TERMINAL_OPENCODE_RESUME !== "0"
@@ -137,6 +50,9 @@ function enabled(providerId: AgentProviderId) {
 }
 
 export function useAgentResumeThreads(active: boolean) {
+  const [refreshRevision, setRefreshRevision] = useState(0)
+  const initialLimit = refreshRevision > 0 ? AGENT_RESUME_SOURCE_LIMIT : AGENT_RESUME_PAGE_SIZE
+  const refreshAllThreads = useCallback(() => setRefreshRevision((value) => value + 1), [])
   const settings = getUiSettings()
   const configuredRemoteProfile = settings.terminalRemoteCodexProfiles.find(
     (candidate) => candidate.id === settings.terminalRemoteCodexActiveProfileId,
@@ -180,7 +96,7 @@ export function useAgentResumeThreads(active: boolean) {
   )
 
   const updateSource = useCallback((key: SourceKey, next: Partial<SourcePage>) => {
-    sources.current[key] = { ...sources.current[key], ...next }
+    sources.current[key] = { ...sources.current[key], failed: false, ...next }
     setSourceRevision((current) => current + 1)
   }, [])
   const trackInitial = useCallback(
@@ -220,23 +136,34 @@ export function useAgentResumeThreads(active: boolean) {
     }
     if (enabled("codex"))
       void trackInitial("codex", async () => {
-        const page = await loadRemoteCodexResumeThreadsPage(profile, controller.signal)
+        const page = await loadRemoteCodexResumeThreadsPage(profile, controller.signal, {
+          limit: initialLimit,
+          collect: initialLimit === AGENT_RESUME_SOURCE_LIMIT,
+        })
         updateRemote("codex:remote", { cursor: page.nextCursor, hasMore: page.hasMore })
-      }).catch(() => updateRemote("codex:remote", { hasMore: false }))
+      }).catch(() => updateRemote("codex:remote", { hasMore: false, failed: true }))
     else updateSource("codex:remote", { hasMore: false })
     if (enabled("opencode"))
       void trackInitial("opencode", async () => {
-        const page = await loadRemoteOpenCodeResumeThreadsPage(profile, controller.signal)
+        const page = await loadRemoteOpenCodeResumeThreadsPage(
+          profile,
+          controller.signal,
+          initialLimit,
+        )
         updateRemote("opencode:remote", { hasMore: page.hasMore })
-      }).catch(() => updateRemote("opencode:remote", { hasMore: false }))
+      }).catch(() => updateRemote("opencode:remote", { hasMore: false, failed: true }))
     else updateSource("opencode:remote", { hasMore: false })
     if (enabled("claude"))
       void trackInitial("claude", async () => {
-        const page = await loadRemoteClaudeResumeThreadsPage(profile, controller.signal)
+        const page = await loadRemoteClaudeResumeThreadsPage(
+          profile,
+          controller.signal,
+          initialLimit,
+        )
         updateRemote("claude:remote", { hasMore: page.hasMore })
-      }).catch(() => updateRemote("claude:remote", { hasMore: false }))
+      }).catch(() => updateRemote("claude:remote", { hasMore: false, failed: true }))
     else updateSource("claude:remote", { hasMore: false })
-  }, [activeRemoteProfile, remoteSignature, trackInitial, updateSource])
+  }, [activeRemoteProfile, remoteSignature, initialLimit, trackInitial, updateSource])
 
   useEffect(() => {
     if (!active) return
@@ -245,27 +172,35 @@ export function useAgentResumeThreads(active: boolean) {
       if (!controller.signal.aborted) updateSource(key, next)
     }
     sources.current = initialSources()
-    setLimits(initialLimits())
+    setLimits(initialLimits(initialLimit))
+    setLoadingMore(new Set())
     setSourceRevision((current) => current + 1)
     if (enabled("codex"))
       void trackInitial("codex", async () => {
         const page = await loadCodexResumeThreadsPage(
           TERM_AGENTS_WORKING_DIRECTORY,
           controller.signal,
+          { limit: initialLimit, collect: initialLimit === AGENT_RESUME_SOURCE_LIMIT },
         )
         updateLocal("codex:local", { cursor: page.nextCursor, hasMore: page.hasMore })
-      }).catch(() => updateLocal("codex:local", { hasMore: false }))
+      }).catch(() => updateLocal("codex:local", { hasMore: false, failed: true }))
     else updateLocal("codex:local", { hasMore: false })
     if (enabled("opencode"))
       void trackInitial("opencode", async () => {
         const page = await loadOpenCodeResumeThreadsPage(
           TERM_AGENTS_WORKING_DIRECTORY,
           controller.signal,
+          initialLimit,
         )
         updateLocal("opencode:local", { hasMore: page.hasMore })
-      }).catch(() => updateLocal("opencode:local", { hasMore: false }))
+      }).catch(() => updateLocal("opencode:local", { hasMore: false, failed: true }))
     else updateLocal("opencode:local", { hasMore: false })
-    if (enabled("claude")) {
+    if (enabled("claude") && refreshRevision > 0) {
+      void trackInitial("claude", async () => {
+        const page = await loadLocalClaudeResumeThreadsPage(controller.signal, initialLimit)
+        updateLocal("claude:local", { hasMore: page.hasMore })
+      }).catch(() => updateLocal("claude:local", { hasMore: false, failed: true }))
+    } else if (enabled("claude")) {
       const page = loadClaudeResumeThreadsPage()
       updateLocal("claude:local", { hasMore: page.hasMore })
     } else updateLocal("claude:local", { hasMore: false })
@@ -274,16 +209,17 @@ export function useAgentResumeThreads(active: boolean) {
       for (const pageController of loadMoreControllers.current.values()) pageController.abort()
       loadMoreControllers.current.clear()
     }
-  }, [active, trackInitial, updateSource])
+  }, [active, refreshRevision, initialLimit, trackInitial, updateSource])
 
   useEffect(() => {
     if (!active) return
+    void refreshRevision
     refreshRemoteThreads()
     return () => {
       remoteRefresh.current?.controller.abort()
       remoteRefresh.current = null
     }
-  }, [active, refreshRemoteThreads])
+  }, [active, refreshRevision, refreshRemoteThreads])
 
   const recentThreads = useMemo(
     () =>
@@ -329,6 +265,13 @@ export function useAgentResumeThreads(active: boolean) {
       const controller = new AbortController()
       loadMoreControllers.current.set(providerId, controller)
       setLoadingMore((current) => new Set(current).add(providerId))
+      const updatePage = (key: SourceKey, next: Partial<SourcePage>) => {
+        if (
+          loadMoreControllers.current.get(providerId) === controller &&
+          !controller.signal.aborted
+        )
+          updateSource(key, next)
+      }
       try {
         const tasks =
           providerId === "codex"
@@ -336,7 +279,7 @@ export function useAgentResumeThreads(active: boolean) {
                 sources.current,
                 activeRemoteProfile,
                 controller.signal,
-                updateSource,
+                updatePage,
               )
             : providerId === "opencode"
               ? openCodeLoadMoreTasks(
@@ -344,31 +287,46 @@ export function useAgentResumeThreads(active: boolean) {
                   activeRemoteProfile,
                   controller.signal,
                   target,
-                  updateSource,
+                  updatePage,
                 )
               : claudeLoadMoreTasks(
                   sources.current,
                   activeRemoteProfile,
                   controller.signal,
                   target,
-                  updateSource,
+                  updatePage,
+                  refreshRevision > 0,
                 )
         const results = await Promise.allSettled(tasks)
         if (!controller.signal.aborted && results.some(({ status }) => status === "fulfilled"))
           setLimits((current) => ({ ...current, [providerId]: target }))
       } finally {
-        if (loadMoreControllers.current.get(providerId) === controller)
+        if (loadMoreControllers.current.get(providerId) === controller) {
           loadMoreControllers.current.delete(providerId)
-        setLoadingMore((current) => {
-          const next = new Set(current)
-          next.delete(providerId)
-          return next
-        })
+          setLoadingMore((current) => {
+            const next = new Set(current)
+            next.delete(providerId)
+            return next
+          })
+        }
       }
     },
-    [activeRemoteProfile, initialLoadingSources, limits, loadingMore, updateSource],
+    [
+      activeRemoteProfile,
+      initialLoadingSources,
+      limits,
+      loadingMore,
+      refreshRevision,
+      updateSource,
+    ],
   )
 
+  const failedSources = useMemo(() => {
+    void sourceRevision
+    return (Object.keys(sources.current) as SourceKey[]).filter(
+      (key) => sources.current[key].failed,
+    )
+  }, [sourceRevision])
   const loadingInitial = initialLoadingSources.size > 0
   const loadingInitialProviders = useMemo(
     () => [...new Set([...initialLoadingSources].map(({ providerId }) => providerId))],
@@ -381,8 +339,9 @@ export function useAgentResumeThreads(active: boolean) {
       loadingInitial,
       loadingInitialProviders,
       loadingMore: [...loadingMore],
+      failedSources,
     }),
-    [hasMore, limits, loadingInitial, loadingInitialProviders, loadingMore],
+    [hasMore, limits, loadingInitial, loadingInitialProviders, loadingMore, failedSources],
   )
   return {
     recentThreads,
@@ -390,5 +349,6 @@ export function useAgentResumeThreads(active: boolean) {
     pagination,
     loadMoreThreads,
     refreshRemoteThreads,
+    refreshAllThreads,
   }
 }

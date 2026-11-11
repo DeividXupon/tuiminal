@@ -29,7 +29,7 @@ function serverFrame(value: string) {
 function reply(request: Record<string, unknown>) {
   if (requestsPath) appendFileSync(requestsPath, `${JSON.stringify(request)}\n`)
   if (request.method === "initialize") return { id: request.id, ...responsePayload }
-  if (mode !== "resume") return null
+  if (mode !== "resume" && mode !== "resume-slow") return null
   if (request.method === "thread/list")
     return {
       id: request.id,
@@ -47,7 +47,7 @@ function reply(request: Record<string, unknown>) {
         ],
       },
     }
-  if (request.method === "thread/turns/list")
+  if (request.method === "thread/turns/list" && mode !== "resume-slow")
     return {
       id: request.id,
       result: {

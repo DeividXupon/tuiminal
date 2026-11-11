@@ -12,14 +12,11 @@ import {
 } from "../model/opencode-resume-threads"
 import type { RemoteCodexTarget } from "../model/sessions"
 import type { OpenCodeObserverEvents } from "./opencode-api"
-import { openCodeLastResponse, openCodeResumeThreads } from "./opencode-api"
+import { openCodeResumeThreads } from "./opencode-api"
 import { resolveOpenCodeExecutable } from "./opencode-executable"
-import { fetchOpenCodeJson, listOpenCodeSessions, OpenCodeObserver } from "./opencode-observer"
-import {
-  type OpenCodeServerProtocol,
-  openCodeTuiCommand,
-  openCodeTuiConfigContent,
-} from "./opencode-protocol"
+import { OpenCodeObserver } from "./opencode-observer"
+import { openCodeTuiCommand, openCodeTuiConfigContent } from "./opencode-protocol"
+import { refreshOpenCodeThreadsFromServer } from "./opencode-resume-hydration"
 import { openCodeResumePageWithFallback } from "./opencode-resume-page"
 import {
   interruptOpenCodeSession,
@@ -207,67 +204,6 @@ export async function startOpenCodeServerTerminal(
   }
 }
 
-async function refreshOpenCodeThreadsFromServer(
-  baseUrl: string,
-  directory: string,
-  signal: AbortSignal,
-  protocol: OpenCodeServerProtocol,
-  authorization: string | undefined,
-  remote?: { id: string; name: string },
-  listedSessions?: Awaited<ReturnType<typeof listOpenCodeSessions>>,
-  maximum = AGENT_RESUME_PAGE_SIZE,
-  hydrateIds?: ReadonlySet<string>,
-) {
-  const sessions =
-    listedSessions ??
-    (await listOpenCodeSessions(
-      baseUrl,
-      protocol === "v2" ? undefined : directory,
-      signal,
-      protocol,
-      authorization,
-    ))
-  const threads = openCodeResumeThreads(sessions, remote, maximum)
-  const previous = new Map(
-    openCodeResumeThreadsSnapshot()
-      .filter((thread) => thread.remoteProfileId === remote?.id)
-      .map((thread) => [thread.id, thread]),
-  )
-  const summaries = threads.map((thread) => ({
-    ...thread,
-    lastResponse: previous.get(thread.id)?.lastResponse ?? thread.lastResponse,
-  }))
-  mergeOpenCodeResumeThreads(summaries, remote?.id)
-  const hydrated = []
-  const pending = hydrateIds ? summaries.filter((thread) => hydrateIds.has(thread.id)) : summaries
-  for (let offset = 0; offset < pending.length; offset += 6) {
-    const batch = await Promise.all(
-      pending.slice(offset, offset + 6).map(async (thread) => {
-        let lastResponse = ""
-        try {
-          lastResponse = openCodeLastResponse(
-            await fetchOpenCodeJson(
-              baseUrl,
-              `${protocol === "v2" ? "/api" : ""}/session/${encodeURIComponent(thread.id)}/message`,
-              protocol === "v2" ? undefined : thread.cwd || directory,
-              signal,
-              { limit: 20 },
-              authorization,
-            ),
-          )
-        } catch {
-          // A summary remains resumable when an older server cannot hydrate messages.
-        }
-        return { ...thread, lastResponse }
-      }),
-    )
-    hydrated.push(...batch)
-    mergeOpenCodeResumeThreads(batch, remote?.id)
-  }
-  const hydratedById = new Map(hydrated.map((thread) => [thread.id, thread]))
-  return summaries.map((thread) => hydratedById.get(thread.id) ?? thread)
-}
-
 async function withTemporaryOpenCodeServerPage(
   directory: string,
   signal: AbortSignal,
@@ -275,35 +211,32 @@ async function withTemporaryOpenCodeServerPage(
   requestedMaximum: number,
 ): Promise<AgentResumePage> {
   const maximum = Math.max(1, Math.min(AGENT_RESUME_SOURCE_LIMIT, Math.floor(requestedMaximum)))
-  const previousIds = new Set(
+  const previous = new Map(
     openCodeResumeThreadsSnapshot()
       .filter((thread) => thread.remoteProfileId === remote?.profile.id)
-      .map((thread) => thread.id),
+      .map((thread) => [thread.id, thread]),
   )
-  const listPromise = listOpenCodeResumeSessions(directory, signal, remote, maximum + 1).catch(
-    () => undefined,
-  )
-  const preflightController = new AbortController()
-  const preflightSignal = AbortSignal.any([signal, preflightController.signal])
-  const compatibilityPromise = remote
-    ? preflightRemoteOpenCode(remote.profile, preflightSignal)
-    : preflightLocalOpenCode(preflightSignal)
-  void compatibilityPromise.catch(() => undefined)
-  const listedSessions = await listPromise
+  const listedSessions = await listOpenCodeResumeSessions(
+    directory,
+    signal,
+    remote,
+    maximum + 1,
+  ).catch(() => undefined)
+  signal.throwIfAborted()
   const boundedSessions = listedSessions?.slice(0, maximum)
   const remoteSource = remote ? { id: remote.profile.id, name: remote.profile.name } : undefined
   const listedThreads = boundedSessions
     ? openCodeResumeThreads(boundedSessions, remoteSource, maximum).map((thread) => {
-        const previous = openCodeResumeThreadsSnapshot().find(
-          (candidate) =>
-            candidate.id === thread.id && candidate.remoteProfileId === thread.remoteProfileId,
-        )
-        return { ...thread, lastResponse: previous?.lastResponse ?? "" }
+        return { ...thread, lastResponse: previous.get(thread.id)?.lastResponse ?? "" }
       })
     : []
   if (boundedSessions) mergeOpenCodeResumeThreads(listedThreads, remote?.profile.id)
   const hydrateIds = new Set(
-    listedThreads.filter((thread) => !previousIds.has(thread.id)).map((thread) => thread.id),
+    listedThreads
+      .filter(
+        (thread) => !thread.lastResponse || previous.get(thread.id)?.updatedAt !== thread.updatedAt,
+      )
+      .map((thread) => thread.id),
   )
   const listedPage = boundedSessions
     ? {
@@ -313,9 +246,14 @@ async function withTemporaryOpenCodeServerPage(
       }
     : undefined
   if (listedPage && hydrateIds.size === 0) {
-    preflightController.abort()
     return listedPage
   }
+  // Once the list is usable, optional compatibility/server/history work gets one
+  // short shared budget rather than extending the loading state per conversation.
+  const detailSignal = listedPage ? AbortSignal.any([signal, AbortSignal.timeout(1_500)]) : signal
+  const compatibilityPromise = remote
+    ? preflightRemoteOpenCode(remote.profile, detailSignal)
+    : preflightLocalOpenCode(detailSignal)
   let compatibility: Awaited<typeof compatibilityPromise>
   try {
     compatibility = await compatibilityPromise
@@ -327,7 +265,7 @@ async function withTemporaryOpenCodeServerPage(
     server = await startOpenCodeServerConnection(
       directory,
       remote,
-      signal,
+      detailSignal,
       compatibility.remoteVersion ?? "",
     )
   } catch (error) {
@@ -340,7 +278,7 @@ async function withTemporaryOpenCodeServerPage(
       const threads = await refreshOpenCodeThreadsFromServer(
         server.baseUrl,
         directory,
-        signal,
+        detailSignal,
         server.protocol,
         server.authorization,
         remote ? { id: remote.profile.id, name: remote.profile.name } : undefined,

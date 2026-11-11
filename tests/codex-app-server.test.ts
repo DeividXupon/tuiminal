@@ -44,6 +44,40 @@ test("remote proxy uses masked WebSocket frames instead of JSONL", () => {
   expect(new TextDecoder().decode(decoded[0]?.payload)).toBe(message)
 })
 
+function serverFrameHeader(length: number) {
+  const header = new Uint8Array(10)
+  header[0] = 0x81
+  header[1] = 127
+  new DataView(header.buffer).setBigUint64(2, BigInt(length))
+  return header
+}
+
+test("remote proxy accepts Codex responses above 16 MiB split into small chunks", () => {
+  // Codex 0.163 sends plugin/list as one unfragmented frame of about 16.2 MiB.
+  const payload = new Uint8Array(17 * 1024 * 1024).fill(0x61)
+  const decoder = new CodexProxyFrameDecoder()
+  expect(decoder.push(serverFrameHeader(payload.byteLength))).toEqual([])
+  const chunk = 64 * 1024
+  for (let offset = 0; offset + chunk < payload.byteLength; offset += chunk)
+    expect(decoder.push(payload.subarray(offset, offset + chunk))).toEqual([])
+  const tail = Uint8Array.of(0x81, 2, 0x7b, 0x7d)
+  const lastOffset = payload.byteLength - (payload.byteLength % chunk || chunk)
+  const last = new Uint8Array(payload.byteLength - lastOffset + tail.byteLength)
+  last.set(payload.subarray(lastOffset))
+  last.set(tail, payload.byteLength - lastOffset)
+  const frames = decoder.push(last)
+  expect(frames.map((frame) => frame.payload.byteLength)).toEqual([payload.byteLength, 2])
+  expect(frames[0]?.payload.every((byte) => byte === 0x61)).toBe(true)
+  expect(new TextDecoder().decode(frames[1]?.payload)).toBe("{}")
+})
+
+test("remote proxy rejects Codex frames above the bounded message limit", () => {
+  const decoder = new CodexProxyFrameDecoder()
+  expect(() => decoder.push(serverFrameHeader(64 * 1024 * 1024 + 1))).toThrow(
+    "A resposta remota do Codex excedeu o limite permitido.",
+  )
+})
+
 test("remote proxy performs HTTP Upgrade before exchanging Codex messages", async () => {
   let output!: ReadableStreamDefaultController<Uint8Array>
   const requests: Record<string, unknown>[] = []

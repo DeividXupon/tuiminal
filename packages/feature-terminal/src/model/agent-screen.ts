@@ -1,5 +1,5 @@
-import type { AgentActivity, AgentProfile, AgentSignal } from "./agent-state"
 import { detectExtendedAgentScreen } from "./agent-screen-extended"
+import type { AgentActivity, AgentProfile, AgentSignal } from "./agent-state"
 
 // Small, local profiles informed by Herdr's detector. See docs/design/terminal-agents.md.
 // Match live controls and activity rows, never arbitrary words in a transcript.
@@ -7,8 +7,7 @@ const UNKNOWN: AgentSignal = { state: "unknown" }
 const IDLE: AgentSignal = { state: "idle", source: "screen" }
 const BLOCKED: AgentSignal = { state: "blocked", source: "screen" }
 const RULE = /^[─━═╌-]{8,}$/u
-const CODEX_BUSY =
-  /^(?:[•◦]\s+)?(.+?)\s+\((?:\d+[hm]\s+)*\d+s\s*[•·]\s*esc to interrupt\)(?:\s*·.*)?$/i
+const CODEX_BUSY = /^(?:[•◦]\s+)?(.+?)\s+\((?:\d+[hm]\s+)*\d+s\s*[•·]\s*(esc.*)$/i
 const CLAUDE_BUSY = /^[*·✢✳✶✻✽]\s+(.+?)(?:…|\.\.\.)(?:\s+\(.*)?$/u
 const OPENCODE_BUSY =
   /^(?:(?:[⬥◆⬩⬪■⬝⋯…\u2800-\u28ff]+|\[⋯\])\s+)?esc(?:\s+again)?(?:\s+to)?\s+interrupt\b/iu
@@ -32,6 +31,16 @@ function lastPrompt(lines: string[], marker: RegExp) {
   return lines.findLastIndex((line) => marker.test(line))
 }
 
+function codexBusyLabel(line: string): string | null {
+  const match = CODEX_BUSY.exec(line)
+  const hint = match?.[2]?.toLowerCase()
+  if (!hint) return null
+  const full = /^esc to interrupt\)(?:\s*·.*)?$/.test(hint)
+  // Codex clips this live row with an ellipsis in narrow panes.
+  const clipped = hint.endsWith("…") && "esc to interrupt)".startsWith(hint.slice(0, -1))
+  return full || clipped ? (match?.[1] ?? null) : null
+}
+
 function codex(lines: string[]): AgentSignal {
   const prompt = lastPrompt(lines, /^›(?:\s|$)/u)
   const after = lines.slice(prompt + 1).join("\n")
@@ -46,8 +55,8 @@ function codex(lines: string[]): AgentSignal {
   const boundary = before.findLastIndex((line) => /^[•◦■✗✓]/u.test(line))
   const tail = before.slice(Math.max(0, boundary))
   for (const line of tail) {
-    const match = CODEX_BUSY.exec(line)
-    if (match) return working(match[1])
+    const label = codexBusyLabel(line)
+    if (label) return working(label)
   }
   if (prompt >= 0 && lines.length - prompt <= 5) return IDLE
   return UNKNOWN

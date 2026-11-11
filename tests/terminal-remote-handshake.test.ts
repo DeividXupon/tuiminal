@@ -111,6 +111,8 @@ test("remote preflight accepts newly started and existing compatible daemons", a
       compatible: true,
       localVersion: "0.157.1",
       remoteVersion: "0.157.1",
+      remoteDaemonVersion: "0.157.1",
+      remoteAppServerVersion: "0.157.1",
       daemonAvailable: true,
       proxyAvailable: true,
     })
@@ -139,7 +141,37 @@ test("remote preflight rejects an invalid or version-skewed daemon response", as
       ),
     }),
   ).rejects.toMatchObject({
-    report: { compatible: false, reason: "versionMismatch", remoteVersion: "0.157.2" },
+    report: {
+      compatible: false,
+      reason: "serviceVersionMismatch",
+      localVersion: "0.157.1",
+      remoteVersion: "0.157.1",
+      remoteDaemonVersion: "0.157.2",
+    },
+  })
+})
+
+test("remote preflight preserves CLI and daemon versions when the connected server differs", async () => {
+  const remote = handshakeServer({ result: { userAgent: "codex_cli_rs/0.165.0" } })
+  await expect(
+    preflightRemoteCodex(profile(), "/srv/project", new AbortController().signal, {
+      localVersionCommand: localVersionCommand("0.166.0"),
+      remoteProbeCommand: remoteProbe("0.166.0"),
+      daemonStartCommand: outputCommand(
+        JSON.stringify({ status: "running", appServerVersion: "0.166.0" }),
+      ),
+      proxyCommand: remote.command,
+      timeoutMs: 1_000,
+    }),
+  ).rejects.toMatchObject({
+    report: {
+      compatible: false,
+      reason: "serviceVersionMismatch",
+      localVersion: "0.166.0",
+      remoteVersion: "0.166.0",
+      remoteDaemonVersion: "0.166.0",
+      remoteAppServerVersion: "0.165.0",
+    },
   })
 })
 

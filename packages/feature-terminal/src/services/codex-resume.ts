@@ -9,12 +9,11 @@ import { unusedCodexLoopbackPort, waitForCodexAppServer } from "./codex-app-serv
 import { resolveCodexExecutable } from "./codex-executable"
 import { type CodexProxyProcess, CodexProxyWebSocket } from "./codex-proxy-websocket"
 import {
-  codexResumeLastResponse,
-  codexResumeNextCursor,
-  codexResumeThreads,
-  resumeListFrame,
-  resumeTurnsFrame,
-} from "./codex-resume-protocol"
+  AGENT_RESUME_DETAIL_TIMEOUT_MS,
+  type CodexResumePageOptions,
+  readCodexResumePage,
+} from "./codex-resume-page"
+import { codexResumeLastResponse, resumeListFrame, resumeTurnsFrame } from "./codex-resume-protocol"
 import { remoteCodexAppServerSshCommand } from "./remote-codex-connection"
 import { registerTerminalResource } from "./terminal-resources"
 
@@ -88,12 +87,6 @@ function waitForResponse(socket: WebSocket, id: string, signal: AbortSignal) {
   })
 }
 
-type CodexResumePageOptions = {
-  cursor?: string | null
-  append?: boolean
-  limit?: number
-}
-
 function publishCodexPage(
   threads: readonly CodexResumeThread[],
   remoteProfileId: string | undefined,
@@ -154,16 +147,25 @@ export async function loadCodexResumeThreadsPage(
     )
     await waitForResponse(connectedSocket, initializeId, deadline)
     connectedSocket.send(JSON.stringify({ method: "initialized", params: {} }))
-    const listId = "tuiminal-resume-list"
-    connectedSocket.send(resumeListFrame(listId, options))
-    const listResponse = await waitForResponse(connectedSocket, listId, deadline)
-    const threads = codexResumeThreads(listResponse)
-    const nextCursor = codexResumeNextCursor(listResponse)
+    const { threads, nextCursor } = await readCodexResumePage(
+      options,
+      async (cursor, limit, index) => {
+        const listId = index ? `tuiminal-resume-list-${index}` : "tuiminal-resume-list"
+        const response = waitForResponse(connectedSocket, listId, deadline)
+        connectedSocket.send(resumeListFrame(listId, { cursor, limit }))
+        return response
+      },
+    )
     publishCodexPage(threads, undefined, Boolean(options.append))
+    const detailSignal = AbortSignal.any([
+      deadline,
+      AbortSignal.timeout(AGENT_RESUME_DETAIL_TIMEOUT_MS),
+    ])
     const lastResponses = await Promise.all(
       threads.map(async (thread, index) => {
+        if (thread.lastResponse) return thread.lastResponse
         const id = `tuiminal-resume-turns-${index}`
-        const response = waitForResponse(connectedSocket, id, deadline)
+        const response = waitForResponse(connectedSocket, id, detailSignal)
         connectedSocket.send(resumeTurnsFrame(id, thread.id))
         return response.then(codexResumeLastResponse, () => "")
       }),
@@ -212,12 +214,18 @@ async function hydrateRemoteCodexResumeThreads(
   const pending = new Map<string, number>()
   const responses = new Map<number, string>()
   for (const [index, thread] of threads.entries()) {
+    if (thread.lastResponse) {
+      responses.set(index, thread.lastResponse)
+      continue
+    }
     const id = `tuiminal-remote-resume-turns:${profileId}:${index}`
     pending.set(id, index)
     await transport.send(resumeTurnsFrame(id, thread.id))
   }
   while (pending.size > 0) {
-    const message = await nextProxyMessage(transport, signal)
+    const message = await nextProxyMessage(transport, signal).catch(() => null)
+    // Optional history may time out after some replies arrived; retain those replies.
+    if (!message) break
     if (typeof message.id !== "string") continue
     const index = pending.get(message.id)
     if (index === undefined) continue
@@ -226,7 +234,7 @@ async function hydrateRemoteCodexResumeThreads(
   }
   return threads.map((thread, index) => ({
     ...thread,
-    lastResponse: responses.get(index) ?? "",
+    lastResponse: responses.get(index) ?? thread.lastResponse,
   }))
 }
 
@@ -294,13 +302,28 @@ export async function loadRemoteCodexResumeThreadsPage(
     )
     await nextProxyResponse(transport, initializeId, deadline)
     await transport.send(JSON.stringify({ method: "initialized", params: {} }))
-    const listId = `tuiminal-remote-resume-list:${profile.id}`
-    await transport.send(resumeListFrame(listId, options))
-    const listResponse = await nextProxyResponse(transport, listId, deadline)
-    const threads = codexResumeThreads(listResponse, profile.id, profile.name)
-    const nextCursor = codexResumeNextCursor(listResponse)
+    const connectedTransport = transport
+    const listSignal = deadline
+    const { threads, nextCursor } = await readCodexResumePage(
+      options,
+      async (cursor, limit, index) => {
+        const listId = `tuiminal-remote-resume-list:${profile.id}:${index}`
+        await connectedTransport.send(resumeListFrame(listId, { cursor, limit }))
+        return nextProxyResponse(connectedTransport, listId, listSignal)
+      },
+      profile,
+    )
     publishCodexPage(threads, profile.id, Boolean(options.append))
-    const hydrated = await hydrateRemoteCodexResumeThreads(transport, threads, profile.id, deadline)
+    const detailSignal = AbortSignal.any([
+      deadline,
+      AbortSignal.timeout(AGENT_RESUME_DETAIL_TIMEOUT_MS),
+    ])
+    const hydrated = await hydrateRemoteCodexResumeThreads(
+      transport,
+      threads,
+      profile.id,
+      detailSignal,
+    ).catch(() => threads)
     deadline.throwIfAborted()
     publishCodexPage(hydrated, profile.id, Boolean(options.append))
     return { threads: hydrated, nextCursor, hasMore: nextCursor !== null }

@@ -51,7 +51,13 @@ function validResumePagination(value: unknown) {
       Array.isArray(pagination.loadingInitialProviders) &&
       pagination.loadingInitialProviders.every(isAgentProviderId) &&
       Array.isArray(pagination.loadingMore) &&
-      pagination.loadingMore.every(isAgentProviderId),
+      pagination.loadingMore.every(isAgentProviderId) &&
+      (pagination.failedSources === undefined ||
+        (Array.isArray(pagination.failedSources) &&
+          pagination.failedSources.every(
+            (source) =>
+              typeof source === "string" && /^(codex|claude|opencode):(local|remote)$/.test(source),
+          ))),
   )
 }
 
@@ -65,6 +71,7 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
     providerId?: string
     remoteProfileId?: string
     loadMoreResumeProvider?: string
+    refreshResumeThreads?: boolean
     folderId?: string
     focusTarget?: string
     action?: string
@@ -76,6 +83,7 @@ function validTarget(value: unknown): value is PinnedTerminalSelection {
         (target.providerId === undefined || isAgentProviderId(target.providerId)) &&
         (target.remoteProfileId === undefined || validId(target.remoteProfileId))) ||
       isAgentProviderId(target.loadMoreResumeProvider) ||
+      target.refreshResumeThreads === true ||
       validId(target.folderId) ||
       (validId(target.focusTarget) &&
         /^(?:sidebar|terminal|history|live-diff):/.test(target.focusTarget ?? "")) ||

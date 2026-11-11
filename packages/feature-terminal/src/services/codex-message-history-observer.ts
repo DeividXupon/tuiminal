@@ -50,7 +50,6 @@ export class CodexMessageHistoryObserver {
   private readonly historyCursors = new Set<string>()
   private readonly turnTimes = new Map<string, number>()
   private readonly publisher = new CodexMessagePublisher()
-  private readonly taskTitle = new CodexTaskTitleObserver()
   private readonly observerId = randomUUID()
   private currentThreadId: string | null = null
   private currentModel: string | null = null
@@ -59,6 +58,8 @@ export class CodexMessageHistoryObserver {
   private historyGeneration = 0
   private messageSequence = 0
   private historyRequestSequence = 0
+
+  constructor(private readonly taskTitle = new CodexTaskTitleObserver()) {}
 
   private withCurrentConfiguration(message: CodexObservedUserMessage) {
     return {
@@ -357,7 +358,6 @@ export class CodexMessageHistoryObserver {
     events: CodexMessageHistoryEvents,
     send: (frame: string) => void,
   ) {
-    this.taskTitle.observeServer(message, events)
     this.observePublicDetailNotification(message, events)
     if (this.observeTurnNotification(message, events)) return false
     const key = requestKey(message.id)

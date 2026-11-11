@@ -16,9 +16,10 @@ export function useAgentResumeSearch(
   pagination: AgentResumePaginationState,
   loadMore: ((providerId: AgentProviderId) => void) | undefined,
   inactive: boolean,
+  searchRequest = 0,
 ) {
   const search = query.trim().toLocaleLowerCase()
-  const scope = JSON.stringify([search, tab, remoteProfileId, inactive])
+  const scope = JSON.stringify([search, tab, remoteProfileId, inactive, searchRequest])
   const [attempted, setAttempted] = useState<{
     scope: string
     limits: Partial<AgentResumePaginationState["limits"]>

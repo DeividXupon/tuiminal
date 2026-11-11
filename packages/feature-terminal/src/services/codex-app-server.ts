@@ -15,7 +15,7 @@ import {
 import { preflightLocalCodex } from "./local-codex-compatibility"
 import { createRemoteCodexAppServerLaunch, remoteCodexTuiCommand } from "./remote-codex-connection"
 import { preflightRemoteCodex } from "./remote-codex-handshake"
-import { type TermAgentsProcessHandle, startTermAgentsProcess } from "./terminal"
+import { startTermAgentsProcess, type TermAgentsProcessHandle } from "./terminal"
 import { registerTerminalResource } from "./terminal-resources"
 
 export type { CodexObservedUserMessage } from "./codex-message-history"
@@ -148,8 +148,8 @@ function forwardProxyMessage(
 }
 
 /** Bridges the daemon's WebSocket through the raw SSH proxy to the local official Codex TUI. */
-async function startCodexProxyRelay(
-  process: StdioAppServerProcess,
+export async function startCodexProxyRelay(
+  process: Pick<StdioAppServerProcess, "stdin" | "stdout" | "stderr">,
   events: CodexAppServerEvents,
   remoteProfileId: string,
   remoteProfileName: string,
