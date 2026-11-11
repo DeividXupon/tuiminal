@@ -52,6 +52,7 @@ export function InboxActionModal({
       : "O GitHub deixará de enviar atualizações desta conversa."
   return (
     <ModalSurface
+      fitContent
       id="git-inbox-action-modal"
       dialogRef={dialogRef}
       width={Math.max(42, Math.min(76, terminal.width - 4))}

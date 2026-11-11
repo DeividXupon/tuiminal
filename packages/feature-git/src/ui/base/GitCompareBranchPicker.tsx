@@ -106,7 +106,7 @@ export function GitCompareBranchPicker({
   })
 
   const width = Math.max(44, Math.min(78, terminal.width - 6))
-  const height = Math.max(14, Math.min(26, terminal.height - 4))
+  const height = Math.max(1, Math.min(26, terminal.height - 4, 8 + Math.max(1, options.length * 2)))
   const title = side === "base" ? "◆ ESCOLHER BRANCH BASE" : "◆ ESCOLHER BRANCH COMPARADA"
   return (
     <ModalSurface

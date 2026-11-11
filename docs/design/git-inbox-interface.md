@@ -132,5 +132,7 @@ responses, and `[Enter]` reopens an exited shell.
 
 `bun run check` includes `tests/git-inbox.test.ts`, `tests/tui/git-inbox.test.tsx`,
 `tests/tui/git-inbox-formatting.test.tsx`, and `tests/git-resource-disposal.test.ts`.
-Remote calls use fake `gh` and temporary state. Inbox is outside the simulated Git
-tutorial, which covers Diffs and Compare.
+Remote calls use fake `gh` and temporary state. The simulated Git tutorial covers
+`[4] Inbox`: notification scope, sections, read marks, conversation activity, local
+saving, completion, and unsubscribe confirmations. Its fixtures never access
+GitHub or persist saved IDs; see the [tutorial contract](git-pr-interface.md#simulated-git-tutorial).

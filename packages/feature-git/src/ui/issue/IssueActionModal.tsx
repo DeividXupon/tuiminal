@@ -178,6 +178,7 @@ export function IssueActionModal({
     !labelPayload(value, currentLabels).removeLabels.length
   return (
     <ModalSurface
+      fitContent
       id="git-issue-action-modal"
       dialogRef={dialogRef}
       width={width}

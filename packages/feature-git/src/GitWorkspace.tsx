@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { BoxRenderable } from "@opentui/core"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
@@ -553,6 +554,7 @@ export function GitBaseWorkspace({
     selectedLabel: translateUi("selecionado(s)"),
     fallback: defaultHeaderMeta,
   })
+  useWorkspaceRepaint(JSON.stringify([view, diffLayout, terminalExpanded, partialStage.active]))
   return (
     <box
       id="git-diffs-workspace"

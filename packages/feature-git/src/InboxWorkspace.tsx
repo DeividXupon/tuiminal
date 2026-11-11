@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useTerminalDimensions } from "@opentui/react"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -69,6 +70,7 @@ export function InboxWorkspace({
     scroll: previewScrollRef,
   })
 
+  useWorkspaceRepaint(JSON.stringify([wide, wide ? null : focus, conversation.tab, state.status]))
   useNotificationFromValue(actions.notice, { source: "Git · Inbox" })
   useNotificationFromValue(inboxDashboardError(state), { source: "Git · Inbox", kind: "error" })
   useNotificationFromValue(backgroundError, { source: "Git · Inbox", kind: "error" })

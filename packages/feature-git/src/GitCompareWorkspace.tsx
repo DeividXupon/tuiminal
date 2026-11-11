@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
@@ -45,6 +46,7 @@ export function GitCompareWorkspace({
   const [loadingComparison, setLoadingComparison] = useState(false)
   const [error, setError] = useState("")
   const [layout, setLayout] = useState<DiffLayout>("unified")
+  useWorkspaceRepaint(JSON.stringify([layout, Boolean(comparison), loadingContext]))
   useNotificationFromValue(error, { source: "Git", kind: "error" })
   useLocalConfigurationShortcut(active && !picker, onOpenLocalConfiguration)
 

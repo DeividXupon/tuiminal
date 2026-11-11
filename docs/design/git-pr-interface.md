@@ -100,13 +100,14 @@ combined minimum, groups stack and action rows wrap, preserving mouse targets.
 The tutorial uses the same header with a fixed project/account fixture and its
 existing target IDs. `[1–4]` and local `[C]` keep their existing behavior.
 `tests/tui/git-navigation-header.test.tsx` covers sources, identity lifecycle,
-resizing, six languages, both layout modes, and mouse controls.
+resizing, all supported languages, both layout modes, and mouse controls.
 
 Diffs, Compare, PR, Issues and Inbox retain their mounted native trees when changing
 tabs. Inactive workspaces use native visibility so they neither paint nor participate
 in layout or hit testing; zero-height clipping is not a hiding mechanism. Returning
 to a workspace preserves its query buffers, selection and scroll state. These local
-transitions do not require continuous full-screen repainting.
+transitions request one recovery frame through the shared core repaint lifecycle
+after their first committed frame; ordinary updates remain incremental.
 
 These diagrams use fictional data and are not pixel-for-pixel copies of the official
 images. Final dimensions must be checked in the native renderer.
@@ -592,7 +593,7 @@ Before `git apply --cached`, the app rereads staged/unstaged patches for the lit
 path and rejects stale selections. New, deleted, binary, and hunkless files do not
 offer partial staging.
 
-### Simulated local tutorial
+### Simulated Git tutorial
 
 The first tutorial module fully simulates `[1] Diffs`: local tab, repository/
 branch, files, mini commit graph, diff, contextual actions, terminal, and shortcuts.
@@ -603,8 +604,8 @@ partial staging `[S]`, and safe discard `[D]`.
 Every visual step enters the explained state: `[Ctrl+P]` opens unified configuration
 on Diffs, `[G]` replaces the diff with the full graph, `[O]` shows expanded Log blocks,
 `[V]` shows split code, and `[S]` shows unstaged/staged panes with the terminal hidden.
-The highlighted target moves from trigger to visible result. PR, Issues, Inbox,
-project discovery, real Git, and remote access are excluded.
+The highlighted target moves from trigger to visible result. Project discovery,
+real Git, and remote access are excluded from every tutorial module.
 
 The second module enters Compare in the same tab `[1]`. It shows three selectors,
 shared local configuration, separate simulated base/compared pickers with local and
@@ -613,6 +614,24 @@ statistics, grouped tree, selected diff, split layout via `[V]`, navigation thro
 `[Tab/H/L/←/→]`, and return with `[C]`/`[Esc]`. Targets existing only in these states
 are marked `stateful` so they remain in the discovered sequence before visual changes.
 No step lists real refs, runs Git, checks out, fetches, or includes worktree changes.
+
+The remaining modules enter `[2] PR`, `[3] Issues`, and `[4] Inbox` with the same
+fixed account and repository fixtures. PR covers scope, section navigation, query
+autocomplete, list selection, all five preview tabs, a simulated file diff, creation,
+and approval confirmation. Issues covers its sections, list, overview, comments,
+creation, and triage actions. Inbox covers its separate notification scope, sections,
+read marks, conversation activity, local saving, completion, and unsubscribe
+confirmations. Action steps show the resulting dialog or view; moving backwards
+restores the previous scene. The 25 remote steps and all local steps are `stateful`,
+so discovery keeps the complete 53-step sequence even before layout or while
+another tab is visible. Their controls are inert: they
+never invoke `gh`, open browsers, write settings, or change local or remote data.
+The tutorial overlay owns input, including `[Esc]`, over these mock dialogs.
+
+`tests/git-remote-tutorial.test.ts` checks sequence, all seven languages and the
+absence of I/O dependencies. `tests/tui/git-remote-tutorial.test.tsx` walks the full
+tour, verifies remote targets at wide/medium/narrow sizes in both layouts, and
+checks scene restoration and simulated confirmation controls.
 
 ### Local rendering and background work
 

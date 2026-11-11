@@ -245,6 +245,7 @@ export function PullRequestActionModal({
   const width = Math.max(50, Math.min(88, terminal.width - 4))
   return (
     <ModalSurface
+      fitContent
       id="git-pr-action-modal"
       dialogRef={dialogRef}
       width={width}

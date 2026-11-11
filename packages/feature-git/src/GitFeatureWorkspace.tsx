@@ -2,6 +2,7 @@ import { useKeyboard, useRenderer } from "@opentui/react"
 import { useState } from "react"
 import { ownsKeyboardFocus } from "@xupon/tuiminal-core/keyboard/scope"
 import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
+import { WorkspaceRepaintBoundary } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { GitNavigationHeader } from "./ui/GitNavigationHeader"
 import { GitNavigationProvider, useGitHubNavigationIdentity } from "./ui/GitNavigationContext"
 import { GitCompareWorkspace } from "./GitCompareWorkspace"
@@ -41,7 +42,9 @@ function MountedGitWorkspace({
         overflow: "hidden",
       }}
     >
-      {children}
+      <WorkspaceRepaintBoundary transitionKey="git-tab" visible={selected}>
+        {children}
+      </WorkspaceRepaintBoundary>
     </box>
   )
 }

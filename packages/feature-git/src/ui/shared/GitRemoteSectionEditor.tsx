@@ -79,7 +79,7 @@ function EditorField({
   onSubmit?: () => void
 }) {
   return (
-    <box style={{ height: 2, flexShrink: 0, flexDirection: "row", marginTop: 1 }}>
+    <box style={{ height: 1, flexShrink: 0, flexDirection: "row", marginTop: 1 }}>
       <text
         content={`${translateUi(label)}  `}
         style={{ width: 8, flexShrink: 0, fg: COLORS.muted }}
@@ -369,7 +369,13 @@ export function GitRemoteSectionEditor<Column extends string>({
       id={`${idPrefix}-modal`}
       dialogRef={dialogRef}
       width={width}
-      height={hasTitle ? 25 : 16}
+      height={Math.max(
+        1,
+        Math.min(
+          terminal.height - 2,
+          (hasTitle ? 20 : 12) + Math.max(1, Math.min(3, autocomplete.suggestions.length)),
+        ),
+      )}
       zIndex={970}
       borderColor={COLORS.git}
       onBackdropPress={onClose}

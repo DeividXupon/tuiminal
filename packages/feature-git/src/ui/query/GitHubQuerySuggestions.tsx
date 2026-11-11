@@ -15,7 +15,13 @@ export function GitHubQuerySuggestions({
   onSelect: (index: number) => void
 }) {
   return (
-    <box style={{ height: 4, flexShrink: 0, marginTop: 1 }}>
+    <box
+      style={{
+        height: 1 + Math.max(1, Math.min(3, suggestions.length)),
+        flexShrink: 0,
+        marginTop: 1,
+      }}
+    >
       <text
         content={translateUi("AUTOCOMPLETE GITHUB · [Ctrl+N/P] navegar · [Ctrl+Y] aplicar")}
         style={{ fg: COLORS.muted }}

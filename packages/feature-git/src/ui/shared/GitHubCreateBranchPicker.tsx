@@ -190,7 +190,10 @@ export function GitHubCreateBranchPicker({
   })
 
   const width = Math.max(38, Math.min(76, terminal.width - 4))
-  const height = Math.max(12, Math.min(25, terminal.height - 2))
+  const height = Math.max(
+    1,
+    Math.min(25, terminal.height - 2, 10 + Math.max(1, options.length * 2) + (error ? 2 : 0)),
+  )
   return (
     <ModalSurface
       id="git-create-branch-picker"

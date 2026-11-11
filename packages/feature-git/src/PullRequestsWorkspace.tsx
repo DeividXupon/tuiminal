@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useCallback, useEffect, useState } from "react"
@@ -147,6 +148,9 @@ export function PullRequestsWorkspace({
     setNotice,
   })
   const layout = resolvePullRequestLayout(terminal.width, terminal.height)
+  useWorkspaceRepaint(JSON.stringify([layout, previewTab, Boolean(diffTarget), dashboard.status]))
+  // Focus replaces the painted pane only in the single-pane layout.
+  useWorkspaceRepaint(focus, layout === "single")
   const modalOpen = configuration.modalOpen || pullRequestActions.modalOpen || creation.open
   const previewItemIndex = previewItemIndices[previewTab]
   const activityEntries = details.status === "ready" ? pullRequestActivity(details.details) : []

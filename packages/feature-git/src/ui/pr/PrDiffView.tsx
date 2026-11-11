@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/react"
 import { Button } from "@tuiparts/react/button"
@@ -183,6 +184,7 @@ export function PrDiffView({
   const terminal = useTerminalDimensions()
   const state = usePullRequestDiff(item, details, target)
   const [mode, setMode] = useState<PullRequestDiffMode>("unified")
+  useWorkspaceRepaint(mode)
   const [focus, setFocus] = useState<PullRequestDiffFocus>("files")
   const [fileIndex, setFileIndex] = useState(0)
   const [offset, setOffset] = useState(0)

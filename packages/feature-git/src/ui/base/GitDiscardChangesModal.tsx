@@ -40,6 +40,7 @@ export function GitDiscardChangesModal({
   const width = Math.max(42, Math.min(76, terminal.width - 4))
   return (
     <ModalSurface
+      fitContent
       id="git-discard-changes-modal"
       dialogRef={dialogRef}
       width={width}

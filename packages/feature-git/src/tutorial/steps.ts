@@ -1,3 +1,5 @@
+import { GIT_REMOTE_TUTORIAL_STEPS } from "./remote-steps"
+
 export const GIT_TUTORIAL_STEPS = [
   {
     targetId: "tutorial-git-diffs-tab",
@@ -6,6 +8,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "A aba [1] reúne as alterações do repositório local. Ela funciona sem GitHub e é a tela apresentada nesta primeira parte do tutorial.",
     kind: "control",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-repository",
@@ -14,6 +17,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Este cabeçalho identifica o repositório e a branch usados pelo workspace e resume arquivos alterados, stage e distância do remoto.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-local-configuration",
@@ -23,6 +27,7 @@ export const GIT_TUTORIAL_STEPS = [
       "[Ctrl+P] abre as configurações do Git diretamente no item Diffs. Nele você escolhe qualquer repositório Git local e uma branch já existente sem alterar o escopo de PR, Issues ou Inbox.",
     hint: "[Enter] abre o item focado",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-files",
@@ -31,6 +36,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Este painel organiza pastas e arquivos modificados. As duas colunas de status distinguem o que já está no stage do que continua no working tree.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-stage-toggle",
@@ -39,6 +45,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Na árvore de arquivos, [Space] alterna o stage do arquivo selecionado. Em uma pasta, a mesma ação adiciona ou remove todos os arquivos descendentes em conjunto.",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-mini-graph",
@@ -47,6 +54,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Este bloco mantém uma visão compacta dos commits e branches recentes sem ocupar a área principal de código.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-open-graph",
@@ -56,6 +64,7 @@ export const GIT_TUTORIAL_STEPS = [
       "[G] expande a árvore na área principal para mostrar o histórico completo e como os commits e branches se conectam.",
     hint: "[J/K] navega · [Enter] abre o commit · [G] volta ao diff",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-open-log",
@@ -65,6 +74,7 @@ export const GIT_TUTORIAL_STEPS = [
       "[O] abre blocos de histórico atravessados pelo grafo. Cada commit mostra hash, branches e tags, pais de merge, autor e e-mail, data relativa, estatísticas de arquivos e linhas, assunto e corpo da mensagem.",
     hint: "[J/K] navega · [Enter] abre o commit · [D] volta ao diff · [G] abre a árvore",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-diff",
@@ -73,6 +83,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "O maior painel mostra somente o arquivo selecionado, com linhas antigas e novas, hunks, adições, remoções e syntax highlight.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-diff-layout",
@@ -81,6 +92,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "[V] alterna entre unificado, lado a lado e intralinha. Essa escolha muda somente a apresentação do código e não altera o conteúdo no stage.",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-actions",
@@ -89,6 +101,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Esta faixa reúne as ações disponíveis para o arquivo ou visualização em foco e muda conforme o contexto da tela.",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-partial-stage",
@@ -98,6 +111,7 @@ export const GIT_TUTORIAL_STEPS = [
       "Com um diff de texto rastreado em foco, [S] separa o que está fora do stage do que entrará nele, inclusive mudanças que já estavam no stage.",
     hint: "[S] alterna hunk/linha · [Space] transfere · [H/L] troca painel · [J/K] navega · [Enter/Esc] aplica e sai",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-discard",
@@ -106,6 +120,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "[D] abre uma confirmação para o arquivo ou pasta selecionado. Ao confirmar, alterações rastreadas são restauradas e arquivos novos dentro do alvo são removidos.",
     kind: "action",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-terminal",
@@ -114,6 +129,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "Este painel registra os comandos Git disparados pela interface, preserva a saída original e também aceita argumentos Git digitados manualmente.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-navigation",
@@ -122,6 +138,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "[Enter] abre e foca o diff do arquivo selecionado. [Tab] percorre árvore, diff e terminal; [H/L/←/→] move para o painel vizinho e [Shift+H/L/←/→] rola linhas largas lateralmente.",
     kind: "block",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-shortcuts",
@@ -130,6 +147,7 @@ export const GIT_TUTORIAL_STEPS = [
     description:
       "[?] Ações no cabeçalho abre o menu de comandos do Git, com atalhos e busca para encontrar cada ação.",
     kind: "control",
+    stateful: true,
   },
   {
     targetId: "tutorial-git-compare-tab",
@@ -242,4 +260,5 @@ export const GIT_TUTORIAL_STEPS = [
     kind: "action",
     stateful: true,
   },
+  ...GIT_REMOTE_TUTORIAL_STEPS,
 ] as const

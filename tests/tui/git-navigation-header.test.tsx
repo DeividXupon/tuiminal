@@ -4,7 +4,7 @@ import type { TestRendererSetup } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { act, useState } from "react"
 import { getUiSettings, updateUiSettings } from "../../packages/core/src/settings/theme"
-import { translateUi } from "../../packages/core/src/i18n/index"
+import { LANGUAGE_OPTIONS, translateUi } from "../../packages/core/src/i18n/index"
 import { GitViewer } from "../../packages/feature-git/src/GitFeatureWorkspace"
 import { GitNavigationHeader } from "../../packages/feature-git/src/ui/GitNavigationHeader"
 import {
@@ -95,7 +95,7 @@ for (const layout of ["compact", "framed"] as const) {
   )
 }
 
-test.each(["pt-BR", "en", "es", "ja", "zh-CN", "ko"] as const)(
+test.each(LANGUAGE_OPTIONS.map(({ id }) => id))(
   "navigation fits translated labels and Unicode context in %s",
   async (language) => {
     updateUiSettings({ language })

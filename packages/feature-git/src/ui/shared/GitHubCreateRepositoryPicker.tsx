@@ -175,7 +175,19 @@ export function GitHubCreateRepositoryPicker({
   })
 
   const width = Math.max(38, Math.min(76, terminal.width - 4))
-  const height = Math.max(12, Math.min(25, terminal.height - 2))
+  const height = Math.max(
+    1,
+    Math.min(
+      25,
+      terminal.height - 2,
+      9 +
+        Math.max(1, options.length * 2) +
+        Number(partial) +
+        Number(moreMatches) +
+        Number(loading && options.length > 0) +
+        (error ? 3 : 0),
+    ),
+  )
   return (
     <ModalSurface
       id="git-create-repository-picker"

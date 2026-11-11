@@ -116,7 +116,7 @@ export function GitTutorialProjectModal({
               >
                 <text content="▌" style={{ width: 2, fg: BRAND_COLOR }} />
                 <text content={translateUi("DIFFS")} style={{ flexGrow: 1, fg: COLORS.focus }} />
-                <ShortcutText content="[Enter]" highlight={false} style={{ fg: BRAND_COLOR }} />
+                <ShortcutText content="[Enter]" style={{ fg: BRAND_COLOR }} />
               </box>
               <box style={{ height: 6, flexShrink: 0, paddingTop: 1 }}>
                 <text content="GITHUB" style={{ fg: COLORS.muted }} />

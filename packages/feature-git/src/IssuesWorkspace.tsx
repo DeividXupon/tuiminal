@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useCallback, useEffect, useState } from "react"
@@ -141,6 +142,9 @@ export function IssuesWorkspace({
       : []
   const selectedComment = comments[selectedCommentIndex] ?? null
   const layout = resolveIssueLayout(terminal.width, terminal.height)
+  useWorkspaceRepaint(
+    JSON.stringify([layout, layout === "single" ? focus : null, previewTab, dashboard.status]),
+  )
   const modalOpen = configuration.modalOpen || issueActions.modalOpen || creation.open
   useIssueNotifications(notice, dashboard, details)
 

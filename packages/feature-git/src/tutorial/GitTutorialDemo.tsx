@@ -7,10 +7,13 @@ import {
   panelBorder,
 } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { FILES_PANEL_WIDTH } from "../rendering/constants"
 import { gitCommandConsoleHeight } from "../ui/base/GitCommandConsole"
 import { GitNavigationHeader } from "../ui/GitNavigationHeader"
 import { GitTutorialCompareView } from "./GitTutorialCompareView"
+import { GitTutorialRemoteView } from "./GitTutorialRemoteView"
+import { GIT_REMOTE_TUTORIAL_STEPS } from "./remote-steps"
 import { TutorialDiffPanel } from "./GitTutorialDiffView"
 import { TutorialGitLogView, TutorialLogActions } from "./GitTutorialLogView"
 import { GitTutorialProjectModal } from "./GitTutorialProjectModal"
@@ -290,6 +293,9 @@ export function GitTutorialDemo({ activeTargetId = null }: { activeTargetId?: st
   const compare = isCompareTutorialState(visualState)
   const filesPanelWidth = Math.min(FILES_PANEL_WIDTH, Math.max(24, terminal.width - 24))
   const filesContentWidth = Math.max(12, filesPanelWidth - (LAYOUT.compact ? 2 : 4))
+  const remoteStep = GIT_REMOTE_TUTORIAL_STEPS.find((step) => step.targetId === activeTargetId)
+  useWorkspaceRepaint(remoteStep ? `${remoteStep.tab}:${remoteStep.view}` : visualState)
+  if (remoteStep) return <GitTutorialRemoteView step={remoteStep} />
   return (
     <box
       id="git-tutorial-workspace"

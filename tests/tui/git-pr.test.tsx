@@ -210,7 +210,7 @@ test("Git tutorial renders the local Diffs screen and essential workflows", asyn
   tui = await testRender(<GitViewer active tutorialMode />, { width: 120, height: 30 })
   await tui.renderOnce()
 
-  expect(GIT_TUTORIAL_STEPS).toHaveLength(28)
+  expect(GIT_TUTORIAL_STEPS).toHaveLength(53)
   for (const step of GIT_TUTORIAL_STEPS.slice(0, 16)) {
     const target = tui.renderer.root.findDescendantById(step.targetId)
     expect(target).toBeDefined()
@@ -273,10 +273,18 @@ test("Git tutorial highlights the header action button on its help step", async 
     </box>,
     { width: 120, height: 30 },
   )
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
     await act(async () => Bun.sleep(30))
     await tui.renderOnce()
-    if (tui.captureCharFrame().includes("Atalhos disponíveis")) break
+    const target = tui.renderer.root.findDescendantById("tutorial-git-shortcuts")
+    const outline = tui.renderer.root.findDescendantById("tutorial-target-outline")
+    if (
+      target?.width &&
+      outline &&
+      outline.width >= target.width &&
+      tui.captureCharFrame().includes("Atalhos disponíveis")
+    )
+      break
   }
 
   const frame = tui.captureCharFrame()
@@ -436,6 +444,7 @@ test("Git tutorial opens local project and branch configuration while explaining
     height: 34,
   })
   await waitForRenderable("tutorial-git-local-configuration-rows")
+  await waitForText("CONFIGURAÇÕES · GIT")
 
   const frame = tui.captureCharFrame()
   expect(frame).toContain("CONFIGURAÇÕES · GIT")

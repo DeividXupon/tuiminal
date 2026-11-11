@@ -163,5 +163,6 @@ coverage in `tests/tui/git-issues.test.tsx` and
 `tests/tui/git-dashboard-cancellation.test.tsx`. Reads and mutations use fixtures/fake
 `gh`, never the user's account. Fake `gh` covers network failures before dispatch,
 during close, and during reconciliation, including read-only confirmation after a
-connection recovers. Git's tutorial covers Diffs and Compare, not this remote
-workspace.
+connection recovers. Git's simulated tutorial also covers `[3] Issues`: sections,
+list selection, overview, activity, creation, and triage. It uses fictional data
+and inert controls; see the [tutorial contract](git-pr-interface.md#simulated-git-tutorial).
