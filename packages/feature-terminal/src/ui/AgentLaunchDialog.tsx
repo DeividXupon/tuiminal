@@ -95,6 +95,8 @@ export function AgentLaunchDialog({
       )}
       {step.kind === "projects" && environments && (
         <AgentProjectEnvironmentDialog
+          target={target}
+          inactive={inactive}
           profiles={profiles}
           loading={profilesLoading}
           error={error}

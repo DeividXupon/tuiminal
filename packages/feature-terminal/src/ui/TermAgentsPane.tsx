@@ -1,3 +1,4 @@
+import { WorkspaceRepaintBoundary } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { type BoxRenderable, EmbeddedTerminalRenderable } from "@opentui/core"
 import { extend } from "@opentui/react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -58,6 +59,7 @@ export const TermAgentsPane = memo(function TermAgentsPane({
   onReady,
   onGone,
   onInput,
+  onSendFiles,
   onResize,
   liveDiff,
   onCloseLiveDiff,
@@ -140,220 +142,234 @@ export const TermAgentsPane = memo(function TermAgentsPane({
     setFrameWidth((current) => (current === frame.width ? current : frame.width))
   }, [measureFrame])
   return (
-    <box
+    <WorkspaceRepaintBoundary
       visible={visible}
-      style={{
-        position: "absolute",
-        top: layout.top,
-        left: layout.left,
-        width: layout.width,
-        height: layout.height,
-        minWidth: 1,
-        minHeight: 1,
-        backgroundColor: COLORS.canvas,
-        overflow: "hidden",
-      }}
+      transitionKey={JSON.stringify([
+        layout,
+        Boolean(liveDiff),
+        liveDiff?.stacked,
+        liveDiff?.coversTerminal,
+        Boolean(messageHistory),
+        messageDetailOpen,
+        hasTerminalCompanion(session),
+      ])}
     >
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes handle terminal mouse activation without ARIA roles. */}
       <box
-        ref={frameRef}
-        id={`terminal-pane-frame-${session.id}`}
-        onMouseDown={() => onActivate(session.id)}
-        onSizeChange={function (this: BoxRenderable) {
-          if (!measureFrame) return
-          setFrameHeight((current) => (current === this.height ? current : this.height))
-          setFrameWidth((current) => (current === this.width ? current : this.width))
-        }}
+        visible={visible}
         style={{
-          flexGrow: 1,
+          position: "absolute",
+          top: layout.top,
+          left: layout.left,
+          width: layout.width,
+          height: layout.height,
           minWidth: 1,
           minHeight: 1,
-          border: borders,
-          borderStyle: "single",
-          borderColor: active ? COLORS.terminal : COLORS.border,
           backgroundColor: COLORS.canvas,
           overflow: "hidden",
-          position: "relative",
-          flexDirection: liveDiff?.stacked ? "column" : "row",
         }}
       >
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI boxes handle terminal mouse activation without ARIA roles. */}
         <box
+          ref={frameRef}
+          id={`terminal-pane-frame-${session.id}`}
+          onMouseDown={() => onActivate(session.id)}
+          onSizeChange={function (this: BoxRenderable) {
+            if (!measureFrame) return
+            setFrameHeight((current) => (current === this.height ? current : this.height))
+            setFrameWidth((current) => (current === this.width ? current : this.width))
+          }}
           style={{
-            width: terminalContentWidth(liveDiff, frameWidth, terminalWidth),
-            height: terminalHeight,
+            flexGrow: 1,
             minWidth: 1,
             minHeight: 1,
-            flexShrink: 1,
-            flexDirection: "column",
+            border: borders,
+            borderStyle: "single",
+            borderColor: active ? COLORS.terminal : COLORS.border,
+            backgroundColor: COLORS.canvas,
+            overflow: "hidden",
+            position: "relative",
+            flexDirection: liveDiff?.stacked ? "column" : "row",
           }}
         >
-          <TerminalPaneMetadata
-            sessionId={session.id}
-            context={context}
-            sync={syncStatus}
-            agentOrigin={agentOrigin}
-            masterKey={masterKey}
-            active={paneContextActive(toolActive, visible)}
-            covered={Boolean(liveDiff?.coversTerminal)}
-            availableWidth={paneContextWidth(
-              liveDiff,
-              frameWidth,
-              terminalWidth,
-              layout.borderLeft,
-            )}
-            onActivate={() => onActivate(session.id)}
-          />
           <box
-            id={`terminal-focus-target-terminal-${session.id}`}
             style={{
-              width: "100%",
-              height: embeddedTerminalHeight,
-              minHeight: 1,
-              flexShrink: 1,
-              position: "relative",
-            }}
-          >
-            <embedded-terminal
-              ref={terminalRef}
-              id={`term-agents-${session.id}`}
-              maxScrollback={5_000}
-              selectable
-              onData={(data) => onInput(session.id, data)}
-              onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
-              onMouseDown={() => onActivate(session.id)}
-              style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
-            />
-            <PlasmaLoadingOverlay
-              id={`terminal-pane-start-loader-${session.id}`}
-              active={session.status === "starting" && Boolean(session.agentLaunch)}
-              label="Iniciando agente…"
-              accent={COLORS.terminal}
-              background={COLORS.canvas}
-            />
-            {focusSelection && (
-              <TerminalFocusSelection
-                target={terminalFocusTarget}
-                selected={focusSelection.selectedTarget === terminalFocusTarget}
-                onFocus={focusSelection.onFocus}
-              />
-            )}
-          </box>
-          {messageHistory && onCloseMessageHistory && onReturnMessageHistoryTerminal && (
-            <box
-              id={`terminal-focus-target-history-${session.id}`}
-              style={{
-                width: "100%",
-                height: historyHeight,
-                minHeight: 1,
-                flexShrink: 1,
-                position: "relative",
-              }}
-            >
-              <AgentMessageHistoryPanel
-                sessionId={session.id}
-                messages={messageHistory.messages}
-                active={Boolean(toolActive && active)}
-                focusRequest={messageHistory.focusRequest}
-                onClose={onCloseMessageHistory}
-                onReturnTerminal={onReturnMessageHistoryTerminal}
-                onActivateSession={() => onActivate(session.id)}
-                onDetailModeChange={setMessageDetailOpen}
-              />
-              {focusSelection && (
-                <TerminalFocusSelection
-                  target={historyFocusTarget}
-                  selected={focusSelection.selectedTarget === historyFocusTarget}
-                  onFocus={focusSelection.onFocus}
-                />
-              )}
-            </box>
-          )}
-          {remoteSetup && (
-            <box
-              id={`terminal-focus-target-setup-${session.id}`}
-              style={{
-                width: "100%",
-                height: setupHeights.setupHeight,
-                minHeight: 1,
-                flexShrink: 1,
-                position: "relative",
-                border: ["top"],
-                borderColor: COLORS.border,
-                backgroundColor: COLORS.panel,
-              }}
-            >
-              <RemoteServerSetupPanel
-                sessionId={session.id}
-                profile={remoteSetup.profile}
-                active={Boolean(toolActive && active)}
-                onActivateSession={() => onActivate(session.id)}
-                onReturnTerminal={() => onActivate(session.id)}
-              />
-              {focusSelection && (
-                <TerminalFocusSelection
-                  target={setupFocusTarget}
-                  selected={focusSelection.selectedTarget === setupFocusTarget}
-                  onFocus={focusSelection.onFocus}
-                />
-              )}
-            </box>
-          )}
-          <RemoteCodexUpdateCompanion
-            session={session}
-            height={setupHeights.setupHeight}
-            active={Boolean(toolActive && active)}
-            onActivate={onActivate}
-            onRetry={onRetryRemoteCodex}
-            focusSelection={focusSelection}
-            focusTarget={setupFocusTarget}
-          />
-        </box>
-        {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
-          <box
-            id={`terminal-focus-target-live-diff-${session.id}`}
-            style={{
+              width: terminalContentWidth(liveDiff, frameWidth, terminalWidth),
+              height: terminalHeight,
               minWidth: 1,
               minHeight: 1,
               flexShrink: 1,
-              ...liveDiffContainerStyle(
-                liveDiff.coversTerminal,
-                frameWidth,
-                diffWidth,
-                liveDiff.stacked,
-                diffHeight,
-              ),
+              flexDirection: "column",
             }}
           >
-            <LiveDiffPanel
+            <TerminalPaneMetadata
               sessionId={session.id}
-              agentKey={liveDiff.agentKey}
-              initialDirectory={session.workingDirectory ?? ""}
-              {...(liveDiff.remote ? { remote: liveDiff.remote } : {})}
-              manualDirectories={liveDiff.manualDirectories}
-              running={liveDiff.running}
-              active={Boolean(toolActive && active)}
-              fileTableHeight={fileTableHeight}
-              stableContentWidth={stableContentWidth}
-              stacked={liveDiff.stacked}
-              coversTerminal={liveDiff.coversTerminal}
-              focusRequest={liveDiff.focusRequest}
-              onClose={onCloseLiveDiff}
-              onAddProject={onAddLiveDiffProject}
-              onActivateSession={() => onActivate(session.id)}
-              onReturnTerminal={() =>
-                liveDiff.coversTerminal ? onCloseLiveDiff(session.id) : onActivate(session.id)
-              }
+              context={context}
+              sync={syncStatus}
+              agentOrigin={agentOrigin}
+              masterKey={masterKey}
+              active={paneContextActive(toolActive, visible)}
+              covered={Boolean(liveDiff?.coversTerminal)}
+              availableWidth={paneContextWidth(
+                liveDiff,
+                frameWidth,
+                terminalWidth,
+                layout.borderLeft,
+              )}
+              onActivate={() => onActivate(session.id)}
+              onSendFiles={onSendFiles?.bind(undefined, session.id)}
             />
-            {focusSelection && (
-              <TerminalFocusSelection
-                target={liveDiffFocusTarget}
-                selected={focusSelection.selectedTarget === liveDiffFocusTarget}
-                onFocus={focusSelection.onFocus}
+            <box
+              id={`terminal-focus-target-terminal-${session.id}`}
+              style={{
+                width: "100%",
+                height: embeddedTerminalHeight,
+                minHeight: 1,
+                flexShrink: 1,
+                position: "relative",
+              }}
+            >
+              <embedded-terminal
+                ref={terminalRef}
+                id={`term-agents-${session.id}`}
+                maxScrollback={5_000}
+                selectable
+                onData={(data) => onInput(session.id, data)}
+                onTerminalResize={(columns, rows) => onResize(session.id, columns, rows)}
+                onMouseDown={() => onActivate(session.id)}
+                style={{ width: "100%", height: "100%", minHeight: 1, flexGrow: 1, flexShrink: 1 }}
               />
+              <PlasmaLoadingOverlay
+                id={`terminal-pane-start-loader-${session.id}`}
+                active={session.status === "starting" && Boolean(session.agentLaunch)}
+                label="Iniciando agente…"
+                accent={COLORS.terminal}
+                background={COLORS.canvas}
+              />
+              {focusSelection && (
+                <TerminalFocusSelection
+                  target={terminalFocusTarget}
+                  selected={focusSelection.selectedTarget === terminalFocusTarget}
+                  onFocus={focusSelection.onFocus}
+                />
+              )}
+            </box>
+            {messageHistory && onCloseMessageHistory && onReturnMessageHistoryTerminal && (
+              <box
+                id={`terminal-focus-target-history-${session.id}`}
+                style={{
+                  width: "100%",
+                  height: historyHeight,
+                  minHeight: 1,
+                  flexShrink: 1,
+                  position: "relative",
+                }}
+              >
+                <AgentMessageHistoryPanel
+                  sessionId={session.id}
+                  messages={messageHistory.messages}
+                  active={Boolean(toolActive && active)}
+                  focusRequest={messageHistory.focusRequest}
+                  onClose={onCloseMessageHistory}
+                  onReturnTerminal={onReturnMessageHistoryTerminal}
+                  onActivateSession={() => onActivate(session.id)}
+                  onDetailModeChange={setMessageDetailOpen}
+                />
+                {focusSelection && (
+                  <TerminalFocusSelection
+                    target={historyFocusTarget}
+                    selected={focusSelection.selectedTarget === historyFocusTarget}
+                    onFocus={focusSelection.onFocus}
+                  />
+                )}
+              </box>
             )}
+            {remoteSetup && (
+              <box
+                id={`terminal-focus-target-setup-${session.id}`}
+                style={{
+                  width: "100%",
+                  height: setupHeights.setupHeight,
+                  minHeight: 1,
+                  flexShrink: 1,
+                  position: "relative",
+                  border: ["top"],
+                  borderColor: COLORS.border,
+                  backgroundColor: COLORS.panel,
+                }}
+              >
+                <RemoteServerSetupPanel
+                  sessionId={session.id}
+                  profile={remoteSetup.profile}
+                  active={Boolean(toolActive && active)}
+                  onActivateSession={() => onActivate(session.id)}
+                  onReturnTerminal={() => onActivate(session.id)}
+                />
+                {focusSelection && (
+                  <TerminalFocusSelection
+                    target={setupFocusTarget}
+                    selected={focusSelection.selectedTarget === setupFocusTarget}
+                    onFocus={focusSelection.onFocus}
+                  />
+                )}
+              </box>
+            )}
+            <RemoteCodexUpdateCompanion
+              session={session}
+              height={setupHeights.setupHeight}
+              active={Boolean(toolActive && active)}
+              onActivate={onActivate}
+              onRetry={onRetryRemoteCodex}
+              focusSelection={focusSelection}
+              focusTarget={setupFocusTarget}
+            />
           </box>
-        )}
+          {liveDiff && onCloseLiveDiff && onAddLiveDiffProject && (
+            <box
+              id={`terminal-focus-target-live-diff-${session.id}`}
+              style={{
+                minWidth: 1,
+                minHeight: 1,
+                flexShrink: 1,
+                ...liveDiffContainerStyle(
+                  liveDiff.coversTerminal,
+                  frameWidth,
+                  diffWidth,
+                  liveDiff.stacked,
+                  diffHeight,
+                ),
+              }}
+            >
+              <LiveDiffPanel
+                sessionId={session.id}
+                agentKey={liveDiff.agentKey}
+                initialDirectory={session.workingDirectory ?? ""}
+                {...(liveDiff.remote ? { remote: liveDiff.remote } : {})}
+                manualDirectories={liveDiff.manualDirectories}
+                running={liveDiff.running}
+                active={Boolean(toolActive && active)}
+                fileTableHeight={fileTableHeight}
+                stableContentWidth={stableContentWidth}
+                stacked={liveDiff.stacked}
+                coversTerminal={liveDiff.coversTerminal}
+                focusRequest={liveDiff.focusRequest}
+                onClose={onCloseLiveDiff}
+                onAddProject={onAddLiveDiffProject}
+                onActivateSession={() => onActivate(session.id)}
+                onReturnTerminal={() =>
+                  liveDiff.coversTerminal ? onCloseLiveDiff(session.id) : onActivate(session.id)
+                }
+              />
+              {focusSelection && (
+                <TerminalFocusSelection
+                  target={liveDiffFocusTarget}
+                  selected={focusSelection.selectedTarget === liveDiffFocusTarget}
+                  onFocus={focusSelection.onFocus}
+                />
+              )}
+            </box>
+          )}
+        </box>
       </box>
-    </box>
+    </WorkspaceRepaintBoundary>
   )
 }, sameTerminalPane)

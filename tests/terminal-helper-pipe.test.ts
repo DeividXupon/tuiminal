@@ -66,11 +66,12 @@ test.skipIf(process.platform === "win32")(
     const first = new AbortController()
     const second = new AbortController()
     try {
-      await protocol.request("context", [], first.signal)
-      const pending = protocol.request("context", [], first.signal).catch((error) => error)
+      const ready = protocol.request("context", [], first.signal)
       const failed = protocol
         .request("patch", ["x".repeat(100_000)], second.signal)
         .catch((error) => error)
+      const pending = protocol.request("context", [], first.signal).catch((error) => error)
+      await ready
       expect(await failed).toMatchObject({ code: "EPIPE" })
       expect(await pending).toMatchObject({ code: "EPIPE" })
       expect(protocol.closed).toBe(true)

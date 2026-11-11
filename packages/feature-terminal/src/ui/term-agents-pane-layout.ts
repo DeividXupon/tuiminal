@@ -31,6 +31,7 @@ export type TermAgentsPaneProps = {
   onReady: (id: string, terminal: EmbeddedTerminalRenderable) => void
   onGone: (id: string, terminal: EmbeddedTerminalRenderable) => void
   onInput: (id: string, data: Uint8Array) => void
+  onSendFiles?: ((id: string) => void) | undefined
   onResize: (id: string, columns: number, rows: number) => void
   liveDiff?:
     | {
@@ -233,6 +234,7 @@ export function sameTerminalPane(previous: TermAgentsPaneProps, next: TermAgents
     previous.onReady === next.onReady &&
     previous.onGone === next.onGone &&
     previous.onInput === next.onInput &&
+    previous.onSendFiles === next.onSendFiles &&
     previous.onResize === next.onResize &&
     (!previous.liveDiff || previous.session.workingDirectory === next.session.workingDirectory) &&
     previous.liveDiff?.agentKey === next.liveDiff?.agentKey &&

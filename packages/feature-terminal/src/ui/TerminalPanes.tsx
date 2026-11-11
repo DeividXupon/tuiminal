@@ -77,6 +77,7 @@ type TerminalPanesProps = {
   onReady: PaneProps["onReady"]
   onGone: PaneProps["onGone"]
   onInput: PaneProps["onInput"]
+  onSendFiles?: PaneProps["onSendFiles"]
   onResize: PaneProps["onResize"]
   onCloseLiveDiff: NonNullable<PaneProps["onCloseLiveDiff"]>
   onAddLiveDiffProject: NonNullable<PaneProps["onAddLiveDiffProject"]>
@@ -177,6 +178,7 @@ function TerminalPaneItem({
       onReady={panes.onReady}
       onGone={panes.onGone}
       onInput={panes.onInput}
+      onSendFiles={panes.onSendFiles}
       onResize={panes.onResize}
       liveDiff={paneLiveDiff(
         session,

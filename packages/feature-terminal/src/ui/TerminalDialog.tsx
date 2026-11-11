@@ -43,6 +43,7 @@ export function TerminalDialog({
   })
   return (
     <ModalSurface
+      fitContent
       dialogRef={dialogRef}
       id="terminal-dialog"
       width={Math.max(1, Math.min(64, dimensions.width - 2))}

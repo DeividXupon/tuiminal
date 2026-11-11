@@ -1,3 +1,4 @@
+import russian from "../packages/core/src/i18n/ru.json"
 import { expect, test } from "bun:test"
 import {
   isTerminalMasterKey,
@@ -14,7 +15,11 @@ import { getUiSettings } from "../packages/core/src/settings/theme"
 
 test("Master Key belongs to contextual Terminal settings without a layout switch", () => {
   expect(configurationSectionsForContext("terminal")[0]).toBe("terminal")
-  expect(configurationSectionsForContext("terminal")[1]).toBe("remoteConnection")
+  expect(configurationSectionsForContext("terminal").slice(0, 3)).toEqual([
+    "terminal",
+    "terminalSounds",
+    "remoteConnection",
+  ])
   expect(configurationSectionsForContext("terminal")).not.toContain("layout")
   expect(
     configurationSettingPatch("terminal", { ...getUiSettings(), terminalMasterKey: "Ctrl+B" }, 1),
@@ -31,7 +36,10 @@ test("Master Key belongs to contextual Terminal settings without a layout switch
 test("all terminal actions and settings have translations in all supported languages", () => {
   for (const message of TERMINAL_MESSAGES) {
     for (const [index, language] of LANGUAGE_OPTIONS.entries()) {
-      expect(translateUi(message[0], language.id)).toBe(message[index]!)
+      const expected =
+        language.id === "ru" ? russian[message[1] as keyof typeof russian] : message[index]
+      if (expected === undefined) throw new Error(`Missing Terminal translation: ${language.id}`)
+      expect(translateUi(message[0], language.id)).toBe(expected)
     }
   }
 })

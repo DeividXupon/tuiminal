@@ -21,6 +21,7 @@ type Options = Pick<ReturnType<typeof useTerminalSessions>, "sessions" | "launch
   focusBox: (target: TerminalFocusTargetKey) => void
   runActionRef: RefObject<(key: string) => void>
   loadMoreThreads: (providerId: AgentProviderId) => Promise<void>
+  refreshAllThreads: () => void
   recentThreads: AgentResumeThread[]
   resumeAgentThreadRef: RefObject<(thread: AgentResumeThread) => void>
   folders: TerminalFolder[]
@@ -38,6 +39,7 @@ type SidebarAction = Extract<
   | { focusTarget: TerminalFocusTargetKey }
   | { action: string }
   | { loadMoreResumeProvider: AgentProviderId }
+  | { refreshResumeThreads: true }
   | { resumeThreadId: string }
 >
 
@@ -60,6 +62,11 @@ function dispatchSidebarAction(
   if ("loadMoreResumeProvider" in target) {
     handled()
     void loadMoreThreads(target.loadMoreResumeProvider)
+    return true
+  }
+  if ("refreshResumeThreads" in target) {
+    handled()
+    options.refreshAllThreads()
     return true
   }
   if ("resumeThreadId" in target) {

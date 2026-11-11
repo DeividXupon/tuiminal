@@ -389,12 +389,14 @@ test.skipIf(process.platform === "win32")(
       expect(await sendPinnedSidebarTarget(endpoint, { action: "n" })).toBe(true)
       expect(await sendPinnedSidebarTarget(endpoint, { focusTarget: "sidebar:main" })).toBe(true)
       expect(await sendPinnedSidebarTarget(endpoint, { resumeThreadId: "thread-123" })).toBe(true)
+      expect(await sendPinnedSidebarTarget(endpoint, { refreshResumeThreads: true })).toBe(true)
       expect(selected).toEqual([
         { sessionId: "shell-123-1" },
         { folderId: "terminal" },
         { action: "n" },
         { focusTarget: "sidebar:main" },
         { resumeThreadId: "thread-123" },
+        { refreshResumeThreads: true },
       ])
       currentReplica = {
         ...replica,

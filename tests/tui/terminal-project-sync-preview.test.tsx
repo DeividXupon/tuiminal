@@ -59,7 +59,7 @@ test("sync progress keeps focus and cancels with Escape", async () => {
     height: dialog.height,
     x: dialog.screenX,
     y: dialog.screenY,
-  }).toEqual({ width: 68, height: 12, x: 11, y: 3 })
+  }).toEqual({ width: 76, height: 13, x: 7, y: 3 })
   expect(tui.captureCharFrame()).toContain("50%")
   expect(tui.captureCharFrame()).toContain("[A] Sincronização automática OFF")
   expect(tui.captureCharFrame()).toContain("[Esc] Cancelar")
@@ -151,10 +151,11 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
     height: dialog.height,
     x: dialog.screenX,
     y: dialog.screenY,
-  }).toEqual({ width: 88, height: 20, x: 6, y: 2 })
+  }).toEqual({ width: 88, height: 19, x: 6, y: 3 })
   const frame = tui.captureCharFrame()
   expect(frame).toContain("ITENS FORA DE SINCRONIA")
   expect(frame).toContain("src/new.ts")
+  expect(frame).toContain("old.txt")
   expect(frame).toContain("Conflito")
   expect(frame).toContain("[A] Sincronização automática ON")
   expect(frame).toContain("O remoto substituirá alterações locais")
@@ -176,9 +177,10 @@ test("sync preview lists actions and uses one explicit destructive confirmation"
   expect(next.screenY).toBeLessThan(automatic.screenY)
   expect(automatic.screenY).toBeLessThan(confirm.screenY)
   expect(cancel.screenY).toBe(confirm.screenY)
-  expect(cancel.screenX).toBeGreaterThan(confirm.screenX)
+  expect(cancel.screenX).toBeLessThan(confirm.screenX)
   await act(async () => tui?.mockMouse.click(automatic.screenX + 1, automatic.screenY))
   expect(automaticToggles).toBe(1)
+  expect(confirms).toBe(0)
   await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))
   expect(confirms).toBe(1)
   await act(async () => tui?.mockMouse.click(cancel.screenX + 1, cancel.screenY))
@@ -212,11 +214,11 @@ test("sync confirmation keeps primary and cancel actions separated in a compact 
     height: dialog.height,
     x: dialog.screenX,
     y: dialog.screenY,
-  }).toEqual({ width: 68, height: 10, x: 11, y: 4 })
+  }).toEqual({ width: 76, height: 11, x: 7, y: 4 })
   expectTransparentBackground("terminal-project-sync-confirm-header")
   expectTransparentBackground("terminal-project-sync-confirm-actions")
   expect(confirm.screenY).toBe(cancel.screenY)
-  expect(confirm.screenX).toBeLessThan(cancel.screenX)
+  expect(confirm.screenX).toBeGreaterThan(cancel.screenX)
   await act(async () => tui?.mockMouse.click(confirm.screenX + 1, confirm.screenY))
   await act(async () => tui?.mockMouse.click(cancel.screenX + 1, cancel.screenY))
   expect({ confirms, closes }).toEqual({ confirms: 1, closes: 1 })

@@ -4,7 +4,7 @@ import type { TerminalRepositoryContext } from "../model/terminal-context"
 import { AGENT_WORKING_FRAMES } from "./agent-presentation"
 
 export type TerminalContextTag = {
-  kind: "directory" | "branch" | "state" | "sync"
+  kind: "directory" | "branch" | "state" | "sync" | "upload"
   label: string
 }
 
@@ -62,6 +62,7 @@ export function terminalContextTooltip(
   sync?: RemoteProjectSyncStatus,
 ) {
   if (kind === "sync") return syncTooltip(sync)
+  if (kind === "upload") return translateUi("Envia arquivos locais para o servidor desta sessão.")
   if (!context) return ""
   if (kind === "directory") return translateUi("Pasta do projeto atual.")
   if (kind === "branch") return translateUi("Branch Git atual.")
@@ -98,37 +99,86 @@ function syncTag(status: RemoteProjectSyncStatus | undefined, masterKey: string,
   return { kind: "sync" as const, label: `${label} [${masterKey}] > [R]` }
 }
 
-/** Fits tags by importance: state, branch, then project directory. */
-export function terminalContextTags(
+function actionTags(
+  sync: RemoteProjectSyncStatus | undefined,
+  masterKey: string,
+  frame: number,
+  upload: boolean,
+  width: number,
+): TerminalContextTag[] {
+  const synchronization = syncTag(sync, masterKey, frame)
+  const syncTags = synchronization ? [synchronization] : []
+  if (!upload) {
+    if (fits(syncTags, width)) return syncTags
+    const compact = synchronization ? [{ kind: "sync" as const, label: "[R]" }] : []
+    return fits(compact, width) ? compact : []
+  }
+  const variants: TerminalContextTag[][] = [
+    [
+      { kind: "upload", label: `${translateUi("Enviar arquivos")} [${masterKey}] > [.]` },
+      ...syncTags,
+    ],
+    [{ kind: "upload", label: `${translateUi("Enviar")} [.]` }, ...syncTags],
+    [
+      { kind: "upload", label: `${translateUi("Enviar")} [.]` },
+      ...(synchronization
+        ? [{ kind: "sync" as const, label: `${translateUi("Sincronizar")} [R]` }]
+        : []),
+    ],
+    [
+      { kind: "upload", label: "[.]" },
+      ...(synchronization ? [{ kind: "sync" as const, label: "[R]" }] : []),
+    ],
+    [{ kind: "upload", label: "[.]" }],
+  ]
+  return variants.find((tags) => fits(tags, width)) ?? []
+}
+
+function repositoryTags(
   context: TerminalRepositoryContext | undefined,
   availableWidth: number,
-  sync?: RemoteProjectSyncStatus,
-  masterKey = "Ctrl+B",
-  syncFrame = 0,
+  actions: readonly TerminalContextTag[],
 ): TerminalContextTag[] {
   const selected: TerminalContextTag[] = []
-  const synchronization = syncTag(sync, masterKey, syncFrame)
-  if (synchronization) {
-    if (fits([synchronization], availableWidth)) selected.push(synchronization)
-    else return []
-  }
   const state = context ? stateLabel(context) : null
   if (state) {
     const tag = { kind: "state" as const, label: state }
-    if (fits([tag, ...selected], availableWidth)) selected.unshift(tag)
+    if (fits([tag, ...selected, ...actions], availableWidth)) selected.unshift(tag)
   }
   if (context?.branch) {
     const tag = {
       kind: "branch" as const,
       label: truncateDisplay(cleanLabel(context.branch), MAX_BRANCH_WIDTH),
     }
-    if (fits([tag, ...selected], availableWidth)) selected.unshift(tag)
+    if (fits([tag, ...selected, ...actions], availableWidth)) selected.unshift(tag)
   }
   const directory = context && {
     kind: "directory" as const,
     label: truncateDisplay(cleanLabel(context.projectName), MAX_DIRECTORY_WIDTH),
   }
-  if (directory?.label && fits([directory, ...selected], availableWidth))
+  if (directory?.label && fits([directory, ...selected, ...actions], availableWidth))
     selected.unshift(directory)
   return selected
+}
+
+/** Compact remote actions before dropping state, branch or project directory. */
+export function terminalContextTags(
+  context: TerminalRepositoryContext | undefined,
+  availableWidth: number,
+  sync?: RemoteProjectSyncStatus,
+  masterKey = "Ctrl+B",
+  syncFrame = 0,
+  upload = Boolean(sync),
+): TerminalContextTag[] {
+  const compact: TerminalContextTag[] = []
+  if (upload) compact.push({ kind: "upload", label: "[.]" })
+  if (sync) compact.push({ kind: "sync", label: "[R]" })
+  if (!fits(compact, availableWidth))
+    return actionTags(sync, masterKey, syncFrame, upload, availableWidth)
+  const repository = repositoryTags(context, availableWidth, compact)
+  const repositoryWidth = repository.reduce((width, tag) => width + tagWidth(tag) + 1, 0)
+  return [
+    ...repository,
+    ...actionTags(sync, masterKey, syncFrame, upload, availableWidth - repositoryWidth),
+  ]
 }

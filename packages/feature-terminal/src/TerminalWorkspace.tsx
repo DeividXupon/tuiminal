@@ -1,3 +1,4 @@
+import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useTerminalFolders } from "./hooks/use-terminal-folders"
 import { useTerminalWorkspaceKeyboard } from "./hooks/use-terminal-workspace-keyboard"
 import { useTerminalSidebarBridge } from "./hooks/use-terminal-sidebar-bridge"
@@ -10,6 +11,7 @@ import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
 import { COLORS, getUiSettings } from "@xupon/tuiminal-core/settings/theme"
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useAgentDetection } from "./hooks/use-agent-detection"
+import { useAgentSounds } from "./hooks/use-agent-sounds"
 import { useAgentNotifications } from "./hooks/use-agent-notifications"
 import { useAgentResumeThreads } from "./hooks/use-agent-resume-threads"
 import { useAutomaticTmuxMirrors } from "./hooks/use-automatic-tmux-mirrors"
@@ -18,6 +20,7 @@ import { usePinnedTmuxSidebars } from "./hooks/use-pinned-tmux-sidebars"
 import { useWorkspaceRemoteCodexCompatibilityFlow } from "./hooks/use-remote-codex-compatibility-flow"
 import { useRemoteProjectAutoSync } from "./hooks/use-remote-project-auto-sync"
 import { useRemoteProjectSync } from "./hooks/use-remote-project-sync"
+import { useRemoteAgentFiles } from "./hooks/use-remote-agent-files"
 import { useTerminalContexts } from "./hooks/use-terminal-contexts"
 import { useTerminalFocusSelection } from "./hooks/use-terminal-focus-selection"
 import { useTerminalPalette } from "./hooks/use-terminal-palette"
@@ -63,6 +66,7 @@ import { AgentLaunchDialog, type AgentLaunchStep } from "./ui/AgentLaunchDialog"
 import { LiveDiffProjectPicker } from "./ui/LiveDiffProjectPicker"
 import { RemoteCodexCompatibilityPrompt } from "./ui/RemoteCodexCompatibilityPrompt"
 import { RemoteProjectSyncFlow } from "./ui/RemoteProjectSyncFlow"
+import { RemoteAgentFilesDialog } from "./ui/RemoteAgentFilesDialog"
 import { TERMINAL_ACTIONS, TerminalActions } from "./ui/TerminalActions"
 import { TerminalDialog, type TerminalDialogKind } from "./ui/TerminalDialog"
 import { TerminalPanes } from "./ui/TerminalPanes"
@@ -98,6 +102,7 @@ export function TermAgents({
   const sidebarWidth = Math.max(16, Math.min(32, Math.floor(dimensions.width * 0.22)))
   const workspaceRef = useRef<BoxRenderable | null>(null)
   const terminal = useTerminalSessions(active, dimensions)
+  const agentFiles = useRemoteAgentFiles(terminal, active && !tutorial)
   const {
     sessions,
     agentMessages,
@@ -180,6 +185,7 @@ export function TermAgents({
     terminalSidebarFocusRevision,
     terminalSidebarFocusRevision,
   )
+  useWorkspaceRepaint(JSON.stringify([sidebarPinned, tmuxHostSidebar, Boolean(tutorial)]))
   const masterKey = getUiSettings().terminalMasterKey
   const sections = useMemo(() => terminalSections(sessions), [sessions])
   const masterKeyTargets = useMemo(
@@ -278,6 +284,7 @@ export function TermAgents({
     pagination: resumePagination,
     loadMoreThreads,
     refreshRemoteThreads,
+    refreshAllThreads,
   } = useAgentResumeThreads(active)
   const appearanceKey = [getLanguage(), COLORS.canvas, COLORS.border, COLORS.terminal].join(
     "\u0000",
@@ -310,6 +317,7 @@ export function TermAgents({
   )
   useAgentDetection(sessionsRef, agentOutputs, seenAgents, updateSession, processHandles)
   useAgentNotifications(sessions, seenAgents)
+  useAgentSounds(sessions)
   useAutomaticTmuxMirrors(sessionsRef, dismissedTmuxPanes, launchCommand, folderForTmuxPane)
   usePinnedTmuxSidebars(sidebarPinned, sidebarWidth, masterKey)
 
@@ -515,6 +523,7 @@ export function TermAgents({
     if (["c", "shift+h"].includes(key)) return !canSplit
     if (key === "s") return !agentSessionHasCapability(activeSession, "message-history")
     if (key === "r") return projectSyncDisabled()
+    if (key === ".") return !agentFiles.canOpen(activeSessionId)
     if (key.startsWith("alt+")) return !onSelectTool
     if (key === ",") return !onOpenSettings
     if (key === "q") return !onQuit
@@ -560,7 +569,8 @@ export function TermAgents({
     const invokedFromLeader = leaderRef.current
     setLeader(false)
     if (runFocusAction(key, invokedFromLeader)) return
-    if (!["e", "shift+l", ",", "q", "m"].includes(key) && !key.startsWith("alt+")) restoreFocus()
+    if (!["e", "shift+l", ",", ".", "q", "m"].includes(key) && !key.startsWith("alt+"))
+      restoreFocus()
     switch (key) {
       case "n":
         launchSection()
@@ -581,6 +591,9 @@ export function TermAgents({
         break
       case "r":
         if (activeSession) requestProjectSync(activeSession)
+        break
+      case ".":
+        agentFiles.open()
         break
       case "alt+1":
       case "alt+2":
@@ -648,6 +661,7 @@ export function TermAgents({
       setLiveDiffProjectPicker(null)
     } else if (
       dialogRef.current ||
+      agentFiles.state ||
       splitRequestRef.current ||
       agentLaunchStep ||
       projectSyncFlow ||
@@ -662,6 +676,7 @@ export function TermAgents({
   }, [
     active,
     activeSessionId,
+    agentFiles.state,
     boxFocusBusyRef,
     focusTerminal,
     liveDiffProjectPicker,
@@ -732,6 +747,7 @@ export function TermAgents({
     loadMoreThreads,
     recentThreads,
     resumeAgentThreadRef,
+    refreshAllThreads,
     folders,
     setSelectedFolder,
     toggleFolder,
@@ -755,6 +771,7 @@ export function TermAgents({
     isBlocked: () =>
       Boolean(
         !active ||
+          agentFiles.busy() ||
           dialogRef.current ||
           splitRequestRef.current ||
           agentLaunchStep ||
@@ -822,6 +839,7 @@ export function TermAgents({
             onReady={terminalReady}
             onGone={terminalGone}
             onInput={terminalInput}
+            onSendFiles={agentFiles.open}
             onResize={terminalResize}
             onCloseLiveDiff={closeLiveDiff}
             onAddLiveDiffProject={addLiveDiffProject}
@@ -839,6 +857,7 @@ export function TermAgents({
             activeRemoteProfileId={activeRemoteProfileId}
             resumePagination={resumePagination}
             onLoadMoreThreads={(providerId) => void loadMoreThreads(providerId)}
+            onSearchThreads={refreshAllThreads}
             onAction={runAction}
             onSelectThread={resumeAgentThread}
             disabled={disabled}
@@ -878,6 +897,15 @@ export function TermAgents({
           />
         )}
         <RemoteCodexCompatibilityPrompt flow={remoteCodexCompatibility} />
+        {agentFiles.state && (
+          <RemoteAgentFilesDialog
+            state={agentFiles.state}
+            onConfirm={agentFiles.confirm}
+            onClose={agentFiles.cancel}
+            onAdd={agentFiles.add}
+            onRemove={agentFiles.remove}
+          />
+        )}
         {liveDiffProjectPicker && (
           <LiveDiffProjectPicker
             projects={liveDiffProjectPicker.projects}

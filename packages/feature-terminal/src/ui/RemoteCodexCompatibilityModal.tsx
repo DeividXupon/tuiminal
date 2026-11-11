@@ -9,6 +9,7 @@ import {
   type RemoteCodexCompatibilityReport,
   remoteCodexCompatibilityMessage,
 } from "../model/remote-codex"
+import { RemoteCodexServiceVersions } from "./RemoteCodexServiceVersions"
 
 export function RemoteCodexCompatibilityModal({
   report,
@@ -49,10 +50,19 @@ export function RemoteCodexCompatibilityModal({
         : "O protocolo do app-server é experimental e depende da versão."
   return (
     <ModalSurface
+      fitContent
       dialogRef={dialog}
       id="remote-codex-compatibility-modal"
       width={Math.max(1, Math.min(72, dimensions.width - 2))}
-      height={Math.max(1, Math.min(11, dimensions.height - 2))}
+      height={Math.max(
+        1,
+        Math.min(
+          11 +
+            Number(Boolean(report.remoteDaemonVersion)) +
+            Number(Boolean(report.remoteAppServerVersion)),
+          dimensions.height - 2,
+        ),
+      )}
       zIndex={950}
       borderColor={COLORS.warning}
       onBackdropPress={onCancel}
@@ -70,6 +80,7 @@ export function RemoteCodexCompatibilityModal({
           style={{ fg: COLORS.muted }}
         />
       )}
+      <RemoteCodexServiceVersions report={report} />
       <text content={translateUi(detail)} style={{ fg: COLORS.muted }} />
       <box style={{ flexGrow: 1 }} />
       <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>

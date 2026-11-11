@@ -23,6 +23,7 @@ export type PinnedTerminalSelection =
   | { sessionId: string }
   | { resumeThreadId: string; providerId?: AgentProviderId; remoteProfileId?: string }
   | { loadMoreResumeProvider: AgentProviderId }
+  | { refreshResumeThreads: true }
   | { folderId: string }
   | { focusTarget: TerminalFocusTargetKey }
   | { action: string }

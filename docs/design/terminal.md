@@ -28,9 +28,10 @@ the remaining workspace up to every edge, without outer borders, margins, paddin
 or gaps at any terminal size. A split uses only one shared separator column or row.
 The sidebar highlights the active terminal, and split separators use the active
 accent when applicable. Resizing preserves the embedded terminal and its process.
-When an overlay cannot fit, it retains repository state first, then branch, then
-folder. Metadata polling is read-only, limited to visible panes and stops when a pane
-is hidden or retired.
+When metadata cannot fit, remote action labels compact to their shortcuts before
+dropping repository tags. It retains repository state first, then branch, then
+folder, while keeping the compact remote actions available. Metadata polling is
+read-only, limited to visible panes and stops when a pane is hidden or retired.
 
 ## Sections and folders
 
@@ -126,6 +127,37 @@ their static markers. One sidebar timer advances the loader every 100 ms while
 the tool is active and at least one running agent is working. It stops when no
 longer needed and is released on unmount, without updating terminal panes or focus.
 
+## Files for remote agents
+
+Dropping or pasting local regular-file paths into the focused integrated remote
+agent offers an SSH upload to that pane's original profile. Absolute paths,
+quoted/escaped paths, `~/` and `file://` URLs are accepted, up to 20 files per drop.
+Ordinary text, unavailable paths, directories and local agent pastes keep their
+native behavior. No project synchronization or active-settings alias is involved.
+
+All files, including images, open confirmation before their paths reach the agent.
+There is no image-marker detection or special image-paste path. The header's clickable
+upload tag sits immediately left of synchronization and shows the configured Master
+Key followed by `[.]`; labels compact as pane width shrinks. The same action is in
+the Master Key menu and opens an empty dialog without requiring a drop.
+
+The focused dialog shows the target profile, destination directory, filenames,
+sizes and transfer progress. Drop or paste more files, use `[A]` to enter a full local
+path, `[↑/↓]` to select, and `[Del]` to remove pending files. While entering a path,
+`[Enter]` adds it and `[Esc]` returns to the file list. `[Enter]` confirms upload;
+`[Esc]` cancels and restores terminal focus without reaching the child. Transfers
+stream over a separate batch-mode SSH child to private, unique subdirectories of
+`/tmp/tuiminal-agents`, retaining original filenames. The receiver requires the
+Linux `stat`, `sha256sum` and standard POSIX utilities. Size and SHA-256 are checked
+before the path is inserted as a paste into the original prompt. Tuiminal never
+presses Enter or clears the draft. Successful uploads remain available to the agent in the remote temporary
+directory. Incomplete receiver-owned directories are removed on failure.
+
+Uploads have a two-minute deadline and are cancelled on pane close/restart, tool
+deactivation or session switch. Late results cannot write into a replacement PTY.
+A failed multi-file transfer retains only pending files for retry, so completed
+uploads are not repeated. No upload starts before confirmation.
+
 ## Master Key and focus
 
 Settings opened from Terminal contain a Terminal category with the persisted
@@ -174,6 +206,11 @@ first-party provider selector. Codex, Claude Code and OpenCode are available. Ch
 the project selector, including when no remote alias is active. It starts in Local;
 `[E]` opens a list of explicit SSH aliases discovered from `~/.ssh/config`.
 Choosing an alias applies to this launch without changing the active settings alias.
+The environment dialog keeps Local above a scrollable remote-alias list, with distinct
+selection colors, alias details and an **In use** marker for the current destination.
+Reopening it highlights that destination. Its height follows the available choices;
+short terminals use single-line rows, and narrow footers wrap without hiding Back or
+Select. Empty and failed SSH discovery retain Local and the return action.
 Recent projects combine that provider and origin's public conversations and successful
 selector launches. They are deduplicated by absolute path, ordered by last use,
 and limited to 20 per provider and origin. Successful launches are stored atomically in
@@ -192,6 +229,12 @@ dependency/build directories, and do not descend through symlinks or repositorie
 Discovery is limited to five levels, 600 directories, 200 projects and ten seconds;
 reaching a limit is visible and never disables manual folder selection. Permission
 or discovery failures leave the recent list usable. No project contents are read.
+
+The project list has a search input: `[/]` or its button focuses it and filters
+visible projects by name or full path, ignoring case. Arrows and `[Enter]` still
+select and launch a matching project while typing; letter shortcuts remain text.
+`[Esc]` leaves the input first, preserving the filter. An empty result disables
+launch. Choosing a folder through `[P]` clears the filter to reveal that selection.
 
 `[P]` opens a separate folder-search screen with a single, focused `~/` input.
 The list updates while typing: the final path segment filters directory suggestions,
@@ -282,8 +325,8 @@ the selected root session, then disconnects without disrupting other server sess
 server port is exposed publicly. Public HTTP and SSE provide
 session identity, title, state,
 permission waits, structured activity, messages, per-message diffs, and resume hydration.
-Input and approvals stay in the official TUI; Tuiminal neither scrapes its screen nor
-displays OpenCode reasoning part text.
+Input and approvals stay in the official TUI; observation uses the public protocol
+and never displays OpenCode reasoning part text.
 
 If a capability is absent or Codex/OpenCode versions are incompatible, a localized
 focused modal shows both detected versions and the provider-specific constraint.
@@ -292,6 +335,10 @@ focused modal shows both detected versions and the provider-specific constraint.
 version, the applicable [`codex update`](https://learn.chatgpt.com/docs/developer-commands#codex-update)
 or [`opencode upgrade`](https://opencode.ai/v2/docs/cli/commands/) command, and the
 official POSIX installer alternative. Tuiminal does not prefill or execute any command.
+Codex reports keep the installed remote CLI, daemon, and connected app-server versions
+separate. A service version mismatch preserves the CLI versions and shows manual
+service restart guidance for when no sessions are in use, instead of CLI installer
+commands. Tuiminal never restarts the shared service automatically.
 The split's inline `[Esc]` and `[Enter]` actions own their keyboard scope.
 Revalidation failure leaves both terminals and the refreshed report open; success
 closes only those two terminals and retries the exact original profile, directory and
@@ -379,8 +426,26 @@ per provider and origin, but does not apply Global's seven-row or the provider t
 visible-page limit to matches. Cached matches stay usable as more pages arrive; loaders
 remain visible until pending pages finish. Clearing the query or closing the modal stops
 requesting further pages. A page that makes no progress is not retried automatically for
-the same query. Horizontal arrows edit the query while the filter owns focus. `[Enter]` opens the
-selected result. `[Esc]` first unfocuses the filter,
+the same query. A nonempty filter shows a clickable `[Enter] Search agents` action on
+its right. Pressing `[Enter]` in that filter or clicking the action starts fresh reads for
+Codex, Claude and OpenCode, locally and on the active remote profile, even if the cached
+lists were exhausted or a previous request failed. It bypasses the remote refresh throttle,
+selects Global and requests up to 120 summaries per source in one refresh rather than ten
+12-row refreshes. Codex follows any smaller server pages over the same connection. The
+six sources load independently. Local Claude queries
+the official `claude agents --json --all` roster and merges its background sessions with
+foreground sessions already known to Tuiminal; it does not scan private transcripts.
+Optional Codex/OpenCode response details share a 1.5-second budget per source after the
+list is available; a slow history read does not extend this budget for each row or batch.
+For a valid OpenCode CLI list, that budget also includes optional compatibility and server
+startup work. Unchanged cached responses are reused. Timeouts retain usable summaries and
+cached details; initial listing and SSH connection deadlines remain separate.
+After an explicit search in the current modal, independent source failures are named in the
+results panel and preserve cached conversations. Opening or reopening the modal, or merely
+typing a filter, does not show the search-retry warning for background recent-list failures;
+another search retries them. The action moves focus to the Agents results without opening
+a conversation. Horizontal arrows edit the query while the filter owns
+focus. Outside the filter, `[Enter]` opens the selected result. `[Esc]` first unfocuses the filter,
 then closes the modal. The modal owns input until an enabled action is chosen or
 cancelled. There is no timeout. Unknown or disabled actions leave it open.
 Repeating the Master Key sends its literal
@@ -396,7 +461,8 @@ settings, and `[Q]` requests application exit. In the Terminal header these glob
 shortcut tokens remain muted until the Master Key is active, when they use the fixed
 blue brand accent. The temporary `[1]`–`[9]` sidebar labels use that same blue without
 changing the sidebar's geometry. The sidebar's New agent button opens the agent
-creation flow directly.
+creation flow directly. The configured Master Key hint uses fixed purple (`#A855F7`)
+in the sidebar, tutorial and sync tags, retaining its traveling highlight.
 
 Master Key then `[M]` closes the action modal and enters box-selection mode for
 the visible sidebar, terminal panes, remote setup guides, sent-message history, and Live Diff panels. The box
@@ -525,11 +591,17 @@ time or change time moved. Quiet paths still appear in the review and are synchr
 normally; the distinction affects only the settled pane tag.
 
 Synchronization confirmation, progress and review use compact centered surfaces with
-consistent outer margins. Their header and footer bands separate status from actions;
-primary and cancel actions occupy opposite footer edges. In the review, pagination
-stays beside the page counter above the automatic-sync control instead of competing
-with the destructive confirmation row. The change list receives the flexible height,
-and all three surfaces clamp to the available terminal dimensions.
+consistent outer margins. A shared route card identifies **Remote → Local**, the owning
+session's SSH alias and remote directory, and the local destination. Confirmation and
+progress size to their content. Cancel sits on the left and confirmation on the right;
+narrow footers stack these actions without shortening the replacement warning.
+The review uses semantic colors for change counts and status labels, alternating path
+rows, and display-width-aware columns. Counts wrap on narrow terminals. Pagination and
+the scrolling hint stay above the automatic-sync control, separate from confirmation.
+Short terminals scroll the review details with the files and move automatic-sync help
+into that scrollable content; actions remain fixed. Progress keeps its phase, percentage
+and cancellation visible, including while restoring the local copy. All three surfaces
+clamp to the available terminal dimensions.
 
 Only new or content-changed regular-file bytes cross SSH. A separate installed helper
 performs enumeration, hashing, snapshot I/O, transfer and publication so the terminal
@@ -686,7 +758,7 @@ unchanged lines and line-number-only shifts are not added. When a line leaves
 the patch, it has no remaining row to highlight. Edits between two polling rounds
 are shown as one observed change. Highlighting never moves a manually scrolled
 preview or changes the PTY.
-Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the same gradual per-character shimmer curve, palette target, frame count, and cadence as Term Agents shortcut keys while preserving its syntax color as the base.
+Rows classify final Git changes as New, Edit, Delete, Rename, Copy, or Type. New uses the palette's purple with a light sweep, Edit and Type use its warning yellow, Delete uses red, Rename uses the focus color, and Copy uses green. Text on persistently blue recent-change lines uses the shared gradual per-character shimmer curve, palette target, frame count, and cadence while preserving its syntax color as the base.
 elapsed time and additions use the palette's blue, and deletions use its red.
 The path shows the project, an omitted-ancestors marker and only the file's
 immediate parent folder; folder names are middle-truncated to 12 display cells.

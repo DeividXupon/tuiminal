@@ -1,12 +1,18 @@
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef, useState } from "react"
 import type { RemoteProjectSyncChange, RemoteProjectSyncReview } from "../model/remote-project-sync"
-import { RemoteProjectSyncAutomaticControl } from "./RemoteProjectSyncAutomaticControl"
-import { TerminalInlineButton } from "./TerminalShortcut"
+import type { RemoteCodexTarget } from "../model/sessions"
+import { RemoteProjectSyncActions, syncActionsStacked } from "./RemoteProjectSyncActions"
+import {
+  RemoteProjectSyncAutomaticControl,
+  RemoteProjectSyncAutomaticHint,
+} from "./RemoteProjectSyncAutomaticControl"
+import { RemoteProjectSyncRoute } from "./RemoteProjectSyncRoute"
+import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
 function consume(key: KeyEvent) {
   key.preventDefault()
@@ -22,7 +28,9 @@ function changeLabel(change: RemoteProjectSyncChange) {
 
 function changeColor(change: RemoteProjectSyncChange) {
   if (change.localChanged) return COLORS.danger
-  return COLORS.muted
+  if (change.action === "add") return COLORS.success
+  if (change.action === "delete") return COLORS.warning
+  return COLORS.terminal
 }
 
 function displayPath(path: string, width: number) {
@@ -31,6 +39,7 @@ function displayPath(path: string, width: number) {
 
 export function RemoteProjectSyncPreviewDialog({
   review,
+  remote,
   automatic,
   onToggleAutomatic,
   onPage,
@@ -39,6 +48,7 @@ export function RemoteProjectSyncPreviewDialog({
   inactive = false,
 }: {
   review: RemoteProjectSyncReview
+  remote?: RemoteCodexTarget | undefined
   automatic: boolean
   onToggleAutomatic: () => void
   onPage: (offset: number) => void
@@ -50,8 +60,39 @@ export function RemoteProjectSyncPreviewDialog({
   const dialog = useRef<BoxRenderable | null>(null)
   const list = useRef<ScrollBoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
-  const width = Math.max(1, Math.min(88, dimensions.width - 6))
-  const height = Math.max(1, Math.min(24, dimensions.height - 4))
+  const width = Math.max(1, Math.min(88, dimensions.width - 2))
+  const contentWidth = Math.max(1, width - 4)
+  const compact = dimensions.height < 22
+  const label = review.hasLocalChanges ? "[Enter] Substituir e sincronizar" : "[Enter] Sincronizar"
+  const stacked = syncActionsStacked(contentWidth, label)
+  const counts = [
+    { label: "Novo", value: review.counts.add, color: COLORS.success },
+    { label: "Alterado", value: review.counts.update, color: COLORS.terminal },
+    { label: "Removido", value: review.counts.delete, color: COLORS.warning },
+    { label: "Conflito", value: review.counts.conflict, color: COLORS.danger },
+  ]
+  const countWidth =
+    Math.max(...counts.map((item) => displayWidth(`${translateUi(item.label)} ${item.value}`))) + 2
+  const countRows = countWidth * 4 > contentWidth - 1 ? 2 : 1
+  const statusWidth =
+    Math.max(
+      ...["Novo", "Alterado", "Removido", "Conflito"].map((label) =>
+        displayWidth(translateUi(label)),
+      ),
+    ) + 2
+  const height = Math.max(
+    1,
+    Math.min(
+      26,
+      dimensions.height - 2,
+      13 +
+        Number(!!remote) +
+        countRows +
+        Number(stacked) +
+        Math.max(1, review.changes.length) +
+        (review.hasLocalChanges ? 2 : 0),
+    ),
+  )
   const [listWidth, setListWidth] = useState(Math.max(1, width - 4))
   const previousOffset = Math.max(0, review.offset - review.pageSize)
   const pageEnd = review.offset + review.changes.length
@@ -61,6 +102,10 @@ export function RemoteProjectSyncPreviewDialog({
   useEffect(() => {
     if (!inactive) dialog.current?.focus()
   }, [inactive])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each fetched page begins at its first row.
+  useEffect(() => {
+    list.current?.scrollTo(0)
+  }, [review.offset])
   const handleKey = (key: Parameters<Parameters<typeof useKeyboard>[0]>[0]) => {
     const name = key.name.toLowerCase()
     if (name === "a") {
@@ -94,49 +139,23 @@ export function RemoteProjectSyncPreviewDialog({
       height={height}
       borderColor={review.hasLocalChanges ? COLORS.warning : COLORS.border}
       zIndex={830}
-      onBackdropPress={onClose}
+      onBackdropPress={() => {
+        if (!inactive) onClose()
+      }}
     >
       <box
         id="terminal-project-sync-preview-header"
         style={{
-          height: 2,
+          height: 1,
           flexShrink: 0,
         }}
       >
         <text
           content={translateUi("ITENS FORA DE SINCRONIA")}
+          wrapMode="none"
           style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
         />
-        <text
-          content={`${translateUi("Novo")}: ${review.counts.add} · ${translateUi("Alterado")}: ${review.counts.update} · ${translateUi("Removido")}: ${review.counts.delete} · ${translateUi("Conflito")}: ${review.counts.conflict}`}
-          wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-        />
       </box>
-      <box id="terminal-project-sync-preview-path" style={{ height: 1, flexShrink: 0 }}>
-        <text
-          content={truncateDisplay(review.localPath, Math.max(1, width - 4))}
-          wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-        />
-      </box>
-      {review.hasLocalChanges && (
-        <box
-          id="terminal-project-sync-preview-warning"
-          style={{
-            height: 2,
-            flexShrink: 0,
-          }}
-        >
-          <text
-            content={translateUi(
-              "As alterações locais destacadas serão substituídas pelo projeto remoto.",
-            )}
-            wrapMode="word"
-            style={{ height: 2, flexShrink: 0, fg: COLORS.warning }}
-          />
-        </box>
-      )}
       <scrollbox
         ref={list}
         id="terminal-project-sync-changes"
@@ -147,35 +166,85 @@ export function RemoteProjectSyncPreviewDialog({
         }}
         style={{
           flexGrow: 1,
-          minHeight: 3,
-          border: ["top", "bottom"],
-          borderColor: COLORS.border,
+          minHeight: 1,
+          marginTop: compact ? 0 : 1,
         }}
       >
+        {review.hasLocalChanges && (
+          <box
+            id="terminal-project-sync-preview-warning"
+            style={{ flexShrink: 0, marginBottom: compact ? 0 : 1 }}
+          >
+            <text
+              content={translateUi(
+                "As alterações locais destacadas serão substituídas pelo projeto remoto.",
+              )}
+              wrapMode="word"
+              style={{ flexShrink: 0, fg: COLORS.warning }}
+            />
+          </box>
+        )}
+        <box
+          id="terminal-project-sync-preview-path"
+          style={{ flexShrink: 0, marginBottom: compact ? 0 : 1 }}
+        >
+          <RemoteProjectSyncRoute
+            localPath={review.localPath}
+            remote={remote}
+            width={listWidth - 1}
+          />
+        </box>
+        <box id="terminal-project-sync-counts" style={{ height: countRows, flexShrink: 0 }}>
+          {(countRows === 1 ? [counts] : [counts.slice(0, 2), counts.slice(2)]).map((row) => (
+            <box
+              key={row.map((item) => item.label).join("-")}
+              style={{ height: 1, flexDirection: "row" }}
+            >
+              {row.map((item) => (
+                <text
+                  key={item.label}
+                  content={`${translateUi(item.label)} ${item.value}`}
+                  wrapMode="none"
+                  style={{
+                    width: countRows === 1 ? "25%" : "50%",
+                    fg: item.value ? item.color : COLORS.muted,
+                  }}
+                />
+              ))}
+            </box>
+          ))}
+        </box>
+        {compact && automatic && <RemoteProjectSyncAutomaticHint automatic={automatic} />}
         {review.changes.map((change, index) => {
           const label = changeLabel(change)
-          const statusWidth = 11
           return (
             <box
               key={`${change.path}\0${change.action}`}
               id={`terminal-project-sync-change-${review.offset + index}`}
-              style={{ height: 1, flexShrink: 0, flexDirection: "row" }}
+              style={{
+                height: 1,
+                flexShrink: 0,
+                flexDirection: "row",
+                backgroundColor: index % 2 === 0 ? COLORS.panel : COLORS.canvas,
+              }}
             >
               <text
-                content={label.padEnd(statusWidth)}
+                content={label}
                 wrapMode="none"
                 style={{ width: statusWidth, flexShrink: 0, fg: changeColor(change) }}
               />
               <text
-                content={displayPath(change.path, Math.max(1, listWidth - statusWidth))}
+                content={displayPath(change.path, Math.max(1, listWidth - statusWidth - 1))}
                 wrapMode="none"
                 style={{ flexGrow: 1, fg: COLORS.text }}
               />
             </box>
           )
         })}
+        {compact && !automatic && <RemoteProjectSyncAutomaticHint automatic={automatic} />}
       </scrollbox>
       <box
+        id="terminal-project-sync-pagination"
         style={{
           height: 1,
           flexShrink: 0,
@@ -184,16 +253,18 @@ export function RemoteProjectSyncPreviewDialog({
         }}
       >
         <text
-          content={`${review.offset + 1}–${Math.min(pageEnd, review.changeCount)} / ${review.changeCount}`}
+          content={`${review.changeCount ? review.offset + 1 : 0}–${Math.min(pageEnd, review.changeCount)} / ${review.changeCount}`}
           wrapMode="none"
           style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
         />
+        <TerminalShortcutText content="[↑/↓]" style={{ fg: COLORS.muted }} />
         <box style={{ height: 1, flexShrink: 0, flexDirection: "row", gap: 1 }}>
           {hasPrevious && (
             <TerminalInlineButton
               id="terminal-project-sync-previous-page"
               compact
-              label="[←] Anterior"
+              label={contentWidth >= 64 ? "[←] Anterior" : "[←]"}
+              disabled={inactive}
               onPress={() => onPage(previousOffset)}
             />
           )}
@@ -201,38 +272,32 @@ export function RemoteProjectSyncPreviewDialog({
             <TerminalInlineButton
               id="terminal-project-sync-next-page"
               compact
-              label="[→] Próxima"
+              label={contentWidth >= 64 ? "[→] Próxima" : "[→]"}
+              disabled={inactive}
               onPress={() => onPage(nextOffset)}
             />
           )}
         </box>
       </box>
-      <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
-      <box
-        id="terminal-project-sync-preview-actions"
-        style={{
-          height: 1,
-          flexShrink: 0,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <TerminalInlineButton
-          id="terminal-project-sync-confirm-changes"
-          compact
-          accent={review.hasLocalChanges ? COLORS.warning : COLORS.terminal}
-          label={
-            review.hasLocalChanges ? "[Enter] Substituir e sincronizar" : "[Enter] Sincronizar"
-          }
-          onPress={onConfirm}
-        />
-        <TerminalInlineButton
-          id="terminal-project-sync-cancel-changes"
-          compact
-          label="[Esc] Cancelar"
-          onPress={onClose}
+      <box style={{ flexShrink: 0, marginTop: compact ? 0 : 1, marginBottom: compact ? 0 : 1 }}>
+        <RemoteProjectSyncAutomaticControl
+          automatic={automatic}
+          onToggle={onToggleAutomatic}
+          compact={compact}
+          inactive={inactive}
         />
       </box>
+      <RemoteProjectSyncActions
+        id="terminal-project-sync-preview-actions"
+        confirmId="terminal-project-sync-confirm-changes"
+        cancelId="terminal-project-sync-cancel-changes"
+        label={label}
+        width={contentWidth}
+        warning={review.hasLocalChanges}
+        inactive={inactive}
+        onConfirm={onConfirm}
+        onClose={onClose}
+      />
     </ModalSurface>
   )
 }

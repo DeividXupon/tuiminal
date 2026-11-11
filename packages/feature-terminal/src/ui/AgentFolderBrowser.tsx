@@ -136,7 +136,16 @@ export function AgentFolderBrowser({
       id="terminal-dialog-folder-browser"
       dialogFocusable={false}
       width={width}
-      height={Math.max(1, Math.min(25, dimensions.height - 2))}
+      height={Math.max(
+        1,
+        Math.min(
+          25,
+          dimensions.height - 2,
+          6 +
+            Math.max(1, search.rows.length) +
+            Number(Boolean(error || search.error || search.result?.truncated)),
+        ),
+      )}
       zIndex={820}
       borderColor={COLORS.terminal}
       onBackdropPress={onClose}

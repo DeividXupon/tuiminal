@@ -89,7 +89,10 @@ only busy or blocker evidence: they stay unknown when no reliable live idle
 control exists. OMP and MastraCode are identified by name but remain unknown
 without an authoritative integration or safe local screen signal. Idle Codex
 titles only finish a turn after an observed busy title; an arbitrary shell title
-cannot claim completion. Viewer screens preserve state.
+cannot claim completion. Codex's live elapsed-time row also counts as working when
+its `esc to interrupt` hint is clipped with an ellipsis to fit a narrow pane, as long
+as the elapsed time and `esc` prefix remain visible. A later response/completion row
+still invalidates a historical activity row. Viewer screens preserve state.
 The OpenCode profile treats its bottom `esc interrupt` control as working even when
 the same row also contains command hints, and treats the idle `ctrl+p commands`
 footer as an explicit prompt. Its current tool rows refine working into reading,
@@ -156,6 +159,36 @@ state does not notify again. Visible panes, including both halves of a split,
 do not pop a redundant alert. A notification click opens the exact existing
 session in Terminal and dismisses the card; its close control only dismisses.
 The notification does not take keyboard focus, submit input, or auto-approve.
+
+### Agent sounds
+
+Only Term Agents exposes the **Agent sounds** settings category. Question/approval,
+successful completion, and error each have a persisted sound choice or **No sound**.
+Questions offer `question_004`, `question_003`, and `question_002`; completion offers
+`select_004`, `select_005`, and `select_006`; errors offer `error_005`. The first
+recording in each list is the default. `[1/2/3]` selects an event, `[H/L/←/→]`
+changes its recording, and `[P]` previews it. Mouse controls offer the same actions.
+Preview failures report unavailable playback or an audio-output failure inline.
+Leaving the category cancels its preview.
+
+Sounds are independent of visual toast visibility. Integrated providers use live
+lifecycle transitions, while screen-only agents require the existing confirmed
+idle observation after work. Hydrating or reopening a completed task, repeated
+state snapshots, title changes, and acknowledging completion do not replay sounds.
+Explicit failed turns and agent process failures play the error sound; interrupted
+turns and unknown activity do not imply success. Ordinary shell exits do not play
+agent sounds. An unstructured agent's textual error output is not classified.
+
+The seven Kenney Interface Sounds 1.0 recordings (CC0) are embedded as base64 PCM
+WAV in the Terminal payload, with source hashes and the upstream license retained.
+No project files, external downloads, or project-local executables are needed for
+playback. One owned player runs at a time, using `afplay` on macOS, Windows
+PowerShell SoundPlayer, or installed Linux `pw-play`, `paplay`, then `aplay`.
+Playback has a five-second deadline; cancellation/shutdown retires its child before
+removing its temporary directory. Automatic playback failure leaves visual alerts
+usable. Tests/demos set `TUIMINAL_AGENT_SOUNDS=0` to disable automatic playback.
+Audio plays on the machine running Tuiminal, including for integrated remote
+agents; running Tuiminal itself over SSH does not forward audio to the client.
 
 A live working row keeps its existing animated loader in the first line. Agents
 already discovered in tmux remain best-effort screen observations, so their rows do
@@ -252,7 +285,10 @@ fallback title. No private reasoning or transcript file is read. Detailed histor
 UUID session ID, origin, directory, 60-character title, state and timestamps for
 sessions Tuiminal started; prompt previews and final responses are not persisted. Resume
 uses the exact `claude --resume <id>` only for UUID session IDs, cwd and original local origin or SSH profile, alias and
-host. Other conversations remain available through Claude's own `/resume`.
+host. Explicit Master Key searches also query the official local
+`claude agents --json --all` roster and merge background sessions discovered outside
+Tuiminal with this index. Foreground conversations outside the index remain available
+through Claude's own `/resume`; the search does not read private transcript files.
 
 For SSH projects, Claude Code 2.1.285 or newer first tries to create an empty official
 background session with a preselected UUID, then attaches its TUI, or attaches the
@@ -386,10 +422,21 @@ user-message history in memory, limits each entry to 4,000 code points, and clea
 on restart or close until the thread is hydrated again. Screen-observed native,
 tmux, and external agents do not offer this structured history.
 
+The Codex TUI's hidden `thread_title` requests remain fully forwarded but do not
+select a visible conversation. Their request responses and subsequent thread events
+cannot replace its task title, history, activity or hydration. Identification uses
+the public `threadSource` classification and correlated thread IDs, never prompt text;
+user-created ephemeral threads remain observable.
+
 For integrated Codex sessions, `turn/completed` determines completion and public
-item events determine visible activity. State is scoped to the selected thread and
-turn; late item events cannot reopen a completed turn. Approval requests, blocking
-user-input requests and MCP elicitations stay blocked until resolved, with concurrent
+item events determine visible activity. A correlated successful `turn/start` response
+with an `inProgress` turn also starts activity when `turn/started` is absent; duplicate
+start evidence cannot reset an active turn or its pending approvals. State is scoped
+to the selected thread and turn; late item events cannot reopen a completed turn.
+A later public `thread/status/changed` transition to active resumes working or blocked
+state even when turn-start evidence is absent. Events for already completed turns
+remain ignored while the observer acquires the new turn identity.
+Approval requests, blocking user-input requests and MCP elicitations stay blocked until resolved, with concurrent
 requests tracked independently. Nonblocking questions do not pause activity. Both
 approval and user-input waiting flags are restored on resume. Explicit thread idle
 clears stale working state without claiming success or acknowledging unseen completion.
@@ -429,7 +476,16 @@ Integrated Codex, Claude Code and OpenCode sessions use the first nonempty user
 message as a temporary sidebar task title until the provider publishes a name.
 Codex and OpenCode also use their public message history for unnamed resumed
 conversations; older history pages can supply an earlier prompt. Generated or
-manually assigned provider titles take precedence over later messages. Fallbacks
+manually assigned provider titles take precedence over later messages.
+Integrated Codex uses only the public thread name and the first prompt as its
+fallback; OSC 0/2 terminal titles do not affect its sidebar task title. Resuming
+the same thread preserves its known name and first prompt when metadata omits the
+name; switching threads clears that context. Public `thread/read` and `thread/list`
+responses from the TUI and recent-thread queries supply the selected thread's name.
+Until a live rename is observed, a coalesced `thread/read` without turns also refreshes
+that name on user submissions and turn completion. Newer metadata can replace an
+older metadata name; stale responses cannot overwrite newer snapshots or live renames.
+Later prompts never replace a known conversation name. Fallbacks
 use the same sanitization and 160-grapheme limit as published titles, remain
 display-only, and stay scoped to the selected conversation. Screen-only agents
 do not infer prompts from keystrokes or terminal output.

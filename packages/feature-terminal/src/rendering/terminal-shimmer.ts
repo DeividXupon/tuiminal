@@ -1,2 +1,4 @@
-export const TERMINAL_SHIMMER_FRAME_MS = 60
-export const TERMINAL_SHIMMER_FRAME_COUNT = 28
+export {
+  TEXT_SHIMMER_FRAME_COUNT as TERMINAL_SHIMMER_FRAME_COUNT,
+  TEXT_SHIMMER_FRAME_MS as TERMINAL_SHIMMER_FRAME_MS,
+} from "@xupon/tuiminal-core/ui/text-shimmer"

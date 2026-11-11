@@ -292,6 +292,9 @@ function SidebarApp({
           onLoadMoreThreads={(providerId) => {
             void sendPinnedSidebarTarget(endpoint, { loadMoreResumeProvider: providerId })
           }}
+          onSearchThreads={() => {
+            void sendPinnedSidebarTarget(endpoint, { refreshResumeThreads: true })
+          }}
           onAction={(key) => void runAction(key)}
           onSelectThread={(thread) => {
             setLeaderActive(false)

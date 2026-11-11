@@ -849,12 +849,33 @@ test("Master Key R offers a local destination only for the active remote Codex",
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-folder-browser")).toBeUndefined()
 })
 
-test("project environment picker has a single navigation footer without reload", async () => {
+test("Master Key dot offers uploads only for remote agents and consumes the modal Escape", async () => {
+  await mount()
+  await launchAgent()
+  await leader(".")
+  expect(tui?.renderer.root.findDescendantById("terminal-agent-files-dialog")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-actions")).toBeDefined()
+  await key("escape")
+  await launchAgent(true)
+  const terminal = focusedTerminal()
+  await leader(".")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-agent-files-dialog")
+  expect(tui?.captureCharFrame()).toContain("Solte arquivos aqui")
+  await key("escape")
+  expect(tui?.renderer.root.findDescendantById("terminal-agent-files-dialog")).toBeUndefined()
+  expect(focusedTerminal()).toBe(terminal)
+})
+
+test("project environment picker keeps its actions together without reload", async () => {
   await mount()
   await openAgentProjects()
   await key("e")
   const frame = tui?.captureCharFrame() ?? ""
-  expect(frame).toContain("[↑/↓] navegar · [Enter] selecionar · [Esc] cancelar")
+  expect(frame).toContain("[↑/↓] Navegar")
+  expect(frame).toContain("[Enter] Selecionar")
+  expect(renderable("terminal-dialog-project-environment-select").screenY).toBe(
+    renderable("terminal-dialog-project-environment-cancel").screenY,
+  )
   expect(frame).not.toContain("[R] Recarregar")
   await key("r")
   expect(
@@ -1328,6 +1349,7 @@ test("the compatibility guide retries the exact remote resumed conversation", as
     compatible: true,
     reason: null,
     remoteVersion: "0.157.9",
+    remoteAppServerVersion: "0.157.9",
     remoteUserAgent: "codex_cli_rs/0.157.9",
   })
   liveDiffSpies.push(preflight)
@@ -1397,7 +1419,7 @@ test("Master Key idle time uses the light palette's primary text color", async (
 })
 
 test.each([false, true])(
-  "Codex prompt titles update the sidebar before generated titles without replacing the pane (remote=%s)",
+  "Codex ignores terminal titles and uses prompt then thread name without replacing the pane (remote=%s)",
   async (remote) => {
     updateUiSettings({
       terminalRemoteCodexProfiles: [{ id: "work", name: "Work", host: "work" }],
@@ -1431,6 +1453,13 @@ test.each([false, true])(
     const titleText = () => tui?.captureCharFrame().split("\n")[renderable(titleId).screenY]
     expect(titleText()).toContain("Corrigir login")
     await act(async () => {
+      starts[0]?.onData(new TextEncoder().encode("\x1b]2;Codex | tuiminal-sync\x07"))
+      events.onState("working")
+      events.onActivity("coding")
+    })
+    await tui?.renderOnce()
+    expect(titleText()).toContain("Corrigir login")
+    await act(async () => {
       inspectUpstreamFrame(
         JSON.stringify({
           method: "thread/name/updated",
@@ -1443,8 +1472,124 @@ test.each([false, true])(
     })
     await tui?.renderOnce()
     expect(titleText()).toContain("Autenticação")
+    await act(async () => {
+      inspectClientFrame(
+        JSON.stringify({
+          id: "helper",
+          method: "thread/start",
+          params: { ephemeral: true, threadSource: "thread_title" },
+        }),
+        relay,
+        events,
+        1,
+      )
+      inspectUpstreamFrame(
+        JSON.stringify({
+          id: "helper",
+          result: { thread: { id: "helper", name: null, turns: [] } },
+        }),
+        relay,
+        events,
+        1,
+      )
+      inspectClientFrame(
+        JSON.stringify({
+          id: "helper-turn",
+          method: "turn/start",
+          params: {
+            threadId: "helper",
+            input: [{ type: "text", text: "Generate a concise, single-line task title" }],
+          },
+        }),
+        relay,
+        events,
+        1,
+      )
+      inspectUpstreamFrame(
+        JSON.stringify({
+          method: "turn/completed",
+          params: { threadId: "helper", turn: { id: "helper-turn", status: "completed" } },
+        }),
+        relay,
+        events,
+        1,
+      )
+    })
+    await tui?.renderOnce()
+    expect(titleText()).toContain("Autenticação")
+    expect(tui?.captureCharFrame().split("\n")[row.screenY]).toContain("Codificando")
+    await act(async () => {
+      const client = (message: unknown) =>
+        inspectClientFrame(JSON.stringify(message), relay, events, 1)
+      client({ id: 2, method: "thread/resume", params: { threadId: "thread-one" } })
+      inspectUpstreamFrame(
+        JSON.stringify({
+          id: 2,
+          result: { thread: { id: "thread-one", name: null, turns: [] } },
+        }),
+        relay,
+        events,
+        1,
+      )
+      client({
+        id: 3,
+        method: "turn/start",
+        params: {
+          threadId: "thread-one",
+          input: [{ type: "text", text: "Agora adicione testes" }],
+        },
+      })
+    })
+    await tui?.renderOnce()
+    expect(titleText()).toContain("Autenticação")
+    expect(titleText()).not.toContain("Agora adicione testes")
     expect(renderable(`terminal-agent-${sessionId}`) === row).toBe(true)
     expect(focusedTerminal() === terminal).toBe(true)
+    expect(starts).toHaveLength(1)
+  },
+)
+
+test.each([false, true])(
+  "Codex sidebar resumes activity after completion from thread status (remote=%s)",
+  async (remote) => {
+    updateUiSettings({
+      terminalRemoteCodexProfiles: [{ id: "work", name: "Work", host: "work" }],
+      terminalRemoteCodexActiveProfileId: "work",
+    })
+    await mount(false, 140, 36)
+    await launchAgent(remote)
+    const events = codexEvents
+    if (!events) throw new Error("Expected Codex events")
+    const terminal = focusedTerminal()
+    const sessionId = terminal.id.replace("term-agents-", "")
+    const row = renderable(`terminal-agent-${sessionId}`)
+    const relay = createCodexRelay()
+    const server = (method: string, params: Record<string, unknown>) =>
+      inspectUpstreamFrame(
+        JSON.stringify({ method, params: { threadId: "thread-one", ...params } }),
+        relay,
+        events,
+        1,
+      )
+    const rowText = () => tui?.captureCharFrame().split("\n")[row.screenY]
+    await act(async () => {
+      server("thread/name/updated", { threadName: "Autenticação" })
+      server("turn/started", { turn: { id: "turn-1", status: "inProgress" } })
+      server("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    })
+    await tui?.renderOnce()
+    expect(rowText()).toContain("Concluído")
+    await act(async () => {
+      server("thread/status/changed", { status: { type: "active", activeFlags: [] } })
+      server("item/started", { turnId: "turn-2", item: { type: "commandExecution" } })
+      server("turn/completed", { turn: { id: "turn-1", status: "completed" } })
+    })
+    await tui?.renderOnce()
+    expect(rowText()).toContain("Executando")
+    expect(rowText()).not.toContain("Concluído")
+    expect(tui?.captureCharFrame()).toContain("Autenticação")
+    expect(renderable(`terminal-agent-${sessionId}`)).toBe(row)
+    expect(focusedTerminal()).toBe(terminal)
     expect(starts).toHaveLength(1)
   },
 )
@@ -1668,7 +1813,7 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   await click(`term-agents-${sessionId}`)
   expect(focusedTerminal()).toBe(terminal)
   expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
-  expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanColor("[M]", messageHeading)).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   await click(`agent-message-history-${sessionId}`)
   expect(app.renderer.currentFocusedRenderable?.id).toBe(`agent-message-history-${sessionId}`)
   expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
@@ -1732,7 +1877,7 @@ test("Master Key S opens a navigable sent-message history below the agent termin
   await key("escape")
   expect(focusedTerminal()).toBe(terminal)
   expect(spanColor("[J/K]", panel.screenY + panel.height - 1)).toEqual(
-    RGBA.fromHex(COLORS.muted).toInts(),
+    RGBA.fromHex(BRAND_COLOR).toInts(),
   )
 
   await leader("d")
@@ -1766,11 +1911,13 @@ test("Master Key opens a centered searchable modal and Escape restores terminal 
   const newCodex = renderable("terminal-action-a")
   const sentMessages = renderable("terminal-action-s")
   const liveDiff = renderable("terminal-action-d")
+  const uploadFiles = renderable("terminal-action-.")
   const remoteSync = renderable("terminal-action-r")
   const chooseBox = renderable("terminal-action-m")
   expect(sentMessages.screenY).toBe(newCodex.screenY + 2)
   expect(liveDiff.screenY).toBe(sentMessages.screenY + 2)
-  expect(remoteSync.screenY).toBe(liveDiff.screenY + 2)
+  expect(uploadFiles.screenY).toBe(liveDiff.screenY + 2)
+  expect(remoteSync.screenY).toBe(uploadFiles.screenY + 2)
   expect(chooseBox.screenY).toBe(remoteSync.screenY + 2)
   expect(tui?.renderer.root.findDescendantById("terminal-action-g")).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-action-c")).toBeDefined()
@@ -2902,7 +3049,7 @@ test("Live Diff polls every 250 ms beside an agent without restarting its termin
   await key("escape")
   expect(focusedTerminal()).toBe(terminal)
   expect(panel.borderColor.toInts()).toEqual(RGBA.fromHex(COLORS.border).toInts())
-  expect(spanColor("[H/L]", liveDiffShortcutLine())).toEqual(RGBA.fromHex(COLORS.muted).toInts())
+  expect(spanColor("[H/L]", liveDiffShortcutLine())).toEqual(RGBA.fromHex(BRAND_COLOR).toInts())
   const reads = read.mock.calls.length
   fingerprints.set(0, "fifth")
   await act(async () => Bun.sleep(650))
@@ -3220,6 +3367,7 @@ test("Terminal settings expose no SSH connection or private-key inputs", async (
 test("Remote connection keeps alias actions visible in a short layout", async () => {
   await mount(true, 58, 18)
   await click("tutorial-settings-button")
+  await arrow("down")
   await arrow("down")
   await key("enter")
   await act(async () => Bun.sleep(20))
@@ -3561,95 +3709,120 @@ test("remote compatibility Escape returns to the preserved project selection", a
   })
 })
 
-test("compatibility guide opens local and SSH terminals, revalidates, and relaunches", async () => {
-  await mount(false, 150, 38)
-  codexSpy?.mockRejectedValueOnce(
-    new remoteHandshake.RemoteCodexCompatibilityError(incompatibleReport),
-  )
-  const updatedReport = { ...incompatibleReport, remoteVersion: "0.159.0" }
-  const preflight = spyOn(remoteHandshake, "preflightRemoteCodex")
-    .mockRejectedValueOnce(new remoteHandshake.RemoteCodexCompatibilityError(updatedReport))
-    .mockResolvedValueOnce({
-      ...incompatibleReport,
-      compatible: true,
-      reason: null,
-      remoteVersion: "0.157.9",
-      remoteUserAgent: "codex_cli_rs/0.157.9",
+test.each([false, true])(
+  "compatibility guide opens, revalidates, and relaunches (service skew: %s)",
+  async (serviceSkew) => {
+    const report = serviceSkew
+      ? {
+          ...incompatibleReport,
+          reason: "serviceVersionMismatch" as const,
+          localVersion: "0.166.0",
+          remoteVersion: "0.166.0",
+          remoteDaemonVersion: "0.165.0",
+        }
+      : incompatibleReport
+    await mount(false, 150, 38)
+    codexSpy?.mockRejectedValueOnce(new remoteHandshake.RemoteCodexCompatibilityError(report))
+    const updatedReport = serviceSkew
+      ? { ...report, remoteDaemonVersion: "0.159.0" }
+      : { ...report, remoteVersion: "0.159.0" }
+    const preflight = spyOn(remoteHandshake, "preflightRemoteCodex")
+      .mockRejectedValueOnce(new remoteHandshake.RemoteCodexCompatibilityError(updatedReport))
+      .mockResolvedValueOnce({
+        ...incompatibleReport,
+        compatible: true,
+        reason: null,
+        remoteVersion: "0.157.9",
+        remoteAppServerVersion: "0.157.9",
+        remoteUserAgent: "codex_cli_rs/0.157.9",
+      })
+    liveDiffSpies.push(preflight)
+
+    await launchAgent(true)
+    await waitForRenderable("remote-codex-compatibility-modal")
+    await key("enter")
+    for (
+      let attempt = 0;
+      attempt < 100 &&
+      !tui?.captureCharFrame().includes(serviceSkew ? "SERVIÇO CODEX" : "ATUALIZAR CODEX");
+      attempt++
+    ) {
+      await act(async () => Bun.sleep(2))
+      await tui?.renderOnce()
+    }
+    const guide = tui?.captureCharFrame() ?? ""
+    const title = serviceSkew ? "SERVIÇO CODEX" : "ATUALIZAR CODEX"
+    expect(guide).toContain(`${title} · Local`)
+    expect(guide).toContain(`${title} · work-server`)
+    if (serviceSkew) {
+      expect(guide).toContain("CLI instalado: 0.166.0")
+      expect(guide).toContain("Serviço remoto: 0.165.0")
+      expect(guide).toContain("Os CLIs já usam a mesma versão.")
+      expect(guide).not.toContain("codex update")
+      expect(guide).not.toContain("install.sh")
+    } else {
+      expect(guide).toContain("codex update")
+      expect(guide).toContain("curl -fsSL https://chatgpt.com/codex/install.sh | sh")
+    }
+    expect(
+      commands.some((command) => command.at(0) === "ssh" && command.at(-1) === "work-server"),
+    ).toBe(true)
+    expect(inputs.every((input) => input.length === 0)).toBe(true)
+    for (
+      let attempt = 0;
+      attempt < 100 &&
+      !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+      attempt++
+    ) {
+      await act(async () => Bun.sleep(2))
+      await tui?.renderOnce()
+    }
+    expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+    await key("escape")
+    expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("term-agents-")
+    await leader("m")
+    await arrow("down")
+    await key("enter")
+    for (
+      let attempt = 0;
+      attempt < 100 &&
+      !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
+      attempt++
+    ) {
+      await act(async () => Bun.sleep(2))
+      await tui?.renderOnce()
+    }
+    expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+    await key("enter")
+    for (
+      let attempt = 0;
+      attempt < 100 &&
+      (!tui?.captureCharFrame().includes("0.159.0") ||
+        !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-"));
+      attempt++
+    ) {
+      await act(async () => Bun.sleep(2))
+      await tui?.renderOnce()
+    }
+    expect(tui?.captureCharFrame()).toContain("0.159.0")
+    expect(tui?.captureCharFrame()).toContain(serviceSkew ? "versão diferente" : "incompatíveis")
+    expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
+
+    await key("enter")
+    for (let attempt = 0; attempt < 100 && codexSpy?.mock.calls.length !== 2; attempt++) {
+      await act(async () => Bun.sleep(2))
+      await tui?.renderOnce()
+    }
+    expect(preflight).toHaveBeenCalledTimes(2)
+    expect(codexSpy).toHaveBeenCalledTimes(2)
+    expect(tui?.captureCharFrame()).not.toContain(title)
+    expect(starts.at(-1)).toMatchObject({
+      remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
     })
-  liveDiffSpies.push(preflight)
-
-  await launchAgent(true)
-  await waitForRenderable("remote-codex-compatibility-modal")
-  await key("enter")
-  for (
-    let attempt = 0;
-    attempt < 100 && !tui?.captureCharFrame().includes("ATUALIZAR CODEX");
-    attempt++
-  ) {
-    await act(async () => Bun.sleep(2))
-    await tui?.renderOnce()
-  }
-  const guide = tui?.captureCharFrame() ?? ""
-  expect(guide).toContain("ATUALIZAR CODEX · Local")
-  expect(guide).toContain("ATUALIZAR CODEX · work-server")
-  expect(guide).toContain("codex update")
-  expect(guide).toContain("curl -fsSL https://chatgpt.com/codex/install.sh | sh")
-  expect(
-    commands.some((command) => command.at(0) === "ssh" && command.at(-1) === "work-server"),
-  ).toBe(true)
-  expect(inputs.every((input) => input.length === 0)).toBe(true)
-  for (
-    let attempt = 0;
-    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
-    attempt++
-  ) {
-    await act(async () => Bun.sleep(2))
-    await tui?.renderOnce()
-  }
-  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
-
-  await key("escape")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("term-agents-")
-  await leader("m")
-  await arrow("down")
-  await key("enter")
-  for (
-    let attempt = 0;
-    attempt < 100 && !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-");
-    attempt++
-  ) {
-    await act(async () => Bun.sleep(2))
-    await tui?.renderOnce()
-  }
-  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
-
-  await key("enter")
-  for (
-    let attempt = 0;
-    attempt < 100 &&
-    (!tui?.captureCharFrame().includes("0.159.0") ||
-      !tui?.renderer.currentFocusedRenderable?.id.startsWith("remote-codex-update-"));
-    attempt++
-  ) {
-    await act(async () => Bun.sleep(2))
-    await tui?.renderOnce()
-  }
-  expect(tui?.captureCharFrame()).toContain("0.159.0")
-  expect(tui?.captureCharFrame()).toContain("incompatíveis")
-  expect(tui?.renderer.currentFocusedRenderable?.id).toStartWith("remote-codex-update-")
-
-  await key("enter")
-  for (let attempt = 0; attempt < 100 && codexSpy?.mock.calls.length !== 2; attempt++) {
-    await act(async () => Bun.sleep(2))
-    await tui?.renderOnce()
-  }
-  expect(preflight).toHaveBeenCalledTimes(2)
-  expect(codexSpy).toHaveBeenCalledTimes(2)
-  expect(tui?.captureCharFrame()).not.toContain("ATUALIZAR CODEX")
-  expect(starts.at(-1)).toMatchObject({
-    remote: { profile: { id: "work-server" }, workingDirectory: "/srv/project" },
-  })
-})
+  },
+)
 
 test("OpenCode incompatibility opens its update split, revalidates, and relaunches", async () => {
   await mount(false, 150, 38)
@@ -4026,12 +4199,53 @@ test("project picker adds discovered Git repositories without duplicating recent
   expect(tui?.captureCharFrame()).toContain("Projetos Git encontrados")
   expect(tui?.captureCharFrame()).toContain("discovered-git")
   expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-row-3")).toBeUndefined()
-  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-search")).toBeUndefined()
+  expect(tui?.renderer.root.findDescendantById("terminal-dialog-project-search")).toBeDefined()
   await selectProjectRemote()
   expect(tui?.captureCharFrame()).toContain("remote-git")
   expect(tui?.captureCharFrame()).not.toContain("discovered-git")
   await click("terminal-dialog-project-launch")
   expect(starts.at(-1)).toMatchObject({ remote: { workingDirectory: "/srv/remote-git" } })
+})
+
+test("project search filters paths, keeps editing keys local and launches only visible matches", async () => {
+  await mount()
+  const discovery = spyOn(gitProjects, "discoverAgentGitProjects").mockResolvedValue({
+    paths: ["/synthetic/alpha", "/synthetic/pejk-one", "/synthetic/pejk-two"],
+    truncated: false,
+  })
+  liveDiffSpies.push(discovery)
+  await openAgentProjects()
+  await key("/")
+  const search = tui?.renderer.root.findDescendantById(
+    "terminal-dialog-project-search",
+  ) as InputRenderable
+  expect(tui?.renderer.currentFocusedRenderable).toBe(search)
+  expect(search.value).toBe("")
+  await act(async () => tui?.mockInput.typeText("SYNTHETIC/pejk"))
+  await tui?.renderOnce()
+  expect(search.value).toBe("SYNTHETIC/pejk")
+  expect(tui?.captureCharFrame()).not.toContain("/synthetic/alpha")
+  expect(tui?.captureCharFrame()).toContain("pejk-one")
+  expect(tui?.captureCharFrame()).toContain("pejk-two")
+  expect(commands).toHaveLength(0)
+  await key("escape")
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-dialog-project-picker")
+  expect(search.value).toBe("SYNTHETIC/pejk")
+  await click("terminal-dialog-project-search-focus")
+  expect(tui?.renderer.currentFocusedRenderable).toBe(search)
+  await act(async () => tui?.mockInput.typeText("-missing"))
+  await tui?.renderOnce()
+  expect(tui?.captureCharFrame()).toContain("Nenhum projeto corresponde à pesquisa.")
+  await key("enter")
+  await click("terminal-dialog-project-launch")
+  expect(commands).toHaveLength(0)
+  await act(async () => {
+    for (let index = 0; index < "-missing".length; index++) tui?.mockInput.pressBackspace()
+  })
+  await tui?.renderOnce()
+  await arrow("down")
+  await key("enter")
+  expect(starts.at(-1)).toMatchObject({ cwd: "/synthetic/pejk-two" })
 })
 
 test("editing a folder parent aborts its old query and ignores a delayed reply", async () => {

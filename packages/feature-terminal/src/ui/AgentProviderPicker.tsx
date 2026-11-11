@@ -41,6 +41,7 @@ export function AgentProviderPicker({
   })
   return (
     <ModalSurface
+      fitContent
       dialogRef={dialog}
       id="terminal-dialog-agent-provider"
       width={Math.max(1, Math.min(64, dimensions.width - 2))}

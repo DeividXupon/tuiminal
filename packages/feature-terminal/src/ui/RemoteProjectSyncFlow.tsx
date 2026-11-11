@@ -49,6 +49,7 @@ export function RemoteProjectSyncFlow({
     return (
       <RemoteProjectSyncDialog
         kind="destination"
+        remote={owner.agentLaunch?.remote}
         localPath={flow.localPath}
         onConfirm={() => onSync(owner, flow.localPath)}
         onClose={onClose}
@@ -57,6 +58,7 @@ export function RemoteProjectSyncFlow({
   if (flow.kind === "progress")
     return (
       <RemoteProjectSyncProgressDialog
+        remote={owner.agentLaunch?.remote}
         localPath={flow.localPath}
         status={statuses.get(owner.id)}
         automatic={automaticFor(owner)}
@@ -66,6 +68,7 @@ export function RemoteProjectSyncFlow({
     )
   return (
     <RemoteProjectSyncPreviewDialog
+      remote={owner.agentLaunch?.remote}
       review={flow.review}
       automatic={automaticFor(owner)}
       onToggleAutomatic={() => onToggleAutomatic(owner)}

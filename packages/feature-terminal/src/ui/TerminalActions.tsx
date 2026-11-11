@@ -3,7 +3,6 @@ import { useKeyboard } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { altNumberShortcut } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useAgentResumeSearch } from "../hooks/use-agent-resume-search"
@@ -18,10 +17,13 @@ import {
 } from "../model/agent-resume-thread"
 import { TERMINAL_ACTION_TAG_LABELS, TERMINAL_ACTIONS } from "../model/terminal-actions"
 import { TerminalActionListPanel } from "./TerminalActionListPanel"
+import { TerminalActionSearch } from "./TerminalActionSearch"
+import { type TerminalActionPanel, TerminalActionTabs } from "./TerminalActionTabs"
 import { TerminalResumePanel } from "./TerminalResumePanel"
 import { adjacentAgentResumeTab } from "./TerminalResumeTabs"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
+export type { TerminalActionPanel } from "./TerminalActionTabs"
 export { TERMINAL_ACTIONS } from "../model/terminal-actions"
 
 export function terminalActionKey(key: {
@@ -42,7 +44,9 @@ export function terminalActionKey(key: {
     const name = key.name.toLowerCase()
     return ["h", "l"].includes(name) ? `shift+${name}` : null
   }
-  return [key.name, key.sequence, key.raw].includes(",") ? "," : key.name
+  for (const punctuation of [",", "."])
+    if ([key.name, key.sequence, key.raw].includes(punctuation)) return punctuation
+  return key.name
 }
 
 function matchesQuery(value: string, query: string) {
@@ -107,38 +111,6 @@ function nextPanel(current: TerminalActionPanel, requested: TerminalActionPanel)
   return requested === "actions" ? "agents" : "actions"
 }
 
-export type TerminalActionPanel = "actions" | "agents"
-
-function TerminalActionTabs({
-  visible,
-  activePanel,
-  onSelect,
-}: {
-  visible: boolean
-  activePanel: TerminalActionPanel
-  onSelect: (panel: TerminalActionPanel) => void
-}) {
-  if (!visible) return null
-  return (
-    <box id="terminal-master-key-tabs" style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
-      <InlineButton
-        id="terminal-action-tab-actions"
-        label="AÇÕES"
-        selected={activePanel === "actions"}
-        accent={COLORS.terminal}
-        onPress={() => onSelect("actions")}
-      />
-      <InlineButton
-        id="terminal-action-tab-agents"
-        label="AGENTES"
-        selected={activePanel === "agents"}
-        accent={COLORS.terminal}
-        onPress={() => onSelect("agents")}
-      />
-    </box>
-  )
-}
-
 export function TerminalActions({
   width,
   height,
@@ -146,6 +118,7 @@ export function TerminalActions({
   activeRemoteProfileId,
   resumePagination = DEFAULT_AGENT_RESUME_PAGINATION,
   onLoadMoreThreads,
+  onSearchThreads,
   onAction,
   onSelectThread,
   disabled,
@@ -159,6 +132,7 @@ export function TerminalActions({
   activeRemoteProfileId?: string | undefined
   resumePagination?: AgentResumePaginationState | undefined
   onLoadMoreThreads?: (providerId: AgentProviderId) => void
+  onSearchThreads?: () => void
   onAction: (key: string) => void
   onSelectThread?: (thread: AgentResumeThread) => void
   disabled: (key: string) => boolean
@@ -170,6 +144,7 @@ export function TerminalActions({
   const dialog = useRef<BoxRenderable | null>(null)
   const input = useRef<InputRenderable | null>(null)
   const [query, setQuery] = useState("")
+  const [searchRequest, setSearchRequest] = useState(0)
   const [activePanel, setActivePanel] = useState<TerminalActionPanel>(initialPanel)
   const [activeResumeTab, setActiveResumeTab] = useState<AgentResumeTab>("global")
   const [selectedAction, setSelectedAction] = useState(0)
@@ -182,6 +157,7 @@ export function TerminalActions({
     resumePagination,
     onLoadMoreThreads,
     inactive,
+    searchRequest,
   )
   const actions = useMemo(
     () =>
@@ -240,6 +216,7 @@ export function TerminalActions({
     if (!selected) setSelectedAgentKey(threads[0] ? agentResumeThreadKey(threads[0]) : null)
   }, [selectedAgentKey, threads])
   const choose = () => {
+    if (input.current?.focused && query.trim()) return searchAgents()
     if (activePanel === "actions") {
       const action = actions[selectedAction]
       if (action && !disabled(action.key)) onAction(action.key)
@@ -249,6 +226,16 @@ export function TerminalActions({
     if (thread) onSelectThread?.(thread)
   }
   const close = () => onAction("escape")
+  const searchAgents = () => {
+    if (inactive || !query.trim()) return
+    setSearchRequest((current) => current + 1)
+    onSearchThreads?.()
+    setActiveResumeTab("global")
+    setActivePanel("agents")
+    setSelectedAgentKey(null)
+    input.current?.blur()
+    dialog.current?.focus()
+  }
   const moveListSelection = (direction: number) => {
     const itemCount = activePanel === "actions" ? actions.length : threads.length
     if (!itemCount) return false
@@ -321,20 +308,11 @@ export function TerminalActions({
         />
         <TerminalShortcutText content="[/] buscar" style={{ flexShrink: 0, fg: COLORS.muted }} />
       </box>
-      <input
-        ref={input}
-        id="terminal-action-search"
-        value={query}
-        placeholder={translateUi("Pesquisar ações e agentes…")}
+      <TerminalActionSearch
+        input={input}
+        query={query}
         onInput={setQuery}
-        onMouseDown={() => input.current?.focus()}
-        width="100%"
-        style={{
-          backgroundColor: COLORS.panelRaised,
-          textColor: COLORS.text,
-          focusedBackgroundColor: COLORS.panelRaised,
-          focusedTextColor: COLORS.text,
-        }}
+        onSearch={searchAgents}
       />
       <TerminalActionTabs visible={compact} activePanel={activePanel} onSelect={setActivePanel} />
       <box
@@ -370,6 +348,7 @@ export function TerminalActions({
             now={now}
             activeTab={activeResumeTab}
             pagination={searchPagination}
+            showSearchErrors={searchRequest > 0}
             onSelectTab={(tab) => {
               setActivePanel("agents")
               setActiveResumeTab(tab)

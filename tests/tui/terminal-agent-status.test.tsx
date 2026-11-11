@@ -210,6 +210,10 @@ test("states continue offscreen, preserve the pane and acknowledge a finished tu
   await waitFor(() => isAgentState(first.id, "Escrevendo"))
   await output("• Finished the task\n› \n? for shortcuts")
   await waitFor(() => isAgentState(first.id, "✓"))
+  await output("• Running tests (1s • esc to interrupt)\n› \n? for shortcuts")
+  await waitFor(() => isAgentState(first.id, "Executando"))
+  await output("• Tests passed\n› \n? for shortcuts")
+  await waitFor(() => isAgentState(first.id, "✓"))
   const agentRow = tui?.renderer.root.findDescendantById(
     `terminal-agent-${first.id.replace("term-agents-", "")}`,
   )
@@ -222,6 +226,31 @@ test("states continue offscreen, preserve the pane and acknowledge a finished tu
   await waitFor(() => !tui?.renderer.root.findDescendantById(agentRow!.id))
   expect(starts).toHaveLength(2)
 }, 20_000)
+
+test("Codex resumes after completion with truncated controls and an unchanged idle title", async () => {
+  await mount()
+  await leader("n")
+  const first = tui?.renderer.currentFocusedRenderable
+  if (!first) throw new Error("Expected terminal")
+  snapshot = [{ pid: 111, parentPid: 101, executable: "codex", command: "codex", foreground: true }]
+  await output("\x1b]2;⠋ project\x07• Working (1s • esc to interrupt)\n› ")
+  await waitFor(() => isAgentState(first.id, "Trabalhando"))
+  await leader("n")
+  const second = tui?.renderer.currentFocusedRenderable
+  await output("\x1b]2;project\x07• Finished\n› \n? for shortcuts")
+  await waitFor(() => isAgentState(first.id, "Concluído"))
+  const rowId = `terminal-agent-${first.id.replace("term-agents-", "")}`
+  const row = tui?.renderer.root.findDescendantById(rowId)
+  // Codex truncates the live status row to the available pane width.
+  await output("• Working (0s • esc…\n› \n? for shortcuts")
+  await waitFor(() => isAgentState(first.id, "Trabalhando"))
+  expect(isAgentState(first.id, "Concluído")).toBe(false)
+  expect(tui?.renderer.root.findDescendantById(rowId)).toBe(row)
+  expect(tui?.renderer.currentFocusedRenderable).toBe(second)
+  await output("• Finished again\n› \n? for shortcuts")
+  await waitFor(() => isAgentState(first.id, "Concluído"))
+  expect(starts).toHaveLength(2)
+}, 15_000)
 
 test("background attention notifies once and clicking opens the exact agent pane", async () => {
   await mount(undefined, true)

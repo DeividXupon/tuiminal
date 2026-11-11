@@ -1,9 +1,10 @@
 import "./setup"
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test"
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { getLanguage, setLanguage } from "../packages/core/src/i18n"
 import {
   terminalContextTags,
   terminalContextTooltip,
@@ -15,6 +16,10 @@ import { readProcessWorkingDirectory } from "../packages/feature-terminal/src/se
 import * as tmuxCommand from "../packages/feature-terminal/src/services/tmux-command"
 import { readTmuxPaneWorkingDirectory } from "../packages/feature-terminal/src/services/tmux-pane-context"
 import { terminalSyncTagProgress } from "../packages/feature-terminal/src/ui/TerminalContextTags"
+
+const initialLanguage = getLanguage()
+beforeEach(() => setLanguage("pt-BR"))
+afterEach(() => setLanguage(initialLanguage))
 
 const temporaryDirectories: string[] = []
 
@@ -116,7 +121,7 @@ test("terminal context tags retain state, then branch, then folder as width shri
   )
 })
 
-test("remote sync status has priority and uses the configured Master Key", () => {
+test("remote upload sits immediately before sync and uses the configured Master Key", () => {
   const context = {
     directory: "/workspace/project",
     projectName: "project",
@@ -124,12 +129,26 @@ test("remote sync status has priority and uses the configured Master Key", () =>
     state: "clean" as const,
   }
   const unmapped = { kind: "unmapped" as const }
-  expect(terminalContextTags(context, 80, unmapped, "Ctrl+G").at(-1)?.label).toBe(
+  expect(terminalContextTags(context, 120, unmapped, "Ctrl+G").at(-1)?.label).toBe(
     "Não sincronizado [Ctrl+G] > [R]",
   )
   expect(terminalContextTags(context, 34, unmapped, "Ctrl+G").map((tag) => tag.kind)).toEqual([
+    "branch",
+    "state",
+    "upload",
     "sync",
   ])
+  expect(terminalContextTags(context, 120, unmapped, "Ctrl+G").at(-2)).toEqual({
+    kind: "upload",
+    label: "Enviar arquivos [Ctrl+G] > [.]",
+  })
+  expect(terminalContextTags(undefined, 12, unmapped).map((tag) => tag.label)).toEqual([
+    "[.]",
+    "[R]",
+  ])
+  expect(terminalContextTags(undefined, 4, unmapped)).toEqual([])
+  expect(terminalContextTags(undefined, 80, undefined, "Ctrl+B", 0, true)[0]?.kind).toBe("upload")
+  expect(terminalContextTags(undefined, 80, unmapped, "Ctrl+B", 0, false)[0]?.kind).toBe("sync")
   expect(
     terminalContextTooltip("sync", context, {
       kind: "out-of-sync",
@@ -147,21 +166,41 @@ test("remote sync status has priority and uses the configured Master Key", () =>
   ).toBe("Sincronizado [Ctrl+G] > [R]")
 })
 
+test("remote actions compact before hiding the folder, branch and diff counts", () => {
+  const context = {
+    directory: "/workspace/tuiminal",
+    projectName: "tuiminal",
+    branch: "main",
+    state: "dirty" as const,
+    changes: { additions: 8, deletions: 8, partial: false },
+  }
+  for (const upload of [false, true]) {
+    const tags = terminalContextTags(context, 40, { kind: "unmapped" }, "Ctrl+B", 0, upload)
+    expect(tags.slice(0, 3).map((tag) => tag.label)).toEqual(["tuiminal", "main", "+8 -8"])
+    expect(tags.at(-1)).toEqual({ kind: "sync", label: "[R]" })
+    if (upload) expect(tags.at(-2)).toEqual({ kind: "upload", label: "[.]" })
+  }
+})
+
 test("remote sync transient states use stable-width animation frames", () => {
   const checking = { kind: "checking" as const, localPath: "/local/project-sync" }
   const syncing = { kind: "syncing" as const, localPath: "/local/project-sync", progress: 0.5 }
-  expect(terminalContextTags(undefined, 80, checking, "Ctrl+B", 0)[0]?.label).toBe(
-    "◐ Verificando sync…",
-  )
-  expect(terminalContextTags(undefined, 80, checking, "Ctrl+B", 1)[0]?.label).toBe(
-    "◓ Verificando sync…",
-  )
-  expect(terminalContextTags(undefined, 80, syncing, "Ctrl+B", 0)[0]?.label).toBe(
-    "⠋ Sincronizando…",
-  )
-  expect(terminalContextTags(undefined, 80, syncing, "Ctrl+B", 1)[0]?.label).toBe(
-    "⠙ Sincronizando…",
-  )
+  expect(
+    terminalContextTags(undefined, 80, checking, "Ctrl+B", 0).find((tag) => tag.kind === "sync")
+      ?.label,
+  ).toBe("◐ Verificando sync…")
+  expect(
+    terminalContextTags(undefined, 80, checking, "Ctrl+B", 1).find((tag) => tag.kind === "sync")
+      ?.label,
+  ).toBe("◓ Verificando sync…")
+  expect(
+    terminalContextTags(undefined, 80, syncing, "Ctrl+B", 0).find((tag) => tag.kind === "sync")
+      ?.label,
+  ).toBe("⠋ Sincronizando…")
+  expect(
+    terminalContextTags(undefined, 80, syncing, "Ctrl+B", 1).find((tag) => tag.kind === "sync")
+      ?.label,
+  ).toBe("⠙ Sincronizando…")
   expect(
     terminalContextTags(
       undefined,
@@ -169,7 +208,7 @@ test("remote sync transient states use stable-width animation frames", () => {
       { kind: "synced", localPath: "/local/project-sync" },
       "Ctrl+B",
       9,
-    )[0]?.label,
+    ).find((tag) => tag.kind === "sync")?.label,
   ).toBe("Sincronizado [Ctrl+B] > [R]")
   expect(terminalSyncTagProgress(syncing, 20, 0)).toEqual({ left: 0, width: 10 })
   expect(terminalSyncTagProgress(checking, 20, 0)).toEqual({ left: 0, width: 1 })

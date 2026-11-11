@@ -6,6 +6,25 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { useEffect, useRef } from "react"
 import type { RemoteCodexUpdateGuide } from "../model/remote-codex"
+import { RemoteCodexServiceVersions } from "./RemoteCodexServiceVersions"
+
+const UPDATE_INSTRUCTIONS = {
+  codex: {
+    title: "◆ ATUALIZAR CODEX",
+    upgradeCommand: "codex update",
+    installer: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+  },
+  claude: {
+    title: "◆ ATUALIZAR CLAUDE CODE",
+    upgradeCommand: "claude update",
+    installer: "curl -fsSL https://claude.ai/install.sh | bash",
+  },
+  opencode: {
+    title: "◆ ATUALIZAR OPENCODE",
+    upgradeCommand: "opencode upgrade",
+    installer: "curl -fsSL https://opencode.ai/v2/install | bash",
+  },
+}
 
 export function RemoteCodexUpdatePanel({
   sessionId,
@@ -28,7 +47,7 @@ export function RemoteCodexUpdatePanel({
 }) {
   const renderer = useRenderer()
   const view = useRef<BoxRenderable | null>(null)
-  const focusRevision = `${terminalStatus}:${guide.error}:${guide.report.localVersion}:${guide.report.remoteVersion}:${guide.report.reason}`
+  const focusRevision = `${terminalStatus}:${guide.error}:${guide.report.localVersion}:${guide.report.remoteVersion}:${guide.report.reason}:${guide.report.remoteDaemonVersion}:${guide.report.remoteAppServerVersion}`
   useEffect(() => {
     if (!active || guide.checking || !focusRevision) return undefined
     const timer = setTimeout(() => view.current?.focus(), 0)
@@ -50,26 +69,12 @@ export function RemoteCodexUpdatePanel({
   })
   const remote = guide.side === "remote"
   const providerId = guide.report.providerId ?? "codex"
+  const serviceMismatch = guide.report.reason === "serviceVersionMismatch"
   const detected = remote ? guide.report.remoteVersion : guide.report.localVersion
   const showInstaller = remote || process.platform !== "win32"
-  const title =
-    providerId === "opencode"
-      ? "◆ ATUALIZAR OPENCODE"
-      : providerId === "claude"
-        ? "◆ ATUALIZAR CLAUDE CODE"
-        : "◆ ATUALIZAR CODEX"
-  const upgradeCommand =
-    providerId === "opencode"
-      ? "opencode upgrade"
-      : providerId === "claude"
-        ? "claude update"
-        : "codex update"
-  const installer =
-    providerId === "opencode"
-      ? "curl -fsSL https://opencode.ai/v2/install | bash"
-      : providerId === "claude"
-        ? "curl -fsSL https://claude.ai/install.sh | bash"
-        : "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+  const instructions = UPDATE_INSTRUCTIONS[providerId]
+  const title = serviceMismatch ? "◆ SERVIÇO CODEX" : instructions.title
+  const { upgradeCommand, installer } = instructions
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this companion panel owns its keyboard scope.
     <box
@@ -87,19 +92,37 @@ export function RemoteCodexUpdatePanel({
         style={{ height: 1, flexShrink: 0, fg: COLORS.warning }}
       />
       <text
-        content={`${translateUi("Versão detectada")}: ${detected ?? translateUi("não detectada")}`}
+        content={`${translateUi(providerId === "codex" ? "CLI instalado" : "Versão detectada")}: ${detected ?? translateUi("não detectada")}`}
         style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
       />
-      <text content={upgradeCommand} style={{ height: 1, flexShrink: 0, fg: COLORS.text }} />
-      {showInstaller && (
+      {remote && <RemoteCodexServiceVersions report={guide.report} />}
+      {serviceMismatch ? (
+        <>
+          <text
+            content={translateUi("Os CLIs já usam a mesma versão.")}
+            style={{ flexShrink: 0, fg: COLORS.text }}
+          />
+          <text
+            content={translateUi(
+              "Reinicie o serviço remoto quando não houver sessões em uso e revalide.",
+            )}
+            style={{ flexShrink: 0, fg: COLORS.muted }}
+          />
+        </>
+      ) : (
+        <text content={upgradeCommand} style={{ height: 1, flexShrink: 0, fg: COLORS.text }} />
+      )}
+      {!serviceMismatch && showInstaller && (
         <text content={installer} style={{ height: 1, flexShrink: 0, fg: COLORS.muted }} />
       )}
-      <text
-        content={translateUi(
-          "Execute manualmente no terminal acima; nenhum comando será preenchido.",
-        )}
-        style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
-      />
+      {!serviceMismatch && (
+        <text
+          content={translateUi(
+            "Execute manualmente no terminal acima; nenhum comando será preenchido.",
+          )}
+          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+        />
+      )}
       <box style={{ flexGrow: 1 }} />
       {guide.error && (
         <text content={translateUi(guide.error)} style={{ height: 1, fg: COLORS.warning }} />

@@ -9,7 +9,10 @@ import {
   type AgentResumeThread,
   DEFAULT_AGENT_RESUME_PAGINATION,
 } from "../../packages/feature-terminal/src/model/agent-resume-thread"
-import { TerminalActions } from "../../packages/feature-terminal/src/ui/TerminalActions"
+import {
+  type TerminalActionPanel,
+  TerminalActions,
+} from "../../packages/feature-terminal/src/ui/TerminalActions"
 
 let tui: TestRendererSetup | undefined
 
@@ -63,13 +66,19 @@ async function clearQuery(length: number) {
   await tui?.renderOnce()
 }
 
-async function fixture(initial: Partial<AgentResumePaginationState> = {}, inactive = false) {
+async function fixture(
+  initial: Partial<AgentResumePaginationState> = {},
+  options: { compact?: boolean; width?: number; initialPanel?: TerminalActionPanel } = {},
+) {
+  const { compact = true, width = 80, initialPanel = "agents" } = options
   let update: (next: Partial<AgentResumePaginationState>) => void = () => undefined
   let append: (threads: AgentResumeThread[]) => void = () => undefined
   const loadMore = mock((providerId: AgentProviderId) => {
     update({ loadingMore: [providerId] })
   })
   const select = mock((_thread: AgentResumeThread) => undefined)
+  const action = mock((_key: string) => undefined)
+  const search = mock(() => undefined)
   function Fixture() {
     const [pagination, setPagination] = useState({ ...DEFAULT_AGENT_RESUME_PAGINATION, ...initial })
     const [threads, setThreads] = useState<AgentResumeThread[]>([])
@@ -77,26 +86,28 @@ async function fixture(initial: Partial<AgentResumePaginationState> = {}, inacti
     append = (next) => setThreads((current) => [...current, ...next])
     return (
       <TerminalActions
-        compact
-        width={80}
+        compact={compact}
+        width={width}
         height={30}
-        initialPanel="agents"
+        initialPanel={initialPanel}
         activeRemoteProfileId="active"
         recentThreads={threads}
         resumePagination={pagination}
         onLoadMoreThreads={loadMore}
+        onSearchThreads={search}
         onSelectThread={select}
-        onAction={() => undefined}
+        onAction={action}
         disabled={() => false}
-        inactive={inactive}
       />
     )
   }
-  tui = await testRender(<Fixture />, { width: 80, height: 30 })
+  tui = await testRender(<Fixture />, { width, height: 30 })
   await tui.renderOnce()
   return {
     loadMore,
     select,
+    action,
+    search,
     async update(next: Partial<AgentResumePaginationState>, threads: AgentResumeThread[] = []) {
       await act(async () => {
         update(next)
@@ -154,8 +165,12 @@ test("Global search loads unseen pages from every provider and opens an older re
   ).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-resume-more-loader")).toBeUndefined()
   await key("enter")
+  expect(view.select).not.toHaveBeenCalled()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
+  await key("enter")
   expect(view.select).toHaveBeenCalledWith(match)
 
+  await key("/")
   await clearQuery(6)
   expect(tui?.renderer.root.findDescendantById("terminal-resume-thread-needle")).toBeUndefined()
   expect(tui?.renderer.root.findDescendantById("terminal-resume-thread-newer-0")).toBeDefined()
@@ -180,12 +195,71 @@ test("provider search waits for initial loading, avoids retry loops and honors t
   await act(async () => Bun.sleep(250))
   expect(view.loadMore).toHaveBeenCalledTimes(1)
   expect(tui?.captureCharFrame()).toContain("Nenhum resultado.")
-  await clearQuery(7)
-  await type("missing")
-  await waitFor(() => view.loadMore.mock.calls.length === 2)
-  await view.update({ loadingMore: [], limits: { codex: 120, claude: 12, opencode: 12 } })
+  await key("enter")
+  await waitFor(() => view.loadMore.mock.calls.length === 4)
+  expect(view.search).toHaveBeenCalledTimes(1)
+  expect(
+    view.loadMore.mock.calls
+      .slice(1)
+      .map(([provider]) => provider)
+      .sort(),
+  ).toEqual(["claude", "codex", "opencode"])
+  expect(view.select).not.toHaveBeenCalled()
+  expect(view.action).not.toHaveBeenCalled()
+  await view.update({ loadingMore: [], limits: { codex: 120, claude: 120, opencode: 120 } })
   await act(async () => Bun.sleep(250))
-  expect(view.loadMore).toHaveBeenCalledTimes(2)
+  expect(view.loadMore).toHaveBeenCalledTimes(4)
+})
+
+test.each([
+  { compact: false, width: 120, mouse: false },
+  { compact: false, width: 120, mouse: true },
+  { compact: true, width: 34, mouse: false },
+  { compact: true, width: 34, mouse: true },
+])("search action submits from Actions without launching a conversation: %j", async (options) => {
+  const view = await fixture({}, { ...options, initialPanel: "actions" })
+  const find = (id: string) => tui?.renderer.root.findDescendantById(id)
+  const match = thread("agente", "claude")
+  await view.update({}, [match, thread("unrelated", "opencode")])
+  expect(find("terminal-action-search-submit")).toBeUndefined()
+  await key("/")
+  await type("   ")
+  expect(find("terminal-action-search-submit")).toBeUndefined()
+  await clearQuery(3)
+  await type("agente")
+  const input = find("terminal-action-search")
+  const submit = find("terminal-action-search-submit")
+  const modal = find("terminal-actions")
+  if (!input || !submit || !modal) throw new Error("Missing Master Key search controls")
+  expect(tui?.captureCharFrame()).toContain("[Enter] Pesquisar agente")
+  expect(submit.screenY).toBe(input.screenY)
+  expect(submit.screenX).toBeGreaterThanOrEqual(input.screenX + input.width)
+  expect(input.width).toBeGreaterThan(0)
+  expect(submit.screenX + submit.width).toBeLessThanOrEqual(modal.screenX + modal.width)
+  if (options.mouse) {
+    await act(async () => tui?.mockMouse.click(submit.screenX + 1, submit.screenY))
+    await tui?.renderOnce()
+  } else await key("enter")
+  expect(view.select).not.toHaveBeenCalled()
+  expect(view.action).not.toHaveBeenCalled()
+  expect(tui?.renderer.currentFocusedRenderable?.id).toBe("terminal-actions")
+  expect(view.search).toHaveBeenCalledTimes(1)
+  expect(find("terminal-agent-panel-active")).toBeDefined()
+  expect(find("terminal-resume-thread-agente")).toBeDefined()
+  expect(find("terminal-resume-thread-unrelated")).toBeUndefined()
+  await key("enter")
+  expect(view.select).toHaveBeenCalledTimes(1)
+  expect(view.select).toHaveBeenCalledWith(match)
+  await key("/")
+  expect(find("terminal-action-search")).toBe(input)
+  await clearQuery(6)
+  expect(find("terminal-action-search-submit")).toBeUndefined()
+  await key("escape")
+  await waitFor(() => tui?.renderer.currentFocusedRenderable?.id === "terminal-actions")
+  expect(view.action).not.toHaveBeenCalled()
+  await key("escape")
+  await waitFor(() => view.action.mock.calls.length === 1)
+  expect(view.action).toHaveBeenCalledWith("escape")
 })
 
 test("clearing search or closing its modal stops automatic pagination", async () => {

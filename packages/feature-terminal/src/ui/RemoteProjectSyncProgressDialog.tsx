@@ -1,11 +1,16 @@
-import type { BoxRenderable, KeyEvent } from "@opentui/core"
+import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
+import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useRef } from "react"
 import type { RemoteProjectSyncStatus } from "../model/remote-project-sync"
-import { RemoteProjectSyncAutomaticControl } from "./RemoteProjectSyncAutomaticControl"
+import type { RemoteCodexTarget } from "../model/sessions"
+import {
+  RemoteProjectSyncAutomaticControl,
+  RemoteProjectSyncAutomaticHint,
+} from "./RemoteProjectSyncAutomaticControl"
+import { RemoteProjectSyncRoute } from "./RemoteProjectSyncRoute"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
 function consume(key: KeyEvent) {
@@ -31,6 +36,7 @@ function phaseLabel(status: RemoteProjectSyncStatus | undefined) {
 
 export function RemoteProjectSyncProgressDialog({
   localPath,
+  remote,
   status,
   automatic,
   onToggleAutomatic,
@@ -38,6 +44,7 @@ export function RemoteProjectSyncProgressDialog({
   inactive = false,
 }: {
   localPath: string
+  remote?: RemoteCodexTarget | undefined
   status?: RemoteProjectSyncStatus | undefined
   automatic: boolean
   onToggleAutomatic: () => void
@@ -46,9 +53,14 @@ export function RemoteProjectSyncProgressDialog({
   inactive?: boolean
 }) {
   const dialog = useRef<BoxRenderable | null>(null)
+  const details = useRef<ScrollBoxRenderable | null>(null)
   const dimensions = useTerminalDimensions()
-  const width = Math.max(1, Math.min(68, dimensions.width - 6))
-  const height = Math.max(1, Math.min(12, dimensions.height - 4))
+  const width = Math.max(1, Math.min(76, dimensions.width - 2))
+  const compact = dimensions.height < 20
+  const height = Math.max(
+    1,
+    Math.min(dimensions.height - 2, compact ? 13 + Number(!!remote) : dimensions.height - 2),
+  )
   const progress = status?.kind === "syncing" ? status.progress : null
   const cancelling = status?.kind === "cancelling"
   useEffect(() => {
@@ -63,10 +75,14 @@ export function RemoteProjectSyncProgressDialog({
     } else if (name === "escape") {
       consume(key)
       if (!cancelling) onCancel()
+    } else if (["up", "down", "j", "k"].includes(name)) {
+      consume(key)
+      details.current?.scrollBy(name === "up" || name === "k" ? -1 : 1)
     }
   })
   return (
     <ModalSurface
+      fitContent={!compact}
       dialogRef={dialog}
       id="terminal-project-sync-progress"
       width={width}
@@ -74,25 +90,34 @@ export function RemoteProjectSyncProgressDialog({
       borderColor={cancelling ? COLORS.warning : COLORS.border}
       zIndex={830}
       onBackdropPress={() => {
-        if (!cancelling) onCancel()
+        if (!cancelling && !inactive) onCancel()
       }}
     >
       <box id="terminal-project-sync-progress-header" style={{ height: 1, flexShrink: 0 }}>
         <text
           content={translateUi("SINCRONIZAÇÃO DO PROJETO")}
+          wrapMode="none"
           style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
         />
       </box>
-      <box style={{ flexGrow: 1, minHeight: 4 }}>
+      {compact ? (
+        <scrollbox ref={details} scrollY style={{ flexGrow: 1, minHeight: 0 }}>
+          <RemoteProjectSyncRoute localPath={localPath} remote={remote} width={width - 5} />
+          <RemoteProjectSyncAutomaticHint automatic={automatic} />
+        </scrollbox>
+      ) : (
+        <box style={{ flexShrink: 0, marginTop: 1, marginBottom: 1 }}>
+          <RemoteProjectSyncRoute localPath={localPath} remote={remote} width={width - 4} />
+        </box>
+      )}
+      <box
+        id="terminal-project-sync-progress-status"
+        style={{ flexShrink: 0, marginBottom: compact ? 0 : 1 }}
+      >
         <text
           content={phaseLabel(status)}
-          wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.text }}
-        />
-        <text
-          content={truncateDisplay(localPath, Math.max(1, width - 4))}
-          wrapMode="none"
-          style={{ height: 1, flexShrink: 0, fg: COLORS.muted }}
+          wrapMode="word"
+          style={{ flexShrink: 0, fg: cancelling ? COLORS.warning : COLORS.text }}
         />
         <box
           style={{
@@ -110,7 +135,7 @@ export function RemoteProjectSyncProgressDialog({
               top: 0,
               width: Math.max(1, Math.round((progress ?? 0.08) * Math.max(1, width - 4))),
               height: 1,
-              backgroundColor: COLORS.terminal,
+              backgroundColor: cancelling ? COLORS.warning : COLORS.terminal,
               opacity: 0.35,
             }}
           />
@@ -121,7 +146,12 @@ export function RemoteProjectSyncProgressDialog({
           />
         </box>
       </box>
-      <RemoteProjectSyncAutomaticControl automatic={automatic} onToggle={onToggleAutomatic} />
+      <RemoteProjectSyncAutomaticControl
+        automatic={automatic}
+        onToggle={onToggleAutomatic}
+        compact={compact}
+        inactive={inactive}
+      />
       <box
         id="terminal-project-sync-progress-actions"
         style={{
@@ -134,7 +164,7 @@ export function RemoteProjectSyncProgressDialog({
         <TerminalInlineButton
           id="terminal-project-sync-cancel-progress"
           compact
-          disabled={cancelling}
+          disabled={cancelling || inactive}
           label={cancelling ? "Cancelando…" : "[Esc] Cancelar"}
           onPress={onCancel}
         />

@@ -1,4 +1,4 @@
-import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
+import type { BoxRenderable, InputRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -6,20 +6,42 @@ import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { PlasmaLoadingOverlay } from "@xupon/tuiminal-core/ui/PlasmaLoadingOverlay"
 import { useEffect, useRef, useState } from "react"
 import { useAgentProjectPicker } from "../hooks/use-agent-project-picker"
-import { agentProvider, type AgentProviderId } from "../model/agent-provider"
 import type { AgentProjectTarget } from "../model/agent-project"
+import { type AgentProviderId, agentProvider } from "../model/agent-provider"
+import { projectName } from "../model/project-name"
 import type { RemoteCodexCompatibilityReport } from "../model/remote-codex"
 import type { TermAgentsCommand, TerminalSession } from "../model/sessions"
 import {
   type DiscoveredAgentProjects,
   discoverAgentGitProjects,
 } from "../services/agent-git-projects"
-import { projectName } from "../model/project-name"
 import { TERM_AGENTS_WORKING_DIRECTORY } from "../services/terminal"
 import { AgentFolderBrowser } from "./AgentFolderBrowser"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
 type ProjectRow = { path: string; group: string }
+
+function handleSearchKey(
+  key: KeyEvent,
+  input: InputRenderable | null,
+  dialog: BoxRenderable | null,
+) {
+  const focused = input?.focused ?? false
+  if (focused && key.name === "escape") {
+    key.preventDefault()
+    key.stopPropagation()
+    dialog?.focus()
+    return true
+  }
+  if (!focused && [key.name, key.sequence, key.raw].includes("/")) {
+    key.preventDefault()
+    key.stopPropagation()
+    input?.focus()
+    return true
+  }
+  return focused && !["up", "down", "enter", "return"].includes(key.name)
+}
+
 function projectRows(
   recent: readonly { path: string }[],
   discovered: readonly string[],
@@ -63,6 +85,8 @@ export function AgentProjectPicker(props: {
   const dimensions = useTerminalDimensions()
   const dialog = useRef<BoxRenderable | null>(null)
   const list = useRef<ScrollBoxRenderable | null>(null)
+  const input = useRef<InputRenderable | null>(null)
+  const [query, setQuery] = useState("")
   const [browsing, setBrowsing] = useState(false)
   const [chosen, setChosen] = useState<string | null>(null)
   const [cursor, setCursorState] = useState<string | null>(null)
@@ -76,12 +100,15 @@ export function AgentProjectPicker(props: {
   const [gitError, setGitError] = useState(false)
   const { target } = props
   const initial = target.kind === "local" ? TERM_AGENTS_WORKING_DIRECTORY : "~"
-  const rows = projectRows(picker.recent, git.paths, chosen, initial)
+  const term = query.trim().toLocaleLowerCase()
+  const rows = projectRows(picker.recent, git.paths, chosen, initial).filter((row) =>
+    row.path.toLocaleLowerCase().includes(term),
+  )
   const selected = Math.max(
     0,
     rows.findIndex((row) => row.path === cursor),
   )
-  const destination = rows[selected]?.path ?? initial
+  const destination = rows[selected]?.path
   const inactive = props.inactive || browsing
   const locked = picker.launching
   useEffect(() => {
@@ -109,20 +136,31 @@ export function AgentProjectPicker(props: {
   useEffect(() => {
     if (!inactive) dialog.current?.focus()
   }, [picker.pending, inactive])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: filtering replaces rows even when the selected index stays the same.
   useEffect(() => {
     list.current?.scrollChildIntoView(`terminal-dialog-project-row-${selected}`)
-  }, [selected])
+  }, [selected, query])
   const launch = (path?: string) => {
     if (!locked) {
       const destination =
-        path ?? rows.find((row) => row.path === cursorRef.current)?.path ?? rows[0]?.path ?? initial
+        path ?? rows.find((row) => row.path === cursorRef.current)?.path ?? rows[0]?.path
+      if (!destination) return
       setChosen(destination)
       setCursor(destination)
       void picker.launch(destination)
     }
   }
+  const navigate = (key: string) => {
+    const direction = ["up", "k"].includes(key) ? -1 : 1
+    const index = Math.max(
+      0,
+      rows.findIndex((row) => row.path === cursorRef.current),
+    )
+    setCursor(rows[(index + direction + rows.length) % rows.length]?.path ?? initial)
+  }
   useKeyboard((key) => {
     if (inactive) return
+    if (!locked && handleSearchKey(key, input.current, dialog.current)) return
     if (key.name === "escape") {
       key.preventDefault()
       key.stopPropagation()
@@ -137,12 +175,7 @@ export function AgentProjectPicker(props: {
     if (["up", "down", "j", "k"].includes(key.name)) {
       key.preventDefault()
       key.stopPropagation()
-      const direction = ["up", "k"].includes(key.name) ? -1 : 1
-      const index = Math.max(
-        0,
-        rows.findIndex((row) => row.path === cursorRef.current),
-      )
-      setCursor(rows[(index + direction + rows.length) % rows.length]?.path ?? initial)
+      navigate(key.name)
     } else if (["enter", "return"].includes(key.name)) {
       key.preventDefault()
       key.stopPropagation()
@@ -159,6 +192,7 @@ export function AgentProjectPicker(props: {
   })
   const width = Math.max(1, Math.min(90, dimensions.width - 2))
   const small = dimensions.height < 16
+  const rowHeight = small ? 1 : 2
   const origin =
     target.kind === "local"
       ? translateUi("Local")
@@ -178,7 +212,17 @@ export function AgentProjectPicker(props: {
           dialogRef={dialog}
           id="terminal-dialog-project-picker"
           width={width}
-          height={Math.max(1, Math.min(26, dimensions.height - 2))}
+          height={Math.max(
+            1,
+            Math.min(
+              26,
+              dimensions.height - 2,
+              5 +
+                rowHeight +
+                Math.max(1, rows.length * rowHeight + new Set(rows.map((row) => row.group)).size) +
+                Number(Boolean(status)),
+            ),
+          )}
           zIndex={810}
           borderColor={COLORS.terminal}
           onBackdropPress={picker.cancel}
@@ -202,6 +246,35 @@ export function AgentProjectPicker(props: {
             )}
             <text content={origin} wrapMode="none" style={{ fg: COLORS.focus, flexGrow: 1 }} />
           </box>
+          <box style={{ height: 1, flexShrink: 0, flexDirection: "row" }}>
+            <TerminalInlineButton
+              compact
+              id="terminal-dialog-project-search-focus"
+              label="[/] Buscar"
+              disabled={locked}
+              onPress={() => input.current?.focus()}
+            />
+            <input
+              ref={input}
+              id="terminal-dialog-project-search"
+              value={query}
+              placeholder={translateUi("Buscar")}
+              onInput={(value) => {
+                setQuery(value)
+                setCursor("")
+              }}
+              onMouseDown={() => {
+                if (!locked) input.current?.focus()
+              }}
+              style={{
+                flexGrow: 1,
+                backgroundColor: COLORS.panelRaised,
+                textColor: COLORS.text,
+                focusedBackgroundColor: COLORS.panelRaised,
+                focusedTextColor: COLORS.text,
+              }}
+            />
+          </box>
           <scrollbox
             ref={list}
             id="terminal-dialog-project-list"
@@ -223,7 +296,7 @@ export function AgentProjectPicker(props: {
                     if (!locked) launch(row.path)
                   }}
                   style={{
-                    height: small ? 1 : 2,
+                    height: rowHeight,
                     flexShrink: 0,
                     backgroundColor: index === selected ? COLORS.panelRaised : COLORS.panel,
                   }}
@@ -243,6 +316,12 @@ export function AgentProjectPicker(props: {
                 </box>
               </box>
             ))}
+            {!rows.length && (
+              <text
+                content={translateUi("Nenhum projeto corresponde à pesquisa.")}
+                style={{ fg: COLORS.muted }}
+              />
+            )}
           </scrollbox>
           {status && (
             <text
@@ -255,7 +334,9 @@ export function AgentProjectPicker(props: {
             />
           )}
           <text
-            content={`${origin} · ${projectName(destination)} · ${destination}`}
+            content={
+              destination ? `${origin} · ${projectName(destination)} · ${destination}` : origin
+            }
             wrapMode="none"
             style={{ height: 1, flexShrink: 0, fg: COLORS.focus }}
           />
@@ -271,7 +352,7 @@ export function AgentProjectPicker(props: {
               compact
               id="terminal-dialog-project-launch"
               label={locked ? "Iniciando agente…" : "[Enter] Iniciar agente"}
-              disabled={locked}
+              disabled={locked || !destination}
               onPress={() => launch()}
             />
             <TerminalInlineButton
@@ -296,6 +377,7 @@ export function AgentProjectPicker(props: {
           origin={origin}
           onClose={() => setBrowsing(false)}
           onSelect={(path) => {
+            setQuery("")
             setChosen(path)
             setCursor(path)
             setBrowsing(false)

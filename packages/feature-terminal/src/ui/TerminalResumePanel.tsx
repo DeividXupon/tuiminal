@@ -10,6 +10,7 @@ import type {
 import { agentResumeThreadKey } from "../model/agent-resume-thread"
 import { TerminalResumeLoader, TerminalResumeTabs } from "./TerminalResumeTabs"
 import { TerminalAgentResponsePanel, TerminalResumeThreadRow } from "./TerminalResumeThreads"
+import { TerminalResumeErrors } from "./TerminalResumeErrors"
 
 export function TerminalResumePanel({
   compact,
@@ -22,6 +23,7 @@ export function TerminalResumePanel({
   now,
   activeTab,
   pagination,
+  showSearchErrors,
   onSelectTab,
   onSelectThread,
   onReachEnd,
@@ -36,6 +38,7 @@ export function TerminalResumePanel({
   now: number
   activeTab: AgentResumeTab
   pagination: AgentResumePaginationState
+  showSearchErrors: boolean
   onSelectTab: (tab: AgentResumeTab) => void
   onSelectThread: (thread: AgentResumeThread) => void
   onReachEnd: () => void
@@ -89,6 +92,9 @@ export function TerminalResumePanel({
         loadingProviders={[...pagination.loadingInitialProviders, ...pagination.loadingMore]}
         onSelect={onSelectTab}
       />
+      {showSearchErrors && (
+        <TerminalResumeErrors sources={pagination.failedSources ?? []} activeTab={activeTab} />
+      )}
       <scrollbox
         ref={list}
         id="terminal-agent-results"

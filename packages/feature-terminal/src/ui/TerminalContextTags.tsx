@@ -10,7 +10,7 @@ import {
   terminalContextTooltip,
 } from "../rendering/terminal-context"
 import { TerminalContextTagText } from "./TerminalContextTagText"
-import { TerminalShimmerText } from "./TerminalShortcut"
+import { TerminalInlineButton, TerminalShimmerText } from "./TerminalShortcut"
 
 export type TerminalAgentOrigin = "local" | "remote"
 
@@ -44,6 +44,7 @@ function tagColor(
 ) {
   if (tag.kind === "directory") return COLORS.terminal
   if (tag.kind === "branch") return COLORS.git
+  if (tag.kind === "upload") return COLORS.terminal
   if (tag.kind === "sync") {
     if (sync?.kind === "synced") return COLORS.success
     if (sync?.kind === "syncing" || sync?.kind === "checking") return COLORS.terminal
@@ -81,6 +82,7 @@ export function TerminalPaneMetadata({
   covered,
   availableWidth,
   onActivate,
+  onSendFiles,
 }: {
   sessionId: string
   context?: TerminalRepositoryContext | undefined
@@ -91,6 +93,7 @@ export function TerminalPaneMetadata({
   covered: boolean
   availableWidth: number
   onActivate: () => void
+  onSendFiles?: (() => void) | undefined
 }) {
   if (!terminalMetadataVisible(covered, context, sync, agentOrigin)) return null
   return (
@@ -103,6 +106,7 @@ export function TerminalPaneMetadata({
       active={active}
       availableWidth={availableWidth}
       onActivate={onActivate}
+      onSendFiles={onSendFiles}
     />
   )
 }
@@ -116,6 +120,7 @@ export function TerminalContextTags({
   active = true,
   availableWidth,
   onActivate,
+  onSendFiles,
 }: {
   sessionId: string
   context?: TerminalRepositoryContext | undefined
@@ -125,6 +130,7 @@ export function TerminalContextTags({
   active?: boolean
   availableWidth: number
   onActivate: () => void
+  onSendFiles?: (() => void) | undefined
 }) {
   const [syncFrame, setSyncFrame] = useState(0)
   const animating = active && sync?.kind === "checking"
@@ -139,7 +145,14 @@ export function TerminalContextTags({
     ? Math.min(Math.max(0, availableWidth - 1), displayWidth(originLabel) + 2)
     : 0
   const contentWidth = Math.max(0, availableWidth - 1 - originWidth - Number(originWidth > 0))
-  const tags = terminalContextTags(context, contentWidth, sync, masterKey, syncFrame)
+  const tags = terminalContextTags(
+    context,
+    contentWidth,
+    sync,
+    masterKey,
+    syncFrame,
+    agentOrigin === "remote" && Boolean(onSendFiles),
+  )
   const [hovered, setHovered] = useState<TerminalContextTag["kind"] | null>(null)
   if (!tags.length && !originWidth) return null
   const tagsWidth = tags.reduce(
@@ -210,8 +223,12 @@ export function TerminalContextTags({
           const progress =
             tag.kind === "sync" ? terminalSyncTagProgress(sync, width, syncFrame) : null
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: preserve the button's press focus instead of activating the parent PTY.
             <box
               key={tag.kind}
+              onMouseDown={(event) => {
+                if (tag.kind === "upload") event.stopPropagation()
+              }}
               style={{
                 position: "relative",
                 width,
@@ -234,24 +251,38 @@ export function TerminalContextTags({
                   }}
                 />
               )}
-              <TerminalContextTagText
-                id={`terminal-context-${tag.kind}-${sessionId}`}
-                tag={tag}
-                context={context}
-                masterKey={masterKey}
-                wrapMode="none"
-                onMouseOver={() => setHovered(tag.kind)}
-                onMouseOut={() => setHovered((current) => (current === tag.kind ? null : current))}
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  width,
-                  height: 1,
-                  fg: tagColor(tag, context, sync),
-                  bg: "transparent",
-                }}
-              />
+              {tag.kind === "upload" && onSendFiles ? (
+                <TerminalInlineButton
+                  id={`terminal-context-upload-${sessionId}`}
+                  label={tag.label}
+                  compact
+                  accent={COLORS.terminal}
+                  backgroundColor={COLORS.panelRaised}
+                  actionKeys={[`[${masterKey}]`]}
+                  onPress={onSendFiles}
+                />
+              ) : (
+                <TerminalContextTagText
+                  id={`terminal-context-${tag.kind}-${sessionId}`}
+                  tag={tag}
+                  context={context}
+                  masterKey={masterKey}
+                  wrapMode="none"
+                  onMouseOver={() => setHovered(tag.kind)}
+                  onMouseOut={() =>
+                    setHovered((current) => (current === tag.kind ? null : current))
+                  }
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width,
+                    height: 1,
+                    fg: tagColor(tag, context, sync),
+                    bg: "transparent",
+                  }}
+                />
+              )}
             </box>
           )
         })}
