@@ -11,7 +11,7 @@
 Databases, GitHub, processes, APIs, and real terminals in one fast, responsive interface.
 
 [![npm](https://img.shields.io/npm/v/tuiminal?label=npm&color=4B75FF)](https://www.npmjs.com/package/tuiminal)
-[![status](https://img.shields.io/badge/status-pre--alpha-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
+[![status](https://img.shields.io/badge/status-beta-F7C873)](https://github.com/DeividXupon/tuiminal/releases)
 [![license](https://img.shields.io/github/license/DeividXupon/tuiminal?color=72D5A3)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-5FA04E)](#installation)
 
@@ -20,7 +20,7 @@ Databases, GitHub, processes, APIs, and real terminals in one fast, responsive i
 </div>
 
 > [!WARNING]
-> Tuiminal is in **alpha**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
+> Tuiminal is in **beta**. You can install and try it, but shortcuts, formats, and APIs may change between versions.
 
 Tuiminal keeps your workflow in one place. Open a project once and switch between its database client, Git interface, processes, HTTP client, and terminals with `[Alt+1–5]`.
 
@@ -31,7 +31,7 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
   readable; the effect works over notifications and embedded terminals, survives
   clicks and selection, and clears when you type.
 - Framed layout with one continuous panel surface, or compact layout with its denser
-  canvas; seven palettes and six languages.
+  canvas; eight palettes and seven languages.
 - Processes and PTYs stay alive when you switch tabs.
 - Explicit protections for sensitive data, writes, and remote operations.
 
@@ -39,10 +39,10 @@ Tuiminal keeps your workflow in one place. Open a project once and switch betwee
 
 ## Installation
 
-Install the alpha from npm:
+Install the beta from npm:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 tuiminal
 ```
 
@@ -75,7 +75,7 @@ During a download, the tool's row fills from left to right with its actual progr
 To update or uninstall:
 
 ```bash
-npm install --global tuiminal@alpha
+npm install --global tuiminal@beta
 npm uninstall --global tuiminal
 ```
 
@@ -98,11 +98,13 @@ tuiminal terminal ./meu-projeto
 
 The aliases `database`/`db`, `run`, and `term`/`tty` are also accepted. In isolated mode, hidden tools are not initialized. Only these commands and aliases are treated as tools; other names are directory paths.
 
-`tuiminal --version` prints the version without loading settings or UI. `tuiminal --help` uses the configured language.
+`tuiminal --version` prints the version without loading settings or UI. `tuiminal --help` and the other commands use the configured language, or English when none is saved.
 
 <a id="navegação-global"></a>
 
 ### Global navigation
+
+All bracketed keyboard hints stay blue, including action palettes and selected or disabled controls.
 
 | Action | Shortcut |
 | --- | --- |
@@ -152,7 +154,7 @@ The table header keeps `[1]` Data, `[2]` Columns, `[3]` Indexes and `[4]` Schema
 
 ### What you can do
 
-- **Connect:** MySQL/MariaDB, PostgreSQL, SQLite, and optional MySQL MCP servers. MCP is always explicit and read-only.
+- **Connect:** MySQL/MariaDB, PostgreSQL, SQLite, and optional MySQL MCP servers. In the connection form, `[A←]` / `[F→]` cycles database tabs outside text fields; `[Esc]` leaves the current field. MCP is always explicit and read-only.
 - **Explore:** schemas, tables, and views; inspect records, columns, indexes, DDL, constraints, and relationships. `[/]` filters the catalog; `[Enter]` moves from the filter to the matching table list, and a second `[Enter]` opens the selected table. In `[4]` Schema, `[G]` toggles a one-hop ASCII relationship diagram for the open table; narrow terminals stack each foreign-key connection vertically.
 - **Find data:** sort the active column, search all columns, and scroll horizontally while keeping the selected row. The table grid keeps up to 50 fetched rows and loads 40 more at either edge when you press the direction key again. Each table read shows a syntax-colored SELECT preview in a notification, including its table and `LIMIT`/`OFFSET`; projected columns and search literals are abbreviated.
 - **Select batches:** `[Space]` marks rows; `[Alt+Space]` sets an anchor and `[↑/↓]` grows or shrinks a spreadsheet-style range. Marked rows have a subtle background tint in tables and SQL results, while the active cell keeps its stronger highlight.
@@ -179,9 +181,13 @@ SQL results are editable only when they directly select columns or `*` from one 
 
 In MySQL, unqualified double-quoted fields remain read-only because they may be string literals; prefer backtick-quoted identifiers. Double-quoted columns remain editable in PostgreSQL and SQLite.
 
-Profiles start **read-only**. Passwords are not written to configuration JSON: when requested, they go to macOS Keychain, Linux libsecret, or Windows Credential Manager. `DATABASE_URL`, `MYSQL_URL`, and `POSTGRES_URL` can be discovered without silently becoming editable profiles. The password field stays masked while editing and resizing, including wide characters such as ideographs and emoji.
+Profiles start **read-only**, with the `READ-ONLY` toggle checked. In the connection form, `[Ctrl+W]` or a click unchecks it to enable writes; the label stays the same. Toggle it again to restore read-only mode. Passwords are not written to configuration JSON: when requested, they go to macOS Keychain, Linux libsecret, or Windows Credential Manager. `DATABASE_URL`, `MYSQL_URL`, and `POSTGRES_URL` can be discovered without silently becoming editable profiles. The password field stays masked while editing and resizing, including wide characters such as ideographs and emoji.
+
+Connection inputs accept exported shell environment variables as `{DB_HOST}`, `{DB_PORT}`, or `{DB_PASSWORD}`, including references inside text such as `{HOME}/data/app.sqlite`. Type `{` to see variable names, use `[↑/↓]` to select and `[Tab]` or `[Enter]` to complete; `[Esc]` dismisses suggestions first. Export variables before launching Tuiminal (for example, `export DB_HOST=localhost`). Suggestions never show values. Saved fields keep references; password references follow the existing Keychain/session setting. Undefined variables and invalid ports block connection attempts.
 
 The connection manager also lists session-only profiles from MySQL `~/.my.cnf`, `mysql_config_editor`, PostgreSQL `~/.pg_service.conf`, and `~/.pgpass` (including the corresponding Windows locations). `[R]` refreshes discovery. Missing fields are requested for the current session; external passwords are never copied into Tuiminal settings. Saved PostgreSQL profiles can use `pgpass` instead of Keychain. On Unix, secrets in files with unsafe ownership or permissions are ignored. Discovered external profiles enable writes, while the same staged review and explicit confirmation remain mandatory.
+
+MySQL groups such as `[client_dev]` and `[client_test]` appear as separate profiles. Each inherits `[client]`/`[mysql]` defaults and merges the matching `[mysql_dev]` or `[mysql_test]` overrides; groups with a hyphen suffix are also supported. Incomplete profiles appear in the connection manager so you can fill in missing fields without re-entering a safely loaded password. Discovery progress and warnings are shown instead of treating these configurations as absent. `!include` and `!includedir` directives are reported but are not followed.
 
 Connection tests release temporary clients on failure as well as success. Environment URL passwords are decoded once, and a passwordless URL does not inherit the previous password.
 
@@ -215,7 +221,7 @@ Export previews process only the first visible rows and retain the original lang
 | Cancel query | `[Ctrl+X]` |
 | New / close SQL tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Switch SQL tabs | `[Alt+←/→]` |
-| Adjust split / maximize pane | `[Ctrl+↑/↓]` / `[F10]` |
+| Adjust split / maximize pane | `[+/-]` / `[F10]` |
 | Review staged writes | `[Ctrl+S]` |
 | Refresh data and catalog | `[R]` |
 
@@ -265,7 +271,7 @@ view between Diffs and Compare.
 - A Git terminal below the diff shows seven rows and retains up to 2,000 history lines of actual command output. `[T]` focuses it for manual commands; `[↑/↓]` and mouse scroll output; `[F10]` maximizes/restores it within the preview pane. The `git` prefix is fixed, without shell command composition. Autocomplete suggests commands, options, known local/remote branches, tags, remotes, and changed files: `[Ctrl+N/P]` navigates, `[Ctrl+Y]` applies, and `[Esc]` dismisses.
 - `[C]` switches to **Compare**, comparing two known refs through `base...compared` without checkout or uncommitted changes.
 - `[Ctrl+P]` chooses another local repository/branch without changing PR, Issues, or Inbox scope. In the terminal it belongs to autocomplete; it cannot open settings over a modal or partial staging.
-- The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub.
+- The Git tutorial demonstrates both local modes in tab `[1]` using simulated data. Diffs covers the header, changed-file tree, mini commit graph, preview, actions, terminal, navigation, and `[Ctrl+P]`, `[Space]`, `[G]`, `[O]`, `[V]`, `[S]`, `[D]`. It then enters `[C] Compare`, opens simulated project/base/compared selectors, explains `base...compared`, and shows the commit-only summary, grouped tree, selected diff, three layouts, and return via `[C]` or `[Esc]`. Stateful steps show the resulting view; the tutorial never discovers projects, runs Git, fetches refs, or accesses GitHub. It then enters `[2] PR` (scope, queues, search, all preview tabs, file diff, creation and approval), `[3] Issues` (sections, details, comments, creation and triage), and `[4] Inbox` (notifications, conversations, read marks, saving, completion and unsubscribe). These 25 remote steps display fictional results and confirmation dialogs; they never invoke `gh`, open a browser, persist settings or submit actions.
 - The Term Agents tutorial walks from the basics to advanced use with a simulated online-store project: PTY panes, the metadata strip, sessions and folders, the New agent button, the Master Key menu and `[1]`–`[9]`, rename, box selection, splits, the Agents list, the provider/project/folder/environment pickers, resume threads, sent-message history and turn details, every Live Diff area and its project picker, the pinned sidebar, tmux mirrors, remote agents, project sync review/progress/automatic sync and the server setup guide. Each step opens the view it explains. The tour paints over the live workspace, so real terminals keep running at their size and receive no input; it never spawns processes, reads Git, discovers projects or connects over SSH.
 
 PR, Issues and Inbox place `[?] Actions` beside their screen title and omit the
@@ -365,6 +371,11 @@ Remote scope is saved in Git profiles. The local Diffs selection is separate in 
 
 Runner is Tuiminal's initial screen. It discovers project commands, starts short- and long-running processes, and keeps logs, input, and history in the same workspace.
 
+Open `[,]` → **Tutorial** while Runner is active for a guided tour of commands,
+processes, logs, Multi, YAML, flows and autostart review. Every demonstration uses
+simulated data; your project files and running sessions stay intact. Use `[Enter]`
+to advance, `[←]` to go back and `[Esc]` to return to your workspace.
+
 <a id="o-que-você-pode-fazer-1"></a>
 
 ### What you can do
@@ -417,7 +428,7 @@ Edit `commands`, `flows` and `profiles` as YAML with syntax colors and contextua
 
 ### Essential Runner shortcuts
 
-The command footer includes Multi, history, environment, saved-command removal, and log copy, export and clearing. With the log focused, the footer also exposes filtering, stream selection and timestamps. Both footers wrap their shortcuts to fit the terminal width. The header's `[N] New tab` button sits between the existing tabs and command summary and opens the project picker. The `[/]` button beside the command input focuses that field; pressing `[/]` does the same. `[P]` switches between commands and active processes, and `[D]` refreshes discovery, using the buttons in the command-panel header or their shortcuts.
+The command footer includes Multi, history, environment, saved-command removal, and log copy, export and clearing. With the log focused, the footer also exposes filtering, stream selection and timestamps. While the log filter is being edited, the footer shows only `[Enter] Apply`, which keeps the filter and returns to the log, and `[Esc] Close`. Both footers wrap their shortcuts to fit the terminal width. The header's `[N] New tab` button sits between the existing tabs and command summary and opens the project picker. The `[/]` button beside the command input focuses that field; pressing `[/]` does the same. `[P]` switches between commands and active processes, and `[D]` refreshes discovery, using the buttons in the command-panel header or their shortcuts.
 
 The action palette lists commands with categories and reasons for unavailable actions. Use `[/]` to search, `[↑/↓]` or `[J/K]` to navigate, and `[Enter]` or a click to choose. `[Esc]` leaves search before closing the palette and restoring focus. Existing shortcuts remain available.
 
@@ -439,7 +450,10 @@ The action palette lists commands with categories and reasons for unavailable ac
 | Search actions | `[?]` (also `[A]` in Single / `[Shift+A]` in Multi) |
 | Open another project | `[N]` |
 | Switch Runner projects | `[1]`–`[4]` |
-| Close project tab without stopping processes | `[Ctrl+X]` |
+| Close project tab without stopping processes | `[X]` |
+| Export selected log | `[Ctrl+X]` |
+
+The active Runner tab shows a red `[X]`; inactive tabs show `×`. Plain `[X]` closes the active tab outside text inputs and dialogs.
 
 The YAML editor saves `~/.config/tuiminal/runner/<project-hash>/runner.yaml`, without changing project files. Existing saved commands and flows are included on the first save. `runner.json` retains sessions, history and legacy definitions for projects without YAML. Logs persist only through opt-in or export to `tuiminal-logs/`. Tuiminal stops only processes it started when exiting.
 
@@ -449,39 +463,70 @@ The YAML editor saves `~/.config/tuiminal/runner/<project-hash>/runner.yaml`, wi
 
 <p align="center">
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/http.gif" alt="Tuiminal HTTP tab demo" width="100%">
+
+Postman collections and folders open **Settings** from `[A]` or a double-click. Collections offer **Authorization**, **Scripts**, and **Variables**; folders offer **Authorization** and **Scripts**, including inherited parent authentication. `[Ctrl+S]` saves to Postman while preserving drafts on failure.
 </p>
 
-A compact API client with documents, collection, request builder, response inspection, and automation. Its interactive data lives in one global HTTP home (`$XDG_DATA_HOME/tuiminal/http`, or `~/.local/share/tuiminal/http`) regardless of the opened project. Layout adapts from three columns to split or single-pane views without losing drafts, cursor, response, or focus.
+A compact API client with documents, collection, request builder, response inspection, and automation. Its interactive data lives in one global HTTP home (`$XDG_DATA_HOME/tuiminal/http`, or `~/.local/share/tuiminal/http`) regardless of the opened project. Layout adapts from three columns to split or single-pane views without losing drafts, cursor, response, or focus. Tabs and action bars wrap in narrow panes so body formats, Copy, and Save remain accessible. Request tables expose Add/Edit controls, and a running response has a clickable Cancel action. HTTP dialogs share a dimmed background, a consistent header and responsive actions; collection import separates choosing a file from reviewing and confirming it.
 
 <a id="o-que-você-pode-fazer-2"></a>
 
+Dialogs highlight the request, file or destination being changed. Confirmations,
+imports and Postman pickers keep their actions in wrapping footers; long form
+details scroll while the focused field stays visible. Import previews separate
+request, skipped-item, warning and conflict counts, and response comparisons use
+distinct before/after context.
+
 ### What you can do
 
-- **Build requests:** method, URL, query parameters, headers, JSON/text/XML, URL-encoded forms, multipart, file bodies, and Bearer, Basic, or API Key authentication.
-- **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors, with tree controls in a separate gutter and a full-row highlight on the selected block. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block. Navigable Pretty JSON keeps one row per line for accurate selection; Wrap remains available in Raw and other response views.
-- **Control space:** request/response starts at `50/50`; `[Ctrl+↑/↓]` and the drag handle share a per-document ratio limited to 25–70%.
+- **Build requests:** method, URL, query parameters, headers, JSON/text/XML, URL-encoded forms, multipart, file bodies, and Bearer, Basic, API Key, or OAuth2 authentication. The Body editor highlights JSON and XML syntax; TEXT remains plain. `[Tab]` inserts two spaces without changing focus, and `[Esc]` leaves the editor.
+- **Inspect responses:** status, duration, size, headers, timing, Pretty/Raw, search, JSONPath, copy, save, and comparison. Valid JSON receives formatting and colors, with tree controls in a separate gutter and a full-row highlight on the selected block. With the response focused, `[↑/↓]` or `[J/K]` navigates blocks, `[←/→]` collapses/expands, and `[Enter]` toggles the current block. Navigable Pretty JSON keeps one row per line for accurate selection. Other views use colored tables: Raw has numbered lines; Headers show names and values; Timing shows measured phases and percentages; Summary, Cookies, Redirects, Assertions and Console have their own columns. Narrow panes stack fields without dropping data, and wrapped cells remain searchable. Success, failures and warnings have distinct colors; values in the Cookies tab remain masked.
+- **Control space:** the workspace/collection pane widens when focused and returns to its normal width when you move elsewhere, keeping the request and response usable. Request/response starts at `50/50`; `[+/-]` and the drag handle share a per-document ratio limited to 25–70%.
 - **Save collections:** import and save interoperable `.http`/`.rest` files in the global HTTP home without silently rewriting unsupported blocks.
-- **Organize collections with keyboard or mouse:** move through the collection tree with `[↑/↓]` or `[J/K]`, collapse and expand with `[←/→]`, and open requests with `[Enter]`. Create folders, `.http` collections, and requests; rename or delete selected items. Empty folders and collections remain visible. Deletion requires confirmation; changed or running open requests must be handled first.
+- **Organize collections with keyboard or mouse:** move through the collection tree with `[↑/↓]` or `[J/K]`, collapse and expand with `[←/→]`, and open requests with `[Enter]`. Create folders, `.http` collections, and requests. `[A]` or a right-click opens a menu beside the selected row: folders/collections offer Add request, Add folder, Rename, Duplicate, and Delete; collections also offer Run collection, and local directories offer New collection. Requests offer Rename, Delete, and Duplicate. New folders/requests and renamed items use a single-line input directly in the tree; `[Enter]` saves and `[Esc]` cancels. While saving, an animated loader appears beside the name in the same row; a failed save leaves the name available to retry. Empty folders and collections remain visible in gray; names with requests use the theme’s main text color. Deletion opens a persistent, focused notification with a softly glowing border: `[Enter]` confirms and `[Esc]` declines, then focus returns to the tree. Changed or running open requests must be handled first.
 - **Import:** enter a full path or `~/` path to a Postman v2.0/v2.1 or OpenAPI 3.0/3.1 file, use `[↑/↓]` and `[Tab]` to complete it, or drop a file into the import box when the terminal pastes its path. Tuiminal detects the format from the file contents and shows it in the conversion preview with loss warnings; the resulting `.http` is saved in the global HTTP library only after confirmation, independent of the opened project.
-- **Connect a Postman account:** run `tuiminal postman login` for a prompt that does not echo the API key, or pipe a key to `tuiminal postman login --api-key-stdin`; add `--region eu` for an EU account. When connected, HTTP opens with Local and Postman source cards; `[Ctrl+G]` switches sources. In Postman mode, choose a workspace to load all its collections, initially with every collection and folder collapsed; `[E]` optionally selects an environment. The left tree shows the workspace name above its collections, omits the internal `postman/` folder, and uses Postman method colors. `[?]` reveals collection actions and shortcuts. The key and imported variable values use the system credential store. Tuiminal creates linked `.http` files for new collections under the global HTTP home and private, selectable environments when variables are available; it does not change the opened project. `[Shift+N]` creates a collection in the selected source; Postman uses the active workspace or asks for one before selection. Create, rename, duplicate, and delete linked requests; create, rename, and delete linked collections and nested folders. These actions update Postman and the local copy. `[Ctrl+S]` sends changes to a linked request; for a new request it offers a destination collection or folder and creates it in Postman. `[Ctrl+P] Postman` retries a pending send. Conflicts and failed remote writes are reported. Moving requests between files is not yet available for Postman. Imported environment edits remain local. Vault values unavailable through the API, scripts, saved responses, and unsupported authentication are reported or omitted. See [Postman account access](./docs/design/postman-account.md) for the exact boundaries.
-- **Automate:** status/header/body/JSONPath assertions, request dependencies, and public or volatile variable extraction.
-- **Run collections:** resolve dependencies topologically, use JSON/CSV datasets, limit concurrency, and emit text, JSON, or JUnit reports. Selection works with duplicate request names. Reopening the runner or changing its target cancels the previous run; stale results cannot replace the new one.
-- **Use environments:** `[E]` lists selectable environments; `[N]` creates one, `[E]` edits or renames the selected one, and `[D]` deletes it after confirmation. `[G]` opens always-active `Globals`, whose name is fixed. Each form has a name and variable/value table; `[/]` chooses a block, `[↑/↓]` moves its focus rail, and `[Enter]` opens it. Alternating row backgrounds and a highlighted cell make table navigation clear. `[Tab]` advances through cells; populated tables support arrows or `[H/J/K/L]`, `[Enter]` to edit, and layered `[Esc]` to leave. Values are visible while editing and always saved in the operating system's credential store; the private environment file contains only opaque references for new or edited values. The bordered modal owns focus while open. Workspace defaults are no longer applied.
-- **Edit request tables:** in Query/Path Params, `[J/K]` or `[↑/↓]` chooses a block. `[Enter]` starts the first cell of an empty table or opens navigation over existing rows. Arrows or `[H/J/K/L]` reach the enabled dot, name/value cells, and `[×]`; `[Enter]` activates the selected control, including deletion on `[×]`. `[Space]` enables or disables the selected row, and `[Tab]` advances through inputs into a draft row that becomes real when typed. `[Esc]` steps back from input to table to block. Headers, form URL encoded, and Multipart use the same flow; Multipart also exposes its text/file switch in table navigation. `[N]` is no longer used to add table rows.
-- **Write URLs quickly:** type `{` in the URL to see available variable names, then `[Tab]` to complete `{{name}}`. Query pairs such as `?manga=2` appear in Params and can be edited there without sending duplicates.
-- **Control transport:** timeout, redirects, cookie jar, HTTP/HTTPS proxy, and TLS. Cookies use Public Suffix List validation and bounded storage isolated by environment and collection directory. `[C]` disables both cookie reads and writes per request. Disabling TLS verification is explicit, visibly red, and requires approval per destination.
+- **Upload files:** Body → File has a native file chooser above a dotted drop area. Choose or drop one or several files from any folder. One file in File sends a raw body; selecting several switches to Multipart with one editable `file` field per attachment. Multipart shows full Text/File type labels and lets you add more files, change field names and remove each row; names must match the receiving API. `[Backspace]` removes the raw-file selection and cancelling keeps the current selection. macOS and Windows use system dialogs; Linux uses Zenity or KDialog when available. Terminals can paste a dropped path, including escaped spaces or a local file URL. File and multipart uploads accept files outside the HTTP library, including symlinks, up to 256 MB. File controls preserve navigation and global shortcuts; isolated letters are not interpreted as file paths.
+- **Connect a Postman account:** run `tuiminal postman login` for a prompt that does not echo the API key, or pipe a key to `tuiminal postman login --api-key-stdin`; add `--region eu` for an EU account. HTTP always starts with the Local and Postman cards; `[Ctrl+G]` returns to them. Choosing Postman immediately opens the last used workspace and environment, or the first accessible workspace. Connection errors keep the cards available for retry or Local selection. Postman loads workspaces, collections, folders, and variables directly from the API, keeping account data in memory without local `.http` copies or sidecars. Use the workspace menu to switch workspaces and `[E]` to open environments. Collections retain their original names and stable remote IDs, including repeated request names and drafts without URLs. `[A]` or right-click offers create, rename, duplicate, and delete actions; `[?]` opens the action palette. `[Ctrl+S]` saves directly to Postman and confirms the result; new requests ask for a destination collection or folder. Failed saves leave edits open and unsaved; `[Ctrl+P]` retries the same save. Unrelated remote changes are preserved, and simultaneous changes to edited fields are reported as conflicts. Form, Multipart, and File bodies retain file references without uploading file contents. Reopening a workspace or request reads current API data; there is no offline collection fallback. The API key uses the OS credential store by default. Explicit CLI `pull`/`push` commands remain available for local copies. See [Postman account access](./docs/design/postman-account.md) for supported fields and boundaries.
+- **Postman login troubleshooting:** if the API accepts the key but it cannot be saved, the CLI shows a red explanation and yellow recovery steps. Interactive login then warns and asks whether to save the key in a local file without encryption; only `Y` followed by `[Enter]` accepts, and the default is no. The file stays in the global HTTP home with owner-only permissions where supported. Both HTTP and the CLI can use it without the OS credential store. A later secure login removes the local copy; `logout` clears the saved key. Piped input never enables this fallback. See [credential storage](./docs/design/postman-account.md).
+- **Postman save troubleshooting:** custom Tuiminal Options, Assertions, and Chaining cannot be saved to Postman. The error identifies which section to reset before retrying. Cleared proxy fields, empty assertions, and removed chaining do not block saving other edits; failed saves keep the draft open.
+- **Concurrent script edits:** Pre-request and Post-response are saved independently. Editing one preserves remote changes to the other; conflicting edits to the same script keep the draft unsaved.
+- **Request selection:** Local and Postman open with the collections sidebar focused and without an automatic Scratch. Until you select a call, the Tuiminal and Postman logos replace the request and response panels. Closing or deleting the last call returns to this view; unsaved edits require confirmation. `[Ctrl+N]` explicitly creates a draft. In Postman, `[Ctrl+S]` asks for a destination only after edits or a prefilled URL; confirmed deletions need no save.
+- **Run request scripts:** the **Scripts** tab contains **Pre-request** and **Post-response** JavaScript editors with syntax highlighting. Nested tabs `[Z←]`/`[V→]` select the phase, `[Enter]` edits, and `[Esc]` exits editing; `[Tab]` indents. Scripts use the Postman engine, including `pm.environment`, `pm.globals`, `pm.collectionVariables`, `pm.variables`, `pm.request`, `pm.response`, `pm.expect` and `pm.test`. Environment/global/collection changes remain in the current workspace session, isolated by environment and collection, without automatic remote writes. Tests appear with response assertions; a pre-request error prevents sending, while a post-response error keeps the response. Scripts are saved with the request in Local or Postman mode. Each phase has a two-second execution limit; collection/folder scripts, additional scripted requests, Vault, Visualizer and flow-control APIs are not supported.
+- **Read and edit request docs:** open **More → Docs** to read the request description as scrollable Markdown. `[Enter] Edit` opens the complete source; `[Esc] Preview` keeps the draft. `[Ctrl+S]` saves to the selected source: a local file in Local mode or directly to the API in Postman mode.
+- **Automate:** status/header/body/JSONPath assertions and guided Chaining. Search for a previous request and review the execution order, then extract variables from JSONPath, response headers or HTTP status. Each extraction has enable/disable and secret controls, validation and a preview from the last response. Reuse values as `{{variable}}` later in the same run; open drafts participate in the chain.
+- **Run collections:** resolve dependencies topologically, use JSON/CSV datasets, limit concurrency, and emit text, JSON, or JUnit reports. Selection works with duplicate request names. The runner separates request selection, parallel dataset cases and optional data. `[Tab]` moves between fields; Enter in the data field focuses Run, while `[Ctrl+Enter]` starts execution. Run/Cancel stays visible while configuration and results scroll. Target and parallelism controls are locked during execution. Reopening the runner cancels the previous run; stale results cannot replace the new one.
+The active HTTP tab shows a red `[X]` close button. Press `[X]` outside text inputs to close it; unsaved changes still require confirmation. `[W]` exports cURL, `[Esc]` cancels requests or collection runs after leaving focused inputs, and `[Shift+M]` beside the method cycles it. HTTP split resizing uses `[+]` to increase and `[-]` to decrease, outside text editors.
+
+- **Use environments:** `[E]` opens the workspace's environment list in place of History, with highlighted **Global** first and the other environments below. Click an item or use `[Enter]`, `[→]` or `[L]` to open and focus its table in a tab beside requests. Each named environment has an `[A]` menu with only **Use environment** and **Delete**, without first opening a tab; deletion asks for confirmation. `[M]` includes the environment table in box selection. Moving up past the first variable selects Name in blue; `[Enter]` or a click starts editing, and `[↓]` returns to the table. `[←/H]` past the variable column returns to the list. While browsing, `[,]`, `[Q]`, `[M]` and `[?]` remain available; text fields retain typed characters. Global keeps its fixed name and cannot be deleted. Its **Variable / Value** table fills the request/response area. Arrows select a highlighted cell, `[Enter]` edits, and `[Esc]` returns to the table, then the list. `[Tab]` reaches actions; while editing, `[Tab/Shift+Tab]` moves through fields. `[Home/End]` scrolls to the first/last row, `[Alt+←/→]` switches tabs without losing edits, and `[Ctrl+S]` saves. `[N]` creates an environment, the name field renames it, and Delete asks for confirmation. **Use environment** activates it for requests; opening a tab alone does not change the active environment. Drafts survive tab changes and failed saves, and closing a changed tab asks before discarding. Local values use the OS credential store with opaque file references. Postman reads and writes the selected workspace's shared values through the API, preserves variable metadata, and rejects a save if the remote environment changed since it was opened.
+- **Edit request tables:** in Query/Path Params, `[J/K]` or `[↑/↓]` chooses a block. `[Enter]` starts the first cell of an empty table or opens navigation over existing rows. Arrows or `[H/J/K/L]` reach the enabled dot, name/value cells, and `[×]`; `[Enter]` activates the selected control, including deletion on `[×]`. `[Space]` enables or disables the selected row, and `[Tab]` advances through inputs into a draft row that becomes real when typed. `[Esc]` steps back from input to table to block. Headers, form URL encoded, and Multipart use the same flow; Multipart also exposes its text/file switch in table navigation. `[N]` is no longer used to add table rows. Tables share aligned Name/Value columns, a type column for multipart, active/total counts, alternating rows, and contextual footer hints. Disabled entries are dimmed. Query and Path Params each use 50% of the available height, even when empty, with independent scrolling. Other empty sections stay compact; scrolling keeps the selected cell visible through resize.
+- **Authorize with OAuth2:** choose **OAuth2** in Auth for Client Credentials or Authorization Code with PKCE (S256). Configure token/authorization URLs, client credentials, scope and optional audience; fields accept environment variables. `[Ctrl+T]` gets a token, `[Ctrl+R]` refreshes it, and `[Esc]` cancels a pending authorization outside text inputs. For PKCE, register the displayed loopback callback with your provider, then open or copy the browser link. Expiring tokens refresh automatically for individual sends and collection runs. Tokens stay in memory for the session; saved requests contain configuration only, and previews/cURL omit issued tokens. Store client secrets in private environment variables. Headless runs support Client Credentials; PKCE requires the interactive login.
+- **Edit authentication and details:** authentication uses labeled full-width fields and masks tokens, passwords, and API key values. Assertions and Chaining use separate rows with Add/Delete controls; `[N]` also adds to an empty list. Authentication uses `[Enter]` to open the form, `[Tab]`/`[Shift+Tab]` to move between fields, and `[Esc]` to return to pane navigation. Chaining uses `[J/K]` or `[↑/↓]` to select items, `[H/L]` or `[←/→]` to select fields/actions, and `[Enter]` to activate. Leaving an input with `[Esc]` or `[Enter]` restores selection; its help stays in a fixed footer. Assertions opens in row selection: `[J/K]` or `[↑/↓]` selects an item and `[Enter]` edits it. `[Esc]` or `[Enter]` returns to selection; `[Tab]`/`[Shift+Tab]` leaves the input and selects the next/previous item. Examples remain in a fixed footer while rows scroll. Preview groups the prepared request, headers, variables, and body with private values masked.
+- **Adjust request options:** More → Options has three blocks selected with `[J/K]` or `[↑/↓]`. `[Enter]` enters Options; move vertically through alternating rows and press `[Enter]` to change a setting or edit the proxy below them. Identity places Name and Method side by side with inline labels: enter the block, select with `[H/L]` or `[←/→]`, then press `[Enter]` to type. `[Esc]` returns from input to items to blocks. Actions stay at the bottom with alternating button backgrounds; select that block, move horizontally and press `[Enter]` to activate directly. Narrow strips scroll to the selected action. The selected options row shows `[R] Default` to reset only that setting; timeout and redirects return to inheritance. Actions have no individual letter shortcuts. The active Options or Identity heading shows `[Enter] Select` before entry and `[Esc] Exit` inside the block; both hints are clickable.
+- **Complete request variables:** type `{{` in URLs, query/path parameters, headers, authentication, raw bodies, form/Multipart text fields, or proxies. Suggestions follow the cursor: `E` has a blue background for the active environment, `G` green for globals, and `C` brown for collection variables. The selected row shows its value immediately below. `[↑/↓]` selects, `[Tab]` completes `{{name}}`, and `[Esc]` dismisses. Completed `{{name}}` references are light blue. Hold the mouse or text cursor over one for one second to open its scope/value tooltip. `[↓]` focuses the value; `[Esc]` saves and returns to the request. Leaving an edited value also saves it in its original scope, while failures retain the draft for retry. Names and values both support variables; query pairs such as `?manga=2` appear in Params without sending duplicates.
+- **Control transport:** timeout, redirects, cookie jar, HTTP/HTTPS proxy, and TLS. Cookies use Public Suffix List validation and bounded storage isolated by environment and collection directory. The Cookie jar row disables both cookie reads and writes per request. Disabling TLS verification is explicit, visibly red, and requires approval per destination.
 - **Review sensitive redirects:** sending a private body/URL to another origin or downgrading HTTPS to HTTP pauses for authorization. `[Y]` continues that hop; `[Esc]` refuses. The confirmation shows destination and risks with known private values masked. Cancellation cannot undo a request already received by the previous server.
 - **Handle external responses carefully:** `[O]` opens only allowlisted raster images with matching MIME and signatures. SVG, PDF, generic binaries, and disguised content cannot open through the system handler, but can be explicitly saved. Full download resends only GET, caps at 256 MB, and removes partial files on failure. Repeated activation does not duplicate downloads; closing the owning document cancels them. Completed files are published only after all bytes are written, without replacing an existing destination.
 
 <a id="atalhos-essenciais-do-http"></a>
 
+HTTP keeps up to six numbered tabs. Opening another replaces the last tab, asking before discarding unsaved changes. The tab bar scrolls to keep the active tab visible.
+
+Select the workspace name in the tree with the mouse or `[Home]`, then press `[A]` or `[Enter]` for **New collection**, **Select workspace**, or **New workspace**. New workspace asks for a name, creates a personal workspace through the Postman API, and opens it. Failed creation keeps the name available to retry; `[Esc]` cancels before submission. Right-clicking the workspace name opens the same menu. New collections in the active workspace use an inline name input; `[Esc]` cancels. In Local mode, the workspace menu offers New collection, New folder, and Import collection. Choose Run collection from a collection’s menu to open the runner scoped to that file; `[T]` cycles only its requests, and `[Ctrl+Enter]` starts execution. The former Commands control and its collection-tree shortcuts have been removed.
+
+The Postman workspace chooser shows call totals on the right, including nested folders. Counts load in the background; `…` means loading and `—` means unavailable.
+
 ### Essential HTTP shortcuts
+
+The Request `[R]` and Response `[Shift+R]` title buttons focus their panels. Text
+inputs and modal dialogs keep ownership of typed keys.
 
 | Action | Shortcut |
 | --- | --- |
 | Switch route, collection, request, and response | `[Tab]` / `[Shift+Tab]` or `[H/L]` |
 | Focus URL / send / cancel | `[/]` / `[S]` or `[Enter]` / `[X]` |
-| Previous / next method | `[Shift+M]` / `[M]` |
+| Open searchable actions | `[?]` (or `[F1]`) |
+| Choose a visible box | `[M]`, arrows or `[H/J/K/L]`, then `[Enter]`; `[Esc]` or `[M]` cancels |
+| Next method | `[Shift+M]` or click the method |
 | Cycle Params, Headers, Body, Auth, and More with request focused | `[A←]` / `[F→]` |
 | Cycle nested Body, Auth, or More options | `[Z←]` / `[V→]` |
 | Switch Query Params / Path Params | `[J/K]` or `[↑/↓]` |
@@ -491,15 +536,16 @@ A compact API client with documents, collection, request builder, response inspe
 | Navigate / collapse / expand JSON | `[↑/↓]` or `[J/K]` / `[←/→]` / `[Enter]` |
 | Open environments | `[E]` |
 | Switch main response view / internal tab | `[A←]` / `[F→]` · `[Z←]` / `[V→]` |
-| Open collection / history | `[C]` / `[Y]` |
+| Open collection / environments | `[C]` / `[E]` |
 | Navigate collection rows / first or last row | `[↑/↓]` or `[J/K]` / `[Home/End]` |
 | Collapse or expand / open selected request | `[←/→]` / `[Enter]` |
-| New request / collection / folder in collection pane | `[N]` / `[Shift+N]` / `[P]` |
-| Rename / delete selected collection item | `[E]` / `[D]`, then `[Enter]` to confirm deletion |
+| Collection / folder / request / workspace actions | `[A]` or right-click |
+| Confirm / refuse deletion | `[Enter]` / `[Esc]` |
+| Select a numbered tab (outside text fields) | `[1]`–`[6]` |
 | New / close tab | `[Ctrl+N]` / `[Ctrl+W]` |
 | Switch documents | `[Alt+←/→]` |
 | Save `.http` | `[Ctrl+S]` |
-| Adjust split / maximize | `[Ctrl+↑/↓]` / `[F10]` |
+| Adjust split / maximize | `[+/-]` / `[F10]` |
 | Open jump mode | `[Ctrl+O]` |
 
 A versionable request example:
@@ -533,7 +579,7 @@ Headless redirects carrying a private body/URL require `--allow-private-redirect
 
 Responses are captured up to roughly 1.5 MB and rendered within a bounded preview. Capture releases its reader on completion/failure and reports truncation only after observing bytes beyond the limit. Search tracks lines and columns without repeatedly processing the preceding text. Known secrets are masked in preview, cURL, conflicts, reports, and errors; secret extractions stay in memory.
 
-The response toolbar's **Copy** button includes all captured text beyond the 50,000-character display limit, without interface labels, line numbers, or folded summaries. Pretty copies formatted JSON or the complete JSONPath result; Raw copies the captured text. To copy a selected excerpt, use selection and right-click. Responses exceeding the capture limit still require **Download full body**.
+For Pretty and Raw, the response toolbar's **Copy** button includes all captured text beyond the 50,000-character display limit, without interface labels, line numbers, or folded summaries. Metadata tabs copy full textual rows without table borders; **Copy line** preserves the logical row even when it wraps. Pretty copies formatted JSON or the complete JSONPath result; Raw copies the captured text. To copy a selected excerpt, use selection and right-click. Responses exceeding the capture limit still require **Download full body**.
 
 HTTP history stays in the current session and does not persist request or response bodies. Original responses remain in memory for inspection and explicit export. Preview, cURL, reports, and errors mask known secrets; explicitly exported files and older files from previous versions remain separate from session history.
 
@@ -546,6 +592,15 @@ Sensitive Path values receive the same protection, including encoded URLs and di
 <a id="term-agents"></a>
 
 ## Term Agents
+
+Drop or paste local files into an integrated remote agent to upload them, after
+confirmation, to `/tmp/tuiminal-agents/<unique-id>/` on its server. Successful
+uploads insert the remote paths into the prompt without sending the message.
+Every file, including images, opens confirmation. You can also click **Upload files**
+to the left of the synchronization tag or press `[Ctrl+B]` → `[.]` (using your
+configured Master Key). The dialog shows the destination, filenames, sizes and
+upload progress; `[A]` adds paths, `[↑/↓]` selects files, `[Del]` removes a selection,
+`[Enter]` confirms and `[Esc]` cancels.
 
 <p align="center">
   <img src="https://github.com/DeividXupon/tuiminal/raw/refs/heads/main/docs/media/terminal.gif" alt="Tuiminal Term Agents tab demo" width="100%">
@@ -603,13 +658,15 @@ background execution with the native backend.
 - The Master Key action list keeps theme-aware primary titles and right-aligned colored tags for features, agent-only capabilities, terminal operations, sidebar controls, navigation, and app actions. `[G]` is not an action in this menu; `[R]` is available for the active integrated remote agent project.
 - Use Master Key `[M]` to choose among the sidebar and the visible terminal, sent-message history, and Live Diff boxes. The previously focused box is highlighted in blue, every other choice is slightly darkened, and the central instruction has its own theme-aware background; move with arrows or `[H/J/K/L]` and press `[Enter]` to focus it.
 - Use the sidebar's **New agent** button to choose a provider, project and environment for an integrated agent session.
-- Use Master Key `[A]` or **New agent** to choose Codex, Claude Code, or OpenCode. Choosing a provider opens **Recent projects** and automatically discovered **Git projects**. `[E]` selects Local or any SSH alias from `~/.ssh/config` without changing the active alias in settings. Lists stay separate per provider and machine/server; Git discovery is bounded and runs in the background. Click a project or press `[Enter]` to start its agent. `[P]` opens a separate folder search with `~/` already focused. Suggestions update as you type; arrows select a suggestion, `[Tab]` autocompletes it and enters that folder. `[Enter]` chooses the typed folder and returns to the project list. `[Esc]` returns from projects to providers, then cancels. The shared loading surface appears only while an agent starts, a selected folder is validated, SSH aliases are still loading, or the Live Diff project catalog is unavailable; background project discovery and autocomplete remain interactive. Startup failures retain the destination for retry. If the selected Codex, Claude Code, or OpenCode CLI is missing or incompatible, a guided local terminal shows manual update and official install commands; remote launches add an SSH terminal when needed. Tuiminal never types or runs those commands, and successful revalidation retries the exact launch. Tasks and approvals remain in the selected provider's official interface.
-- In `[,]` → **Remote connection**, press `[Enter]` to choose an explicit `Host` alias discovered from `~/.ssh/config` (including bounded `Include` files), make it active with `[Enter]` or `[A]`, and test access. Configure the SSH user, endpoint, port, identity, agent, proxy, and jump hosts only in OpenSSH; Tuiminal neither asks for nor stores those values and invokes `ssh` with the selected alias. Automated launches neutralize alias-owned remote commands, connection masters, and forwards; tunnel aliases must not define their own dynamic, local, or remote forwards. **Check server** verifies GitHub-over-SSH and whether Codex CLI is installed, authenticated, and supports app-server. **Configure server** opens an interactive SSH terminal with a step-by-step guide below it; you run each command yourself, and **Confirm configuration** rechecks the current requirement before advancing. Before opening a remote Codex interface, Tuiminal validates the local and remote CLIs, SSH, the selected directory, the remote Codex account, compatible versions, daemon/proxy capabilities, persistent daemon startup, and the proxy's `initialize` response. The local CLI, remote CLI, daemon app-server, and initialized app-server versions must match exactly. Missing or incompatible support opens a localized modal: `[Esc]` preserves the launch selection, while `[Enter]` opens split local and remote update terminals showing detected versions, `codex update`, and the official POSIX installer alternative. Tuiminal never prefills or runs those commands; successful revalidation closes only the guide terminals and retries the original new or resumed session. The remote installation owns the shared daemon, while Tuiminal closes only its local TUI, relay, and disposable SSH proxy—never the daemon. Tuiminal merges both machines' recent agents in the Master Key Agents panel, labeling remote rows with their profile; select a remote conversation there to resume it with its public history and current state rehydrated. Master Key `[N]` always opens a local terminal. No server port is exposed. Browsing and startup do not copy projects, and Tuiminal does not install tools or connect accounts for you. The [app-server protocol is experimental and version-dependent](https://learn.chatgpt.com/docs/app-server); see the official [`codex update` command](https://learn.chatgpt.com/docs/developer-commands#codex-update).
+- Use Master Key `[A]` or **New agent** to choose Codex, Claude Code, or OpenCode. Choosing a provider opens **Recent projects** and automatically discovered **Git projects**. `[E]` selects Local or any SSH alias from `~/.ssh/config` without changing the active alias in settings. Lists stay separate per provider and machine/server; Git discovery is bounded and runs in the background. `[/]` focuses the project search, which filters by name or path; `[Esc]` returns to the list while keeping the filter. Click a project or press `[Enter]` to start its agent. `[P]` opens a separate folder search with `~/` already focused. Suggestions update as you type; arrows select a suggestion, `[Tab]` autocompletes it and enters that folder. `[Enter]` chooses the typed folder and returns to the project list. `[Esc]` returns from projects to providers, then cancels. The shared loading surface appears only while an agent starts, a selected folder is validated, SSH aliases are still loading, or the Live Diff project catalog is unavailable; background project discovery and autocomplete remain interactive. Startup failures retain the destination for retry. If the selected Codex, Claude Code, or OpenCode CLI is missing or incompatible, a guided local terminal shows manual update and official install commands; remote launches add an SSH terminal when needed. Tuiminal never types or runs those commands, and successful revalidation retries the exact launch. Tasks and approvals remain in the selected provider's official interface.
+- In `[,]` → **Remote connection**, press `[Enter]` to choose an explicit `Host` alias discovered from `~/.ssh/config` (including bounded `Include` files), make it active with `[Enter]` or `[A]`, and test access. Configure the SSH user, endpoint, port, identity, agent, proxy, and jump hosts only in OpenSSH; Tuiminal neither asks for nor stores those values and invokes `ssh` with the selected alias. Automated launches neutralize alias-owned remote commands, connection masters, and forwards; tunnel aliases must not define their own dynamic, local, or remote forwards. **Check server** verifies GitHub-over-SSH and whether Codex CLI is installed, authenticated, and supports app-server. **Configure server** opens an interactive SSH terminal with a step-by-step guide below it; you run each command yourself, and **Confirm configuration** rechecks the current requirement before advancing. Before opening a remote Codex interface, Tuiminal validates the local and remote CLIs, SSH, the selected directory, the remote Codex account, compatible versions, daemon/proxy capabilities, persistent daemon startup, and the proxy's `initialize` response. The local CLI, remote CLI, daemon app-server, and initialized app-server versions must match exactly. Service version mismatches show the installed CLI and service versions separately, with manual restart guidance instead of CLI installation commands. Missing or incompatible support opens a localized modal: `[Esc]` preserves the launch selection, while `[Enter]` opens split local and remote update terminals showing detected versions, `codex update`, and the official POSIX installer alternative. Tuiminal never prefills or runs those commands; successful revalidation closes only the guide terminals and retries the original new or resumed session. The remote installation owns the shared daemon, while Tuiminal closes only its local TUI, relay, and disposable SSH proxy—never the daemon. Tuiminal merges both machines' recent agents in the Master Key Agents panel, labeling remote rows with their profile; select a remote conversation there to resume it with its public history and current state rehydrated. Master Key `[N]` always opens a local terminal. No server port is exposed. Browsing and startup do not copy projects, and Tuiminal does not install tools or connect accounts for you. The [app-server protocol is experimental and version-dependent](https://learn.chatgpt.com/docs/app-server); see the official [`codex update` command](https://learn.chatgpt.com/docs/developer-commands#codex-update).
 - OpenCode uses its own first-party remote path: Tuiminal starts or reuses a version- and directory-scoped `opencode serve` on a remotely selected loopback port, repairs stale registrations, and carries it through a disposable SSH local-forward, negotiates the public v2/v1 protocol, and launches the official local TUI. Public HTTP and SSE provide session state, title, activity, history, per-message changes, and resume metadata. The owned v2 TUI hides its session tab rail without changing global OpenCode settings. Each physical OpenCode terminal has one Agents row, which follows the root session currently visible in that TUI; child/subagent sessions are not listed. Closing Tuiminal disconnects the TUI, observer, and forward while the remote server and turn continue; closing the pane explicitly interrupts only its selected root turn. No server port is exposed publicly.
 - Claude Code 2.1.63+ runs locally in its official TUI with per-launch HTTP hooks passed through `--settings`; Tuiminal does not edit or read `~/.claude`. Remote persistence is enabled on Claude Code 2.1.285+: Tuiminal creates or attaches an official background session with hook-free process settings and observes public state through one shared five-second `claude agents --json --all` poller per project. Closing Tuiminal disconnects the attachment and observer while the supervisor-owned turn continues; closing the pane explicitly runs `claude stop`. Older supported versions keep the previous attached foreground lifecycle. Persistent background sessions expose public state and bounded resume metadata without reading Claude's internal files; detailed hook history is unavailable for those sessions.
 - For the active integrated remote agent session, use Master Key `[R]` to create or update a complete local mirror. The pane tag shows the last known state; comparison and synchronization also keep a focused progress dialog open so `[Esc]` can cancel safely. On first use, choose a local parent; remote `/tui` is saved as `tui-sync` inside it. An unknown pre-existing destination is never overwritten. Every explicit comparison includes hidden and ignored files, dependencies, caches and `.git`, reuses saved content digests, and hashes only metadata-changed candidates. Changes confined to VCS metadata, dependency/cache trees, or generated output remain quiet in the pane's out-of-sync indicator, but still appear in review and synchronize normally. A paged review shows new, changed, removed and conflicting paths, and one explicit confirmation lets the remote replace local changes. During checking, review, or transfer, `[A]` toggles automatic sync for that remote project. Once enabled, each successfully completed prompt runs a background remote-to-local sync, treats the setting as permission to replace local changes, reports progress in the pane tag, and notifies only on failure. Reopening a thread that completed while closed schedules one coalesced catch-up after hydration; active, failed, interrupted, or approval-pending threads do not sync. Only new or content-changed file bytes cross SSH; a journaled delta updates the destination and rolls back on cancellation or failure. Heavy scanning, hashing and snapshot work runs outside the terminal renderer, and no project tree is polled on a timer.
 - Use a compact workspace inspired by Herdr: the agent list comes first in the sidebar, followed by numbered two-line terminals. An idle shell shows `○ Idle`; `● Running` appears only while a foreground tool or command is active. The second row shows its directory, command or exit code with the `native`/`tmux` backend; read-only external rows show their TTY. The active section has an accent rail. Terminals fill the remaining area to every edge; splits use a single separator.
 - New terminals open in **Tuiminals**. `[C]` / `[Shift+H]` asks whether the split should start a new shell or use an existing running agent terminal; moving an agent keeps its process alive. Rename terminals when needed. Click a folder heading, or highlight it with `[↑/↓]` / `[J/K]` and press `[Enter]`, to collapse or expand it. That fold state and reserved tmux session placement are saved per project outside the project directory and restored on the next launch. Only non-empty reserved folders appear. The **tmux** folder contains mirrorable external panes; **Others** lists non-tmux POSIX terminals with their foreground command, state, directory and TTY as read-only references. Recognized external agents appear in **Agents** with unknown activity because Tuiminal cannot inspect their screen. Split sessions keep both two-line terminal items independently clickable beside one vertical separator.
+- Sync dialogs identify the remote SSH source and local destination, color-code the change review, and keep confirmation and cancellation visible in smaller terminals. Scroll the details with `[↑/↓]`; pagination stays separate from confirmation.
+- The execution-environment picker keeps Local above a scrollable SSH list, marks the current destination, and adapts its rows and footer to smaller terminals. Click an environment or use the arrows and `[Enter]`; `[Esc]` returns to projects.
 - Terminal names follow the running tool automatically: `zsh` → `lazygit` → `zsh`. Recognized agents show their CLI name, such as `codex`, even when the runtime reports `MainThread` or `node`. This also works with tmux mirrors. Names chosen manually through the Master Key's `[E]` action remain fixed, including after a restart.
 - Follow recognized agents exclusively in **Agents**, separated into **Local • term** for agents observed through native, tmux, or external terminals, **Local • localhost** for local integrated sessions, and **Remote • profile** for integrated SSH sessions. Terminal agents appear first, with an animated loader while they work. Integrated Codex, Claude Code, and OpenCode rows add an activity line for code, command, plan, and tool activity; the current icon pulses from their public events. The portable icons `{}`, `>_`, `txt`, and `●` are always used, without requiring a patched font. When an integrated agent is stopped, its first-line state represents it and all activity icons remain inactive. **Terminals** shows the remaining terminals. The original folders and splits are preserved, and a terminal returns to Terminals when its agent ends. With the Master Key open, the first nine visible agents and terminals show sequential `[1]`, `[2]`, … `[9]` labels in sidebar order; type one to activate it.
 - Open an integrated Codex, Claude Code, or OpenCode session's sent-message history below its terminal with Master Key then `[S]`. Columns are ordered as elapsed time, status, message, image, audio, skill, and model. Status combines turn duration with `✓` for completion, `×` for failure or interruption, and `…` while running, such as `18m ✓`. Image, audio, and skill columns show `✓` only when that input was sent. Model configuration appears when the provider publishes it and otherwise shows `—`. Use `[J/K]`, `[↑/↓]`, or the mouse to select a row and `[Enter]` to open its detail. The expanded detail uses half of the terminal column and fills that area with theme-aware message, response, activity, and change cards. It provides `[M]` message, `[R]` final response and other public agent text, `[A]` complete public activity, and `[D]` that turn's changes. The change view separates the prompt-specific patch into file blocks, each with a visible path, change kind, statistics, syntax highlighting, line-number gutters, and addition/removal backgrounds; incomplete legacy patches use a colored line fallback instead of a blank preview. `[Esc]` steps back through section, detail, list, and terminal; `[X]` closes the panel. Codex history comes from public app-server input and events, Claude history for local and foreground sessions comes from per-launch public hooks, while persistent remote backgrounds do not populate detailed history; OpenCode history comes from its public message and diff APIs. Claude hook history covers prompts observed in the current Tuiminal run; Codex and OpenCode can hydrate earlier public turns. Private reasoning content is never shown. The in-memory view is cleared on restart or close until the provider can load it again. When Live Diff is open, it remains full-height to the right.
@@ -619,6 +676,8 @@ background execution with the native backend.
 - Pin the live sidebar with Master Key then `[B]` so Terminals and Agents stay visible without a right border while you move between Tuiminal tools. Use `[Shift+L]` from the action menu to focus it, move continuously through folder headings, Terminals and Agents with `[↑/↓]` or `[J/K]`, and press `[Enter]` to toggle a folder or open the highlighted item. Focus is marked by a fast light sweep across the sidebar background. Inside tmux, Tuiminal also keeps a marked left sidebar split in each window of the current server: after selecting that split with normal tmux navigation, its direct navigation works immediately, and it remains clickable while the neighboring terminal has focus. Folding a folder keeps that sidebar split selected. Selecting a terminal or agent from any pinned split always returns to Tuiminal and opens it in the Terminal workspace. If that pane is not open there yet, Tuiminal creates its mirror and lists it under Agents or Terminals as appropriate. Its Master Key opens the same actions and can run non-dialog actions without leaving that window. Unpinning removes only those helper splits and restores the previous tmux mouse setting.
 - Typing `exit` in an interactive shell closes that terminal and removes it from Terminals; completed custom commands keep their final output available for inspection and restart.
 - Match the hosting terminal's reported ANSI palette and default text/background colors in embedded panes, while preserving explicit RGB colors. Preserve colors, cursor, output and processes across resizing, sections and tool switches. Restarts wait for the previous owned process to retire; application shutdown detaches persistent tmux, remote OpenCode, remote Claude Code, and remote Codex clients and stops only processes owned for the current attachment.
+
+While Term Agents is active, open `[,]` → **Agent sounds** to choose a sound for questions/approvals, completed tasks, and errors. `[1/2/3]` selects the event, `[H/L]` or `[←/→]` changes its sound, and `[P]` previews it; every control also supports the mouse. Each event has a **No sound** option, and choices are saved automatically. Seven Kenney CC0 recordings are bundled for offline playback. macOS uses `afplay`, Windows uses PowerShell SoundPlayer, and Linux tries `pw-play`, `paplay`, then `aplay` if installed. Playback happens on the computer running Tuiminal; running the entire application over SSH does not forward audio to your computer.
 
 In `[,]` → **Terminal**, choose the **Master Key** (default `[Ctrl+B]`). Press it to
 open a centered modal whose actions are shown as a vertical list with two lines per
@@ -645,8 +704,8 @@ recent view and stops requesting further pages.
 `[←/→]` or `[H/L]` switches Actions and Agents; inside Agents, `[Z←] [→V]` switches
 provider tabs. `[C]` remains available for **Split right**.
 `[Esc]` first leaves the filter, then closes the modal and restores terminal focus.
-Global shortcut tokens in the top bar stay muted until the Master Key is active;
-they then turn blue together with the temporary sidebar keys, without moving its layout.
+Global shortcut tokens in the top bar and temporary sidebar keys stay blue,
+including while the terminal owns input, without moving the layout.
 Repeating the Master Key sends its literal control byte to the process.
 
 | After the Master Key | Action |
@@ -692,6 +751,16 @@ screen-observed agents that do not expose a title have no task-title line.
 Integrated Codex, Claude Code and OpenCode sessions use the first available user
 message as a temporary sidebar title until the agent publishes its own. The text
 is sanitized and limited to 160 graphemes; later messages preserve the generated title.
+Screen-observed Codex agents also recognize elapsed-time activity rows with a
+clipped interrupt hint in narrow panes, so new work replaces the completed status.
+Integrated Codex leaves the completed state when its public runtime status becomes
+active again, even if the turn-start notification is unavailable.
+Integrated Codex uses the public conversation name, falling back to the first prompt
+while unnamed. Resuming the same conversation preserves its known name, and later
+prompts never replace it. Hidden Codex title-generation threads cannot replace the
+visible conversation’s name, history or activity. Public thread metadata refreshes names on submissions and
+completion when no rename notification arrives. Terminal OSC titles do not affect
+its sidebar task title.
 Opening a conversation from Recent agents immediately reuses its known title in the
 sidebar; later title updates from the agent replace it.
 
@@ -746,9 +815,9 @@ the detail pane. A blue left rail marks the pane with focus. Inside a Git detail
 Diffs opens this same center directly on the local project and branch controls.
 
 - **Color mode:** Dark or Light.
-- **Palettes:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, and Tokyo Night.
+- **Palettes:** Prime, Midnight, Nord, Gruvbox, Dracula, Catppuccin, Tokyo Night, and Galaxy. Galaxy uses [Posting's colors](https://posting.sh/guide/themes/) in Dark mode and a Tuiminal adaptation in Light mode.
 - **Layout:** Framed, with gaps and full borders; or Compact, with more content space and a focus rail per panel.
-- **Languages:** Brazilian Portuguese, English, Spanish, Japanese, Simplified Chinese, and Korean.
+- **Languages:** English (default), Brazilian Portuguese, Spanish, Japanese, Simplified Chinese, Korean, and Russian.
 - **Tutorial:** an active-tool tour using simulated data without real service access.
 - **Mouse:** tabs, lists, buttons, fields, commits, diffs, scrolling, and splits remain clickable.
 - **Notifications:** information, success, warnings, and errors without stealing focus.
@@ -770,8 +839,9 @@ bun run dev
 
 Development uses the same installer with locally generated payloads and a separate
 cache. After editing a feature, restart `bun run dev` and install its new snapshot.
-If you rebuild separately with `bun run build:features`, restart the application
-before installing. No npm publication is needed. See the
+If you rebuild separately with `bun run build:features`, an open application can
+still install tools from its original build. Restart it to use the new build.
+No npm publication is needed. See the
 [installation contract](./docs/design/official-feature-installation.md).
 
 Main commands:

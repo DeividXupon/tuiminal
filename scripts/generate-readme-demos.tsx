@@ -9,6 +9,7 @@ import { act, createElement, useState } from "react"
 import type { FeatureState } from "../apps/cli/src/features/controller"
 import { demoTextRuns } from "./readme-demo-text"
 import { prepareTerminalMirrorDemo } from "./readme-terminal-mirror"
+import { installReadmeHttpAccount } from "./readme-http-account"
 
 type FocusRect = {
   x: number
@@ -45,6 +46,7 @@ process.env.USERPROFILE = DEMO_HOME
 
 process.env.XDG_CONFIG_HOME = join(CAPTURE_ROOT, "config")
 process.env.TUIMINAL_TERMINAL_BACKEND = "native"
+process.env.TUIMINAL_AGENT_SOUNDS = "0"
 process.env.TUIMINAL_TERMINAL_AUTO_MIRROR = "0"
 process.env.TUIMINAL_TERMINAL_EXTERNAL_DISCOVERY = "0"
 process.env.TUIMINAL_TERMINAL_RESTORE = "0"
@@ -137,6 +139,7 @@ const { DatabaseTutorialDemo } = await import(
 const { GitViewer } = await import("../packages/feature-git/src")
 const { Runner } = await import("../packages/feature-runner/src")
 const { HttpTutorialDemo } = await import("../packages/feature-http/src/tutorial/HttpTutorialDemo")
+const { HttpClient } = await import("../packages/feature-http/src/HttpClient")
 const { TermAgents } = await import("../packages/feature-terminal/src")
 const { stopAllRunnerProcesses } = await import("../packages/feature-runner/src/services/process")
 const { stopAllTermAgentsProcesses } = await import(
@@ -247,13 +250,14 @@ async function pressRenderable(tui: TestRendererSetup, id: string) {
   await tui.renderOnce()
 }
 
-async function clickRenderable(tui: TestRendererSetup, id: string) {
+async function clickRenderable(tui: TestRendererSetup, id: string, button: 0 | 1 | 2 = 0) {
   const target = tui.renderer.root.findDescendantById(id)
   if (!target) throw new Error(`Alvo de mouse da demonstração não encontrado: ${id}`)
   await act(async () => {
     await tui.mockMouse.click(
       target.screenX + Math.max(0, Math.floor(target.width / 2)),
       target.screenY + Math.max(0, Math.floor(target.height / 2)),
+      button,
     )
     await Bun.sleep(12)
   })
@@ -583,6 +587,8 @@ async function runnerFrames() {
     frames.push(
       snapshot(tui, "[N] abre outro projeto sem parar os atuais", "runner-project-list", 170),
     )
+    const { runnerTutorialFrames } = await import("./readme-runner-tutorial")
+    frames.push(...(await runnerTutorialFrames(snapshot, TERMINAL_COLUMNS, TERMINAL_ROWS)))
     return frames
   } finally {
     destroy(tui)
@@ -590,7 +596,7 @@ async function runnerFrames() {
   }
 }
 
-async function httpFrames() {
+async function httpTutorialFrames() {
   const tui = await testRender(createElement(HttpTutorialDemo), {
     width: TERMINAL_COLUMNS,
     height: TERMINAL_ROWS,
@@ -615,6 +621,458 @@ async function httpFrames() {
     ]
   } finally {
     destroy(tui)
+  }
+}
+
+async function httpFrames() {
+  const restoreAccount = installReadmeHttpAccount()
+  writeFileSync(
+    join(PROJECT_ROOT, "demo-api.http"),
+    "### List users\n# @name list-users\nGET https://api.example.test/users\n",
+  )
+  const frames = await httpTutorialFrames()
+  const tui = await testRender(
+    createElement(HttpClient, {
+      active: true,
+      initialUrlRequest: { id: 1, url: "https://api.example.test/users" },
+    }),
+    { width: TERMINAL_COLUMNS, height: TERMINAL_ROWS },
+  )
+  try {
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-source-local-card")))
+    await clickRenderable(tui, "http-source-local-card")
+    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "http-url-input")
+    await pressKey(tui, "escape")
+    await pressKey(tui, "c")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-collection-file-demo-api.http")),
+    )
+    await clickRenderable(tui, "http-collection-file-demo-api.http")
+    await clickRenderable(tui, "http-collection-file-demo-api.http", 2)
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-collection-menu")))
+    frames.push(
+      snapshot(tui, "Botão direito ou [A] abre as ações da coleção", "http-collection-menu", 180),
+    )
+    await clickRenderable(tui, "http-collection-menu-create-request")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+    )
+    await typeInto(tui, "http-collection-name-input", "Create user", true)
+    frames.push(
+      snapshot(
+        tui,
+        "Crie e renomeie diretamente na árvore; [Enter] confirma, [Esc] cancela",
+        "http-collection-draft",
+        180,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await pressKey(tui, "a")
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-collection-menu")))
+    await clickRenderable(tui, "http-collection-menu-run-collection")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-collection-runner-modal")),
+    )
+    frames.push(
+      snapshot(
+        tui,
+        "Execute apenas a coleção escolhida pelo menu [A]",
+        "http-collection-runner-modal",
+        180,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await pressKey(tui, "a")
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-collection-menu")))
+    await clickRenderable(tui, "http-collection-menu-delete")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-collection-action-form",
+    )
+    for (let frame = 0; frame < 8; frame++) {
+      await act(async () => Bun.sleep(150))
+      await tui.renderOnce()
+      frames.push(
+        snapshot(
+          tui,
+          "Confirmação focada: [Enter] confirma, [Esc] recusa e devolve o foco",
+          "http-collection-action-form",
+          15,
+        ),
+      )
+    }
+    await pressKey(tui, "escape")
+    await clickRenderable(tui, "http-request-view-auth")
+    await clickRenderable(tui, "http-auth-kind-basic")
+    await typeInto(tui, "http-auth-username-http-scratch-1", "demo-user")
+    await typeInto(tui, "http-auth-password-http-scratch-1", "demo-password")
+    await pressKey(tui, "escape")
+    await pressKey(tui, "F10")
+    await settle(tui, () => tui.captureCharFrame().includes("CREDENCIAIS"))
+    frames.push(
+      snapshot(
+        tui,
+        "Autenticação: campos alinhados e credenciais mascaradas",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await clickRenderable(tui, "http-request-view-more")
+    await clickRenderable(tui, "http-request-more-docs")
+    await clickRenderable(tui, "http-request-docs-edit-http-scratch-1")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-docs-editor-http-scratch-1",
+    )
+    await act(async () =>
+      tui.mockInput.pasteBracketedText(
+        "# List users\n\nReturns **active users**.\n\n- `limit`: maximum number of users\n- `page`: current page\n",
+      ),
+    )
+    await settle(tui, () => tui.captureCharFrame().includes("active users"))
+    frames.push(
+      snapshot(
+        tui,
+        "Docs: edite a documentação em Markdown; [Ctrl+S] salva",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-request-docs-edit-http-scratch-1")),
+    )
+    frames.push(
+      snapshot(
+        tui,
+        "[Esc] volta à visualização mantendo o rascunho",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await clickRenderable(tui, "http-request-view-more")
+    await clickRenderable(tui, "http-request-more-options")
+    await settle(tui)
+    frames.push(
+      snapshot(
+        tui,
+        "Mais: transporte, identificação e ações em seções",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await clickRenderable(tui, "http-request-more-assertions")
+    for (const expression of ["status == 200", "jsonpath $.id exists"]) {
+      await clickRenderable(tui, "http-assertion-add")
+      await settle(tui, () =>
+        Boolean(tui.renderer.currentFocusedRenderable?.id.startsWith("http-automation-assertion-")),
+      )
+      const inputId = tui.renderer.currentFocusedRenderable?.id
+      if (!inputId) throw new Error("Assertion input did not receive focus")
+      await typeInto(tui, inputId, expression, true)
+      await pressKey(tui, "escape")
+    }
+    await pressKey(tui, "k")
+    frames.push(
+      snapshot(
+        tui,
+        "Assertions: [J/K] seleciona; exemplos fixos no rodapé",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await pressKey(tui, "enter")
+    frames.push(
+      snapshot(
+        tui,
+        "[Enter] edita; [Esc] retorna ao seletor de assertions",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await pressKey(tui, "escape")
+    await clickRenderable(tui, "http-request-more-chaining")
+    await clickRenderable(tui, "http-chain-choose-http-scratch-1")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-chain-picker-search",
+    )
+    await typeInto(tui, "http-chain-picker-search", "List users", true)
+    await pressKey(tui, "down")
+    frames.push(
+      snapshot(
+        tui,
+        "Busque o request anterior para montar a sequência",
+        "http-chain-picker-modal",
+        180,
+      ),
+    )
+    await pressKey(tui, "enter")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-chaining-selection-http-scratch-1",
+    )
+    await pressKey(tui, "n")
+    await settle(
+      tui,
+      () =>
+        tui.renderer.currentFocusedRenderable?.id ===
+        "http-automation-extraction-name-http-scratch-1-0",
+    )
+    await typeInto(tui, "http-automation-extraction-name-http-scratch-1-0", "userId", true)
+    await typeInto(tui, "http-automation-extraction-path-http-scratch-1-0", "$.id", true)
+    await pressKey(tui, "escape")
+    frames.push(
+      snapshot(
+        tui,
+        "Chaining: ordem de execução, extrações e prévia dos valores",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    await clickRenderable(tui, "http-request-more-preview")
+    await settle(tui)
+    frames.push(
+      snapshot(
+        tui,
+        "Preview: revise o envio com os segredos mascarados",
+        "http-request-pane-http-scratch-1",
+        180,
+      ),
+    )
+    frames.push(...(await httpBodyFrames(tui)))
+    frames.push(...(await httpScriptFrames(tui)))
+  } finally {
+    destroy(tui)
+    restoreAccount()
+  }
+  return frames.concat(await httpWorkspaceFrames())
+}
+
+async function httpScriptFrames(tui: TestRendererSetup) {
+  await clickRenderable(tui, "http-request-view-scripts")
+  const pre = tui.renderer.root.findDescendantById(
+    "http-script-editor-preRequest-http-scratch-1",
+  ) as TextareaRenderable
+  const post = tui.renderer.root.findDescendantById(
+    "http-script-editor-postResponse-http-scratch-1",
+  ) as TextareaRenderable
+  act(() => pre.focus())
+  await act(async () =>
+    tui.mockInput.pasteBracketedText(
+      'const token = pm.environment.get("token");\npm.request.headers.upsert({ key: "X-Token", value: token });',
+    ),
+  )
+  await clickRenderable(tui, "http-script-tab-postResponse")
+  act(() => post.focus())
+  await act(async () =>
+    tui.mockInput.pasteBracketedText(
+      'pm.test("Status OK", () => {\n  pm.response.to.have.status(200);\n});',
+    ),
+  )
+  await settle(tui, () => post.editBuffer.getLineHighlights(0).length > 0)
+  return [
+    snapshot(tui, "Scripts: Pre-request e Post-response com JavaScript e API pm.*", post.id, 220),
+  ]
+}
+
+async function httpBodyFrames(tui: TestRendererSetup) {
+  await clickRenderable(tui, "http-request-view-body")
+  const frames: DemoFrame[] = []
+  for (const [kind, source] of [
+    ["json", '{\n  "name": "Tuiminal",\n  "active": true,\n  "count": 42\n}'],
+    [
+      "xml",
+      '<request>\n  <user name="Tuiminal" active="true" />\n  <!-- Conteúdo XML -->\n</request>',
+    ],
+  ] as const) {
+    await clickRenderable(tui, `http-body-kind-${kind}`)
+    const editor = tui.renderer.root.findDescendantById(
+      "http-body-editor-http-scratch-1",
+    ) as TextareaRenderable
+    act(() => {
+      editor.focus()
+      editor.setSelection(0, editor.plainText.length)
+    })
+    await act(async () => tui.mockInput.pasteBracketedText(source))
+    await settle(tui, () => editor.editBuffer.getLineHighlights(1).length > 0)
+    frames.push(
+      snapshot(
+        tui,
+        `Body ${kind.toUpperCase()}: cores de sintaxe; [Tab] indenta sem mudar o foco`,
+        editor.id,
+        180,
+      ),
+    )
+  }
+  await clickRenderable(tui, "http-body-kind-text")
+  const editor = tui.renderer.root.findDescendantById(
+    "http-body-editor-http-scratch-1",
+  ) as TextareaRenderable
+  await settle(tui, () => editor.editBuffer.getLineHighlights(1).length === 0)
+  frames.push(snapshot(tui, "Body TEXT: conteúdo preservado, sem cores de sintaxe", editor.id, 150))
+  await clickRenderable(tui, "http-body-kind-file")
+  const dropId = "http-body-file-http-scratch-1-drop"
+  await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === dropId)
+  frames.push(
+    snapshot(
+      tui,
+      "Body FILE: escolha no sistema ou solte um arquivo na área pontilhada",
+      dropId,
+      160,
+    ),
+  )
+  const attachment = join(CAPTURE_ROOT, "attachment.bin")
+  writeFileSync(attachment, new Uint8Array([0, 1, 2, 255]))
+  await act(async () => tui.mockInput.pasteBracketedText(attachment))
+  await settle(tui, () => tui.captureCharFrame().includes("attachment.bin"))
+  frames.push(
+    snapshot(tui, "Arquivo selecionado fora da biblioteca HTTP, pronto para enviar", dropId, 160),
+  )
+  const secondAttachment = join(CAPTURE_ROOT, "second-attachment.bin")
+  writeFileSync(secondAttachment, new Uint8Array([4, 5, 6]))
+  await act(async () => tui.mockInput.pasteBracketedText(`"${attachment}" "${secondAttachment}"`))
+  await settle(tui, () => tui.captureCharFrame().includes("Adicionar arquivos"))
+  frames.push(
+    snapshot(
+      tui,
+      "Vários arquivos: Multipart, campos editáveis e remoção individual",
+      "http-request-pane-http-scratch-1",
+      180,
+    ),
+  )
+  return frames
+}
+
+async function httpWorkspaceFrames() {
+  let finishCreation = () => {}
+  const creation = new Promise<void>((resolve) => {
+    finishCreation = resolve
+  })
+  const restoreAccount = installReadmeHttpAccount(true, () => creation)
+  const tui = await testRender(createElement(HttpClient, { active: true }), {
+    width: TERMINAL_COLUMNS,
+    height: TERMINAL_ROWS,
+  })
+  try {
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-source-picker")))
+    const sourceFrame = snapshot(
+      tui,
+      "Escolha Local ou Postman para abrir um workspace",
+      "http-source-picker",
+      160,
+    )
+    await pressKey(tui, "p")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-collection-workspace-heading")?.width),
+    )
+    const emptyFrame = snapshot(
+      tui,
+      "Escolha uma chamada na coleção para abrir os painéis",
+      "http-empty-state",
+      180,
+    )
+    await clickRenderable(tui, "http-environment-button")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-environment-entry-1")?.width),
+    )
+    const environmentListFrame = snapshot(
+      tui,
+      "Ambientes do workspace: Global primeiro, seguido pelos demais",
+      "http-navigation-pane",
+      180,
+    )
+    await clickRenderable(tui, "http-environment-actions-1")
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-environment-menu")))
+    const environmentMenuFrame = snapshot(
+      tui,
+      "[A] abre Usar ambiente e Excluir direto na lista",
+      "http-environment-menu",
+      180,
+    )
+    await pressKey(tui, "escape")
+    await settle(tui, () => !tui.renderer.root.findDescendantById("http-environment-menu"))
+    await clickRenderable(tui, "http-environment-entry-1")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-environment-cell-0-value")?.width),
+    )
+    const environmentTableFrame = snapshot(
+      tui,
+      "Cada ambiente abre sua própria aba com Variável e Valor",
+      "http-environment-pane",
+      200,
+    )
+    await settle(tui, () => tui.renderer.currentFocusedRenderable?.id === "http-environment-pane")
+    await pressKey(tui, "up")
+    await settle(tui, () => tui.captureCharFrame().includes("[↓] Tabela · [Enter] Editar"))
+    const environmentNameFrame = snapshot(
+      tui,
+      "[↑] seleciona o Nome em azul; [Enter] ou clique inicia a edição",
+      "http-environment-name",
+      180,
+    )
+    await clickRenderable(tui, "http-navigation-collection")
+    await clickRenderable(tui, "http-collection-workspace-heading", 2)
+    await settle(tui, () => Boolean(tui.renderer.root.findDescendantById("http-collection-menu")))
+    const frames = [
+      sourceFrame,
+      emptyFrame,
+      environmentListFrame,
+      environmentMenuFrame,
+      environmentTableFrame,
+      environmentNameFrame,
+      snapshot(
+        tui,
+        "Selecione o workspace: [A] cria uma coleção ou escolhe outro workspace",
+        "http-collection-menu",
+        180,
+      ),
+    ]
+    await clickRenderable(tui, "http-collection-menu-create-collection")
+    await settle(
+      tui,
+      () => tui.renderer.currentFocusedRenderable?.id === "http-collection-name-input",
+    )
+    await typeInto(tui, "http-collection-name-input", "Payments API", true)
+    frames.push(
+      snapshot(tui, "Nova coleção: escreva o nome direto na árvore", "http-collection-draft", 180),
+    )
+    await pressKey(tui, "enter")
+    await settle(tui, () =>
+      Boolean(tui.renderer.root.findDescendantById("http-collection-name-loading")),
+    )
+    for (let frame = 0; frame < 8; frame++) {
+      await act(async () => Bun.sleep(100))
+      await tui.renderOnce()
+      frames.push(
+        snapshot(
+          tui,
+          "Salvando no Postman: o loader acompanha a própria linha",
+          "http-collection-draft",
+          10,
+        ),
+      )
+    }
+    finishCreation()
+    await settle(tui, () => !tui.renderer.root.findDescendantById("http-collection-name-input"))
+    frames.push(
+      snapshot(
+        tui,
+        "Coleções exibem o nome original do Postman",
+        "http-collection-file-postman/demo-created.http",
+        180,
+      ),
+    )
+    return frames
+  } finally {
+    try {
+      finishCreation()
+      await settle(tui, () => !tui.renderer.root.findDescendantById("http-collection-name-loading"))
+    } finally {
+      destroy(tui)
+      restoreAccount()
+    }
   }
 }
 
@@ -964,10 +1422,10 @@ function renderGif(name: string, title: string, frames: DemoFrame[]) {
     ...animationArguments,
     "-loop",
     "0",
-    "-layers",
-    "Optimize",
     "-colors",
     "128",
+    "-layers",
+    "Optimize",
     output,
   ])
   process.stdout.write(`✓ ${output}\n`)

@@ -11,8 +11,8 @@ initialization and dependency boundaries.
   ownership matches; features retain keyboard scopes, focus stacks and write guards.
 - Use `InlineButton`, `DirectionalButton`, `ShortcutText` and `ModalSurface` for
   their documented roles. Selectable rows may use native buttons. Bracketed hints
-  use the fixed brand accent; `[?]` and the Master Key use the action-key purple;
-  data branches disable hint highlighting.
+  use brand blue, including arrows; `[?]` and the Terminal Master Key use purple
+  (`#A855F7`). Disable hint highlighting for user data.
 - Contextual creation uses `[N]` unless the local editor requires a modifier.
   Primary horizontal strips use `[A←]`/`[F→]`; nested strips use
   `[Z←]`/`[V→]`. Show and handle actions only in their owning focus scope.
@@ -29,6 +29,10 @@ initialization and dependency boundaries.
 - Preserve native refs, buffers and focus across theme, language and layout changes.
   Never key tab trees by appearance. Use `LAYOUT.workspaceBackground` for outer
   surfaces; Term Agents always uses compact geometry.
+- Report scene changes with core's `WorkspaceRepaintBoundary` or
+  `useWorkspaceRepaint`. Retained hidden trees need inherited visual visibility,
+  independent of keyboard activity. Keys describe scenes, never typing, logs,
+  scrolling or animation; see the [repaint contract](../design/ui-controls.md).
 - Password fields use core `PasswordInput` with runtime registration. Mask the
   full rendered width and expose only mask text to selection APIs, including
   Unicode, resize, scrolling and clearing.
@@ -44,7 +48,9 @@ initialization and dependency boundaries.
 - Resolve CLI aliases through own-property lookup; inherited object names remain
   directory arguments. Isolated mode initializes only the requested feature.
 - Fixed text uses `translateUi` and the [catalog](../../packages/core/src/i18n/index.ts).
-  Keep all six languages complete; never translate child output, code or user data.
+  Keep every supported language complete; never translate child output, code or user data.
+  Keep [ru.json](../../packages/core/src/i18n/ru.json) in sync with English message
+  and pattern templates, which serve as its keys.
 - Preserve catalog precedence, whitespace and markers. Index message tuples once;
   process nested prefixes iteratively without truncation or repeated suffix scans.
 - Measure/truncate by grapheme display width and iterate visible prefixes lazily.
@@ -55,8 +61,8 @@ initialization and dependency boundaries.
 - Keep current contracts in their owning specification; update it when behavior
   changes. Preserve commands, identifiers, fixtures and license text when translating.
   Release prose is English; translation must retain claims and release metadata.
-- Regenerate README demos with `bun run docs:demos` after material UI/workflow
-  changes. Set isolated config/data/project paths before runtime imports, retaining
+- Generate README GIFs only when explicitly requested. Use `bun run docs:demos`
+  with isolated config/data/project paths before runtime imports, retaining
   the settings-path assertion. SVG captures position text by display columns and
   paint backgrounds before foregrounds.
 - Tutorials simulate only the active tool. Enter the demonstrated state, target its
