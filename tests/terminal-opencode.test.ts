@@ -819,7 +819,7 @@ test.skipIf(process.platform === "win32")(
     const pidFile = join(root, "pid")
     writeFileSync(
       executable,
-      `#!/bin/sh\nprintf '%s\\n' "$$" > "$PID_FILE"\ntrap 'exit 0' TERM INT\nwhile :; do sleep 1; done\n`,
+      `#!/bin/sh\ntrap 'exit 0' TERM INT\nprintf '%s\\n' "$$" > "$PID_FILE"\nwhile :; do sleep 1; done\n`,
       { mode: 0o700 },
     )
     let serverPid = 0
