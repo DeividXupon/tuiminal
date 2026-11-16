@@ -1,4 +1,8 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useApplicationKeyboard as useKeyboard } from "./hooks/use-application-keyboard"
+import { shortcutMatches } from "@xupon/tuiminal-core/keyboard/bindings"
+import { useConfigurationWarnings } from "./hooks/use-configuration-warnings"
+import { ConfigurationWarningsModal } from "./ui/ConfigurationWarningsModal"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Tabs } from "@tuiparts/react/tabs"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
@@ -10,9 +14,7 @@ import {
   useNotificationPlacement,
   withNotifications,
 } from "@xupon/tuiminal-core/notifications/index"
-import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
-import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
-import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
+import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { MountWhen } from "@xupon/tuiminal-core/ui/MountWhen"
 import { withSelectionClipboard } from "@xupon/tuiminal-core/ui/SelectionClipboard"
 import type {
@@ -47,7 +49,7 @@ import {
   activateConfigurationSection,
   configurationContextForTool,
 } from "./model/configuration-context"
-import { type ToolId as AppTab, resolveToolLaunch, TOOL_LABELS as TAB_LABELS } from "./tool-catalog"
+import { type ToolId as AppTab, resolveToolLaunch } from "./tool-catalog"
 import { TutorialOverlay } from "./tutorial/TutorialOverlay"
 import { useTutorial } from "./tutorial/use-tutorial"
 import { applicationExitLayer } from "./ui/application-exit-layer"
@@ -58,6 +60,7 @@ import { withStartupAnimation } from "./ui/StartupAnimation"
 import { ToolPanel } from "./ui/ToolPanel"
 import { contextualRemoteSettingsOwnKey } from "./ui/terminal-remote-settings"
 import { WorkspaceConfigurationOverlay } from "./ui/WorkspaceConfigurationOverlay"
+import { IsolatedWorkspaceHeader } from "./ui/IsolatedWorkspaceHeader"
 import { WorkspaceHeader } from "./ui/WorkspaceHeader"
 
 function syncVisitedTools(
@@ -80,6 +83,7 @@ function contextualSettingsOwnKey(focusedId: string | null | undefined, keyName:
 
 export function AppContent() {
   useExclusiveKeyboardFocus()
+  const configurationWarnings = useConfigurationWarnings()
   const features = useFeatureWorkspace()
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
@@ -162,7 +166,7 @@ export function AppContent() {
     closeTutorial,
     runnerTutorial,
   } = useTutorial(tutorialScreen, closeSettings)
-  const modalBlocked = settingsOpen || tutorialOpen || exit.open
+  const modalBlocked = settingsOpen || tutorialOpen || exit.open || configurationWarnings.open
   const interactionBlocked = modalBlocked || features.showInstaller || Boolean(features.state.busy)
   useWorkspaceRepaint(
     [tutorialScreen, settings.layout, terminal.width, terminal.height, interactionBlocked].join(
@@ -221,6 +225,7 @@ export function AppContent() {
   )
 
   useKeyboard((key) => {
+    if (configurationWarnings.open) return
     exit.guardKey(key)
     const focusedId = focusedRenderableId(renderer.currentFocusedRenderable)
     const sidebarOwnsFocus = focusedId?.startsWith("terminal-sidebar") ?? false
@@ -233,6 +238,7 @@ export function AppContent() {
     const globalShortcut = globalApplicationShortcut(key, globalLayerAvailable, Boolean(ONLY_TAB))
     if (globalShortcut) {
       key.preventDefault()
+      key.stopPropagation()
       if (globalShortcut === "settings") openSettings()
       else void selectTab(globalShortcut)
       return
@@ -250,14 +256,20 @@ export function AppContent() {
     if (settingsOpen && contextualSettingsOwnKey(focusedId, key.name)) return
     if (handleConfigurationKey(key, activateConfiguration)) return
 
-    if (features.showInstaller && !(key.ctrl && key.name === "c") && key.name !== "q") return
+    if (
+      features.showInstaller &&
+      !shortcutMatches("global", "workspace", "interrupt", key) &&
+      !shortcutMatches("global", "workspace", "quit", key)
+    )
+      return
 
     if (
-      key.ctrl &&
-      key.name === "c" &&
+      shortcutMatches("global", "workspace", "interrupt", key) &&
       !sidebarOwnsFocus &&
       !ownsInterrupt(keyboardScope, focusedId)
     ) {
+      key.preventDefault()
+      key.stopPropagation()
       features.controller.cancel()
       void exit.quit()
       return
@@ -265,14 +277,19 @@ export function AppContent() {
 
     if (sidebarOwnsFocus || ownsKeyboardFocus(keyboardScope, focusedId)) return
 
-    if (key.name === "escape" && keyboardScope.deferEscape) {
+    if (shortcutMatches("global", "workspace", "escape", key) && keyboardScope.deferEscape) {
       setTimeout(() => {
         if (!key.defaultPrevented) void exit.quit()
       }, 0)
       return
     }
 
-    if (key.name === "q" || key.name === "escape") {
+    if (
+      shortcutMatches("global", "workspace", "quit", key) ||
+      shortcutMatches("global", "workspace", "escape", key)
+    ) {
+      key.preventDefault()
+      key.stopPropagation()
       features.controller.cancel()
       void exit.quit()
     }
@@ -281,6 +298,12 @@ export function AppContent() {
   const exitModal = applicationExitLayer(exit, terminal)
   const overlays = (
     <>
+      {configurationWarnings.open && (
+        <ConfigurationWarningsModal
+          warnings={configurationWarnings.warnings}
+          onClose={configurationWarnings.close}
+        />
+      )}
       <MountWhen when={features.showInstaller}>
         <WorkspaceInstaller
           onlyTool={ONLY_TAB}
@@ -356,49 +379,17 @@ export function AppContent() {
   if (ONLY_TAB) {
     const compact = ONLY_TAB === "terminal" || LAYOUT.compact
     const headerHeight = compact ? 1 : 2
-    const shortcutsMuted = ONLY_TAB === "terminal" && !terminalMasterKeyActive
     const isolatedToolAvailable =
       features.state.installed.includes(ONLY_TAB) && !closed.has(ONLY_TAB)
     return (
       <box style={{ flexGrow: 1, backgroundColor: LAYOUT.workspaceBackground }}>
-        <box
-          id="tutorial-app-header"
-          style={{
-            height: headerHeight,
-            flexShrink: 0,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            ...(ONLY_TAB === "terminal" ? { border: false } : separatorBorder()),
-            backgroundColor: COLORS.panel,
-            paddingLeft: 1,
-            paddingRight: 1,
-          }}
-        >
-          <text content="◆ TUIMINAL" style={{ fg: BRAND_COLOR }} />
-          <text
-            content={`◆ ${translateUi(TAB_LABELS[ONLY_TAB])} · ${translateUi("MODO ISOLADO")}`}
-            style={{ fg: COLORS.muted }}
-          />
-          <box style={{ flexDirection: "row", alignItems: "center" }}>
-            <InlineButton
-              compact={compact}
-              id="tutorial-settings-button"
-              label={compactNavigation ? "[,]" : "[,] Config"}
-              accent={COLORS.focus}
-              shortcutsMuted={shortcutsMuted}
-              onPress={openSettings}
-            />
-            <InlineButton
-              compact={compact}
-              id="app-exit-button"
-              label={compactNavigation ? "[Q]" : "[Q] Sair"}
-              accent={COLORS.focus}
-              shortcutsMuted={shortcutsMuted}
-              onPress={() => void exit.quit()}
-            />
-          </box>
-        </box>
+        <IsolatedWorkspaceHeader
+          tool={ONLY_TAB}
+          compactNavigation={compactNavigation}
+          terminalMasterKeyActive={terminalMasterKeyActive}
+          openSettings={openSettings}
+          onQuit={() => void exit.quit()}
+        />
 
         <box style={{ flexGrow: 1, flexDirection: "row", minHeight: 1 }}>
           <PinnedTerminalSidebar

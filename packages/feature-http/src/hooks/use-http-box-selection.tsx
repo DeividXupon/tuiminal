@@ -1,4 +1,5 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import type { Renderable } from "@opentui/core"
 import { useEffect, useRef, useState } from "react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"

@@ -1,5 +1,8 @@
 import type { InputRenderable } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
+import {
+  useShortcutKeyHandler,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, type RefObject } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -34,6 +37,7 @@ function ResponseInput({
   onSubmit: () => void
   onEscape: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   return (
     <input
       ref={(input) => {
@@ -45,7 +49,9 @@ function ResponseInput({
       placeholder={translateUi(placeholder)}
       onInput={onChange}
       onSubmit={onSubmit}
-      onKeyDown={(event) => {
+      onKeyDown={(physicalKey) => {
+        const event = mapShortcutKey(physicalKey)
+
         if (event.name !== "escape") return
         event.preventDefault()
         event.stopPropagation()

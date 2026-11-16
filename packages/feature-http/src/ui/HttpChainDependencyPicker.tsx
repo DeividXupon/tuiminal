@@ -1,5 +1,7 @@
+import { useShortcutKeyHandler, withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -10,7 +12,7 @@ import type { HttpProjectRequestItem, HttpRequestDefinition } from "../model/typ
 import { HttpDialog } from "./HttpDialog"
 import { HttpDialogSection } from "./HttpDialogDetails"
 
-export function HttpChainDependencyPicker({
+function HttpChainDependencyPickerView({
   request,
   requests,
   onChange,
@@ -21,6 +23,7 @@ export function HttpChainDependencyPicker({
   onChange: (id: string | undefined) => void
   onClose: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const renderer = useRenderer()
   const { width, height } = useTerminalDimensions()
   const scroll = useRef<ScrollBoxRenderable | null>(null)
@@ -125,7 +128,7 @@ export function HttpChainDependencyPicker({
           setSelected(0)
           setError(null)
         }}
-        onKeyDown={handleKey}
+        onKeyDown={(key) => handleKey(mapShortcutKey(key))}
         style={{
           marginTop: height >= 20 ? 1 : 0,
           flexShrink: 0,
@@ -191,3 +194,10 @@ export function HttpChainDependencyPicker({
     </HttpDialog>
   )
 }
+
+export const HttpChainDependencyPicker = withShortcutContext(
+  "http",
+  "chain-dependency-picker",
+  HttpChainDependencyPickerView,
+  "http-chain-picker-modal",
+)

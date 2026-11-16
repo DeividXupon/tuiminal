@@ -1,7 +1,9 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -55,7 +57,7 @@ const KIND_COLOR = {
   delete: COLORS.danger,
 } as const
 
-export function DatabaseChangesModal({
+function DatabaseChangesModalView({
   open,
   items,
   busy,
@@ -305,3 +307,10 @@ export function DatabaseChangesModal({
     </ModalSurface>
   )
 }
+
+export const DatabaseChangesModal = withShortcutContext(
+  "database",
+  "changes-modal",
+  DatabaseChangesModalView,
+  "database-changes-modal",
+)

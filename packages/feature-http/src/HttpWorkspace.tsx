@@ -19,7 +19,7 @@ import {
   resolveHttpWorkspaceLayout,
 } from "./model/layout"
 import { useHttpKeyboard } from "./hooks/use-http-keyboard"
-import { HttpBoxSelectionContext } from "./ui/HttpBoxSelection"
+import { HttpShortcutSurface } from "./ui/HttpShortcutSurface"
 import { useHttpWorkspaceActions } from "./hooks/use-http-workspace-actions"
 import type { HttpKeyboardCommand, HttpKey } from "./model/keyboard-types"
 import type { HttpRequestTableKey } from "./hooks/use-http-request-tables"
@@ -727,8 +727,8 @@ export function HttpInteractiveClient({
     </box>
   )
   return (
-    <HttpBoxSelectionContext.Provider value={actions.boxOverlay}>
+    <HttpShortcutSurface overlay={actions.boxOverlay} pane={state.activePane}>
       {workspace}
-    </HttpBoxSelectionContext.Provider>
+    </HttpShortcutSurface>
   )
 }

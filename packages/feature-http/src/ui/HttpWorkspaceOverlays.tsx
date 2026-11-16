@@ -1,3 +1,5 @@
+import { ShortcutScope } from "@xupon/tuiminal-core/keyboard/react"
+import { httpShortcutContext } from "../model/shortcut-context"
 import type {
   HttpDocumentState,
   HttpHistoryEntry,
@@ -139,7 +141,7 @@ export function HttpWorkspaceOverlays({
     ? HttpPostmanWorkspaceCreateModal
     : HttpPostmanModal
   return (
-    <>
+    <ShortcutScope tool="http" context={httpShortcutContext(activePane, overlay)}>
       {hasDocumentOverlay(document, overlay, ["jump", "help"]) ? (
         <HttpWorkspaceOverlay
           overlay={overlay as "jump" | "help"}
@@ -269,7 +271,7 @@ export function HttpWorkspaceOverlays({
           onClose={externalConflict.cancelPostmanSave}
         />
       ) : null}
-    </>
+    </ShortcutScope>
   )
 }
 

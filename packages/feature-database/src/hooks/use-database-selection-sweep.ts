@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import {
   type DatabaseBatchSelectedRow,
@@ -21,6 +22,7 @@ export function useDatabaseSelectionSweep({
   moveRow: (delta: number) => void
   resetKey: unknown
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const [active, setActive] = useState(false)
   const activeRef = useRef(false)
   const anchorIndexRef = useRef<number | null>(null)
@@ -56,14 +58,14 @@ export function useDatabaseSelectionSweep({
   )
   const handleVerticalKey = useCallback(
     (key: { name: string; preventDefault: () => void; stopPropagation: () => void }) => {
-      const direction = databaseBatchRangeDirection(key.name)
+      const direction = databaseBatchRangeDirection(mapShortcutKey(key).name)
       if (!direction) return false
       key.preventDefault()
       key.stopPropagation()
       move(direction)
       return true
     },
-    [move],
+    [move, mapShortcutKey],
   )
   const clear = useCallback(() => {
     activeRef.current = false

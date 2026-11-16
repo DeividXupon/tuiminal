@@ -1,3 +1,6 @@
+import * as sharedConfiguredKeyboard from "@xupon/tuiminal-core/keyboard/react"
+import * as sharedConfiguredBindings from "@xupon/tuiminal-core/keyboard/bindings"
+import * as sharedYamlConfiguration from "@xupon/tuiminal-core/config/index"
 import * as sharedActionPaletteLifecycle from "@xupon/tuiminal-core/ui/use-action-palette"
 import * as sharedWorkspaceRepaint from "@xupon/tuiminal-core/ui/workspace-repaint"
 // Shared instances used by the private official-feature payload format.
@@ -53,6 +56,9 @@ export function prepareFeatureHost(
     ...(terminalSidebarCommand ? { terminalSidebarCommand } : {}),
     ...(terminalProjectSyncWorkerCommand ? { terminalProjectSyncWorkerCommand } : {}),
     modules: {
+      "@xupon/tuiminal-core/keyboard/react": sharedConfiguredKeyboard,
+      "@xupon/tuiminal-core/keyboard/bindings": sharedConfiguredBindings,
+      "@xupon/tuiminal-core/config/index": sharedYamlConfiguration,
       react: shared0,
       "react/jsx-runtime": shared1,
       "react/jsx-dev-runtime": shared2,

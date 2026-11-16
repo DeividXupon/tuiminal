@@ -1,3 +1,4 @@
+import { shortcutLabel } from "@xupon/tuiminal-core/keyboard/bindings"
 import { FeatureChoice } from "./FeatureChoice"
 import { FeaturePreview } from "./FeaturePreview"
 import { FeatureUninstallModal } from "./FeatureUninstallModal"
@@ -163,7 +164,7 @@ export function FeatureInstaller({
       >
         <text content="◆ TUIMINAL" style={{ fg: BRAND_COLOR }} />
         <InlineButton
-          label="[,] Config"
+          label={`${shortcutLabel("global", "workspace", "settings")} Config`}
           onPress={onSettings}
           disabled={blocked || Boolean(removal)}
           accent={COLORS.focus}

@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, TextareaRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -49,7 +51,7 @@ function createModalKeyAction(
   return null
 }
 
-export function GitHubCreateModal({
+function GitHubCreateModalView({
   draft,
   host,
   viewer,
@@ -359,3 +361,10 @@ export function GitHubCreateModal({
     </>
   )
 }
+
+export const GitHubCreateModal = withShortcutContext(
+  "git",
+  "hub-create-modal",
+  GitHubCreateModalView,
+  "git-create-modal",
+)

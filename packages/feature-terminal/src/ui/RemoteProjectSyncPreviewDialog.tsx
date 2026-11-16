@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -37,7 +41,7 @@ function displayPath(path: string, width: number) {
   return truncateDisplay(path.replace(/[\p{Cc}\p{Cf}]/gu, ""), width)
 }
 
-export function RemoteProjectSyncPreviewDialog({
+function RemoteProjectSyncPreviewDialogContent({
   review,
   remote,
   automatic,
@@ -301,3 +305,10 @@ export function RemoteProjectSyncPreviewDialog({
     </ModalSurface>
   )
 }
+
+export const RemoteProjectSyncPreviewDialog = withShortcutContext(
+  "terminal",
+  "remote-sync-preview",
+  RemoteProjectSyncPreviewDialogContent,
+  "terminal-project-sync-preview",
+)

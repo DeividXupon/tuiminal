@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import type { InputRenderable } from "@opentui/core"
 import { useEffect, useRef, useState } from "react"
 import { useRenderer } from "@opentui/react"
@@ -19,6 +20,7 @@ export function HttpCollectionNameInput({
   onApply,
   onCancel,
 }: HttpCollectionNameEdit) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const ref = useRef<InputRenderable | null>(null)
   const renderer = useRenderer()
   useEffect(() => {
@@ -54,7 +56,9 @@ export function HttpCollectionNameInput({
           event.stopPropagation()
         }}
         onMouseDown={() => ref.current?.focus()}
-        onKeyDown={(event) => {
+        onKeyDown={(physicalKey) => {
+          const event = mapShortcutKey(physicalKey)
+
           if (event.name === "return" || event.name === "enter") {
             event.preventDefault()
             event.stopPropagation()

@@ -1,5 +1,5 @@
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { handleGitDiffHorizontalKey } from "../../rendering/diff-scroll"
 import {

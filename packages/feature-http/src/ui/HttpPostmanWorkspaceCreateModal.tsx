@@ -1,5 +1,6 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { InputRenderable } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { useEffect, useRef, useState } from "react"
@@ -18,7 +19,7 @@ async function createPersonalWorkspace(name: string, isActive: () => boolean) {
   return { api, workspace }
 }
 
-export function HttpPostmanWorkspaceCreateModal({
+function HttpPostmanWorkspaceCreateModalView({
   terminalWidth,
   terminalHeight,
   onWorkspaceSelected,
@@ -150,3 +151,10 @@ export function HttpPostmanWorkspaceCreateModal({
     </HttpDialog>
   )
 }
+
+export const HttpPostmanWorkspaceCreateModal = withShortcutContext(
+  "http",
+  "postman-workspace-create-modal",
+  HttpPostmanWorkspaceCreateModalView,
+  "http-postman-create-workspace",
+)

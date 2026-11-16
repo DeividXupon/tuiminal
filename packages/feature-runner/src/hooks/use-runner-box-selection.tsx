@@ -1,4 +1,5 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, useState } from "react"
 import { FocusSelectionOverlay } from "@xupon/tuiminal-core/ui/FocusSelectionOverlay"
 import { focusDirectionForKey, nextFocusTarget } from "@xupon/tuiminal-core/ui/focus-navigation"

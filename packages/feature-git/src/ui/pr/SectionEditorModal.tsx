@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { PULL_REQUEST_COLUMNS } from "../../model/pr/config"
 import { parsePullRequestSectionOptions } from "../../model/pr/sections"
 import type { PullRequestColumn, PullRequestSort } from "../../model/pr/types"
@@ -10,7 +11,7 @@ import {
 export type SectionEditorMode = GitRemoteSectionEditorMode
 export type SectionEditorValues = GitRemoteSectionEditorValues<PullRequestColumn>
 
-export function SectionEditorModal({
+function SectionEditorModalView({
   open,
   embedded = false,
   contentWidth,
@@ -61,3 +62,10 @@ export function SectionEditorModal({
     />
   )
 }
+
+export const SectionEditorModal = withShortcutContext(
+  "git",
+  "configuration-section-editor",
+  SectionEditorModalView,
+  "git-pr-section-editor-modal",
+)

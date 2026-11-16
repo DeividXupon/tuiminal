@@ -1,6 +1,10 @@
 import type { InputRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import {
+  useShortcutKeyHandler,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -69,6 +73,7 @@ export function HttpCollectionActionForm({
   workspaceError: string
   sourceMode: HttpSourceMode
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const inputRef = useRef<InputRenderable | null>(null)
   const renderer = useRenderer()
   useKeyboard((key) => {
@@ -128,7 +133,9 @@ export function HttpCollectionActionForm({
         value={name}
         placeholder={translateUi("Nome")}
         onInput={onNameChange}
-        onKeyDown={(event) => {
+        onKeyDown={(physicalKey) => {
+          const event = mapShortcutKey(physicalKey)
+
           if (event.name === "return" || event.name === "enter") {
             event.preventDefault()
             event.stopPropagation()

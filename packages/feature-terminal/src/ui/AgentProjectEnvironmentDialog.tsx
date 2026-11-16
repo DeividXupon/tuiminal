@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, type TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -12,7 +16,7 @@ import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 const environmentKey = (target: AgentProjectTarget) =>
   target.kind === "local" ? "local" : `remote:${target.profile.id}`
 
-export function AgentProjectEnvironmentDialog({
+function AgentProjectEnvironmentDialogContent({
   profiles,
   loading,
   error,
@@ -224,3 +228,10 @@ export function AgentProjectEnvironmentDialog({
     </ModalSurface>
   )
 }
+
+export const AgentProjectEnvironmentDialog = withShortcutContext(
+  "terminal",
+  "environment-dialog",
+  AgentProjectEnvironmentDialogContent,
+  "terminal-dialog-project-environments",
+)

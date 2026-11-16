@@ -1,5 +1,6 @@
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"

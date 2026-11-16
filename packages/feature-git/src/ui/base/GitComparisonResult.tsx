@@ -1,5 +1,6 @@
 import type { ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"

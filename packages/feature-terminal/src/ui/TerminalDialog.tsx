@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -10,7 +14,7 @@ export type TerminalDialogKind = "rename"
 const TITLES = {
   rename: "Renomear terminal",
 }
-export function TerminalDialog({
+function TerminalDialogContent({
   kind,
   initialValue,
   onSave,
@@ -75,3 +79,10 @@ export function TerminalDialog({
     </ModalSurface>
   )
 }
+
+export const TerminalDialog = withShortcutContext(
+  "terminal",
+  "dialog",
+  TerminalDialogContent,
+  "terminal-dialog",
+)

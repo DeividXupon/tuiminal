@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
@@ -6,7 +7,7 @@ import { TerminalShortcutText } from "./TerminalShortcut"
 
 const DIM_COLOR = "#000000"
 
-export function TerminalFocusSelection({
+function TerminalFocusSelectionContent({
   target,
   selected,
   onFocus,
@@ -88,3 +89,10 @@ export function TerminalFocusSelection({
     </box>
   )
 }
+
+export const TerminalFocusSelection = withShortcutContext(
+  "terminal",
+  "focus-selection",
+  TerminalFocusSelectionContent,
+  "terminal-focus-selection-*",
+)

@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -7,7 +9,7 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 
-export function GitDiscardChangesModal({
+function GitDiscardChangesModalView({
   target,
   fileCount,
   onClose,
@@ -74,3 +76,10 @@ export function GitDiscardChangesModal({
     </ModalSurface>
   )
 }
+
+export const GitDiscardChangesModal = withShortcutContext(
+  "git",
+  "discard-changes-modal",
+  GitDiscardChangesModalView,
+  "git-discard-changes-modal",
+)

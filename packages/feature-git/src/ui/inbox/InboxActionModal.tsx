@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -10,7 +12,7 @@ import type { InboxNotification } from "../../model/inbox/types"
 
 export type InboxDestructiveAction = "done" | "unsubscribe"
 
-export function InboxActionModal({
+function InboxActionModalView({
   action,
   item,
   busy,
@@ -86,3 +88,10 @@ export function InboxActionModal({
     </ModalSurface>
   )
 }
+
+export const InboxActionModal = withShortcutContext(
+  "git",
+  "inbox-action-modal",
+  InboxActionModalView,
+  "git-inbox-action-modal",
+)

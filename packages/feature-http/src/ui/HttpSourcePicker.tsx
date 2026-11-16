@@ -1,12 +1,14 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { TextAttributes } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useState } from "react"
 import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { HttpSourceMode } from "../model/source-mode"
 import { HttpSourceCard } from "./HttpSourceCard"
 
-export function HttpSourcePicker({
+function HttpSourcePickerView({
   active,
   loading = false,
   error = "",
@@ -100,3 +102,10 @@ export function HttpSourcePicker({
     </box>
   )
 }
+
+export const HttpSourcePicker = withShortcutContext(
+  "http",
+  "source-picker",
+  HttpSourcePickerView,
+  "http-source-picker",
+)

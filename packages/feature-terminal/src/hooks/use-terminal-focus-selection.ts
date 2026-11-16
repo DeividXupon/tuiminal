@@ -1,3 +1,4 @@
+import { remapShortcutKey } from "@xupon/tuiminal-core/keyboard/bindings"
 import type { BoxRenderable, KeyEvent, Renderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
@@ -172,6 +173,7 @@ export function useTerminalFocusSelection({
 
   useKeyboard((key: KeyEvent) => {
     if (!active || !selectedTarget || key.defaultPrevented) return
+    key = remapShortcutKey("terminal", "focus-selection", key)
     key.preventDefault()
     key.stopPropagation()
     const action = focusSelectionKeyAction(key)

@@ -1,5 +1,6 @@
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import type { RefObject } from "react"
 
 type RenderableRef<T> = RefObject<T | null>

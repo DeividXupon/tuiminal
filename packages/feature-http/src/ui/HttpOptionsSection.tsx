@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { consumeHttpRequestTableKey } from "../hooks/use-http-request-tables"
 import { Button } from "@tuiparts/react/button"
 import type { ReactNode } from "react"
@@ -20,6 +21,7 @@ export function HttpOptionsSection({
   navigation: HttpOptionsNavigation
   children: ReactNode
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const active = navigation.focused && navigation.section === section
   const id = navigation.sectionId(section)
   return (
@@ -29,7 +31,9 @@ export function HttpOptionsSection({
       focusable
       flexShrink={0}
       border={["left"]}
-      onKeyDown={(key) => {
+      onKeyDown={(physicalKey) => {
+        const key = mapShortcutKey(physicalKey)
+
         if (!key.defaultPrevented) consumeHttpRequestTableKey(key, navigation.handleKey)
       }}
       borderColor={active ? COLORS.http : COLORS.border}

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { getLanguage, setLanguage } from "../packages/core/src/i18n/index"
 import { COLORS } from "../packages/core/src/settings/theme"
 import {
   agentMessageElapsedLabel,
@@ -34,6 +35,10 @@ import {
   codexAppServerState,
 } from "../packages/feature-terminal/src/services/codex-app-server"
 import { createCodexAgentCommand } from "../packages/feature-terminal/src/services/terminal"
+
+const initialLanguage = getLanguage()
+beforeEach(() => setLanguage("pt-BR"))
+afterEach(() => setLanguage(initialLanguage))
 
 export function session(id: string, patch: Partial<TerminalSession> = {}): TerminalSession {
   return {

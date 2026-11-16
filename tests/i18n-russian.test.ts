@@ -20,7 +20,7 @@ import {
   updateUiSettings,
 } from "../packages/core/src/settings/theme"
 
-const initialSettings = getUiSettings()
+const initialSettings = initializeUiSettings()
 afterEach(() => {
   updateUiSettings(initialSettings)
   setLanguage(initialSettings.language)

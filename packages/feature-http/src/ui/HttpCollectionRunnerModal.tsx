@@ -1,6 +1,8 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { HttpDialog } from "./HttpDialog"
 import { HttpRunnerResults } from "./HttpRunnerResults"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -21,7 +23,7 @@ function runnerFocusFields(running: boolean, hasApproval: boolean, hasResults: b
   ].map((name) => `http-collection-runner-${name}`)
 }
 
-export function HttpCollectionRunnerModal({
+function HttpCollectionRunnerModalView({
   targetName,
   datasetPath,
   concurrency,
@@ -273,3 +275,10 @@ export function HttpCollectionRunnerModal({
     </HttpDialog>
   )
 }
+
+export const HttpCollectionRunnerModal = withShortcutContext(
+  "http",
+  "collection-runner-modal",
+  HttpCollectionRunnerModalView,
+  "http-collection-runner-modal",
+)

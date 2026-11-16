@@ -822,6 +822,27 @@ Diffs opens this same center directly on the local project and branch controls.
 - **Mouse:** tabs, lists, buttons, fields, commits, diffs, scrolling, and splits remain clickable.
 - **Notifications:** information, success, warnings, and errors without stealing focus.
 
+### YAML shortcuts and themes
+
+On the first interactive launch, Tuiminal creates `config.yml`, `database.yml`,
+`git.yml`, `runner.yml`, `http.yml`, and `terminal.yml` in
+`$XDG_CONFIG_HOME/tuiminal` (or `~/.config/tuiminal`). The files contain the default
+shortcuts, grouped by the screen or dialog that owns them. Edit a binding to
+change its key, use `null` or `[]` to disable it, and restart Tuiminal to apply it.
+The interface shows the configured shortcuts.
+
+Use `tuiminal --config ~/my-tuiminal/config.yml` to choose a main file, or set
+`TUIMINAL_CONFIG` to its path. `--config` takes priority; tool YAML files are
+loaded beside the selected main file. This selection does not move existing
+connection, session, or settings data.
+
+`config.yml` also selects a built-in palette and accepts individual color
+overrides. Updates add missing options while preserving custom values, disabled
+bindings, and comments. Invalid files produce a startup warning naming the file
+and problem; their defaults are used without overwriting the invalid file.
+See [YAML configuration](docs/configuration.md) for the schema, examples, context
+rules, and theme precedence.
+
 Preferences live in `~/.config/tuiminal/settings.json`. An invalid palette name falls back to Prime while preserving other valid preferences. Translating repeated error/warning prefixes does not truncate text or depend on call-stack depth.
 
 <a id="desenvolvimento"></a>

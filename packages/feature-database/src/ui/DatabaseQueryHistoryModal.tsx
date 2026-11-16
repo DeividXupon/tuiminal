@@ -1,6 +1,8 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -32,7 +34,7 @@ import {
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 
-export function DatabaseQueryHistoryModal({
+function DatabaseQueryHistoryModalView({
   open,
   entries,
   canRerun,
@@ -452,3 +454,10 @@ export function DatabaseQueryHistoryModal({
     </ModalSurface>
   )
 }
+
+export const DatabaseQueryHistoryModal = withShortcutContext(
+  "database",
+  "query-history-modal",
+  DatabaseQueryHistoryModalView,
+  "database-query-history-modal",
+)

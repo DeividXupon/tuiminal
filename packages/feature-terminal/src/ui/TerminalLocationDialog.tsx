@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, KeyEvent } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import type { TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -12,7 +16,7 @@ function consume(key: KeyEvent) {
   key.stopPropagation()
 }
 
-export function TerminalLocationDialog({
+function TerminalLocationDialogContent({
   profile,
   onLocal,
   onRemote,
@@ -90,3 +94,10 @@ export function TerminalLocationDialog({
     </ModalSurface>
   )
 }
+
+export const TerminalLocationDialog = withShortcutContext(
+  "terminal",
+  "location-dialog",
+  TerminalLocationDialogContent,
+  "terminal-location-dialog",
+)

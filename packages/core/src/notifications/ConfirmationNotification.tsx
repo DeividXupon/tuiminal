@@ -1,5 +1,6 @@
+import { useConfiguredKeyboard as useKeyboard } from "../keyboard/react"
 import { RGBA, type BoxRenderable } from "@opentui/core"
-import { createPortal, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { createPortal, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useRef, useState } from "react"
 import { translateUi, truncateDisplay } from "../i18n/index"
 import { COLORS } from "../settings/theme"

@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -26,7 +30,7 @@ const UPDATE_INSTRUCTIONS = {
   },
 }
 
-export function RemoteCodexUpdatePanel({
+function RemoteCodexUpdatePanelContent({
   sessionId,
   guide,
   profileName,
@@ -140,3 +144,10 @@ export function RemoteCodexUpdatePanel({
     </box>
   )
 }
+
+export const RemoteCodexUpdatePanel = withShortcutContext(
+  "terminal",
+  "remote-update",
+  RemoteCodexUpdatePanelContent,
+  "remote-codex-update-*",
+)

@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, Renderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { useEffect, useRef } from "react"
@@ -16,7 +18,7 @@ const RISK_COPY = {
   "insecure-tls": "A identidade do servidor não será verificada neste destino.",
 }
 
-export function HttpRedirectApprovalModal({
+function HttpRedirectApprovalModalView({
   pending,
   decide,
   terminalWidth,
@@ -178,3 +180,10 @@ export function HttpRedirectApprovalModal({
     </box>
   )
 }
+
+export const HttpRedirectApprovalModal = withShortcutContext(
+  "http",
+  "redirect-approval-modal",
+  HttpRedirectApprovalModalView,
+  "http-redirect-approval-layer",
+)

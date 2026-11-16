@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useTerminalFolders } from "./hooks/use-terminal-folders"
 import { useTerminalWorkspaceKeyboard } from "./hooks/use-terminal-workspace-keyboard"
@@ -73,8 +74,7 @@ import { TerminalPanes } from "./ui/TerminalPanes"
 import { TerminalShortcutAnimation } from "./ui/TerminalShortcut"
 import { TerminalSidebar } from "./ui/TerminalSidebar"
 import { TerminalSplitDialog } from "./ui/TerminalSplitDialog"
-
-export function TermAgents({
+function TermAgentsContent({
   active,
   externalSidebarHost = false,
   onOpenSettings,
@@ -933,3 +933,9 @@ export function TermAgents({
     </TerminalShortcutAnimation>
   )
 }
+export const TermAgents = withShortcutContext(
+  "terminal",
+  "actions",
+  TermAgentsContent,
+  "terminal-workspace",
+)

@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { pullRequestActivity } from "../../model/pr/activity"
 import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import type { PullRequestFocus, PullRequestWorkspaceAction } from "../../model/pr/navigation"

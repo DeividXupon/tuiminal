@@ -1,8 +1,10 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import type { HttpCollectionSettings } from "../hooks/use-http-collection-settings"
 import { HttpDiscardDocumentModal } from "./HttpDiscardDocumentModal"
 
-export function HttpCollectionSettingsConfirmation({
+function HttpCollectionSettingsConfirmationView({
   settings,
 }: {
   settings: HttpCollectionSettings
@@ -25,3 +27,10 @@ export function HttpCollectionSettingsConfirmation({
     />
   )
 }
+
+export const HttpCollectionSettingsConfirmation = withShortcutContext(
+  "http",
+  "collection-settings-confirmation",
+  HttpCollectionSettingsConfirmationView,
+  "http-discard-document-modal",
+)

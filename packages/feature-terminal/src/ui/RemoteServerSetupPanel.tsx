@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
 import { focusedRenderableId } from "@xupon/tuiminal-core/keyboard/scope"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, type TerminalRemoteCodexProfile } from "@xupon/tuiminal-core/settings/theme"
@@ -40,7 +44,7 @@ function resultMessage(code: RemoteServerBarrierCode) {
   return messages[code]
 }
 
-export function RemoteServerSetupPanel({
+function RemoteServerSetupPanelContent({
   sessionId,
   profile,
   active,
@@ -234,3 +238,10 @@ export function RemoteServerSetupPanel({
     </box>
   )
 }
+
+export const RemoteServerSetupPanel = withShortcutContext(
+  "terminal",
+  "remote-server-setup",
+  RemoteServerSetupPanelContent,
+  "remote-server-setup-*",
+)

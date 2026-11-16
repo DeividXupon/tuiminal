@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import {
   type IssueFocus,

@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { DatabaseTable } from "../model/types"
 
@@ -8,7 +10,7 @@ import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
 
-export function DatabaseTableSearchModal({
+function DatabaseTableSearchModalView({
   open,
   table,
   initialValue,
@@ -162,3 +164,10 @@ export function DatabaseTableSearchModal({
     </ModalSurface>
   )
 }
+
+export const DatabaseTableSearchModal = withShortcutContext(
+  "database",
+  "table-search-modal",
+  DatabaseTableSearchModalView,
+  "database-table-search-modal",
+)

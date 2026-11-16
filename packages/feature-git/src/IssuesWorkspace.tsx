@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -34,7 +35,7 @@ import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
 import { useAutoPage } from "./ui/useAutoPagination"
 
-export function IssuesWorkspace({
+function IssuesWorkspaceShortcuts({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
@@ -358,3 +359,10 @@ export function IssuesWorkspace({
     </>
   )
 }
+
+export const IssuesWorkspace = withShortcutContext(
+  "git",
+  "issues",
+  IssuesWorkspaceShortcuts,
+  "git-issue-dashboard",
+)

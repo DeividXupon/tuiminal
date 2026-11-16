@@ -848,6 +848,27 @@ controles de projeto e branch local.
 - **Mouse:** tabs, listas, botões, campos, commits, diffs, scroll e splits continuam clicáveis.
 - **Notificações:** informações, sucessos, avisos e erros aparecem sem roubar o foco.
 
+### Atalhos e temas em YAML
+
+Na primeira abertura interativa, o Tuiminal cria `config.yml`, `database.yml`,
+`git.yml`, `runner.yml`, `http.yml` e `terminal.yml` em
+`$XDG_CONFIG_HOME/tuiminal` (ou `~/.config/tuiminal`). Os arquivos vêm preenchidos
+com os atalhos padrão, agrupados pela tela ou diálogo responsável por eles.
+Edite uma combinação para mudar a tecla, use `null` ou `[]` para desativá-la e
+reinicie o Tuiminal para aplicar. As dicas da interface acompanham a configuração.
+
+Use `tuiminal --config ~/meu-tuiminal/config.yml` para escolher o arquivo
+principal, ou defina `TUIMINAL_CONFIG` com seu caminho. `--config` tem prioridade;
+os YAMLs das ferramentas são carregados ao lado do arquivo principal escolhido.
+Essa seleção não move conexões, sessões ou preferências existentes.
+
+O `config.yml` também permite escolher uma paleta e substituir cores individuais.
+Atualizações acrescentam opções novas preservando valores personalizados,
+atalhos desativados e comentários. Arquivos inválidos geram um aviso na abertura
+com o arquivo e o problema; seus valores padrão são usados sem sobrescrevê-los.
+Veja [Configuração YAML](docs/configuration.md) para o formato, exemplos, regras
+de contexto e prioridade dos temas.
+
 As preferências ficam em `~/.config/tuiminal/settings.json`.
 
 Se o arquivo contiver um nome de paleta inválido, a interface usa Prime e preserva as demais preferências válidas.

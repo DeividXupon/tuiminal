@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { useMemo, useState } from "react"
 import { Button } from "@tuiparts/react/button"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -36,6 +37,7 @@ export function HttpRequestChainingEditor({
   onChange: (chain: NonNullable<HttpRequestDefinition["chain"]>) => void
   onFocus: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const [contentWidth, setContentWidth] = useState(1)
   const chain = request.chain ?? { extract: [] }
   const nav = useHttpChainingNavigation({
@@ -60,7 +62,13 @@ export function HttpRequestChainingEditor({
   return (
     <>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI box owns keyboard selection for this form. */}
-      <box id={nav.selectionId} focusable flexGrow={1} minHeight={0} onKeyDown={nav.keyDown}>
+      <box
+        id={nav.selectionId}
+        focusable
+        flexGrow={1}
+        minHeight={0}
+        onKeyDown={(key) => nav.keyDown(mapShortcutKey(key))}
+      >
         <HttpFormSection
           first
           title="CHAINING DO REQUEST"

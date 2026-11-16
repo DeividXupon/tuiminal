@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -63,7 +67,7 @@ function projectRows(
   return rows
 }
 
-export function AgentProjectPicker(props: {
+function AgentProjectPickerContent(props: {
   providerId: AgentProviderId
   target: AgentProjectTarget
   sessions: readonly TerminalSession[]
@@ -387,3 +391,10 @@ export function AgentProjectPicker(props: {
     </>
   )
 }
+
+export const AgentProjectPicker = withShortcutContext(
+  "terminal",
+  "agent-project-picker",
+  AgentProjectPickerContent,
+  "terminal-dialog-project-picker",
+)

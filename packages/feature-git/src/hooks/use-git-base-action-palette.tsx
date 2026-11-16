@@ -1,6 +1,7 @@
 import { gitBaseActionTags } from "../rendering/action-palette-tags"
 import type { KeyEvent, Renderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { focusedRenderableId, ownsKeyboardFocus } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ActionPalette } from "@xupon/tuiminal-core/ui/ActionPalette"

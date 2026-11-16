@@ -1,4 +1,5 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useMemo, useState } from "react"
 import {
   applyGitHubQuerySuggestion,

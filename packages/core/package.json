@@ -45,7 +45,10 @@
     "./ui/use-action-palette": "./src/ui/use-action-palette.tsx",
     "./ui/workspace-repaint": "./src/ui/workspace-repaint.tsx",
     "./ui/text-shimmer": "./src/ui/text-shimmer.ts",
-    "./runtime/feature-host": "./src/runtime/feature-host.ts"
+    "./runtime/feature-host": "./src/runtime/feature-host.ts",
+    "./config/index": "./src/config/index.ts",
+    "./keyboard/bindings": "./src/keyboard/bindings.ts",
+    "./keyboard/react": "./src/keyboard/react.tsx"
   },
   "peerDependencies": {
     "@opentui/core": "^0.5.9",
@@ -55,7 +58,8 @@
   "dependencies": {
     "@tuiparts/core": "^0.0.6",
     "@tuiparts/react": "^0.0.6",
-    "string-width": "^7.2.0"
+    "string-width": "^7.2.0",
+    "yaml": "^2.9.0"
   },
   "files": [
     "dist",

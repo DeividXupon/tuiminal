@@ -1,4 +1,6 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   environmentFormRows,
@@ -20,7 +22,7 @@ import {
   environmentKeyIsHandled,
 } from "./http-environment-manager-keyboard"
 
-export function HttpEnvironmentManagerModal({
+function HttpEnvironmentManagerModalView({
   environments,
   globals,
   activeName,
@@ -367,3 +369,10 @@ export function HttpEnvironmentManagerModal({
     </HttpEnvironmentManagerShell>
   )
 }
+
+export const HttpEnvironmentManagerModal = withShortcutContext(
+  "http",
+  "environment-manager-modal",
+  HttpEnvironmentManagerModalView,
+  "http-environment-manager-modal",
+)

@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -16,7 +20,7 @@ import { readProjectDirectory } from "../services/agent-project-directories"
 import { projectName } from "../model/project-name"
 import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
-export function AgentFolderBrowser({
+function AgentFolderBrowserContent({
   target,
   origin,
   onSelect,
@@ -252,3 +256,10 @@ export function AgentFolderBrowser({
     </ModalSurface>
   )
 }
+
+export const AgentFolderBrowser = withShortcutContext(
+  "terminal",
+  "agent-folder-browser",
+  AgentFolderBrowserContent,
+  "terminal-dialog-folder-browser",
+)

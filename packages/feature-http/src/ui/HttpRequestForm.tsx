@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import {
   InputRenderable,
   RenderableEvents,
@@ -46,6 +47,7 @@ export function HttpRequestForm({
   children: ReactNode
   onFocus?: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const scroll = useRef<ScrollBoxRenderable | null>(null)
   const [viewportSize, setViewportSize] = useState("")
   const reveal = useCallback((input: InputRenderable) => {
@@ -87,7 +89,9 @@ export function HttpRequestForm({
           },
         }}
         style={{ flexGrow: 1, minHeight: 1, backgroundColor: COLORS.canvas }}
-        onKeyDown={(key) => {
+        onKeyDown={(physicalKey) => {
+          const key = mapShortcutKey(physicalKey)
+
           if (key.defaultPrevented) return
           if (key.name !== "tab" && key.name !== "return" && key.name !== "enter") return
           key.preventDefault()
@@ -151,6 +155,7 @@ export function HttpFormField({
   onDelete?: () => void
   autoFocus?: boolean
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const ref = useRef<InputRenderable | null>(null)
   const form = useContext(FormContext)
   useEffect(() => {
@@ -181,7 +186,9 @@ export function HttpFormField({
           form.onFocus()
           ref.current?.focus()
         }}
-        onKeyDown={(key) => {
+        onKeyDown={(physicalKey) => {
+          const key = mapShortcutKey(physicalKey)
+
           if (key.defaultPrevented) return
           if (key.ctrl && key.name === "d" && onDelete) {
             key.preventDefault()

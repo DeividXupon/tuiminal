@@ -17,7 +17,7 @@ import {
 } from "../packages/feature-terminal/src/services/agent-sounds"
 import sounds from "../packages/feature-terminal/src/audio/agent-sounds.json"
 
-const settings = getUiSettings()
+const settings = initializeUiSettings()
 afterEach(() => {
   updateUiSettings(settings)
 })

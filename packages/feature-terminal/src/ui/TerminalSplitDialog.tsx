@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -10,7 +14,7 @@ import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
 type SplitOption = { kind: "new" } | { kind: "agent"; session: TerminalSession }
 
-export function TerminalSplitDialog({
+function TerminalSplitDialogContent({
   down,
   agents,
   canCreateTerminal,
@@ -185,3 +189,10 @@ export function TerminalSplitDialog({
     </ModalSurface>
   )
 }
+
+export const TerminalSplitDialog = withShortcutContext(
+  "terminal",
+  "split-dialog",
+  TerminalSplitDialogContent,
+  "terminal-split-dialog",
+)

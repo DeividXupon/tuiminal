@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -8,7 +12,7 @@ import { AGENT_PROVIDERS, type AgentProviderId } from "../model/agent-provider"
 import { AgentProviderWordmark } from "./AgentProviderWordmark"
 import { TerminalShortcutText } from "./TerminalShortcut"
 
-export function AgentProviderPicker({
+function AgentProviderPickerContent({
   inactive = false,
   onSelect,
   onClose,
@@ -95,3 +99,10 @@ export function AgentProviderPicker({
     </ModalSurface>
   )
 }
+
+export const AgentProviderPicker = withShortcutContext(
+  "terminal",
+  "provider-picker",
+  AgentProviderPickerContent,
+  "terminal-dialog-agent-provider",
+)

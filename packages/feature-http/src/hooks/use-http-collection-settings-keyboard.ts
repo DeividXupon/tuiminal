@@ -1,5 +1,6 @@
 import { InputRenderable, TextareaRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { directionalShortcutDirection } from "@xupon/tuiminal-core/ui/directional-shortcut"
 import { httpAuthForKind, HTTP_AUTH_KINDS } from "../model/nested-view-navigation"
 import type { HttpCollectionSettingsDocument } from "../model/collection-settings"

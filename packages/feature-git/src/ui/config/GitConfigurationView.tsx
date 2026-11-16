@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { GIT_BROWSER_OPTIONS, type GitBrowser } from "../../model/browser"
 import {
@@ -83,7 +85,7 @@ function configurationRowId(tab: GitConfigurationTab, index: number) {
   return `git-configuration-pr-selector-${index}`
 }
 
-export function GitConfigurationView({
+function GitConfigurationViewView({
   active,
   keyboardActive,
   tab,
@@ -297,3 +299,10 @@ export function GitConfigurationView({
     />
   )
 }
+
+export const GitConfigurationView = withShortcutContext(
+  "git",
+  "configuration",
+  GitConfigurationViewView,
+  "git-configuration-context",
+)

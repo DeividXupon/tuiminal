@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import {
   type InputRenderable,
   type KeyEvent,
@@ -24,6 +25,7 @@ export function useConnectionEnvironmentCompletion(
   maxLength: number,
 ) {
   const renderer = useRenderer()
+  const mapShortcutKey = useShortcutKeyHandler()
   const [candidate, setCandidate] =
     useState<ReturnType<typeof connectionEnvironmentCompletion>>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -59,7 +61,8 @@ export function useConnectionEnvironmentCompletion(
     clear()
     input.focus()
   }
-  const onKey = useEffectEvent((key: KeyEvent) => {
+  const onKey = useEffectEvent((physicalKey: KeyEvent) => {
+    const key = mapShortcutKey(physicalKey)
     if (key.defaultPrevented || !inputRef.current?.focused || !candidateRef.current) return
     if (key.name === "escape") clear()
     else if ((key.name === "tab" && !key.shift) || key.name === "return")

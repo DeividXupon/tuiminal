@@ -5,7 +5,7 @@ import {
   RenderableEvents,
   type ScrollBoxRenderable,
 } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard, useShortcutHint } from "../keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { displayWidth, translateUi, truncateDisplay } from "../i18n/index"
 import { COLORS } from "../settings/theme"
@@ -290,6 +290,9 @@ export function ActionPalette<Id extends string>({
     }
   })
 
+  const searchPlaceholder = useShortcutHint(
+    translateUi(searchFocused ? "Pesquisar ações…" : "[/] Buscar"),
+  )
   const available = visible.filter(actionPaletteActionEnabled).length
   const counter = `${available}/${visible.length}`
   const actionBackground = showSide && activePanel === "actions" ? COLORS.panelAlt : COLORS.canvas
@@ -320,7 +323,7 @@ export function ActionPalette<Id extends string>({
         ref={input}
         id={`${id}-search`}
         value={query}
-        placeholder={translateUi(searchFocused ? "Pesquisar ações…" : "[/] Buscar")}
+        placeholder={searchPlaceholder}
         onInput={setQuery}
         onMouseDown={() => input.current?.focus()}
         width="100%"

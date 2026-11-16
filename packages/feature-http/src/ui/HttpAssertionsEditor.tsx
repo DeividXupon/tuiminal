@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import type { KeyEvent } from "@opentui/core"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -27,6 +28,7 @@ export function AssertionsEditor({
   onChange: (assertions: HttpAssertionDefinition[]) => void
   onFocus: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const navigation = useHttpAssertionsNavigation({
     requestId,
     assertions,
@@ -40,7 +42,13 @@ export function AssertionsEditor({
   }
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: OpenTUI box is the native focusable row selector.
-    <box id={navigation.selectionId} focusable flexGrow={1} minHeight={0} onKeyDown={handleKey}>
+    <box
+      id={navigation.selectionId}
+      focusable
+      flexGrow={1}
+      minHeight={0}
+      onKeyDown={(key) => handleKey(mapShortcutKey(key))}
+    >
       <HttpFormSection
         first
         title="ASSERTIONS DO REQUEST"
@@ -98,7 +106,7 @@ export function AssertionsEditor({
                   value={assertion.expression}
                   placeholder="status == 200"
                   width="100%"
-                  onKeyDown={handleKey}
+                  onKeyDown={(key) => handleKey(mapShortcutKey(key))}
                   onMouseDown={() => navigation.select(assertion.id, true)}
                   onInput={(expression) =>
                     onChange(

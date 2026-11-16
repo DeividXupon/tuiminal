@@ -1,3 +1,5 @@
+import { globalShortcutCaption } from "../global-shortcuts"
+import { shortcutLabel } from "@xupon/tuiminal-core/keyboard/bindings"
 import { Tabs } from "@tuiparts/react/tabs"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, LAYOUT, separatorBorder } from "@xupon/tuiminal-core/settings/theme"
@@ -18,15 +20,35 @@ function WorkspaceTabs({
   shortcutsMuted?: boolean | undefined
 }) {
   const tabs = [
-    { value: "database", label: translateUi("Banco"), compactLabel: "DB", shortcut: "[Alt+1]" },
-    { value: "git", label: "Git", compactLabel: "G", shortcut: "[Alt+2]" },
-    { value: "runner", label: "Runner", compactLabel: "Run", shortcut: "[Alt+3]" },
-    { value: "http", label: "HTTP", compactLabel: "HTTP", shortcut: "[Alt+4]" },
+    {
+      value: "database",
+      label: translateUi("Banco"),
+      compactLabel: "DB",
+      shortcut: shortcutLabel("global", "workspace", "database"),
+    },
+    {
+      value: "git",
+      label: "Git",
+      compactLabel: "G",
+      shortcut: shortcutLabel("global", "workspace", "git"),
+    },
+    {
+      value: "runner",
+      label: "Runner",
+      compactLabel: "Run",
+      shortcut: shortcutLabel("global", "workspace", "runner"),
+    },
+    {
+      value: "http",
+      label: "HTTP",
+      compactLabel: "HTTP",
+      shortcut: shortcutLabel("global", "workspace", "http"),
+    },
     {
       value: "terminal",
       label: translateUi("Terminal"),
       compactLabel: "FT",
-      shortcut: "[Alt+5]",
+      shortcut: shortcutLabel("global", "workspace", "terminal"),
     },
   ] satisfies Array<{ value: ToolId; label: string; compactLabel: string; shortcut: string }>
   return (
@@ -94,14 +116,14 @@ export function WorkspaceHeader({
         <InlineButton
           compact={terminalCompact || LAYOUT.compact}
           id="tutorial-settings-button"
-          label={compactNavigation ? "[,]" : "[,] Config"}
+          label={globalShortcutCaption("settings", "Config", compactNavigation)}
           accent={COLORS.focus}
           shortcutsMuted={shortcutsMuted}
           onPress={openSettings}
         />
         <InlineButton
           compact={terminalCompact || LAYOUT.compact}
-          label={compactNavigation ? "[Q]" : "[Q] Sair"}
+          label={globalShortcutCaption("quit", translateUi("Sair"), compactNavigation)}
           accent={COLORS.focus}
           shortcutsMuted={shortcutsMuted}
           onPress={onQuit}

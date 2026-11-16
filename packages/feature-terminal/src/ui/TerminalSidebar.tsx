@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -36,25 +37,19 @@ import {
   useTerminalSidebarFocusSweep,
 } from "./TerminalSidebarFocusSweep"
 import { handleSidebarKey } from "./terminal-sidebar-keyboard"
-
 export { terminalSidebarFocusSweep } from "./TerminalSidebarFocusSweep"
-
 const FOLDER_CURSOR_PREFIX = "terminal-folder:"
 const NO_COLLAPSED_FOLDERS: readonly string[] = []
-
 const folderCursorId = (id: string) => `${FOLDER_CURSOR_PREFIX}${id}`
-
 function cursorFolderId(id: string | null) {
   return id?.startsWith(FOLDER_CURSOR_PREFIX) ? id.slice(FOLDER_CURSOR_PREFIX.length) : null
 }
-
 type SidebarFocusSelection =
   | {
       selectedTarget: TerminalFocusTargetKey
       onFocus: (target: TerminalFocusTargetKey) => void
     }
   | undefined
-
 function TerminalSidebarFocusSelection({
   focusSelection,
 }: {
@@ -70,7 +65,7 @@ function TerminalSidebarFocusSelection({
   )
 }
 
-export const TerminalSidebar = memo(function TerminalSidebar({
+const TerminalSidebarContent = memo(function TerminalSidebar({
   active = true,
   sessions: allSessions,
   folders,
@@ -397,3 +392,9 @@ export const TerminalSidebar = memo(function TerminalSidebar({
     </TerminalShortcutAnimation>
   )
 })
+export const TerminalSidebar = withShortcutContext(
+  "terminal",
+  "sidebar",
+  TerminalSidebarContent,
+  "terminal-sidebar",
+)

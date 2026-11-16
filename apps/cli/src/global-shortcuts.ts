@@ -1,4 +1,4 @@
-import { altNumberShortcut } from "@xupon/tuiminal-core/keyboard/scope"
+import { shortcutLabel, shortcutMatches } from "@xupon/tuiminal-core/keyboard/bindings"
 import { TOOL_SHORTCUTS, type ToolId } from "./tool-catalog"
 
 type GlobalShortcutKey = {
@@ -18,8 +18,19 @@ export function globalApplicationShortcut(
   isolated: boolean,
 ): ToolId | "settings" | null {
   if (!available) return null
-  if (!key.shift && [key.name, key.sequence, key.raw].includes(",")) return "settings"
+  if (shortcutMatches("global", "workspace", "settings", key)) return "settings"
   if (isolated) return null
-  const number = altNumberShortcut(key)
-  return TOOL_SHORTCUTS.find((candidate) => candidate.key === number)?.tab ?? null
+  return (
+    TOOL_SHORTCUTS.find((candidate) => shortcutMatches("global", "workspace", candidate.tab, key))
+      ?.tab ?? null
+  )
+}
+
+export function globalShortcutCaption(
+  action: "settings" | "quit",
+  label: string,
+  compact: boolean,
+) {
+  const shortcut = shortcutLabel("global", "workspace", action)
+  return compact && shortcut ? shortcut : [shortcut, label].filter(Boolean).join(" ")
 }
