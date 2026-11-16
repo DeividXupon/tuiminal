@@ -31,6 +31,8 @@ import {
 } from "../security/sensitive-data"
 import { atomicWriteFileSync, fileContentHash } from "../storage/atomic-file"
 import { DARK_PALETTES } from "./dark-palettes"
+import { configuredColors, getConfiguredTheme } from "./configured-theme"
+import { getConfiguredMasterKey } from "./configured-terminal"
 import { LIGHT_PALETTES } from "./light-palettes"
 import {
   DEFAULT_TERMINAL_MASTER_KEY,
@@ -169,9 +171,16 @@ export const COLORS: ColorPalette = {
 /** Explicit startup boundary: importing UI modules never reads user configuration. */
 export function initializeUiSettings() {
   currentSettings = loadSettings()
+  const configured = getConfiguredTheme()
+  currentSettings.palette = configured.palette ?? currentSettings.palette
+  currentSettings.colorMode = configured.mode ?? currentSettings.colorMode
+  currentSettings.terminalMasterKey = getConfiguredMasterKey() ?? currentSettings.terminalMasterKey
   setLanguage(currentSettings.language)
   setActiveSensitiveTerms(currentSettings.sensitiveTerms)
-  Object.assign(COLORS, paletteFor(currentSettings.palette, currentSettings.colorMode))
+  Object.assign(
+    COLORS,
+    configuredColors(paletteFor(currentSettings.palette, currentSettings.colorMode)),
+  )
   return getUiSettings()
 }
 
@@ -312,7 +321,7 @@ export function updateUiSettings(
   currentSettings = next
   setLanguage(next.language)
   setActiveSensitiveTerms(next.sensitiveTerms)
-  Object.assign(COLORS, paletteFor(next.palette, next.colorMode))
+  Object.assign(COLORS, configuredColors(paletteFor(next.palette, next.colorMode)))
   if (themeChanged) for (const listener of themeListeners) listener()
 
   try {

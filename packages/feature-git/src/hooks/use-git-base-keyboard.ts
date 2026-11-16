@@ -1,5 +1,6 @@
 import type { KeyEvent } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { type Dispatch, type SetStateAction, useCallback } from "react"
 import {
   gitDiffHorizontalScrollDelta,

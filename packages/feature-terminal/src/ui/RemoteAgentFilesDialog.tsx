@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import { BorderChars, type BoxRenderable, type InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -10,7 +14,7 @@ import { agentFileSize, RemoteAgentFileList } from "./RemoteAgentFileList"
 import { RemoteAgentFilesFeedback } from "./RemoteAgentFilesFeedback"
 import { TerminalInlineButton, TerminalShortcutText } from "./TerminalShortcut"
 
-export function RemoteAgentFilesDialog({
+function RemoteAgentFilesDialogContent({
   state,
   onConfirm,
   onClose,
@@ -263,3 +267,10 @@ export function RemoteAgentFilesDialog({
     </ModalSurface>
   )
 }
+
+export const RemoteAgentFilesDialog = withShortcutContext(
+  "terminal",
+  "remote-files",
+  RemoteAgentFilesDialogContent,
+  "terminal-agent-files-dialog",
+)

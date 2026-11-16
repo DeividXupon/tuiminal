@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import {
+  useShortcutKeyHandler,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { TextareaRenderable } from "@opentui/core"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { DirectionalButton } from "@xupon/tuiminal-core/ui/DirectionalButton"
@@ -152,6 +156,7 @@ function ScriptEditor({
   onFocus: () => void
   onChange: (value: string) => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const input = useRef<TextareaRenderable | null>(null)
   const [editorHeight, setEditorHeight] = useState(1)
   const published = useRef(value)
@@ -201,7 +206,9 @@ function ScriptEditor({
           onFocus()
           input.current?.focus()
         }}
-        onKeyDown={(key) => {
+        onKeyDown={(physicalKey) => {
+          const key = mapShortcutKey(physicalKey)
+
           queueMicrotask(sync)
           if (key.name === "tab" && !key.ctrl && !key.meta && !key.option) {
             key.preventDefault()

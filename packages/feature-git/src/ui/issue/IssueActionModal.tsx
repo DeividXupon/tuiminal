@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -83,7 +85,7 @@ function actionPayload(
   return {}
 }
 
-export function IssueActionModal({
+function IssueActionModalView({
   kind,
   item,
   currentAssignees,
@@ -282,3 +284,10 @@ export function IssueActionModal({
     </ModalSurface>
   )
 }
+
+export const IssueActionModal = withShortcutContext(
+  "git",
+  "issue-action-modal",
+  IssueActionModalView,
+  "git-issue-action-modal",
+)

@@ -1,3 +1,5 @@
+import { terminalGlobalActionKey, isTerminalGlobalAction } from "../ui/terminal-global-shortcuts"
+import { remapShortcutKey } from "@xupon/tuiminal-core/keyboard/bindings"
 import type { KeyEvent } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import {
@@ -53,13 +55,9 @@ function handleLeaderKey(key: KeyEvent, options: SidebarKeyboardOptions) {
     return
   }
   const action = terminalActionKey(key)
-  if (action?.startsWith("alt+")) {
-    void options.runAction(action)
-    return
-  }
   if (handleLeaderDigit(key, options)) return
   options.masterTargetDigits.current = ""
-  if (action) void options.runAction(action)
+  if (action && !isTerminalGlobalAction(action)) void options.runAction(action)
 }
 
 export function useSidebarKeyboard(options: SidebarKeyboardOptions) {
@@ -77,6 +75,13 @@ export function useSidebarKeyboard(options: SidebarKeyboardOptions) {
     }
     if (renderer.currentFocusedRenderable?.id === "terminal-action-search") return
     if (options.leaderActive) {
+      const globalAction = terminalGlobalActionKey(key)
+      if (globalAction) {
+        consumeKey(key)
+        void options.runAction(globalAction)
+        return
+      }
+      key = remapShortcutKey("terminal", "actions", key)
       if (key.name === "/" || key.sequence === "/" || key.raw === "/") {
         consumeKey(key)
         renderer.root.findDescendantById("terminal-action-search")?.focus()

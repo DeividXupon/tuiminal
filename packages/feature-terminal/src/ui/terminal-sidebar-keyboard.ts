@@ -1,3 +1,4 @@
+import { remapShortcutKey } from "@xupon/tuiminal-core/keyboard/bindings"
 import type { KeyEvent } from "@opentui/core"
 import {
   matchesTerminalMasterKey,
@@ -68,6 +69,7 @@ export function handleSidebarKey(
   },
 ) {
   if (handleMasterKey(key, options.masterKey, options.onMasterKey)) return
+  key = remapShortcutKey("terminal", "sidebar", key)
   if (handleEscapeKey(key, options.onEscape, options.blur)) return
   if (handleMovementKey(key, options.navigationIds, options.cursorRef, options.setCursorId)) return
   handleActivationKey(key, options.cursorRef.current, options.onActivate)

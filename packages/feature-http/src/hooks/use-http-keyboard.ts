@@ -1,6 +1,9 @@
 import { InputRenderable, TextareaRenderable, type Renderable } from "@opentui/core"
 import { focusHttpRequestForm } from "../ui/HttpRequestForm"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useKeyboard } from "@opentui/react"
+import { remapShortcutForFocus } from "@xupon/tuiminal-core/keyboard/react"
+import { httpShortcutContext } from "../model/shortcut-context"
 import type { RefObject } from "react"
 import { resolveHttpKeyboardCommand } from "../model/keyboard"
 import type { HttpKey, HttpKeyboardCommand } from "../model/keyboard-types"
@@ -32,14 +35,20 @@ export function useHttpKeyboard({
   collectionTreeKeyRef: RefObject<((key: HttpKey) => boolean) | null>
 }) {
   const renderer = useRenderer()
-  useKeyboard((key) => {
-    if (!active || key.defaultPrevented) return
+  useKeyboard((physicalKey) => {
+    if (!active || physicalKey.defaultPrevented) return
+    const currentState = stateRef.current
+    const key = remapShortcutForFocus(
+      "http",
+      httpShortcutContext(currentState.activePane, currentState.overlay),
+      physicalKey,
+      renderer.currentFocusedRenderable,
+    )
     const focusedId = renderer.currentFocusedRenderable?.id ?? ""
     if (
       /^http-(collection-(menu|action-|name-input)|environment-menu|chain-picker-)/.test(focusedId)
     )
       return
-    const currentState = stateRef.current
     if (isSourcePickerShortcut(key, currentState.overlay)) {
       key.preventDefault()
       key.stopPropagation()

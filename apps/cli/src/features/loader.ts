@@ -31,13 +31,17 @@ function sqliteWorkerCommand() {
 }
 
 function terminalSidebarCommand(args: string[]) {
+  // A tmux server can retain an older environment than the invoking CLI.
+  const sidebarArgs = process.env.TUIMINAL_CONFIG
+    ? [...args, "--config", process.env.TUIMINAL_CONFIG]
+    : args
   return MINIMAL_BUILD
-    ? [process.execPath, "--internal-terminal-sidebar", ...args]
+    ? [process.execPath, "--internal-terminal-sidebar", ...sidebarArgs]
     : [
         process.execPath,
         fileURLToPath(new URL("../../bin/tuiminal.ts", import.meta.url)),
         "--internal-terminal-sidebar",
-        ...args,
+        ...sidebarArgs,
       ]
 }
 

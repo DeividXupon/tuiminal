@@ -1,4 +1,6 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useState } from "react"
 import { ownsKeyboardFocus } from "@xupon/tuiminal-core/keyboard/scope"
 import { LAYOUT } from "@xupon/tuiminal-core/settings/theme"
@@ -49,7 +51,7 @@ function MountedGitWorkspace({
   )
 }
 
-export function GitViewer({
+function GitViewerView({
   active,
   tutorialMode = false,
   tutorialTargetId = null,
@@ -199,3 +201,5 @@ function GitInteractiveWorkspace({
     </box>
   )
 }
+
+export const GitViewer = withShortcutContext("git", "workspace", GitViewerView, "git-workspace")

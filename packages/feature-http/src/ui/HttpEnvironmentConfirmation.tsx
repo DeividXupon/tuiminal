@@ -1,13 +1,11 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { HttpDiscardDocumentModal } from "./HttpDiscardDocumentModal"
 import type { HttpEnvironmentTabs } from "../hooks/use-http-environment-tabs"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 
-export function HttpEnvironmentConfirmation({
-  environments,
-}: {
-  environments: HttpEnvironmentTabs
-}) {
+function HttpEnvironmentConfirmationView({ environments }: { environments: HttpEnvironmentTabs }) {
   const terminal = useTerminalDimensions()
   const pending = environments.pending
   useKeyboard((key) => {
@@ -43,3 +41,10 @@ export function HttpEnvironmentConfirmation({
     />
   )
 }
+
+export const HttpEnvironmentConfirmation = withShortcutContext(
+  "http",
+  "environment-confirmation",
+  HttpEnvironmentConfirmationView,
+  "http-discard-document-modal",
+)

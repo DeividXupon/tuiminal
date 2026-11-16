@@ -1,6 +1,8 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { DatabaseColumn } from "../model/types"
 import { coerceDatabaseCellValue } from "../services/database"
@@ -31,7 +33,7 @@ function inputValue(value: unknown) {
   }
 }
 
-export function DatabaseCellEditor({
+function DatabaseCellEditorView({
   open,
   tableName,
   column,
@@ -238,3 +240,10 @@ export function DatabaseCellEditor({
     </ModalSurface>
   )
 }
+
+export const DatabaseCellEditor = withShortcutContext(
+  "database",
+  "cell-editor",
+  DatabaseCellEditorView,
+  "database-cell-editor-modal",
+)

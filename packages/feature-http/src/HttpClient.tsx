@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect } from "react"
 import { useRenderer } from "@opentui/react"
 import { ensureHttpRendererListenerBudget } from "./model/renderer-listener-budget"
@@ -9,7 +10,7 @@ import { HttpSourceClient } from "./ui/HttpSourceClient"
 
 export type { HttpClientProps } from "./model/types"
 
-export function HttpClient({ tutorialMode = false, ...props }: HttpClientProps) {
+function HttpClientView({ tutorialMode = false, ...props }: HttpClientProps) {
   ensureHttpRendererListenerBudget(useRenderer())
   useEffect(() => () => clearHttpOAuthSessions(), [])
   if (tutorialMode) return <HttpTutorialDemo />
@@ -27,3 +28,5 @@ export function HttpClient({ tutorialMode = false, ...props }: HttpClientProps) 
     </HttpSourceClient>
   )
 }
+
+export const HttpClient = withShortcutContext("http", "workspace", HttpClientView, "http-workspace")

@@ -1,7 +1,9 @@
+import { initializeYamlConfiguration } from "@xupon/tuiminal-core/config/index"
 import { createCliRenderer } from "@opentui/core"
 import { createRoot } from "@opentui/react"
 import { initializeUiSettings } from "@xupon/tuiminal-core/settings/theme"
 
+initializeYamlConfiguration()
 initializeUiSettings()
 // Feature syntax styles must be created only after the user's palette is loaded.
 const { App } = await import("./App")

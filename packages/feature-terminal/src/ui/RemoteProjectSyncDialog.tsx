@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -13,7 +17,7 @@ function consume(key: KeyEvent) {
   key.stopPropagation()
 }
 
-export function RemoteProjectSyncDialog({
+function RemoteProjectSyncDialogContent({
   kind,
   localPath,
   remote,
@@ -121,3 +125,10 @@ export function RemoteProjectSyncDialog({
     </ModalSurface>
   )
 }
+
+export const RemoteProjectSyncDialog = withShortcutContext(
+  "terminal",
+  "remote-sync",
+  RemoteProjectSyncDialogContent,
+  "terminal-project-sync-confirm",
+)

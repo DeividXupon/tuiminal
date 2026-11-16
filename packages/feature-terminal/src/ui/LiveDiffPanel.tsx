@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, DiffRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -35,7 +36,7 @@ function liveDiffPreviewGeometry(
   }
 }
 
-export function LiveDiffPanel({
+function LiveDiffPanelContent({
   sessionId,
   agentKey,
   initialDirectory,
@@ -330,3 +331,10 @@ export function LiveDiffPanel({
     </box>
   )
 }
+
+export const LiveDiffPanel = withShortcutContext(
+  "terminal",
+  "live-diff",
+  LiveDiffPanelContent,
+  "live-diff-*",
+)

@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { TextareaRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { RunnerEnvironmentProfile } from "../model/config"
 import {
@@ -39,7 +41,7 @@ type Props = {
   onClose: () => void
   onSaved: () => void
 }
-export function RunnerConfigurationEditor({
+function RunnerConfigurationEditorScope({
   root,
   target = { kind: "configuration" },
   commands,
@@ -289,3 +291,10 @@ export function RunnerConfigurationEditor({
     />
   )
 }
+
+export const RunnerConfigurationEditor = withShortcutContext(
+  "runner",
+  "configuration-editor",
+  RunnerConfigurationEditorScope,
+  "runner-config-editor",
+)

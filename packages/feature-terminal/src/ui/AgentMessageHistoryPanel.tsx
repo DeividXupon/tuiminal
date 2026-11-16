@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { BRAND_COLOR } from "@xupon/tuiminal-core/ui/brand"
@@ -82,7 +86,7 @@ function historyKeyAction(
   return amount && hasRows ? { type: "select", delta: amount } : null
 }
 
-export function AgentMessageHistoryPanel({
+function AgentMessageHistoryPanelContent({
   sessionId,
   messages,
   active,
@@ -378,3 +382,10 @@ export function AgentMessageHistoryPanel({
     </box>
   )
 }
+
+export const AgentMessageHistoryPanel = withShortcutContext(
+  "terminal",
+  "agent-message-history",
+  AgentMessageHistoryPanelContent,
+  "agent-message-history-*",
+)

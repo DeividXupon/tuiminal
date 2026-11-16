@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useTerminalDimensions } from "@opentui/react"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
@@ -21,7 +22,7 @@ import { usePreviewPagination } from "./ui/shared/usePreviewPagination"
 import { useGitRemoteActionPalette } from "./ui/shared/useGitRemoteActionPalette"
 import { useAutoPagination } from "./ui/useAutoPagination"
 
-export function InboxWorkspace({
+function InboxWorkspaceShortcuts({
   active,
   configurationRevision = 0,
   onOpenBrowser = defaultGitBrowserOpener,
@@ -245,3 +246,10 @@ export function InboxWorkspace({
   )
 }
 import type { ScrollBoxRenderable } from "@opentui/core"
+
+export const InboxWorkspace = withShortcutContext(
+  "git",
+  "inbox",
+  InboxWorkspaceShortcuts,
+  "git-inbox-dashboard",
+)

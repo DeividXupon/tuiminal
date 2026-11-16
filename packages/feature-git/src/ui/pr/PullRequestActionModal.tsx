@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -138,7 +140,7 @@ function actionModalHeight(kind: PullRequestActionKind, checkoutPathCount: numbe
   return 15
 }
 
-export function PullRequestActionModal({
+function PullRequestActionModalView({
   open,
   kind,
   item,
@@ -363,3 +365,10 @@ export function PullRequestActionModal({
     </ModalSurface>
   )
 }
+
+export const PullRequestActionModal = withShortcutContext(
+  "git",
+  "pull-request-action-modal",
+  PullRequestActionModalView,
+  "git-pr-action-modal",
+)

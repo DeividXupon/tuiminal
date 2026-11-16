@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -38,7 +40,7 @@ function branchPickerKeyAction(
   return null
 }
 
-export function GitHubCreateBranchPicker({
+function GitHubCreateBranchPickerView({
   side,
   host,
   repository,
@@ -311,3 +313,10 @@ export function GitHubCreateBranchPicker({
     </ModalSurface>
   )
 }
+
+export const GitHubCreateBranchPicker = withShortcutContext(
+  "git",
+  "hub-create-branch-picker",
+  GitHubCreateBranchPickerView,
+  "git-create-branch-picker",
+)

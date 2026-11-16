@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 import packageMetadata from "../package.json" with { type: "json" }
 import { DEFAULT_TOOL, TOOL_COMMANDS, type ToolId as ToolCommand } from "../src/tool-catalog"
 const VERSION = packageMetadata.version
-const args = process.argv.slice(2)
+let args = process.argv.slice(2)
 const helpRequested = args.includes("--help") || args.includes("-h")
 
 if (!helpRequested && (args.includes("--version") || args.includes("-v"))) {
@@ -22,12 +22,28 @@ if (args[0] === "--internal-sqlite-worker") {
   )
   // The worker stays alive through its IPC message listener.
 } else if (args[0] === "--internal-terminal-sidebar") {
+  const { configurationArguments } = await import("../src/config-arguments")
+  const { initializeYamlConfiguration } = await import("@xupon/tuiminal-core/config/index")
+  const sidebar = configurationArguments(args.slice(1))
+  args = [args[0]!, ...sidebar.args]
+  process.env.TUIMINAL_CONFIG = initializeYamlConfiguration(sidebar.configPath).path
   const { initializeUiSettings } = await import("@xupon/tuiminal-core/settings/theme")
   initializeUiSettings()
   process.exit(
     await (await import("../src/features/loader")).runInstalledTerminalSidebar(args.slice(1)),
   )
 } else {
+  const { configurationArguments } = await import("../src/config-arguments")
+  const { initializeYamlConfiguration } = await import("@xupon/tuiminal-core/config/index")
+  try {
+    const parsed = configurationArguments(args)
+    args = parsed.args
+    const configuration = initializeYamlConfiguration(parsed.configPath)
+    process.env.TUIMINAL_CONFIG = configuration.path
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
   const { initializeUiSettings } = await import("@xupon/tuiminal-core/settings/theme")
   const { translateUi } = await import("@xupon/tuiminal-core/i18n/index")
   initializeUiSettings()
@@ -59,6 +75,7 @@ ${translateUi("Ferramentas:")}
   banco, git, runner, http, terminal
 
 ${translateUi("Opções:")}
+  --config <file>  YAML ${translateUi("Configurações")}
   -h, --help       ${translateUi("Exibir esta ajuda")}
   -v, --version    ${translateUi("Exibir a versão")}
 

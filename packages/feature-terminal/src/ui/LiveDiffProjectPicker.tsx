@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -8,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { LiveDiffProject } from "../services/live-diff-projects"
 import { TerminalInlineButton } from "./TerminalShortcut"
 
-export function LiveDiffProjectPicker({
+function LiveDiffProjectPickerContent({
   projects,
   loading,
   error,
@@ -167,3 +171,10 @@ export function LiveDiffProjectPicker({
     </ModalSurface>
   )
 }
+
+export const LiveDiffProjectPicker = withShortcutContext(
+  "terminal",
+  "live-diff-project-picker",
+  LiveDiffProjectPickerContent,
+  "live-diff-project-picker",
+)

@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -42,7 +43,7 @@ import {
 import { useGitForegroundRefresh } from "./ui/shared/useGitForegroundRefresh"
 import { useGitHubCreation } from "./ui/shared/useGitHubCreation"
 import { useAutoPage } from "./ui/useAutoPagination"
-export function PullRequestsWorkspace({
+function PullRequestsWorkspaceShortcuts({
   active,
   configurationRevision = 0,
   onLocalCheckout = () => undefined,
@@ -370,3 +371,10 @@ export function PullRequestsWorkspace({
     </>
   )
 }
+
+export const PullRequestsWorkspace = withShortcutContext(
+  "git",
+  "pull-requests",
+  PullRequestsWorkspaceShortcuts,
+  "git-pr-dashboard",
+)

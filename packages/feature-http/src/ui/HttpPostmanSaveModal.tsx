@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
@@ -30,7 +32,7 @@ function destinations(
   })
 }
 
-export function HttpPostmanSaveModal({
+function HttpPostmanSaveModalView({
   files,
   folders,
   requestName,
@@ -142,3 +144,10 @@ export function HttpPostmanSaveModal({
     </HttpDialog>
   )
 }
+
+export const HttpPostmanSaveModal = withShortcutContext(
+  "http",
+  "postman-save-modal",
+  HttpPostmanSaveModalView,
+  "http-postman-save-modal",
+)

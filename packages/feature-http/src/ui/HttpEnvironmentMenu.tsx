@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { CliRenderEvents, type BoxRenderable } from "@opentui/core"
-import { createPortal, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { createPortal, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
@@ -7,7 +9,7 @@ import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { HttpEnvironmentEntry } from "../services/environment-editor"
 
-export function HttpEnvironmentMenu({
+function HttpEnvironmentMenuView({
   entry,
   anchorId,
   onSelect,
@@ -117,3 +119,10 @@ export function HttpEnvironmentMenu({
     "http-environment-menu",
   )
 }
+
+export const HttpEnvironmentMenu = withShortcutContext(
+  "http",
+  "environment-menu",
+  HttpEnvironmentMenuView,
+  "http-environment-menu-layer",
+)

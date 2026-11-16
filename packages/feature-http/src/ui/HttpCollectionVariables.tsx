@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import {
+  useShortcutKeyHandler,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import { InputRenderable, type KeyEvent } from "@opentui/core"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -21,6 +25,7 @@ export function HttpCollectionVariables({
   onFocus: () => void
   onChange: (variables: HttpCollectionSettingsData["variables"]) => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const renderer = useRenderer()
   const rows = useRef(document.variables)
   const pendingFocus = useRef<string | null>(null)
@@ -106,7 +111,10 @@ export function HttpCollectionVariables({
               placeholder={translateUi("variável")}
               width="40%"
               onInput={(name) => change(row.id, { name })}
-              onKeyDown={(key) => move(key, index, 0)}
+              onKeyDown={(physicalKey) => {
+                const key = mapShortcutKey(physicalKey)
+                return move(key, index, 0)
+              }}
             />
             <input
               id={`http-collection-variable-value-${row.id}`}
@@ -114,7 +122,10 @@ export function HttpCollectionVariables({
               placeholder={translateUi("valor")}
               flexGrow={1}
               onInput={(value) => change(row.id, { value })}
-              onKeyDown={(key) => move(key, index, 1)}
+              onKeyDown={(physicalKey) => {
+                const key = mapShortcutKey(physicalKey)
+                return move(key, index, 1)
+              }}
             />
             <InlineButton
               id={`http-collection-variable-delete-${row.id}`}

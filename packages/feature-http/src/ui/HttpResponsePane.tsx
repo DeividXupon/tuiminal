@@ -1,3 +1,5 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { HttpBoxSelection } from "./HttpBoxSelection"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
@@ -33,7 +35,7 @@ function responseCopyLabel(document: HttpDocumentState) {
   return "BODY DA RESPOSTA"
 }
 
-export function HttpResponsePane({
+function HttpResponsePaneShortcuts({
   document,
   visible,
   focused,
@@ -70,6 +72,7 @@ export function HttpResponsePane({
   onCancelDownload: () => void
   downloading: boolean
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const scrollRef = useRef<ScrollBoxRenderable | null>(null)
   const previousView = useRef("")
   const presentation = document.responsePresentation
@@ -188,7 +191,7 @@ export function HttpResponsePane({
           scrollY
           scrollX={table !== null || jsonTree !== null || !presentation.wrap}
           viewportCulling
-          onKeyDown={handleJsonTreeKey}
+          onKeyDown={(key) => handleJsonTreeKey(mapShortcutKey(key))}
           onMouseDown={(event) => {
             onFocus()
             scrollRef.current?.focus()
@@ -239,3 +242,10 @@ export function HttpResponsePane({
     </box>
   )
 }
+
+export const HttpResponsePane = withShortcutContext(
+  "http",
+  "response",
+  HttpResponsePaneShortcuts,
+  "http-response-pane-*",
+)

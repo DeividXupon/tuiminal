@@ -1,6 +1,8 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ButtonRenderable } from "@tuiparts/core/button"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
@@ -207,7 +209,7 @@ function DatabaseCredentialControl({
   )
 }
 
-export function DatabaseConnectionModal({
+function DatabaseConnectionModalView({
   open,
   connections,
   externalCandidates = [],
@@ -968,3 +970,10 @@ export function DatabaseConnectionModal({
     </ModalSurface>
   )
 }
+
+export const DatabaseConnectionModal = withShortcutContext(
+  "database",
+  "connection-modal",
+  DatabaseConnectionModalView,
+  "database-connection-modal",
+)

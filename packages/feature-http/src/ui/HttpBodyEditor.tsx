@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { RGBA, type TextareaRenderable } from "@opentui/core"
 import { useRef } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -20,6 +21,7 @@ export function HttpBodyEditor({
   onChange: (value: string) => void
   onSend: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const input = useRef<TextareaRenderable | null>(null)
   const publishedText = useRef(request.body.text)
   publishedText.current = request.body.text
@@ -46,7 +48,9 @@ export function HttpBodyEditor({
         input.current?.focus()
       }}
       onContentChange={syncText}
-      onKeyDown={(event) => {
+      onKeyDown={(physicalKey) => {
+        const event = mapShortcutKey(physicalKey)
+
         if (event.defaultPrevented) return
         // Native undo/redo can restore text without a content-change notification.
         queueMicrotask(syncText)

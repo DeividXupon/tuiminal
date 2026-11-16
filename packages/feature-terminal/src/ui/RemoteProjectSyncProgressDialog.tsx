@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ModalSurface } from "@xupon/tuiminal-core/ui/ModalSurface"
@@ -34,7 +38,7 @@ function phaseLabel(status: RemoteProjectSyncStatus | undefined) {
   return translateUi("Preparando a sincronização…")
 }
 
-export function RemoteProjectSyncProgressDialog({
+function RemoteProjectSyncProgressDialogContent({
   localPath,
   remote,
   status,
@@ -172,3 +176,10 @@ export function RemoteProjectSyncProgressDialog({
     </ModalSurface>
   )
 }
+
+export const RemoteProjectSyncProgressDialog = withShortcutContext(
+  "terminal",
+  "remote-sync-progress",
+  RemoteProjectSyncProgressDialogContent,
+  "terminal-project-sync-progress",
+)

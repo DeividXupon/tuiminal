@@ -57,6 +57,7 @@
         "@tuiparts/core": "^0.0.6",
         "@tuiparts/react": "^0.0.6",
         "string-width": "^7.2.0",
+        "yaml": "^2.9.0",
       },
       "peerDependencies": {
         "@opentui/core": "^0.5.9",

@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { ISSUE_COLUMNS } from "../../model/issue/config"
 import { parseIssueSectionOptions } from "../../model/issue/sections"
 import type { IssueColumn, IssueSort } from "../../model/issue/types"
@@ -10,7 +11,7 @@ import {
 export type IssueSectionEditorMode = GitRemoteSectionEditorMode
 export type IssueSectionEditorValues = GitRemoteSectionEditorValues<IssueColumn>
 
-export function IssueSectionEditorModal({
+function IssueSectionEditorModalView({
   embedded = false,
   contentWidth,
   mode,
@@ -58,3 +59,10 @@ export function IssueSectionEditorModal({
     />
   )
 }
+
+export const IssueSectionEditorModal = withShortcutContext(
+  "git",
+  "configuration-section-editor",
+  IssueSectionEditorModalView,
+  "git-issue-section-editor-modal",
+)

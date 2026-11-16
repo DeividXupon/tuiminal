@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { CliRenderEvents, type InputRenderable } from "@opentui/core"
 import { createPortal, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useRef, useState, type RefObject } from "react"
@@ -35,6 +36,7 @@ export function HttpVariableInspector({
   suggestions: HttpVariableSuggestion[]
   keyRef: RefObject<((key: HttpCompletionKey) => boolean) | null>
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()
   const [item, setItem] = useState<Inspector | null>(null)
@@ -194,7 +196,9 @@ export function HttpVariableInspector({
             const owner = current.current
             if (owner && !owner.busy) publish({ ...owner, value })
           }}
-          onKeyDown={(event) => {
+          onKeyDown={(physicalKey) => {
+            const event = mapShortcutKey(physicalKey)
+
             if (current.current?.busy) {
               event.preventDefault()
               event.stopPropagation()

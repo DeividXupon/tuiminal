@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { StyledText, type BoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   serializeDatabaseBatchRows,
@@ -20,7 +22,7 @@ const FORMAT_LABEL: Record<DatabaseBatchExportFormat, string> = {
   json: "JSON",
 }
 
-export function DatabaseBatchExportModal({
+function DatabaseBatchExportModalView({
   open,
   tableName,
   columns,
@@ -235,3 +237,10 @@ export function DatabaseBatchExportModal({
     </ModalSurface>
   )
 }
+
+export const DatabaseBatchExportModal = withShortcutContext(
+  "database",
+  "batch-export-modal",
+  DatabaseBatchExportModalView,
+  "database-batch-export-modal",
+)

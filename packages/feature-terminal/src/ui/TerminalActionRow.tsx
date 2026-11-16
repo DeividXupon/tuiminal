@@ -1,3 +1,5 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
+import { isTerminalGlobalAction, terminalGlobalActionLabel } from "./terminal-global-shortcuts"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import {
@@ -7,6 +9,8 @@ import {
 } from "../model/terminal-actions"
 import { terminalShortcutColor } from "../rendering/terminal-shortcut"
 import { TerminalShortcutText } from "./TerminalShortcut"
+
+const GlobalShortcutText = withShortcutContext("global", "workspace", TerminalShortcutText, [])
 
 function terminalActionTagColor(tag: TerminalActionTag) {
   switch (tag) {
@@ -40,6 +44,7 @@ export function TerminalActionRow({
   descriptionWidth: number
   onSelect: () => void
 }) {
+  const Label = isTerminalGlobalAction(action.key) ? GlobalShortcutText : TerminalShortcutText
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: row selection is also available through arrows and Enter.
     <box
@@ -56,9 +61,9 @@ export function TerminalActionRow({
           content={active ? "› " : "  "}
           style={{ fg: active ? COLORS.focus : COLORS.muted, flexShrink: 0 }}
         />
-        <TerminalShortcutText
+        <Label
           id={`terminal-action-title-${action.key}`}
-          content={translateUi(action.label)}
+          content={terminalGlobalActionLabel(action.key, translateUi(action.label))}
           shortcutColor={terminalShortcutColor(!disabled)}
           wrapMode="none"
           style={{ fg: COLORS.text, flexGrow: 1, minWidth: 1, overflow: "hidden" }}

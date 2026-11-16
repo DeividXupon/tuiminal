@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { HttpCollectionSettingsTarget } from "../model/collection-settings"
 import { HttpBoxSelection } from "./HttpBoxSelection"
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core"
@@ -21,7 +22,7 @@ import type { PostmanCollectionFolder } from "../postman/sync"
 import type { PostmanWorkspace } from "../postman/api"
 import { httpMethodColor } from "./http-method-colors"
 
-export function HttpNavigationPane({
+function HttpNavigationPaneShortcuts({
   state,
   visible,
   focused,
@@ -91,11 +92,9 @@ export function HttpNavigationPane({
   const renderer = useRenderer()
   useEffect(() => {
     if (!visible || !focused || state.overlay || state.navigationView === "environments") return
-    const timer = setTimeout(() => {
-      if (renderer.root.findDescendantById("http-collection-menu")) return
-      collectionRef.current?.focus()
-    })
-    return () => clearTimeout(timer)
+    if (renderer.root.findDescendantById("http-collection-menu")) return
+    // Restore ownership with the overlay commit, before a subsequent search key can focus its input.
+    collectionRef.current?.focus()
   }, [focused, state.navigationView, state.overlay, visible, renderer])
   return (
     <box
@@ -231,3 +230,10 @@ export function HttpNavigationPane({
     </box>
   )
 }
+
+export const HttpNavigationPane = withShortcutContext(
+  "http",
+  "navigation",
+  HttpNavigationPaneShortcuts,
+  "http-navigation-pane",
+)

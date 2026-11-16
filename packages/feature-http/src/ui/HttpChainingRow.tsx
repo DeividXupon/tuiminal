@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { httpExtractionIsSecret } from "../model/chain-extractions"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -122,6 +123,7 @@ function ExtractionField({
   navigation: HttpChainingNavigation
   active: boolean
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const source = item.source ?? "jsonpath"
   const pathLabel =
     source === "header" ? "HEADER DA RESPOSTA" : source === "status" ? "STATUS HTTP" : "JSONPath"
@@ -143,7 +145,7 @@ function ExtractionField({
           width="100%"
           placeholder={column ? placeholder : "token"}
           onMouseDown={() => nav.select(index, column, true)}
-          onKeyDown={nav.keyDown}
+          onKeyDown={(key) => nav.keyDown(mapShortcutKey(key))}
           onInput={(value) => nav.patch(index, column ? { jsonPath: value } : { name: value })}
           style={{
             backgroundColor: active ? COLORS.diffModifiedBg : COLORS.panelAlt,

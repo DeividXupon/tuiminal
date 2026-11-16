@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { CliRenderEvents, type BoxRenderable } from "@opentui/core"
-import { createPortal, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { createPortal, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { displayWidth, translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -53,7 +55,7 @@ function menuItems(
   ]
 }
 
-export function HttpCollectionMenu({
+function HttpCollectionMenuView({
   row,
   settingsEnabled = false,
   onSelect,
@@ -191,3 +193,10 @@ function useMenuAnchor(row: HttpCollectionMenuTarget) {
   }, [read, renderer])
   return anchor
 }
+
+export const HttpCollectionMenu = withShortcutContext(
+  "http",
+  "collection-menu",
+  HttpCollectionMenuView,
+  "http-collection-menu-layer",
+)

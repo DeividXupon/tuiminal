@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import {
   type InputRenderable,
   type KeyEvent,
@@ -109,6 +110,7 @@ export function GitCommandConsole({
   /** Paint layer drawn above the console, such as box selection. */
   overlay?: ReactNode
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const inputRef = useRef<InputRenderable | null>(null)
   const outputRef = useRef<ScrollBoxRenderable | null>(null)
   const focus = () => {
@@ -165,7 +167,8 @@ export function GitCommandConsole({
     consumeKey(event)
     onNavigate(event.name === "tab" ? "files" : "preview")
   }
-  const handleInputKey = (event: KeyEvent) => {
+  const handleInputKey = (physicalKey: KeyEvent) => {
+    const event = mapShortcutKey(physicalKey)
     if (event.defaultPrevented || handleAutocompleteKey(event) || handleOutputKey(event)) return
     handlePanelKey(event)
   }

@@ -1,9 +1,7 @@
 # Cross-tool conventions
 
-Use for shared UI, keyboard/focus, i18n, tutorials and documentation.
-The [control contract](../design/ui-controls.md) owns component geometry, settings,
-clipboard and notification behavior; [architecture](../architecture.md) owns
-initialization and dependency boundaries.
+Shared UI, keyboard, i18n and tutorials follow [controls](../design/ui-controls.md),
+[architecture](../architecture.md) and [YAML configuration](../configuration.md).
 
 ## UI and keyboard
 

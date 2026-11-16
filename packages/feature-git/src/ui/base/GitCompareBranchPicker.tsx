@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -15,7 +17,7 @@ import {
 
 export type GitComparePickerSide = "base" | "compared"
 
-export function GitCompareBranchPicker({
+function GitCompareBranchPickerView({
   side,
   references,
   selectedRef,
@@ -203,3 +205,10 @@ export function GitCompareBranchPicker({
     </ModalSurface>
   )
 }
+
+export const GitCompareBranchPicker = withShortcutContext(
+  "git",
+  "compare-branch-picker",
+  GitCompareBranchPickerView,
+  "git-compare-branch-picker",
+)

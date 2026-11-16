@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -16,7 +18,7 @@ import { HttpPostmanWorkspaceRow } from "./HttpPostmanWorkspaceRow"
 const ARROWS = new Set(["up", "down", "j", "k"])
 const ENTER = new Set(["enter", "return"])
 
-export function HttpPostmanModal({
+function HttpPostmanModalView({
   terminalWidth,
   terminalHeight,
   onWorkspaceSelected,
@@ -296,3 +298,10 @@ export function HttpPostmanModal({
     </HttpDialog>
   )
 }
+
+export const HttpPostmanModal = withShortcutContext(
+  "http",
+  "postman-modal",
+  HttpPostmanModalView,
+  "http-postman-modal",
+)

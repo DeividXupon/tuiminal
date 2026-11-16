@@ -1,5 +1,7 @@
+import { useKeyboard, useRenderer } from "@opentui/react"
+import { terminalGlobalActionKey } from "./terminal-global-shortcuts"
+import { withShortcutContext, remapShortcutForFocus } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, KeyEvent } from "@opentui/core"
-import { useKeyboard } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { altNumberShortcut } from "@xupon/tuiminal-core/keyboard/scope"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
@@ -111,7 +113,7 @@ function nextPanel(current: TerminalActionPanel, requested: TerminalActionPanel)
   return requested === "actions" ? "agents" : "actions"
 }
 
-export function TerminalActions({
+function TerminalActionsContent({
   width,
   height,
   recentThreads = [],
@@ -141,6 +143,7 @@ export function TerminalActions({
   inactive?: boolean
   initialPanel?: TerminalActionPanel
 }) {
+  const renderer = useRenderer()
   const dialog = useRef<BoxRenderable | null>(null)
   const input = useRef<InputRenderable | null>(null)
   const [query, setQuery] = useState("")
@@ -257,6 +260,8 @@ export function TerminalActions({
   useKeyboard((key) => {
     if (inactive) return
     const searchFocused = input.current?.focused ?? false
+    if (!searchFocused && terminalGlobalActionKey(key)) return
+    key = remapShortcutForFocus("terminal", "actions", key, renderer.currentFocusedRenderable)
     if (handleDialogKey(key, searchFocused, input.current, dialog.current, close)) return
     if (!searchFocused && key.name === "tab") {
       consumeKey(key)
@@ -281,7 +286,7 @@ export function TerminalActions({
       consumeKey(key)
       return
     }
-    if (key.name === "enter" || key.name === "return") {
+    if (["enter", "return"].includes(key.name)) {
       consumeKey(key)
       choose()
     }
@@ -368,3 +373,10 @@ export function TerminalActions({
     </ModalSurface>
   )
 }
+
+export const TerminalActions = withShortcutContext(
+  "terminal",
+  "actions",
+  TerminalActionsContent,
+  "terminal-actions",
+)

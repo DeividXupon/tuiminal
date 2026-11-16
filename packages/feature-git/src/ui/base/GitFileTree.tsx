@@ -1,4 +1,5 @@
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import type { FileTreeOption } from "../../model/view"

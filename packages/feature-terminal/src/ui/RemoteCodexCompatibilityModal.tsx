@@ -1,5 +1,9 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { InlineButton } from "@xupon/tuiminal-core/ui/InlineButton"
@@ -11,7 +15,7 @@ import {
 } from "../model/remote-codex"
 import { RemoteCodexServiceVersions } from "./RemoteCodexServiceVersions"
 
-export function RemoteCodexCompatibilityModal({
+function RemoteCodexCompatibilityModalContent({
   report,
   profileName,
   onCancel,
@@ -100,3 +104,10 @@ export function RemoteCodexCompatibilityModal({
     </ModalSurface>
   )
 }
+
+export const RemoteCodexCompatibilityModal = withShortcutContext(
+  "terminal",
+  "remote-compatibility",
+  RemoteCodexCompatibilityModalContent,
+  "remote-codex-compatibility-modal",
+)

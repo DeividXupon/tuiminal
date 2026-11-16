@@ -1,10 +1,14 @@
-import { expect, test } from "bun:test"
-import { displayWidth } from "../packages/core/src/i18n/index"
+import { afterEach, beforeEach, expect, test } from "bun:test"
+import { displayWidth, getLanguage, setLanguage } from "../packages/core/src/i18n/index"
 import type {
   DatabaseRelationship,
   DatabaseTable,
 } from "../packages/feature-database/src/model/types"
 import { renderDatabaseRelationshipDiagram } from "../packages/feature-database/src/rendering/relationship-diagram"
+
+const initialLanguage = getLanguage()
+beforeEach(() => setLanguage("en"))
+afterEach(() => setLanguage(initialLanguage))
 
 const selected: DatabaseTable = { schema: "main", name: "users", type: "table" }
 const incoming: DatabaseRelationship = {

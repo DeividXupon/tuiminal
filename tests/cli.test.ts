@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import packageMetadata from "../package.json" with { type: "json" }
@@ -119,4 +119,72 @@ describe("Tuiminal CLI", () => {
       expect(result.stdout).toContain("tuiminal <tool> [directory]")
     },
   )
+
+  test.each(["--config", "--config=", "--config --help", "--config one.yml --config two.yml"])(
+    "rejects malformed configuration arguments: %s",
+    async (argumentsText) => {
+      const result = await runCli(...argumentsText.split(" "))
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain("--config")
+      expect(result.stdout).toBe("")
+    },
+  )
+
+  test.each(["argument", "equals", "environment"])(
+    "loads YAML and sibling defaults through %s selection without touching the default directory",
+    async (selection) => {
+      const root = mkdtempSync(resolve(tmpdir(), "tuiminal-cli-yaml-"))
+      try {
+        const xdg = resolve(root, "xdg")
+        const selected = resolve(root, "selected", "custom.yml")
+        const environmentPath =
+          selection === "environment" ? selected : resolve(root, "ignored", "config.yml")
+        const args =
+          selection === "argument"
+            ? ["--config", selected]
+            : selection === "equals"
+              ? [`--config=${selected}`]
+              : []
+        const child = Bun.spawn(
+          [process.execPath, resolve("apps/cli/bin/tuiminal.ts"), ...args, "--help"],
+          {
+            env: { ...process.env, XDG_CONFIG_HOME: xdg, TUIMINAL_CONFIG: environmentPath },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        )
+        const [exitCode, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ])
+        expect(exitCode).toBe(0)
+        expect(stderr).toBe("")
+        expect(stdout).toContain("--config <file>")
+        expect(readFileSync(selected, "utf8")).toContain("shortcuts:")
+        for (const tool of ["http", "git", "database", "runner", "terminal"]) {
+          expect(existsSync(resolve(root, "selected", `${tool}.yml`))).toBe(true)
+        }
+        expect(existsSync(xdg)).toBe(false)
+        expect(existsSync(resolve(root, "ignored"))).toBe(false)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+  )
+
+  test("invalid YAML never prevents help or overwrites the user's file", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "tuiminal-cli-invalid-yaml-"))
+    try {
+      const path = resolve(root, "config.yml")
+      const original = "theme: [invalid\n# keep this\n"
+      writeFileSync(path, original)
+      const result = await runCli("--config", path, "--help")
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("Usage:")
+      expect(readFileSync(path, "utf8")).toBe(original)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })

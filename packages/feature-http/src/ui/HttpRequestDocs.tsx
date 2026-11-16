@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useEffect, useRef, useState } from "react"
@@ -26,6 +27,7 @@ export function HttpRequestDocs({
   onFocus: () => void
   onChange: (value: string) => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const docs = useHttpRequestDocumentation(request, visible)
   const [editing, setEditing] = useState(false)
   const editable = !docs.loading && !docs.error
@@ -76,7 +78,9 @@ export function HttpRequestDocs({
           onFocus()
           scrollRef.current?.focus()
         }}
-        onKeyDown={(key) => {
+        onKeyDown={(physicalKey) => {
+          const key = mapShortcutKey(physicalKey)
+
           if (!key.ctrl && !key.meta && !key.option && ["enter", "return"].includes(key.name)) {
             key.preventDefault()
             key.stopPropagation()

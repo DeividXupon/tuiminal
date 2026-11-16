@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, InputRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -10,7 +12,7 @@ import type { LocalGitProject, LocalGitTarget } from "../../services/local-targe
 
 export type GitLocalTargetPickerKind = "project" | "branch"
 
-export function GitLocalTargetPicker({
+function GitLocalTargetPickerView({
   width,
   kind,
   target,
@@ -233,3 +235,10 @@ export function GitLocalTargetPicker({
     </box>
   )
 }
+
+export const GitLocalTargetPicker = withShortcutContext(
+  "git",
+  "local-target-picker",
+  GitLocalTargetPickerView,
+  "git-local-target-picker",
+)

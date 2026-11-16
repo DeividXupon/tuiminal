@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useNotificationFromValue } from "@xupon/tuiminal-core/notifications/index"
 import { COLORS, LAYOUT } from "@xupon/tuiminal-core/settings/theme"
@@ -23,7 +25,7 @@ function nextDiffLayout(layout: DiffLayout): DiffLayout {
   return layout === "unified" ? "split" : layout === "split" ? "inline" : "unified"
 }
 
-export function GitCompareWorkspace({
+function GitCompareWorkspaceShortcuts({
   active,
   targetDirectory,
   onOpenLocalConfiguration,
@@ -222,3 +224,10 @@ export function GitCompareWorkspace({
     </box>
   )
 }
+
+export const GitCompareWorkspace = withShortcutContext(
+  "git",
+  "compare",
+  GitCompareWorkspaceShortcuts,
+  "git-compare-workspace",
+)

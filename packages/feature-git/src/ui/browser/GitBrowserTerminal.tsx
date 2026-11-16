@@ -1,5 +1,6 @@
 import { EmbeddedTerminalRenderable, type BoxRenderable } from "@opentui/core"
-import { extend, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { extend, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { useEffect, useRef, useState } from "react"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"

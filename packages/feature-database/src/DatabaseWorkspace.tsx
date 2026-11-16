@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import {
   useWorkspaceRepaint,
   WorkspaceRepaintBoundary,
@@ -10,13 +11,8 @@ import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
 import { paletteAction, useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
 import { databaseGridActions } from "./ui/database-grid-actions"
 import type { InputRenderable, ScrollBoxRenderable, SelectRenderable } from "@opentui/core"
-import {
-  AppContext,
-  useAppContext,
-  useKeyboard,
-  useRenderer,
-  useTerminalDimensions,
-} from "@opentui/react"
+import { AppContext, useAppContext, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import { useNotifications } from "@xupon/tuiminal-core/notifications/index"
@@ -133,7 +129,7 @@ type DatabaseViewerProps = {
   onQueryRerunRequestHandled?: () => void
 }
 
-export function DatabaseViewer(props: DatabaseViewerProps) {
+function DatabaseViewerView(props: DatabaseViewerProps) {
   const liveMounted = useRef(false)
   if (!props.tutorialMode) liveMounted.current = true
   const context = useAppContext()
@@ -3014,3 +3010,10 @@ function DatabaseWorkspace({
     </box>
   )
 }
+
+export const DatabaseViewer = withShortcutContext(
+  "database",
+  "workspace",
+  DatabaseViewerView,
+  "database-workspace",
+)

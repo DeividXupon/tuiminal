@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { decodePasteBytes, type InputRenderable } from "@opentui/core"
-import { useKeyboard, usePaste, useRenderer } from "@opentui/react"
+import { usePaste, useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS } from "@xupon/tuiminal-core/settings/theme"
 import { ShortcutText } from "@xupon/tuiminal-core/ui/ShortcutText"
@@ -10,7 +12,7 @@ import {
   suggestHttpImportSourcePaths,
 } from "../services/import-source-path"
 
-export function HttpImportSourcePicker({
+function HttpImportSourcePickerView({
   sourcePath,
   compact,
   tiny,
@@ -148,3 +150,10 @@ export function HttpImportSourcePicker({
     </box>
   )
 }
+
+export const HttpImportSourcePicker = withShortcutContext(
+  "http",
+  "import-source-picker",
+  HttpImportSourcePickerView,
+  "http-collection-import-source",
+)

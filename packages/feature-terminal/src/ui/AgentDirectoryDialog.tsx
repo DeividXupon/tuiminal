@@ -1,6 +1,10 @@
+import {
+  withShortcutContext,
+  useConfiguredKeyboard as useKeyboard,
+} from "@xupon/tuiminal-core/keyboard/react"
 import { isAbsolute } from "node:path"
 import type { BoxRenderable, EmbeddedTerminalRenderable, KeyEvent } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import {
   COLORS,
@@ -29,7 +33,7 @@ function consume(key: KeyEvent) {
   key.stopPropagation()
 }
 
-export function AgentDirectoryDialog({
+function AgentDirectoryDialogContent({
   profile,
   masterKey,
   onConfirm,
@@ -159,3 +163,10 @@ export function AgentDirectoryDialog({
     </ModalSurface>
   )
 }
+
+export const AgentDirectoryDialog = withShortcutContext(
+  "terminal",
+  "directory-dialog",
+  AgentDirectoryDialogContent,
+  ["local-agent-directory-dialog", "remote-agent-directory-dialog"],
+)

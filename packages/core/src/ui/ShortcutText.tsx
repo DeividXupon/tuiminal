@@ -1,5 +1,6 @@
 import type { TextProps } from "@opentui/react"
 import { useMemo } from "react"
+import { useShortcutHint } from "../keyboard/react"
 import { translateUi } from "../i18n/index"
 import { useShortcutAnimation } from "./shortcut-animation"
 import { type ShortcutAnimation, shortcutContent } from "./shortcut-content"
@@ -8,6 +9,7 @@ export { ShortcutAnimationBoundary, useShortcutAnimation } from "./shortcut-anim
 
 type ShortcutTextProps = Omit<TextProps, "content" | "children"> & {
   content: string
+  shortcutMapping?: boolean
   highlight?: boolean
   shortcutsMuted?: boolean | undefined
   shortcutColor?: string | undefined
@@ -22,6 +24,7 @@ type ShortcutTextProps = Omit<TextProps, "content" | "children"> & {
 export function ShortcutText({
   content,
   highlight = true,
+  shortcutMapping = true,
   shortcutsMuted = false,
   shortcutColor,
   shortcutBaseColor,
@@ -29,7 +32,7 @@ export function ShortcutText({
   actionKeys,
   ...props
 }: ShortcutTextProps) {
-  const translated = translateUi(content)
+  const translated = useShortcutHint(translateUi(content), highlight && shortcutMapping)
   const defaultAnimation = useShortcutAnimation(
     !shortcutsMuted &&
       shortcutAnimation === undefined &&

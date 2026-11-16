@@ -1,5 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, useState } from "react"
 import type { HttpEnvironmentDocument } from "../model/environment-documents"
 

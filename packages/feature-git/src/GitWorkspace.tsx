@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import type { BoxRenderable } from "@opentui/core"
 import { useRenderer, useTerminalDimensions } from "@opentui/react"
@@ -84,7 +85,7 @@ import {
   GitPartialStageToolbarSlot,
 } from "./ui/base/GitPartialStage"
 
-export function GitBaseWorkspace({
+function GitBaseWorkspaceShortcuts({
   active,
   refreshRequest = 0,
   targetDirectory = GIT_LAUNCH_DIRECTORY,
@@ -1104,3 +1105,10 @@ export function GitBaseWorkspace({
     </box>
   )
 }
+
+export const GitBaseWorkspace = withShortcutContext(
+  "git",
+  "diffs",
+  GitBaseWorkspaceShortcuts,
+  "git-diffs-workspace",
+)

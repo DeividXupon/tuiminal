@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { homedir } from "node:os"
 import { basename, dirname } from "node:path"
 import type {
@@ -6,7 +7,8 @@ import type {
   ScrollBoxRenderable,
   SelectRenderable,
 } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { COLORS, LAYOUT, panelBorder } from "@xupon/tuiminal-core/settings/theme"
 import { isActionPaletteKey } from "@xupon/tuiminal-core/ui/action-palette"
@@ -108,7 +110,12 @@ import {
   runnerMultiLayout,
 } from "./ui/runner-layout"
 import { runnerPaletteActions } from "./ui/runner-palette-actions"
-export const Runner = withRunnerTutorial(RunnerLive)
+export const Runner = withShortcutContext(
+  "runner",
+  "workspace",
+  withRunnerTutorial(RunnerLive),
+  "runner-workspace",
+)
 function RunnerLive({ active, onOpenHttp }: RunnerWorkspaceProps) {
   const renderer = useRenderer()
   const terminal = useTerminalDimensions()

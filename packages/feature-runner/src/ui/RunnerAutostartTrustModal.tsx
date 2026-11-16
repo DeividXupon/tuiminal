@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { displayWidth, translateUi } from "@xupon/tuiminal-core/i18n/index"
 import { useEffect, useMemo, useRef } from "react"
 import type { RunnerAutostartReview } from "../storage/autostart-trust"
@@ -34,7 +36,7 @@ function reviewText(review: RunnerAutostartReview) {
   return lines.join("\n")
 }
 
-export function RunnerAutostartTrustModal({
+function RunnerAutostartTrustModalView({
   review,
   onApprove,
   onClose,
@@ -80,3 +82,10 @@ export function RunnerAutostartTrustModal({
     />
   )
 }
+
+export const RunnerAutostartTrustModal = withShortcutContext(
+  "runner",
+  "autostart-trust-modal",
+  RunnerAutostartTrustModalView,
+  "runner-autostart-trust-modal",
+)

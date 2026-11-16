@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { HttpOAuthContext } from "./HttpOAuth2Controls"
 import type { HttpChainingKeyRef } from "../hooks/use-http-chaining-navigation"
 import { HttpBoxSelection } from "./HttpBoxSelection"
@@ -61,7 +62,7 @@ function showRequestEditorHint(document: HttpDocumentState, dense: boolean) {
   )
 }
 
-export function HttpRequestPane({
+function HttpRequestPaneShortcuts({
   document,
   oauthContext,
   requestTableKeyRef,
@@ -387,3 +388,10 @@ export function HttpRequestPane({
     </box>
   )
 }
+
+export const HttpRequestPane = withShortcutContext(
+  "http",
+  "request",
+  HttpRequestPaneShortcuts,
+  "http-request-pane-*",
+)

@@ -1,3 +1,5 @@
+import { terminalGlobalActionKey, isTerminalGlobalAction } from "../ui/terminal-global-shortcuts"
+import { remapShortcutKey } from "@xupon/tuiminal-core/keyboard/bindings"
 import type { KeyEvent } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import {
@@ -65,6 +67,14 @@ export function useTerminalWorkspaceKeyboard({
   const handleLeaderKey = (key: KeyEvent) => {
     if (!leaderRef.current) return false
     if (renderer.currentFocusedRenderable?.id === "terminal-action-search") return true
+    const globalAction = terminalGlobalActionKey(key)
+    if (globalAction) {
+      key.preventDefault()
+      key.stopPropagation()
+      runAction(globalAction)
+      return true
+    }
+    key = remapShortcutKey("terminal", "actions", key)
     if (key.name === "/" || key.sequence === "/" || key.raw === "/") {
       key.preventDefault()
       key.stopPropagation()
@@ -81,10 +91,6 @@ export function useTerminalWorkspaceKeyboard({
     key.preventDefault()
     key.stopPropagation()
     const action = terminalActionKey(key)
-    if (action?.startsWith("alt+")) {
-      runAction(action)
-      return true
-    }
     if (
       /^[1-9]$/.test(key.name) &&
       !key.ctrl &&
@@ -97,7 +103,7 @@ export function useTerminalWorkspaceKeyboard({
       if (target) selectSession(target.id)
       return true
     }
-    if (action) runAction(action)
+    if (action && !isTerminalGlobalAction(action)) runAction(action)
     return true
   }
 

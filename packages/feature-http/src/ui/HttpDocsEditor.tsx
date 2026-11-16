@@ -1,3 +1,4 @@
+import { useShortcutKeyHandler } from "@xupon/tuiminal-core/keyboard/react"
 import { RGBA, type TextareaRenderable } from "@opentui/core"
 import { useEffect, useRef } from "react"
 import { translateUi } from "@xupon/tuiminal-core/i18n/index"
@@ -18,6 +19,7 @@ export function HttpDocsEditor({
   onPreview: () => void
   onFocus: () => void
 }) {
+  const mapShortcutKey = useShortcutKeyHandler()
   const input = useRef<TextareaRenderable | null>(null)
   const published = useRef(value)
   published.current = value
@@ -48,7 +50,9 @@ export function HttpDocsEditor({
         input.current?.focus()
       }}
       onContentChange={syncText}
-      onKeyDown={(key) => {
+      onKeyDown={(physicalKey) => {
+        const key = mapShortcutKey(physicalKey)
+
         queueMicrotask(syncText)
         if (key.name === "escape") {
           key.preventDefault()

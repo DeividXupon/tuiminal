@@ -1,3 +1,4 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import { useWorkspaceRepaint } from "@xupon/tuiminal-core/ui/workspace-repaint"
 import {
   databaseQueryBoxTargets,
@@ -11,7 +12,8 @@ import { useActionPalette } from "@xupon/tuiminal-core/ui/use-action-palette"
 import { databaseGridActions } from "../ui/database-grid-actions"
 import type { BoxRenderable, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { RenderableEvents, RGBA } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { Button } from "@tuiparts/react/button"
 import { translateUi, truncateDisplay } from "@xupon/tuiminal-core/i18n/index"
 import {
@@ -112,7 +114,7 @@ import {
 } from "../ui/DatabaseQueryFavoritesModal"
 import { RowInspector } from "../ui/RowInspector"
 
-export function DatabaseQueryWorkspace({
+function DatabaseQueryWorkspaceShortcuts({
   active,
   tabId,
   tabs,
@@ -432,12 +434,10 @@ export function DatabaseQueryWorkspace({
     (suffix: string) => `database-query-${tabId}-${suffix}`,
     [tabId],
   )
-
   const updateAutocomplete = useCallback((next: SqlAutocompleteState | null) => {
     autocompleteRef.current = next
     setAutocomplete(next)
   }, [])
-
   const ensureAutocompleteColumns = useCallback(
     (table: DatabaseTable) => {
       const key = sqlAutocompleteTableKey(table)
@@ -458,7 +458,6 @@ export function DatabaseQueryWorkspace({
     },
     [autocompleteColumns, connectionId],
   )
-
   const refreshAutocomplete = useCallback(
     (force = false) => {
       const editor = editorRef.current
@@ -498,7 +497,6 @@ export function DatabaseQueryWorkspace({
       updateAutocomplete,
     ],
   )
-
   const acceptAutocomplete = useCallback(
     (index?: number) => {
       const state = autocompleteRef.current
@@ -518,13 +516,11 @@ export function DatabaseQueryWorkspace({
     },
     [updateAutocomplete],
   )
-
   const focusQueryEditor = useCallback(() => {
     setWorkspaceMode((current) => (current === "result" ? "split" : current))
     setEditorMode(true)
     editorRef.current?.focus()
   }, [])
-
   const setEditorRef = useCallback(
     (editor: TextareaRenderable | null) => {
       editorRef.current = editor
@@ -532,14 +528,12 @@ export function DatabaseQueryWorkspace({
     },
     [connection.driver],
   )
-
   useEffect(() => {
     autocompleteMountedRef.current = true
     return () => {
       autocompleteMountedRef.current = false
     }
   }, [])
-
   useEffect(() => {
     void result
     setResultBatchRows([])
@@ -2501,3 +2495,10 @@ export function DatabaseQueryWorkspace({
     </box>
   )
 }
+
+export const DatabaseQueryWorkspace = withShortcutContext(
+  "database",
+  "query",
+  DatabaseQueryWorkspaceShortcuts,
+  "database-query-*",
+)

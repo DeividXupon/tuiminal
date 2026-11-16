@@ -1,5 +1,7 @@
+import { withShortcutContext } from "@xupon/tuiminal-core/keyboard/react"
 import type { BoxRenderable, SelectRenderable } from "@opentui/core"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useRenderer, useTerminalDimensions } from "@opentui/react"
+import { useConfiguredKeyboard as useKeyboard } from "@xupon/tuiminal-core/keyboard/react"
 import { useEffect, useRef, useState } from "react"
 import type { RunnerEnvironmentProfile } from "../model/config"
 import type { RunnerFlow, RunnerNodeStatus } from "../model/plan"
@@ -19,7 +21,7 @@ type Props = {
   onChanged: () => void
   onClose: () => void
 }
-export function RunnerConfiguration({
+function RunnerConfigurationContent({
   root,
   commands,
   profiles,
@@ -116,3 +118,10 @@ export function RunnerConfiguration({
     />
   )
 }
+
+export const RunnerConfiguration = withShortcutContext(
+  "runner",
+  "configuration",
+  RunnerConfigurationContent,
+  "runner-config-modal",
+)
